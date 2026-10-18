@@ -1,8 +1,10 @@
 import os, time, requests
 
-INTERNAL_TOKEN = os.getenv('AIOPS_INTERNAL_TOKEN', os.getenv('AIOPS_ADMIN_TOKEN', 'Newaiops26$'))
+INTERNAL_TOKEN = os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 
 def _headers(token=None):
+    if not (token or INTERNAL_TOKEN):
+        raise RuntimeError('AIOPS internal token is not configured')
     return {'X-AIOPS-Request': 'internal', 'Authorization': f'Bearer {token or INTERNAL_TOKEN}'}
 
 def _request(method, base, path, payload=None, timeout=8, retries=2, token=None):
