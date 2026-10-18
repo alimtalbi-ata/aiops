@@ -150,7 +150,9 @@ services:
       POSTGRES_PWD: "${POSTGRES_PASSWORD:-Newaiops26$}"
       POSTGRES_SEEDS: aiops2-temporal-postgres
       BIND_ON_IP: 0.0.0.0
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml
+      TEMPORAL_ADDRESS: aiops2-temporal:7233
+      TEMPORAL_CLI_ADDRESS: aiops2-temporal:7233
     expose: ["7233"]
     volumes:
       - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
