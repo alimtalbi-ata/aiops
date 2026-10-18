@@ -16,16 +16,16 @@ cd "$TARGET"
 cp config/.env.example .env
 python3 - "$PASSWORD" <<'PY'
 from pathlib import Path
-import sys
+import sys, secrets
 p=Path(".env")
 value=sys.argv[1]
 lines=[]
 for line in p.read_text().splitlines():
     if line.startswith(("POSTGRES_PASSWORD=","AIOPS_ADMIN_TOKEN=","AIOPS_INTERNAL_TOKEN=","GLPI_DB_PASSWORD=","GLPI_DB_ROOT_PASSWORD=","GRAFANA_ADMIN_PASSWORD=")):
         key=line.split("=",1)[0]
-        lines.append(f"{key}={value}")
+        lines.append(f"{key}={value if key == \"AIOPS_ADMIN_TOKEN\" else secrets.token_urlsafe(36)}")
     elif line.startswith("N8N_ENCRYPTION_KEY="):
-        lines.append(f"N8N_ENCRYPTION_KEY={value}-N8N")
+        lines.append(f"N8N_ENCRYPTION_KEY={secrets.token_urlsafe(36)}")
     else:
         lines.append(line)
 p.write_text("\n".join(lines)+"\n")
