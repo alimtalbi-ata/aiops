@@ -5,7 +5,7 @@ cd "$ROOT"
 
 bash deploy/preflight.sh
 
-docker compose --env-file .env build --pull
+docker compose --env-file .env build
 docker compose --env-file .env up -d --remove-orphans
 
 # Never report a successful start before the runtime qualification and E2E smoke test.
