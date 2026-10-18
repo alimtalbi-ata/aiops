@@ -1,0 +1,34 @@
+name: AioOps CI
+
+on:
+  push:
+    branches: ["main", "r5-runtime-hardening", "r5-*"]
+  pull_request:
+
+jobs:
+  static-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare environment
+        run: cp config/.env.example .env
+      - name: Compose syntax
+        run: docker compose --env-file .env config >/dev/null
+      - name: Static audit
+        run: bash tests/static-audit.sh
+      - name: SQL audit
+        run: bash tests/sql-audit.sh
+      - name: Runtime contract
+        run: bash tests/runtime-contract.sh
+      - name: Python compile
+        run: python3 -m compileall -q app
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: static-runtime
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare environment
+        run: cp config/.env.example .env
+      - name: Build application images
+        run: docker compose --env-file .env build
