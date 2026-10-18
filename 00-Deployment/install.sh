@@ -34,7 +34,8 @@ chmod 600 .env
 grep -Eq '^POSTGRES_PASSWORD=.+$' .env || { echo 'FAIL|EMPTY_POSTGRES_PASSWORD'; exit 2; }
 grep -Eq '^GLPI_DB_PASSWORD=.+$' .env || { echo 'FAIL|EMPTY_GLPI_PASSWORD'; exit 2; }
 grep -Eq '^AIOPS_ADMIN_TOKEN=.+$' .env || { echo 'FAIL|EMPTY_ADMIN_TOKEN'; exit 2; }
-bash deploy/preflight.sh\nbash 00-Deployment/offline-preflight.sh
+bash deploy/preflight.sh
+bash 00-Deployment/offline-preflight.sh
 echo "PASS|ENV_CONFIG"
 echo "PASS|INSTALL_TREE|$TARGET"
 echo "NEXT|bash 00-Deployment/start.sh"
