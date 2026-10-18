@@ -149,9 +149,19 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_PWD: "${POSTGRES_PASSWORD:-Newaiops26$}"
       POSTGRES_SEEDS: aiops2-temporal-postgres
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
     expose: ["7233"]
+    volumes:
+      - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
     networks: [aiops2-control, aiops2-temporal-data]
     depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+    healthcheck:
+      test: ["CMD","temporal","operator","cluster","health","--address","127.0.0.1:7233"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 60
 
   aiops2-temporal-ui:
     image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.56.0}
@@ -161,7 +171,13 @@ services:
       TEMPORAL_ADDRESS: "aiops2-temporal:7233"
     expose: ["8080"]
     networks: [aiops2-control]
-    depends_on: {aiops2-temporal: {condition: service_started}}
+    depends_on: {aiops2-temporal: {condition: service_healthy}}
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://127.0.0.1:8080"]
+      interval: 5s
+      timeout: 3s
+      start_period: 15s
+      retries: 30
 
   aiops2-prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0}
