@@ -169,6 +169,24 @@ services:
     networks: [aiops2-temporal-data]
     healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d temporal"], interval: 5s, timeout: 3s, retries: 30}
 
+  aiops2-temporal-schema:
+    image: ${TEMPORAL_ADMINTOOLS_IMAGE:-temporalio/admin-tools:1.32.1}
+    container_name: aiops2-temporal-schema
+    restart: "no"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:-Newaiops26$}
+      POSTGRES_SEEDS: aiops2-temporal-postgres
+      SQL_PASSWORD: ${POSTGRES_PASSWORD:-Newaiops26$}
+    volumes:
+      - ./00-Deployment/temporal-schema.sh:/scripts/temporal-schema.sh:ro
+    entrypoint: ["/bin/sh","/scripts/temporal-schema.sh"]
+    networks: [aiops2-temporal-data]
+    depends_on:
+      aiops2-temporal-postgres: {condition: service_healthy}
+
   aiops2-temporal:
     image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.32.1}
     container_name: aiops2-temporal
@@ -187,7 +205,9 @@ services:
     volumes:
       - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
     networks: [aiops2-control, aiops2-temporal-data]
-    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+    depends_on:
+      aiops2-temporal-postgres: {condition: service_healthy}
+      aiops2-temporal-schema: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD","nc","-z","127.0.0.1","7233"]
       interval: 5s
