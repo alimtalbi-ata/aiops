@@ -205,7 +205,6 @@ services:
     container_name: aiops2-temporal
     restart: unless-stopped
     environment:
-      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
