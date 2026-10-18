@@ -26,6 +26,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       POLICY_URL: http://aiops2-policy:813
       WORKER_URL: http://aiops2-worker:815
+      INTELLIGENCE_URL: http://aiops2-intelligence:817
+      RAG_URL: http://aiops2-rag:818
+      INTEGRATION_URL: http://aiops2-integration:819
       ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
     expose: ["810"]
     networks: [aiops2-control, aiops2-data]
@@ -43,6 +46,33 @@ services:
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:811/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-intelligence:
+    build: {context: ./app, dockerfile: intelligence/Dockerfile}
+    restart: unless-stopped
+    environment:
+      RAG_URL: http://aiops2-rag:818
+    expose: ["817"]
+    networks: [aiops2-control]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-rag:
+    build: {context: ./app, dockerfile: rag/Dockerfile}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+    expose: ["818"]
+    networks: [aiops2-control, aiops2-data]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:818/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-integration:
+    build: {context: ./app, dockerfile: integration/Dockerfile}
+    restart: unless-stopped
+    expose: ["819"]
+    networks: [aiops2-control, aiops2-integration]
+    depends_on: {aiops2-core: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:819/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-evidence:
     build: {context: ./app, dockerfile: evidence/Dockerfile}
