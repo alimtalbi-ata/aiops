@@ -1,60 +1,24 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
-command -v docker >/dev/null || { echo 'FAIL|docker_missing'; exit 1; }
-docker compose version >/dev/null || { echo 'FAIL|compose_missing'; exit 1; }
-FREE_KB=$(df -Pk "$ROOT" | awk 'NR==2{print $4}')
-(( FREE_KB > 8388608 )) || { echo "FAIL|disk_low|${FREE_KB}KB"; exit 1; }
-[ -f compose.yml ] || { echo 'FAIL|compose_missing'; exit 1; }
-[ -f config/.env.example ] || { echo 'FAIL|env_missing'; exit 1; }
-[ -f .env ] || cp config/.env.example .env
-docker compose --env-file .env config >/dev/null
-grep -Eq '^POSTGRES_PASSWORD=.+
-for f in app/core/Dockerfile app/twin/Dockerfile app/evidence/Dockerfile app/policy/Dockerfile app/copilot/Dockerfile app/worker/Dockerfile app/simulator/Dockerfile app/portal/Dockerfile; do test -f "$f" || { echo "FAIL|MISSING_DOCKERFILE|$f"; exit 1; }; done
-[ -s config/temporal/dynamicconfig/docker.yaml ] || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_MISSING'; exit 1; }
-grep -q 'DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_WIRED'; exit 1; }
-grep -q './config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_MOUNTED'; exit 1; }
-for p in '7777:777' '18080:80' '15678:5678' '19090:9090' '13000:3000' '19093:9093' '18088:8080'; do grep -q "$p" compose.yml || { echo "FAIL|PORT|$p"; exit 1; }; done
-grep -q 'condition: service_healthy' compose.yml || { echo 'FAIL|HEALTH_GATING_MISSING'; exit 1; }
-grep -q 'aiops2-temporal: {condition: service_healthy}' compose.yml || { echo 'FAIL|TEMPORAL_HEALTH_GATING_MISSING'; exit 1; }
-echo DOCKERFILE_PORT_TEMPORAL_CONTRACT=PASS
- .env || { echo 'FAIL|EMPTY_POSTGRES_PASSWORD'; exit 1; }
-grep -Eq '^AIOPS_ADMIN_TOKEN=.+
-for f in app/core/Dockerfile app/twin/Dockerfile app/evidence/Dockerfile app/policy/Dockerfile app/copilot/Dockerfile app/worker/Dockerfile app/simulator/Dockerfile app/portal/Dockerfile; do test -f "$f" || { echo "FAIL|MISSING_DOCKERFILE|$f"; exit 1; }; done
-[ -s config/temporal/dynamicconfig/docker.yaml ] || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_MISSING'; exit 1; }
-grep -q 'DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_WIRED'; exit 1; }
-grep -q './config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_MOUNTED'; exit 1; }
-for p in '7777:777' '18080:80' '15678:5678' '19090:9090' '13000:3000' '19093:9093' '18088:8080'; do grep -q "$p" compose.yml || { echo "FAIL|PORT|$p"; exit 1; }; done
-grep -q 'condition: service_healthy' compose.yml || { echo 'FAIL|HEALTH_GATING_MISSING'; exit 1; }
-grep -q 'aiops2-temporal: {condition: service_healthy}' compose.yml || { echo 'FAIL|TEMPORAL_HEALTH_GATING_MISSING'; exit 1; }
-echo DOCKERFILE_PORT_TEMPORAL_CONTRACT=PASS
- .env || { echo 'FAIL|EMPTY_ADMIN_TOKEN'; exit 1; }
-grep -Eq '^POSTGRES_PASSWORD=.+
-for f in app/core/Dockerfile app/twin/Dockerfile app/evidence/Dockerfile app/policy/Dockerfile app/copilot/Dockerfile app/worker/Dockerfile app/simulator/Dockerfile app/portal/Dockerfile; do test -f "$f" || { echo "FAIL|MISSING_DOCKERFILE|$f"; exit 1; }; done
-[ -s config/temporal/dynamicconfig/docker.yaml ] || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_MISSING'; exit 1; }
-grep -q 'DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_WIRED'; exit 1; }
-grep -q './config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_MOUNTED'; exit 1; }
-for p in '7777:777' '18080:80' '15678:5678' '19090:9090' '13000:3000' '19093:9093' '18088:8080'; do grep -q "$p" compose.yml || { echo "FAIL|PORT|$p"; exit 1; }; done
-grep -q 'condition: service_healthy' compose.yml || { echo 'FAIL|HEALTH_GATING_MISSING'; exit 1; }
-grep -q 'aiops2-temporal: {condition: service_healthy}' compose.yml || { echo 'FAIL|TEMPORAL_HEALTH_GATING_MISSING'; exit 1; }
-echo DOCKERFILE_PORT_TEMPORAL_CONTRACT=PASS
- .env || { echo 'FAIL|EMPTY_POSTGRES_PASSWORD'; exit 1; }
-grep -Eq '^AIOPS_ADMIN_TOKEN=.+
-for f in app/core/Dockerfile app/twin/Dockerfile app/evidence/Dockerfile app/policy/Dockerfile app/copilot/Dockerfile app/worker/Dockerfile app/simulator/Dockerfile app/portal/Dockerfile; do test -f "$f" || { echo "FAIL|MISSING_DOCKERFILE|$f"; exit 1; }; done
-[ -s config/temporal/dynamicconfig/docker.yaml ] || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_MISSING'; exit 1; }
-grep -q 'DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_WIRED'; exit 1; }
-grep -q './config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_MOUNTED'; exit 1; }
-for p in '7777:777' '18080:80' '15678:5678' '19090:9090' '13000:3000' '19093:9093' '18088:8080'; do grep -q "$p" compose.yml || { echo "FAIL|PORT|$p"; exit 1; }; done
-grep -q 'condition: service_healthy' compose.yml || { echo 'FAIL|HEALTH_GATING_MISSING'; exit 1; }
-grep -q 'aiops2-temporal: {condition: service_healthy}' compose.yml || { echo 'FAIL|TEMPORAL_HEALTH_GATING_MISSING'; exit 1; }
-echo DOCKERFILE_PORT_TEMPORAL_CONTRACT=PASS
- .env || { echo 'FAIL|EMPTY_ADMIN_TOKEN'; exit 1; }
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+command -v docker >/dev/null || { echo 'FAIL|DOCKER_MISSING'; exit 1; }
+docker compose version >/dev/null || { echo 'FAIL|COMPOSE_MISSING'; exit 1; }
+command -v python3 >/dev/null || { echo 'FAIL|PYTHON_MISSING'; exit 1; }
+[ -s .env ] || { echo 'FAIL|ENV_MISSING'; exit 1; }
+[ -s config/temporal/dynamicconfig/docker.yaml ] || { echo 'FAIL|DYNAMICCONFIG_MISSING'; exit 1; }
+python3 - <<'PY'
+from pathlib import Path
+import sys
+values={}
+for line in Path('.env').read_text().splitlines():
+ if '=' in line and not line.startswith('#'):
+  k,v=line.split('=',1);values[k]=v
+for key in ('POSTGRES_PASSWORD','AIOPS_ADMIN_TOKEN','AIOPS_INTERNAL_TOKEN','GLPI_DB_PASSWORD','GLPI_DB_ROOT_PASSWORD','GRAFANA_ADMIN_PASSWORD','N8N_ENCRYPTION_KEY'):
+ if not values.get(key):sys.exit('FAIL|EMPTY_SECRET|'+key)
+PY
+docker compose --env-file .env config --quiet
+bash tests/static-audit.sh
+bash tests/sql-audit.sh
+bash tests/runtime-contract.sh
 echo 'PREFLIGHT=PASS'
-for f in app/core/Dockerfile app/twin/Dockerfile app/evidence/Dockerfile app/policy/Dockerfile app/copilot/Dockerfile app/worker/Dockerfile app/simulator/Dockerfile app/portal/Dockerfile; do test -f "$f" || { echo "FAIL|MISSING_DOCKERFILE|$f"; exit 1; }; done
-[ -s config/temporal/dynamicconfig/docker.yaml ] || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_MISSING'; exit 1; }
-grep -q 'DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_WIRED'; exit 1; }
-grep -q './config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro' compose.yml || { echo 'FAIL|TEMPORAL_DYNAMIC_CONFIG_NOT_MOUNTED'; exit 1; }
-for p in '7777:777' '18080:80' '15678:5678' '19090:9090' '13000:3000' '19093:9093' '18088:8080'; do grep -q "$p" compose.yml || { echo "FAIL|PORT|$p"; exit 1; }; done
-grep -q 'condition: service_healthy' compose.yml || { echo 'FAIL|HEALTH_GATING_MISSING'; exit 1; }
-grep -q 'aiops2-temporal: {condition: service_healthy}' compose.yml || { echo 'FAIL|TEMPORAL_HEALTH_GATING_MISSING'; exit 1; }
-echo DOCKERFILE_PORT_TEMPORAL_CONTRACT=PASS
