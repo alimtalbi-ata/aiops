@@ -3,9 +3,11 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 bash deploy/preflight.sh
-[ -s images/images.tar ] || { echo 'FAIL|OFFLINE_IMAGE_ARCHIVE_MISSING';exit 1; }
-[ -s images/images.sha256 ] || { echo 'FAIL|OFFLINE_IMAGE_CHECKSUM_MISSING';exit 1; }
-(cd images && sha256sum -c images.sha256) >/dev/null || { echo 'FAIL|OFFLINE_IMAGE_CHECKSUM';exit 1; }
+if [ -s images/images.tar ];then
+  (cd images && sha256sum -c images.sha256) >/dev/null || { echo 'FAIL|OFFLINE_IMAGE_CHECKSUM';exit 1; }
+else
+  echo 'WARN|IMAGE_ARCHIVE_NOT_PRESENT_AFTER_LOAD'
+fi
 python3 - <<'PY'
 import json,subprocess,sys
 s=json.loads(subprocess.check_output(['docker','compose','--env-file','.env','config','--format','json'],text=True))['services']
