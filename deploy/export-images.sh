@@ -6,6 +6,8 @@ cd "$ROOT"
 mkdir -p images
 docker compose --env-file .env config --quiet
 docker compose --env-file .env build
+# Pull third-party images only on the connected build host.
+docker compose --env-file .env pull --ignore-buildable
 python3 - <<'PY'
 import json,subprocess,sys
 d=json.loads(subprocess.check_output(['docker','compose','--env-file','.env','config','--format','json'],text=True))
