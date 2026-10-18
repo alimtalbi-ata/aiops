@@ -1,1 +1,0 @@
-{"mode":"DEMO","scenario":"SAN_DUAL_FABRIC_DEGRADED","incident_id":"INC-DEMO-SAN-001","run_id":"RUN-DEMO-SAN-001","correlation_id":"COR-DEMO-SAN-001","synthetic":true,"expected":{"severity":"P1","decision":"ESCALATE"}}

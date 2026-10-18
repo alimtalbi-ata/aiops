@@ -1,0 +1,17 @@
+services:
+  core: {container_name: aiops2_core, build: ../02-Services/core, environment: [PORT=810], expose: ['810'], networks: [aiops2_core, aiops2_data]}
+  twin: {container_name: aiops2_twin, build: ../02-Services/twin, environment: [PORT=811], expose: ['811'], networks: [aiops2_core, aiops2_data]}
+  evidence: {container_name: aiops2_evidence, build: ../02-Services/evidence, environment: [PORT=812], expose: ['812'], networks: [aiops2_core, aiops2_data]}
+  policy: {container_name: aiops2_policy, build: ../02-Services/policy, environment: [PORT=813], expose: ['813'], networks: [aiops2_core, aiops2_data]}
+  copilot: {container_name: aiops2_copilot, build: ../02-Services/copilot, environment: [PORT=814], expose: ['814'], networks: [aiops2_front, aiops2_core]}
+  simulator: {container_name: aiops2_simulator, build: ../02-Services/simulator, environment: [PORT=816], expose: ['816'], networks: [aiops2_core]}
+  integration: {container_name: aiops2_integration, build: ../02-Services/integration, environment: [PORT=817], expose: ['817'], networks: [aiops2_core, aiops2_itsm]}
+  intelligence: {container_name: aiops2_intelligence, build: ../02-Services/intelligence, environment: [PORT=818], expose: ['818'], networks: [aiops2_core]}
+  rag: {container_name: aiops2_rag, build: ../02-Services/rag, environment: [PORT=819], expose: ['819'], networks: [aiops2_core, aiops2_data]}
+networks:
+  aiops2_front: {name: aiops2_front}
+  aiops2_core: {name: aiops2_core}
+  aiops2_data: {name: aiops2_data, internal: true}
+  aiops2_temporal: {name: aiops2_temporal, internal: true}
+  aiops2_observability: {name: aiops2_observability, internal: true}
+  aiops2_itsm: {name: aiops2_itsm, internal: true}

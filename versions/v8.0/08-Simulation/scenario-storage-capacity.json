@@ -1,1 +1,0 @@
-{"mode":"DEMO","scenario":"STORAGE_POOL_CAPACITY","incident_id":"INC-DEMO-STORAGE-001","run_id":"RUN-DEMO-STORAGE-001","correlation_id":"COR-DEMO-STORAGE-001","synthetic":true,"expected":{"severity":"P2","decision":"OBSERVE"}}

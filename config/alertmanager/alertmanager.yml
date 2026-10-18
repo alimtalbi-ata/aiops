@@ -1,6 +1,0 @@
-global:
-  resolve_timeout: 5m
-route:
-  receiver: acme-null
-receivers:
-  - name: acme-null

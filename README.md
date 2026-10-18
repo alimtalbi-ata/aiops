@@ -1,41 +1,15 @@
-# AIOps 2.0 — Clean-Slate Deployment V7.8
+# AIOps 2.0 — Clean-Slate V8.0.0
 
-ACME Digital Twin + Canonical Run Engine baseline.
+Reconstruction fonctionnelle de la plateforme AIOps. Les anciennes stacks restent hors runtime et ne sont jamais arrêtées par le kit.
 
-## Runtime invariants
-- Core owns canonical Run/Incident state.
-- Temporal is the only workflow executor.
-- Twin owns topology and run-scoped simulation overrides.
-- Evidence is append-only and idempotent.
-- Policy is fail-closed.
-- RAG exposes provenance/context; Intelligence consumes Twin + RAG.
-- Portal reads APIs, never databases.
-- Demo/Replay/Story are never production mutation modes.
-- Integration is isolated from the control plane.
+## Chemin canonique
+Simulator/Ingress → Core → Run → Temporal → Twin + Evidence + RAG → Intelligence → Critic → Policy → HITL/Remediation → Verify/Reconcile → Integration/Outbox → GLPI/n8n → Portal projection.
 
-## Ports
-External: Portal 7777, GLPI 8080, n8n 5678, Prometheus 9090, Grafana 3000, Alertmanager 9093.
-Internal: Core 810, Twin 811, Evidence 812, Policy 813, Copilot 814, Worker 815, Simulator 816, Integration 817, Intelligence 818, RAG 819.
-Temporal 7233 is internal only.
+## Modes
+LIVE, DEMO, REPLAY, STORY. DEMO/REPLAY/STORY sont explicitement synthétiques/rejoués et ne mutent aucun système externe.
 
-## Deployment
-```bash
-cp config/.env.example .env
-chmod 600 .env
-./deploy/install.sh
-./tests/qualification.sh
-./tests/synthetic-e2e.sh
-```
+## Ports externes
+Portal 7777, GLPI 8080, n8n 5678, Prometheus 9090, Grafana 3000.
 
-Retire legacy only after qualification and backup: `CONFIRM_RETIRE=YES bash deploy/retire-legacy.sh`.
-
-## V7.7
-Reliability hardening: outbox lease recovery, deterministic worker identity, serialized run-event sequencing, explicit migration execution, RAG/Intelligence runtime qualification, and clean release packaging.
-
-## Développement cloud
-
-Voir [CLOUD-DEVELOPMENT.md](docs/CLOUD-DEVELOPMENT.md) pour les contrôles locaux et les limites de qualification.
-
-## Socle V8.0
-
-Le runtime V7.8 reste à la racine. Le nouveau socle V8.0 est conservé dans [versions/v8.0](versions/v8.0/README.md). Cette livraison ne contient pas encore les implémentations Core et Temporal ; elle ne remplace pas le runtime fonctionnel.
+## Ports internes
+Core 810, Twin 811, Evidence 812, Policy 813, Copilot 814, Simulator 816, Integration 817, Intelligence 818, RAG 819, Temporal 7233, PostgreSQL 5432, MariaDB 3306.

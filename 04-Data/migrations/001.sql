@@ -1,0 +1,6 @@
+CREATE SCHEMA IF NOT EXISTS aiops;
+CREATE TABLE IF NOT EXISTS aiops.runs(run_id text primary key,incident_id text not null,correlation_id text not null,mode text not null,state text not null,version bigint not null default 0,created_at timestamptz default now(),updated_at timestamptz default now());
+CREATE TABLE IF NOT EXISTS aiops.run_events(event_id text primary key,run_id text not null,sequence bigint not null,event_type text not null,payload jsonb not null,occurred_at timestamptz default now(),unique(run_id,sequence));
+CREATE TABLE IF NOT EXISTS aiops.evidence(evidence_id text primary key,run_id text not null,source_type text not null,source_locator text not null,observed_at timestamptz,known_at timestamptz default now(),provenance jsonb not null,content jsonb not null);
+CREATE TABLE IF NOT EXISTS aiops.outbox(event_id text primary key,topic text not null,payload jsonb not null,status text not null default 'PENDING',lease_owner text,lease_until timestamptz,attempts int not null default 0,delivered_at timestamptz);
+CREATE TABLE IF NOT EXISTS aiops.integration_receipts(receipt_id text primary key,event_id text not null,target text not null,idempotency_key text unique not null,status text not null,response jsonb,created_at timestamptz default now());
