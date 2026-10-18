@@ -48,6 +48,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:811/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-intelligence:
+    container_name: aiops2-intelligence
     build: {context: ./app, dockerfile: intelligence/Dockerfile}
     restart: unless-stopped
     environment:
@@ -57,6 +58,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-rag:
+    container_name: aiops2-rag
     build: {context: ./app, dockerfile: rag/Dockerfile}
     restart: unless-stopped
     environment:
@@ -67,6 +69,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:818/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-integration:
+    container_name: aiops2-integration
     build: {context: ./app, dockerfile: integration/Dockerfile}
     restart: unless-stopped
     expose: ["819"]
