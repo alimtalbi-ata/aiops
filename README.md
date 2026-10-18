@@ -1,15 +1,45 @@
-# AIOps 2.0 — Clean-Slate V8.0.0
+# ACME AioOps 2.0 — Final Big Bang Deployment Kit
 
-Reconstruction fonctionnelle de la plateforme AIOps. Les anciennes stacks restent hors runtime et ne sont jamais arrêtées par le kit.
+**Author: Abdelhalim Talbi**
 
-## Chemin canonique
-Simulator/Ingress → Core → Run → Temporal → Twin + Evidence + RAG → Intelligence → Critic → Policy → HITL/Remediation → Verify/Reconcile → Integration/Outbox → GLPI/n8n → Portal projection.
+This kit is a clean rebuild of the AioOps runtime. It is designed to deploy the largest coherent functional baseline in one operation rather than accumulate another historical version.
 
-## Modes
-LIVE, DEMO, REPLAY, STORY. DEMO/REPLAY/STORY sont explicitement synthétiques/rejoués et ne mutent aucun système externe.
+## First deployment
 
-## Ports externes
-Portal 7777, GLPI 8080, n8n 5678, Prometheus 9090, Grafana 3000.
+```bash
+cp config/.env.example .env
+RETIRE_LEGACY=1 ./deploy/install.sh
+```
 
-## Ports internes
-Core 810, Twin 811, Evidence 812, Policy 813, Copilot 814, Simulator 816, Integration 817, Intelligence 818, RAG 819, Temporal 7233, PostgreSQL 5432, MariaDB 3306.
+The installer builds the application images, starts the complete stack, checks the exposed services and launches a deterministic synthetic Golden Demo.
+
+## External interfaces
+
+- Portal: `7777`
+- GLPI: `8080`
+- n8n: `5678`
+- Prometheus: `9090`
+- Grafana: `3000`
+- Alertmanager: `9093`
+- Temporal gRPC: internal `7233`
+
+## Core architecture
+
+`Portal → Core → Temporal/Worker → Twin + Evidence + Policy`.
+
+The Simulator is isolated on `aiops2-execution`; it does not have direct access to the data network. n8n is an integration boundary and never owns Run state. The Portal never writes PostgreSQL directly.
+
+## Safety model
+
+- Run state uses optimistic versioning and idempotency receipts.
+- Events and Evidence are append-only.
+- Every stage has durable stage state.
+- LIVE resolution/remediation is fail-closed.
+- DEMO/REPLAY/STORY synthetic mutation is guarded by mode and token.
+- Missing proof is represented as `UNKNOWN`, not guessed.
+
+## Qualification
+
+`tests/static-audit.sh` checks source structure and naming. `tests/qualification.sh` checks the running stack. `tests/synthetic-e2e.sh` exercises Portal → Core → Temporal → Worker and waits for the Run inventory to contain the generated Run.
+
+See `docs/` for architecture, data contracts, network boundaries, deployment, demo and resilience strategy.

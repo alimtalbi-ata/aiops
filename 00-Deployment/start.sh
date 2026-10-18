@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-cd "$(dirname "$0")"
-docker compose up -d --build
-docker compose ps
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+docker compose --env-file .env up -d --build
+docker compose --env-file .env ps

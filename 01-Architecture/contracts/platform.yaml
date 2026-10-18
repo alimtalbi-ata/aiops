@@ -1,9 +1,0 @@
-name: aiops2
-release: 8.0.0
-author: Abdelhalim Talbi
-external_ports: {portal: 7777, glpi: 8080, n8n: 5678, prometheus: 9090, grafana: 3000}
-internal_ports: {core: 810, twin: 811, evidence: 812, policy: 813, copilot: 814, simulator: 816, integration: 817, intelligence: 818, rag: 819, temporal: 7233, postgres: 5432, mariadb: 3306}
-networks: [aiops2_front, aiops2_core, aiops2_data, aiops2_temporal, aiops2_observability, aiops2_itsm]
-identities: [correlation_id, incident_id, run_id, event_id, evidence_id, decision_id, remediation_id, receipt_id]
-mode_rules: {DEMO: no_external_mutation, REPLAY: no_external_mutation, STORY: no_external_mutation, LIVE: fail_closed_until_adapter_qualified}
-invariants: [immutable_events, provenance_required, observed_at_known_at, run_scoped_simulation, idempotent_outbox, temporal_single_executor, legacy_retirement_after_qualification]

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-cd "$(dirname "$0")"
-docker compose stop
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+docker compose --env-file .env stop

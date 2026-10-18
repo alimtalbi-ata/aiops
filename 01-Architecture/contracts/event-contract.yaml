@@ -1,4 +1,0 @@
-required_context: [correlation_id, incident_id, run_id]
-optional_context: [evidence_id, decision_id, remediation_id, receipt_id]
-event_fields: [event_id, run_id, sequence, event_type, occurred_at, payload]
-rule: downstream_services_reuse_upstream_ids

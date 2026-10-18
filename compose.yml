@@ -1,0 +1,261 @@
+name: aiops2
+services:
+  aiops2-postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: aiops2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aiops}
+      POSTGRES_USER: ${POSTGRES_USER:-aiops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Newaiops26$}
+    volumes:
+      - aiops2-postgres-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks: [aiops2-data]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  aiops2-core:
+    build: {context: ./app, dockerfile: core/Dockerfile}
+    container_name: aiops2-core
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+      POLICY_URL: http://aiops2-policy:813
+      WORKER_URL: http://aiops2-worker:815
+      ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
+    expose: ["810"]
+    networks: [aiops2-control, aiops2-data]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:810/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-twin:
+    build: {context: ./app, dockerfile: twin/Dockerfile}
+    container_name: aiops2-twin
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+      AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
+    expose: ["811"]
+    networks: [aiops2-control, aiops2-data]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:811/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-evidence:
+    build: {context: ./app, dockerfile: evidence/Dockerfile}
+    container_name: aiops2-evidence
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+    expose: ["812"]
+    networks: [aiops2-control, aiops2-data]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:812/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-policy:
+    build: {context: ./app, dockerfile: policy/Dockerfile}
+    container_name: aiops2-policy
+    restart: unless-stopped
+    expose: ["813"]
+    networks: [aiops2-control]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-copilot:
+    build: {context: ./app, dockerfile: copilot/Dockerfile}
+    container_name: aiops2-copilot
+    restart: unless-stopped
+    environment:
+      CORE_URL: http://aiops2-core:810
+      TWIN_URL: http://aiops2-twin:811
+      EVIDENCE_URL: http://aiops2-evidence:812
+    expose: ["814"]
+    networks: [aiops2-control]
+    depends_on:
+      aiops2-core: {condition: service_healthy}
+      aiops2-twin: {condition: service_healthy}
+      aiops2-evidence: {condition: service_healthy}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:814/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-worker:
+    build: {context: ./app, dockerfile: worker/Dockerfile}
+    container_name: aiops2-worker
+    restart: unless-stopped
+    environment:
+      CORE_URL: http://aiops2-core:810
+      EVIDENCE_URL: http://aiops2-evidence:812
+      POLICY_URL: http://aiops2-policy:813
+      TWIN_URL: http://aiops2-twin:811
+      AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
+      TEMPORAL_ADDRESS: aiops2-temporal:7233
+      TEMPORAL_NAMESPACE: default
+    expose: ["815"]
+    networks: [aiops2-control, aiops2-execution]
+    depends_on:
+      aiops2-core: {condition: service_healthy}
+      aiops2-evidence: {condition: service_healthy}
+      aiops2-policy: {condition: service_healthy}
+      aiops2-twin: {condition: service_healthy}
+      aiops2-temporal: {condition: service_started}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-simulator:
+    build: {context: ./app, dockerfile: simulator/Dockerfile}
+    container_name: aiops2-simulator
+    restart: unless-stopped
+    environment:
+      CORE_URL: http://aiops2-core:810
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:-Newaiops26$}
+    expose: ["816"]
+    networks: [aiops2-execution]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:816/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-portal:
+    build: {context: ./app, dockerfile: portal/Dockerfile}
+    container_name: aiops2-portal
+    restart: unless-stopped
+    environment:
+      CORE_URL: http://aiops2-core:810
+      COPILOT_URL: http://aiops2-copilot:814
+      TWIN_URL: http://aiops2-twin:811
+    ports: ["7777:777"]
+    networks: [aiops2-public, aiops2-control]
+    depends_on:
+      aiops2-core: {condition: service_healthy}
+      aiops2-copilot: {condition: service_healthy}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:777/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-temporal-postgres:
+    image: ${TEMPORAL_POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: aiops2-temporal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-Newaiops26$}"
+      POSTGRES_DB: temporal
+    volumes: [aiops2-temporal-postgres-data:/var/lib/postgresql/data]
+    networks: [aiops2-temporal-data]
+    healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d temporal"], interval: 5s, timeout: 3s, retries: 30}
+
+  aiops2-temporal:
+    image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.32.1}
+    container_name: aiops2-temporal
+    restart: unless-stopped
+    environment:
+      DB: postgresql
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: "${POSTGRES_PASSWORD:-Newaiops26$}"
+      POSTGRES_SEEDS: aiops2-temporal-postgres
+    expose: ["7233"]
+    networks: [aiops2-control, aiops2-temporal-data]
+    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+
+  aiops2-temporal-ui:
+    image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.56.0}
+    container_name: aiops2-temporal-ui
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: "aiops2-temporal:7233"
+    expose: ["8080"]
+    networks: [aiops2-control]
+    depends_on: {aiops2-temporal: {condition: service_started}}
+
+  aiops2-prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0}
+    container_name: aiops2-prometheus
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    volumes: [./config/prometheus:/etc/prometheus:ro, aiops2-prometheus-data:/prometheus]
+    healthcheck: {test: ["CMD","wget","-qO-","http://127.0.0.1:9090/-/ready"], interval: 5s, timeout: 3s, retries: 20}
+    networks: [aiops2-observability, aiops2-control]
+
+  aiops2-grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:13.2.2}
+    container_name: aiops2-grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-Newaiops26$}"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - aiops2-grafana-data:/var/lib/grafana
+    networks: [aiops2-observability]
+    depends_on: {aiops2-prometheus: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","wget","-qO-","http://127.0.0.1:3000/api/health"], interval: 5s, timeout: 3s, retries: 20}
+
+  aiops2-alertmanager:
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.34.1}
+    container_name: aiops2-alertmanager
+    restart: unless-stopped
+    ports: ["9093:9093"]
+    volumes: [./config/alertmanager:/etc/alertmanager:ro]
+    networks: [aiops2-observability]
+
+  aiops2-glpi-db:
+    image: ${GLPI_DB_IMAGE:-mariadb:11.4}
+    container_name: aiops2-glpi-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: glpi
+      MARIADB_USER: glpi
+      MARIADB_PASSWORD: "${GLPI_DB_PASSWORD:-Newaiops26$}"
+      MARIADB_ROOT_PASSWORD: "${GLPI_DB_ROOT_PASSWORD:-Newaiops26$}"
+    volumes: [aiops2-glpi-db-data:/var/lib/mysql]
+    networks: [aiops2-integration]
+    healthcheck: {test: ["CMD-SHELL","mariadb-admin ping -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"], interval: 5s, timeout: 3s, retries: 30}
+
+  aiops2-glpi:
+    image: ${GLPI_IMAGE:-glpi/glpi:11.0.9}
+    container_name: aiops2-glpi
+    restart: unless-stopped
+    ports: ["8080:80"]
+    environment:
+      GLPI_DB_HOST: aiops2-glpi-db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: glpi
+      GLPI_DB_USER: glpi
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD:-Newaiops26$}
+      GLPI_SKIP_AUTOINSTALL: "false"
+      GLPI_SKIP_AUTOUPDATE: "false"
+    volumes: [aiops2-glpi-data:/var/glpi]
+    networks: [aiops2-integration]
+    depends_on: {aiops2-glpi-db: {condition: service_healthy}}
+
+  aiops2-n8n:
+    image: ${N8N_IMAGE:-n8nio/n8n:2.40.6}
+    container_name: aiops2-n8n
+    restart: unless-stopped
+    ports: ["5678:5678"]
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: aiops2-postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-aiops}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-Newaiops26$}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-Newaiops26$-N8N}
+      N8N_SECURE_COOKIE: "false"
+    volumes: [aiops2-n8n-data:/home/node/.n8n]
+    networks: [aiops2-integration, aiops2-control]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
+
+networks:
+  aiops2-public: {name: aiops2-public}
+  aiops2-control: {name: aiops2-control, internal: true}
+  aiops2-data: {name: aiops2-data, internal: true}
+  aiops2-execution: {name: aiops2-execution, internal: true}
+  aiops2-temporal-data: {name: aiops2-temporal-data, internal: true}
+  aiops2-integration: {name: aiops2-integration, internal: true}
+  aiops2-observability: {name: aiops2-observability, internal: true}
+volumes:
+  aiops2-postgres-data: {name: aiops2-postgres-data}
+  aiops2-temporal-postgres-data: {name: aiops2-temporal-postgres-data}
+  aiops2-prometheus-data: {name: aiops2-prometheus-data}
+  aiops2-grafana-data: {name: aiops2-grafana-data}
+  aiops2-glpi-db-data: {name: aiops2-glpi-db-data}
+  aiops2-glpi-data: {name: aiops2-glpi-data}
+  aiops2-n8n-data: {name: aiops2-n8n-data}

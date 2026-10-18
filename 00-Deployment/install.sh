@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-ROOT=${AIOPS2_ROOT:-/home/aiops/aiops2-v8}
-[[ ! -e "$ROOT" ]] || { echo "BLOCKED|TARGET_EXISTS|$ROOT"; exit 2; }
-command -v docker >/dev/null || { echo 'FAIL|DOCKER'; exit 1; }
-docker compose version >/dev/null || { echo 'FAIL|COMPOSE'; exit 1; }
-free=$(df -Pm /home|awk 'NR==2{print $4}'); ((free>=4096)) || { echo "FAIL|DISK|${free}MB"; exit 1; }
-mkdir -p "$ROOT"; cp -a "$(cd "$(dirname "$0")/..";pwd)/." "$ROOT/"
-cd "$ROOT/00-Deployment"
-docker compose config >/dev/null
-echo "PASS|INSTALL_TREE|$ROOT"
-echo "NEXT|docker compose up -d --build"
+umask 077
+SRC="$(cd "$(dirname "$0")/.." && pwd)"
+TARGET="${AIOPS2_ROOT:-/home/aiops/aiops2-v8}"
+if [[ -e "$TARGET" ]]; then echo "FAIL|TARGET_EXISTS|$TARGET"; exit 2; fi
+bash "$SRC/deploy/preflight.sh"
+mkdir -p "$TARGET"
+cp -a "$SRC/." "$TARGET/"
+cd "$TARGET"
+[[ -f .env ]] || cp config/.env.example .env
+chmod 600 .env
+if ! grep -q '^POSTGRES_PASSWORD=' .env; then cat >> .env <<'EOV'
+POSTGRES_PASSWORD=Newaiops26$
+GLPI_DB_PASSWORD=Newaiops26$
+GLPI_DB_ROOT_PASSWORD=Newaiops26$
+AIOPS_ADMIN_TOKEN=Newaiops26$
+AIOPS_INTERNAL_TOKEN=Newaiops26$
+GRAFANA_ADMIN_PASSWORD=Newaiops26$
+N8N_ENCRYPTION_KEY=Newaiops26$-N8N
+EOV
+fi
+chmod 600 .env
+docker compose --env-file .env config >/dev/null
+echo "PASS|INSTALL_TREE|$TARGET"
+echo "NEXT|bash 00-Deployment/start.sh"
