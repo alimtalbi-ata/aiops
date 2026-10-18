@@ -2,14 +2,14 @@
 set -Eeuo pipefail
 umask 077
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
-TARGET="\${AIOPS2_ROOT:-/home/aiops/aiops2-v8}"
-PASSWORD="\${AIOPS2_PASSWORD:-}"
+TARGET="${AIOPS2_ROOT:-/home/aiops/aiops2-r5}"
+PASSWORD="${AIOPS2_PASSWORD:-}"
 if [[ -z "$PASSWORD" ]]; then
   echo "FAIL|PASSWORD_REQUIRED|Use AIOPS2_PASSWORD=..."
   exit 2
 fi
 if [[ -e "$TARGET" ]]; then echo "FAIL|TARGET_EXISTS|$TARGET"; exit 2; fi
-bash "$SRC/deploy/preflight.sh"
+command -v docker >/dev/null && docker compose version >/dev/null || { echo "FAIL|DOCKER_COMPOSE_MISSING"; exit 2; }
 mkdir -p "$TARGET"
 cp -a "$SRC/." "$TARGET/"
 cd "$TARGET"
@@ -34,7 +34,7 @@ chmod 600 .env
 grep -Eq '^POSTGRES_PASSWORD=.+$' .env || { echo 'FAIL|EMPTY_POSTGRES_PASSWORD'; exit 2; }
 grep -Eq '^GLPI_DB_PASSWORD=.+$' .env || { echo 'FAIL|EMPTY_GLPI_PASSWORD'; exit 2; }
 grep -Eq '^AIOPS_ADMIN_TOKEN=.+$' .env || { echo 'FAIL|EMPTY_ADMIN_TOKEN'; exit 2; }
-docker compose --env-file .env config >/dev/null
+bash deploy/preflight.sh\nbash 00-Deployment/offline-preflight.sh
 echo "PASS|ENV_CONFIG"
 echo "PASS|INSTALL_TREE|$TARGET"
 echo "NEXT|bash 00-Deployment/start.sh"
