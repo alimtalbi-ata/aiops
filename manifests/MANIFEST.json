@@ -22,8 +22,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 1419,
-      "sha256": "0d2eb8ccbd491da87fd18deab6312feed40598524b42b0774fba7de4fbae0a36"
+      "bytes": 1678,
+      "sha256": "e0f60b1bd8ab128d871a8b4a0cc50180762fa08c62bf4dc81280852767d157dd"
     },
     {
       "path": "app/copilot/Dockerfile",
@@ -474,6 +474,91 @@
       "path": "tests/v78-static-gate.sh",
       "bytes": 963,
       "sha256": "a7d9e04c423fc86ef298b1cb8f48d4255977a551b4bb51c6fccc490d7dc84063"
+    },
+    {
+      "path": "versions/v8.0/00-Deployment/compose.yml",
+      "bytes": 2117,
+      "sha256": "bd9a9d591c93cb4fce66fcc39e848c1220f9a6da5132f77161970e76978d4848"
+    },
+    {
+      "path": "versions/v8.0/01-Architecture/PLATFORM-CONTRACT.yaml",
+      "bytes": 1018,
+      "sha256": "b4f42c6c743ea90543adb559c53146fb3770fbd4c6873cfa451cee68c9844e07"
+    },
+    {
+      "path": "versions/v8.0/02-Core/.gitkeep",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "versions/v8.0/03-Temporal/.gitkeep",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "versions/v8.0/04-Data/001_schema.sql",
+      "bytes": 2156,
+      "sha256": "4ca840879f441275abaa4b09ab698ce2fece019d9eae029241d342f9161a5e6f"
+    },
+    {
+      "path": "versions/v8.0/05-Qualification/contract_audit.py",
+      "bytes": 1020,
+      "sha256": "da2eda314dc13747237dbf5c9af00c767de3933278e74154aa8fb1925d79a1c4"
+    },
+    {
+      "path": "versions/v8.0/05-Qualification/qualify.sh",
+      "bytes": 374,
+      "sha256": "f281c266fc0e21297eb027b3bd2a8b2ee603d9eb9c3fce4d552c6dcec18cd5b1"
+    },
+    {
+      "path": "versions/v8.0/05-Qualification/retire-legacy.sh",
+      "bytes": 280,
+      "sha256": "93fbb6ecdd821fc2c115ffcd5d66eddfd54171491b19c69ff922ade61db0dc01"
+    },
+    {
+      "path": "versions/v8.0/06-Documentation/ARCHITECTURE.md",
+      "bytes": 1058,
+      "sha256": "0ec31526462ee0ed2f84e4bdc48191954a3d82f05e6c4c97a8c2f45a2ecc8999"
+    },
+    {
+      "path": "versions/v8.0/06-Documentation/OPERATIONS.md",
+      "bytes": 552,
+      "sha256": "2d0589d4513a4bd8f58f15258f2741074a8d372c3fb72ceb4a7a9d1c1a92f8cc"
+    },
+    {
+      "path": "versions/v8.0/07-Manifests/MANIFEST.json",
+      "bytes": 264,
+      "sha256": "3d22d31a4b21beef916860b7957062f290ac79e34c7b69e7f7c24510007075e5"
+    },
+    {
+      "path": "versions/v8.0/07-Manifests/RELEASE-GATE.md",
+      "bytes": 298,
+      "sha256": "a89b8cf3ef48effb91ed651e3970ff98fd1efde5d48bdaa38e52f74ca9551379"
+    },
+    {
+      "path": "versions/v8.0/08-Simulation/scenario-san-dual-fabric.json",
+      "bytes": 219,
+      "sha256": "0ee54cb47a935d79566bcaa81c55b43cad2a5b7cea601d6d49d1b2304f611bbe"
+    },
+    {
+      "path": "versions/v8.0/08-Simulation/scenario-storage-capacity.json",
+      "bytes": 227,
+      "sha256": "3cd5b5cfb865239ac6b9013286dae15462d7e2347e50d8470974285a9d94a5e8"
+    },
+    {
+      "path": "versions/v8.0/09-Tests/.gitkeep",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "versions/v8.0/README.md",
+      "bytes": 609,
+      "sha256": "55210012b2d034170912c19e404f9a202d0c57cf4f3570325bcc3da3abbbcafd"
+    },
+    {
+      "path": "versions/v8.0/VERSION",
+      "bytes": 6,
+      "sha256": "462c9aaa608fb2014cd9649af1c5c009485c60b9c8b15b89401fdc10cf6161c6"
     }
   ],
   "clean_slate": true,

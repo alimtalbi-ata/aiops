@@ -35,3 +35,7 @@ Reliability hardening: outbox lease recovery, deterministic worker identity, ser
 ## Développement cloud
 
 Voir [CLOUD-DEVELOPMENT.md](docs/CLOUD-DEVELOPMENT.md) pour les contrôles locaux et les limites de qualification.
+
+## Socle V8.0
+
+Le runtime V7.8 reste à la racine. Le nouveau socle V8.0 est conservé dans [versions/v8.0](versions/v8.0/README.md). Cette livraison ne contient pas encore les implémentations Core et Temporal ; elle ne remplace pas le runtime fonctionnel.

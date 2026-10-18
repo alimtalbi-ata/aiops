@@ -1,0 +1,65 @@
+services:
+  postgres:
+    container_name: aiops2_postgres
+    image: ${AIOPS2_POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_USER: aiops2
+      POSTGRES_PASSWORD: ${AIOPS2_DB_PASSWORD:-Newaiops26$}
+      POSTGRES_DB: aiops2
+    networks: [aiops2_data]
+    expose: [5432]
+    volumes: [aiops2_postgres:/var/lib/postgresql/data]
+  core:
+    container_name: aiops2_core
+    image: ${AIOPS2_CORE_IMAGE:-aiops2/core:8.0}
+    networks: [aiops2_core, aiops2_data]
+    expose: [810]
+  twin:
+    container_name: aiops2_twin
+    image: ${AIOPS2_TWIN_IMAGE:-aiops2/twin:8.0}
+    networks: [aiops2_core, aiops2_data]
+    expose: [811]
+  evidence:
+    container_name: aiops2_evidence
+    image: ${AIOPS2_EVIDENCE_IMAGE:-aiops2/evidence:8.0}
+    networks: [aiops2_core, aiops2_data]
+    expose: [812]
+  policy:
+    container_name: aiops2_policy
+    image: ${AIOPS2_POLICY_IMAGE:-aiops2/policy:8.0}
+    networks: [aiops2_core, aiops2_data]
+    expose: [813]
+  copilot:
+    container_name: aiops2_copilot
+    image: ${AIOPS2_COPILOT_IMAGE:-aiops2/copilot:8.0}
+    networks: [aiops2_core]
+    expose: [814]
+  simulator:
+    container_name: aiops2_simulator
+    image: ${AIOPS2_SIMULATOR_IMAGE:-aiops2/simulator:8.0}
+    networks: [aiops2_core]
+    expose: [816]
+  integration:
+    container_name: aiops2_integration
+    image: ${AIOPS2_INTEGRATION_IMAGE:-aiops2/integration:8.0}
+    networks: [aiops2_core, aiops2_itsm]
+    expose: [817]
+  intelligence:
+    container_name: aiops2_intelligence
+    image: ${AIOPS2_INTELLIGENCE_IMAGE:-aiops2/intelligence:8.0}
+    networks: [aiops2_core]
+    expose: [818]
+  rag:
+    container_name: aiops2_rag
+    image: ${AIOPS2_RAG_IMAGE:-aiops2/rag:8.0}
+    networks: [aiops2_core, aiops2_data]
+    expose: [819]
+networks:
+  aiops2_front: {name: aiops2_front}
+  aiops2_core: {name: aiops2_core}
+  aiops2_data: {name: aiops2_data, internal: true}
+  aiops2_temporal: {name: aiops2_temporal, internal: true}
+  aiops2_observability: {name: aiops2_observability, internal: true}
+  aiops2_itsm: {name: aiops2_itsm, internal: true}
+volumes:
+  aiops2_postgres: {name: aiops2_postgres}
