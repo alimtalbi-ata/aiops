@@ -24,3 +24,16 @@ Target host:
 Required coexistence: portal 7777; n8n 15678; GLPI 18080; Prometheus 19090; Grafana 13000; Temporal UI 18088. Internal Temporal 7233 must not be published.
 
 No claim of qualification or Debian functionality is made before the actual deployment test. Stop on errors and preserve pre-existing environments.
+
+## GitHub Actions package
+
+The workflow `.github/workflows/r5-offline-package.yml` builds Docker images on a connected GitHub-hosted Ubuntu runner, runs `deploy/package.sh`, and uploads an artifact named `AIOps-2.0-R5-Debian-Offline`. The artifact contains `AIOps-2.0-R5-Debian-Offline.zip` and its SHA-256 sidecar. The ZIP is not ready until the workflow finishes successfully and the artifact is present.
+
+On the target, verify the ZIP sidecar with `sha256sum -c AIOps-2.0-R5-Debian-Offline.zip.sha256` in the directory containing both files. Extract, then verify `images/images.sha256` before `docker load -i images/images.tar`. The installer checks for locally available images; it does not download images. Do not place the ZIP or extracted tree on a full root filesystem: the image tar and Docker layer extraction can require substantial disk space.
+
+## Qualification gates
+
+* GitHub CI success alone is **not** Debian qualification.
+* Workflow success plus an artifact establishes packaging only, not runtime health.
+* Runtime qualification requires a fresh install on SRV-DEB-05, `tests/qualification.sh` and `tests/synthetic-e2e.sh` passing, captured command output and a review of Temporal schema/worker health.
+* If any gate fails, keep R5 marked **NOT QUALIFIED** and attach evidence to the pull request.
