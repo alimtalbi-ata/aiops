@@ -1,0 +1,43 @@
+name: R5 Debian Offline Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["r5-offline-package-hardening"]
+    paths:
+      - "app/**"
+      - "deploy/**"
+      - "00-Deployment/**"
+      - "compose.yml"
+      - "config/**"
+      - "tests/**"
+      - ".github/workflows/r5-offline-package.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-offline-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare build environment
+        run: cp config/.env.example .env
+      - name: Export all Docker images
+        run: bash deploy/export-images.sh
+      - name: Package complete offline distribution
+        run: |
+          AIOPS2_PACKAGE_OUTPUT="$RUNNER_TEMP/AIOps-2.0-R5-Debian-Offline.zip" bash deploy/package.sh
+          mkdir -p dist
+          mv "$RUNNER_TEMP/AIOps-2.0-R5-Debian-Offline.zip" dist/
+          mv "$RUNNER_TEMP/AIOps-2.0-R5-Debian-Offline.zip.sha256" dist/
+          (cd dist && sha256sum -c AIOps-2.0-R5-Debian-Offline.zip.sha256)
+      - name: Upload Debian offline ZIP and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIOps-2.0-R5-Debian-Offline
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
