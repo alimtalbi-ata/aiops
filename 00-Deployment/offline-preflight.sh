@@ -6,7 +6,7 @@ bash deploy/preflight.sh
 if [ -s images/images.tar ];then
   (cd images && sha256sum -c images.sha256) >/dev/null || { echo 'FAIL|OFFLINE_IMAGE_CHECKSUM';exit 1; }
 else
-  echo 'WARN|IMAGE_ARCHIVE_NOT_PRESENT_AFTER_LOAD'
+  echo 'FAIL|OFFLINE_IMAGE_ARCHIVE_MISSING';exit 1
 fi
 python3 - <<'PY'
 import json,subprocess,sys
