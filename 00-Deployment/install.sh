@@ -4,6 +4,7 @@ umask 077
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET="${AIOPS2_ROOT:-/home/aiops/aiops2-r5}"
 PASSWORD="${AIOPS2_PASSWORD:-}"
+export AIOPS2_PASSWORD
 if [[ -z "$PASSWORD" ]]; then
   echo "FAIL|PASSWORD_REQUIRED|Use AIOPS2_PASSWORD=..."
   exit 2
@@ -14,11 +15,11 @@ mkdir -p "$TARGET"
 cp -a "$SRC/." "$TARGET/"
 cd "$TARGET"
 cp config/.env.example .env
-python3 - "$PASSWORD" <<'PY'
+python3 - <<'PY'
 from pathlib import Path
-import sys, secrets
+import os, secrets
 p=Path(".env")
-value=sys.argv[1]
+value=os.environ["AIOPS2_PASSWORD"]
 lines=[]
 for line in p.read_text().splitlines():
     if line.startswith(("POSTGRES_PASSWORD=","AIOPS_ADMIN_TOKEN=","AIOPS_INTERNAL_TOKEN=","GLPI_DB_PASSWORD=","GLPI_DB_ROOT_PASSWORD=","GRAFANA_ADMIN_PASSWORD=")):
