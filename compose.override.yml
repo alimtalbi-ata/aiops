@@ -1,0 +1,27 @@
+services:
+  aiops2-intelligence:
+    build: {context: ./app, dockerfile: intelligence/Dockerfile}
+    container_name: aiops2-intelligence
+    restart: unless-stopped
+    environment:
+      RAG_URL: http://aiops2-rag:818
+    expose: ["817"]
+    networks: [aiops2-control]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
+  aiops2-rag:
+    build: {context: ./app, dockerfile: rag/Dockerfile}
+    container_name: aiops2-rag
+    restart: unless-stopped
+    expose: ["818"]
+    networks: [aiops2-control, aiops2-data]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:818/health')"], interval: 5s, timeout: 3s, retries: 20}
+  aiops2-integration:
+    build: {context: ./app, dockerfile: integration/Dockerfile}
+    container_name: aiops2-integration
+    restart: unless-stopped
+    expose: ["819"]
+    networks: [aiops2-control, aiops2-integration]
+    depends_on:
+      aiops2-core: {condition: service_healthy}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:819/health')"], interval: 5s, timeout: 3s, retries: 20}
