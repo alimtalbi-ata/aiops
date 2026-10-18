@@ -98,7 +98,7 @@ services:
       aiops2-evidence: {condition: service_healthy}
       aiops2-policy: {condition: service_healthy}
       aiops2-twin: {condition: service_healthy}
-      aiops2-temporal: {condition: service_started}
+      aiops2-temporal: {condition: service_healthy}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-simulator:
@@ -159,7 +159,7 @@ services:
     networks: [aiops2-control, aiops2-temporal-data]
     depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD","temporal","operator","cluster","health","--address","127.0.0.1:7233"]
+      test: ["CMD","nc","-z","127.0.0.1","7233"]
       interval: 5s
       timeout: 5s
       start_period: 30s
@@ -171,7 +171,7 @@ services:
     restart: unless-stopped
     environment:
       TEMPORAL_ADDRESS: "aiops2-temporal:7233"
-    expose: ["8080"]
+    ports: ["18088:8080"]
     networks: [aiops2-control]
     depends_on: {aiops2-temporal: {condition: service_healthy}}
     healthcheck:
@@ -185,7 +185,7 @@ services:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0}
     container_name: aiops2-prometheus
     restart: unless-stopped
-    ports: ["9090:9090"]
+    ports: ["19090:9090"]
     volumes: [./config/prometheus:/etc/prometheus:ro, aiops2-prometheus-data:/prometheus]
     healthcheck: {test: ["CMD","wget","-qO-","http://127.0.0.1:9090/-/ready"], interval: 5s, timeout: 3s, retries: 20}
     networks: [aiops2-observability, aiops2-control]
@@ -194,7 +194,7 @@ services:
     image: ${GRAFANA_IMAGE:-grafana/grafana:13.2.2}
     container_name: aiops2-grafana
     restart: unless-stopped
-    ports: ["3000:3000"]
+    ports: ["13000:3000"]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-Newaiops26$}"
     volumes:
@@ -209,7 +209,7 @@ services:
     image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.34.1}
     container_name: aiops2-alertmanager
     restart: unless-stopped
-    ports: ["9093:9093"]
+    ports: ["19093:9093"]
     volumes: [./config/alertmanager:/etc/alertmanager:ro]
     networks: [aiops2-observability]
 
@@ -230,7 +230,7 @@ services:
     image: ${GLPI_IMAGE:-glpi/glpi:11.0.9}
     container_name: aiops2-glpi
     restart: unless-stopped
-    ports: ["8080:80"]
+    ports: ["18080:80"]
     environment:
       GLPI_DB_HOST: aiops2-glpi-db
       GLPI_DB_PORT: 3306
@@ -247,7 +247,7 @@ services:
     image: ${N8N_IMAGE:-n8nio/n8n:2.40.6}
     container_name: aiops2-n8n
     restart: unless-stopped
-    ports: ["5678:5678"]
+    ports: ["15678:5678"]
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: aiops2-postgres
