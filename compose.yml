@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-aiops}
       POSTGRES_USER: ${POSTGRES_USER:-aiops}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Newaiops26$}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - aiops2-postgres-data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
@@ -19,35 +19,39 @@ services:
       retries: 30
 
   aiops2-core:
+    image: aiops2/core:r5-offline
     build: {context: ./app, dockerfile: core/Dockerfile}
     container_name: aiops2-core
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       POLICY_URL: http://aiops2-policy:813
       WORKER_URL: http://aiops2-worker:815
       INTELLIGENCE_URL: http://aiops2-intelligence:817
       RAG_URL: http://aiops2-rag:818
       INTEGRATION_URL: http://aiops2-integration:819
-      ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
+      ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN is required}
     expose: ["810"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:810/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-twin:
+    image: aiops2/twin:r5-offline
     build: {context: ./app, dockerfile: twin/Dockerfile}
     container_name: aiops2-twin
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
-      AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+      AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN is required}
     expose: ["811"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:811/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-intelligence:
+    image: aiops2/intelligence:r5-offline
     container_name: aiops2-intelligence
     build: {context: ./app, dockerfile: intelligence/Dockerfile}
     restart: unless-stopped
@@ -58,17 +62,19 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-rag:
+    image: aiops2/rag:r5-offline
     container_name: aiops2-rag
     build: {context: ./app, dockerfile: rag/Dockerfile}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
     expose: ["818"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:818/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-integration:
+    image: aiops2/integration:r5-offline
     container_name: aiops2-integration
     build: {context: ./app, dockerfile: integration/Dockerfile}
     restart: unless-stopped
@@ -78,17 +84,19 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:819/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-evidence:
+    image: aiops2/evidence:r5-offline
     build: {context: ./app, dockerfile: evidence/Dockerfile}
     container_name: aiops2-evidence
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:-Newaiops26$}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
     expose: ["812"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:812/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-policy:
+    image: aiops2/policy:r5-offline
     build: {context: ./app, dockerfile: policy/Dockerfile}
     container_name: aiops2-policy
     restart: unless-stopped
@@ -97,6 +105,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-copilot:
+    image: aiops2/copilot:r5-offline
     build: {context: ./app, dockerfile: copilot/Dockerfile}
     container_name: aiops2-copilot
     restart: unless-stopped
@@ -113,15 +122,17 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:814/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-worker:
+    image: aiops2/worker:r5-offline
     build: {context: ./app, dockerfile: worker/Dockerfile}
     container_name: aiops2-worker
     restart: unless-stopped
     environment:
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN is required}
       CORE_URL: http://aiops2-core:810
       EVIDENCE_URL: http://aiops2-evidence:812
       POLICY_URL: http://aiops2-policy:813
       TWIN_URL: http://aiops2-twin:811
-      AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:-Newaiops26$}
+      AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN is required}
       TEMPORAL_ADDRESS: aiops2-temporal:7233
       TEMPORAL_NAMESPACE: default
     expose: ["815"]
@@ -131,46 +142,22 @@ services:
       aiops2-evidence: {condition: service_healthy}
       aiops2-policy: {condition: service_healthy}
       aiops2-twin: {condition: service_healthy}
-      aiops2-temporal:
-    image: ${TEMPORAL_IMAGE:-temporalio/server:1.32.1}
-    container_name: aiops2-temporal
-    restart: unless-stopped
-    environment:
-      DB: postgres12
-      DB_PORT: 5432
-      POSTGRES_USER: temporal
-      POSTGRES_PWD: "${POSTGRES_PASSWORD:-Newaiops26$}"
-      POSTGRES_SEEDS: aiops2-temporal-postgres
-      BIND_ON_IP: 0.0.0.0
-      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml
-      TEMPORAL_ADDRESS: aiops2-temporal:7233
-      TEMPORAL_CLI_ADDRESS: aiops2-temporal:7233
-    expose: ["7233"]
-    volumes:
-      - ./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
-    networks: [aiops2-control, aiops2-temporal-data]
-    depends_on:
-      aiops2-temporal-postgres: {condition: service_healthy}
-      aiops2-temporal-schema: {condition: service_completed_successfully}
-    healthcheck:
-      test: ["CMD","nc","-z","127.0.0.1","7233"]
-      interval: 5s
-      timeout: 5s
-      start_period: 30s
-      retries: 60
+      aiops2-temporal: {condition: service_healthy}
 
   aiops2-simulator:
+    image: aiops2/simulator:r5-offline
     build: {context: ./app, dockerfile: simulator/Dockerfile}
     container_name: aiops2-simulator
     restart: unless-stopped
     environment:
       CORE_URL: http://aiops2-core:810
-      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:-Newaiops26$}
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN is required}
     expose: ["816"]
     networks: [aiops2-execution]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:816/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-portal:
+    image: aiops2/portal:r5-offline
     build: {context: ./app, dockerfile: portal/Dockerfile}
     container_name: aiops2-portal
     restart: unless-stopped
@@ -191,7 +178,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: temporal
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-Newaiops26$}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       POSTGRES_DB: temporal
     volumes: [aiops2-temporal-postgres-data:/var/lib/postgresql/data]
     networks: [aiops2-temporal-data]
@@ -205,9 +192,9 @@ services:
       DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
-      POSTGRES_PWD: ${POSTGRES_PASSWORD:-Newaiops26$}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_SEEDS: aiops2-temporal-postgres
-      SQL_PASSWORD: ${POSTGRES_PASSWORD:-Newaiops26$}
+      SQL_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - ./00-Deployment/temporal-schema.sh:/scripts/temporal-schema.sh:ro
     entrypoint: ["/bin/sh","/scripts/temporal-schema.sh"]
@@ -216,14 +203,13 @@ services:
       aiops2-temporal-postgres: {condition: service_healthy}
 
   aiops2-temporal:
-    image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.32.1}
+    image: ${TEMPORAL_IMAGE:-temporalio/server:1.32.1}
     container_name: aiops2-temporal
     restart: unless-stopped
     environment:
-      DB: postgresql
       DB_PORT: 5432
       POSTGRES_USER: temporal
-      POSTGRES_PWD: "${POSTGRES_PASSWORD:-Newaiops26$}"
+      POSTGRES_PWD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       POSTGRES_SEEDS: aiops2-temporal-postgres
       BIND_ON_IP: 0.0.0.0
       DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/docker.yaml
@@ -274,7 +260,7 @@ services:
     restart: unless-stopped
     ports: ["13000:3000"]
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-Newaiops26$}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}"
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -298,8 +284,8 @@ services:
     environment:
       MARIADB_DATABASE: glpi
       MARIADB_USER: glpi
-      MARIADB_PASSWORD: "${GLPI_DB_PASSWORD:-Newaiops26$}"
-      MARIADB_ROOT_PASSWORD: "${GLPI_DB_ROOT_PASSWORD:-Newaiops26$}"
+      MARIADB_PASSWORD: "${GLPI_DB_PASSWORD:?GLPI_DB_PASSWORD is required}"
+      MARIADB_ROOT_PASSWORD: "${GLPI_DB_ROOT_PASSWORD:?GLPI_DB_ROOT_PASSWORD is required}"
     volumes: [aiops2-glpi-db-data:/var/lib/mysql]
     networks: [aiops2-integration]
     healthcheck: {test: ["CMD-SHELL","mariadb-admin ping -uroot -p$${MARIADB_ROOT_PASSWORD} --silent"], interval: 5s, timeout: 3s, retries: 30}
@@ -314,7 +300,7 @@ services:
       GLPI_DB_PORT: 3306
       GLPI_DB_NAME: glpi
       GLPI_DB_USER: glpi
-      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD:-Newaiops26$}
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD:?GLPI_DB_PASSWORD is required}
       GLPI_SKIP_AUTOINSTALL: "false"
       GLPI_SKIP_AUTOUPDATE: "false"
     volumes: [aiops2-glpi-data:/var/glpi]
@@ -332,7 +318,7 @@ services:
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: n8n
       DB_POSTGRESDB_USER: ${POSTGRES_USER:-aiops}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-Newaiops26$}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-Newaiops26$-N8N}
       N8N_SECURE_COOKIE: "false"
     volumes: [aiops2-n8n-data:/home/node/.n8n]
