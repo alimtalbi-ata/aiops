@@ -24,6 +24,7 @@ services:
     container_name: aiops2-core
     restart: unless-stopped
     environment:
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN is required}
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       POLICY_URL: http://aiops2-policy:813
       WORKER_URL: http://aiops2-worker:815
@@ -126,6 +127,7 @@ services:
     container_name: aiops2-worker
     restart: unless-stopped
     environment:
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN is required}
       CORE_URL: http://aiops2-core:810
       EVIDENCE_URL: http://aiops2-evidence:812
       POLICY_URL: http://aiops2-policy:813
