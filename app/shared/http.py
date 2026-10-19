@@ -37,9 +37,9 @@ def _request(method, base, path, payload=None, timeout=8, retries=None, token=No
     raise last
 
 
-def get_json(base, path, timeout=8, token=None):
-    return _request('GET', base, path, timeout=timeout, token=token)
+def get_json(base, path, timeout=8, token=None, retries=None):
+    return _request('GET', base, path, timeout=timeout, token=token, retries=retries)
 
 
-def post_json(base, path, payload, timeout=8, token=None):
-    return _request('POST', base, path, payload, timeout=timeout, token=token)
+def post_json(base, path, payload, timeout=8, token=None, retries=None):
+    return _request('POST', base, path, payload, timeout=timeout, token=token, retries=retries)
