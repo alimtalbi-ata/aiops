@@ -113,3 +113,11 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Tests expanded to cover authenticated read boundary, unauthenticated POSTs, login-shell response headers and origin validation. The CI run for these latest commits is pending.
 - CSP currently permits inline script/style because the current UI is a single embedded page. A next hardening iteration should move scripts/styles into versioned static assets or use nonces/hashes before production exposure.
 - No runtime deployment was performed. Reverse-proxy TLS/trusted-forwarded-header configuration, rate limiting, live browser testing and production qualification remain open.
+
+
+### Latest portal security qualification — 2026-10-19
+- GitHub Actions run [39275563557](https://github.com/alimtalbi-ata/aiops/actions/runs/39275563557) passed after the authenticated-read and browser-boundary changes.
+- Portal boundary tests: 14/14 passed.
+- Policy tests: 7/7 passed.
+- Secret preflight, static audit, Python compileall and Compose config validation: PASS.
+- PR #16 remains draft pending actual browser/proxy integration, rate limiting, TLS/trusted-proxy review and production qualification.
