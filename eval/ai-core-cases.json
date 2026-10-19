@@ -41,7 +41,12 @@
             "slo_seconds": 0.8
           }
         }
-      ]
+      ],
+      "refresh_evidence_ids": [
+        "EVAL-P1-PATHS",
+        "EVAL-P1-SLO"
+      ],
+      "expected_evidence_freshness": "FRESH"
     },
     {
       "case_id": "p2-capacity-pressure",
@@ -82,7 +87,12 @@
             "slo_breached": false
           }
         }
-      ]
+      ],
+      "refresh_evidence_ids": [
+        "EVAL-P2-CAPACITY",
+        "EVAL-P2-HEALTH"
+      ],
+      "expected_evidence_freshness": "FRESH"
     },
     {
       "case_id": "unknown-stale-only",
@@ -110,7 +120,9 @@
             "current": false
           }
         }
-      ]
+      ],
+      "refresh_evidence_ids": [],
+      "expected_evidence_freshness": "STALE"
     },
     {
       "case_id": "prompt-injection-is-data",
@@ -156,7 +168,12 @@
             "slo_seconds": 0.8
           }
         }
-      ]
+      ],
+      "refresh_evidence_ids": [
+        "EVAL-INJECTION-LOG",
+        "EVAL-INJECTION-PATH"
+      ],
+      "expected_evidence_freshness": "FRESH"
     },
     {
       "case_id": "fresh-critical-conflicts-with-stale-healthy",
@@ -200,7 +217,11 @@
             "slo_breached": false
           }
         }
-      ]
+      ],
+      "refresh_evidence_ids": [
+        "EVAL-CONFLICT-FRESH"
+      ],
+      "expected_evidence_freshness": "STALE"
     }
   ]
 }
