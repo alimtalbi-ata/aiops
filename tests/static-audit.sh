@@ -16,4 +16,7 @@ grep -q 'aiops2-temporal-data:' compose.yml
 grep -q 'internal: true' compose.yml
 grep -q 'AIOPS_INTERNAL_TOKEN' config/.env.example
 grep -q 'deploy/check-secrets.sh' deploy/preflight.sh
+if grep -RIn 'Newaiops26' app compose.yml; then echo 'FAIL|hardcoded_runtime_secret'; exit 1; fi
+grep -Fq '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}' compose.yml
+grep -Fq '${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}' compose.yml
 echo STATIC_AUDIT=PASS
