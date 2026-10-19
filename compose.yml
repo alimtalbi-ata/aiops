@@ -116,6 +116,7 @@ services:
       aiops2-core: {condition: service_healthy}
       aiops2-evidence: {condition: service_healthy}
       aiops2-policy: {condition: service_healthy}
+      aiops2-intelligence: {condition: service_healthy}
       aiops2-twin: {condition: service_healthy}
       aiops2-temporal: {condition: service_started}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health')"], interval: 5s, timeout: 3s, retries: 20}
