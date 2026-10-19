@@ -22,4 +22,9 @@ grep -Fq '${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}' compose.yml
 grep -Fq '${AIOPS_PORTAL_OPERATOR_TOKEN:?AIOPS_PORTAL_OPERATOR_TOKEN_required}' compose.yml
 grep -q 'secrets.compare_digest' app/portal/main.py
 grep -q 'Depends(require_operator)' app/portal/main.py
+grep -q 'Depends(require_same_origin)' app/portal/main.py
+grep -q 'Content-Security-Policy' app/portal/main.py
+grep -q 'X-Frame-Options' app/portal/main.py
+grep -q 'def bootstrap(_operator:bool=Depends(require_operator))' app/portal/main.py
+grep -q 'login shell' app/portal/main.py
 echo STATIC_AUDIT=PASS
