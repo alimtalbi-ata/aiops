@@ -75,7 +75,7 @@ create table if not exists aiops.reconciliation_records (
 );
 create index if not exists ix_reconciliation_run on aiops.reconciliation_records(run_id,created_at desc);
 create table if not exists aiops.learning_cases (
- learning_case_id text primary key, source_run_id text not null references aiops.runs(run_id),
+ learning_case_id text primary key, idempotency_key text not null unique, source_run_id text not null references aiops.runs(run_id),
  parent_case_id text references aiops.learning_cases(learning_case_id), revision integer not null check (revision >= 1),
  case_type text not null check (case_type in ('INCIDENT','PROBLEM','CHANGE','REMEDIATION','FALSE_POSITIVE','NEAR_MISS')),
  synthetic boolean not null default true, human_reviewed boolean not null default false, outcome_verified boolean not null default false,
