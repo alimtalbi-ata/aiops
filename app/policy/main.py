@@ -81,4 +81,4 @@ def check(x: Decision):
 
 @app.get("/metrics")
 def metrics():
-    return "aiops_policy_up 1\\n"
+    return "aiops_policy_up 1\n"
