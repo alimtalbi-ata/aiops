@@ -1,4 +1,4 @@
-import os,json,requests,datetime
+import os,json,requests,datetime,hashlib
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
 from shared.db import db
@@ -182,3 +182,68 @@ def get_run(rid:str):
         if not r:raise HTTPException(404,'run not found')
         e=c.execute('select sequence,stage,event_type,status,occurred_at,evidence_ids,decision,confidence,payload from aiops.run_events where run_id=%s order by sequence',(rid,)).fetchall();s=c.execute('select stage,state,attempt,started_at,completed_at,last_error from aiops.run_stage_state where run_id=%s order by array_position(%s::text[],stage)',(rid,STAGES)).fetchall();g=c.execute('select stage,state,decision,reason,evidence_ids,evaluated_at from aiops.gates where run_id=%s order by evaluated_at',(rid,)).fetchall()
     k=['run_id','incident_id','mode','scenario_id','status','version','overall_confidence','created_at','started_at','completed_at'];ek=['sequence','stage','event_type','status','occurred_at','evidence_ids','decision','confidence','payload'];sk=['stage','state','attempt','started_at','completed_at','last_error'];gk=['stage','state','decision','reason','evidence_ids','evaluated_at'];return {'run':dict(zip(k,r)),'events':[dict(zip(ek,x)) for x in e],'stages':[dict(zip(sk,x)) for x in s],'gates':[dict(zip(gk,x)) for x in g]}
+
+@app.post('/api/runs/{rid}/analysis-record')
+def persist_analysis(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    analysis=x.get('analysis')
+    evidence_ids=sorted(set(x.get('evidence_ids') or []))
+    idem=x.get('idempotency_key')
+    if not isinstance(analysis,dict) or not idem or not evidence_ids:
+        raise HTTPException(422,'analysis_and_evidence_and_idempotency_key_required')
+    canonical=json.dumps(evidence_ids,separators=(',',':'))
+    evidence_hash=hashlib.sha256(canonical.encode()).hexdigest()
+    with db() as c:
+        run=c.execute('select incident_id from aiops.runs where run_id=%s',(rid,)).fetchone()
+        if not run: raise HTTPException(404,'run not found')
+        existing=c.execute('select analysis_id from aiops.analysis_records where idempotency_key=%s',(idem,)).fetchone()
+        if existing: return {'analysis_id':existing[0],'idempotent':True,'evidence_set_hash':evidence_hash}
+        n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
+        if n!=len(evidence_ids): raise HTTPException(422,'analysis references unknown evidence')
+        revision=c.execute('select coalesce(max(revision),0)+1 from aiops.analysis_records where run_id=%s',(rid,)).fetchone()[0]
+        aid=new('ANL')
+        c.execute('insert into aiops.analysis_records(analysis_id,run_id,incident_id,idempotency_key,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(aid,rid,run[0],idem,revision,str(analysis.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),str(x.get('prompt_version','analyst-v2.0')),json.dumps(evidence_ids),evidence_hash,json.dumps(analysis),float(analysis.get('confidence',0)),'VALID'))
+    return {'analysis_id':aid,'revision':revision,'evidence_set_hash':evidence_hash,'idempotent':False}
+
+@app.post('/api/runs/{rid}/critique-record')
+def persist_critique(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    critique=x.get('critique'); idem=x.get('idempotency_key'); aid=x.get('analysis_id')
+    evidence_ids=sorted(set(x.get('evidence_ids') or []))
+    if not isinstance(critique,dict) or not idem or not aid or not evidence_ids:
+        raise HTTPException(422,'critique_analysis_and_evidence_and_idempotency_key_required')
+    with db() as c:
+        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
+        existing=c.execute('select critique_id from aiops.critique_records where idempotency_key=%s',(idem,)).fetchone()
+        if existing:return {'critique_id':existing[0],'idempotent':True}
+        if not c.execute('select 1 from aiops.analysis_records where analysis_id=%s and run_id=%s',(aid,rid)).fetchone(): raise HTTPException(422,'analysis_record_not_found_for_run')
+        n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
+        if n!=len(evidence_ids):raise HTTPException(422,'critique_references_unknown_evidence')
+        cid=new('CRT')
+        c.execute('insert into aiops.critique_records(critique_id,idempotency_key,analysis_id,run_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(cid,idem,aid,rid,str(critique.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),bool(critique.get('validated',False)),json.dumps(critique.get('issues',[])),json.dumps(evidence_ids),json.dumps(critique),float(critique.get('diagnostic_confidence',0))))
+    return {'critique_id':cid,'idempotent':False}
+
+@app.post('/api/runs/{rid}/policy-record')
+def persist_policy_decision(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    policy=x.get('policy')
+    if not isinstance(policy,dict): raise HTTPException(422,'policy_result_required')
+    evidence_ids=sorted(set(x.get('evidence_ids') or []))
+    proof={'evidence_ids':evidence_ids,'analysis_id':x.get('analysis_id'),'critique_id':x.get('critique_id'),'policy_input':x.get('policy_input',{})}
+    canonical=json.dumps({'run_id':rid,'policy':policy,'proof':proof,'policy_version':x.get('policy_version','2.1.0')},sort_keys=True,separators=(',',':'))
+    digest=hashlib.sha256(canonical.encode()).hexdigest()
+    with db() as c:
+        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
+        old=c.execute('select policy_decision_id from aiops.policy_decisions where run_id=%s and input_hash=%s',(rid,digest)).fetchone()
+        if old:return {'policy_decision_id':old[0],'input_hash':digest,'idempotent':True}
+        n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0] if evidence_ids else 0
+        if n!=len(evidence_ids):raise HTTPException(422,'policy_references_unknown_evidence')
+        aid=x.get('analysis_id');cid=x.get('critique_id')
+        if aid and not c.execute('select 1 from aiops.analysis_records where analysis_id=%s and run_id=%s',(aid,rid)).fetchone(): raise HTTPException(422,'analysis_record_not_found_for_run')
+        if cid and not c.execute('select 1 from aiops.critique_records where critique_id=%s and run_id=%s',(cid,rid)).fetchone(): raise HTTPException(422,'critique_record_not_found_for_run')
+        pid=new('POL')
+        decision=str(policy.get('decision','HUMAN_APPROVAL'))
+        state=str(policy.get('state','UNKNOWN'))
+        c.execute('insert into aiops.policy_decisions(policy_decision_id,run_id,analysis_id,critique_id,policy_version,input_hash,decision,state,reasons,proof_snapshot) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(pid,rid,aid,cid,str(x.get('policy_version','2.1.0')),digest,decision,state,json.dumps([policy.get('reason','unspecified')]),json.dumps(proof)))
+    return {'policy_decision_id':pid,'input_hash':digest,'idempotent':False}
+
