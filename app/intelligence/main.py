@@ -83,12 +83,18 @@ class Critique(Contract):
     contract_version: str = '2.0'
     validated: bool
     issues: list[Issue] = []
-    claim_checks: list[ClaimCheck] = []
+    claim_checks: list[ClaimCheck] = Field(min_length=1, max_length=100)
     additional_evidence_needed: list[str] = []
     unsafe_actions: list[str] = []
     diagnostic_confidence: float = Field(ge=0, le=1)
     final_recommendation: Literal['OBSERVE', 'ENRICH', 'ESCALATE', 'HUMAN_APPROVAL']
     limitations: list[str] = []
+
+    @model_validator(mode='after')
+    def validated_requires_clean_claim_checks(self):
+        if self.validated and (not self.claim_checks or self.issues or self.unsafe_actions or any(not check.supported for check in self.claim_checks)):
+            raise ValueError('validated critique requires non-empty supported claim checks and no issues or unsafe actions')
+        return self
 
 class Request(Contract):
     incident: dict
