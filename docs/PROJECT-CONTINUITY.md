@@ -172,3 +172,8 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Added `deploy/ensure-portal-token.sh` for an intentional upgrade of an existing local `.env`: creates a dedicated 256-bit random token only if the key is absent/empty/template-valued, preserves a valid existing token, enforces mode 0600 and never prints the secret.
 - Added shell test coverage that verifies a missing key is populated, rerunning is idempotent, and file permissions are restrictive.
 - Existing installations must run this helper deliberately before preflight/build; it does not rotate internal service credentials.
+
+
+## Git-less delivery path for Debian targets — 2026-10-19
+
+Some qualification hosts do not have Git installed. Do not require `git fetch` or `git switch` on those hosts. Download the PR branch source archive from GitHub on the Windows workstation, transfer it with SCP, and extract into a separate staging directory. Copy the target's existing `.env` into staging with mode 0600 (never into the archive or Git), then run source/config qualification there. Do not run runtime apply from staging because Compose project/service names can address the active deployment. Runtime application must be an explicitly reviewed, controlled rollout from the intended deployment directory after backup and rollback planning.
