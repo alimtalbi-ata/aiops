@@ -160,7 +160,7 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
     if unsupported:
         result.validated = False
         for check in unsupported:
-            result.issues.append({'code':'UNSUPPORTED_CLAIM','description':'Critic marked a material claim as unsupported: ' + check.claim[:300],'evidence_ids':check.supporting_evidence_ids + check.contradicting_evidence_ids})
+            result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Critic marked a material claim as unsupported: ' + check.claim[:300], evidence_ids=check.supporting_evidence_ids + check.contradicting_evidence_ids))
         if result.final_recommendation != 'ESCALATE':
             result.final_recommendation = 'HUMAN_APPROVAL'
     if unknown:
