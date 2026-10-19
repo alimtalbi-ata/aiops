@@ -8,6 +8,9 @@ CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_U
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
 @app.get('/api/portal/bootstrap')
 def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
+@app.get('/api/portal/runs/{rid}')
+def run_detail(rid:str):
+    return get_json(CORE,f'/api/runs/{rid}')
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')
