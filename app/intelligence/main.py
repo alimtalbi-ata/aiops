@@ -1,7 +1,7 @@
 import json, os, hmac, logging
 import requests
 from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from typing import Literal
 
 app = FastAPI(title='AIOps Analyst and Critic Adapter', version='2.0.0')
@@ -22,6 +22,12 @@ class Hypothesis(Contract):
     supporting_evidence_ids: list[str] = []
     contradicting_evidence_ids: list[str] = []
     assumptions: list[str] = []
+
+    @model_validator(mode='after')
+    def require_grounding_or_assumption(self):
+        if not self.supporting_evidence_ids and not self.assumptions:
+            raise ValueError('hypothesis requires supporting evidence or explicit assumptions')
+        return self
 
 class Alternative(Contract):
     statement: str
@@ -66,6 +72,12 @@ class ClaimCheck(Contract):
     supported: bool
     supporting_evidence_ids: list[str] = []
     contradicting_evidence_ids: list[str] = []
+
+    @model_validator(mode='after')
+    def supported_claim_requires_evidence(self):
+        if self.supported and not self.supporting_evidence_ids:
+            raise ValueError('supported claim requires at least one supporting evidence ID')
+        return self
 
 class Critique(Contract):
     contract_version: str = '2.0'
@@ -173,12 +185,19 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
         result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Analyst referenced evidence absent from the ledger', evidence_ids=unknown))
         result.final_recommendation = 'HUMAN_APPROVAL'
     known = known_ids(x.evidence)
+    invalid_refs = []
     for check in result.claim_checks:
         refs = check.supporting_evidence_ids + check.contradicting_evidence_ids
-        invalid = sorted(set(ref for ref in refs if ref not in known))
-        if invalid:
-            result.validated = False
-            result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Critic referenced evidence absent from the ledger', evidence_ids=invalid))
+        invalid_refs.extend(ref for ref in refs if ref not in known)
+    for issue in result.issues:
+        invalid_refs.extend(ref for ref in issue.evidence_ids if ref not in known)
+    if invalid_refs:
+        invalid = sorted(set(invalid_refs))
+        result.validated = False
+        result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Critic referenced evidence absent from the ledger', evidence_ids=invalid))
+    if result.issues or result.unsafe_actions or any(not check.supported for check in result.claim_checks):
+        result.validated = False
+        if result.final_recommendation != 'ESCALATE':
             result.final_recommendation = 'HUMAN_APPROVAL'
     return {'critique':result.model_dump(mode='json'),'mode':x.mode,'execution_allowed':False}
 
