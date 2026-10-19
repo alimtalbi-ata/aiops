@@ -233,6 +233,10 @@ def persist_policy_decision(rid:str,x:dict,authorization:str|None=Header(default
     policy=x.get('policy')
     if not isinstance(policy,dict): raise HTTPException(422,'policy_result_required')
     if not x.get('analysis_id') or not x.get('critique_id'): raise HTTPException(422,'analysis_and_critic_records_required')
+    if policy.get('state')=='PASS':
+        with db() as c:
+            ok=c.execute("select 1 from aiops.analysis_records a join aiops.critique_records q on q.analysis_id=a.analysis_id where a.analysis_id=%s and q.critique_id=%s and a.run_id=%s and q.run_id=%s and a.status='VALID' and q.validated=true and q.output->'issues'='[]'::jsonb and q.output->'unsafe_actions'='[]'::jsonb",(x.get('analysis_id'),x.get('critique_id'),rid,rid)).fetchone()
+        if not ok:raise HTTPException(409,'PASS_policy_requires_clean_validated_analysis_and_critic')
     evidence_ids=sorted(set(x.get('evidence_ids') or []))
     proof={'evidence_ids':evidence_ids,'analysis_id':x.get('analysis_id'),'critique_id':x.get('critique_id'),'policy_input':x.get('policy_input',{})}
     canonical=json.dumps({'run_id':rid,'policy':policy,'proof':proof,'policy_version':x.get('policy_version','2.1.0')},sort_keys=True,separators=(',',':'))
@@ -303,13 +307,16 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
-        records=c.execute('select a.output,a.evidence_ids,a.status,c.validated,c.evidence_ids from aiops.analysis_records a join aiops.critique_records c on c.analysis_id=a.analysis_id where a.analysis_id=%s and a.run_id=%s and c.critique_id=%s and c.run_id=%s',(analysis_id,rid,critique_id,rid)).fetchone()
+        records=c.execute('select a.output,a.evidence_ids,a.status,c.validated,c.evidence_ids,c.output from aiops.analysis_records a join aiops.critique_records c on c.analysis_id=a.analysis_id where a.analysis_id=%s and a.run_id=%s and c.critique_id=%s and c.run_id=%s',(analysis_id,rid,critique_id,rid)).fetchone()
         if not records or records[2]!='VALID' or records[3] is not True:raise HTTPException(409,'validated_analysis_and_critic_required')
         analysis_output=json.loads(records[0]) if isinstance(records[0],str) else records[0]
         analysis_evidence=json.loads(records[1]) if isinstance(records[1],str) else records[1]
         critique_evidence=json.loads(records[4]) if isinstance(records[4],str) else records[4]
+        critique_output=json.loads(records[5]) if isinstance(records[5],str) else records[5]
         source_action=next((a for a in analysis_output.get('recommended_actions',[]) if a.get('action_id')==source_action_id),None)
         if not source_action:raise HTTPException(422,'source_action_not_in_validated_analysis')
+        if source_action.get('advisory_only') is not True or source_action.get('requires_human_approval') is not True:raise HTTPException(422,'source_action_is_not_advisory_only')
+        if critique_output.get('issues') or critique_output.get('unsafe_actions'):raise HTTPException(409,'critic_issues_or_unsafe_actions_prevent_proposal')
         if source_action.get('risk_tier')!=risk:raise HTTPException(422,'proposal_risk_must_match_analyst_action')
         if source_action.get('target_ci_id') and source_action.get('target_ci_id')!=target:raise HTTPException(422,'proposal_target_must_match_analyst_action')
         if not set(evidence_ids).issubset(set(analysis_evidence)) or not set(evidence_ids).issubset(set(critique_evidence)):
