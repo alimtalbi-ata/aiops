@@ -45,8 +45,12 @@ def compare(legacy: set[str], v1: set[str], v2: set[str]) -> dict:
             classification = "legacy-and-v2-name-match"
         elif in_legacy and in_v1:
             classification = "legacy-and-v1-name-match"
+        elif in_v1 and in_v2:
+            classification = "v1-and-v2-name-match"
         elif in_v2:
             classification = "v2-only-name"
+        elif in_v1 and in_v2:
+            classification = "v1-and-v2-name-match"
         elif in_v1:
             classification = "v1-only-name"
         else:
