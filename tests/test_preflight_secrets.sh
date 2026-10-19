@@ -44,6 +44,7 @@ fi
 mkdir -p "$TMP/init/config" "$TMP/init/deploy"
 cp "$ROOT/config/.env.example" "$TMP/init/config/.env.example"
 cp "$ROOT/deploy/init-env.sh" "$TMP/init/deploy/init-env.sh"
+cp "$ROOT/deploy/ensure-portal-token.sh" "$TMP/init/deploy/ensure-portal-token.sh"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 bash "$ROOT/deploy/check-secrets.sh" "$TMP/init/.env" >/dev/null
 [[ "$(stat -c '%a' "$TMP/init/.env")" == "600" ]]
@@ -56,4 +57,15 @@ BEFORE="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 [[ "$BEFORE" == "$AFTER" ]]
+
+# Existing-env upgrade helper adds a token without rotating any existing secrets.
+cp "$TMP/secure.env" "$TMP/upgrade.env"
+bash "$ROOT/deploy/ensure-portal-token.sh" "$TMP/upgrade.env" >/dev/null
+TOKEN1="$(sed -n 's/^AIOPS_PORTAL_OPERATOR_TOKEN=//p' "$TMP/upgrade.env")"
+[[ "$TOKEN1" =~ ^[a-f0-9]{64}$ ]]
+UPGRADE_HASH="$(sha256sum "$TMP/upgrade.env" | cut -d' ' -f1)"
+bash "$ROOT/deploy/ensure-portal-token.sh" "$TMP/upgrade.env" >/dev/null
+[[ "$UPGRADE_HASH" == "$(sha256sum "$TMP/upgrade.env" | cut -d' ' -f1)" ]]
+[[ "$(stat -c '%a' "$TMP/upgrade.env")" == "600" ]]
+
 echo 'SECRET_PREFLIGHT_TEST=PASS'
