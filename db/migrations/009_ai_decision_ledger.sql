@@ -37,7 +37,7 @@ create table if not exists aiops.action_proposals (
  parameters jsonb not null default '{}'::jsonb, evidence_ids jsonb not null default '[]'::jsonb,
  preconditions jsonb not null default '[]'::jsonb, expected_postconditions jsonb not null default '[]'::jsonb,
  rollback_plan jsonb not null default '{}'::jsonb, proposal_hash text not null,
- status text not null check (status in ('PROPOSED','REJECTED','APPROVED','EXPIRED','EXECUTING','EXECUTED','FAILED','VERIFIED','ROLLED_BACK','SUPERSEDED')),
+ status text not null check (status in ('PROPOSED','REJECTED','APPROVED','EXPIRED','EXECUTING','EXECUTED','FAILED','VERIFIED','ROLLED_BACK','SUPERSEDED','REVOKED')),
  expires_at timestamptz, created_at timestamptz not null default now(),
  unique(run_id, proposal_hash), unique(run_id, proposal_revision)
 );
@@ -143,7 +143,7 @@ begin
  if NEW.status is not distinct from OLD.status then return NEW; end if;
  if not (
   (OLD.status='PROPOSED' and NEW.status in ('APPROVED','REJECTED','EXPIRED','SUPERSEDED')) or
-  (OLD.status='APPROVED' and NEW.status in ('EXECUTING','EXPIRED','SUPERSEDED')) or
+  (OLD.status='APPROVED' and NEW.status in ('EXECUTING','EXPIRED','SUPERSEDED','REVOKED')) or
   (OLD.status='EXECUTING' and NEW.status in ('EXECUTED','FAILED')) or
   (OLD.status='EXECUTED' and NEW.status in ('VERIFIED','ROLLED_BACK','FAILED')) or
   (OLD.status='FAILED' and NEW.status in ('ROLLED_BACK','SUPERSEDED'))
