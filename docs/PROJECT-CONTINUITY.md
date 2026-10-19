@@ -45,8 +45,14 @@ Consolidate AIOps 2.0 around one coherent runtime and operations experience. Reu
 6. `docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md`
 7. Latest release notes and evidence manifests for the target version.
 
+## Latest source review (2026-10-19)
+
+A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE-AUDIT-2026-10-19.md). A safety patch is in branch `fix/live-safety-gates-2026-10-19` (not yet merged): P1 escalates before evidence checks; policy no longer defaults critic validation to true and requires explicit freshness/precondition/fencing/approval inputs; the worker blocks LIVE runs before generating placeholder evidence and marks the Run BLOCKED. Added `tests/test_policy_safety.py` and `.github/workflows/quality.yml`; GitHub Actions run [39223403723](https://github.com/alimtalbi-ata/aiops/actions/runs/39223403723) passed compileall, policy unit tests and static audit. Container build, runtime qualification and synthetic E2E remain unrun. This is a conservative guard, not evidence that LIVE execution is qualified.
+
 ## Next work queue
 
+- [x] Add deterministic policy safety tests and run them in GitHub Actions; preserve the run link in the source audit.
+- [ ] Review and merge the LIVE safety patch only after tests pass and its diff is inspected.
 - [ ] Run a corrected, truly read-only inventory of historical v1/V145 source, contracts, tests, and service ownership.
 - [ ] Inspect current repository tree and deployment files; compare Git-tracked code to the host deployment without copying secrets.
 - [ ] Build a reuse matrix: reuse unchanged / adapt behind adapter / replace / retire, each with evidence and owner.
