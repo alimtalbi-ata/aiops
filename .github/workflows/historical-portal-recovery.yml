@@ -1,0 +1,27 @@
+name: Historical portal recovery checks
+
+on:
+  pull_request:
+    paths:
+      - "tools/recovery/collect-historical-portal.sh"
+      - "tools/recovery/test-collect-historical-portal.sh"
+      - ".github/workflows/historical-portal-recovery.yml"
+  push:
+    branches:
+      - "fix/historical-portal-recovery-20261019"
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Bash syntax
+        run: |
+          bash -n tools/recovery/collect-historical-portal.sh
+          bash -n tools/recovery/test-collect-historical-portal.sh
+      - name: Isolated fixture test
+        run: bash tools/recovery/test-collect-historical-portal.sh
