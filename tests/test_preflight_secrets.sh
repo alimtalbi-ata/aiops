@@ -59,7 +59,7 @@ AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 [[ "$BEFORE" == "$AFTER" ]]
 
 # Existing-env upgrade helper adds a token without rotating any existing secrets.
-cp "$TMP/secure.env" "$TMP/upgrade.env"
+grep -v '^AIOPS_PORTAL_OPERATOR_TOKEN=' "$TMP/secure.env" > "$TMP/upgrade.env"
 bash "$ROOT/deploy/ensure-portal-token.sh" "$TMP/upgrade.env" >/dev/null
 TOKEN1="$(sed -n 's/^AIOPS_PORTAL_OPERATOR_TOKEN=//p' "$TMP/upgrade.env")"
 [[ "$TOKEN1" =~ ^[a-f0-9]{64}$ ]]
