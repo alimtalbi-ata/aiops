@@ -1,12 +1,14 @@
 import importlib.util
 import pathlib
 import unittest
+import sys
 import json
 import requests
 from fastapi import HTTPException
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'app'))
 SPEC = importlib.util.spec_from_file_location('aiops_intelligence', ROOT / 'app' / 'intelligence' / 'main.py')
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
