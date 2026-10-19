@@ -14,7 +14,6 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 COMMIT="$(git rev-parse --short=12 HEAD 2>/dev/null || printf 'source-tree')"
 VERSION="$(awk -F= '/^AIOPS_KIT_VERSION=/{print $2; exit}' config/version.env 2>/dev/null || true)"
 VERSION="${VERSION:-2.0.0}"
-PARENT="$(cd "$ROOT/.." && pwd)"
 NAME="AIOps-2.0-Debian-Deployment-Kit-${VERSION}-${STAMP}"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/aiops-kit.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
@@ -36,7 +35,8 @@ EOF
   cd "$STAGE/$NAME"
   find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 )
-OUT="$PARENT/$NAME.zip"
+mkdir -p "$ROOT/dist"
+OUT="$ROOT/dist/$NAME.zip"
 (cd "$STAGE" && zip -qr "$OUT" "$NAME")
 sha256sum "$OUT" > "$OUT.sha256"
 echo "PACKAGE=$OUT"
