@@ -13,9 +13,6 @@ while ! nc -z -w 5 "$POSTGRES_SEEDS" "$DB_PORT"; do
   attempt=$((attempt + 1))
   sleep 2
 done
-sql() {
-  temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$1" "${@:2}"
-}
 # The dedicated Temporal Postgres volume is initialized from scratch in this
 # disposable stack. The official admin-tools CLI creates both databases and
 # applies the versioned schemas before the server is allowed to start.
