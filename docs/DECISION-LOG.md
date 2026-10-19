@@ -96,3 +96,14 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+
+## ADR-0013 — Qualify the analysis core before ACME twin and demo expansion
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Make the Analyst/Critic/Evidence/Policy quality contract and offline qualification gates the immediate engineering priority. The ACME digital twin and demonstration/video phase starts only after core gates pass.
+- **Reason:** A convincing UI or simulation cannot compensate for ungrounded diagnoses, weak evidence provenance, unsafe decisions or non-reproducible learning.
+- **Controls:** Versioned analyst/critic schemas; evidence IDs for material claims; explicit unknowns and contradictions; independent deterministic policy; P1 escalation; fail-closed behavior on missing/stale evidence, invalid output or critic failure; approval bound to immutable action hash; separate proposed/approved/executed/verified states.
+- **Learning:** Store immutable linked analysis, critique, policy, human feedback and verified outcomes. Only reviewed provenance-complete cases enter the trusted gold set; no silent online learning from raw tickets.
+- **Qualification:** Use the new core analysis quality contract and qualification matrix. No status may be marked PASS without an executed test artifact. No production server testing in Phase A.
