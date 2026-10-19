@@ -130,3 +130,12 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Added unit coverage for GET retries, POST no-retry, explicit override, and internal authentication headers; added the test to CI.
 - This deliberately favors safety over automatic recovery for ambiguous POST outcomes. A timed-out POST must be reconciled against the canonical run/incident state before an operator repeats it.
 - CI result for this latest change is pending.
+
+
+### Latest quality run after HTTP retry hardening — 2026-10-19
+- GitHub Actions run [39276121809](https://github.com/alimtalbi-ata/aiops/actions/runs/39276121809) completed successfully after the shared HTTP retry changes.
+- Portal boundary tests: 14/14 passed; shared HTTP retry-safety tests: 4/4 passed; existing policy tests: 7/7 passed.
+- Secret preflight, static repository audit, Python compilation and Compose validation: PASS.
+- Default HTTP policy is now GET retry (up to two retries) and POST single attempt. The public helper functions allow an explicit retry override only when a caller can justify the idempotency contract.
+- An ambiguous POST timeout must be reconciled against canonical state before repeating an operation; do not blindly resubmit.
+- PR #16 remains draft. CI passing is not a substitute for browser/proxy integration or production qualification.
