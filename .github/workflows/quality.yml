@@ -91,7 +91,7 @@ jobs:
           PGPASSWORD: ci-only-password
         run: |
           psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from information_schema.tables where table_schema='aiops' and table_name in ('analysis_records','critique_records','policy_decisions','action_proposals','approval_records','effect_receipts','verification_records','reconciliation_records','learning_cases','model_evaluation_runs')" | grep -x 10
-          psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from pg_trigger where not tgisinternal and tgname like 'trg_immutable_%'" | grep -x 7
+          psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from pg_trigger where not tgisinternal and tgname like 'trg_immutable_%'" | grep -x 9
       - name: Verify immutable ledger and gold-set safety invariants
         env:
           PGPASSWORD: ci-only-password
