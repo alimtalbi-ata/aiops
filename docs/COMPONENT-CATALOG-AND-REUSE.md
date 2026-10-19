@@ -49,6 +49,18 @@
 
 **Important:** “Probable capability” is inferred from the component name, not yet verified from implementation. Inventory output included logs, PIDs, caches and backups; these are not source deliverables and should not be treated as deployable modules.
 
+### Additional portal source evidence recorded 2026-10-19
+
+| Source | Evidence available | Decision | Next action |
+|---|---|---|---|
+| R33 `03-SOURCES/V1/stack/live_console` | Main Python entrypoint, portal HTML/JS/CSS, campaign studio, demo studio, Dockerfile and requirements listed on host | **Candidate baseline**, not runtime-qualified | Use as a source comparison baseline; inspect dependencies and routes against current Portal/Core contracts |
+| `aiops_v1_live_console` container export | Export archive exists; selected app files were listed in the export inventory | **Candidate** | Extract only whitelisted files using `tools/recovery/collect-historical-portal.sh`; compare hashes/diffs |
+| `aiops_v1_live_console_v145_test` container export | Export archive exists; V145-specific files such as `fasttrack-v2-marker.html` were listed in its inventory | **Candidate for delta mining** | Identify unique behavior/fixes; port only after API, auth and safety review |
+| `aiops_v1_ui_validation_20261018-000409` export | Export archive exists and largely resembles the v1 console inventory | **Secondary evidence** | Use only if it contains a useful change absent from both R33 and V145 comparison |
+| `aiops_portal_consolidated_v92` | Export reported as 1,024 bytes; image metadata lookup reported a missing content blob | **Unavailable / untrusted** | Do not use unless independently recovered and integrity-checked |
+
+The selective recovery archive is an interchange artifact only. Do not commit the archive or full container exports. Commit only reviewed source files, tests, contracts, and provenance notes that are needed by the current AIOps 2.0 target.
+
 ## Required reuse assessment per component
 
 Record the following before integration:
