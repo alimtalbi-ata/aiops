@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from shared.http import post_json,get_json
 from shared.ids import new
 app=FastAPI(title='ACME Synthetic Scenario & Replay Engine',version='2.0.0')
-CORE=os.getenv('CORE_URL','http://aiops2-core:810'); TOKEN=os.getenv('AIOPS_INTERNAL_TOKEN',os.getenv('AIOPS_ADMIN_TOKEN','Newaiops26$'))
+CORE=os.getenv('CORE_URL','http://aiops2-core:810'); TOKEN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
+if not TOKEN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 class Scenario(BaseModel):name:str;seed:int;scenario_id:str|None=None
 class Launch(BaseModel):scenario_id:str='SCN-GOLDEN-PAYMENT-P1';mode:str='DEMO';idempotency_key:str|None=None
 @app.get('/health')
