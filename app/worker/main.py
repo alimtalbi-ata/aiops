@@ -75,7 +75,7 @@ class IncidentWorkflow:
 @app.get('/health')
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
-def metrics(): return 'aiops_worker_up 1\\n'
+def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
