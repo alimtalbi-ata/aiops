@@ -63,6 +63,19 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 - [ ] Add deterministic E2E and failure-injection qualification before enabling any new live action.
 - [ ] Produce cumulative deployment ZIP and updated docs/evidence for each version where a release is requested.
 
+## Historical schema reconciliation — 2026-10-19
+
+The operator's read-only catalog inventory on SRV-DEB-05 reports eight application tables in the current V2 database `aiops2`; the V1 database `aiops` inventory reports 175 tables across `aiops` and `n8n`. The R33 custom dump's `pg_restore --list` succeeds and reports 1,414 TOC entries; its selected application table list contains 23 names. The four current SQL exports passed gzip and SHA-256 checks as reported in the session. These facts establish inventory availability, not restoration or migration qualification.
+
+A dedicated branch `feature/r33-schema-reconciliation-2026-10-19` adds an offline, name-only reconciliation utility (`tools/schema_reconcile.py`), unit tests, a dated evidence report, and a CI step. The tool intentionally never connects to a database. Name matches must not be interpreted as schema or semantic compatibility. CI results are pending until GitHub Actions completes on the PR.
+
+Next gates:
+- [ ] Run the new schema reconciliation unit tests in CI and resolve failures.
+- [ ] Compare columns, types, PK/FK, indexes, nullability and constraints for selected incident/CMDB/evidence candidates.
+- [ ] Obtain read-only row counts and data-quality checks from current V1/V2; never expose row contents or secrets.
+- [ ] Plan any future legacy reuse behind a versioned adapter; no direct R33 restore into active V2.
+- [ ] Keep PC11K5 fencing and the active runtime untouched.
+
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
