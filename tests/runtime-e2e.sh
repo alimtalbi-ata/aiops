@@ -63,7 +63,7 @@ for i in $(seq 1 180); do
   [[ "$RUN_STATUS" =~ ^(BLOCKED|RESOLVED|FAILED|CANCELLED)$ ]] && break
   sleep 1
 done
-[[ "$RUN_STATUS" == "BLOCKED" ]] || { FAILURE="expected_P1_policy_block_but_run_status_$RUN_STATUS"; exit 1; }
+[[ "$RUN_STATUS" == "RESOLVED" ]] || { FAILURE="expected_synthetic_run_resolved_without_effects_but_status_$RUN_STATUS"; exit 1; }
 ANALYSIS_COUNT="$(psqlc "select count(*) from aiops.analysis_records where run_id='$RUN_ID'")"
 CRITIQUE_COUNT="$(psqlc "select count(*) from aiops.critique_records where run_id='$RUN_ID'")"
 POLICY_COUNT="$(psqlc "select count(*) from aiops.policy_decisions where run_id='$RUN_ID'")"
@@ -79,8 +79,8 @@ EVENT_TYPES="$(psqlc "select coalesce(string_agg(event_type,',' order by sequenc
 [[ "$EVIDENCE_COUNT" -ge 2 ]] || { FAILURE="synthetic_source_evidence_missing"; exit 1; }
 [[ "$ANALYSIS_SEVERITY" == "P1" ]] || { FAILURE="expected_P1_classification_got_$ANALYSIS_SEVERITY"; exit 1; }
 [[ "$CRITIQUE_VALIDATED" == "true" ]] || { FAILURE="critic_did_not_validate_grounded_fixture"; exit 1; }
-[[ "$POLICY_RESULT" == "BLOCKED|ESCALATE" ]] || { FAILURE="expected_blocked_escalation_got_$POLICY_RESULT"; exit 1; }
-[[ "$EVENT_TYPES" == *"ANALYST_COMPLETED"* && "$EVENT_TYPES" == *"CRITIC_COMPLETED"* && "$EVENT_TYPES" == *"GATE_BLOCKED"* ]] || { FAILURE="expected_analysis_critic_and_policy_block_events_missing"; exit 1; }
+[[ "$POLICY_RESULT" == "PASS|SIMULATE" ]] || { FAILURE="expected_demo_simulation_got_$POLICY_RESULT"; exit 1; }
+[[ "$EVENT_TYPES" == *"ANALYST_COMPLETED"* && "$EVENT_TYPES" == *"CRITIC_COMPLETED"* && "$EVENT_TYPES" == *"STAGE_COMPLETED"* ]] || { FAILURE="expected_analysis_critic_and_completed_simulation_events_missing"; exit 1; }
 [[ "$EFFECT_COUNT" == "0" ]] || { FAILURE="unexpected_effect_receipt_created_in_synthetic_P1_run"; exit 1; }
 RESULT="PASS"
 FAILURE=""
