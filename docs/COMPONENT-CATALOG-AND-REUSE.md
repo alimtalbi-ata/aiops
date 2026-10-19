@@ -86,3 +86,16 @@ A selective historical portal package now exists; it is a preservation artifact,
 | Recovery collector | Syntax checked after correcting R33 entry-point path; completed with exit code 0 | Reuse as a recovery utility after independent review | Validate checksum, safe extraction behavior and output manifest |
 
 Do not import the recovery archive itself into the repository. Integrate only source files and tests that are reviewed, necessary, contract-compatible and free of secrets/runtime data. The archive's checksum and the source diff have not yet been independently validated/reviewed.
+
+
+## Expanded recovery artifact — 2026-10-19
+
+The second collection package (`AIOPS-HISTORICAL-PORTAL-SOURCE-RECOVERY-20261019-154435.tar.gz`, 856,801 bytes) reports 32 inventory rows and includes two static diffs: V1/V145 (27,623 lines) and R33/V145 (16,363 lines). The collector reported its server-side checksum check as passing. The uploaded archive has not yet been independently extracted/re-hashed in the current analysis runtime; this adds preservation evidence only, not a change to component qualification decisions.
+
+| Candidate | New evidence | Decision | Next gate |
+|---|---|---|---|
+| R33 portal | R33/V145 textual diff now reported by collector | Unknown pending semantic review | Inspect route/API and UI changes, dependencies and security controls |
+| V1 vs V145 portal | Two-version textual diff reported | Unknown pending semantic review | Review changes by function and contract; distinguish bug fixes from regressions |
+| Package integrity | Server collector reported sidecar validation PASS; sidecar value recorded in recovery result | Host-reported PASS; independent local recomputation pending | Recompute SHA-256 over uploaded bytes, extract safely, verify per-file manifest |
+
+Do not promote any historical portal code based only on package creation or diff size. ACME remains a synthetic demonstration narrative, not a production dependency. Production adoption requires adapter boundaries, contract tests and separate isolated E2E qualification.
