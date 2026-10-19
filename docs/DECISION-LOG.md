@@ -96,3 +96,13 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-0011 — Historical portal recovery is a source candidate, not a release
+
+- **Date:** 2026-10-19
+- **Status:** Accepted
+- **Decision:** Preserve the historical V1/V145 portal through a selective, checksum-manifested source package; do not import full container exports or treat the recovered portal as production-ready.
+- **Evidence:** SRV-DEB-05 reported successful creation of `AIOPS-HISTORICAL-PORTAL-SOURCE-RECOVERY-20261019-144103.tar.gz` (756,799 bytes), 33 staged files, a 27,623-line V1/V145 diff and collector exit code 0. The original collector's R33 entry-point assumption was corrected from root-level `main.py` to `app/main.py`.
+- **Qualification boundary:** Outer checksum validation, workstation transfer verification, semantic diff review, dependency/build checks and runtime/UI/E2E tests remain pending. These host-reported outputs are not a runtime qualification.
+- **Consequences:** Verify the artifact before extracting into an isolated workspace. Classify every candidate as reuse unchanged, adapt behind adapter, replace, retire or unknown. Never merge unreviewed legacy code into `main`.
+- **Safety:** Preserve the canonical AIOps 2.0 state and orchestration boundaries and the PC11K5 claim → fencing/ownership → preconditions → effect → evidence → reconciliation invariant. No production action is authorized by this ADR.
