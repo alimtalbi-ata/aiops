@@ -182,12 +182,12 @@ begin
  select output,evidence_ids,status into a from aiops.analysis_records where analysis_id=NEW.analysis_id and run_id=NEW.run_id;
  if not found or a.status<>'VALID' then raise exception 'proposal requires a valid analysis for the same run'; end if;
  select output,evidence_ids,validated into q from aiops.critique_records where critique_id=NEW.critique_id and analysis_id=NEW.analysis_id and run_id=NEW.run_id;
- if not found or q.validated is not true or coalesce(q.output->'issues','[]'::jsonb)<>'[]'::jsonb or coalesce(q.output->'unsafe_actions','[]'::jsonb)<>'[]'::jsonb then
+ if not found or q.validated is not true or coalesce(q.output->'issues','[]'::jsonb)<>'[]'::jsonb or coalesce(q.output->'unsafe_actions','[]'::jsonb)<>'[]'::jsonb or exists(select 1 from jsonb_array_elements(coalesce(q.output->'claim_checks','[]'::jsonb)) checks(value) where coalesce((value->>'supported')::boolean,false) is not true) then
   raise exception 'proposal requires a clean validated critique for the same analysis';
  end if;
  select value into action_record from jsonb_array_elements(coalesce(a.output->'recommended_actions','[]'::jsonb)) where value->>'action_id'=NEW.source_action_id limit 1;
  if action_record is null then raise exception 'source action is not present in validated analysis'; end if;
- if action_record->>'risk_tier'<>NEW.risk_tier
+ if action_record->>'risk_tier' is distinct from NEW.risk_tier
  or coalesce((action_record->>'advisory_only')::boolean,false) is not true
  or coalesce((action_record->>'requires_human_approval')::boolean,false) is not true
  or (action_record->>'target_ci_id' is not null and action_record->>'target_ci_id'<>NEW.target_ci_id) then
