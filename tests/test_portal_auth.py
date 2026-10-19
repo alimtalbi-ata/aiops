@@ -7,7 +7,7 @@ os.environ.setdefault("AIOPS_INTERNAL_TOKEN", "test-internal-token-not-a-real-se
 os.environ.setdefault("AIOPS_PORTAL_OPERATOR_TOKEN", "test-operator-token-not-a-real-secret")
 
 from portal.main import CopilotQuestion, require_operator, safe_upstream
-from fastapi import HTTPException
+from fastapi import HTTPException\nfrom fastapi.testclient import TestClient\nfrom portal.main import app, require_same_origin
 
 
 class PortalAuthorizationTests(unittest.TestCase):
