@@ -27,7 +27,12 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["state"], "BLOCKED")
         self.assertEqual(result["decision"], "ESCALATE")
 
-    def test_missing_evidence_is_unknown(self):
+    def test_p1_without_evidence_still_escalates(self):
+        result = evaluate(decision(severity="P1", evidence_count=0))
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertEqual(result["decision"], "ESCALATE")
+
+    def test_missing_evidence_is_unknown_for_non_p1(self):
         result = evaluate(decision(evidence_count=0))
         self.assertEqual(result["state"], "UNKNOWN")
         self.assertEqual(result["decision"], "HUMAN_APPROVAL")
