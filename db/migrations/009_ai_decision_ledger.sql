@@ -23,7 +23,7 @@ create table if not exists aiops.policy_decisions (
  policy_decision_id text primary key, run_id text not null references aiops.runs(run_id),
  analysis_id text references aiops.analysis_records(analysis_id), critique_id text references aiops.critique_records(critique_id),
  policy_version text not null, input_hash text not null,
- decision text not null check (decision in ('OBSERVE','ENRICH','ESCALATE','HUMAN_APPROVAL','BLOCK','AUTO_REMEDIATE')),
+ decision text not null check (decision in ('OBSERVE','ENRICH','ESCALATE','HUMAN_APPROVAL','BLOCK','AUTO_REMEDIATE','SIMULATE','ALLOW')),
  state text not null check (state in ('PASS','FAIL','BLOCKED','UNKNOWN')),
  reasons jsonb not null default '[]'::jsonb, proof_snapshot jsonb not null default '{}'::jsonb,
  created_at timestamptz not null default now(), unique(run_id,input_hash)
