@@ -78,7 +78,7 @@ Implications:
 Required correction before external exposure:
 1. Fail startup/preflight if an admin token is required but missing or weak.
 2. Use a centralized, explicit dependency for every privileged mutation; default deny.
-3. Compare secrets with constant-time comparison and never return/log the secret.
+3. Compare secrets with constant-time comparison and never return/log the secret. The current token is accepted as a query parameter (`token`), which risks exposure through URL history, access logs, and telemetry; prefer an Authorization header or established identity middleware.
 4. Prefer the established operator identity/proxy boundary where defined; do not trust unverified forwarded identity headers.
 5. Add tests for unset token, empty token, missing request token, wrong token, valid token, and all privileged routes.
 6. Separate read-only access from DEMO/chaos/HITL mutations and enforce explicit DEMO mode. Never let a demo endpoint authorize LIVE remediation.
