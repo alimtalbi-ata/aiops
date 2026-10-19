@@ -44,6 +44,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AIOps-Debian-Deployment-Kit
-          path: ../AIOps-2.0-Debian-Deployment-Kit-*.zip*
+          path: dist/AIOps-2.0-Debian-Deployment-Kit-*.zip*
           if-no-files-found: error
           retention-days: 14
