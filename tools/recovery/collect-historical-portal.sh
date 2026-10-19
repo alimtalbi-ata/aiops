@@ -6,11 +6,11 @@
 set -Eeuo pipefail
 umask 077
 
-RECOVERY_ROOT="\${RECOVERY_ROOT:-/home/aiops/recovery/AIOPS-HISTORICAL-PORTAL-20261019-130658}"
-R33_SOURCE="\${R33_SOURCE:-/home/aiops/exports/AIOPS-R33-LOGICAL-20261007-112249/03-SOURCES/V1/stack/live_console}"
-OUT_ROOT="\${OUT_ROOT:-/home/aiops/recovery/exports}"
-V1_EXPORT="\${V1_EXPORT:-$RECOVERY_ROOT/containers/aiops_v1_live_console.tar}"
-V145_EXPORT="\${V145_EXPORT:-$RECOVERY_ROOT/containers/aiops_v1_live_console_v145_test.tar}"
+RECOVERY_ROOT="${RECOVERY_ROOT:-/home/aiops/recovery/AIOPS-HISTORICAL-PORTAL-20261019-130658}"
+R33_SOURCE="${R33_SOURCE:-/home/aiops/exports/AIOPS-R33-LOGICAL-20261007-112249/03-SOURCES/V1/stack/live_console}"
+OUT_ROOT="${OUT_ROOT:-/home/aiops/recovery/exports}"
+V1_EXPORT="${V1_EXPORT:-$RECOVERY_ROOT/containers/aiops_v1_live_console.tar}"
+V145_EXPORT="${V145_EXPORT:-$RECOVERY_ROOT/containers/aiops_v1_live_console_v145_test.tar}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 die() { printf 'ERROR: %s\n' "$*" >&2; return 1; }
@@ -20,7 +20,7 @@ mkdir -p "$OUT_ROOT"
 STAGE="$(mktemp -d "$OUT_ROOT/.portal-recovery-$STAMP.XXXXXX")"
 cleanup() {
   local rc=$?
-  if [[ -n "\${STAGE:-}" && -d "$STAGE" ]]; then
+  if [[ -n "${STAGE:-}" && -d "$STAGE" ]]; then
     if [[ "$rc" -eq 0 ]]; then rm -rf -- "$STAGE"
     else
       printf 'STAGING_PRESERVED=%s\n' "$STAGE" >&2
@@ -47,7 +47,7 @@ FILES=(app/main.py requirements.txt Dockerfile app/static/aiops-portal.html
  app/static/app.js app/static/campaign-studio.html app/static/campaign-studio.js
  app/static/demo-director.html app/static/demo-studio-v2.html
  app/static/demo-videos.html app/static/index.html app/static/styles.css)
-for rel in "\${FILES[@]}"; do
+for rel in "${FILES[@]}"; do
   src="$R33_SOURCE/$rel"
   if [[ -f "$src" ]]; then
     normalized="${rel#app/}"
@@ -65,10 +65,10 @@ extract_selected() {
         found+=("$rel") ;;
     esac
   done < <(tar -tf "$archive")
-  (("\${#found[@]}" > 0)) || { die "No whitelisted portal files in $archive"; return 1; }
-  tar -xf "$archive" -C "$dest" "\${found[@]}"
-  for rel in "\${found[@]}"; do
-    normalized="\${rel#app/app/}"
+  (("${#found[@]}" > 0)) || { die "No whitelisted portal files in $archive"; return 1; }
+  tar -xf "$archive" -C "$dest" "${found[@]}"
+  for rel in "${found[@]}"; do
+    normalized="${rel#app/app/}"
     mkdir -p "$dest/live_console/$(dirname "$normalized")"
     install -m 0644 "$dest/$rel" "$dest/live_console/$normalized"
   done
