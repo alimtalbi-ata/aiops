@@ -73,7 +73,7 @@ A selective V1/V145 portal source-recovery package was created on SRV-DEB-05 wit
 
 The collector path defect was corrected: R33's application entry point is `app/main.py`, not `main.py` at the source root. The corrected collector completed with exit code 0. On 2026-10-19, server-side integrity checks passed: `sha256sum -c` returned `Réussi`, and `tar -tzf "$PKG" >/dev/null` completed with `TAR_READABLE=YES`. This validates the server archive against its sidecar and confirms TAR readability, but does not qualify source semantics or runtime behavior.
 
-Next: SCP the archive and sidecar to Windows, compare the local SHA-256, extract into an isolated workspace, review the manifest and V1/V145 diff, then add only reviewed source/tests/docs in a separate PR. Keep main protected and preserve PC11K5 fencing invariants.
+Next: independently recompute SHA-256 for the uploaded 15:44 archive, extract it into an isolated workspace, verify the per-file manifest, and review the R33/V1/V145 source diffs by capability. Only reviewed source/tests/docs may enter a follow-up implementation PR. Keep main protected and preserve PC11K5 fencing invariants.
 
 
 ## Second selective recovery package — 2026-10-19 15:44
