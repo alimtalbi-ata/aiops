@@ -6,7 +6,8 @@ from shared.ids import new
 from shared.domain import transition,STAGES
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
-ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN',os.getenv('ADMIN_TOKEN','Newaiops26$'))
+ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
+if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or ADMIN_TOKEN must be configured')
 class RunIn(BaseModel): mode:str=Field(pattern='^(LIVE|DEMO|REPLAY|STORY)$'); scenario_id:str; incident_id:str|None=None; idempotency_key:str=Field(min_length=3,max_length=200)
 class Command(BaseModel): expected_version:int; idempotency_key:str; command:str=Field(pattern='^(START|WAIT|BLOCK|RESOLVE|FAIL|CANCEL)$')
 class Event(BaseModel): expected_version:int; stage:str; event_type:str; status:str; event_key:str|None=None; evidence_ids:list[str]=[]; decision:str|None=None; confidence:float|None=None; payload:dict={}
