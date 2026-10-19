@@ -138,24 +138,43 @@ services:
     environment:
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
-      POSTGRES_DB: temporal
+      POSTGRES_DB: postgres
     volumes: [aiops2-temporal-postgres-data:/var/lib/postgresql/data]
     networks: [aiops2-temporal-data]
-    healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d temporal"], interval: 5s, timeout: 3s, retries: 30}
+    healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d postgres"], interval: 5s, timeout: 3s, retries: 30}
+
+  aiops2-temporal-admin-tools:
+    image: ${TEMPORAL_ADMINTOOLS_IMAGE:-temporalio/admin-tools:1.32.1}
+    container_name: aiops2-temporal-admin-tools
+    restart: "no"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
+      POSTGRES_SEEDS: aiops2-temporal-postgres
+    volumes: [./deploy/setup-temporal-postgres.sh:/scripts/setup-temporal-postgres.sh:ro]
+    entrypoint: ["/bin/sh", "/scripts/setup-temporal-postgres.sh"]
+    networks: [aiops2-temporal-data]
+    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
 
   aiops2-temporal:
-    image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.32.1}
+    image: ${TEMPORAL_IMAGE:-temporalio/server:1.32.1}
     container_name: aiops2-temporal
     restart: unless-stopped
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
       POSTGRES_SEEDS: aiops2-temporal-postgres
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    volumes: [./config/temporal:/etc/temporal/config/dynamicconfig:ro]
     expose: ["7233"]
     networks: [aiops2-control, aiops2-temporal-data]
-    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+    depends_on: {aiops2-temporal-admin-tools: {condition: service_completed_successfully}}
+    healthcheck: {test: ["CMD","nc","-z","127.0.0.1","7233"], interval: 5s, timeout: 3s, start_period: 30s, retries: 60}
 
   aiops2-temporal-ui:
     image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.56.0}
@@ -165,7 +184,7 @@ services:
       TEMPORAL_ADDRESS: "aiops2-temporal:7233"
     expose: ["8080"]
     networks: [aiops2-control]
-    depends_on: {aiops2-temporal: {condition: service_started}}
+    depends_on: {aiops2-temporal: {condition: service_healthy}}
 
   aiops2-prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0}
