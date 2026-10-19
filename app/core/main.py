@@ -397,13 +397,6 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
-        old=c.execute('select learning_case_id,gold_eligible,source_run_id,case_type,evidence_ids,label,human_reviewed,outcome_verified from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
-        if old:
-            if old[2]!=rid: raise HTTPException(409,'learning_idempotency_key_reused_across_runs')
-            old_evidence=json.loads(old[4]) if isinstance(old[4],str) else old[4]
-            old_label=json.loads(old[5]) if isinstance(old[5],str) else old[5]
-            if old[3]!=case_type or sorted(old_evidence or [])!=evidence_ids or old_label!=(x.get('label') or {}) or old[6]!=human_reviewed or old[7]!=outcome_verified: raise HTTPException(409,'learning_idempotency_key_reused_with_different_input')
-            return {'learning_case_id':old[0],'gold_eligible':old[1],'idempotent':True}
         rows=c.execute("select evidence_id,coalesce(provenance->>'synthetic','false') from aiops.evidence where evidence_id=any(%s)",(evidence_ids,)).fetchall()
         if len(rows)!=len(evidence_ids):raise HTTPException(422,'learning_case_references_unknown_evidence')
         synthetic=(run[0]!='LIVE') or any(flag.lower()=='true' for _,flag in rows)
@@ -414,6 +407,15 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
             if not vr:raise HTTPException(422,'verified_outcome_requires_passed_verification_record')
         if gold_eligible and not gold_set_eligible(run[0],synthetic,human_reviewed,outcome_verified):
             raise HTTPException(422,'gold_set_requires_live_non_synthetic_human_review_and_verified_outcome')
+        old=c.execute('select learning_case_id,gold_eligible,source_run_id,case_type,evidence_ids,label,human_reviewed,outcome_verified,synthetic,analysis_id,critique_id,verification_id,exclusion_reasons,reviewed_by,review_note from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
+        if old:
+            if old[2]!=rid: raise HTTPException(409,'learning_idempotency_key_reused_across_runs')
+            old_evidence=json.loads(old[4]) if isinstance(old[4],str) else old[4]
+            old_label=json.loads(old[5]) if isinstance(old[5],str) else old[5]
+            old_exclusions=json.loads(old[12]) if isinstance(old[12],str) else old[12]
+            if old[1]!=gold_eligible or old[3]!=case_type or sorted(old_evidence or [])!=evidence_ids or old_label!=label or old[6]!=human_reviewed or old[7]!=outcome_verified or old[8]!=synthetic or old[9]!=x.get('analysis_id') or old[10]!=x.get('critique_id') or old[11]!=verification_id or old_exclusions!=(x.get('exclusion_reasons') or []) or old[13]!=(reviewer or None) or old[14]!=(review_note or None):
+                raise HTTPException(409,'learning_idempotency_key_reused_with_different_input')
+            return {'learning_case_id':old[0],'gold_eligible':old[1],'idempotent':True}
         for field,table in [('analysis_id','analysis_records'),('critique_id','critique_records')]:
             ref=x.get(field)
             if ref and not c.execute(f'select 1 from aiops.{table} where {field}=%s and run_id=%s',(ref,rid)).fetchone():
