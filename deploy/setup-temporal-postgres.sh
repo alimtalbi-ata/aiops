@@ -13,14 +13,19 @@ while ! nc -z -w 5 "$POSTGRES_SEEDS" "$DB_PORT"; do
   attempt=$((attempt + 1))
   sleep 2
 done
-# Create missing databases, initialize missing schemas, then apply forward
-# migrations. Existing schema validation is used to avoid destructive re-setup.
-for database in temporal temporal_visibility; do
-  if ! temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" validate >/dev/null 2>&1; then
-    temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" create >/dev/null 2>&1 || true
-    temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" setup-schema -v 0.0
+# Try the non-destructive forward upgrade first. If the database or schema
+# version tables are absent, create/setup and then apply the versioned schema.
+upgrade_schema() {
+  database="$1"
+  schema_dir="$2"
+  if temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" update-schema -d "$schema_dir" >/dev/null 2>&1; then
+    echo "TEMPORAL_SCHEMA_ALREADY_INITIALIZED|$database"
+    return 0
   fi
-done
-temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db temporal update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
-temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+  temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" create >/dev/null 2>&1 || true
+  temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" setup-schema -v 0.0
+  temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" update-schema -d "$schema_dir"
+}
+upgrade_schema temporal /etc/temporal/schema/postgresql/v12/temporal/versioned
+upgrade_schema temporal_visibility /etc/temporal/schema/postgresql/v12/visibility/versioned
 echo 'TEMPORAL_SCHEMA_SETUP=PASS'
