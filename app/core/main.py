@@ -247,3 +247,18 @@ def persist_policy_decision(rid:str,x:dict,authorization:str|None=Header(default
         c.execute('insert into aiops.policy_decisions(policy_decision_id,run_id,analysis_id,critique_id,policy_version,input_hash,decision,state,reasons,proof_snapshot) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(pid,rid,aid,cid,str(x.get('policy_version','2.1.0')),digest,decision,state,json.dumps([policy.get('reason','unspecified')]),json.dumps(proof)))
     return {'policy_decision_id':pid,'input_hash':digest,'idempotent':False}
 
+
+@app.get('/api/runs/{rid}/ai-ledger')
+def get_ai_ledger(rid:str,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    with db() as c:
+        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
+        analyses=c.execute('select analysis_id,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status,created_at from aiops.analysis_records where run_id=%s order by revision',(rid,)).fetchall()
+        critiques=c.execute('select critique_id,analysis_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence,created_at from aiops.critique_records where run_id=%s order by created_at',(rid,)).fetchall()
+        decisions=c.execute('select policy_decision_id,analysis_id,critique_id,policy_version,input_hash,decision,state,reasons,proof_snapshot,created_at from aiops.policy_decisions where run_id=%s order by created_at',(rid,)).fetchall()
+    return {
+      'run_id':rid,
+      'analyses':[dict(zip(['analysis_id','revision','contract_version','provider','model','prompt_version','evidence_ids','evidence_set_hash','output','confidence','status','created_at'],row)) for row in analyses],
+      'critiques':[dict(zip(['critique_id','analysis_id','contract_version','provider','model','validated','issues','evidence_ids','output','diagnostic_confidence','created_at'],row)) for row in critiques],
+      'policy_decisions':[dict(zip(['policy_decision_id','analysis_id','critique_id','policy_version','input_hash','decision','state','reasons','proof_snapshot','created_at'],row)) for row in decisions]
+    }
