@@ -2,7 +2,7 @@
 
 **Author:** Abdelhalim Talbi  
 **Target:** GitHub `main` at `8f9e6e7356777a0331b36a14c2fc325001cae41e`  
-**Work branch:** `fix/live-safety-gates-2026-10-19` — merged by [PR #5](https://github.com/alimtalbi-ata/aiops/pull/5) as commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`  
+**Work branch:** `fix/live-safety-gates-2026-10-19` — merged by [PR #5](https://github.com/alimtalbi-ata/aiops/pull/5) as commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`; deployment-secret hardening merged by [PR #7](https://github.com/alimtalbi-ata/aiops/pull/7) as commit `1bdd7235687f8b2c7081278e4dd86b8a17939ff3`  
 **Scope:** Read-only source review followed by a narrow fail-closed safety patch. No production host or running service was accessed or modified.
 
 ## Evidence boundary
@@ -43,7 +43,7 @@ This review is based on source files retrieved from GitHub. It is not a runtime 
 
 **Risk:** A deployment that fails to replace demo values can run with guessable credentials. A documentation warning does not enforce secure configuration.
 
-**Disposition:** Not changed in this patch because rotating defaults requires coordinated changes to environment validation, deployment scripts and all service token consumers. Next change should fail preflight when any default/empty secret is used outside an explicitly opted-in local demo, and should remove insecure application-level fallbacks.
+**Disposition:** Preflight enforcement and secure generation for fresh installs are now implemented in PR #7. Existing `.env` files containing defaults fail preflight unless explicit demo mode is set. Remaining issue: application code still contains insecure fallback literals; a later change should remove them only after environment propagation and every service consumer are made consistent and integration-tested.
 
 ### F-05 — Qualification scripts prove structure/reachability, not safety semantics
 
