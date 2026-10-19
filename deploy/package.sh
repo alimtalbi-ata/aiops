@@ -38,7 +38,7 @@ EOF
 mkdir -p "$ROOT/dist"
 OUT="$ROOT/dist/$NAME.zip"
 (cd "$STAGE" && zip -qr "$OUT" "$NAME")
-sha256sum "$OUT" > "$OUT.sha256"
+(cd "$ROOT/dist" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")
 echo "PACKAGE=$OUT"
 echo "CHECKSUM=$OUT.sha256"
 echo "SOURCE_COMMIT=$COMMIT"
