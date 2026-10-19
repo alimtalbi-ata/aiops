@@ -304,5 +304,7 @@ $$;
 drop trigger if exists trg_guard_reconciliation_record on aiops.reconciliation_records;
 create trigger trg_guard_reconciliation_record before insert on aiops.reconciliation_records for each row execute function aiops.guard_reconciliation_record();
 
+drop trigger if exists trg_immutable_delete_action_proposals on aiops.action_proposals;
 create trigger trg_immutable_delete_action_proposals before delete on aiops.action_proposals for each row execute function aiops.reject_immutable_mutation();
+drop trigger if exists trg_immutable_delete_effect_receipts on aiops.effect_receipts;
 create trigger trg_immutable_delete_effect_receipts before delete on aiops.effect_receipts for each row execute function aiops.reject_immutable_mutation();
