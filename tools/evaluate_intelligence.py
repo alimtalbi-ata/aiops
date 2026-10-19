@@ -84,11 +84,14 @@ def main():
             item["checks"]["actions_advisory_only"] = all(a.get("advisory_only") is True and a.get("requires_human_approval") is True for a in analysis.get("recommended_actions", []))
             crit = request("/api/intelligence/critic", {**common, "analyst": analysis})["critique"]
             item["checks"]["critic_validated"] = crit.get("validated") is True
-            item["checks"]["critic_no_unknown_evidence"] = all(
-                ref in known
-                for issue in crit.get("issues", [])
-                for ref in issue.get("evidence_ids", [])
-            )
+            critic_refs = []
+            for issue in crit.get("issues", []):
+                critic_refs.extend(issue.get("evidence_ids", []))
+            for check in crit.get("claim_checks", []):
+                critic_refs.extend(check.get("supporting_evidence_ids", []))
+                critic_refs.extend(check.get("contradicting_evidence_ids", []))
+            item["checks"]["critic_no_unknown_evidence"] = set(critic_refs).issubset(known)
+            item["checks"]["critic_no_unsafe_actions"] = not crit.get("unsafe_actions", [])
             item["analysis"] = analysis
             item["critique"] = crit
             item["status"] = "PASS" if all(item["checks"].values()) else "FAIL"
