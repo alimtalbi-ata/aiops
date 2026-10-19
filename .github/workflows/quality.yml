@@ -36,4 +36,14 @@ jobs:
       - name: Validate Compose configuration with generated secrets
         run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
       - name: Build and verify Debian deployment kit
+        env:
+          KEEP_PACKAGE: '1'
         run: bash tests/test_package_kit.sh
+      - name: Publish Debian deployment kit artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIOps-Debian-Deployment-Kit
+          path: ../AIOps-2.0-Debian-Deployment-Kit-*.zip*
+          if-no-files-found: error
+          retention-days: 14
