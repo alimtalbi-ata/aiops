@@ -7,7 +7,7 @@
 
 ## Summary
 
-The cumulative Deployment Kit V1.1 was transferred to the host and extracted. Its archive SHA-256 matched the locally produced artifact:
+The cumulative Deployment Kit V1.1 was transferred to the host and extracted. Its archive SHA-256 matched the operator-provided artifact:
 
 `3c22ef388abaea3263a38f3403221892f0e6b8b06e0d130bb8f39a5b5f4fd5cf`
 
@@ -15,7 +15,16 @@ The read-only runtime audit completed and confirmed the current AIOps 2.0 Compos
 
 `/home/aiops/aiops2-v8-r4/00-Deployment/compose.yml`
 
-This is a blocker to deployment, not permission to reconstruct or guess a Compose file. No databases were modified, no workflows were started, and no containers were restarted by this audit.
+No databases were modified, no workflows were started, and no containers were restarted by the captured audit.
+
+## Additional source-level findings
+
+GitHub source inspection on 2026-10-19 confirms:
+- The Temporal worker intentionally blocks LIVE stages until qualified live adapters exist; it does not create evidence on the LIVE guard path.
+- DEMO/REPLAY/STORY use synthetic evidence and must stay visibly synthetic.
+- The general Core event endpoint updates stage state for BLOCKED events but does not, in the inspected implementation, consistently reconcile the canonical Run lifecycle to BLOCKED. This is a source-level finding, not a host runtime test.
+- The existing qualification script checks container presence and selected health endpoints; it does not by itself prove retry/idempotency, ACME twin determinism, fencing, partial-effect recovery or rollback.
+- Existing architecture/decision records require one canonical runtime, Portal→Core-only state mutation, Temporal-owned progression, append-only evidence, fail-closed LIVE actions, and PC11K5 fencing/ownership preservation.
 
 ## Runtime facts from the captured audit
 
@@ -24,26 +33,25 @@ This is a blocker to deployment, not permission to reconstruct or guess a Compos
 - Core/worker reported working directory: `/home/aiops/aiops2-v8-r4/00-Deployment`.
 - V2 Temporal container: `aiops2_temporal`; worker queue: `aiops2`.
 - Workflow visibility observed in V2: `AIOpsRun` (1 execution) and `IncidentDecisionWorkflow` (17 executions).
-- V2 namespace catalog query returned `default` and `temporal-system`; the kit's preflight expects `default`.
+- V2 namespace catalog query returned `default` and `temporal-system`.
 - Separate historical Temporal projects remain running and use namespace `aiops` with queues `aiops-v28` / `aiops-incidents`. Do not merge or redirect them by assumption.
 
 ## Immediate next actions
 
-1. Locate and verify the actual Compose files recorded by Docker labels, including any overrides; record existence, hashes, and rendered service names without printing secret values.
-2. Locate the V2 source/configuration tree and compare it with the GitHub repository; do not infer missing files from labels alone.
-3. Review image availability and Docker daemon/containerd errors before attempting builds or service reconciliation.
-4. Repair the kit's preflight only after the canonical path and Temporal namespace contract are verified against the actual runtime.
-5. Run a plan-only deployment and inspect the exact service list; keep Temporal, PostgreSQL, MariaDB and other stateful services excluded.
-6. Open a PR with the source/configuration kit, scripts, evidence and updated continuity notes. No direct main change.
-
-## Product direction and safety invariants
-
-AIOps 2.0 remains the target architecture. Reuse historical portal V1/V145 capabilities only after inspecting source, contracts, dependencies and tests. Temporal must preserve durable ordering/retries for core functions. ACME digital-twin and chaos campaigns must be deterministic and simulation-only by default. Policy/HITL gates remain independent of LLM recommendations. Keep PC11K5 fencing/ownership invariants unchanged. Missing or stale evidence is UNKNOWN; LIVE remediation stays fail-closed.
+1. Run `deployment-kit/v1.1/scripts/discover-compose.sh` on SRV-DEB-05 and return its report (not .env values).
+2. Compare labeled Compose files, overrides, Git-tracked source and backups by hashes; identify the real deployment source of truth.
+3. Investigate the reported containerd blob-not-found error and verify image IDs/digests.
+4. Fix general BLOCKED Run lifecycle reconciliation with deterministic tests before enabling any new workflow progression.
+5. Extend qualification with Temporal retry/idempotency, deterministic ACME twin replay, and failure injection for event append/activity crash, stale evidence, partial external effect, HITL resume and rollback failure.
+6. Repair the kit preflight only after canonical paths and the Temporal namespace/queue contract are verified.
+7. Run plan-only deployment and inspect the exact service list; keep Temporal, PostgreSQL, MariaDB and other stateful services excluded.
+8. Do not enable LIVE remediation until real evidence, CMDB/RAG/analyst/critic, HITL, remediation, verification, rollback and reconciliation adapters pass qualification.
 
 ## Qualification labels
 
 - **Archive integrity:** PASS (SHA-256 matched).
-- **Read-only runtime audit:** completed; see the operator-provided terminal capture.
+- **Read-only runtime audit:** completed based on operator-provided terminal capture.
+- **GitHub source inspection:** completed for architecture, decisions, Core, Worker, Policy and current tests.
 - **Preflight:** FAIL — canonical Compose path missing.
 - **Deployment/reconciliation:** NOT RUN.
 - **Build / container image integrity:** NOT QUALIFIED; the audit reported a containerd blob-not-found error.
