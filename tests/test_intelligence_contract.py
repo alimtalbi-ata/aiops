@@ -51,7 +51,7 @@ class IntelligenceContractTests(unittest.TestCase):
         MODULE.TOKEN = 'unit-test-token'
         analyst = MODULE.Analyst(contract_version='2.0', classification='storage', severity='P2', severity_rationale='fixture', hypotheses=[{'id':'H1','statement':'test claim','confidence':0.8,'supporting_evidence_ids':['E1']}], confidence=0.8, confidence_basis='fixture')
         request = MODULE.CriticRequest(incident={'title':'fixture'}, evidence=[{'evidence_id':'E1'}], mode='DEMO', analyst=analyst)
-        critique = MODULE.Critique(contract_version='2.0', validated=True, issues=[{'code':'CONTRADICTION','description':'unverified reference','evidence_ids':['E-UNKNOWN']}], diagnostic_confidence=0.8, final_recommendation='OBSERVE')
+        critique = MODULE.Critique(contract_version='2.0', validated=False, issues=[{'code':'CONTRADICTION','description':'unverified reference','evidence_ids':['E-UNKNOWN']}], claim_checks=[{'claim':'test claim','supported':True,'supporting_evidence_ids':['E1']}], diagnostic_confidence=0.8, final_recommendation='OBSERVE')
         with patch.object(MODULE, 'call_model', return_value=critique):
             result = MODULE.critic(request, authorization='Bearer unit-test-token')
         self.assertFalse(result['critique']['validated'])
