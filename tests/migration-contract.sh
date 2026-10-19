@@ -8,6 +8,9 @@ for table in analysis_records critique_records policy_decisions action_proposals
 done
 grep -Fq "gold_eligible or (human_reviewed and outcome_verified and not synthetic)" "$SQL"
 grep -Fq "reject_immutable_mutation" "$SQL"
+grep -Fq "guard_action_proposal_insert" "$SQL"
+grep -Fq "guard_effect_receipt" "$SQL"
+grep -Fq "guard_verification_record" "$SQL"
 grep -Fq "proposal_hash" "$SQL"
 grep -Fq "idempotency_key text not null unique" "$SQL"
 grep -Fq "migration_checksum_changed" deploy/migrate.sh
