@@ -104,6 +104,10 @@ jobs:
           if psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -c "insert into aiops.learning_cases(learning_case_id,idempotency_key,source_run_id,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible) values('CI-GOLD-REJECT','CI-GOLD-KEY','CI-LEDGER-RUN',1,'INCIDENT',true,true,true,true)" 2>/tmp/gold.err; then echo "FAIL|synthetic_case_entered_gold_set"; exit 1; fi
           grep -Fq "gold learning eligibility" /tmp/gold.err
           echo "SYNTHETIC_GOLD_SET_BLOCK=PASS"
+      - name: Exercise proposal, dual approval, effect, verification and learning lifecycle
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f tests/sql/ledger-invariants.sql
 
   migration-runner-upgrade:
     runs-on: ubuntu-latest
