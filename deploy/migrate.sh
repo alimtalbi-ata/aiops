@@ -25,7 +25,7 @@ for file in db/migrations/00[0-8]_*.sql; do
   fi
 done
 # Every post-bootstrap migration runs transactionally and is immutable once applied.
-for file in db/migrations/00[9]_*.sql db/migrations/[1-9][0-9][0-9]_*.sql; do
+for file in db/migrations/00[9]_*.sql db/migrations/0[1-9][0-9]_*.sql db/migrations/[1-9][0-9][0-9]_*.sql; do
   [[ -f "$file" ]] || continue
   version="$(basename "$file")"; checksum="$(sha256sum "$file" | awk '{print $1}')"
   existing="$(psqlc -Atqc "select checksum from public.aiops_schema_migrations where version='$version'")"
