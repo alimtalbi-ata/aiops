@@ -139,3 +139,13 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Default HTTP policy is now GET retry (up to two retries) and POST single attempt. The public helper functions allow an explicit retry override only when a caller can justify the idempotency contract.
 - An ambiguous POST timeout must be reconciled against canonical state before repeating an operation; do not blindly resubmit.
 - PR #16 remains draft. CI passing is not a substitute for browser/proxy integration or production qualification.
+
+
+## Install/qualification loop — authenticated E2E correction (2026-10-19)
+
+- During the next development loop, reviewed the existing install/qualification path after adding operator authentication.
+- Found that `tests/synthetic-e2e.sh` still called the bootstrap and demo endpoints without a Bearer token. It would fail against the new Portal security boundary and did not assert that unauthenticated access was rejected.
+- Updated the synthetic E2E script to read the dedicated operator token from the existing local `.env`, assert that bootstrap and demo are rejected without authentication, then execute the synthetic flow with authentication and wait for the generated run to appear.
+- Added CI shell syntax checks for install, preflight, qualification and E2E scripts, and static assertions that the E2E security checks are present.
+- No server-side SCP/SSH deployment was possible from this session: available connected GitHub actions support repository changes and CI, not arbitrary shell access to `SRV-DEB-05`. No runtime installation, container restart or live E2E is claimed.
+- Next loop gate: CI must pass, then the operator runs the guarded install/qualification sequence on the intended isolated target with backup and rollback ready. Do not apply this draft PR directly to production.
