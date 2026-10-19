@@ -27,4 +27,7 @@ grep -q 'Content-Security-Policy' app/portal/main.py
 grep -q 'X-Frame-Options' app/portal/main.py
 grep -q 'def bootstrap(_operator:bool=Depends(require_operator))' app/portal/main.py
 grep -q 'login shell' app/portal/main.py
+grep -q 'unauthenticated_mutations=BLOCKED' tests/synthetic-e2e.sh
+grep -q 'bootstrap_without_auth' tests/synthetic-e2e.sh
+grep -q 'demo_without_auth' tests/synthetic-e2e.sh
 echo STATIC_AUDIT=PASS
