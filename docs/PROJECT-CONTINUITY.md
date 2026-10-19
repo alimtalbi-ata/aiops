@@ -72,7 +72,7 @@ Every material change must update this record and the relevant architecture/deci
 
 **Date:** 2026-10-19  
 **Branch:** `feat/portal-operator-auth-v2`  
-**Status:** Implementation committed to a dedicated branch; PR and CI qualification pending.
+**Status:** Implementation committed to a dedicated branch; PR #16 open as draft. GitHub Actions quality run #105 passed.
 
 ### Change scope
 - Portal startup now fails closed if `AIOPS_PORTAL_OPERATOR_TOKEN` is absent.
@@ -83,7 +83,7 @@ Every material change must update this record and the relevant architecture/deci
 - Fresh-install secret generation creates a separate random portal operator token. Compose requires it explicitly. The secure env template, preflight, static audit and CI test job were updated.
 
 ### Qualification
-New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Copilot question bounds, upstream error redaction and success passthrough. CI is configured to run these tests. Their execution result is pending; do not claim the patch is qualified until the workflow completes.
+New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Copilot question bounds, upstream error redaction and success passthrough. GitHub Actions run [39274829807](https://github.com/alimtalbi-ata/aiops/actions/runs/39274829807) passed Python compileall, policy tests, portal authorization tests (8 cases), secret-preflight tests, static audit, and Compose config validation with generated secrets. This is CI qualification only; it does not replace browser/API integration or production qualification.
 
 ### Limits and next gates
 - Read-only dashboard/bootstrap routes are not yet protected by operator authentication; determine the intended public-read policy before external exposure.
@@ -92,3 +92,12 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Test rate limits, CSRF/origin policy, content-security policy, browser UX, Core timeout/idempotency and compose/preflight behavior.
 - Keep DEMO synthetic. LIVE execution remains blocked by the existing canonical worker/policy safety controls.
 - No runtime deployment, restart, database change, or PC11K5 fencing modification was performed.
+
+
+### Latest CI evidence — 2026-10-19
+- [PR #16](https://github.com/alimtalbi-ata/aiops/pull/16) is open as draft, branch `feat/portal-operator-auth-v2`, targeting `main`.
+- Quality workflow run [39274829807](https://github.com/alimtalbi-ata/aiops/actions/runs/39274829807) completed successfully.
+- Portal auth unit tests: 8/8 passed.
+- Policy tests: 7/7 passed.
+- Secret preflight, static repository audit and Compose configuration validation: PASS.
+- No runtime deployment or live service test was performed. Keep the PR in draft until broader security/UI acceptance gates are addressed.
