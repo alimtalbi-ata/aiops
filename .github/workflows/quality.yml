@@ -31,7 +31,7 @@ jobs:
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
       - name: Static and SQL audit
-        run: bash tests/static-audit.sh && bash tests/sql-audit.sh && bash tests/migration-contract.sh && bash tests/core-ledger-contract.sh
+        run: bash tests/static-audit.sh && bash tests/sql-audit.sh && bash tests/migration-contract.sh && bash tests/core-ledger-contract.sh && bash tests/backup-contract.sh
       - name: Secret preflight tests
         run: bash tests/test_preflight_secrets.sh
       - name: Generate isolated CI environment
