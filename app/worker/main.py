@@ -6,7 +6,7 @@ from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
 from shared.http import post_json
-app=FastAPI(title='ACME AioOps Temporal Worker',version='2.0.0')
+app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN',os.getenv('AIOPS_ADMIN_TOKEN','Newaiops26$'));TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233')
 STAGES=['NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC','POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN']
 RETRY=RetryPolicy(initial_interval=datetime.timedelta(seconds=1),backoff_coefficient=2.0,max_interval=datetime.timedelta(seconds=10),maximum_attempts=3)
@@ -19,7 +19,30 @@ async def execute_stage(a):
     started=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':version,'stage':stage,'event_type':'STAGE_STARTED','event_key':f'{stage}:START','status':'RUNNING','confidence':None,'payload':{'attempt':activity.info().attempt,'executor':'temporal'}})
     v=started['version']
     try:
-        synthetic=mode!='LIVE'
+        # This baseline has no qualified LIVE evidence/CMDB/RAG/analyst/critic/remediation adapters.
+        # Never manufacture evidence or confidence values for a LIVE run.
+        if mode == 'LIVE':
+            blocked = call('POST',f'{CORE}/api/runs/{rid}/events',{
+                'expected_version':v,
+                'stage':stage,
+                'event_type':'LIVE_ADAPTER_UNAVAILABLE',
+                'event_key':f'{stage}:LIVE-ADAPTER-UNAVAILABLE',
+                'status':'BLOCKED',
+                'decision':'HUMAN_APPROVAL',
+                'confidence':0.0,
+                'payload':{
+                    'reason':'LIVE execution is disabled until real evidence adapters and policy/HITL qualification are implemented',
+                    'synthetic_evidence_created':False,
+                    'stage_adapter_qualified':False,
+                },
+            })
+            state = call('POST',f'{CORE}/api/runs/{rid}/command',{
+                'expected_version':blocked['version'],
+                'idempotency_key':f'LIVE-BLOCK-{rid}',
+                'command':'BLOCK',
+            })
+            return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':state['version'],'sequence':blocked['sequence']}
+        synthetic=True
         if synthetic and stage=='OBSERVE':
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'SET_STATE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'state':'DEGRADED','health':0.42}},token=ADMIN)
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'OBSERVE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL'}},token=ADMIN)
@@ -52,7 +75,7 @@ class IncidentWorkflow:
 @app.get('/health')
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
-def metrics(): return 'aiops_worker_up 1\n'
+def metrics(): return 'aiops_worker_up 1\\n'
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
