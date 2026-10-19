@@ -66,3 +66,11 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## Historical portal recovery update — 2026-10-19
+
+A selective V1/V145 portal source-recovery package was created on SRV-DEB-05 without intentional runtime changes. The host reported package creation success, a 756,799-byte archive, 33 staged files and a 27,623-line V1/V145 diff. See [HISTORICAL-PORTAL-RECOVERY-RESULT-2026-10-19.md](HISTORICAL-PORTAL-RECOVERY-RESULT-2026-10-19.md) for exact paths, provenance, evidence boundaries and next steps.
+
+The collector path defect was corrected: R33's application entry point is `app/main.py`, not `main.py` at the source root. The corrected collector completed with exit code 0. The archive and checksum sidecar still require independent validation; source semantics and runtime behavior have not been qualified. Do not rerun collection unnecessarily or execute the archive as a command.
+
+Next: verify server checksum and TAR readability, SCP to Windows, compare local SHA-256, extract into an isolated workspace, review the diff and contracts, then add only reviewed source/tests/docs in a separate PR. Keep main protected and preserve PC11K5 fencing invariants.
