@@ -44,7 +44,7 @@ The migrations reviewed provide durable run events, evidence and policy gates, b
 
 Before implementation, map every existing write/read in Core, Worker, Policy, Evidence and Copilot to the schema. Then add an additive, versioned migration for any missing domain records. Avoid breaking existing APIs or relying on PostgreSQL initdb scripts to upgrade an already initialized volume: upgrade scripts must be run explicitly and be idempotent/transactional where possible.
 
-## Required AI ledger entities for a future migration
+## AI ledger entities and implementation notes
 
 1. analysis_records: run/incident, contract version, model/provider, prompt version, output JSON, input evidence IDs/hash, status, created_at.
 2. critique_records: analysis ID, critic/provider/version, validated, issue list, evidence checks, output JSON, created_at.
