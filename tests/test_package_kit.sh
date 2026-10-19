@@ -4,10 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 LOG="$TMP/package.log"
-(
-  cd "$ROOT"
-  bash deploy/package.sh
-) | tee "$LOG"
+( cd "$ROOT"; bash deploy/package.sh ) | tee "$LOG"
 PACKAGE="$(sed -n 's/^PACKAGE=//p' "$LOG" | tail -n 1)"
 CHECKSUM="$(sed -n 's/^CHECKSUM=//p' "$LOG" | tail -n 1)"
 [[ -n "$PACKAGE" && -f "$PACKAGE" ]] || { echo 'FAIL|package_missing'; exit 1; }
@@ -21,27 +18,10 @@ grep -q '/SHA256SUMS$' "$LIST"
 grep -q '/deploy/install.sh$' "$LIST"
 grep -q '/docs/DEBIAN-DEPLOYMENT-KIT.md$' "$LIST"
 grep -q '/config/.env.example$' "$LIST"
-if grep -Eq '(^|/)[.]env
+if grep -Eq '(^|/)[.]env$' "$LIST"; then
   echo 'FAIL|environment_secret_file_in_package'
   exit 1
 fi
-(
-  cd "$TMP"
-  unzip -q "$PACKAGE"
-  cd "$(find . -name KIT-MANIFEST.txt -printf '%h\n' | head -n 1)"
-  sha256sum -c SHA256SUMS
-)
-rm -f "$PACKAGE" "$CHECKSUM"
-echo 'PACKAGE_KIT_TEST=PASS'
- "$LIST"; then
-  echo 'FAIL|environment_secret_file_in_package'
-  exit 1
-fi
-(
-  cd "$TMP"
-  unzip -q "$PACKAGE"
-  cd "$(find . -name KIT-MANIFEST.txt -printf '%h\n' | head -n 1)"
-  sha256sum -c SHA256SUMS
-)
+( cd "$TMP"; unzip -q "$PACKAGE"; cd "$(find . -name KIT-MANIFEST.txt -printf '%h\n' | head -n 1)"; sha256sum -c SHA256SUMS )
 rm -f "$PACKAGE" "$CHECKSUM"
 echo 'PACKAGE_KIT_TEST=PASS'
