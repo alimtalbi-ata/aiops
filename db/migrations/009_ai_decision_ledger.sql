@@ -205,7 +205,7 @@ begin
  end if;
  return NEW;
 end;
-$;
+$$;
 drop trigger if exists trg_guard_action_proposal_insert on aiops.action_proposals;
 create trigger trg_guard_action_proposal_insert before insert on aiops.action_proposals for each row execute function aiops.guard_action_proposal_insert();
 
