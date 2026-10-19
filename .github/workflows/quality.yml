@@ -23,6 +23,8 @@ jobs:
           python-version: "3.12"
       - name: Install policy test dependencies
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7"
+      - name: Validate shell syntax
+        run: bash -n deploy/*.sh tests/*.sh
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
@@ -33,3 +35,15 @@ jobs:
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
         run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+      - name: Build and verify Debian deployment kit
+        env:
+          KEEP_PACKAGE: '1'
+        run: bash tests/test_package_kit.sh
+      - name: Publish Debian deployment kit artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIOps-Debian-Deployment-Kit
+          path: dist/AIOps-2.0-Debian-Deployment-Kit-*.zip*
+          if-no-files-found: error
+          retention-days: 14

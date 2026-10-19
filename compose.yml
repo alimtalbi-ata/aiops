@@ -138,24 +138,44 @@ services:
     environment:
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
-      POSTGRES_DB: temporal
+      POSTGRES_DB: postgres
     volumes: [aiops2-temporal-postgres-data:/var/lib/postgresql/data]
     networks: [aiops2-temporal-data]
-    healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d temporal"], interval: 5s, timeout: 3s, retries: 30}
+    healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d postgres"], interval: 5s, timeout: 3s, retries: 30}
+
+  aiops2-temporal-admin-tools:
+    image: ${TEMPORAL_ADMINTOOLS_IMAGE:-temporalio/admin-tools:1.32.1}
+    container_name: aiops2-temporal-admin-tools
+    restart: "no"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
+      SQL_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
+      POSTGRES_SEEDS: aiops2-temporal-postgres
+    volumes: [./deploy/setup-temporal-postgres.sh:/scripts/setup-temporal-postgres.sh:ro]
+    entrypoint: ["/bin/sh", "/scripts/setup-temporal-postgres.sh"]
+    networks: [aiops2-temporal-data]
+    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
 
   aiops2-temporal:
-    image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.32.1}
+    image: ${TEMPORAL_IMAGE:-temporalio/server:1.32.1}
     container_name: aiops2-temporal
     restart: unless-stopped
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
       POSTGRES_SEEDS: aiops2-temporal-postgres
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    volumes: [./config/temporal:/etc/temporal/config/dynamicconfig:ro]
     expose: ["7233"]
     networks: [aiops2-control, aiops2-temporal-data]
-    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+    depends_on: {aiops2-temporal-admin-tools: {condition: service_completed_successfully}}
+    healthcheck: {test: ["CMD","nc","-z","127.0.0.1","7233"], interval: 5s, timeout: 3s, start_period: 30s, retries: 60}
 
   aiops2-temporal-ui:
     image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.56.0}
@@ -165,7 +185,7 @@ services:
       TEMPORAL_ADDRESS: "aiops2-temporal:7233"
     expose: ["8080"]
     networks: [aiops2-control]
-    depends_on: {aiops2-temporal: {condition: service_started}}
+    depends_on: {aiops2-temporal: {condition: service_healthy}}
 
   aiops2-prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0}
@@ -226,8 +246,23 @@ services:
       GLPI_SKIP_AUTOINSTALL: "false"
       GLPI_SKIP_AUTOUPDATE: "false"
     volumes: [aiops2-glpi-data:/var/glpi]
-    networks: [aiops2-integration]
+    networks: [aiops2-integration, aiops2-public]
     depends_on: {aiops2-glpi-db: {condition: service_healthy}}
+
+  aiops2-n8n-db-init:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    container_name: aiops2-n8n-db-init
+    restart: "no"
+    environment:
+      PGHOST: aiops2-postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-aiops}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
+      PGDATABASE: postgres
+      N8N_DATABASE: n8n
+    command: ["sh", "-ec", "until pg_isready -h \"$$PGHOST\" -p \"$$PGPORT\" -U \"$$PGUSER\"; do sleep 2; done; if ! psql -v ON_ERROR_STOP=1 -tAc \"SELECT 1 FROM pg_database WHERE datname='$$N8N_DATABASE'\" | grep -q 1; then createdb -O \"$$PGUSER\" \"$$N8N_DATABASE\"; fi; echo N8N_DATABASE_READY"]
+    networks: [aiops2-data]
+    depends_on: {aiops2-postgres: {condition: service_healthy}}
 
   aiops2-n8n:
     image: ${N8N_IMAGE:-n8nio/n8n:2.40.6}
@@ -244,8 +279,8 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY_required}
       N8N_SECURE_COOKIE: "false"
     volumes: [aiops2-n8n-data:/home/node/.n8n]
-    networks: [aiops2-integration, aiops2-control]
-    depends_on: {aiops2-postgres: {condition: service_healthy}}
+    networks: [aiops2-integration, aiops2-control, aiops2-data]
+    depends_on: {aiops2-n8n-db-init: {condition: service_completed_successfully}}
 
 networks:
   aiops2-public: {name: aiops2-public}

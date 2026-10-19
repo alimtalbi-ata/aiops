@@ -49,6 +49,19 @@ Consolidate AIOps 2.0 around one coherent runtime and operations experience. Reu
 
 A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE-AUDIT-2026-10-19.md). The safety patch was merged via [PR #5](https://github.com/alimtalbi-ata/aiops/pull/5) at commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`: P1 escalates before evidence checks; policy no longer defaults critic validation to true and requires explicit freshness/precondition/fencing/approval inputs; the worker blocks LIVE runs before generating placeholder evidence and marks the Run BLOCKED. Added `tests/test_policy_safety.py` and `.github/workflows/quality.yml`; GitHub Actions run [39223403723](https://github.com/alimtalbi-ata/aiops/actions/runs/39223403723) passed compileall, policy unit tests and static audit. Container build, runtime qualification and synthetic E2E remain unrun. The current main branch includes this conservative guard; LIVE execution is still not qualified. Container build, runtime qualification and synthetic E2E remain unrun. A second hardening change merged via [PR #7](https://github.com/alimtalbi-ata/aiops/pull/7), commit `1bdd7235687f8b2c7081278e4dd86b8a17939ff3`: fresh installs generate random secrets, existing `.env` files are preserved, preflight rejects default secrets outside explicit demo mode, and the admin/internal tokens are checked for consistency. A third change merged via [PR #9](https://github.com/alimtalbi-ata/aiops/pull/9), commit `e6251c1ce195937b1af6019e389c9f6b3f68e2dc`: runtime credential fallbacks were removed, Compose now requires explicit secrets, the secure template is blank, and known demo values are isolated in `config/.env.demo.example`. CI run [39224781141](https://github.com/alimtalbi-ata/aiops/actions/runs/39224781141) passed Python compilation, policy tests, secret-preflight tests, static checks and `docker compose config`.
 
+
+
+## Debian kit and runtime qualification work (2026-10-19)
+
+- Added a cumulative Debian kit builder: `deploy/package.sh`, version marker `config/version.env`, embedded `KIT-MANIFEST.txt`, per-file `SHA256SUMS`, and sidecar ZIP SHA-256. Package test: `tests/test_package_kit.sh`; never include live `.env` files, database volumes, production exports or built images.
+- Added `docs/DEBIAN-DEPLOYMENT-KIT.md` and refreshed `docs/README-DEPLOY.md` with fresh install vs upgrade, secure secret handling, safe legacy-retirement conditions and qualification boundaries.
+- Strengthened Portal Run detail read endpoint and synthetic E2E: duplicate demo must reuse the same Run ID; all 13 stages/events must pass; policy must PASS with SIMULATE; terminal Run must be RESOLVED.
+- Strengthened runtime qualification for app container health and public endpoint readiness. Added isolated Docker CI workflow that builds and runs the full stack and removes only its disposable CI volumes.
+- Runtime test exposed a real Temporal SDK mismatch: worker used unsupported `RetryPolicy(max_interval=...)`; changed to supported `maximum_interval`.
+- Runtime test exposed n8n/Postgres network isolation; attached n8n to the internal data network and added an idempotent one-shot database initializer for its dedicated `n8n` database.
+- CI status at the time of this update: static checks pass on prior commits; isolated runtime test is being rerun after fixes. Do not claim full runtime/E2E qualification until the latest runtime workflow passes.
+- The current work is on branch `test/qualify-full-synthetic-run-2026-10-19`, proposed in [PR #11](https://github.com/alimtalbi-ata/aiops/pull/11). No production host was changed.
+
 ## Next work queue
 
 - [x] Add deterministic policy safety tests and run them in GitHub Actions; preserve the run link in the source audit.

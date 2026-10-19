@@ -13,11 +13,13 @@
 
 ### Functional
 - Golden DEMO creates an Incident and Run.
-- Temporal starts the canonical workflow.
-- Every stage generates evidence/event state.
-- Policy produces a Gate.
+- Repeating the same Golden DEMO reuses the same idempotent Run.
+- Temporal starts the canonical workflow and the Run reaches RESOLVED within a bounded timeout.
+- Every required stage has PASS state and a successful completion event.
+- Policy produces a PASS Gate with `SIMULATE` decision in DEMO mode.
+- The Portal read model returns the canonical Run detail from Core.
 - Twin receives synthetic degradation only for synthetic modes.
-- Run reaches RESOLVED.
+- Any BLOCKED/FAILED/CANCELLED terminal state, missing stage, missing gate or timeout fails the test.
 
 ### Resilience to add before production
 - kill Worker during stage and verify Temporal retry/recovery;

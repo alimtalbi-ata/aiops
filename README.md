@@ -39,7 +39,7 @@ The Simulator is isolated on `aiops2-execution`; it does not have direct access 
 
 ## Qualification
 
-`tests/static-audit.sh` checks source structure and naming. `tests/qualification.sh` checks the running stack. `tests/synthetic-e2e.sh` exercises Portal → Core → Temporal → Worker and waits for the Run inventory to contain the generated Run.
+`deploy/package.sh` creates a versioned cumulative Debian deployment kit with a manifest and SHA-256 checksums. `tests/static-audit.sh` checks source structure and safety contracts. `tests/qualification.sh` checks application health and exposed endpoints. `tests/synthetic-e2e.sh` exercises Portal → Core → Temporal → Worker, verifies idempotency, requires all 13 stages and a PASS/SIMULATE policy gate, and fails on a blocked or incomplete Run.
 
 See `docs/` for architecture, data contracts, network boundaries, deployment, demo and resilience strategy.
 
