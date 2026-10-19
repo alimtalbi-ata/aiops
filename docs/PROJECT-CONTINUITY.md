@@ -158,3 +158,11 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Added five deterministic unit tests for absent receipts, exact replay, cross-run conflict, cross-command conflict and response preservation; wired them into CI.
 - The schema still intentionally treats the idempotency key as globally unique. This change makes that global contract explicit and fail-closed; changing it to per-run uniqueness would require a separate migration and compatibility decision.
 - Latest CI must pass before this source change is considered qualified. No DB migration, deployment or runtime mutation was performed.
+
+
+## Repeatable guarded qualification runner — 2026-10-19
+
+- Added `deploy/qualify-update.sh` to repeat source/config checks and, only after explicit multi-variable confirmation, rebuild/recreate services and run runtime qualification plus authenticated synthetic E2E.
+- Default mode is non-mutating: it requires an existing `.env`, validates secrets, checks shell syntax, compiles Python, runs policy/portal/HTTP/idempotency tests, secret preflight, static audit and Compose config validation; then exits with runtime apply skipped.
+- Runtime mode requires all of `APPLY_RUNTIME=1`, `ISOLATED_TARGET=1`, `BACKUP_CONFIRMED=1` and `CONFIRM_RUNTIME_UPDATE=I_APPROVE_AIOPS2_QUALIFICATION_UPDATE`. The operator must actually verify backups and isolation; flags are explicit acknowledgements, not automated proof of backup integrity.
+- CI now syntax-checks the new runner. No remote execution, SCP/SSH or actual runtime install was possible from this chat's available connections; do not report the runtime phase as executed until the script runs on the target and outputs the qualification PASS markers.
