@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('aiops_intelligence', ROOT / 'app' / 'intelligence' / 'main.py')
@@ -13,7 +14,7 @@ class IntelligenceContractTests(unittest.TestCase):
         self.assertEqual(MODULE.bad_refs(output, [{'evidence_id':'E1'}]), ['E-NOT-PRESENT'])
 
     def test_missing_evidence_does_not_create_references(self):
-        output = MODULE.Analyst(contract_version='2.0', classification='unknown', severity='UNKNOWN', severity_rationale='no evidence', hypotheses=[{'id':'H1','statement':'unknown','confidence':0.2}], confidence=0.2, confidence_basis='no evidence')
+        output = MODULE.Analyst(contract_version='2.0', classification='unknown', severity='UNKNOWN', severity_rationale='no evidence', hypotheses=[{'id':'H1','statement':'unknown','confidence':0.2,'assumptions':['insufficient evidence']}], confidence=0.2, confidence_basis='no evidence')
         self.assertEqual(MODULE.bad_refs(output, []), [])
 
     def test_health_does_not_claim_provider_is_ready(self):
@@ -24,6 +25,34 @@ class IntelligenceContractTests(unittest.TestCase):
     def test_action_cannot_be_marked_executable(self):
         with self.assertRaises(Exception):
             MODULE.Action(action_id='A1', intent='restart', risk_tier='HIGH', expected_effect='restart', advisory_only=False)
+
+    def test_hypothesis_requires_evidence_or_explicit_assumption(self):
+        with self.assertRaises(Exception):
+            MODULE.Hypothesis(id='H1', statement='unsupported', confidence=0.5)
+
+    def test_supported_critic_claim_requires_evidence(self):
+        with self.assertRaises(Exception):
+            MODULE.ClaimCheck(claim='storage path failed', supported=True)
+
+    def test_critic_cannot_validate_an_unsupported_claim(self):
+        MODULE.TOKEN = 'unit-test-token'
+        analyst = MODULE.Analyst(contract_version='2.0', classification='storage', severity='P2', severity_rationale='fixture', hypotheses=[{'id':'H1','statement':'test claim','confidence':0.8,'supporting_evidence_ids':['E1']}], confidence=0.8, confidence_basis='fixture')
+        request = MODULE.CriticRequest(incident={'title':'fixture'}, evidence=[{'evidence_id':'E1'}], mode='DEMO', analyst=analyst)
+        critique = MODULE.Critique(contract_version='2.0', validated=True, claim_checks=[{'claim':'test claim','supported':False}], diagnostic_confidence=0.8, final_recommendation='OBSERVE')
+        with patch.object(MODULE, 'call_model', return_value=critique):
+            result = MODULE.critic(request, authorization='Bearer unit-test-token')
+        self.assertFalse(result['critique']['validated'])
+        self.assertEqual(result['critique']['final_recommendation'], 'HUMAN_APPROVAL')
+
+    def test_critic_issue_with_unknown_evidence_fails_closed(self):
+        MODULE.TOKEN = 'unit-test-token'
+        analyst = MODULE.Analyst(contract_version='2.0', classification='storage', severity='P2', severity_rationale='fixture', hypotheses=[{'id':'H1','statement':'test claim','confidence':0.8,'supporting_evidence_ids':['E1']}], confidence=0.8, confidence_basis='fixture')
+        request = MODULE.CriticRequest(incident={'title':'fixture'}, evidence=[{'evidence_id':'E1'}], mode='DEMO', analyst=analyst)
+        critique = MODULE.Critique(contract_version='2.0', validated=True, issues=[{'code':'CONTRADICTION','description':'unverified reference','evidence_ids':['E-UNKNOWN']}], diagnostic_confidence=0.8, final_recommendation='OBSERVE')
+        with patch.object(MODULE, 'call_model', return_value=critique):
+            result = MODULE.critic(request, authorization='Bearer unit-test-token')
+        self.assertFalse(result['critique']['validated'])
+        self.assertEqual(result['critique']['final_recommendation'], 'HUMAN_APPROVAL')
 
     def test_invalid_critic_disposition_is_rejected(self):
         with self.assertRaises(Exception):
