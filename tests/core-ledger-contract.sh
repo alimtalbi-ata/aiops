@@ -13,4 +13,7 @@ grep -Fq "critical_action_requires_two_distinct_actors_and_roles" "$CORE"
 grep -Fq "synthetic_mode_cannot_authorize_real_approval" "$CORE"
 grep -Fq "gold_set_requires_live_non_synthetic_human_review_and_verified_outcome" "$CORE"
 grep -Fq "execution_allowed':False" "$CORE"
+grep -Fq "gold_set_eligible" "$CORE"
+grep -Fq "critical_approval_complete" "$CORE"
+grep -Fq "analysis_id text not null references aiops.analysis_records" db/migrations/009_ai_decision_ledger.sql
 echo 'CORE_LEDGER_CONTRACT=PASS'
