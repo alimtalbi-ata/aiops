@@ -176,6 +176,41 @@ $$;
 drop trigger if exists trg_guard_action_proposal_transition on aiops.action_proposals;
 create trigger trg_guard_action_proposal_transition before update on aiops.action_proposals for each row execute function aiops.guard_action_proposal_transition();
 
+create or replace function aiops.guard_action_proposal_insert() returns trigger language plpgsql as $
+declare a record; q record; action_record jsonb; evidence_count integer;
+begin
+ select output,evidence_ids,status into a from aiops.analysis_records where analysis_id=NEW.analysis_id and run_id=NEW.run_id;
+ if not found or a.status<>'VALID' then raise exception 'proposal requires a valid analysis for the same run'; end if;
+ select output,evidence_ids,validated into q from aiops.critique_records where critique_id=NEW.critique_id and analysis_id=NEW.analysis_id and run_id=NEW.run_id;
+ if not found or q.validated is not true or q.output->'issues'<>'[]'::jsonb or q.output->'unsafe_actions'<>'[]'::jsonb then
+  raise exception 'proposal requires a clean validated critique for the same analysis';
+ end if;
+ select value into action_record from jsonb_array_elements(coalesce(a.output->'recommended_actions','[]'::jsonb)) where value->>'action_id'=NEW.source_action_id limit 1;
+ if action_record is null then raise exception 'source action is not present in validated analysis'; end if;
+ if action_record->>'risk_tier'<>NEW.risk_tier
+ or coalesce((action_record->>'advisory_only')::boolean,false) is not true
+ or coalesce((action_record->>'requires_human_approval')::boolean,false) is not true
+ or (action_record->>'target_ci_id' is not null and action_record->>'target_ci_id'<>NEW.target_ci_id) then
+  raise exception 'proposal differs from advisory-only analyst action';
+ end if;
+ if jsonb_typeof(NEW.evidence_ids)<>'array' or jsonb_array_length(NEW.evidence_ids)=0
+ or not (a.evidence_ids @> NEW.evidence_ids) or not (q.evidence_ids @> NEW.evidence_ids) then
+  raise exception 'proposal evidence must be a non-empty subset of analysis and critique evidence';
+ end if;
+ select count(*) into evidence_count from jsonb_array_elements_text(NEW.evidence_ids) e(id) join aiops.evidence ev on ev.evidence_id=e.id;
+ if evidence_count<>jsonb_array_length(NEW.evidence_ids) then raise exception 'proposal references unknown evidence'; end if;
+ if jsonb_array_length(NEW.preconditions)=0 or jsonb_array_length(NEW.expected_postconditions)=0 then
+  raise exception 'proposal requires preconditions and measurable postconditions';
+ end if;
+ if NEW.risk_tier in ('HIGH','CRITICAL') and (NEW.rollback_plan='{}'::jsonb or NEW.rollback_plan='null'::jsonb) then
+  raise exception 'high-risk proposal requires rollback plan';
+ end if;
+ return NEW;
+end;
+$;
+drop trigger if exists trg_guard_action_proposal_insert on aiops.action_proposals;
+create trigger trg_guard_action_proposal_insert before insert on aiops.action_proposals for each row execute function aiops.guard_action_proposal_insert();
+
 -- An effect receipt is evidence of an actual adapter invocation, not an approval or proposal.
 create or replace function aiops.guard_effect_receipt() returns trigger language plpgsql as $$
 declare p record; a record; approval_count integer; approved_roles text[];
@@ -218,7 +253,8 @@ begin
  select proposal_id,outcome into effect_proposal,effect_outcome from aiops.effect_receipts where effect_id=NEW.effect_id;
  if not found or effect_proposal<>NEW.proposal_id then raise exception 'verification must reference effect for the same proposal'; end if;
  if effect_outcome not in ('SUCCEEDED','FAILED','PARTIAL','UNKNOWN') then raise exception 'effect must be terminal before verification'; end if;
- if NEW.evidence_ids='[]'::jsonb then raise exception 'verification requires independent evidence IDs'; end if;
+ if jsonb_typeof(NEW.evidence_ids)<>'array' or jsonb_array_length(NEW.evidence_ids)=0 then raise exception 'verification requires independent evidence IDs'; end if;
+ if (select count(*) from jsonb_array_elements_text(NEW.evidence_ids) e(id) join aiops.evidence ev on ev.evidence_id=e.id)<>jsonb_array_length(NEW.evidence_ids) then raise exception 'verification references unknown evidence'; end if;
  return NEW;
 end;
 $$;
@@ -230,7 +266,8 @@ begin
  if NEW.proposal_id is not null and not exists(select 1 from aiops.action_proposals where proposal_id=NEW.proposal_id and run_id=NEW.run_id) then
   raise exception 'reconciliation proposal must belong to the same run';
  end if;
- if NEW.evidence_ids='[]'::jsonb then raise exception 'reconciliation requires evidence IDs'; end if;
+ if jsonb_typeof(NEW.evidence_ids)<>'array' or jsonb_array_length(NEW.evidence_ids)=0 then raise exception 'reconciliation requires evidence IDs'; end if;
+ if (select count(*) from jsonb_array_elements_text(NEW.evidence_ids) e(id) join aiops.evidence ev on ev.evidence_id=e.id)<>jsonb_array_length(NEW.evidence_ids) then raise exception 'reconciliation references unknown evidence'; end if;
  return NEW;
 end;
 $$;
