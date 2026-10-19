@@ -50,6 +50,8 @@ bash "$ROOT/deploy/check-secrets.sh" "$TMP/init/.env" >/dev/null
 ADMIN_TOKEN="$(sed -n 's/^AIOPS_ADMIN_TOKEN=//p' "$TMP/init/.env")"
 INTERNAL_TOKEN="$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/init/.env")"
 [[ -n "$ADMIN_TOKEN" && "$ADMIN_TOKEN" == "$INTERNAL_TOKEN" ]]
+PORTAL_TOKEN="$(sed -n 's/^AIOPS_PORTAL_OPERATOR_TOKEN=//p' "$TMP/init/.env")"
+[[ -n "$PORTAL_TOKEN" && "$PORTAL_TOKEN" != "$INTERNAL_TOKEN" ]]
 BEFORE="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
