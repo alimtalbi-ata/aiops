@@ -31,6 +31,8 @@ jobs:
         run: PYTHONPATH=app python -m unittest discover -s tests -p "test_portal_auth.py" -v
       - name: Shared HTTP retry-safety tests
         run: PYTHONPATH=app python -m unittest discover -s tests -p "test_shared_http.py" -v
+      - name: Idempotency receipt scope tests
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_idempotency_receipts.py" -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Shell syntax checks
