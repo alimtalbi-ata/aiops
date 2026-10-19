@@ -73,7 +73,7 @@ New documents on the working branch:
 - [Database schema catalog](DATABASE-SCHEMA-CATALOG.md): source-derived map of existing migrations and the proposed AI decision-ledger gap.
 - [Stack deployment inventory](STACK-DEPLOYMENT-INVENTORY.md): source-derived service/network responsibility and deployment-kit acceptance criteria.
 
-This is a documentation/acceptance-contract change. It does not claim application code has been fully reconciled to the new contracts, and no Debian server or live runtime was tested. Next technical work is to implement a real provider-backed Analyst/Critic behind strict schemas, integrate it with Worker through versioned contracts, map existing persistence before adding an additive decision-ledger migration, and add deterministic provider-fake tests plus local/CI integration qualification. The Copilot currently constructs a fixed evidence summary and must not be called an LLM diagnostic engine. Qualify core with isolated containers before ACME twin/demo expansion.
+The initial branch has progressed beyond documentation: an isolated provider-backed Analyst/Critic adapter is now present and the Worker calls it in the synthetic flow. The Copilot itself still constructs a fixed evidence summary and is not the LLM diagnostic engine. The adapter/Worker integration remains unqualified at runtime. Next work is to add provider-fake tests, map persistence before an additive decision-ledger migration, run disposable PostgreSQL and container/E2E qualification in CI, and only then expand ACME twin/demo features.
 
 ## Update rule
 
@@ -86,6 +86,7 @@ Every material change must update this record and the relevant architecture/deci
 - Added the service to Compose on the internal control network and added optional LLM provider variables to the safe .env template.
 - Added deterministic contract tests and wired them into the quality workflow.
 - GitHub Actions run 39312217053 passed compileall, existing policy safety tests, new intelligence contract tests, secret preflight, static repository audit, and Compose configuration validation: https://github.com/alimtalbi-ata/aiops/actions/runs/39312217053
-- Scope boundary: the new service is not yet connected to Temporal Worker stage execution. The current worker still generates generic synthetic stage records in DEMO/REPLAY. Do not treat those records as source observations or claim the analyst/critic workflow is end-to-end qualified. Before wiring, provide claim-grounded evidence acquisition and persist versioned analyst/critic outputs with explicit evidence references.
-- No Debian host, production containers or live infrastructure were accessed or tested in this increment. Container build and full synthetic E2E remain unqualified.
+- Worker integration: the Worker now calls Analyst/Critic for DGX_ANALYST/DGX_CRITIC, stores structured outputs in run-event payloads, blocks on provider/contract failure, and derives the policy input from the returned analysis/critique. The synthetic OBSERVE stage creates two explicitly synthetic twin-simulator evidence records; generic stage markers are filtered out of the AI evidence input.
+- The service remains unqualified against an actual local model endpoint. Runtime container build, model inference, Temporal E2E, persistence/replay behavior and the complete failure matrix remain untested. The latest GitHub Actions run 39312640495 passed compileall, policy tests, intelligence contract tests, secret preflight, static audit and Compose config: https://github.com/alimtalbi-ata/aiops/actions/runs/39312640495.
+- No Debian host, production containers or live infrastructure were accessed. LIVE execution remains blocked.
 
