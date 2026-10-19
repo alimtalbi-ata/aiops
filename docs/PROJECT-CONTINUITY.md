@@ -149,3 +149,12 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Added CI shell syntax checks for install, preflight, qualification and E2E scripts, and static assertions that the E2E security checks are present.
 - No server-side SCP/SSH deployment was possible from this session: available connected GitHub actions support repository changes and CI, not arbitrary shell access to `SRV-DEB-05`. No runtime installation, container restart or live E2E is claimed.
 - Next loop gate: CI must pass, then the operator runs the guarded install/qualification sequence on the intended isolated target with backup and rollback ready. Do not apply this draft PR directly to production.
+
+
+## Canonical command idempotency scope — 2026-10-19
+
+- Source review found that Core looked up command receipts by globally unique `idempotency_key` and replayed the stored response without checking that the receipt belonged to the requested run and command.
+- Added a pure helper that replays a receipt only when both `run_id` and `command` match; cross-run or cross-command key reuse now returns HTTP 409 rather than an unrelated success response.
+- Added five deterministic unit tests for absent receipts, exact replay, cross-run conflict, cross-command conflict and response preservation; wired them into CI.
+- The schema still intentionally treats the idempotency key as globally unique. This change makes that global contract explicit and fail-closed; changing it to per-run uniqueness would require a separate migration and compatibility decision.
+- Latest CI must pass before this source change is considered qualified. No DB migration, deployment or runtime mutation was performed.
