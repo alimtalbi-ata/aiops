@@ -45,11 +45,11 @@ No claim is made that:
 
 ## Next actions, in order
 
-1. **Completed on SRV-DEB-05:** `sha256sum -c` returned `Réussi`; `tar -tzf "$PKG" >/dev/null` succeeded and printed `TAR_READABLE=YES`.
-2. Transfer the archive and checksum sidecar by SCP to the Windows workstation; independently compare the downloaded file's SHA-256 with the server value.
+1. **Completed on SRV-DEB-05:** the 15:44 package collector reported checksum validation PASS and TAR creation success. The sidecar SHA-256 value is recorded above.
+2. The 15:44 archive has now been uploaded to the current work session. Independently recompute SHA-256 over the uploaded bytes before extraction; do not treat the earlier 14:41 Windows hash output as validation of this newer file.
 3. Extract only into a new isolated workspace. Never overlay the active checkout or production files.
-4. Review the manifest, per-file checksums, R33/V1/V145 source tree and the 27,623-line diff. Start with entry points, routes/API contracts, UI flows, dependencies, error handling and security boundaries.
-5. Compare candidate functionality with the canonical AIOps 2.0 Portal/Core/Twin/Evidence/Policy/Worker/Temporal contracts. Reuse through explicit adapters where useful; do not add a parallel state owner.
+4. Verify every per-file checksum, then review the R33/V1/V145 source tree and both diffs (V1/V145: 27,623 lines; R33/V145: 16,363 lines). Start with entry points, routes/API contracts, UI flows, dependencies, error handling and security boundaries.
+5. Compare candidate functionality with canonical AIOps 2.0 Portal/Core/Twin/Evidence/Policy/Worker/Temporal contracts. Reuse through explicit adapters where useful; do not add a parallel state owner.
 6. Record every candidate as reuse unchanged, adapt behind adapter, replace, retire or unknown, with source hashes and evidence.
 7. Add only reviewed source, tests and documentation to a follow-up branch/PR. Do not commit the archive, container exports, secrets, databases or runtime data to GitHub.
 
