@@ -82,7 +82,7 @@ create table if not exists aiops.learning_cases (
  gold_eligible boolean not null default false, label jsonb not null default '{}'::jsonb,
  evidence_ids jsonb not null default '[]'::jsonb, analysis_id text references aiops.analysis_records(analysis_id),
  critique_id text references aiops.critique_records(critique_id), verification_id text references aiops.verification_records(verification_id),
- exclusion_reasons jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), reviewed_at timestamptz,
+ exclusion_reasons jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), reviewed_at timestamptz, reviewed_by text, review_note text,
  unique(source_run_id,revision),
  check (not gold_eligible or (human_reviewed and outcome_verified and not synthetic))
 );
