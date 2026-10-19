@@ -130,7 +130,7 @@ services:
       aiops2-policy: {condition: service_healthy}
       aiops2-intelligence: {condition: service_healthy}
       aiops2-twin: {condition: service_healthy}
-      aiops2-temporal: {condition: service_started}
+      aiops2-temporal-namespace: {condition: service_completed_successfully}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-simulator:
@@ -172,19 +172,56 @@ services:
     networks: [aiops2-temporal-data]
     healthcheck: {test: ["CMD-SHELL","pg_isready -U temporal -d temporal"], interval: 5s, timeout: 3s, retries: 30}
 
-  aiops2-temporal:
-    image: ${TEMPORAL_IMAGE:-temporalio/auto-setup:1.32.1}
-    container_name: aiops2-temporal
-    restart: unless-stopped
+  aiops2-temporal-schema:
+    image: ${TEMPORAL_ADMINTOOLS_IMAGE:-temporalio/admin-tools:1.31.0}
+    container_name: aiops2-temporal-schema
+    restart: "no"
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
       POSTGRES_SEEDS: aiops2-temporal-postgres
+      SQL_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
+    volumes: ["./deploy/temporal/setup-postgres.sh:/scripts/setup-postgres.sh:ro"]
+    entrypoint: ["/bin/sh","/scripts/setup-postgres.sh"]
+    networks: [aiops2-temporal-data]
+    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+
+  aiops2-temporal:
+    image: ${TEMPORAL_IMAGE:-temporalio/server:1.31.0}
+    container_name: aiops2-temporal
+    restart: unless-stopped
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}"
+      POSTGRES_SEEDS: aiops2-temporal-postgres
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    volumes: ["./config/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro"]
     expose: ["7233"]
     networks: [aiops2-control, aiops2-temporal-data]
-    depends_on: {aiops2-temporal-postgres: {condition: service_healthy}}
+    depends_on:
+      aiops2-temporal-postgres: {condition: service_healthy}
+      aiops2-temporal-schema: {condition: service_completed_successfully}
+    healthcheck: {test: ["CMD","nc","-z","localhost","7233"], interval: 5s, timeout: 3s, start_period: 30s, retries: 60}
+
+  aiops2-temporal-namespace:
+    image: ${TEMPORAL_ADMINTOOLS_IMAGE:-temporalio/admin-tools:1.31.0}
+    container_name: aiops2-temporal-namespace
+    restart: "no"
+    environment:
+      TEMPORAL_ADDRESS: aiops2-temporal:7233
+      DEFAULT_NAMESPACE: default
+      TEMPORAL_WAIT_ATTEMPTS: 60
+      TEMPORAL_WAIT_SECONDS: 2
+    volumes: ["./deploy/temporal/create-namespace.sh:/scripts/create-namespace.sh:ro"]
+    entrypoint: ["/bin/sh","/scripts/create-namespace.sh"]
+    networks: [aiops2-control]
+    depends_on:
+      aiops2-temporal: {condition: service_healthy}
 
   aiops2-temporal-ui:
     image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.56.0}
