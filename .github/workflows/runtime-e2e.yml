@@ -29,7 +29,7 @@ jobs:
       - name: Build application images and pull pinned services
         run: docker compose --env-file .env build --pull
       - name: Start isolated stack
-        run: docker compose --env-file .env up -d --wait --wait-timeout 360
+        run: docker compose --env-file .env up -d
       - name: Qualify container health and exposed endpoints
         run: bash tests/qualification.sh
       - name: Run deterministic synthetic end-to-end
