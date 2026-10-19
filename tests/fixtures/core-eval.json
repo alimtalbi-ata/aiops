@@ -9,7 +9,7 @@
       "incident": {
         "incident_id": "EVAL-INC-001",
         "title": "Payment latency with SAN fabric degradation",
-        "severity": "P1",
+        "severity": "UNKNOWN",
         "synthetic": true
       },
       "evidence": [
@@ -66,7 +66,7 @@
       "incident": {
         "incident_id": "EVAL-INC-002",
         "title": "Storage pool capacity pressure",
-        "severity": "P2",
+        "severity": "UNKNOWN",
         "synthetic": true
       },
       "evidence": [
@@ -112,7 +112,7 @@
       "incident": {
         "incident_id": "EVAL-INC-003",
         "title": "Critical multipath degradation",
-        "severity": "P1",
+        "severity": "UNKNOWN",
         "synthetic": true
       },
       "evidence": [
