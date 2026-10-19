@@ -1,0 +1,11 @@
+# Secrets and runtime data
+.env
+.env.*
+!.env.example
+*.log
+reports/
+backups/
+data/
+__pycache__/
+.pytest_cache/
+.venv/
