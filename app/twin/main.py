@@ -32,7 +32,8 @@ def at(known_at:str):
 import os
 from pydantic import BaseModel
 from shared.ids import new
-SIM_TOKEN=os.getenv('AIOPS_ADMIN_TOKEN','Newaiops26$')
+SIM_TOKEN=os.getenv('AIOPS_ADMIN_TOKEN')
+if not SIM_TOKEN: raise RuntimeError('AIOPS_ADMIN_TOKEN must be configured')
 class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:dict={};run_id:str|None=None
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):

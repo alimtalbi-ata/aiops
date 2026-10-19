@@ -31,3 +31,5 @@ jobs:
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
         run: bash tests/static-audit.sh
+      - name: Validate Compose configuration with generated secrets
+        run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
