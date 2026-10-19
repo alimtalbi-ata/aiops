@@ -6,8 +6,10 @@ bash tests/sql-audit.sh
 bash tests/migration-contract.sh
 bash tests/core-ledger-contract.sh
 bash tests/backup-contract.sh
-python3 -m compileall -q app tests
-find app tests -type d -name __pycache__ -prune -exec rm -rf {} +
+bash tests/temporal-contract.sh
+bash -n deploy/*.sh deploy/temporal/*.sh tests/*.sh
+python3 -m compileall -q app tests tools
+find app tests tools -type d -name __pycache__ -prune -exec rm -rf {} +
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 VERSION="$(cat VERSION 2>/dev/null || echo 2.0.0-core)"
 mkdir -p "$ROOT/dist"
