@@ -25,13 +25,15 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4"
       - name: Compile Python source
-        run: python -m compileall -q app tests
+        run: python -m compileall -q app tests tools
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
+      - name: AI evaluation harness tests
+        run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
       - name: Internal HTTP retry safety tests
         run: python -m unittest discover -s tests -p "test_shared_http.py" -v
       - name: Shared safety invariant tests
@@ -46,6 +48,8 @@ jobs:
         run: docker compose --env-file .env config --quiet
       - name: Build every application image
         run: docker compose --env-file .env build
+      - name: Build opt-in model evaluation runner
+        run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
     runs-on: ubuntu-latest
@@ -203,6 +207,7 @@ jobs:
           python -m unittest discover -s tests -p "test_policy_safety.py" -v
           python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
           python -m unittest discover -s tests -p "test_portal_demo.py" -v
+          python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
           python -m unittest discover -s tests -p "test_shared_http.py" -v
           python -m unittest discover -s tests -p "test_safety_invariants.py" -v
           bash tests/static-audit.sh
