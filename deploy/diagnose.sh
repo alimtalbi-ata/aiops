@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="${1:-$ROOT/reports/diagnostics-$STAMP}"
 mkdir -p "$OUT"; chmod 700 "$OUT"
-redact() { sed -E 's/(PASSWORD|TOKEN|API_KEY|ENCRYPTION_KEY)([=:][[:space:]]*)[^[:space:]]+/\1\2[REDACTED]/Ig'; }
+redact() { sed -E -e 's/(PASSWORD|TOKEN|API_KEY|ENCRYPTION_KEY)([=:][[:space:]]*)[^[:space:]]+/\1\2[REDACTED]/Ig' -e 's/(Authorization:[[:space:]]*Bearer[[:space:]]+)[A-Za-z0-9._~+\/=:-]+/\1[REDACTED]/Ig' -e 's#(postgres(ql)?://[^:/[:space:]]+:)[^@/[:space:]]+@#\1[REDACTED]@#Ig'; }
 {
  echo "timestamp_utc=$STAMP"
  echo "git_head=$(git rev-parse HEAD 2>/dev/null || echo unavailable)"
