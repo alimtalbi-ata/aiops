@@ -9,7 +9,7 @@
 2. The Worker declares workflow stages including DGX_ANALYST and DGX_CRITIC, but the reviewed Worker code explicitly documents that qualified LIVE evidence/CMDB/RAG/analyst/critic/remediation adapters are absent. LIVE stage execution is blocked and emits an adapter-unavailable event instead of manufacturing evidence.
 3. The Policy API has deterministic inputs for mode, command, severity, confidence, evidence count, critic validation, redundancy, freshness, preconditions, fencing and approval. Its existing safety tests cover P1, missing evidence, missing fencing, missing approval and synthetic-mode behavior.
 4. The database migrations already provide runs, ordered run events, append-only evidence, gates, command receipts, stage state, checkpoints, API audit, topology nodes/edges/facts, incidents, observations, changes, impact assessments, scenarios and demo artifacts.
-5. The migrations reviewed do not show explicit normalized records for Analyst output, Critic output, proposal versions, approval bindings, execution effects, post-effect verification/reconciliation or curated learning/evaluation cases. Some state may currently be embedded in run event JSON; that must be confirmed by mapping all reads/writes before changing schema.
+5. Migration 009 now defines normalized records for Analyst output, Critic output, policy decisions, proposal versions, hash-bound approvals, effect receipts, verification/reconciliation and curated learning/evaluation cases. Core API endpoints persist and expose analysis/critique/policy records and provide guarded proposal/approval/learning ingestion. Run-event JSON remains the timeline/replay record, not the only normalized AI ledger.
 6. The repository already has a broad Compose stack, installer/preflight, static audit, policy tests, runtime contract checks, qualification and synthetic E2E scripts. Existing continuity notes state that full container/runtime qualification and synthetic E2E were not yet established at the last recorded review.
 
 ## Engineering work and current state
@@ -62,3 +62,8 @@
 The Core is ready to be considered qualified only when the analyst and critic are real provider-backed components (or explicitly declared unavailable), structured outputs are validated and evidence-grounded, deterministic policy tests pass, data persistence is durable and auditable, migration tests pass, failure cases are covered, and CI produces a reproducible report. Until then, keep LIVE effects disabled.
 
 The ACME twin feature expansion, demonstration polish and video recording are Phase C/D activities after the core exit criteria; existing seed topology can remain available for isolated tests but is not proof of twin accuracy.
+
+
+## 2026-10-19 implementation update
+
+Migration 009, Core persistence/read APIs, hash-bound action proposals, role-scoped approval and reviewed learning-case ingestion have been added on the feature branch. CI has separately passed full image build/package, fresh PostgreSQL migration application, and the legacy-only schema upgrade runner at least once on earlier commits. The latest commit still requires its own green run after the most recent contract tests. Do not claim actual model quality or full Temporal E2E until those runs are executed.
