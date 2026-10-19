@@ -12,11 +12,11 @@ cp config/.env.example .env
 chmod 600 .env
 set_value() {
   local key="$1" value="$2"
-  if ! grep -q "^\${key}=" .env; then
-    echo "FAIL|missing_template_key|\${key}" >&2
+  if ! grep -q "^${key}=" .env; then
+    echo "FAIL|missing_template_key|${key}" >&2
     exit 1
   fi
-  sed -i "s|^\${key}=.*|\${key}=\${value}|" .env
+  sed -i "s|^${key}=.*|${key}=${value}|" .env
 }
 # Core, worker and simulator share this internal authentication token by contract.
 INTERNAL_TOKEN="$(openssl rand -hex 32)"
