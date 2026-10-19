@@ -11,7 +11,7 @@ psqlc() { docker compose --env-file .env exec -T aiops2-postgres psql -v ON_ERRO
 docker compose --env-file .env exec -T aiops2-postgres pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null
 # Fail closed rather than guessing how to upgrade a partial or unknown legacy schema.
 BASELINE_OK="$(psqlc -Atqc "select (to_regclass('aiops.runs') is not null and to_regclass('aiops.run_events') is not null and to_regclass('aiops.evidence') is not null and to_regclass('aiops.gates') is not null and to_regclass('aiops.twin_facts') is not null and to_regclass('aiops.incidents') is not null and to_regclass('aiops.run_checkpoints') is not null and exists(select 1 from information_schema.columns where table_schema='aiops' and table_name='run_events' and column_name='event_key'))::text")"
-[[ "$BASELINE_OK" == true ]] || { echo 'FAIL|legacy_schema_incomplete|refusing_to_guess'; exit 3; }
+[[ "$BASELINE_OK" == true || "$BASELINE_OK" == t ]] || { echo 'FAIL|legacy_schema_incomplete|refusing_to_guess'; exit 3; }
 psqlc -q -c "create table if not exists public.aiops_schema_migrations(version text primary key, checksum text not null, applied_at timestamptz not null default now(), execution_mode text not null check(execution_mode in ('BOOTSTRAP_BASELINE','APPLIED')))"
 # Adopt the verified initdb baseline only after the schema signature above succeeds.
 for file in db/migrations/00[0-8]_*.sql; do
