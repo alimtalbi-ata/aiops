@@ -31,6 +31,7 @@ create table if not exists aiops.policy_decisions (
 create index if not exists ix_policy_decision_run on aiops.policy_decisions(run_id, created_at desc);
 create table if not exists aiops.action_proposals (
  proposal_id text primary key, run_id text not null references aiops.runs(run_id),
+ analysis_id text not null references aiops.analysis_records(analysis_id), critique_id text not null references aiops.critique_records(critique_id), source_action_id text not null,
  proposal_revision integer not null check (proposal_revision >= 1), target_ci_id text not null,
  action_type text not null, risk_tier text not null check (risk_tier in ('LOW','MEDIUM','HIGH','CRITICAL')),
  parameters jsonb not null default '{}'::jsonb, evidence_ids jsonb not null default '[]'::jsonb,
