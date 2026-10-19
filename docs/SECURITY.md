@@ -8,7 +8,7 @@ If `.env` already exists, the generator does not rotate or overwrite it. Preflig
 
 ## Demo mode
 
-The known sample values in `config/.env.example` are for an isolated, disposable local demo only. To deliberately opt into those values, set `AIOPS_DEMO_MODE=1` in `.env`. Never use this option for shared, internet-facing, staging or production environments. Demo mode emits a warning during preflight.
+The secure `config/.env.example` intentionally leaves secret values blank; the installer fills them with random values. `config/.env.demo.example` contains known sample values for an isolated, disposable local demo only. To deliberately opt into those values, copy that file to `.env` and keep `AIOPS_DEMO_MODE=1`. Never use this option for shared, internet-facing, staging or production environments. Demo mode emits a warning during preflight.
 
 ## Production requirements
 
