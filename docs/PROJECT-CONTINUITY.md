@@ -66,3 +66,8 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+
+## GitHub qualification follow-up (2026-10-19 22:55 CEST, draft PR #22)
+
+See [verified review](REVIEWS/2026-10-19-2252.md). Draft PR #21 adds the Core AI ledger, provider adapter, migration runner and isolated Temporal E2E. CI [39323045122](https://github.com/alimtalbi-ata/aiops/actions/runs/39323045122) passed quality/image-build, disposable clean SQL migrations and legacy-schema upgrade, but **failed isolated runtime E2E** because Worker startup used an invalid Temporal RetryPolicy keyword (`max_interval`; expected `maximum_interval`). Release-kit was skipped. Critic/BLOCK paths also contain a separately reproduced relative-URL defect. No real-model inference, PC11K5 live fencing, ACME replay or production qualification is established. The prior host Compose/image issue and Temporal queue discrepancy remain unresolved. Prioritize Core and real-provider Analyst/Critic tests before ACME expansion; no LIVE remediation.
