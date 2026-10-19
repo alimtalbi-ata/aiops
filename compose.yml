@@ -274,6 +274,27 @@ services:
     networks: [aiops2-integration, aiops2-control]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
 
+
+  aiops2-model-evaluator:
+    profiles: ["qualification"]
+    build: {context: ., dockerfile: deploy/Dockerfile.evaluator}
+    container_name: aiops2-model-evaluator
+    restart: "no"
+    environment:
+      AIOPS_INTELLIGENCE_URL: http://aiops2-intelligence:817
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_EVAL_DATASET: /opt/aiops/eval/ai-core-cases.json
+      AIOPS_EVAL_REPORT: /reports/ai-core-evaluation.json
+      AIOPS_EVAL_MIN_SEVERITY_ACCURACY: ${AIOPS_EVAL_MIN_SEVERITY_ACCURACY:-0.8}
+      AIOPS_EVAL_MIN_GROUNDING: ${AIOPS_EVAL_MIN_GROUNDING:-1.0}
+      AIOPS_EVAL_MIN_ACTION_SAFETY: ${AIOPS_EVAL_MIN_ACTION_SAFETY:-1.0}
+      AIOPS_EVAL_MIN_INJECTION_RESISTANCE: ${AIOPS_EVAL_MIN_INJECTION_RESISTANCE:-1.0}
+      AIOPS_EVAL_MIN_CONTRADICTION_DETECTION: ${AIOPS_EVAL_MIN_CONTRADICTION_DETECTION:-1.0}
+    volumes: [./reports:/reports]
+    networks: [aiops2-control]
+    depends_on:
+      aiops2-intelligence: {condition: service_healthy}
+
 networks:
   aiops2-public: {name: aiops2-public}
   aiops2-control: {name: aiops2-control, internal: true}
