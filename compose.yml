@@ -124,6 +124,7 @@ services:
       COPILOT_URL: http://aiops2-copilot:814
       TWIN_URL: http://aiops2-twin:811
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_PORTAL_OPERATOR_TOKEN: ${AIOPS_PORTAL_OPERATOR_TOKEN:?AIOPS_PORTAL_OPERATOR_TOKEN_required}
     ports: ["7777:777"]
     networks: [aiops2-public, aiops2-control]
     depends_on:
