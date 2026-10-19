@@ -88,7 +88,7 @@ SQL
 )
 
 # SQL is schema metadata only: no row data, defaults, comments, credentials, or secrets.
-printf '%s\\n' "$SQL" | docker exec -i "$CONTAINER" sh -c '
+printf '%s\n' "$SQL" | docker exec -i "$CONTAINER" sh -c '
   set -eu
   : "${POSTGRES_USER:?POSTGRES_USER is not set in the container}"
   exec psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$1" -At
