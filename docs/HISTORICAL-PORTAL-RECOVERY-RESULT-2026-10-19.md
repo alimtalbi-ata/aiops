@@ -66,3 +66,32 @@ No claim is made that:
 
 **Confirmed by host output:** source-path inventory, historical export readability checks, corrected collector syntax check, package creation output and zero collector exit code. On 2026-10-19 the user ran `sha256sum -c` against the exact package sidecar and received `Réussi`; `tar -tzf "$PKG" >/dev/null` also completed and printed `TAR_READABLE=YES`. These confirm the server-side archive checksum and gzip/TAR readability for that file.  
 **Pending:** SCP/workstation transfer verification, semantic source review, dependency/build tests, isolated integration/E2E and any live-runtime qualification.
+
+
+## Transfer instructions — important shell boundary
+
+The archive and sidecar have been verified on SRV-DEB-05: the user observed `sha256sum -c` returning `Réussi` and `tar -tzf` succeeding. A transfer attempt then ran PowerShell assignments in the remote Debian Bash shell and failed with `variable sans liaison`. No evidence indicates that the archive was damaged or that the transfer occurred.
+
+**Do not paste PowerShell syntax at the `aiops@SRV-DEB-05:~$` prompt.** Keep that SSH session open. Open a separate local Windows PowerShell window from the Windows Start menu and run the following there:
+
+```powershell
+$Server = 'aiops@10.79.94.202'
+$Remote = '/home/aiops/recovery/exports'
+$Package = 'AIOPS-HISTORICAL-PORTAL-SOURCE-RECOVERY-20261019-144103.tar.gz'
+$Dest = Join-Path $env:USERPROFILE 'Downloads'
+
+scp "${Server}:${Remote}/${Package}" $Dest
+if ($LASTEXITCODE -ne 0) { throw 'SCP archive failed; do not continue.' }
+scp "${Server}:${Remote}/${Package}.sha256" $Dest
+if ($LASTEXITCODE -ne 0) { throw 'SCP checksum sidecar failed; do not continue.' }
+
+$Local = Join-Path $Dest $Package
+$Expected = ((Get-Content -LiteralPath (Join-Path $Dest "${Package}.sha256") -Raw).Trim() -split '\\s+')[0]
+$Actual = (Get-FileHash -LiteralPath $Local -Algorithm SHA256).Hash.ToLowerInvariant()
+"EXPECTED=$Expected"
+"ACTUAL=$Actual"
+if ($Expected -ne $Actual) { throw 'SHA-256 mismatch: isolate/delete local copy and investigate.' }
+'WINDOWS_TRANSFER_CHECK=PASS'
+```
+
+The server sidecar contains the server's absolute path in the checksum line; if the simple extraction above does not yield a 64-character digest, instead compare the hash printed by `Get-FileHash` against the first 64-hex-character value shown by `sha256sum -c`/`sha256sum` on the server. Do not type `exit` or close the SSH session as part of this transfer; it is not required.
