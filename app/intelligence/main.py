@@ -118,7 +118,7 @@ def call_model(system, payload, schema):
     headers = {'Content-Type': 'application/json'}
     if KEY:
         headers['Authorization'] = 'Bearer ' + KEY
-    body = {'model': MODEL, 'temperature': 0, 'messages': [{'role':'system','content':system + '\\nOutput JSON Schema:\\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
+    body = {'model': MODEL, 'temperature': 0, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
     try:
         r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
         r.raise_for_status()
