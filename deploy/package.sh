@@ -5,6 +5,7 @@ bash tests/static-audit.sh
 bash tests/sql-audit.sh
 bash tests/migration-contract.sh
 bash tests/core-ledger-contract.sh
+bash tests/backup-contract.sh
 python3 -m compileall -q app tests
 find app tests -type d -name __pycache__ -prune -exec rm -rf {} +
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
