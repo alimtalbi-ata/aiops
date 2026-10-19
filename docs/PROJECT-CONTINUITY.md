@@ -78,3 +78,14 @@ This is a documentation/acceptance-contract change. It does not claim applicatio
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+
+## Core Analyst/Critic adapter increment (2026-10-19)
+
+- Added a separate FastAPI service under app/intelligence with an OpenAI-compatible chat-completions adapter, strict top-level Pydantic contracts, required internal-token authentication, bounded provider timeout, provider-unavailable behavior, and evidence-ID reference checks.
+- Added the service to Compose on the internal control network and added optional LLM provider variables to the safe .env template.
+- Added deterministic contract tests and wired them into the quality workflow.
+- GitHub Actions run 39312217053 passed compileall, existing policy safety tests, new intelligence contract tests, secret preflight, static repository audit, and Compose configuration validation: https://github.com/alimtalbi-ata/aiops/actions/runs/39312217053
+- Scope boundary: the new service is not yet connected to Temporal Worker stage execution. The current worker still generates generic synthetic stage records in DEMO/REPLAY. Do not treat those records as source observations or claim the analyst/critic workflow is end-to-end qualified. Before wiring, provide claim-grounded evidence acquisition and persist versioned analyst/critic outputs with explicit evidence references.
+- No Debian host, production containers or live infrastructure were accessed or tested in this increment. Container build and full synthetic E2E remain unqualified.
+
