@@ -19,4 +19,15 @@ grep -q 'deploy/check-secrets.sh' deploy/preflight.sh
 if grep -RIn 'Newaiops26' app compose.yml; then echo 'FAIL|hardcoded_runtime_secret'; exit 1; fi
 grep -Fq '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}' compose.yml
 grep -Fq '${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}' compose.yml
+grep -Fq '${AIOPS_PORTAL_OPERATOR_TOKEN:?AIOPS_PORTAL_OPERATOR_TOKEN_required}' compose.yml
+grep -q 'secrets.compare_digest' app/portal/main.py
+grep -q 'Depends(require_operator)' app/portal/main.py
+grep -q 'Depends(require_same_origin)' app/portal/main.py
+grep -q 'Content-Security-Policy' app/portal/main.py
+grep -q 'X-Frame-Options' app/portal/main.py
+grep -q 'def bootstrap(_operator:bool=Depends(require_operator))' app/portal/main.py
+grep -q 'login shell' app/portal/main.py
+grep -q 'unauthenticated_mutations=BLOCKED' tests/synthetic-e2e.sh
+grep -q 'bootstrap_without_auth' tests/synthetic-e2e.sh
+grep -q 'demo_without_auth' tests/synthetic-e2e.sh
 echo STATIC_AUDIT=PASS

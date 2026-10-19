@@ -32,6 +32,7 @@ check_secret() {
 check_secret POSTGRES_PASSWORD 'Newaiops26$'
 check_secret AIOPS_ADMIN_TOKEN 'Newaiops26$'
 check_secret AIOPS_INTERNAL_TOKEN 'Newaiops26$'
+check_secret AIOPS_PORTAL_OPERATOR_TOKEN 'CHANGE_ME'
 check_secret GLPI_DB_PASSWORD 'Newaiops26$'
 check_secret GLPI_DB_ROOT_PASSWORD 'Newaiops26$'
 check_secret GRAFANA_ADMIN_PASSWORD 'Newaiops26$'

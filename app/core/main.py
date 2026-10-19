@@ -4,6 +4,7 @@ from pydantic import BaseModel,Field
 from shared.db import db
 from shared.ids import new
 from shared.domain import transition,STAGES
+from shared.idempotency import resolve_receipt,IdempotencyConflict
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -66,8 +67,10 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
-        rec=c.execute('select response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
-        if rec:return rec[0]
+        rec=c.execute('select run_id,command,response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
+        try: replay=resolve_receipt(rec,rid,x.command)
+        except IdempotencyConflict as e: raise HTTPException(409,str(e))
+        if replay is not None:return replay
         status,version,mode=row
         if version!=x.expected_version:raise HTTPException(409,'stale run version')
         target={'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED','RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'}[x.command]

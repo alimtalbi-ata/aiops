@@ -66,3 +66,114 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+
+## AIOps 2.0 development continuation — Portal operator boundary
+
+**Date:** 2026-10-19  
+**Branch:** `feat/portal-operator-auth-v2`  
+**Status:** Implementation committed to a dedicated branch; PR #16 open as draft. GitHub Actions quality run #105 passed.
+
+### Change scope
+- Portal startup now fails closed if `AIOPS_PORTAL_OPERATOR_TOKEN` is absent.
+- `POST /api/demo` and `POST /api/copilot` require a Bearer token validated with constant-time comparison.
+- Copilot input is validated and bounded to 1–4,000 characters.
+- Upstream exceptions from these mutation/AI routes return a generic 503 without leaking internal exception text, URLs or secrets.
+- Portal UI asks for the operator token at runtime, sends it in the Authorization header, and does not persist it in browser storage.
+- Fresh-install secret generation creates a separate random portal operator token. Compose requires it explicitly. The secure env template, preflight, static audit and CI test job were updated.
+
+### Qualification
+New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Copilot question bounds, upstream error redaction and success passthrough. GitHub Actions run [39274829807](https://github.com/alimtalbi-ata/aiops/actions/runs/39274829807) passed Python compileall, policy tests, portal authorization tests (8 cases), secret-preflight tests, static audit, and Compose config validation with generated secrets. This is CI qualification only; it does not replace browser/API integration or production qualification.
+
+### Limits and next gates
+- Read-only dashboard/bootstrap routes are not yet protected by operator authentication; determine the intended public-read policy before external exposure.
+- The portal token is a shared operator secret, not an identity provider, per-user RBAC, or MFA. Deploy behind TLS and a trusted access boundary; plan identity-provider integration for production.
+- Verify that all reverse proxies redact Authorization headers and never log credentials.
+- Test rate limits, CSRF/origin policy, content-security policy, browser UX, Core timeout/idempotency and compose/preflight behavior.
+- Keep DEMO synthetic. LIVE execution remains blocked by the existing canonical worker/policy safety controls.
+- No runtime deployment, restart, database change, or PC11K5 fencing modification was performed.
+
+
+### Latest CI evidence — 2026-10-19
+- [PR #16](https://github.com/alimtalbi-ata/aiops/pull/16) is open as draft, branch `feat/portal-operator-auth-v2`, targeting `main`.
+- Quality workflow run [39274829807](https://github.com/alimtalbi-ata/aiops/actions/runs/39274829807) completed successfully.
+- Portal auth unit tests: 8/8 passed.
+- Policy tests: 7/7 passed.
+- Secret preflight, static repository audit and Compose configuration validation: PASS.
+- No runtime deployment or live service test was performed. Keep the PR in draft until broader security/UI acceptance gates are addressed.
+
+
+## Portal security follow-up — authenticated read model and browser boundary (2026-10-19)
+
+- Portal `GET /api/portal/bootstrap` now requires the operator Bearer token; upstream read failures are normalized by the same safe error wrapper.
+- `GET /` now serves a login shell only. Operational dashboard/run/twin data is fetched client-side after successful operator authentication, rather than embedded in unauthenticated HTML.
+- Added response headers: CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a restrictive `Permissions-Policy`.
+- Privileged POST routes reject a supplied cross-origin `Origin` that does not match the request origin/host. Requests without an Origin header are still allowed for non-browser clients, with Bearer auth required.
+- UI uses textContent for returned JSON/data and does not persist the operator token to local/session storage.
+- Tests expanded to cover authenticated read boundary, unauthenticated POSTs, login-shell response headers and origin validation. The CI run for these latest commits is pending.
+- CSP currently permits inline script/style because the current UI is a single embedded page. A next hardening iteration should move scripts/styles into versioned static assets or use nonces/hashes before production exposure.
+- No runtime deployment was performed. Reverse-proxy TLS/trusted-forwarded-header configuration, rate limiting, live browser testing and production qualification remain open.
+
+
+### Latest portal security qualification — 2026-10-19
+- GitHub Actions run [39275563557](https://github.com/alimtalbi-ata/aiops/actions/runs/39275563557) passed after the authenticated-read and browser-boundary changes.
+- Portal boundary tests: 14/14 passed.
+- Policy tests: 7/7 passed.
+- Secret preflight, static audit, Python compileall and Compose config validation: PASS.
+- PR #16 remains draft pending actual browser/proxy integration, rate limiting, TLS/trusted-proxy review and production qualification.
+
+
+## Shared HTTP retry safety — 2026-10-19
+
+- Audited `app/shared/http.py`: the previous helper retried POST requests after timeouts/errors. For side-effecting operations, the server may have committed an incident/run while the response was lost, so an automatic retry can duplicate work.
+- Changed default retry policy: GET retries up to two times; POST makes one attempt by default. A caller may request an explicit retry override only when the operation's idempotency contract is understood.
+- Added unit coverage for GET retries, POST no-retry, explicit override, and internal authentication headers; added the test to CI.
+- This deliberately favors safety over automatic recovery for ambiguous POST outcomes. A timed-out POST must be reconciled against the canonical run/incident state before an operator repeats it.
+- CI result for this latest change is pending.
+
+
+### Latest quality run after HTTP retry hardening — 2026-10-19
+- GitHub Actions run [39276121809](https://github.com/alimtalbi-ata/aiops/actions/runs/39276121809) completed successfully after the shared HTTP retry changes.
+- Portal boundary tests: 14/14 passed; shared HTTP retry-safety tests: 4/4 passed; existing policy tests: 7/7 passed.
+- Secret preflight, static repository audit, Python compilation and Compose validation: PASS.
+- Default HTTP policy is now GET retry (up to two retries) and POST single attempt. The public helper functions allow an explicit retry override only when a caller can justify the idempotency contract.
+- An ambiguous POST timeout must be reconciled against canonical state before repeating an operation; do not blindly resubmit.
+- PR #16 remains draft. CI passing is not a substitute for browser/proxy integration or production qualification.
+
+
+## Install/qualification loop — authenticated E2E correction (2026-10-19)
+
+- During the next development loop, reviewed the existing install/qualification path after adding operator authentication.
+- Found that `tests/synthetic-e2e.sh` still called the bootstrap and demo endpoints without a Bearer token. It would fail against the new Portal security boundary and did not assert that unauthenticated access was rejected.
+- Updated the synthetic E2E script to read the dedicated operator token from the existing local `.env`, assert that bootstrap and demo are rejected without authentication, then execute the synthetic flow with authentication and wait for the generated run to appear.
+- Added CI shell syntax checks for install, preflight, qualification and E2E scripts, and static assertions that the E2E security checks are present.
+- No server-side SCP/SSH deployment was possible from this session: available connected GitHub actions support repository changes and CI, not arbitrary shell access to `SRV-DEB-05`. No runtime installation, container restart or live E2E is claimed.
+- Next loop gate: CI must pass, then the operator runs the guarded install/qualification sequence on the intended isolated target with backup and rollback ready. Do not apply this draft PR directly to production.
+
+
+## Canonical command idempotency scope — 2026-10-19
+
+- Source review found that Core looked up command receipts by globally unique `idempotency_key` and replayed the stored response without checking that the receipt belonged to the requested run and command.
+- Added a pure helper that replays a receipt only when both `run_id` and `command` match; cross-run or cross-command key reuse now returns HTTP 409 rather than an unrelated success response.
+- Added five deterministic unit tests for absent receipts, exact replay, cross-run conflict, cross-command conflict and response preservation; wired them into CI.
+- The schema still intentionally treats the idempotency key as globally unique. This change makes that global contract explicit and fail-closed; changing it to per-run uniqueness would require a separate migration and compatibility decision.
+- Latest CI must pass before this source change is considered qualified. No DB migration, deployment or runtime mutation was performed.
+
+
+## Repeatable guarded qualification runner — 2026-10-19
+
+- Added `deploy/qualify-update.sh` to repeat source/config checks and, only after explicit multi-variable confirmation, rebuild/recreate services and run runtime qualification plus authenticated synthetic E2E.
+- Default mode is non-mutating: it requires an existing `.env`, validates secrets, checks shell syntax, compiles Python, runs policy/portal/HTTP/idempotency tests, secret preflight, static audit and Compose config validation; then exits with runtime apply skipped.
+- Runtime mode requires all of `APPLY_RUNTIME=1`, `ISOLATED_TARGET=1`, `BACKUP_CONFIRMED=1` and `CONFIRM_RUNTIME_UPDATE=I_APPROVE_AIOPS2_QUALIFICATION_UPDATE`. The operator must actually verify backups and isolation; flags are explicit acknowledgements, not automated proof of backup integrity.
+- CI now syntax-checks the new runner. No remote execution, SCP/SSH or actual runtime install was possible from this chat's available connections; do not report the runtime phase as executed until the script runs on the target and outputs the qualification PASS markers.
+
+
+### Existing-install token migration helper — 2026-10-19
+- Added `deploy/ensure-portal-token.sh` for an intentional upgrade of an existing local `.env`: creates a dedicated 256-bit random token only if the key is absent/empty/template-valued, preserves a valid existing token, enforces mode 0600 and never prints the secret.
+- Added shell test coverage that verifies a missing key is populated, rerunning is idempotent, and file permissions are restrictive.
+- Existing installations must run this helper deliberately before preflight/build; it does not rotate internal service credentials.
+
+
+## Git-less delivery path for Debian targets — 2026-10-19
+
+Some qualification hosts do not have Git installed. Do not require `git fetch` or `git switch` on those hosts. Download the PR branch source archive from GitHub on the Windows workstation, transfer it with SCP, and extract into a separate staging directory. Copy the target's existing `.env` into staging with mode 0600 (never into the archive or Git), then run source/config qualification there. Do not run runtime apply from staging because Compose project/service names can address the active deployment. Runtime application must be an explicitly reviewed, controlled rollout from the intended deployment directory after backup and rollback planning.

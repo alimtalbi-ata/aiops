@@ -96,3 +96,15 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+
+## ADR-0013 — Protect privileged Portal actions with an explicit operator token
+
+- **Date:** 2026-10-19
+- **Status:** Proposed in `feat/portal-operator-auth-v2`; awaiting CI and review.
+- **Decision:** Require a separately generated `AIOPS_PORTAL_OPERATOR_TOKEN` for Portal DEMO launch and Copilot calls. Reject missing/invalid Bearer credentials; use constant-time comparison; do not persist the token in browser storage. Keep internal service credentials server-side.
+- **Reason:** The historical and current Portal route review found privileged POST handlers without an explicit operator authorization boundary. A missing admin token must not disable authorization.
+- **Consequences:** Fresh installs generate a unique token; Compose/preflight require it. Operators must enter the token into the Portal UI for privileged interactions. Existing `.env` files are not automatically rewritten or rotated; operators upgrading must deliberately add a strong independent token before deploying this branch.
+- **Limitations:** This shared token is not per-user identity, RBAC, MFA or an identity-provider integration. Read-only routes remain a separate policy decision. Production exposure still requires TLS, a trusted proxy/access boundary, rate limiting and credential-safe logging.
+- **Safety:** DEMO remains synthetic. This does not enable LIVE remediation or modify the canonical policy gate, worker guard or PC11K5 fencing invariant.
+- **Qualification:** New unit tests and CI steps are committed, but results are pending. No runtime deployment or production qualification is claimed.

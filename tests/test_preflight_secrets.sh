@@ -22,6 +22,7 @@ AIOPS_DEMO_MODE=0
 POSTGRES_PASSWORD=postgres_random_01
 AIOPS_ADMIN_TOKEN=shared_internal_random_02
 AIOPS_INTERNAL_TOKEN=shared_internal_random_02
+AIOPS_PORTAL_OPERATOR_TOKEN=portal_random_07
 GLPI_DB_PASSWORD=glpi_random_03
 GLPI_DB_ROOT_PASSWORD=glpi_root_random_04
 GRAFANA_ADMIN_PASSWORD=grafana_random_05
@@ -43,14 +44,28 @@ fi
 mkdir -p "$TMP/init/config" "$TMP/init/deploy"
 cp "$ROOT/config/.env.example" "$TMP/init/config/.env.example"
 cp "$ROOT/deploy/init-env.sh" "$TMP/init/deploy/init-env.sh"
+cp "$ROOT/deploy/ensure-portal-token.sh" "$TMP/init/deploy/ensure-portal-token.sh"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 bash "$ROOT/deploy/check-secrets.sh" "$TMP/init/.env" >/dev/null
 [[ "$(stat -c '%a' "$TMP/init/.env")" == "600" ]]
 ADMIN_TOKEN="$(sed -n 's/^AIOPS_ADMIN_TOKEN=//p' "$TMP/init/.env")"
 INTERNAL_TOKEN="$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/init/.env")"
 [[ -n "$ADMIN_TOKEN" && "$ADMIN_TOKEN" == "$INTERNAL_TOKEN" ]]
+PORTAL_TOKEN="$(sed -n 's/^AIOPS_PORTAL_OPERATOR_TOKEN=//p' "$TMP/init/.env")"
+[[ -n "$PORTAL_TOKEN" && "$PORTAL_TOKEN" != "$INTERNAL_TOKEN" ]]
 BEFORE="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 [[ "$BEFORE" == "$AFTER" ]]
+
+# Existing-env upgrade helper adds a token without rotating any existing secrets.
+grep -v '^AIOPS_PORTAL_OPERATOR_TOKEN=' "$TMP/secure.env" > "$TMP/upgrade.env"
+bash "$ROOT/deploy/ensure-portal-token.sh" "$TMP/upgrade.env" >/dev/null
+TOKEN1="$(sed -n 's/^AIOPS_PORTAL_OPERATOR_TOKEN=//p' "$TMP/upgrade.env")"
+[[ "$TOKEN1" =~ ^[a-f0-9]{64}$ ]]
+UPGRADE_HASH="$(sha256sum "$TMP/upgrade.env" | cut -d' ' -f1)"
+bash "$ROOT/deploy/ensure-portal-token.sh" "$TMP/upgrade.env" >/dev/null
+[[ "$UPGRADE_HASH" == "$(sha256sum "$TMP/upgrade.env" | cut -d' ' -f1)" ]]
+[[ "$(stat -c '%a' "$TMP/upgrade.env")" == "600" ]]
+
 echo 'SECRET_PREFLIGHT_TEST=PASS'
