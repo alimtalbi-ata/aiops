@@ -44,17 +44,6 @@ jobs:
         run: docker compose --env-file .env config --quiet
       - name: Build every application image
         run: docker compose --env-file .env build
-      - name: Assemble cumulative deployment kit
-        run: bash deploy/package.sh
-      - name: Upload cumulative deployment kit and checksum
-        uses: actions/upload-artifact@v4
-        with:
-          name: aiops2-core-deployment-kit
-          path: |
-            dist/*.zip
-            dist/*.sha256
-          if-no-files-found: error
-          retention-days: 30
 
   database-migrations:
     runs-on: ubuntu-latest
@@ -187,3 +176,46 @@ jobs:
       - name: Tear down isolated test stack
         if: always()
         run: docker compose --env-file .env down -v --remove-orphans || true
+
+  release-kit:
+    runs-on: ubuntu-latest
+    needs:
+      - quality-build-package
+      - database-migrations
+      - migration-runner-upgrade
+      - runtime-e2e
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4"
+      - name: Re-run release-blocking unit and contract tests
+        run: |
+          python -m compileall -q app tests
+          python -m unittest discover -s tests -p "test_policy_safety.py" -v
+          python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+          python -m unittest discover -s tests -p "test_shared_http.py" -v
+          python -m unittest discover -s tests -p "test_safety_invariants.py" -v
+          bash tests/static-audit.sh
+          bash tests/sql-audit.sh
+          bash tests/migration-contract.sh
+          bash tests/core-ledger-contract.sh
+          bash tests/backup-contract.sh
+      - name: Generate isolated packaging environment
+        run: bash deploy/init-env.sh
+      - name: Assemble cumulative deployment kit only after all gates pass
+        run: bash deploy/package.sh
+      - name: Upload qualified cumulative deployment kit and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-core-deployment-kit
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 30
