@@ -10,6 +10,7 @@ V1_EXPORT="$RECOVERY_ROOT/containers/aiops_v1_live_console.tar"
 V145_EXPORT="$RECOVERY_ROOT/containers/aiops_v1_live_console_v145_test.tar"
 OUT_ROOT="${OUT_ROOT:-/home/aiops/recovery/exports}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$OUT_ROOT"
 STAGE="$(mktemp -d "$OUT_ROOT/.portal-recovery-$STAMP.XXXXXX")"
 trap 'rm -rf -- "$STAGE"' EXIT
 
