@@ -97,3 +97,39 @@ The inventory files contain no production rows or credentials and should be gene
 | Production deployment qualification | Not run |
 
 No production database, container, workflow, or PC11K5 behavior was changed by this repository work.
+
+
+## 7. Next gate: structural fingerprint (read-only)
+
+The branch now also includes:
+- `tools/export_pg_schema_fingerprint.sh`: queries PostgreSQL catalogs only; exports relation names/kinds, column names/types/nullability/identity, constraints and indexes. It deliberately omits table rows, column defaults, comments and application data.
+- `tools/compare_pg_schema_fingerprints.py`: compares two exported JSON fingerprints and reports relation/column/constraint/index differences.
+- `tests/test_pg_schema_fingerprint.py`: unit tests for structural comparison.
+- CI checks Python compilation, the unit tests and Bash syntax.
+
+Run from the checked-out repository on SRV-DEB-05, with permission to inspect the named containers:
+
+```bash
+set -eu
+umask 077
+OUT=/home/aiops/recovery/DB-BACKUP-20261019-193924/validation/schema-comparison
+mkdir -p "$OUT"
+
+bash tools/export_pg_schema_fingerprint.sh \
+  aiops_v1_postgres aiops "$OUT/v1-schema-fingerprint.json"
+
+bash tools/export_pg_schema_fingerprint.sh \
+  aiops2_postgres aiops2 "$OUT/aiops2-schema-fingerprint.json"
+
+python3 tools/compare_pg_schema_fingerprints.py \
+  "$OUT/v1-schema-fingerprint.json" \
+  "$OUT/aiops2-schema-fingerprint.json" \
+  --out "$OUT/v1-vs-aiops2-structural-diff.json"
+
+sha256sum "$OUT"/*schema-fingerprint.json "$OUT"/*structural-diff.json \
+  > "$OUT/structural-fingerprint-SHA256SUMS"
+```
+
+This operation is intended to be read-only. It executes catalog SELECT queries and writes local JSON artifacts; it does not run DDL, restore a dump, alter data, or restart containers. Check that the container names match the current deployment before running. The V1 fingerprint includes the `n8n` schema if it is in that database; filter it out for business-only interpretation rather than counting it as AIOps functionality.
+
+**Important:** structural equality is not data equivalence or migration approval. Before any migration proposal, inspect foreign-key relationships and row counts separately, then run a restore rehearsal against a disposable database. Do not upload fingerprints if schema identifiers are considered sensitive by the environment owner.
