@@ -176,7 +176,7 @@ $$;
 drop trigger if exists trg_guard_action_proposal_transition on aiops.action_proposals;
 create trigger trg_guard_action_proposal_transition before update on aiops.action_proposals for each row execute function aiops.guard_action_proposal_transition();
 
-create or replace function aiops.guard_action_proposal_insert() returns trigger language plpgsql as $
+create or replace function aiops.guard_action_proposal_insert() returns trigger language plpgsql as $$
 declare a record; q record; action_record jsonb; evidence_count integer;
 begin
  select output,evidence_ids,status into a from aiops.analysis_records where analysis_id=NEW.analysis_id and run_id=NEW.run_id;
