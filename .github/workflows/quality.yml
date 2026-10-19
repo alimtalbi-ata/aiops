@@ -26,7 +26,11 @@ jobs:
       - name: Compile Python source
         run: python -m compileall -q app tests tools
       - name: Offline schema reconciliation unit tests
-        run: python -m unittest discover -s tests -p "test_schema_reconcile.py" -v
+        run: |
+          python -m unittest discover -s tests -p "test_schema_reconcile.py" -v
+          python -m unittest discover -s tests -p "test_pg_schema_fingerprint.py" -v
+      - name: Validate schema export shell syntax
+        run: bash -n tools/export_pg_schema_fingerprint.sh
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Secret preflight unit tests
