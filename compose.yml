@@ -75,6 +75,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_EVIDENCE_MAX_AGE_SECONDS: ${AIOPS_EVIDENCE_MAX_AGE_SECONDS:-900}
     expose: ["817"]
     networks: [aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
@@ -118,6 +119,7 @@ services:
       INTELLIGENCE_URL: http://aiops2-intelligence:817
       AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_EVIDENCE_MAX_AGE_SECONDS: ${AIOPS_EVIDENCE_MAX_AGE_SECONDS:-900}
       TEMPORAL_ADDRESS: aiops2-temporal:7233
       TEMPORAL_NAMESPACE: default
     expose: ["815"]
