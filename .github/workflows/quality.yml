@@ -164,7 +164,7 @@ jobs:
       - name: Validate test-profile Compose override
         run: docker compose --env-file .env config --quiet
       - name: Start isolated full Core dependency graph with deterministic provider
-        run: docker compose --env-file .env up -d --build aiops2-portal aiops2-simulator aiops2-test-llm
+        run: docker compose --env-file .env up -d --build --wait --wait-timeout 180 aiops2-portal aiops2-simulator aiops2-test-llm aiops2-worker
       - name: Run explicit schema upgrade runner
         run: bash deploy/migrate.sh
       - name: Qualify real Temporal workflow against deterministic synthetic provider
