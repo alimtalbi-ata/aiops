@@ -46,7 +46,7 @@ class Analyst(Contract):
     classification: str
     severity: Literal['P1', 'P2', 'P3', 'P4', 'UNKNOWN']
     severity_rationale: str
-    hypotheses: list[Hypothesis]
+    hypotheses: list[Hypothesis] = Field(min_length=1, max_length=20)
     alternatives: list[Alternative] = []
     recommended_actions: list[Action] = []
     missing_information: list[str] = []
