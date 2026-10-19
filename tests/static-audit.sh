@@ -19,4 +19,7 @@ grep -q 'deploy/check-secrets.sh' deploy/preflight.sh
 if grep -RIn 'Newaiops26' app compose.yml; then echo 'FAIL|hardcoded_runtime_secret'; exit 1; fi
 grep -Fq '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}' compose.yml
 grep -Fq '${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}' compose.yml
+grep -Fq '${AIOPS_PORTAL_OPERATOR_TOKEN:?AIOPS_PORTAL_OPERATOR_TOKEN_required}' compose.yml
+grep -q 'secrets.compare_digest' app/portal/main.py
+grep -q 'Depends(require_operator)' app/portal/main.py
 echo STATIC_AUDIT=PASS
