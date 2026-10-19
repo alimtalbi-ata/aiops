@@ -19,7 +19,7 @@ grep -q 'deploy/check-secrets.sh' deploy/preflight.sh
 grep -q 'RUN_ID_2' tests/synthetic-e2e.sh
 grep -q 'RESOLVED' tests/synthetic-e2e.sh
 grep -q 'E2E_ASSERTIONS=PASS' tests/synthetic-e2e.sh
-grep -q 'UNHEALTHY' tests/qualification.sh
+grep -q 'APP_HEALTH_TIMEOUT' tests/qualification.sh
 if grep -RIn 'Newaiops26' app compose.yml; then echo 'FAIL|hardcoded_runtime_secret'; exit 1; fi
 grep -Fq '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}' compose.yml
 grep -Fq '${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}' compose.yml
