@@ -48,7 +48,7 @@ Generated diagnostics go under `reports/`. Review redacted logs before sharing. 
 6. Compare run counts, latest run versions, event/evidence counts and AI ledger integrity with the pre-incident inventory.
 7. Do not declare recovery successful based solely on PostgreSQL accepting a dump; confirm application semantics and a replayable incident scenario.
 
-Backups include database dumps and a private `.env`; they contain secrets and must be encrypted at rest and stored outside GitHub. The scripts do not upload backups anywhere.
+The full-stack backup includes PostgreSQL dumps for AIOps, n8n and Temporal; a MariaDB dump for GLPI; persistent n8n, GLPI, Grafana and Prometheus volumes; a private `.env`; a Git commit reference; and SHA-256 checksums. Backups contain secrets and must be encrypted at rest and stored outside GitHub. The scripts do not upload backups anywhere.
 
 ## Cumulative ZIP
 
