@@ -350,7 +350,7 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
     decision=str(x.get('decision','')).strip().upper()
     nonce=str(x.get('nonce','')).strip()
     scope=x.get('scope') or {}
-    if not actor or not role or decision not in ('APPROVE','REJECT') or not nonce or not supplied_hash:
+    if not actor or not role or decision not in ('APPROVE','REJECT','REVOKE') or not nonce or not supplied_hash:
         raise HTTPException(422,'actor_role_decision_nonce_and_proposal_hash_required')
     with db() as c:
         p=c.execute('select p.run_id,r.mode,p.target_ci_id,p.action_type,p.risk_tier,p.proposal_hash,p.status,p.expires_at from aiops.action_proposals p join aiops.runs r on r.run_id=p.run_id where p.proposal_id=%s for update of p',(proposal_id,)).fetchone()
@@ -359,6 +359,13 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         if run_mode!='LIVE':raise HTTPException(403,'synthetic_mode_cannot_authorize_real_approval')
         if not hmac.compare_digest(supplied_hash,digest):raise HTTPException(409,'proposal_hash_mismatch')
         if status not in ('PROPOSED','APPROVED'):raise HTTPException(409,'proposal_not_approvable')
+        revoked_approval_id=None
+        if decision=='REVOKE':
+            if status!='APPROVED':raise HTTPException(409,'only_approved_proposals_can_be_revoked')
+            revoked_approval_id=str(x.get('approval_id_to_revoke','')).strip()
+            if not revoked_approval_id:raise HTTPException(422,'approval_id_to_revoke_required')
+            revocable=c.execute("select approval_id from aiops.approval_records where approval_id=%s and proposal_id=%s and proposal_hash=%s and decision='APPROVE' and expires_at>now()",(revoked_approval_id,proposal_id,digest)).fetchone()
+            if not revocable:raise HTTPException(409,'active_approval_to_revoke_not_found')
         if expires<=datetime.datetime.now(datetime.timezone.utc):raise HTTPException(409,'proposal_expired')
         if role not in APPROVER_ROLES[risk]:raise HTTPException(403,'role_not_authorized_for_risk_tier')
         expected_scope={'proposal_hash':digest,'target_ci_id':target,'action_type':action}
@@ -372,10 +379,10 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         if decision=='APPROVE' and risk=='CRITICAL':
             if any(row[0]==actor or row[1]==role for row in prior):raise HTTPException(409,'critical_action_requires_two_distinct_actors_and_roles')
         approval_id=new('APR')
-        c.execute('insert into aiops.approval_records(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,scope,nonce,expires_at,audit) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(approval_id,proposal_id,digest,actor,role,decision,json.dumps(scope),nonce,expires,json.dumps({'run_id':rid,'source':'human-in-the-loop-api'})))
+        c.execute('insert into aiops.approval_records(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,scope,nonce,expires_at,audit) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(approval_id,proposal_id,digest,actor,role,decision,json.dumps(scope),nonce,expires,json.dumps({'run_id':rid,'source':'human-in-the-loop-api','revokes_approval_id':revoked_approval_id})))
         approval_count=(len(prior)+1) if decision=='APPROVE' else 0
         approval_complete=(decision=='APPROVE' and (risk!='CRITICAL' or (approval_count>=2 and critical_approval_complete({row[1] for row in prior}|{role}))))
-        next_status=('REJECTED' if decision=='REJECT' else ('APPROVED' if approval_complete else 'PROPOSED'))
+        next_status=('REJECTED' if decision=='REJECT' else ('REVOKED' if decision=='REVOKE' else ('APPROVED' if approval_complete else 'PROPOSED')))
         c.execute('update aiops.action_proposals set status=%s where proposal_id=%s',(next_status,proposal_id))
     return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'approval_count':approval_count,'approval_complete':approval_complete,'status':next_status,'execution_allowed':False,'idempotent':False}
 
