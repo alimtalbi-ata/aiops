@@ -96,3 +96,15 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-0013 — Recover historical assets selectively and preserve provenance
+
+- **Date:** 2026-10-19
+- **Status:** Accepted for the recovery phase
+- **Decision:** Recover only historical assets that may be required to advance the AIOps 2.0 target. Use R33 as a known source baseline, mine V1/V145 exports for unique source changes, and package a minimal, checksummed recovery archive for SCP. Ingest reviewed source/doc/test deltas into GitHub on a branch/PR; do not commit full exports or recovery archives.
+- **Evidence:** Host inventory reported R33 source at `/home/aiops/exports/AIOPS-R33-LOGICAL-20261007-112249/03-SOURCES/V1/stack/live_console`, a v1 console export (180,038,656 bytes), a V145 test console export (179,796,480 bytes), and a UI-validation export (180,038,144 bytes). The V92 consolidated portal export was reported as 1,024 bytes and its image metadata lookup failed with a missing content blob.
+- **Security/operations:** No production container restart, image rebuild, data migration, token rotation or PC11K5 fencing change is part of source recovery. Exclude secrets, DBs, volumes, logs, caches, bytecode and backup files.
+- **Qualification:** Archive creation, SHA-256 verification and SCP transfer are pending. Source presence and diff output are not build, integration or runtime qualification.
+- **Implementation:** `tools/recovery/collect-historical-portal.sh`; procedure: `docs/HISTORICAL-PORTAL-RECOVERY-2026-10-19.md`.
+- **Follow-up:** Review V1/V145 deltas, compare them with the current repository, and port only useful missing functionality with tests and provenance.
+
