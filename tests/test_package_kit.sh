@@ -23,5 +23,5 @@ if grep -Eq '(^|/)[.]env$' "$LIST"; then
   exit 1
 fi
 ( cd "$TMP"; unzip -q "$PACKAGE"; cd "$(find . -name KIT-MANIFEST.txt -printf '%h\n' | head -n 1)"; sha256sum -c SHA256SUMS )
-rm -f "$PACKAGE" "$CHECKSUM"
+if [[ "${KEEP_PACKAGE:-0}" != "1" ]]; then rm -f "$PACKAGE" "$CHECKSUM"; fi
 echo 'PACKAGE_KIT_TEST=PASS'
