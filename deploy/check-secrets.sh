@@ -31,7 +31,17 @@ check_secret() {
 }
 check_secret POSTGRES_PASSWORD 'Newaiops26$'
 check_secret AIOPS_ADMIN_TOKEN 'Newaiops26$'
-check_secret AIOPS_INTERNAL_TOKEN 'Newaiops26$'
+check_secret AIOPS_INTERNAL_TOKEN 'Newaiops26 'Newaiops26$'
+check_secret GLPI_DB_ROOT_PASSWORD 'Newaiops26$'
+check_secret GRAFANA_ADMIN_PASSWORD 'Newaiops26$'
+check_secret N8N_ENCRYPTION_KEY 'Newaiops26$-N8N'
+if [[ "$failures" -ne 0 ]]; then
+  echo 'ACTION|run deploy/init-env.sh only for a new installation, or replace every listed value in .env; existing .env files are never rotated automatically'
+  exit 1
+fi
+echo 'SECRET_PREFLIGHT=PASS'
+
+check_secret AIOPS_PORTAL_OPERATOR_TOKEN 'CHANGE_ME'
 check_secret GLPI_DB_PASSWORD 'Newaiops26$'
 check_secret GLPI_DB_ROOT_PASSWORD 'Newaiops26$'
 check_secret GRAFANA_ADMIN_PASSWORD 'Newaiops26$'
