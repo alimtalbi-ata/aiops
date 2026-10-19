@@ -74,3 +74,8 @@ A selective V1/V145 portal source-recovery package was created on SRV-DEB-05 wit
 The collector path defect was corrected: R33's application entry point is `app/main.py`, not `main.py` at the source root. The corrected collector completed with exit code 0. On 2026-10-19, server-side integrity checks passed: `sha256sum -c` returned `Réussi`, and `tar -tzf "$PKG" >/dev/null` completed with `TAR_READABLE=YES`. This validates the server archive against its sidecar and confirms TAR readability, but does not qualify source semantics or runtime behavior.
 
 Next: SCP the archive and sidecar to Windows, compare the local SHA-256, extract into an isolated workspace, review the manifest and V1/V145 diff, then add only reviewed source/tests/docs in a separate PR. Keep main protected and preserve PC11K5 fencing invariants.
+
+
+## Second selective recovery package — 2026-10-19 15:44
+
+A second selective portal source package was generated and uploaded: `AIOPS-HISTORICAL-PORTAL-SOURCE-RECOVERY-20261019-154435.tar.gz` (856,801 bytes). Its checksum sidecar states SHA-256 `829bec97028fbe21a96b8fbcc77fdb8c3092f304f5a8665106edc2c87b8180e4`; the collector reported server-side checksum validation PASS, 27,623 V1/V145 diff lines, 16,363 R33/V145 diff lines and 32 inventory rows. The current analysis runtime has not independently extracted or re-hashed the uploaded bytes, so semantic review and all build/runtime qualification remain pending. See [the recovery result record](HISTORICAL-PORTAL-RECOVERY-RESULT-2026-10-19.md). Keep changes on this PR branch, preserve `main`, and do not touch active services or PC11K5 fencing invariants.
