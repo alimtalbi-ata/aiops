@@ -96,3 +96,14 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+
+## ADR-0013 — Historical schema reconciliation is read-only and name-based
+
+- **Date:** 2026-10-19
+- **Status:** Accepted for the analysis/tooling phase; migration decision deferred.
+- **Decision:** Compare the R33 selected application table list with current V1 and V2 table inventories using an offline utility. Do not restore the historical dump into an active database and do not infer compatibility from matching table names.
+- **Evidence:** SRV-DEB-05 reports eight tables in current V2 `aiops2`, 175 tables across V1 `aiops` and `n8n`, and a readable R33 custom dump catalogue with 1,414 TOC entries. Four current SQL exports passed gzip integrity and SHA-256 manifest checks.
+- **Consequences:** Any candidate reuse requires a separate DDL/constraint/data-provenance review and an explicit owner/adapter contract. V2 remains the canonical writer for its current Run/Event/Evidence/Decision/Remediation lifecycle.
+- **Safety:** No database or active container is modified by the reconciliation utility. Preserve PC11K5 claim → fencing/ownership → preconditions → effect → evidence → reconciliation.
+- **Qualification:** Unit tests are added to CI; results are pending. No migration, restore rehearsal, API integration, E2E or production qualification is claimed.
