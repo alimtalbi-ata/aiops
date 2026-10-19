@@ -410,9 +410,9 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
-        rows=c.execute("select evidence_id,coalesce(provenance->>'synthetic','false') from aiops.evidence where evidence_id=any(%s)",(evidence_ids,)).fetchall()
+        rows=c.execute("select evidence_id,coalesce(provenance->>'synthetic','unknown') from aiops.evidence where evidence_id=any(%s)",(evidence_ids,)).fetchall()
         if len(rows)!=len(evidence_ids):raise HTTPException(422,'learning_case_references_unknown_evidence')
-        synthetic=(run[0]!='LIVE') or any(flag.lower()=='true' for _,flag in rows)
+        synthetic=(run[0]!='LIVE') or any(flag.lower()!='false' for _,flag in rows)
         verification_id=x.get('verification_id')
         if outcome_verified:
             if not verification_id:raise HTTPException(422,'verified_outcome_requires_verification_id')
