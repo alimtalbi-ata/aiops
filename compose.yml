@@ -224,14 +224,14 @@ services:
       aiops2-temporal: {condition: service_healthy}
 
   aiops2-temporal-ui:
-    image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.56.0}
+    image: ${TEMPORAL_UI_IMAGE:-temporalio/ui:2.49.1}
     container_name: aiops2-temporal-ui
     restart: unless-stopped
     environment:
       TEMPORAL_ADDRESS: "aiops2-temporal:7233"
     expose: ["8080"]
     networks: [aiops2-control]
-    depends_on: {aiops2-temporal: {condition: service_started}}
+    depends_on: {aiops2-temporal: {condition: service_healthy}}
 
   aiops2-prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0}
