@@ -161,7 +161,7 @@ def analyze(x: Request, authorization: str | None = Header(default=None)):
     unknown = bad_refs(result, x.evidence)
     if unknown:
         raise HTTPException(502, detail={'code':'unknown_evidence_reference','evidence_ids':unknown})
-    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'execution_allowed':False}
+    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'analyst-v2.0','execution_allowed':False}
 
 @app.post('/api/intelligence/critic')
 def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
@@ -199,5 +199,5 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
         result.validated = False
         if result.final_recommendation != 'ESCALATE':
             result.final_recommendation = 'HUMAN_APPROVAL'
-    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'execution_allowed':False}
+    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.0','execution_allowed':False}
 
