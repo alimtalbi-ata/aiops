@@ -197,9 +197,10 @@ def persist_analysis(rid:str,x:dict,authorization:str|None=Header(default=None))
     with db() as c:
         run=c.execute('select incident_id from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run: raise HTTPException(404,'run not found')
-        existing=c.execute('select analysis_id,run_id from aiops.analysis_records where idempotency_key=%s',(idem,)).fetchone()
+        existing=c.execute('select analysis_id,run_id,evidence_set_hash,provider,model,prompt_version from aiops.analysis_records where idempotency_key=%s',(idem,)).fetchone()
         if existing:
             if existing[1]!=rid: raise HTTPException(409,'analysis_idempotency_key_reused_across_runs')
+            if existing[2]!=evidence_hash or existing[3]!=str(x.get('provider','unknown')) or existing[4]!=str(x.get('model','unknown')) or existing[5]!=str(x.get('prompt_version','analyst-v2.0')): raise HTTPException(409,'analysis_idempotency_key_reused_with_different_input')
             return {'analysis_id':existing[0],'idempotent':True,'evidence_set_hash':evidence_hash}
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids): raise HTTPException(422,'analysis references unknown evidence')
@@ -217,9 +218,11 @@ def persist_critique(rid:str,x:dict,authorization:str|None=Header(default=None))
         raise HTTPException(422,'critique_analysis_and_evidence_and_idempotency_key_required')
     with db() as c:
         if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
-        existing=c.execute('select critique_id,run_id from aiops.critique_records where idempotency_key=%s',(idem,)).fetchone()
+        existing=c.execute('select critique_id,run_id,analysis_id,evidence_ids,provider,model from aiops.critique_records where idempotency_key=%s',(idem,)).fetchone()
         if existing:
             if existing[1]!=rid: raise HTTPException(409,'critique_idempotency_key_reused_across_runs')
+            old_evidence=json.loads(existing[3]) if isinstance(existing[3],str) else existing[3]
+            if existing[2]!=aid or sorted(old_evidence or [])!=evidence_ids or existing[4]!=str(x.get('provider','unknown')) or existing[5]!=str(x.get('model','unknown')): raise HTTPException(409,'critique_idempotency_key_reused_with_different_input')
             return {'critique_id':existing[0],'idempotent':True}
         if not c.execute('select 1 from aiops.analysis_records where analysis_id=%s and run_id=%s',(aid,rid)).fetchone(): raise HTTPException(422,'analysis_record_not_found_for_run')
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
@@ -360,9 +363,10 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         if role not in APPROVER_ROLES[risk]:raise HTTPException(403,'role_not_authorized_for_risk_tier')
         expected_scope={'proposal_hash':digest,'target_ci_id':target,'action_type':action}
         if scope!=expected_scope:raise HTTPException(422,'approval_scope_must_match_exact_proposal')
-        old=c.execute('select approval_id,proposal_id,proposal_hash,decision from aiops.approval_records where nonce=%s',(nonce,)).fetchone()
+        old=c.execute('select approval_id,proposal_id,proposal_hash,decision,actor_id,actor_role,scope from aiops.approval_records where nonce=%s',(nonce,)).fetchone()
         if old:
-            if old[1]==proposal_id and old[2]==digest and old[3]==decision:return {'approval_id':old[0],'decision':decision,'idempotent':True,'execution_allowed':False}
+            old_scope=json.loads(old[6]) if isinstance(old[6],str) else old[6]
+            if old[1]==proposal_id and old[2]==digest and old[3]==decision and old[4]==actor and old[5]==role and old_scope==scope:return {'approval_id':old[0],'decision':decision,'idempotent':True,'execution_allowed':False}
             raise HTTPException(409,'approval_nonce_reuse')
         prior=c.execute("select actor_id,actor_role from aiops.approval_records where proposal_id=%s and decision='APPROVE' and expires_at>now() order by decided_at",(proposal_id,)).fetchall()
         if decision=='APPROVE' and risk=='CRITICAL':
@@ -393,9 +397,12 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
-        old=c.execute('select learning_case_id,gold_eligible,source_run_id from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
+        old=c.execute('select learning_case_id,gold_eligible,source_run_id,case_type,evidence_ids,label,human_reviewed,outcome_verified from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
         if old:
             if old[2]!=rid: raise HTTPException(409,'learning_idempotency_key_reused_across_runs')
+            old_evidence=json.loads(old[4]) if isinstance(old[4],str) else old[4]
+            old_label=json.loads(old[5]) if isinstance(old[5],str) else old[5]
+            if old[3]!=case_type or sorted(old_evidence or [])!=evidence_ids or old_label!=(x.get('label') or {}) or old[6]!=human_reviewed or old[7]!=outcome_verified: raise HTTPException(409,'learning_idempotency_key_reused_with_different_input')
             return {'learning_case_id':old[0],'gold_eligible':old[1],'idempotent':True}
         rows=c.execute("select evidence_id,coalesce(provenance->>'synthetic','false') from aiops.evidence where evidence_id=any(%s)",(evidence_ids,)).fetchall()
         if len(rows)!=len(evidence_ids):raise HTTPException(422,'learning_case_references_unknown_evidence')
