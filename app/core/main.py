@@ -1,4 +1,4 @@
-import os,json,requests,datetime,hashlib
+import os,json,requests,datetime,hashlib,hmac
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
 from shared.db import db
@@ -196,8 +196,10 @@ def persist_analysis(rid:str,x:dict,authorization:str|None=Header(default=None))
     with db() as c:
         run=c.execute('select incident_id from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run: raise HTTPException(404,'run not found')
-        existing=c.execute('select analysis_id from aiops.analysis_records where idempotency_key=%s',(idem,)).fetchone()
-        if existing: return {'analysis_id':existing[0],'idempotent':True,'evidence_set_hash':evidence_hash}
+        existing=c.execute('select analysis_id,run_id from aiops.analysis_records where idempotency_key=%s',(idem,)).fetchone()
+        if existing:
+            if existing[1]!=rid: raise HTTPException(409,'analysis_idempotency_key_reused_across_runs')
+            return {'analysis_id':existing[0],'idempotent':True,'evidence_set_hash':evidence_hash}
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids): raise HTTPException(422,'analysis references unknown evidence')
         revision=c.execute('select coalesce(max(revision),0)+1 from aiops.analysis_records where run_id=%s',(rid,)).fetchone()[0]
@@ -214,8 +216,10 @@ def persist_critique(rid:str,x:dict,authorization:str|None=Header(default=None))
         raise HTTPException(422,'critique_analysis_and_evidence_and_idempotency_key_required')
     with db() as c:
         if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
-        existing=c.execute('select critique_id from aiops.critique_records where idempotency_key=%s',(idem,)).fetchone()
-        if existing:return {'critique_id':existing[0],'idempotent':True}
+        existing=c.execute('select critique_id,run_id from aiops.critique_records where idempotency_key=%s',(idem,)).fetchone()
+        if existing:
+            if existing[1]!=rid: raise HTTPException(409,'critique_idempotency_key_reused_across_runs')
+            return {'critique_id':existing[0],'idempotent':True}
         if not c.execute('select 1 from aiops.analysis_records where analysis_id=%s and run_id=%s',(aid,rid)).fetchone(): raise HTTPException(422,'analysis_record_not_found_for_run')
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids):raise HTTPException(422,'critique_references_unknown_evidence')
@@ -333,14 +337,20 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         if role not in APPROVER_ROLES[risk]:raise HTTPException(403,'role_not_authorized_for_risk_tier')
         expected_scope={'proposal_hash':digest,'target_ci_id':target,'action_type':action}
         if scope!=expected_scope:raise HTTPException(422,'approval_scope_must_match_exact_proposal')
-        old=c.execute('select approval_id,proposal_hash,decision from aiops.approval_records where nonce=%s',(nonce,)).fetchone()
+        old=c.execute('select approval_id,proposal_id,proposal_hash,decision from aiops.approval_records where nonce=%s',(nonce,)).fetchone()
         if old:
-            if old[1]==digest and old[2]==decision:return {'approval_id':old[0],'decision':decision,'idempotent':True,'execution_allowed':False}
+            if old[1]==proposal_id and old[2]==digest and old[3]==decision:return {'approval_id':old[0],'decision':decision,'idempotent':True,'execution_allowed':False}
             raise HTTPException(409,'approval_nonce_reuse')
+        prior=c.execute("select actor_id,actor_role from aiops.approval_records where proposal_id=%s and decision='APPROVE' and expires_at>now() order by decided_at",(proposal_id,)).fetchall()
+        if decision=='APPROVE' and risk=='CRITICAL':
+            if any(row[0]==actor or row[1]==role for row in prior):raise HTTPException(409,'critical_action_requires_two_distinct_actors_and_roles')
         approval_id=new('APR')
         c.execute('insert into aiops.approval_records(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,scope,nonce,expires_at,audit) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(approval_id,proposal_id,digest,actor,role,decision,json.dumps(scope),nonce,expires,json.dumps({'run_id':rid,'source':'human-in-the-loop-api'})))
-        c.execute('update aiops.action_proposals set status=%s where proposal_id=%s',('APPROVED' if decision=='APPROVE' else 'REJECTED',proposal_id))
-    return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'execution_allowed':False,'idempotent':False}
+        approval_count=(len(prior)+1) if decision=='APPROVE' else 0
+        approval_complete=(decision=='APPROVE' and (risk!='CRITICAL' or (approval_count>=2 and {row[1] for row in prior}|{role} >= {'security_admin','incident_commander'})))
+        next_status=('REJECTED' if decision=='REJECT' else ('APPROVED' if approval_complete else 'PROPOSED'))
+        c.execute('update aiops.action_proposals set status=%s where proposal_id=%s',(next_status,proposal_id))
+    return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'approval_count':approval_count,'approval_complete':approval_complete,'status':next_status,'execution_allowed':False,'idempotent':False}
 
 @app.post('/api/runs/{rid}/learning-cases')
 def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=None)):
@@ -360,8 +370,10 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
-        old=c.execute('select learning_case_id,gold_eligible from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
-        if old:return {'learning_case_id':old[0],'gold_eligible':old[1],'idempotent':True}
+        old=c.execute('select learning_case_id,gold_eligible,source_run_id from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
+        if old:
+            if old[2]!=rid: raise HTTPException(409,'learning_idempotency_key_reused_across_runs')
+            return {'learning_case_id':old[0],'gold_eligible':old[1],'idempotent':True}
         rows=c.execute("select evidence_id,coalesce(provenance->>'synthetic','false') from aiops.evidence where evidence_id=any(%s)",(evidence_ids,)).fetchall()
         if len(rows)!=len(evidence_ids):raise HTTPException(422,'learning_case_references_unknown_evidence')
         synthetic=(run[0]!='LIVE') or any(flag.lower()=='true' for _,flag in rows)
