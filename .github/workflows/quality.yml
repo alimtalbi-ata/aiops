@@ -108,6 +108,10 @@ jobs:
         env:
           PGPASSWORD: ci-only-password
         run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f tests/sql/ledger-invariants.sql
+      - name: Reapply decision ledger migration to prove idempotency
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f db/migrations/009_ai_decision_ledger.sql
 
   migration-runner-upgrade:
     runs-on: ubuntu-latest
