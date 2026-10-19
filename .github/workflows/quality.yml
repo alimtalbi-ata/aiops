@@ -217,7 +217,14 @@ jobs:
           bash tests/backup-contract.sh
       - name: Generate isolated packaging environment
         run: bash deploy/init-env.sh
+      - name: Download runtime qualification report for cumulative kit
+        uses: actions/download-artifact@v4
+        with:
+          name: aiops2-runtime-e2e-report
+          path: reports
       - name: Assemble cumulative deployment kit only after all gates pass
+        env:
+          REQUIRE_RUNTIME_REPORT: "1"
         run: bash deploy/package.sh
       - name: Upload qualified cumulative deployment kit and checksum
         uses: actions/upload-artifact@v4
