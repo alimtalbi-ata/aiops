@@ -90,7 +90,8 @@ jobs:
           if psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -c "update aiops.analysis_records set confidence=0.1 where analysis_id='CI-IMMUTABLE-ANALYSIS'" 2>/tmp/immutable.err; then echo "FAIL|immutable_analysis_was_mutable"; exit 1; fi
           grep -Fq "immutable ledger" /tmp/immutable.err
           echo "IMMUTABLE_ANALYSIS=PASS"
-          if psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -c "insert into aiops.learning_cases(learning_case_id,idempotency_key,source_run_id,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible) values('CI-GOLD-REJECT','CI-GOLD-KEY','CI-LEDGER-RUN',1,'INCIDENT',true,true,true,true)" 2>/tmp/gold.err; then echo "FAIL|synthetic_case_entered_gold_set"; exit 1; fi
+          psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -c "insert into aiops.evidence(evidence_id,source,claim,confidence,provenance,payload_hash,payload) values('CI-GOLD-EVIDENCE','ci-fixture','synthetic learning guard fixture',0.9,'{\\"synthetic\\":false}'::jsonb,'ci-gold-hash','{}'::jsonb)"
+          if psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -c "insert into aiops.learning_cases(learning_case_id,idempotency_key,source_run_id,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible,evidence_ids,reviewed_at,reviewed_by,review_note) values('CI-GOLD-REJECT','CI-GOLD-KEY','CI-LEDGER-RUN',1,'INCIDENT',true,true,true,true,'[\\"CI-GOLD-EVIDENCE\\"]'::jsonb,now(),'ci-reviewer','negative eligibility fixture')" 2>/tmp/gold.err; then echo "FAIL|synthetic_case_entered_gold_set"; exit 1; fi
           grep -Fq "gold learning eligibility" /tmp/gold.err
           echo "SYNTHETIC_GOLD_SET_BLOCK=PASS"
       - name: Exercise proposal, dual approval, effect, verification and learning lifecycle
