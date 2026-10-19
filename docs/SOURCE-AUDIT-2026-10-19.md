@@ -43,7 +43,7 @@ This review is based on source files retrieved from GitHub. It is not a runtime 
 
 **Risk:** A deployment that fails to replace demo values can run with guessable credentials. A documentation warning does not enforce secure configuration.
 
-**Disposition:** Preflight enforcement and secure generation for fresh installs are now implemented in PR #7. Existing `.env` files containing defaults fail preflight unless explicit demo mode is set. Remaining issue: application code still contains insecure fallback literals; a later change should remove them only after environment propagation and every service consumer are made consistent and integration-tested.
+**Disposition:** Preflight enforcement and secure generation for fresh installs are now implemented in PR #7. Existing `.env` files containing defaults fail preflight unless explicit demo mode is set. Application-level fallback literals were removed by PR #9; missing credentials now fail fast and Compose requires explicit values. The shared token is injected into Portal and Copilot as well as Core, worker and simulator. CI validates Compose interpolation with generated secrets. Full container build and E2E are still required.
 
 ### F-05 — Qualification scripts prove structure/reachability, not safety semantics
 
