@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "mode": "unconfigured",
+  "address_env": "TEMPORAL_ADDRESS",
+  "namespace_env": "TEMPORAL_NAMESPACE",
+  "task_queue_env": "TEMPORAL_TASK_QUEUE",
+  "start_workflows_automatically": false,
+  "note": "Temporal integration is roadmap work; configure only after qualification."
+}
