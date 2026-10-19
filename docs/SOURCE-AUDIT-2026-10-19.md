@@ -2,7 +2,7 @@
 
 **Author:** Abdelhalim Talbi  
 **Target:** GitHub `main` at `8f9e6e7356777a0331b36a14c2fc325001cae41e`  
-**Work branch:** `fix/live-safety-gates-2026-10-19`  
+**Work branch:** `fix/live-safety-gates-2026-10-19` — merged by [PR #5](https://github.com/alimtalbi-ata/aiops/pull/5) as commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`  
 **Scope:** Read-only source review followed by a narrow fail-closed safety patch. No production host or running service was accessed or modified.
 
 ## Evidence boundary
