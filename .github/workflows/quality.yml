@@ -29,9 +29,50 @@ jobs:
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+      - name: Migration ledger contract tests
+        run: bash tests/migration-contract.sh
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
         run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+      - name: Build every application image
+        run: docker compose --env-file .env build
+
+  database-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: aiops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply complete migration chain to disposable PostgreSQL
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          for file in db/migrations/*.sql; do
+            echo "APPLY $file"
+            psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Assert AI decision ledger and invariants exist
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from information_schema.tables where table_schema='aiops' and table_name in ('analysis_records','critique_records','policy_decisions','action_proposals','approval_records','effect_receipts','verification_records','reconciliation_records','learning_cases','model_evaluation_runs')" | grep -x 10
+          psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from pg_trigger where not tgisinternal and tgname like 'trg_immutable_%'" | grep -x 7
