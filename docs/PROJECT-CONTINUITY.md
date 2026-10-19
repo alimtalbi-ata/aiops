@@ -45,8 +45,14 @@ Consolidate AIOps 2.0 around one coherent runtime and operations experience. Reu
 6. `docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md`
 7. Latest release notes and evidence manifests for the target version.
 
+## Latest source review (2026-10-19)
+
+A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE-AUDIT-2026-10-19.md). A safety patch is in branch `fix/live-safety-gates-2026-10-19` (not yet merged): P1 escalates before evidence checks; policy no longer defaults critic validation to true and requires explicit freshness/precondition/fencing/approval inputs; the worker blocks LIVE runs before generating placeholder evidence and marks the Run BLOCKED. Added `tests/test_policy_safety.py`; tests have not yet been executed in a provisioned runtime. This is a conservative guard, not evidence that LIVE execution is qualified.
+
 ## Next work queue
 
+- [ ] Run the new policy safety unit tests in the pinned application environment; record actual output.
+- [ ] Review and merge the LIVE safety patch only after tests pass and its diff is inspected.
 - [ ] Run a corrected, truly read-only inventory of historical v1/V145 source, contracts, tests, and service ownership.
 - [ ] Inspect current repository tree and deployment files; compare Git-tracked code to the host deployment without copying secrets.
 - [ ] Build a reuse matrix: reuse unchanged / adapt behind adapter / replace / retire, each with evidence and owner.
