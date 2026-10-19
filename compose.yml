@@ -72,6 +72,7 @@ services:
       CORE_URL: http://aiops2-core:810
       TWIN_URL: http://aiops2-twin:811
       EVIDENCE_URL: http://aiops2-evidence:812
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["814"]
     networks: [aiops2-control]
     depends_on:
