@@ -105,6 +105,7 @@ services:
       EVIDENCE_URL: http://aiops2-evidence:812
       POLICY_URL: http://aiops2-policy:813
       TWIN_URL: http://aiops2-twin:811
+      INTELLIGENCE_URL: http://aiops2-intelligence:817
       AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       TEMPORAL_ADDRESS: aiops2-temporal:7233
