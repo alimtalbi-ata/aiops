@@ -15,4 +15,5 @@ grep -q 'aiops2-execution:' compose.yml
 grep -q 'aiops2-temporal-data:' compose.yml
 grep -q 'internal: true' compose.yml
 grep -q 'AIOPS_INTERNAL_TOKEN' config/.env.example
+grep -q 'deploy/check-secrets.sh' deploy/preflight.sh
 echo STATIC_AUDIT=PASS

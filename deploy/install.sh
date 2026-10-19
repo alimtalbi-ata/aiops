@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
-[ -f .env ] || cp config/.env.example .env
+bash deploy/init-env.sh
 bash deploy/preflight.sh
 # Legacy retirement is deliberately separate and explicit.
 if [ "${RETIRE_LEGACY:-0}" = 1 ]; then bash deploy/retire-legacy.sh; fi

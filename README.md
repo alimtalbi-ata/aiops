@@ -7,11 +7,10 @@ This kit is a clean rebuild of the AioOps runtime. It is designed to deploy the 
 ## First deployment
 
 ```bash
-cp config/.env.example .env
-RETIRE_LEGACY=1 ./deploy/install.sh
+./deploy/install.sh
 ```
 
-The installer builds the application images, starts the complete stack, checks the exposed services and launches a deterministic synthetic Golden Demo.
+The installer creates a new `.env` with random credentials (or validates an existing `.env`), builds the application images, starts the stack, checks exposed services and launches a deterministic synthetic Golden Demo. Legacy retirement is separate and must only be enabled deliberately with `RETIRE_LEGACY=1`. See `docs/SECURITY.md` for the explicit, isolated-only demo mode.
 
 ## External interfaces
 
