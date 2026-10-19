@@ -50,8 +50,9 @@ FILES=(app/main.py requirements.txt Dockerfile app/static/aiops-portal.html
 for rel in "\${FILES[@]}"; do
   src="$R33_SOURCE/$rel"
   if [[ -f "$src" ]]; then
-    mkdir -p "$STAGE/R33/live_console/$(dirname "$rel")"
-    install -m 0644 "$src" "$STAGE/R33/live_console/$rel"
+    normalized="${rel#app/}"
+    mkdir -p "$STAGE/R33/live_console/$(dirname "$normalized")"
+    install -m 0644 "$src" "$STAGE/R33/live_console/$normalized"
   fi
 done
 
@@ -75,7 +76,7 @@ extract_selected() {
 }
 extract_selected "$V1_EXPORT" "$STAGE/V1-export"
 extract_selected "$V145_EXPORT" "$STAGE/V145-export"
-[[ -s "$STAGE/R33/live_console/app/main.py" ]] || { die "R33 app/main.py missing"; exit 3; }
+[[ -s "$STAGE/R33/live_console/main.py" ]] || { die "R33 app/main.py missing"; exit 3; }
 [[ -s "$STAGE/V1-export/live_console/main.py" ]] || { die "V1 main.py missing"; exit 3; }
 [[ -s "$STAGE/V145-export/live_console/main.py" ]] || { die "V145 main.py missing"; exit 3; }
 
