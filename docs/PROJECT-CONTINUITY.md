@@ -66,3 +66,29 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+
+## AIOps 2.0 development continuation — Portal operator boundary
+
+**Date:** 2026-10-19  
+**Branch:** `feat/portal-operator-auth-v2`  
+**Status:** Implementation committed to a dedicated branch; PR and CI qualification pending.
+
+### Change scope
+- Portal startup now fails closed if `AIOPS_PORTAL_OPERATOR_TOKEN` is absent.
+- `POST /api/demo` and `POST /api/copilot` require a Bearer token validated with constant-time comparison.
+- Copilot input is validated and bounded to 1–4,000 characters.
+- Upstream exceptions from these mutation/AI routes return a generic 503 without leaking internal exception text, URLs or secrets.
+- Portal UI asks for the operator token at runtime, sends it in the Authorization header, and does not persist it in browser storage.
+- Fresh-install secret generation creates a separate random portal operator token. Compose requires it explicitly. The secure env template, preflight, static audit and CI test job were updated.
+
+### Qualification
+New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Copilot question bounds, upstream error redaction and success passthrough. CI is configured to run these tests. Their execution result is pending; do not claim the patch is qualified until the workflow completes.
+
+### Limits and next gates
+- Read-only dashboard/bootstrap routes are not yet protected by operator authentication; determine the intended public-read policy before external exposure.
+- The portal token is a shared operator secret, not an identity provider, per-user RBAC, or MFA. Deploy behind TLS and a trusted access boundary; plan identity-provider integration for production.
+- Verify that all reverse proxies redact Authorization headers and never log credentials.
+- Test rate limits, CSRF/origin policy, content-security policy, browser UX, Core timeout/idempotency and compose/preflight behavior.
+- Keep DEMO synthetic. LIVE execution remains blocked by the existing canonical worker/policy safety controls.
+- No runtime deployment, restart, database change, or PC11K5 fencing modification was performed.
