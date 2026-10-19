@@ -101,3 +101,15 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Policy tests: 7/7 passed.
 - Secret preflight, static repository audit and Compose configuration validation: PASS.
 - No runtime deployment or live service test was performed. Keep the PR in draft until broader security/UI acceptance gates are addressed.
+
+
+## Portal security follow-up — authenticated read model and browser boundary (2026-10-19)
+
+- Portal `GET /api/portal/bootstrap` now requires the operator Bearer token; upstream read failures are normalized by the same safe error wrapper.
+- `GET /` now serves a login shell only. Operational dashboard/run/twin data is fetched client-side after successful operator authentication, rather than embedded in unauthenticated HTML.
+- Added response headers: CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a restrictive `Permissions-Policy`.
+- Privileged POST routes reject a supplied cross-origin `Origin` that does not match the request origin/host. Requests without an Origin header are still allowed for non-browser clients, with Bearer auth required.
+- UI uses textContent for returned JSON/data and does not persist the operator token to local/session storage.
+- Tests expanded to cover authenticated read boundary, unauthenticated POSTs, login-shell response headers and origin validation. The CI run for these latest commits is pending.
+- CSP currently permits inline script/style because the current UI is a single embedded page. A next hardening iteration should move scripts/styles into versioned static assets or use nonces/hashes before production exposure.
+- No runtime deployment was performed. Reverse-proxy TLS/trusted-forwarded-header configuration, rate limiting, live browser testing and production qualification remain open.
