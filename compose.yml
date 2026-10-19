@@ -152,6 +152,7 @@ services:
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
+      SQL_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
       POSTGRES_SEEDS: aiops2-temporal-postgres
     volumes: [./deploy/setup-temporal-postgres.sh:/scripts/setup-temporal-postgres.sh:ro]
     entrypoint: ["/bin/sh", "/scripts/setup-temporal-postgres.sh"]
