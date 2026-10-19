@@ -22,6 +22,15 @@ class Decision(BaseModel):
 
 
 def evaluate(x: Decision) -> dict:
+    # Severity is an independent safety signal: never downgrade P1 to UNKNOWN
+    # or ALLOW merely because evidence is missing or confidence is high.
+    if x.mode == "LIVE" and x.severity == "P1":
+        return {
+            "state": "BLOCKED",
+            "decision": "ESCALATE",
+            "reason": "P1 incidents require escalation; autonomous execution is prohibited",
+        }
+
     if x.evidence_count == 0:
         return {
             "state": "UNKNOWN",
@@ -34,14 +43,6 @@ def evaluate(x: Decision) -> dict:
             "state": "PASS",
             "decision": "SIMULATE",
             "reason": "synthetic mode: no production mutation permitted",
-        }
-
-    # P1 is never auto-authorized, regardless of model confidence.
-    if x.severity == "P1":
-        return {
-            "state": "BLOCKED",
-            "decision": "ESCALATE",
-            "reason": "P1 incidents require escalation; autonomous execution is prohibited",
         }
 
     if not x.critic_validated:
