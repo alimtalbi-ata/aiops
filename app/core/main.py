@@ -1,4 +1,5 @@
 import os,json,requests,datetime,hashlib,hmac
+from shared.safety import canonical_sha256, gold_set_eligible, critical_approval_complete
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
 from shared.db import db
@@ -303,7 +304,7 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
     if risk in ('HIGH','CRITICAL') and not rollback:
         raise HTTPException(422,'rollback_plan_required_for_high_risk_action')
     canonical={'run_id':rid,'analysis_id':analysis_id,'critique_id':critique_id,'source_action_id':source_action_id,'target_ci_id':target,'action_type':action,'risk_tier':risk,'parameters':parameters,'evidence_ids':evidence_ids,'preconditions':preconditions,'expected_postconditions':postconditions,'rollback_plan':rollback}
-    digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    digest=canonical_sha256(canonical)
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
@@ -369,7 +370,7 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         approval_id=new('APR')
         c.execute('insert into aiops.approval_records(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,scope,nonce,expires_at,audit) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(approval_id,proposal_id,digest,actor,role,decision,json.dumps(scope),nonce,expires,json.dumps({'run_id':rid,'source':'human-in-the-loop-api'})))
         approval_count=(len(prior)+1) if decision=='APPROVE' else 0
-        approval_complete=(decision=='APPROVE' and (risk!='CRITICAL' or (approval_count>=2 and {row[1] for row in prior}|{role} >= {'security_admin','incident_commander'})))
+        approval_complete=(decision=='APPROVE' and (risk!='CRITICAL' or (approval_count>=2 and critical_approval_complete({row[1] for row in prior}|{role}))))
         next_status=('REJECTED' if decision=='REJECT' else ('APPROVED' if approval_complete else 'PROPOSED'))
         c.execute('update aiops.action_proposals set status=%s where proposal_id=%s',(next_status,proposal_id))
     return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'approval_count':approval_count,'approval_complete':approval_complete,'status':next_status,'execution_allowed':False,'idempotent':False}
@@ -404,7 +405,7 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
             if not verification_id:raise HTTPException(422,'verified_outcome_requires_verification_id')
             vr=c.execute("select outcome from aiops.verification_records where verification_id=%s and outcome='PASS'",(verification_id,)).fetchone()
             if not vr:raise HTTPException(422,'verified_outcome_requires_passed_verification_record')
-        if gold_eligible and (synthetic or not human_reviewed or not outcome_verified):
+        if gold_eligible and not gold_set_eligible(run[0],synthetic,human_reviewed,outcome_verified):
             raise HTTPException(422,'gold_set_requires_live_non_synthetic_human_review_and_verified_outcome')
         for field,table in [('analysis_id','analysis_records'),('critique_id','critique_records')]:
             ref=x.get(field)
