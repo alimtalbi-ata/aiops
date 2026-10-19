@@ -121,3 +121,12 @@ New unit tests cover valid/missing/incorrect auth, wrong scheme, empty token, Co
 - Policy tests: 7/7 passed.
 - Secret preflight, static audit, Python compileall and Compose config validation: PASS.
 - PR #16 remains draft pending actual browser/proxy integration, rate limiting, TLS/trusted-proxy review and production qualification.
+
+
+## Shared HTTP retry safety — 2026-10-19
+
+- Audited `app/shared/http.py`: the previous helper retried POST requests after timeouts/errors. For side-effecting operations, the server may have committed an incident/run while the response was lost, so an automatic retry can duplicate work.
+- Changed default retry policy: GET retries up to two times; POST makes one attempt by default. A caller may request an explicit retry override only when the operation's idempotency contract is understood.
+- Added unit coverage for GET retries, POST no-retry, explicit override, and internal authentication headers; added the test to CI.
+- This deliberately favors safety over automatic recovery for ambiguous POST outcomes. A timed-out POST must be reconciled against the canonical run/incident state before an operator repeats it.
+- CI result for this latest change is pending.
