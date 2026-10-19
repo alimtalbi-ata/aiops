@@ -36,7 +36,7 @@ jobs:
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Shell syntax checks
-        run: bash -n deploy/install.sh deploy/preflight.sh deploy/init-env.sh tests/qualification.sh tests/synthetic-e2e.sh tests/static-audit.sh deploy/qualify-update.sh
+        run: bash -n deploy/install.sh deploy/preflight.sh deploy/init-env.sh deploy/check-secrets.sh deploy/ensure-portal-token.sh tests/qualification.sh tests/synthetic-e2e.sh tests/static-audit.sh deploy/qualify-update.sh
       - name: Static repository audit
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
