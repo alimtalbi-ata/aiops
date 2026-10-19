@@ -1,13 +1,18 @@
 import os
 import unittest
-from unittest.mock import patch
 
-# Portal and shared HTTP client intentionally fail closed without configured secrets.
 os.environ.setdefault("AIOPS_INTERNAL_TOKEN", "test-internal-token-not-a-real-secret")
 os.environ.setdefault("AIOPS_PORTAL_OPERATOR_TOKEN", "test-operator-token-not-a-real-secret")
 
-from portal.main import CopilotQuestion, require_operator, safe_upstream
-from fastapi import HTTPException\nfrom fastapi.testclient import TestClient\nfrom portal.main import app, require_same_origin
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+from portal.main import (
+    CopilotQuestion,
+    app,
+    require_operator,
+    require_same_origin,
+    safe_upstream,
+)
 
 
 class PortalAuthorizationTests(unittest.TestCase):
@@ -53,6 +58,42 @@ class PortalAuthorizationTests(unittest.TestCase):
 
     def test_successful_upstream_result_is_preserved(self):
         self.assertEqual(safe_upstream(lambda: {"status": "ok"}), {"status": "ok"})
+
+    def test_cross_origin_is_rejected(self):
+        request = type("RequestStub", (), {
+            "headers": {"origin": "https://evil.example", "host": "localhost:7777"},
+            "url": type("URLStub", (), {"scheme": "http"})(),
+        })()
+        with self.assertRaises(HTTPException) as caught:
+            require_same_origin(request)
+        self.assertEqual(caught.exception.status_code, 403)
+
+    def test_same_origin_is_accepted(self):
+        request = type("RequestStub", (), {
+            "headers": {"origin": "http://localhost:7777", "host": "localhost:7777"},
+            "url": type("URLStub", (), {"scheme": "http"})(),
+        })()
+        self.assertTrue(require_same_origin(request))
+
+    def test_bootstrap_requires_operator_authentication(self):
+        response = TestClient(app).get("/api/portal/bootstrap")
+        self.assertEqual(response.status_code, 401)
+
+    def test_homepage_is_only_a_login_shell_and_sets_security_headers(self):
+        response = TestClient(app).get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Content-Security-Policy", response.headers)
+        self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
+        self.assertNotIn("DEMO-GOLDEN-PAYMENT", response.text)
+        self.assertIn("Authenticate and load dashboard", response.text)
+
+    def test_unauthenticated_copilot_post_is_rejected(self):
+        response = TestClient(app).post("/api/copilot", json={"question": "status"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_unauthenticated_demo_post_is_rejected(self):
+        response = TestClient(app).post("/api/demo")
+        self.assertEqual(response.status_code, 401)
 
 
 if __name__ == "__main__":
