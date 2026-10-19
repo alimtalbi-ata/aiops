@@ -85,7 +85,8 @@ create table if not exists aiops.learning_cases (
  critique_id text references aiops.critique_records(critique_id), verification_id text references aiops.verification_records(verification_id),
  exclusion_reasons jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), reviewed_at timestamptz, reviewed_by text, review_note text,
  unique(source_run_id,revision),
- check (not gold_eligible or (human_reviewed and outcome_verified and not synthetic))
+ check (not human_reviewed or (reviewed_by is not null and btrim(reviewed_by)<>'' and review_note is not null and btrim(review_note)<>'' and reviewed_at is not null)),
+ check (not gold_eligible or (human_reviewed and outcome_verified and not synthetic and reviewed_by is not null and review_note is not null and reviewed_at is not null))
 );
 create index if not exists ix_learning_eligibility on aiops.learning_cases(gold_eligible,human_reviewed,outcome_verified);
 create table if not exists aiops.model_evaluation_runs (
@@ -108,7 +109,36 @@ begin
  end loop;
 end $$;
 create or replace function aiops.guard_gold_learning_case() returns trigger language plpgsql as $$
+declare run_mode text; evidence_count integer; evidence_is_synthetic boolean;
 begin
+ select mode into run_mode from aiops.runs where run_id=NEW.source_run_id;
+ if not found then raise exception 'learning case source run does not exist'; end if;
+ if jsonb_typeof(NEW.evidence_ids)<>'array' then raise exception 'learning evidence IDs must be an array'; end if;
+ if jsonb_array_length(NEW.evidence_ids)=0 then raise exception 'learning case requires evidence IDs'; end if;
+ select count(*) into evidence_count from jsonb_array_elements_text(NEW.evidence_ids) e(id) join aiops.evidence ev on ev.evidence_id=e.id;
+ if evidence_count<>jsonb_array_length(NEW.evidence_ids) then raise exception 'learning case references unknown evidence'; end if;
+ select exists(
+  select 1 from jsonb_array_elements_text(NEW.evidence_ids) e(id)
+  join aiops.evidence ev on ev.evidence_id=e.id
+  where coalesce(ev.provenance->>'synthetic','unknown')<>'false'
+ ) into evidence_is_synthetic;
+ NEW.synthetic := (run_mode<>'LIVE') or evidence_is_synthetic;
+ if NEW.human_reviewed and (NEW.reviewed_by is null or btrim(NEW.reviewed_by)='' or NEW.review_note is null or btrim(NEW.review_note)='' or NEW.reviewed_at is null) then
+  raise exception 'human review requires reviewer identity, rationale and timestamp';
+ end if;
+ if NEW.outcome_verified then
+  if NEW.verification_id is null or not exists(
+   select 1 from aiops.verification_records v
+   join aiops.action_proposals p on p.proposal_id=v.proposal_id
+   where v.verification_id=NEW.verification_id and v.outcome='PASS' and p.run_id=NEW.source_run_id
+  ) then raise exception 'verified learning outcome requires a passed verification for the same run'; end if;
+ end if;
+ if NEW.analysis_id is not null and not exists(select 1 from aiops.analysis_records where analysis_id=NEW.analysis_id and run_id=NEW.source_run_id) then
+  raise exception 'learning analysis must belong to the source run';
+ end if;
+ if NEW.critique_id is not null and not exists(select 1 from aiops.critique_records where critique_id=NEW.critique_id and run_id=NEW.source_run_id) then
+  raise exception 'learning critique must belong to the source run';
+ end if;
  if NEW.gold_eligible and (NEW.synthetic or not NEW.human_reviewed or not NEW.outcome_verified) then
   raise exception 'gold learning eligibility requires non-synthetic, human-reviewed, outcome-verified case';
  end if;
