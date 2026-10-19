@@ -72,8 +72,11 @@ New documents on the working branch:
 - [Core qualification matrix](CORE-QUALIFICATION-MATRIX.md): test scenarios for core, AI quality, policy, remediation, learning and deployment. All new rows remain NOT RUN until executed.
 - [Database schema catalog](DATABASE-SCHEMA-CATALOG.md): source-derived map of existing migrations and the proposed AI decision-ledger gap.
 - [Stack deployment inventory](STACK-DEPLOYMENT-INVENTORY.md): source-derived service/network responsibility and deployment-kit acceptance criteria.
+- [Accelerated rebuild plan](ACCELERATED-REBUILD-PLAN.md): prioritized build and release gates.
+- [Deployment and recovery runbook](DEPLOYMENT-AND-RECOVERY-RUNBOOK.md): install, migration, backup/restore, package and model evaluation.
+- [AI quality evaluation protocol](AI-QUALITY-EVALUATION.md): golden set, metrics and promotion gates.
 
-The initial branch has progressed beyond documentation: an isolated provider-backed Analyst/Critic adapter is now present and the Worker calls it in the synthetic flow. The Copilot itself still constructs a fixed evidence summary and is not the LLM diagnostic engine. The adapter/Worker integration remains unqualified at runtime. Next work is to add provider-fake tests, map persistence before an additive decision-ledger migration, run disposable PostgreSQL and container/E2E qualification in CI, and only then expand ACME twin/demo features.
+The branch now includes the initial provider-backed Analyst/Critic, Worker wiring, explicit AI decision-ledger migration and Core APIs for normalized persistence, hash-bound remediation proposals, role-scoped human approval and curated learning ingestion. The Copilot itself still constructs a fixed evidence summary and is not the LLM diagnostic engine. Full stack image builds and clean PostgreSQL migration execution pass in CI; the upgrade runner is being qualified against a legacy-only schema. Actual model inference, full Temporal E2E and production runtime remain unqualified. Keep ACME twin/demo expansion behind these gates.
 
 ## Update rule
 
@@ -90,3 +93,26 @@ Every material change must update this record and the relevant architecture/deci
 - The service remains unqualified against an actual local model endpoint. Runtime container build, model inference, Temporal E2E, persistence/replay behavior and the complete failure matrix remain untested. The latest GitHub Actions run 39313131331 passed compileall, policy tests, intelligence contract tests, secret preflight, static audit and Compose config: https://github.com/alimtalbi-ata/aiops/actions/runs/39313131331.
 - No Debian host, production containers or live infrastructure were accessed. LIVE execution remains blocked.
 
+
+
+## Accelerated rebuild increment (2026-10-19, same PR #21)
+
+### Implemented on branch
+- Added migration 009 for analysis, critique, policy decisions, proposals, approvals, effect receipts, verification, reconciliation, learning cases and model-evaluation runs.
+- Added an explicit checksummed migration runner for already-initialized PostgreSQL volumes. It verifies a legacy-schema signature, records a baseline for 000–008 and fails closed on schema drift/incomplete schema.
+- Added Core APIs to persist/query analysis, critique and policy records; proposal creation is bound to a validated analysis/critique and exact evidence IDs; approval is bound to immutable proposal hash and scope; CRITICAL approval requires two distinct actors/roles; synthetic runs cannot create real approvals.
+- Added learning ingestion with reviewer identity/rationale, verification reference and database/application checks that prohibit synthetic or unreviewed cases from gold-set eligibility.
+- Added repeatable synthetic model evaluation fixtures/runner, deployment/recovery runbook, full-stack database/volume backup and explicitly guarded restore scripts, diagnostic bundle, cumulative package manifest/checksums and CI artifact upload.
+- CI now builds every application image, runs static/unit/security contract tests, applies the full SQL chain to disposable PostgreSQL, and separately exercises the upgrade runner against a legacy-only schema. Do not infer model quality or live safety from those checks.
+
+### Current verified CI evidence
+- Clean migration chain and full image build/package passed in run 39315470210: https://github.com/alimtalbi-ata/aiops/actions/runs/39315470210
+- Upgrade runner initially exposed a CI startup race: PostgreSQL's temporary initdb socket reported ready before TCP startup. The workflow was changed to wait for TCP readiness; the new result must be checked before marking this gate PASS.
+- Latest cumulative artifact from earlier successful CI is only a previous snapshot and should not be treated as the newest branch release until the post-change workflow produces a fresh artifact.
+
+### Immediate next actions
+1. Confirm latest CI jobs, especially migration-runner-upgrade and core-ledger contract.
+2. Fix any remaining failures; regenerate the cumulative ZIP from the passing commit and verify SHA-256.
+3. Review the generated package contents and ensure no .env, backups or diagnostics are present.
+4. Add/execute disposable Temporal E2E with a deterministic fake provider and explicit provider timeout/malformed-output/retry tests.
+5. Keep LIVE execution disabled; only then progress toward real evidence adapters and ACME twin qualification.
