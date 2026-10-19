@@ -13,14 +13,14 @@ while ! nc -z -w 5 "$POSTGRES_SEEDS" "$DB_PORT"; do
   attempt=$((attempt + 1))
   sleep 2
 done
-# The dedicated Temporal Postgres volume is initialized from scratch in this
-# disposable stack. The official admin-tools CLI creates both databases and
-# applies the versioned schemas before the server is allowed to start.
+# Create missing databases, initialize missing schemas, then apply forward
+# migrations. Existing schema validation is used to avoid destructive re-setup.
 for database in temporal temporal_visibility; do
-  temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" create
+  if ! temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" validate >/dev/null 2>&1; then
+    temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" create >/dev/null 2>&1 || true
+    temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db "$database" setup-schema -v 0.0
+  fi
 done
-temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db temporal setup-schema -v 0.0
 temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db temporal update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
-temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db temporal_visibility setup-schema -v 0.0
 temporal-sql-tool --plugin postgres12 --ep "$POSTGRES_SEEDS" -u "$POSTGRES_USER" -p "$DB_PORT" --db temporal_visibility update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
 echo 'TEMPORAL_SCHEMA_SETUP=PASS'
