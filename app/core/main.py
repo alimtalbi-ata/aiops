@@ -232,6 +232,7 @@ def persist_policy_decision(rid:str,x:dict,authorization:str|None=Header(default
     auth(bearer(authorization))
     policy=x.get('policy')
     if not isinstance(policy,dict): raise HTTPException(422,'policy_result_required')
+    if not x.get('analysis_id') or not x.get('critique_id'): raise HTTPException(422,'analysis_and_critic_records_required')
     evidence_ids=sorted(set(x.get('evidence_ids') or []))
     proof={'evidence_ids':evidence_ids,'analysis_id':x.get('analysis_id'),'critique_id':x.get('critique_id'),'policy_input':x.get('policy_input',{})}
     canonical=json.dumps({'run_id':rid,'policy':policy,'proof':proof,'policy_version':x.get('policy_version','2.1.0')},sort_keys=True,separators=(',',':'))
@@ -281,6 +282,9 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
     target=str(x.get('target_ci_id','')).strip()
     action=str(x.get('action_type','')).strip().upper()
     risk=str(x.get('risk_tier','')).strip().upper()
+    source_action_id=str(x.get('source_action_id','')).strip()
+    analysis_id=str(x.get('analysis_id','')).strip()
+    critique_id=str(x.get('critique_id','')).strip()
     evidence_ids=sorted(set(x.get('evidence_ids') or []))
     preconditions=x.get('preconditions') or []
     postconditions=x.get('expected_postconditions') or []
@@ -288,18 +292,28 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
     rollback=x.get('rollback_plan') or {}
     if not target or action not in PROPOSAL_ACTION_ALLOWLIST or risk not in APPROVER_ROLES:
         raise HTTPException(422,'invalid_target_action_or_risk_tier')
+    if not source_action_id or not analysis_id or not critique_id:
+        raise HTTPException(422,'validated_analysis_critic_and_source_action_required')
     if not evidence_ids or not preconditions or not postconditions:
         raise HTTPException(422,'evidence_preconditions_and_expected_postconditions_required')
     if risk in ('HIGH','CRITICAL') and not rollback:
         raise HTTPException(422,'rollback_plan_required_for_high_risk_action')
-    canonical={'run_id':rid,'target_ci_id':target,'action_type':action,'risk_tier':risk,'parameters':parameters,'evidence_ids':evidence_ids,'preconditions':preconditions,'expected_postconditions':postconditions,'rollback_plan':rollback}
+    canonical={'run_id':rid,'analysis_id':analysis_id,'critique_id':critique_id,'source_action_id':source_action_id,'target_ci_id':target,'action_type':action,'risk_tier':risk,'parameters':parameters,'evidence_ids':evidence_ids,'preconditions':preconditions,'expected_postconditions':postconditions,'rollback_plan':rollback}
     digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run:raise HTTPException(404,'run not found')
-        if run[0]=='LIVE':
-            # A proposal is still advisory; the live effect path is intentionally not enabled here.
-            pass
+        records=c.execute('select a.output,a.evidence_ids,a.status,c.validated,c.evidence_ids from aiops.analysis_records a join aiops.critique_records c on c.analysis_id=a.analysis_id where a.analysis_id=%s and a.run_id=%s and c.critique_id=%s and c.run_id=%s',(analysis_id,rid,critique_id,rid)).fetchone()
+        if not records or records[2]!='VALID' or records[3] is not True:raise HTTPException(409,'validated_analysis_and_critic_required')
+        analysis_output=json.loads(records[0]) if isinstance(records[0],str) else records[0]
+        analysis_evidence=json.loads(records[1]) if isinstance(records[1],str) else records[1]
+        critique_evidence=json.loads(records[4]) if isinstance(records[4],str) else records[4]
+        source_action=next((a for a in analysis_output.get('recommended_actions',[]) if a.get('action_id')==source_action_id),None)
+        if not source_action:raise HTTPException(422,'source_action_not_in_validated_analysis')
+        if source_action.get('risk_tier')!=risk:raise HTTPException(422,'proposal_risk_must_match_analyst_action')
+        if source_action.get('target_ci_id') and source_action.get('target_ci_id')!=target:raise HTTPException(422,'proposal_target_must_match_analyst_action')
+        if not set(evidence_ids).issubset(set(analysis_evidence)) or not set(evidence_ids).issubset(set(critique_evidence)):
+            raise HTTPException(422,'proposal_evidence_must_be_in_analysis_and_critic_scope')
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids):raise HTTPException(422,'proposal_references_unknown_evidence')
         old=c.execute('select proposal_id,proposal_revision,status from aiops.action_proposals where run_id=%s and proposal_hash=%s',(rid,digest)).fetchone()
@@ -313,7 +327,7 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
             if expires.tzinfo is None:raise HTTPException(422,'expires_at_requires_timezone')
             if expires<=datetime.datetime.now(datetime.timezone.utc):raise HTTPException(422,'proposal_expiry_must_be_future')
         else: expires=datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(minutes=30)
-        c.execute('insert into aiops.action_proposals(proposal_id,run_id,proposal_revision,target_ci_id,action_type,risk_tier,parameters,evidence_ids,preconditions,expected_postconditions,rollback_plan,proposal_hash,status,expires_at) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(pid,rid,revision,target,action,risk,json.dumps(parameters),json.dumps(evidence_ids),json.dumps(preconditions),json.dumps(postconditions),json.dumps(rollback),digest,'PROPOSED',expires))
+        c.execute('insert into aiops.action_proposals(proposal_id,run_id,analysis_id,critique_id,source_action_id,proposal_revision,target_ci_id,action_type,risk_tier,parameters,evidence_ids,preconditions,expected_postconditions,rollback_plan,proposal_hash,status,expires_at) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(pid,rid,analysis_id,critique_id,source_action_id,revision,target,action,risk,json.dumps(parameters),json.dumps(evidence_ids),json.dumps(preconditions),json.dumps(postconditions),json.dumps(rollback),digest,'PROPOSED',expires))
     return {'proposal_id':pid,'revision':revision,'proposal_hash':digest,'status':'PROPOSED','expires_at':expires.isoformat(),'execution_allowed':False,'idempotent':False}
 
 @app.post('/api/proposals/{proposal_id}/approval')
@@ -328,9 +342,10 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
     if not actor or not role or decision not in ('APPROVE','REJECT') or not nonce or not supplied_hash:
         raise HTTPException(422,'actor_role_decision_nonce_and_proposal_hash_required')
     with db() as c:
-        p=c.execute('select run_id,target_ci_id,action_type,risk_tier,proposal_hash,status,expires_at from aiops.action_proposals where proposal_id=%s for update',(proposal_id,)).fetchone()
+        p=c.execute('select p.run_id,r.mode,p.target_ci_id,p.action_type,p.risk_tier,p.proposal_hash,p.status,p.expires_at from aiops.action_proposals p join aiops.runs r on r.run_id=p.run_id where p.proposal_id=%s for update of p',(proposal_id,)).fetchone()
         if not p:raise HTTPException(404,'proposal not found')
-        rid,target,action,risk,digest,status,expires=p
+        rid,run_mode,target,action,risk,digest,status,expires=p
+        if run_mode!='LIVE':raise HTTPException(403,'synthetic_mode_cannot_authorize_real_approval')
         if not hmac.compare_digest(supplied_hash,digest):raise HTTPException(409,'proposal_hash_mismatch')
         if status not in ('PROPOSED','APPROVED'):raise HTTPException(409,'proposal_not_approvable')
         if expires<=datetime.datetime.now(datetime.timezone.utc):raise HTTPException(409,'proposal_expired')
