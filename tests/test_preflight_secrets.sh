@@ -35,4 +35,22 @@ if bash "$ROOT/deploy/check-secrets.sh" "$TMP/mismatch.env" >/dev/null 2>&1; the
 fi
 sed 's/^AIOPS_DEMO_MODE=0$/AIOPS_DEMO_MODE=1/' "$TMP/default.env" > "$TMP/demo.env"
 bash "$ROOT/deploy/check-secrets.sh" "$TMP/demo.env" >/dev/null
+sed 's/^AIOPS_DEMO_MODE=0$/AIOPS_DEMO_MODE=1/; s/^AIOPS_INTERNAL_TOKEN=.*/AIOPS_INTERNAL_TOKEN=different_token/' "$TMP/secure.env" > "$TMP/demo-mismatch.env"
+if bash "$ROOT/deploy/check-secrets.sh" "$TMP/demo-mismatch.env" >/dev/null 2>&1; then
+  echo 'FAIL|demo_token_mismatch_accepted'
+  exit 1
+fi
+mkdir -p "$TMP/init/config" "$TMP/init/deploy"
+cp "$ROOT/config/.env.example" "$TMP/init/config/.env.example"
+cp "$ROOT/deploy/init-env.sh" "$TMP/init/deploy/init-env.sh"
+bash "$TMP/init/deploy/init-env.sh" >/dev/null
+bash "$ROOT/deploy/check-secrets.sh" "$TMP/init/.env" >/dev/null
+[[ "$(stat -c '%a' "$TMP/init/.env")" == "600" ]]
+ADMIN_TOKEN="$(sed -n 's/^AIOPS_ADMIN_TOKEN=//p' "$TMP/init/.env")"
+INTERNAL_TOKEN="$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/init/.env")"
+[[ -n "$ADMIN_TOKEN" && "$ADMIN_TOKEN" == "$INTERNAL_TOKEN" ]]
+BEFORE="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
+bash "$TMP/init/deploy/init-env.sh" >/dev/null
+AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
+[[ "$BEFORE" == "$AFTER" ]]
 echo 'SECRET_PREFLIGHT_TEST=PASS'
