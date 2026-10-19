@@ -1,0 +1,61 @@
+# AIOps 2.0 — Project Continuity Record
+
+**Author:** Abdelhalim Talbi  
+**Repository:** https://github.com/alimtalbi-ata/aiops  
+**Default branch:** `main` (protected by workflow; work on branches and propose PRs)  
+**Last updated:** 2026-10-19
+
+## Why this document exists
+
+This is the restart point for future ChatGPT sessions and contributors. Read it before proposing work. Update it whenever a material decision, architecture, interface contract, operational discovery, test result, or delivery changes. Do not rely on chat history as the only record.
+
+## Current direction
+
+Consolidate AIOps 2.0 around one coherent runtime and operations experience. Reuse proven historical AIOps v1 / V145 capabilities when they are faster and safer to adapt than to rebuild. Do not equate a directory, old demo, PID file, or running process with a qualified component: inspect source, contracts, dependencies, tests, and runtime behavior first.
+
+## Known environment snapshot (reported 2026-10-19)
+
+- Host: `SRV-DEB-05`, Debian 13; working root `/home/aiops`.
+- AIOps 2.0 runtime families exist, including V8 clean deployment line, V28.3.x Command Center line, and later architecture/implementation investigations.
+- Reported active services include portal, core, worker, policy, RAG, intelligence, Temporal, twin, copilot, simulator, evidence, integration, Prometheus and Grafana. Re-check live state before every deployment; this is a dated snapshot, not a current guarantee.
+- Historical AIOps v1 source and evidence live under `/home/aiops/aiops-v1`.
+- V145-related directories include decision intelligence, evidence fusion/matrix/acquisition/enrichment, semantic evidence engine, decision adapter, functional bridge, functional read model and decision cockpit.
+- A first read-only audit was attempted on 2026-10-19. Its terminal paste/output is partially corrupted; module presence and file listings are useful leads, but the report does not qualify these modules or prove their behavior.
+
+## Non-negotiable operating rules
+
+1. **Protect production.** No restart, destructive cleanup, migration, config change, token rotation or production cutover without explicit scope, backup/rollback and a verified preflight.
+2. **Preserve main.** Work in a dedicated branch, commit to GitHub, and open a PR. Do not claim a commit exists until GitHub confirms it.
+3. **Keep evidence.** Every change must include tests run, exact outcomes, limitations, changed files, and rollback notes. Distinguish source inspection, static tests, integration tests, and live production verification.
+4. **No false qualification.** Never label a demo, synthetic run, expected output, or unexecuted test as a real runtime proof.
+5. **Fail closed.** Missing, stale, contradictory or unproven evidence is `UNKNOWN`; it must not be silently treated as healthy or successful.
+6. **Security boundary.** Keep secrets out of Git, reports, screenshots, chat and logs. Never commit `.env`, tokens, private keys, database files or production exports.
+7. **Cumulative handover.** Keep architecture, decisions, component catalog, compatibility/contracts, test evidence and release notes in the repository and update them with every significant delivery.
+8. **Reuse before rebuild.** Compare historical v1/V145 code and contracts with current runtime responsibilities; adapt only where boundaries and tests can be made explicit.
+9. **Do not silently fallback.** If a preferred adapter/tool is unavailable, report it and require a documented fallback decision.
+10. **Do not break PC11K5 fencing guarantees.** Ownership, fencing, preconditions, effect, evidence and reconciliation invariants must remain intact.
+
+## Required reading order for a new session
+
+1. `README.md`
+2. `docs/PROJECT-CONTINUITY.md`
+3. `docs/ARCHITECTURE-AND-BOUNDARIES.md`
+4. `docs/DECISION-LOG.md`
+5. `docs/COMPONENT-CATALOG-AND-REUSE.md`
+6. `docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md`
+7. Latest release notes and evidence manifests for the target version.
+
+## Next work queue
+
+- [ ] Run a corrected, truly read-only inventory of historical v1/V145 source, contracts, tests, and service ownership.
+- [ ] Inspect current repository tree and deployment files; compare Git-tracked code to the host deployment without copying secrets.
+- [ ] Build a reuse matrix: reuse unchanged / adapt behind adapter / replace / retire, each with evidence and owner.
+- [ ] Establish one canonical incident/run/evidence/decision schema and versioned API contracts.
+- [ ] Verify the complete event path from ingestion to correlation, CMDB enrichment, evidence acquisition, analysis/critic, policy gate, HITL, remediation, verification, rollback and learning.
+- [ ] Test replay/simulation separately from LIVE execution, with explicit authorization and idempotency.
+- [ ] Add deterministic E2E and failure-injection qualification before enabling any new live action.
+- [ ] Produce cumulative deployment ZIP and updated docs/evidence for each version where a release is requested.
+
+## Update rule
+
+Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
