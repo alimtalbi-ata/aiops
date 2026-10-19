@@ -156,6 +156,10 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
     payload['unknown_analyst_evidence_ids'] = unknown
     system = 'You are the independent AIOps Critic. Challenge claims against supplied evidence, identify missing or stale proof, contradictions and unsafe proposals. Do not invent evidence. Recommend only OBSERVE, ENRICH, ESCALATE or HUMAN_APPROVAL. Return only the requested JSON contract.'
     result = call_model(system, payload, Critique)
+    if any(not check.supported for check in result.claim_checks):
+        result.validated = False
+        if result.final_recommendation != 'ESCALATE':
+            result.final_recommendation = 'HUMAN_APPROVAL'
     if unknown:
         result.validated = False
         result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Analyst referenced evidence absent from the ledger', evidence_ids=unknown))
