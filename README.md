@@ -43,3 +43,15 @@ The Simulator is isolated on `aiops2-execution`; it does not have direct access 
 `tests/static-audit.sh` checks source structure and naming. `tests/qualification.sh` checks the running stack. `tests/synthetic-e2e.sh` exercises Portal → Core → Temporal → Worker and waits for the Run inventory to contain the generated Run.
 
 See `docs/` for architecture, data contracts, network boundaries, deployment, demo and resilience strategy.
+
+## Project continuity and historical reuse
+
+Before resuming work in a new session, read these documents in order:
+
+1. [Project continuity record](docs/PROJECT-CONTINUITY.md)
+2. [Architecture and service boundaries](docs/ARCHITECTURE-AND-BOUNDARIES.md)
+3. [Architecture/product decision log](docs/DECISION-LOG.md)
+4. [Component catalog and AIOps v1/V145 reuse matrix](docs/COMPONENT-CATALOG-AND-REUSE.md)
+5. [Change safety and qualification protocol](docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md)
+
+**Maintenance rule:** every significant development session must update the continuity record and all affected architecture, decision, component, qualification and release documents in the same branch/PR. Prefer adapting qualified AIOps v1/V145 capabilities over rebuilding them, but verify source, contracts, dependencies and tests before declaring a component reusable. Never treat a file listing or synthetic demo as qualification evidence.
