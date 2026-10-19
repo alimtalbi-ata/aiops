@@ -37,7 +37,11 @@ def build_output(system, payload):
     incident = payload.get("incident", {})
     claims = " ".join(str(item.get("claim", "")) for item in evidence).lower()
     title = str(incident.get("title", "")).lower()
-    if ("91 percent" in claims or "91%" in claims or ("capacity" in title and "pool" in title)):
+    if not known:
+        severity = "UNKNOWN"
+        rationale = "No evidence was supplied; the incident title alone is not enough to establish severity."
+        confidence = 0.1
+    elif ("91 percent" in claims or "91%" in claims or ("capacity" in title and "pool" in title)):
         severity = "P2"
         rationale = "The supplied synthetic evidence reports capacity pressure without current service impact."
         confidence = 0.91
