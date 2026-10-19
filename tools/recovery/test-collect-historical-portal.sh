@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
-SCRIPT="\${SCRIPT_UNDER_TEST:-$(cd "$(dirname "$0")" && pwd)/collect-historical-portal.sh}"
+SCRIPT="$(cd "$(dirname "$0")" && pwd)/collect-historical-portal.sh"
 bash -n "$SCRIPT"
 
 TMP="$(mktemp -d)"
