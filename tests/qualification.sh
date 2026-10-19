@@ -4,12 +4,17 @@ cd "$(dirname "$0")/.."
 docker compose --env-file .env config >/dev/null
 bash deploy/migrate.sh
 # Container existence and process health are separate assertions.
-for s in aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-intelligence aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal aiops2-temporal-postgres aiops2-glpi-db aiops2-glpi aiops2-n8n aiops2-prometheus aiops2-grafana aiops2-alertmanager; do
+for s in aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-intelligence aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal aiops2-temporal-ui aiops2-temporal-postgres aiops2-glpi-db aiops2-glpi aiops2-n8n aiops2-prometheus aiops2-grafana aiops2-alertmanager; do
   docker inspect "$s" >/dev/null 2>&1 || { echo "FAIL|MISSING|$s"; exit 1; }
   state="$(docker inspect --format '{{.State.Status}}' "$s")"
   [[ "$state" == running ]] || { echo "FAIL|NOT_RUNNING|$s|$state"; exit 1; }
 done
-for s in aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-intelligence aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal-postgres aiops2-glpi-db aiops2-prometheus aiops2-grafana; do
+for s in aiops2-temporal-schema aiops2-temporal-namespace; do
+  state="$(docker inspect --format '{{.State.Status}}' "$s")"
+  code="$(docker inspect --format '{{.State.ExitCode}}' "$s")"
+  [[ "$state" == exited && "$code" == 0 ]] || { echo "FAIL|TEMPORAL_BOOTSTRAP|$s|$state|$code"; exit 1; }
+done
+for s in aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-intelligence aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal aiops2-temporal-postgres aiops2-glpi-db aiops2-prometheus aiops2-grafana; do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' "$s")"
   [[ "$health" == healthy ]] || { echo "FAIL|UNHEALTHY|$s|$health"; exit 1; }
 done
