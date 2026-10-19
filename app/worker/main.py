@@ -1,4 +1,4 @@
-import os,asyncio,datetime
+import os,asyncio,datetime,hashlib,json
 from fastapi import FastAPI,HTTPException,Header
 from temporalio import activity,workflow
 from temporalio.client import Client
@@ -61,8 +61,9 @@ async def execute_stage(a):
                 if stage=='DGX_ANALYST':
                     response=post_json(INTEL,'/api/intelligence/analyze',{'incident':incident,'evidence':source_evidence,'mode':mode,'context':{'scenario':scenario_context}},timeout=50,token=ADMIN)
                     result=response['analysis']
-                    evidence_ids=[x['evidence_id'] for x in source_evidence]
-                    record=post_json(CORE,f'/api/runs/{rid}/analysis-record',{'analysis':result,'evidence_ids':evidence_ids,'idempotency_key':f'ANALYST-{rid}-V2','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0')},timeout=15,token=ADMIN)
+                    evidence_ids=sorted(x['evidence_id'] for x in source_evidence)
+                    evidence_key=hashlib.sha256(json.dumps(evidence_ids,separators=(',',':')).encode()).hexdigest()[:16]
+                    record=post_json(CORE,f'/api/runs/{rid}/analysis-record',{'analysis':result,'evidence_ids':evidence_ids,'idempotency_key':f'ANALYST-{rid}-V2-{evidence_key}','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0')},timeout=15,token=ADMIN)
                     saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'ANALYST_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':evidence_ids,'confidence':result['confidence'],'payload':{'analysis':result,'analysis_record_id':record['analysis_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                     post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                     return saved
@@ -73,8 +74,9 @@ async def execute_stage(a):
                 result=response['critique'];state='PASS' if result.get('validated') is True else 'BLOCKED'
                 analysis_record_id=analyst_event.get('payload',{}).get('analysis_record_id')
                 if not analysis_record_id: raise RuntimeError('analysis_ledger_record_missing')
-                evidence_ids=[x['evidence_id'] for x in source_evidence]
-                critique_record=post_json(CORE,f'/api/runs/{rid}/critique-record',{'critique':result,'analysis_id':analysis_record_id,'evidence_ids':evidence_ids,'idempotency_key':f'CRITIC-{rid}-V2','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown')},timeout=15,token=ADMIN)
+                evidence_ids=sorted(x['evidence_id'] for x in source_evidence)
+                evidence_key=hashlib.sha256(json.dumps(evidence_ids,separators=(',',':')).encode()).hexdigest()[:16]
+                critique_record=post_json(CORE,f'/api/runs/{rid}/critique-record',{'critique':result,'analysis_id':analysis_record_id,'evidence_ids':evidence_ids,'idempotency_key':f'CRITIC-{rid}-{analysis_record_id}-{evidence_key}','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown')},timeout=15,token=ADMIN)
                 saved=call('POST',f'/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
