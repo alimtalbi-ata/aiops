@@ -246,7 +246,7 @@ services:
       GLPI_SKIP_AUTOINSTALL: "false"
       GLPI_SKIP_AUTOUPDATE: "false"
     volumes: [aiops2-glpi-data:/var/glpi]
-    networks: [aiops2-integration]
+    networks: [aiops2-integration, aiops2-public]
     depends_on: {aiops2-glpi-db: {condition: service_healthy}}
 
   aiops2-n8n-db-init:
