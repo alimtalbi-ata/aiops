@@ -52,6 +52,7 @@ PY
 trap write_report EXIT
 curl --retry 10 --retry-connrefused --retry-delay 2 --retry-max-time 30 -fsS "$BASE/health" >/dev/null || { FAILURE="portal_health_unavailable"; exit 1; }
 curl --retry 5 --retry-connrefused --retry-delay 2 --retry-max-time 20 -fsS "$BASE/api/portal/bootstrap" >/dev/null || { FAILURE="portal_bootstrap_unavailable"; exit 1; }
+docker compose --env-file .env exec -T aiops2-worker python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:815/health", timeout=3)' || { FAILURE="temporal_worker_unavailable"; exit 1; }
 curl -fsS -X POST "$BASE/api/demo" -H 'Content-Type: application/json' -d '{}' > /tmp/aiops-runtime-demo.json || { FAILURE="demo_launch_failed"; exit 1; }
 RUN_ID="$(python3 -c 'import json; print(json.load(open("/tmp/aiops-runtime-demo.json"))["run_id"])')"
 [[ "$RUN_ID" =~ ^[A-Za-z0-9_-]+$ ]] || { FAILURE="invalid_run_id"; exit 1; }
