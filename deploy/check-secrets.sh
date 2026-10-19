@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-ENV_FILE="\${1:-.env}"
+ENV_FILE="${1:-.env}"
 [[ -f "$ENV_FILE" ]] || { echo 'FAIL|env_file_missing'; exit 1; }
 env_value() {
   local key="$1"
   awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); value=$0 } END { print value }' "$ENV_FILE"
 }
 MODE="$(env_value AIOPS_DEMO_MODE)"
-MODE="\${MODE:-0}"
+MODE="${MODE:-0}"
 if [[ "$MODE" == "1" ]]; then
   echo 'WARN|DEMO_MODE_ENABLED|use only on an isolated local demo; never in production'
   exit 0
