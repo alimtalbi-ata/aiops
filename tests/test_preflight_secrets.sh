@@ -22,6 +22,7 @@ AIOPS_DEMO_MODE=0
 POSTGRES_PASSWORD=postgres_random_01
 AIOPS_ADMIN_TOKEN=shared_internal_random_02
 AIOPS_INTERNAL_TOKEN=shared_internal_random_02
+AIOPS_PORTAL_OPERATOR_TOKEN=portal_random_07
 GLPI_DB_PASSWORD=glpi_random_03
 GLPI_DB_ROOT_PASSWORD=glpi_root_random_04
 GRAFANA_ADMIN_PASSWORD=grafana_random_05
