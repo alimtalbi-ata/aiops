@@ -43,6 +43,30 @@ The Simulator is isolated on `aiops2-execution`; it does not have direct access 
 
 See `docs/` for architecture, data contracts, network boundaries, deployment, demo and resilience strategy.
 
+## Core qualification and model evaluation
+
+The cumulative kit is versioned from `VERSION`. The CI release job packages the full repository source, Compose/configuration, migrations, scripts, docs, checksums and the successful Temporal runtime report under `09-Qualification/`. The kit is published only when the unit/static gates, image builds, empty-database migrations, legacy upgrade, and deterministic-provider Temporal E2E all pass.
+
+### Automated qualification
+
+```bash
+# Create/validate the local secret file and validate the full stack.
+bash deploy/init-env.sh
+bash deploy/preflight.sh
+
+# Run the deterministic Temporal end-to-end qualification in an isolated test stack.
+# CI invokes tests/runtime-e2e.sh and stores a machine-readable report in reports/.
+
+# After configuring LLM_BASE_URL and LLM_MODEL to a reachable OpenAI-compatible endpoint:
+bash deploy/qualify-model.sh
+```
+
+The model evaluation profile sends only synthetic fixtures to the advisory Analyst/Critic endpoints. It checks severity accuracy, evidence grounding, advisory-only action flags, resistance to prompt-injection text, and Critic detection of contradictory/stale evidence. It writes `reports/ai-core-evaluation.json`; threshold failures return a non-zero exit code. The evaluator never invokes remediation.
+
+For a host-local inference server, configure a Docker-reachable address, not `127.0.0.1` from inside the container. A model-evaluation PASS applies only to the recorded provider/model/prompt and fixture version; it is not a substitute for production qualification.
+
+Read [the reconstruction execution plan](docs/RECONSTRUCTION-EXECUTION-PLAN.md) for the work-package sequence and release gates.
+
 ## Project continuity and historical reuse
 
 Before resuming work in a new session, read these documents in order:
