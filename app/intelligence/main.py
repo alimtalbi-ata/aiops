@@ -23,14 +23,32 @@ class Hypothesis(Contract):
     contradicting_evidence_ids: list[str] = []
     assumptions: list[str] = []
 
+class Alternative(Contract):
+    statement: str
+    evidence_ids: list[str] = []
+    discriminating_test: str
+
+class Action(Contract):
+    action_id: str
+    intent: str
+    risk_tier: Literal['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+    target_ci_id: str | None = None
+    evidence_ids: list[str] = []
+    preconditions: list[str] = []
+    expected_effect: str
+    verification_steps: list[str] = []
+    rollback_plan: str | None = None
+    requires_human_approval: Literal[True] = True
+    advisory_only: Literal[True] = True
+
 class Analyst(Contract):
     contract_version: str = '2.0'
     classification: str
     severity: Literal['P1', 'P2', 'P3', 'P4', 'UNKNOWN']
     severity_rationale: str
     hypotheses: list[Hypothesis]
-    alternatives: list[dict] = []
-    recommended_actions: list[dict] = []
+    alternatives: list[Alternative] = []
+    recommended_actions: list[Action] = []
     missing_information: list[str] = []
     unknowns: list[str] = []
     contradictions: list[str] = []
@@ -38,15 +56,26 @@ class Analyst(Contract):
     confidence_basis: str
     limitations: list[str] = []
 
+class Issue(Contract):
+    code: Literal['UNSUPPORTED_CLAIM', 'STALE_EVIDENCE', 'CONTRADICTION', 'MISSING_PRECONDITION', 'CAUSAL_LEAP', 'SEVERITY_MISMATCH', 'UNSAFE_ACTION', 'SCOPE_VIOLATION', 'SCHEMA_OR_COVERAGE']
+    description: str
+    evidence_ids: list[str] = []
+
+class ClaimCheck(Contract):
+    claim: str
+    supported: bool
+    supporting_evidence_ids: list[str] = []
+    contradicting_evidence_ids: list[str] = []
+
 class Critique(Contract):
     contract_version: str = '2.0'
     validated: bool
-    issues: list[dict] = []
-    claim_checks: list[dict] = []
+    issues: list[Issue] = []
+    claim_checks: list[ClaimCheck] = []
     additional_evidence_needed: list[str] = []
     unsafe_actions: list[str] = []
     diagnostic_confidence: float = Field(ge=0, le=1)
-    final_recommendation: str
+    final_recommendation: Literal['OBSERVE', 'ENRICH', 'ESCALATE', 'HUMAN_APPROVAL']
     limitations: list[str] = []
 
 class Request(Contract):
@@ -91,9 +120,9 @@ def bad_refs(analyst, evidence):
     for h in analyst.hypotheses:
         refs += h.supporting_evidence_ids + h.contradicting_evidence_ids
     for a in analyst.alternatives:
-        refs += a.get('evidence_ids', [])
+        refs += a.evidence_ids
     for a in analyst.recommended_actions:
-        refs += a.get('evidence_ids', [])
+        refs += a.evidence_ids
     return sorted(set(x for x in refs if x not in known))
 
 @app.get('/health')
@@ -125,7 +154,15 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
     result = call_model(system, payload, Critique)
     if unknown:
         result.validated = False
-        result.issues.append({'code':'UNSUPPORTED_CLAIM','description':'Analyst referenced evidence absent from the ledger','evidence_ids':unknown})
+        result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Analyst referenced evidence absent from the ledger', evidence_ids=unknown))
         result.final_recommendation = 'HUMAN_APPROVAL'
+    known = known_ids(x.evidence)
+    for check in result.claim_checks:
+        refs = check.supporting_evidence_ids + check.contradicting_evidence_ids
+        invalid = sorted(set(ref for ref in refs if ref not in known))
+        if invalid:
+            result.validated = False
+            result.issues.append(Issue(code='UNSUPPORTED_CLAIM', description='Critic referenced evidence absent from the ledger', evidence_ids=invalid))
+            result.final_recommendation = 'HUMAN_APPROVAL'
     return {'critique':result.model_dump(mode='json'),'mode':x.mode,'execution_allowed':False}
 
