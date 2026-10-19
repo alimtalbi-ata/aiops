@@ -180,6 +180,7 @@ create trigger trg_guard_action_proposal_transition before update on aiops.actio
 create or replace function aiops.guard_effect_receipt() returns trigger language plpgsql as $$
 declare p record; a record; approval_count integer; approved_roles text[];
 begin
+ if TG_OP='DELETE' then raise exception 'effect receipts cannot be deleted'; end if;
  if TG_OP='UPDATE' then
   if NEW.proposal_id is distinct from OLD.proposal_id or NEW.approval_id is distinct from OLD.approval_id or NEW.idempotency_key is distinct from OLD.idempotency_key or NEW.executor_id is distinct from OLD.executor_id or NEW.adapter_version is distinct from OLD.adapter_version or NEW.started_at is distinct from OLD.started_at then
    raise exception 'effect receipt identity is immutable';
@@ -235,3 +236,6 @@ end;
 $$;
 drop trigger if exists trg_guard_reconciliation_record on aiops.reconciliation_records;
 create trigger trg_guard_reconciliation_record before insert on aiops.reconciliation_records for each row execute function aiops.guard_reconciliation_record();
+
+create trigger trg_immutable_delete_action_proposals before delete on aiops.action_proposals for each row execute function aiops.reject_immutable_mutation();
+create trigger trg_immutable_delete_effect_receipts before delete on aiops.effect_receipts for each row execute function aiops.reject_immutable_mutation();
