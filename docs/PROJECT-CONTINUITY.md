@@ -63,6 +63,15 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 - [ ] Add deterministic E2E and failure-injection qualification before enabling any new live action.
 - [ ] Produce cumulative deployment ZIP and updated docs/evidence for each version where a release is requested.
 
+## Core AI quality contract added (2026-10-19, branch feat/core-analysis-quality-v2)
+
+New documents on the working branch:
+- [Core analysis quality contract](CORE-ANALYSIS-QUALITY.md): analyst/critic schemas, evidence dimensions, prompt-injection boundary, deterministic gate, metrics and capitalization.
+- [Decision, remediation and learning architecture](AI-DECISION-AND-LEARNING-ARCHITECTURE.md): canonical record separation, proposal/approval/effect/verification boundaries, PC11K5 invariant chain and staged roadmap.
+- [Core qualification matrix](CORE-QUALIFICATION-MATRIX.md): test scenarios for core, AI quality, policy, remediation, learning and deployment. All new rows remain NOT RUN until executed.
+
+This is a documentation/acceptance-contract change. It does not claim application code has been fully reconciled to the new contracts, and no Debian server or live runtime was tested. Next technical work is to map the current code and DB migrations against these contracts, implement missing analyst/critic contracts and offline evaluation in CI, then qualify core with local isolated containers before any ACME twin/demo expansion.
+
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
