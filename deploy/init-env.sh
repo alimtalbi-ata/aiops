@@ -19,7 +19,7 @@ if [[ -f .env ]]; then
     case "$line" in
       *=*)
         key="${line%%=*}"
-        if ! grep -q "^\${key}=" .env; then
+        if ! grep -q "^${key}=" .env; then
           printf '%s\n' "$line" >> .env
           migrated=1
         fi
