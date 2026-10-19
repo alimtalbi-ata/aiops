@@ -1,6 +1,7 @@
 -- AIOps 2.0 canonical AI decision ledger.
 create table if not exists aiops.analysis_records (
  analysis_id text primary key, run_id text not null references aiops.runs(run_id), incident_id text,
+ idempotency_key text not null unique,
  revision integer not null check (revision >= 1), contract_version text not null,
  provider text not null, model text not null, prompt_version text not null,
  evidence_ids jsonb not null default '[]'::jsonb, evidence_set_hash text not null,
@@ -10,7 +11,7 @@ create table if not exists aiops.analysis_records (
 );
 create index if not exists ix_analysis_run_created on aiops.analysis_records(run_id, created_at desc);
 create table if not exists aiops.critique_records (
- critique_id text primary key, analysis_id text not null references aiops.analysis_records(analysis_id),
+ critique_id text primary key, idempotency_key text not null unique, analysis_id text not null references aiops.analysis_records(analysis_id),
  run_id text not null references aiops.runs(run_id), contract_version text not null,
  provider text not null, model text not null, validated boolean not null,
  issues jsonb not null default '[]'::jsonb, evidence_ids jsonb not null default '[]'::jsonb,
@@ -25,7 +26,7 @@ create table if not exists aiops.policy_decisions (
  decision text not null check (decision in ('OBSERVE','ENRICH','ESCALATE','HUMAN_APPROVAL','BLOCK','AUTO_REMEDIATE')),
  state text not null check (state in ('PASS','FAIL','BLOCKED','UNKNOWN')),
  reasons jsonb not null default '[]'::jsonb, proof_snapshot jsonb not null default '{}'::jsonb,
- created_at timestamptz not null default now()
+ created_at timestamptz not null default now(), unique(run_id,input_hash)
 );
 create index if not exists ix_policy_decision_run on aiops.policy_decisions(run_id, created_at desc);
 create table if not exists aiops.action_proposals (
