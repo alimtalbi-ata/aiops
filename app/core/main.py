@@ -262,3 +262,121 @@ def get_ai_ledger(rid:str,authorization:str|None=Header(default=None)):
       'critiques':[dict(zip(['critique_id','analysis_id','contract_version','provider','model','validated','issues','evidence_ids','output','diagnostic_confidence','created_at'],row)) for row in critiques],
       'policy_decisions':[dict(zip(['policy_decision_id','analysis_id','critique_id','policy_version','input_hash','decision','state','reasons','proof_snapshot','created_at'],row)) for row in decisions]
     }
+
+PROPOSAL_ACTION_ALLOWLIST={'COLLECT_DIAGNOSTICS','INCREASE_LOGGING','RESCAN_STORAGE','FAILOVER_PATH','ROLLBACK_CHANGE','RESTART_SERVICE','CAPACITY_EXPANSION'}
+APPROVER_ROLES={
+ 'LOW':{'operator','senior_operator','storage_admin','oncall_lead','security_admin','incident_commander'},
+ 'MEDIUM':{'senior_operator','storage_admin','oncall_lead','security_admin','incident_commander'},
+ 'HIGH':{'storage_admin','oncall_lead','security_admin','incident_commander'},
+ 'CRITICAL':{'security_admin','incident_commander'},
+}
+
+@app.post('/api/runs/{rid}/proposals')
+def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    target=str(x.get('target_ci_id','')).strip()
+    action=str(x.get('action_type','')).strip().upper()
+    risk=str(x.get('risk_tier','')).strip().upper()
+    evidence_ids=sorted(set(x.get('evidence_ids') or []))
+    preconditions=x.get('preconditions') or []
+    postconditions=x.get('expected_postconditions') or []
+    parameters=x.get('parameters') or {}
+    rollback=x.get('rollback_plan') or {}
+    if not target or action not in PROPOSAL_ACTION_ALLOWLIST or risk not in APPROVER_ROLES:
+        raise HTTPException(422,'invalid_target_action_or_risk_tier')
+    if not evidence_ids or not preconditions or not postconditions:
+        raise HTTPException(422,'evidence_preconditions_and_expected_postconditions_required')
+    if risk in ('HIGH','CRITICAL') and not rollback:
+        raise HTTPException(422,'rollback_plan_required_for_high_risk_action')
+    canonical={'run_id':rid,'target_ci_id':target,'action_type':action,'risk_tier':risk,'parameters':parameters,'evidence_ids':evidence_ids,'preconditions':preconditions,'expected_postconditions':postconditions,'rollback_plan':rollback}
+    digest=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    with db() as c:
+        run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
+        if not run:raise HTTPException(404,'run not found')
+        if run[0]=='LIVE':
+            # A proposal is still advisory; the live effect path is intentionally not enabled here.
+            pass
+        n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
+        if n!=len(evidence_ids):raise HTTPException(422,'proposal_references_unknown_evidence')
+        old=c.execute('select proposal_id,proposal_revision,status from aiops.action_proposals where run_id=%s and proposal_hash=%s',(rid,digest)).fetchone()
+        if old:return {'proposal_id':old[0],'revision':old[1],'status':old[2],'proposal_hash':digest,'idempotent':True,'execution_allowed':False}
+        revision=c.execute('select coalesce(max(proposal_revision),0)+1 from aiops.action_proposals where run_id=%s',(rid,)).fetchone()[0]
+        pid=new('ACT')
+        expires=x.get('expires_at')
+        if expires:
+            try: expires=datetime.datetime.fromisoformat(str(expires).replace('Z','+00:00'))
+            except ValueError: raise HTTPException(422,'expires_at_must_be_iso8601')
+            if expires.tzinfo is None:raise HTTPException(422,'expires_at_requires_timezone')
+            if expires<=datetime.datetime.now(datetime.timezone.utc):raise HTTPException(422,'proposal_expiry_must_be_future')
+        else: expires=datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(minutes=30)
+        c.execute('insert into aiops.action_proposals(proposal_id,run_id,proposal_revision,target_ci_id,action_type,risk_tier,parameters,evidence_ids,preconditions,expected_postconditions,rollback_plan,proposal_hash,status,expires_at) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(pid,rid,revision,target,action,risk,json.dumps(parameters),json.dumps(evidence_ids),json.dumps(preconditions),json.dumps(postconditions),json.dumps(rollback),digest,'PROPOSED',expires))
+    return {'proposal_id':pid,'revision':revision,'proposal_hash':digest,'status':'PROPOSED','expires_at':expires.isoformat(),'execution_allowed':False,'idempotent':False}
+
+@app.post('/api/proposals/{proposal_id}/approval')
+def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    supplied_hash=str(x.get('proposal_hash',''))
+    actor=str(x.get('actor_id','')).strip()
+    role=str(x.get('actor_role','')).strip().lower()
+    decision=str(x.get('decision','')).strip().upper()
+    nonce=str(x.get('nonce','')).strip()
+    scope=x.get('scope') or {}
+    if not actor or not role or decision not in ('APPROVE','REJECT') or not nonce or not supplied_hash:
+        raise HTTPException(422,'actor_role_decision_nonce_and_proposal_hash_required')
+    with db() as c:
+        p=c.execute('select run_id,target_ci_id,action_type,risk_tier,proposal_hash,status,expires_at from aiops.action_proposals where proposal_id=%s for update',(proposal_id,)).fetchone()
+        if not p:raise HTTPException(404,'proposal not found')
+        rid,target,action,risk,digest,status,expires=p
+        if not hmac.compare_digest(supplied_hash,digest):raise HTTPException(409,'proposal_hash_mismatch')
+        if status not in ('PROPOSED','APPROVED'):raise HTTPException(409,'proposal_not_approvable')
+        if expires<=datetime.datetime.now(datetime.timezone.utc):raise HTTPException(409,'proposal_expired')
+        if role not in APPROVER_ROLES[risk]:raise HTTPException(403,'role_not_authorized_for_risk_tier')
+        expected_scope={'proposal_hash':digest,'target_ci_id':target,'action_type':action}
+        if scope!=expected_scope:raise HTTPException(422,'approval_scope_must_match_exact_proposal')
+        old=c.execute('select approval_id,proposal_hash,decision from aiops.approval_records where nonce=%s',(nonce,)).fetchone()
+        if old:
+            if old[1]==digest and old[2]==decision:return {'approval_id':old[0],'decision':decision,'idempotent':True,'execution_allowed':False}
+            raise HTTPException(409,'approval_nonce_reuse')
+        approval_id=new('APR')
+        c.execute('insert into aiops.approval_records(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,scope,nonce,expires_at,audit) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(approval_id,proposal_id,digest,actor,role,decision,json.dumps(scope),nonce,expires,json.dumps({'run_id':rid,'source':'human-in-the-loop-api'})))
+        c.execute('update aiops.action_proposals set status=%s where proposal_id=%s',('APPROVED' if decision=='APPROVE' else 'REJECTED',proposal_id))
+    return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'execution_allowed':False,'idempotent':False}
+
+@app.post('/api/runs/{rid}/learning-cases')
+def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    idem=str(x.get('idempotency_key','')).strip()
+    case_type=str(x.get('case_type','INCIDENT')).upper()
+    label=x.get('label') or {}
+    evidence_ids=sorted(set(x.get('evidence_ids') or []))
+    human_reviewed=bool(x.get('human_reviewed',False))
+    outcome_verified=bool(x.get('outcome_verified',False))
+    gold_eligible=bool(x.get('gold_eligible',False))
+    reviewer=str(x.get('reviewed_by','')).strip()
+    review_note=str(x.get('review_note','')).strip()
+    if not idem or case_type not in ('INCIDENT','PROBLEM','CHANGE','REMEDIATION','FALSE_POSITIVE','NEAR_MISS') or not evidence_ids:
+        raise HTTPException(422,'idempotency_case_type_and_evidence_required')
+    if human_reviewed and (not reviewer or not review_note):raise HTTPException(422,'reviewer_identity_and_review_note_required')
+    with db() as c:
+        run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
+        if not run:raise HTTPException(404,'run not found')
+        old=c.execute('select learning_case_id,gold_eligible from aiops.learning_cases where idempotency_key=%s',(idem,)).fetchone()
+        if old:return {'learning_case_id':old[0],'gold_eligible':old[1],'idempotent':True}
+        rows=c.execute("select evidence_id,coalesce(provenance->>'synthetic','false') from aiops.evidence where evidence_id=any(%s)",(evidence_ids,)).fetchall()
+        if len(rows)!=len(evidence_ids):raise HTTPException(422,'learning_case_references_unknown_evidence')
+        synthetic=(run[0]!='LIVE') or any(flag.lower()=='true' for _,flag in rows)
+        verification_id=x.get('verification_id')
+        if outcome_verified:
+            if not verification_id:raise HTTPException(422,'verified_outcome_requires_verification_id')
+            vr=c.execute("select outcome from aiops.verification_records where verification_id=%s and outcome='PASS'",(verification_id,)).fetchone()
+            if not vr:raise HTTPException(422,'verified_outcome_requires_passed_verification_record')
+        if gold_eligible and (synthetic or not human_reviewed or not outcome_verified):
+            raise HTTPException(422,'gold_set_requires_live_non_synthetic_human_review_and_verified_outcome')
+        for field,table in [('analysis_id','analysis_records'),('critique_id','critique_records')]:
+            ref=x.get(field)
+            if ref and not c.execute(f'select 1 from aiops.{table} where {field}=%s and run_id=%s',(ref,rid)).fetchone():
+                raise HTTPException(422,f'{field}_not_found_for_run')
+        revision=c.execute('select coalesce(max(revision),0)+1 from aiops.learning_cases where source_run_id=%s',(rid,)).fetchone()[0]
+        case_id=new('LRN')
+        c.execute('insert into aiops.learning_cases(learning_case_id,idempotency_key,source_run_id,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible,label,evidence_ids,analysis_id,critique_id,verification_id,exclusion_reasons,reviewed_at,reviewed_by,review_note) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(case_id,idem,rid,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible,json.dumps(label),json.dumps(evidence_ids),x.get('analysis_id'),x.get('critique_id'),verification_id,json.dumps(x.get('exclusion_reasons') or []),datetime.datetime.now(datetime.timezone.utc) if human_reviewed else None,reviewer or None,review_note or None))
+    return {'learning_case_id':case_id,'revision':revision,'synthetic':synthetic,'gold_eligible':gold_eligible,'execution_allowed':False,'idempotent':False}
