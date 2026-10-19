@@ -66,3 +66,26 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## Historical portal recovery update — 2026-10-19
+
+A selective V1/V145 portal source-recovery package was created on SRV-DEB-05 without intentional runtime changes. The host reported package creation success, a 756,799-byte archive, 33 staged files and a 27,623-line V1/V145 diff. See [HISTORICAL-PORTAL-RECOVERY-RESULT-2026-10-19.md](HISTORICAL-PORTAL-RECOVERY-RESULT-2026-10-19.md) for exact paths, provenance, evidence boundaries and next steps.
+
+The collector path defect was corrected: R33's application entry point is `app/main.py`, not `main.py` at the source root. The corrected collector completed with exit code 0. On 2026-10-19, server-side integrity checks passed: `sha256sum -c` returned `Réussi`, and `tar -tzf "$PKG" >/dev/null` completed with `TAR_READABLE=YES`. This validates the server archive against its sidecar and confirms TAR readability, but does not qualify source semantics or runtime behavior.
+
+Next: independently recompute SHA-256 for the uploaded 15:44 archive, extract it into an isolated workspace, verify the per-file manifest, and review the R33/V1/V145 source diffs by capability. Only reviewed source/tests/docs may enter a follow-up implementation PR. Keep main protected and preserve PC11K5 fencing invariants.
+
+
+## Second selective recovery package — 2026-10-19 15:44
+
+A second selective portal source package was generated and uploaded: `AIOPS-HISTORICAL-PORTAL-SOURCE-RECOVERY-20261019-154435.tar.gz` (856,801 bytes). Its checksum sidecar states SHA-256 `829bec97028fbe21a96b8fbcc77fdb8c3092f304f5a8665106edc2c87b8180e4`; the collector reported server-side checksum validation PASS, 27,623 V1/V145 diff lines, 16,363 R33/V145 diff lines and 32 inventory rows. The current analysis runtime has not independently extracted or re-hashed the uploaded bytes, so semantic review and all build/runtime qualification remain pending. See [the recovery result record](HISTORICAL-PORTAL-RECOVERY-RESULT-2026-10-19.md). Keep changes on this PR branch, preserve `main`, and do not touch active services or PC11K5 fencing invariants.
+
+
+## Continued review update — 2026-10-19 16:38 CEST
+
+- Re-verified GitHub state: recovery PR #13 remains open, unmerged, and targets `main`; the recovery branch head was `0abcb5226457d13a13ca7a4bf353f95680b5aa41` at review time.
+- Read the current `main` source for `app/portal/main.py` (blob `eac44df4abba0a3d85d69df9960cc4baa6ef71f3`). The `POST /api/demo` and `POST /api/copilot` handlers have no route-level authentication/authorization dependency in the inspected file. This is a static source finding, not proof of external reachability or exploitability.
+- Opened [issue #15](https://github.com/alimtalbi-ata/aiops/issues/15) to implement a real operator authorization boundary, safe upstream errors/timeouts, request limits, CSRF/origin protections where applicable, and tests. Do not solve this by putting the internal service token in browser JavaScript or by trusting an unverified forwarded identity header.
+- The uploaded 15:44 archive is still not available as a verified local byte stream in the current analysis workspace. The sidecar digest is host-reported; independent re-hash, safe extraction, manifest verification and semantic R33/V1/V145 review remain blocked. Do not claim those gates passed.
+- No application code, active runtime, or PC11K5 fencing behavior was changed in this continuation. Keep PR #13 documentation-only; implement issue #15 separately after choosing and documenting the supported identity provider/reverse-proxy trust model.
+- Next gates: (1) obtain the archive in a materializable attachment or provide the verified file path; (2) perform independent SHA-256 and safe TAR/member validation; (3) inspect diffs by routes, UI capabilities, schemas and dependencies; (4) implement portal authorization on a dedicated branch with tests and CI; (5) only then assess isolated UI/API/E2E qualification.
