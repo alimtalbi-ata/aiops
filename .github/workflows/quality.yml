@@ -149,3 +149,37 @@ jobs:
           eval "$psql_command -c \"select count(*) from public.aiops_schema_migrations where execution_mode='APPLIED' and version='009_ai_decision_ledger.sql'\"" | grep -x 1
           bash deploy/migrate.sh | grep -F 'MIGRATION=SKIP|009_ai_decision_ledger.sql'
           docker compose --env-file .env down -v
+
+  runtime-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_FILE: compose.yml:.github/compose.e2e.yml
+      COMPOSE_PROFILES: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate isolated CI environment
+        run: bash deploy/init-env.sh
+      - name: Validate test-profile Compose override
+        run: docker compose --env-file .env config --quiet
+      - name: Start isolated full Core dependency graph with deterministic provider
+        run: docker compose --env-file .env up -d --build aiops2-portal aiops2-simulator aiops2-test-llm
+      - name: Run explicit schema upgrade runner
+        run: bash deploy/migrate.sh
+      - name: Qualify real Temporal workflow against deterministic synthetic provider
+        run: bash tests/runtime-e2e.sh
+      - name: Upload runtime qualification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-runtime-e2e-report
+          path: reports/runtime-e2e-*.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Show bounded service logs on failure
+        if: failure()
+        run: docker compose --env-file .env logs --no-color --tail=160 aiops2-portal aiops2-worker aiops2-core aiops2-intelligence aiops2-test-llm || true
+      - name: Tear down isolated test stack
+        if: always()
+        run: docker compose --env-file .env down -v --remove-orphans || true
