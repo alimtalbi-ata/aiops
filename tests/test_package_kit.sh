@@ -21,7 +21,19 @@ grep -q '/SHA256SUMS$' "$LIST"
 grep -q '/deploy/install.sh$' "$LIST"
 grep -q '/docs/DEBIAN-DEPLOYMENT-KIT.md$' "$LIST"
 grep -q '/config/.env.example$' "$LIST"
-if grep -Eq '(^|/).env$|(^|/).env.[^/]+$' "$LIST"; then
+if grep -Eq '(^|/)[.]env
+  echo 'FAIL|environment_secret_file_in_package'
+  exit 1
+fi
+(
+  cd "$TMP"
+  unzip -q "$PACKAGE"
+  cd "$(find . -name KIT-MANIFEST.txt -printf '%h\n' | head -n 1)"
+  sha256sum -c SHA256SUMS
+)
+rm -f "$PACKAGE" "$CHECKSUM"
+echo 'PACKAGE_KIT_TEST=PASS'
+ "$LIST"; then
   echo 'FAIL|environment_secret_file_in_package'
   exit 1
 fi
