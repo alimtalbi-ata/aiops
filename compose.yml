@@ -64,6 +64,31 @@ services:
     networks: [aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health')"], interval: 5s, timeout: 3s, retries: 20}
 
+
+  aiops2-intelligence:
+    build: {context: ./app, dockerfile: intelligence/Dockerfile}
+    container_name: aiops2-intelligence
+    restart: unless-stopped
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+    expose: ["817"]
+    networks: [aiops2-control]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
+
+
+  aiops2-test-llm:
+    profiles: ["test"]
+    build: {context: ./app, dockerfile: test_provider/Dockerfile}
+    container_name: aiops2-test-llm
+    restart: "no"
+    expose: ["818"]
+    networks: [aiops2-control]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:818/health')"], interval: 3s, timeout: 2s, retries: 20}
+
   aiops2-copilot:
     build: {context: ./app, dockerfile: copilot/Dockerfile}
     container_name: aiops2-copilot
@@ -90,6 +115,7 @@ services:
       EVIDENCE_URL: http://aiops2-evidence:812
       POLICY_URL: http://aiops2-policy:813
       TWIN_URL: http://aiops2-twin:811
+      INTELLIGENCE_URL: http://aiops2-intelligence:817
       AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       TEMPORAL_ADDRESS: aiops2-temporal:7233
@@ -100,6 +126,7 @@ services:
       aiops2-core: {condition: service_healthy}
       aiops2-evidence: {condition: service_healthy}
       aiops2-policy: {condition: service_healthy}
+      aiops2-intelligence: {condition: service_healthy}
       aiops2-twin: {condition: service_healthy}
       aiops2-temporal: {condition: service_started}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health')"], interval: 5s, timeout: 3s, retries: 20}

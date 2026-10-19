@@ -1,4 +1,4 @@
-import os,json,html
+import os,json,html,uuid
 from fastapi import FastAPI,Request
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -12,9 +12,10 @@ def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_j
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')
 def demo():
-    iid=post_json(CORE,'/api/incidents',{'external_id':'DEMO-GOLDEN-PAYMENT','title':'Payment latency following FC fabric degradation','severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo','synthetic':True,'payload':{'seed':20261018}})['incident_id']
-    run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':'DEMO-GOLDEN-PAYMENT'})
-    return post_json(CORE,f"/api/runs/{run['run_id']}/execute")
+    demo_id=uuid.uuid4().hex
+    iid=post_json(CORE,'/api/incidents',{'external_id':f'DEMO-GOLDEN-PAYMENT-{demo_id}','title':'Payment latency following FC fabric degradation','severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo','synthetic':True,'payload':{'seed':20261018}})['incident_id']
+    run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':f'DEMO-GOLDEN-PAYMENT-{demo_id}'})
+    return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
 @app.get('/',response_class=HTMLResponse)
 def home():
     d=get_json(CORE,'/api/dashboard');runs=get_json(CORE,'/api/runs')['items'];t=get_json(TWIN,'/api/twin/summary')
