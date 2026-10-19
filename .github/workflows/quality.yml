@@ -210,6 +210,7 @@ jobs:
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
           python -m unittest discover -s tests -p "test_shared_http.py" -v
           python -m unittest discover -s tests -p "test_safety_invariants.py" -v
+          python -m unittest discover -s tests -p "test_freshness.py" -v
           bash tests/static-audit.sh
           bash tests/sql-audit.sh
           bash tests/migration-contract.sh
