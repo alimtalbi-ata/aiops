@@ -119,9 +119,10 @@ jobs:
         run: |
           docker compose --env-file .env up -d
           for i in $(seq 1 60); do
-            docker compose --env-file .env exec -T aiops2-postgres pg_isready -U aiops -d aiops >/dev/null 2>&1 && break
+            docker compose --env-file .env exec -T aiops2-postgres pg_isready -h 127.0.0.1 -U aiops -d aiops >/dev/null 2>&1 && break
             sleep 1
           done
+          docker compose --env-file .env exec -T aiops2-postgres pg_isready -h 127.0.0.1 -U aiops -d aiops
           bash deploy/migrate.sh
           psql_command="docker compose --env-file .env exec -T aiops2-postgres psql -At -U aiops -d aiops"
           eval "$psql_command -c \"select count(*) from information_schema.tables where table_schema='aiops' and table_name='analysis_records'\"" | grep -x 1
