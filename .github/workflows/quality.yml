@@ -88,3 +88,43 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from information_schema.tables where table_schema='aiops' and table_name in ('analysis_records','critique_records','policy_decisions','action_proposals','approval_records','effect_receipts','verification_records','reconciliation_records','learning_cases','model_evaluation_runs')" | grep -x 10
           psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from pg_trigger where not tgisinternal and tgname like 'trg_immutable_%'" | grep -x 7
+
+  migration-runner-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate isolated environment
+        run: bash deploy/init-env.sh
+      - name: Prepare legacy-only initdb fixture
+        run: |
+          mkdir -p /tmp/aiops-legacy-migrations
+          cp db/migrations/00[0-8]_*.sql /tmp/aiops-legacy-migrations/
+          cat > /tmp/compose-migrate.yml <<'YAML'
+          services:
+            aiops2-postgres:
+              image: postgres:16-alpine
+              container_name: aiops2-postgres
+              environment:
+                POSTGRES_DB: ${POSTGRES_DB:-aiops}
+                POSTGRES_USER: ${POSTGRES_USER:-aiops}
+                POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
+              volumes:
+                - /tmp/aiops-legacy-migrations:/docker-entrypoint-initdb.d:ro
+          YAML
+      - name: Upgrade legacy schema and prove repeatability
+        env:
+          COMPOSE_FILE: /tmp/compose-migrate.yml
+        run: |
+          docker compose --env-file .env up -d
+          for i in $(seq 1 60); do
+            docker compose --env-file .env exec -T aiops2-postgres pg_isready -U aiops -d aiops >/dev/null 2>&1 && break
+            sleep 1
+          done
+          bash deploy/migrate.sh
+          psql_command="docker compose --env-file .env exec -T aiops2-postgres psql -At -U aiops -d aiops"
+          eval "$psql_command -c \"select count(*) from information_schema.tables where table_schema='aiops' and table_name='analysis_records'\"" | grep -x 1
+          eval "$psql_command -c \"select count(*) from public.aiops_schema_migrations where execution_mode='APPLIED' and version='009_ai_decision_ledger.sql'\"" | grep -x 1
+          bash deploy/migrate.sh | grep -F 'MIGRATION=SKIP|009_ai_decision_ledger.sql'
+          docker compose --env-file .env down -v
