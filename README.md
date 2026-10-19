@@ -54,3 +54,22 @@ Before resuming work in a new session, read these documents in order:
 5. [Change safety and qualification protocol](docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md)
 
 **Maintenance rule:** every significant development session must update the continuity record and all affected architecture, decision, component, qualification and release documents in the same branch/PR. Prefer adapting qualified AIOps v1/V145 capabilities over rebuilding them, but verify source, contracts, dependencies and tests before declaring a component reusable. Never treat a file listing or synthetic demo as qualification evidence.
+
+## Accelerated rebuild and operations
+
+The repository is the source of truth. Do not preserve code for its own sake: replace components when that accelerates a verifiable outcome, but preserve contracts and operational safety.
+
+- Full build/install: `bash deploy/install.sh`
+- Environment preflight: `bash deploy/preflight.sh`
+- Apply additive SQL migrations: `bash deploy/migrate.sh`
+- Runtime qualification: `bash tests/qualification.sh`
+- Synthetic end-to-end: `bash tests/synthetic-e2e.sh`
+- Static, SQL and AI ledger checks: `bash tests/static-audit.sh && bash tests/sql-audit.sh && bash tests/migration-contract.sh`
+- Diagnostics bundle: `bash deploy/diagnose.sh`
+- Private database backup: `bash deploy/backup.sh`
+- Guarded restore: `CONFIRM_RESTORE=YES CONFIRM_TARGET_DATABASES=YES bash deploy/restore.sh <backup-directory>`
+- Cumulative ZIP: `bash deploy/package.sh` (outputs under `dist/`; excludes secrets, database dumps and diagnostics).
+
+The new migration `009_ai_decision_ledger.sql` defines explicit analysis, critique, policy-decision, proposal, approval, effect, verification, reconciliation, learning and model-evaluation records. Synthetic cases cannot be gold-set eligible. Applied migrations are checksum-pinned; edits to an applied migration fail closed. The migration runner verifies a legacy schema signature before adopting migrations 000–008 as a baseline and refuses to guess when the schema is incomplete.
+
+**Qualification honesty:** a successful static or SQL test does not prove that the full stack or model inference works. CI must separately report compilation/unit tests, full image builds, disposable PostgreSQL migration execution and synthetic runtime E2E. LIVE execution remains disabled until real evidence adapters, policy/HITL and effect verification are qualified.
