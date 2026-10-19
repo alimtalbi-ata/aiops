@@ -49,13 +49,24 @@ Consolidate AIOps 2.0 around one coherent runtime and operations experience. Reu
 
 A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE-AUDIT-2026-10-19.md). The safety patch was merged via [PR #5](https://github.com/alimtalbi-ata/aiops/pull/5) at commit `493336fb51fcda41d1ece8fc1822bb13f1ef232c`: P1 escalates before evidence checks; policy no longer defaults critic validation to true and requires explicit freshness/precondition/fencing/approval inputs; the worker blocks LIVE runs before generating placeholder evidence and marks the Run BLOCKED. Added `tests/test_policy_safety.py` and `.github/workflows/quality.yml`; GitHub Actions run [39223403723](https://github.com/alimtalbi-ata/aiops/actions/runs/39223403723) passed compileall, policy unit tests and static audit. Container build, runtime qualification and synthetic E2E remain unrun. The current main branch includes this conservative guard; LIVE execution is still not qualified. Container build, runtime qualification and synthetic E2E remain unrun. A second hardening change merged via [PR #7](https://github.com/alimtalbi-ata/aiops/pull/7), commit `1bdd7235687f8b2c7081278e4dd86b8a17939ff3`: fresh installs generate random secrets, existing `.env` files are preserved, preflight rejects default secrets outside explicit demo mode, and the admin/internal tokens are checked for consistency. A third change merged via [PR #9](https://github.com/alimtalbi-ata/aiops/pull/9), commit `e6251c1ce195937b1af6019e389c9f6b3f68e2dc`: runtime credential fallbacks were removed, Compose now requires explicit secrets, the secure template is blank, and known demo values are isolated in `config/.env.demo.example`. CI run [39224781141](https://github.com/alimtalbi-ata/aiops/actions/runs/39224781141) passed Python compilation, policy tests, secret-preflight tests, static checks and `docker compose config`.
 
+## Historical portal recovery (2026-10-19)
+
+A focused recovery review found that source preservation is feasible without exporting or rebuilding the whole historical platform:
+
+- R33 portal source is available at `/home/aiops/exports/AIOPS-R33-LOGICAL-20261007-112249/03-SOURCES/V1/stack/live_console`.
+- Existing v1 and V145 test console exports are available under `/home/aiops/recovery/AIOPS-HISTORICAL-PORTAL-20261019-130658/containers/`; reported sizes are approximately 180 MB each. The UI validation export is also available, but should only be mined for unique source changes if needed.
+- The V92 consolidated portal export was reported as 1,024 bytes and its image metadata lookup returned a missing content blob. Do not rely on it without independent verification.
+- A selective collection script is now in `tools/recovery/collect-historical-portal.sh`; instructions are in `docs/HISTORICAL-PORTAL-RECOVERY-2026-10-19.md`. The script packages a whitelist of source files, V1/V145 text diff, manifest and SHA-256 checksums. It excludes secrets, DBs, volumes, logs, caches and `*.bak` files and does not modify running containers.
+- GitHub branch: `recovery/historical-portal-20261019`. The recovery package has **not yet been run on the server**, and SCP transfer has **not yet been confirmed**. Do not report either as complete until output and checksums are supplied.
+- Once transferred, review the diff and ingest only useful, missing changes into the AIOps 2.0 codebase through a separate branch/PR. Never commit the full recovery archive to GitHub.
+
 ## Next work queue
 
 - [x] Add deterministic policy safety tests and run them in GitHub Actions; preserve the run link in the source audit.
 - [ ] Review and merge the LIVE safety patch only after tests pass and its diff is inspected.
-- [ ] Run a corrected, truly read-only inventory of historical v1/V145 source, contracts, tests, and service ownership.
+- [x] Run a focused read-only inventory of historical portal sources and exports; continue contract/runtime qualification only for candidates selected from the recovery diff.
 - [x] Audit and harden runtime secret fallbacks and Compose interpolation; merged via PR #9 with passing CI.
-- [ ] Inspect current repository tree and deployment files; compare Git-tracked code to the host deployment without copying secrets.
+- [ ] Run the selective portal recovery script on SRV-DEB-05, verify checksums, and SCP the package to Windows; then compare recovered candidates with GitHub without copying secrets.
 - [ ] Build a reuse matrix: reuse unchanged / adapt behind adapter / replace / retire, each with evidence and owner.
 - [ ] Establish one canonical incident/run/evidence/decision schema and versioned API contracts.
 - [ ] Verify the complete event path from ingestion to correlation, CMDB enrichment, evidence acquisition, analysis/critic, policy gate, HITL, remediation, verification, rollback and learning.
