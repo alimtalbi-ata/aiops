@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 docker compose --env-file .env config >/dev/null
-ALL_SERVICES=(aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal aiops2-temporal-admin-tools aiops2-temporal-postgres aiops2-glpi-db aiops2-glpi aiops2-n8n aiops2-prometheus aiops2-grafana aiops2-alertmanager)
+ALL_SERVICES=(aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal aiops2-temporal-admin-tools aiops2-temporal-postgres aiops2-glpi-db aiops2-glpi aiops2-n8n-db-init aiops2-n8n aiops2-prometheus aiops2-grafana aiops2-alertmanager)
 for s in "${ALL_SERVICES[@]}"; do
   docker inspect "$s" >/dev/null 2>&1 || { echo "FAIL|MISSING|$s"; exit 1; }
 done
