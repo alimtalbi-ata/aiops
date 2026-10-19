@@ -21,6 +21,14 @@ class IntelligenceContractTests(unittest.TestCase):
         self.assertIn(ready['status'], ('ready', 'degraded'))
         self.assertIn('provider_configured', ready)
 
+    def test_action_cannot_be_marked_executable(self):
+        with self.assertRaises(Exception):
+            MODULE.Action(action_id='A1', intent='restart', risk_tier='HIGH', expected_effect='restart', advisory_only=False)
+
+    def test_invalid_critic_disposition_is_rejected(self):
+        with self.assertRaises(Exception):
+            MODULE.Critique(contract_version='2.0', validated=True, diagnostic_confidence=0.9, final_recommendation='EXECUTE')
+
     def test_extra_fields_are_rejected(self):
         with self.assertRaises(Exception):
             MODULE.Analyst(contract_version='2.0', classification='x', severity='UNKNOWN', severity_rationale='x', hypotheses=[{'id':'H1','statement':'x','confidence':0.1}], confidence=0.1, confidence_basis='x', unexpected='field')
