@@ -79,6 +79,16 @@ services:
     networks: [aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
 
+
+  aiops2-test-llm:
+    profiles: ["test"]
+    build: {context: ./app, dockerfile: test_provider/Dockerfile}
+    container_name: aiops2-test-llm
+    restart: "no"
+    expose: ["818"]
+    networks: [aiops2-control]
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:818/health')"], interval: 3s, timeout: 2s, retries: 20}
+
   aiops2-copilot:
     build: {context: ./app, dockerfile: copilot/Dockerfile}
     container_name: aiops2-copilot
