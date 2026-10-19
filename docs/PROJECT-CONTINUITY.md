@@ -67,10 +67,13 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 
 New documents on the working branch:
 - [Core analysis quality contract](CORE-ANALYSIS-QUALITY.md): analyst/critic schemas, evidence dimensions, prompt-injection boundary, deterministic gate, metrics and capitalization.
+- [Core implementation gap analysis](CORE-IMPLEMENTATION-GAP-ANALYSIS.md): source-confirmed finding that Copilot currently returns deterministic summaries rather than performing LLM diagnosis; prioritized work to implement real provider-backed Analyst/Critic.
 - [Decision, remediation and learning architecture](AI-DECISION-AND-LEARNING-ARCHITECTURE.md): canonical record separation, proposal/approval/effect/verification boundaries, PC11K5 invariant chain and staged roadmap.
 - [Core qualification matrix](CORE-QUALIFICATION-MATRIX.md): test scenarios for core, AI quality, policy, remediation, learning and deployment. All new rows remain NOT RUN until executed.
+- [Database schema catalog](DATABASE-SCHEMA-CATALOG.md): source-derived map of existing migrations and the proposed AI decision-ledger gap.
+- [Stack deployment inventory](STACK-DEPLOYMENT-INVENTORY.md): source-derived service/network responsibility and deployment-kit acceptance criteria.
 
-This is a documentation/acceptance-contract change. It does not claim application code has been fully reconciled to the new contracts, and no Debian server or live runtime was tested. Next technical work is to map the current code and DB migrations against these contracts, implement missing analyst/critic contracts and offline evaluation in CI, then qualify core with local isolated containers before any ACME twin/demo expansion.
+This is a documentation/acceptance-contract change. It does not claim application code has been fully reconciled to the new contracts, and no Debian server or live runtime was tested. Next technical work is to implement a real provider-backed Analyst/Critic behind strict schemas, integrate it with Worker through versioned contracts, map existing persistence before adding an additive decision-ledger migration, and add deterministic provider-fake tests plus local/CI integration qualification. The Copilot currently constructs a fixed evidence summary and must not be called an LLM diagnostic engine. Qualify core with isolated containers before ACME twin/demo expansion.
 
 ## Update rule
 
