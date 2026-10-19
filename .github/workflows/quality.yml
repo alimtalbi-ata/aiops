@@ -35,3 +35,5 @@ jobs:
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
         run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+      - name: Build and verify Debian deployment kit
+        run: bash tests/test_package_kit.sh
