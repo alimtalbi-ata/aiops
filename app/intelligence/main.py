@@ -97,7 +97,12 @@ def auth(value):
 def call_model(system, payload, schema):
     if not BASE or not MODEL:
         raise HTTPException(503, 'llm_provider_not_configured')
-    url = BASE if BASE.endswith('/chat/completions') else BASE + '/v1/chat/completions'
+    if BASE.endswith('/chat/completions'):
+        url = BASE
+    elif BASE.endswith('/v1'):
+        url = BASE + '/chat/completions'
+    else:
+        url = BASE + '/v1/chat/completions'
     headers = {'Content-Type': 'application/json'}
     if KEY:
         headers['Authorization'] = 'Bearer ' + KEY
