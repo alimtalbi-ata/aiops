@@ -45,7 +45,7 @@ No claim is made that:
 
 ## Next actions, in order
 
-1. On SRV-DEB-05, run `sha256sum -c <exact-package-path>.sha256` and `tar -tzf <exact-package-path> >/dev/null`; retain the outputs.
+1. **Completed on SRV-DEB-05:** `sha256sum -c` returned `Réussi`; `tar -tzf "$PKG" >/dev/null` succeeded and printed `TAR_READABLE=YES`.
 2. Transfer the archive and checksum sidecar by SCP to the Windows workstation; independently compare the downloaded file's SHA-256 with the server value.
 3. Extract only into a new isolated workspace. Never overlay the active checkout or production files.
 4. Review the manifest, per-file checksums, R33/V1/V145 source tree and the 27,623-line diff. Start with entry points, routes/API contracts, UI flows, dependencies, error handling and security boundaries.
@@ -64,5 +64,5 @@ No claim is made that:
 
 ## Evidence level
 
-**Confirmed by host output:** source-path inventory, historical export readability checks, corrected collector syntax check, package creation output and zero collector exit code.  
-**Pending:** independent archive/checksum verification, SCP verification, semantic source review, dependency/build tests, isolated integration/E2E and any live-runtime qualification.
+**Confirmed by host output:** source-path inventory, historical export readability checks, corrected collector syntax check, package creation output and zero collector exit code. On 2026-10-19 the user ran `sha256sum -c` against the exact package sidecar and received `Réussi`; `tar -tzf "$PKG" >/dev/null` also completed and printed `TAR_READABLE=YES`. These confirm the server-side archive checksum and gzip/TAR readability for that file.  
+**Pending:** SCP/workstation transfer verification, semantic source review, dependency/build tests, isolated integration/E2E and any live-runtime qualification.
