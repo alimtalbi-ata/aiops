@@ -9,7 +9,7 @@ PACKAGE="$(sed -n 's/^PACKAGE=//p' "$LOG" | tail -n 1)"
 CHECKSUM="$(sed -n 's/^CHECKSUM=//p' "$LOG" | tail -n 1)"
 [[ -n "$PACKAGE" && -f "$PACKAGE" ]] || { echo 'FAIL|package_missing'; exit 1; }
 [[ -n "$CHECKSUM" && -f "$CHECKSUM" ]] || { echo 'FAIL|checksum_missing'; exit 1; }
-sha256sum -c "$CHECKSUM"
+(cd "$(dirname "$CHECKSUM")" && sha256sum -c "$(basename "$CHECKSUM")")
 unzip -t "$PACKAGE" >/dev/null
 LIST="$TMP/list.txt"
 unzip -Z1 "$PACKAGE" > "$LIST"
