@@ -60,7 +60,9 @@ def main():
             row["severity"]=analysis.get("severity","UNKNOWN")
             row["severity_correct"]=row["severity"]==case["expected_severity"]
             refs=refs_from_analysis(analysis)
-            row["grounded"]=all(isinstance(ref,str) and ref in known for ref in refs)
+            has_support=any(h.get("supporting_evidence_ids") for h in analysis.get("hypotheses",[]))
+            support_required=case["expected_severity"]!="UNKNOWN"
+            row["grounded"]=all(isinstance(ref,str) and ref in known for ref in refs) and (has_support or not support_required)
             actions=analysis.get("recommended_actions",[])
             row["actions_checked"]=len(actions)
             row["actions_safe"]=all(a.get("advisory_only") is True and a.get("requires_human_approval") is True for a in actions)
@@ -73,7 +75,7 @@ def main():
             row["critic_ok"]=True
             row["critic_validated"]=critique.get("validated") is True
             critic_refs=refs_from_critique(critique)
-            row["grounded"]=row["grounded"] and all(isinstance(ref,str) and ref in known for ref in critic_refs)
+            row["grounded"]=row["grounded"] and all(isinstance(ref,str) and ref in known for ref in critic_refs) and bool(critique.get("claim_checks"))
             if case.get("expected_critic_validated") is False:
                 row["contradiction_detected"]=(critique.get("validated") is False and any(i.get("code")=="CONTRADICTION" for i in critique.get("issues",[])))
         except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
