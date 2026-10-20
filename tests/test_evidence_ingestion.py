@@ -69,7 +69,9 @@ class EvidenceIngestionTests(unittest.TestCase):
 
     def test_exact_replay_returns_existing_evidence(self):
         payload=event()
-        digest=evidence_digest(canonical_evidence(**payload.model_dump()))
+        body=payload.model_dump()
+        body["provenance"]={**body["provenance"],"identity_contract":"canonical-envelope-v1"}
+        digest=evidence_digest(canonical_evidence(**body))
         conn=FakeConnection(None,("EVD-PRIOR",digest))
         with patch.object(API,"db",lambda:connection(conn)):
             value=API.create(payload,authorization="Bearer unit-only-token")
@@ -97,6 +99,12 @@ class EvidenceIngestionTests(unittest.TestCase):
     def test_timezone_naive_evidence_cannot_be_ingested(self):
         with self.assertRaises(HTTPException) as result:
             API.create(event(observed_at="2026-10-20T06:00:00"),
+                       authorization="Bearer unit-only-token")
+        self.assertEqual(result.exception.status_code,422)
+
+    def test_identity_contract_cannot_be_forged_by_caller(self):
+        with self.assertRaises(HTTPException) as result:
+            API.create(event(provenance={"synthetic":True,"identity_contract":"canonical-envelope-v1"}),
                        authorization="Bearer unit-only-token")
         self.assertEqual(result.exception.status_code,422)
 
