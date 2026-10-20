@@ -342,18 +342,18 @@ services:
       aiops2-core: {condition: service_healthy}
 
 networks:
-  aiops2-public: {name: ${AIOPS_STACK_ID:-aiops2}-public}
-  aiops2-control: {name: ${AIOPS_STACK_ID:-aiops2}-control, internal: true}
-  aiops2-data: {name: ${AIOPS_STACK_ID:-aiops2}-data, internal: true}
-  aiops2-execution: {name: ${AIOPS_STACK_ID:-aiops2}-execution, internal: true}
-  aiops2-temporal-data: {name: ${AIOPS_STACK_ID:-aiops2}-temporal-data, internal: true}
-  aiops2-integration: {name: ${AIOPS_STACK_ID:-aiops2}-integration, internal: true}
-  aiops2-observability: {name: ${AIOPS_STACK_ID:-aiops2}-observability, internal: true}
+  aiops2-public: {name: "${AIOPS_STACK_ID:-aiops2}-public"}
+  aiops2-control: {name: "${AIOPS_STACK_ID:-aiops2}-control", internal: true}
+  aiops2-data: {name: "${AIOPS_STACK_ID:-aiops2}-data", internal: true}
+  aiops2-execution: {name: "${AIOPS_STACK_ID:-aiops2}-execution", internal: true}
+  aiops2-temporal-data: {name: "${AIOPS_STACK_ID:-aiops2}-temporal-data", internal: true}
+  aiops2-integration: {name: "${AIOPS_STACK_ID:-aiops2}-integration", internal: true}
+  aiops2-observability: {name: "${AIOPS_STACK_ID:-aiops2}-observability", internal: true}
 volumes:
-  aiops2-postgres-data: {name: ${AIOPS_STACK_ID:-aiops2}-postgres-data}
-  aiops2-temporal-postgres-data: {name: ${AIOPS_STACK_ID:-aiops2}-temporal-postgres-data}
-  aiops2-prometheus-data: {name: ${AIOPS_STACK_ID:-aiops2}-prometheus-data}
-  aiops2-grafana-data: {name: ${AIOPS_STACK_ID:-aiops2}-grafana-data}
-  aiops2-glpi-db-data: {name: ${AIOPS_STACK_ID:-aiops2}-glpi-db-data}
-  aiops2-glpi-data: {name: ${AIOPS_STACK_ID:-aiops2}-glpi-data}
-  aiops2-n8n-data: {name: ${AIOPS_STACK_ID:-aiops2}-n8n-data}
+  aiops2-postgres-data: {name: "${AIOPS_STACK_ID:-aiops2}-postgres-data"}
+  aiops2-temporal-postgres-data: {name: "${AIOPS_STACK_ID:-aiops2}-temporal-postgres-data"}
+  aiops2-prometheus-data: {name: "${AIOPS_STACK_ID:-aiops2}-prometheus-data"}
+  aiops2-grafana-data: {name: "${AIOPS_STACK_ID:-aiops2}-grafana-data"}
+  aiops2-glpi-db-data: {name: "${AIOPS_STACK_ID:-aiops2}-glpi-db-data"}
+  aiops2-glpi-data: {name: "${AIOPS_STACK_ID:-aiops2}-glpi-data"}
+  aiops2-n8n-data: {name: "${AIOPS_STACK_ID:-aiops2}-n8n-data"}
