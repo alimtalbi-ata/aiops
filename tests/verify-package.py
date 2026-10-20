@@ -2,6 +2,7 @@
 """Verify a cumulative AIOps release ZIP without extracting untrusted files."""
 from __future__ import annotations
 import hashlib
+import json
 from pathlib import Path, PurePosixPath
 import re
 import sys
@@ -43,7 +44,7 @@ def verify(archive: Path) -> dict:
                   "db/migrations/010_evidence_identity.sql",
                   "deploy/verify_backup.py","tests/evidence-e2e.sh",
                   "tests/runtime-e2e.sh","tests/model-evaluation-e2e.sh",
-                  "09-Qualification/ai-core-evaluation.json"}
+                  "deploy/package_tree.py","deploy/plan_isolation.py"}
         if not required.issubset(names):
             raise ValueError("required_files_missing:"+",".join(sorted(required-set(names))))
         manifest=z.read("FILES-SHA256SUMS").decode("utf-8")
@@ -63,15 +64,47 @@ def verify(archive: Path) -> dict:
             if sha256(z.read(name))!=digest:
                 raise ValueError("manifest_checksum_mismatch:"+name)
         release=z.read("RELEASE-MANIFEST.txt").decode("utf-8")
-        if "qualification=CI-runtime-e2e-PASS" not in release:
-            raise ValueError("runtime_qualification_not_passed")
-        if "synthetic_analyst_critic_quality=PASS" not in release:
-            raise ValueError("synthetic_ai_qualification_not_passed")
-        if "real_model_qualification=NOT_RUN" not in release:
+        meta={}
+        for line in release.splitlines():
+            if "=" not in line:
+                raise ValueError("invalid_release_manifest_entry")
+            key,value=line.split("=",1)
+            if key in meta:
+                raise ValueError("duplicate_release_manifest_key")
+            meta[key]=value
+        if meta.get("real_model_qualification")!="NOT_RUN":
             raise ValueError("real_model_qualification_must_be_explicit")
+        if meta.get("production_qualification")!="NOT_RUN":
+            raise ValueError("production_qualification_must_be_explicit")
+        declared=meta.get("qualification")
+        if declared=="CI-runtime-e2e-PASS":
+            required_reports={"09-Qualification/ai-core-evaluation.json"}
+            runtime_reports=[item for item in names if item.startswith("09-Qualification/runtime-e2e-") and item.endswith(".json")]
+            if not required_reports.issubset(names) or not runtime_reports:
+                raise ValueError("qualified_release_missing_ci_evidence")
+            if meta.get("synthetic_analyst_critic_quality")!="PASS" or meta.get("ci_evidence_carried")!="yes":
+                raise ValueError("qualified_release_manifest_inconsistent")
+            evaluation=json.loads(z.read("09-Qualification/ai-core-evaluation.json"))
+            if (evaluation.get("result")!="PASS" or
+                evaluation.get("qualification_kind")!="deterministic-integration-fixture" or
+                evaluation.get("ledger_persistence",{}).get("status")!="PASS"):
+                raise ValueError("model_evaluation_ci_evidence_invalid")
+            for report_name in runtime_reports:
+                evidence=json.loads(z.read(report_name))
+                if evidence.get("result")!="PASS" or evidence.get("live_execution")!="disabled":
+                    raise ValueError("runtime_ci_evidence_invalid")
+            qualification="SYNTHETIC_CI_PASS"
+        elif declared=="static-unit-only":
+            if meta.get("synthetic_analyst_critic_quality")!="NOT_RUN" or meta.get("ci_evidence_carried")!="no":
+                raise ValueError("source_only_manifest_inconsistent")
+            if any(name.startswith("09-Qualification/") for name in names):
+                raise ValueError("unqualified_source_cannot_carry_ci_reports")
+            qualification="UNQUALIFIED_SOURCE_ONLY"
+        else:
+            raise ValueError("unknown_release_qualification_status")
     return {"archive":archive.name,"sha256":sha256(archive.read_bytes()),
             "files_verified":len(found),"status":"PASS",
-            "qualification":"synthetic CI integration, not production"}
+            "qualification":qualification}
 
 
 if __name__=="__main__":
@@ -80,7 +113,7 @@ if __name__=="__main__":
         raise SystemExit(2)
     try:
         result=verify(Path(sys.argv[1]))
-        print("PACKAGE_VERIFICATION=PASS|files="+str(result["files_verified"])+"|sha256="+result["sha256"])
+        print("PACKAGE_VERIFICATION=PASS|qualification="+result["qualification"]+"|files="+str(result["files_verified"])+"|sha256="+result["sha256"])
     except Exception as exc:
         print("PACKAGE_VERIFICATION=FAIL|reason="+str(exc),file=sys.stderr)
         raise SystemExit(1)
