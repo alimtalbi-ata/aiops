@@ -82,6 +82,35 @@ class BackupVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"unsafe_tar_member"):
             CHECK.verify_backup(self.root,"aiops2-rebuild")
 
+    def test_checksum_valid_symlink_member_is_rejected(self):
+        filename="aiops2-n8n-data.tar.gz"
+        with tarfile.open(self.root/filename,"w:gz") as tar:
+            member=tarfile.TarInfo("./link")
+            member.type=tarfile.SYMTYPE
+            member.linkname="safe-looking-target"
+            tar.addfile(member)
+        self._rebuild_checksums()
+        with self.assertRaisesRegex(ValueError,"backup_tar_special_member_forbidden"):
+            CHECK.verify_backup(self.root,"aiops2-rebuild")
+
+    def test_checksum_valid_device_member_is_rejected(self):
+        filename="aiops2-glpi-data.tar.gz"
+        with tarfile.open(self.root/filename,"w:gz") as tar:
+            member=tarfile.TarInfo("./unsafe-device")
+            member.type=tarfile.CHRTYPE
+            tar.addfile(member)
+        self._rebuild_checksums()
+        with self.assertRaisesRegex(ValueError,"backup_tar_special_member_forbidden"):
+            CHECK.verify_backup(self.root,"aiops2-rebuild")
+
+    def _rebuild_checksums(self):
+        entries=[]
+        for path in sorted(self.root.iterdir()):
+            if path.name=="SHA256SUMS":
+                continue
+            entries.append(hashlib.sha256(path.read_bytes()).hexdigest()+"  ./"+path.name)
+        (self.root/"SHA256SUMS").write_text("\\n".join(entries)+"\\n",encoding="utf-8")
+
     def test_missing_temporal_visibility_dump_is_rejected(self):
         (self.root/"temporal_visibility.dump").unlink()
         with self.assertRaisesRegex(ValueError,"missing_or_empty"):
