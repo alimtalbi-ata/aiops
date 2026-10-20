@@ -116,3 +116,33 @@ Every material change must update this record and the relevant architecture/deci
 3. Review the generated package contents and ensure no .env, backups or diagnostics are present.
 4. Add/execute disposable Temporal E2E with a deterministic fake provider and explicit provider timeout/malformed-output/retry tests.
 5. Keep LIVE execution disabled; only then progress toward real evidence adapters and ACME twin qualification.
+
+## RECONSTRUCTION MILESTONE — 2026-10-20 (supersedes earlier CI pending notes)
+
+**Status:** latest verified release-producing commit `65ee946d31030c18ee554f572130295b9b82be46` on branch `feat/core-analysis-quality-v2`, draft PR #21. Do not interpret earlier “E2E not yet run” notes as current status.
+
+### Actual qualification evidence
+- **CI run 39371018120 PASS for all five jobs:** quality-build-package, database-migrations, migration-runner-upgrade, runtime-e2e and release-kit. https://github.com/alimtalbi-ata/aiops/actions/runs/39371018120
+- Cumulative kit artifact `aiops2-core-deployment-kit`, GitHub artifact id `12241690507`, release file `AIOps-2.0.0-core-qualification.1-Core-Deployment-Kit-20261020T044458Z.zip`.
+- Verified SHA-256 (actual ZIP) `145b31f3c26bc809df727b2d3b7f3ed2312658337692f6148a6d2abea11800e4`; outer checksum matches. ZIP CRC and all 146 manifest-listed payload files passed `tests/verify-package.py`.
+- Cumulative package includes source and infrastructure, 10 SQL migrations, 18 deployment Shell scripts, 28 test files, documentation and integrated reports under `09-Qualification/`.
+- Synthetic Temporal E2E run `RUN-A19102CAD44B972F`: run status RESOLVED, one persisted analysis, one persisted critique, one persisted policy decision, **zero actual effect receipts**; report PASS.
+- Deterministic synthetic Analyst/Critic evaluation: 5/5 scenario cases successfully assessed; severity accuracy 1.0, grounding 1.0, freshness accuracy 1.0, action safety 1.0, injection fixture resistance 1.0, contradiction detection 1.0. Four strictly advisory proposals checked; evaluation saved in immutable PostgreSQL ledger, `ledger_persistence.status=PASS`.
+- Docker Compose environment is configurable by `AIOPS_STACK_ID` and `COMPOSE_PROJECT_NAME`, distinct container/network/volume namespaces; host services default to loopback. Isolated deployment script `deploy/install-isolated.sh` configures `aiops2-rebuild` with separate ports and refuses unsafe clashes. Its `--configure-only` identity/port contract runs in CI without modifying a production host.
+- New runbook: [Isolated deployment](DEPLOYMENT-ISOLATED-REBUILD-RUNBOOK.md). Execution roadmap: [Reconstruction plan](RECONSTRUCTION-EXECUTION-PLAN.md).
+
+### Strict limitations, still unresolved
+- **Real inference quality NOT RUN:** the CI provider is a deterministic synthetic fixture, not an actual DGX/Mistral/Qwen/other local LLM. No real-model accuracy claim.
+- **Production Debian deployment NOT RUN:** CI tests use disposable GitHub runners. No production containers, databases or volumes altered.
+- **LIVE actions/remediation NOT QUALIFIED and disabled** pending safe adapters, independent verification, HITL, effect fencing and dedicated qualification.
+- The synthetic ACME fixture is not yet a fully calibrated, validated enterprise digital twin.
+- The release is a core integration qualification, **not** a production-ready release or the completed full autonomy objective.
+
+### Next engineering batch
+1. Add nontrivial provider-fault fixtures and Temporal replay/retry/fencing/adversarial concurrency E2E; CI must report verified PASS/FAIL per case.
+2. Qualify Analyst/Critic with a **real model endpoint** against larger holdout sets, track calibrated evidence quality and critic defect catch rate. No model self-certification or direct execution.
+3. Implement read-only CMDB/monitoring/RAG adapters with source freshness, provenance, auth, timeouts, and integration tests.
+4. Wire HITL approvals, immutable action hashes, fencing, verification and reconciliation for optional guarded action proposals (keep LIVE blocked until certified).
+5. Expand ACME digital twin and produce an actual reproducible UI demonstration and video only after Core acceptance.
+6. Continue using GitHub PRs/CI release ZIPs as source of truth; minimize chat-to-Debian round trips.
+
