@@ -1,4 +1,4 @@
-import os,asyncio,datetime,hashlib,json
+import os,asyncio,datetime,hashlib,json,logging
 from fastapi import FastAPI,HTTPException,Header
 from temporalio import activity
 from temporalio.client import Client
@@ -8,6 +8,8 @@ from worker.workflow import IncidentWorkflow, STAGES, RETRY
 from shared.http import post_json,get_json
 from shared.freshness import assess_evidence_freshness
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
+log=logging.getLogger('aiops2.worker')
+worker_state={'polling':False,'last_error':None,'attempts':0}
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233');INTEL=os.getenv('INTELLIGENCE_URL','http://aiops2-intelligence:817')
@@ -83,8 +85,8 @@ async def execute_stage(a):
                     return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked['version']}
                 return saved
             except Exception as exc:
-                blocked_event=call('POST',f'/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'INTELLIGENCE_UNAVAILABLE','event_key':f'{stage}:UNAVAILABLE','status':'BLOCKED','decision':'HUMAN_APPROVAL','confidence':0,'payload':{'reason':type(exc).__name__,'synthetic_evidence_created':False,'execution_allowed':False}})
-                blocked=call('POST',f'/api/runs/{rid}/command',{'expected_version':blocked_event['version'],'idempotency_key':f'INTELLIGENCE-BLOCK-{rid}-{stage}','command':'BLOCK'})
+                blocked_event=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'INTELLIGENCE_UNAVAILABLE','event_key':f'{stage}:UNAVAILABLE','status':'BLOCKED','decision':'HUMAN_APPROVAL','confidence':0,'payload':{'reason':type(exc).__name__,'synthetic_evidence_created':False,'execution_allowed':False}})
+                blocked=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':blocked_event['version'],'idempotency_key':f'INTELLIGENCE-BLOCK-{rid}-{stage}','command':'BLOCK'})
                 return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked['version']}
         ev=post_json(EVID,'/api/evidence',{'source':f'run:{rid}:{stage.lower()}','claim':f'{stage} completed for scenario {scenario}','confidence':0.94,'provenance':{'synthetic':synthetic,'run_id':rid,'stage':stage,'scenario_id':scenario,'record_type':'stage_marker'},'payload':{'stage':stage,'scenario_id':scenario,'mode':mode,'attempt':activity.info().attempt}},token=ADMIN)
         eids=[ev['evidence_id']]
@@ -119,7 +121,10 @@ async def execute_stage(a):
 @activity.defn
 async def finish_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
 @app.get('/health')
-def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
+def health():
+ if not worker_state['polling']:
+  raise HTTPException(503,{'status':'unavailable','component':'worker','reason':'temporal_poller_not_running'})
+ return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
 def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
@@ -132,9 +137,18 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
   return {'workflow_id':args['run_id'],'run_id':args['run_id'],'executor':'temporal','idempotent':True}
 async def worker_main():
  while True:
+  worker_state['polling']=False
+  worker_state['attempts']+=1
   try:
    c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):await asyncio.Event().wait()
-  except Exception:await asyncio.sleep(5)
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):
+    worker_state['polling']=True
+    worker_state['last_error']=None
+    await asyncio.Event().wait()
+  except Exception as exc:
+   worker_state['polling']=False
+   worker_state['last_error']=type(exc).__name__
+   log.exception('Temporal polling worker unavailable; retrying in 5s')
+   await asyncio.sleep(5)
 @app.on_event('startup')
 async def startup():asyncio.create_task(worker_main())
