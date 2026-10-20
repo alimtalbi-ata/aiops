@@ -73,6 +73,8 @@ jobs:
         run: bash tests/isolated-deploy-contract.sh
       - name: Zero-mutation isolation plan and topology safety tests
         run: python -m unittest discover -s tests -p "test_deployment_isolation.py" -v
+      - name: Read-only operational status and redaction tests
+        run: python -m unittest discover -s tests -p "test_stack_status.py" -v
       - name: Generate isolated CI environment
         run: bash deploy/init-env.sh
       - name: Validate full Compose model
@@ -278,6 +280,7 @@ jobs:
           bash tests/lifecycle-safety-contract.sh
           bash tests/isolated-deploy-contract.sh
           python -m unittest discover -s tests -p "test_deployment_isolation.py" -v
+          python -m unittest discover -s tests -p "test_stack_status.py" -v
           bash tests/temporal-contract.sh
       - name: Generate isolated packaging environment
         run: bash deploy/init-env.sh
