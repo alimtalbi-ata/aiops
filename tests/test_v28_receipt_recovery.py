@@ -49,3 +49,22 @@ class ReceiptRecoveryTests(unittest.TestCase):
         self.ns["get_json"]=unavailable
         with self.assertRaises(ConnectionError):
             self.recover("RUN-QF132")
+
+class CriticIncompleteReplayTests(unittest.TestCase):
+    setUp=ReceiptRecoveryTests.setUp
+    def test_completed_critic_without_block_is_fail_closed(self):
+        self.run["status"]="RUNNING"
+        self.ns["AtomicDenialBlockError"]=RuntimeError
+        original=self.ns["get_json"]
+        def get(base,path,**kw):
+            result=original(base,path,**kw)
+            if not path.endswith("/receipt"):
+                result["events"]=[{
+                    "stage":"DGX_CRITIC",
+                    "event_type":"CRITIC_COMPLETED"
+                }]
+            return result
+        self.ns["get_json"]=get
+        with self.assertRaisesRegex(RuntimeError,"durable_resume"):
+            self.recover("RUN-QF132")
+        self.assertEqual(len(self.calls),1)

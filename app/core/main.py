@@ -254,12 +254,34 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
         # previous expected_version. Resolve the *same* idempotent semantic event
         # before checking its stale version; conflicting key reuse still fails.
         if x.event_key:
-            previous=c.execute('select sequence,stage,event_type,status from aiops.run_events where run_id=%s and event_key=%s',
-                               (rid,x.event_key)).fetchone()
+            previous=c.execute(
+                'SELECT sequence,stage,event_type,status,evidence_ids,'
+                'decision,confidence,payload FROM aiops.run_events '
+                'WHERE run_id=%s AND event_key=%s',
+                (rid,x.event_key)
+            ).fetchone()
             if previous:
-                if tuple(previous[1:])!=(x.stage,x.event_type,x.status):
-                    raise HTTPException(409,'event_key_reused_for_different_semantic_event')
-                return {'run_id':rid,'sequence':previous[0],'version':row[0],'idempotent':True}
+                def canonical(value):
+                    if isinstance(value,str):
+                        value=json.loads(value)
+                    return json.dumps(value,sort_keys=True,separators=(',',':'))
+                same=(
+                    previous[1]==x.stage
+                    and previous[2]==x.event_type
+                    and previous[3]==x.status
+                    and canonical(previous[4])==canonical(x.evidence_ids or [])
+                    and previous[5]==x.decision
+                    and previous[6]==x.confidence
+                    and canonical(previous[7])==canonical(x.payload or {})
+                )
+                if not same:
+                    raise HTTPException(409,'event_idempotency_conflict')
+                return {
+                    'run_id':rid,
+                    'sequence':previous[0],
+                    'version':row[0],
+                    'idempotent':True
+                }
         if row[0]!=x.expected_version:raise HTTPException(409,'stale run version')
         if x.evidence_ids:
             n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(x.evidence_ids,)).fetchone()[0]

@@ -139,7 +139,17 @@ async def execute_stage(a):
 
 def recover_committed_critic_block(rid):
     detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
-    if detail.get('run',{}).get('status')!='BLOCKED':
+    status=detail.get('run',{}).get('status')
+    if status!='BLOCKED':
+        completed=any(
+            e.get('stage')=='DGX_CRITIC'
+            and e.get('event_type')=='CRITIC_COMPLETED'
+            for e in detail.get('events',[])
+        )
+        if completed or status!='RUNNING':
+            raise AtomicDenialBlockError(
+                'critic_replay_requires_durable_resume'
+            )
         return None
     receipt=get_json(
         CORE,f'/api/runs/{rid}/critic-denial-block/receipt',
