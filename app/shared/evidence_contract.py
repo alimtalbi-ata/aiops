@@ -6,6 +6,7 @@ useful context, but current-state claims require fresh, traceable records.
 from __future__ import annotations
 
 from .freshness import assess_evidence_freshness
+from .evidence_identity import canonical_evidence, evidence_digest
 
 
 def validate_evidence(evidence):
@@ -34,6 +35,21 @@ def validate_evidence(evidence):
         if item.get("_aiops_quality") is not None:
             # Metadata is calculated internally; a client must not masquerade as the guard.
             errors.append("client_supplied_quality_metadata:"+str(position))
+        if provenance.get("identity_contract")=="canonical-envelope-v1":
+            try:
+                envelope=canonical_evidence(
+                    source=item.get("source"),
+                    external_id=item.get("external_id"),
+                    observed_at=item.get("observed_at"),
+                    claim=item.get("claim"),
+                    confidence=item.get("confidence"),
+                    provenance=provenance,
+                    payload=item.get("payload")
+                )
+                if item.get("payload_hash")!=evidence_digest(envelope):
+                    errors.append("canonical_evidence_digest_mismatch:"+str(position))
+            except (TypeError,ValueError):
+                errors.append("canonical_evidence_material_invalid:"+str(position))
     return errors
 
 
