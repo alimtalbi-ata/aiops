@@ -1,9 +1,19 @@
 from typing import Literal
+import os,hmac
 
-from fastapi import FastAPI
+from fastapi import FastAPI,Header,HTTPException
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="ACME Policy Engine", version="2.1.0")
+app = FastAPI(title="ACME Policy Engine", version="2.2.0")
+INTERNAL_TOKEN=os.getenv("AIOPS_INTERNAL_TOKEN","")
+
+
+def authorize(authorization):
+    if not INTERNAL_TOKEN:
+        raise HTTPException(503,"internal_auth_not_configured")
+    supplied=(authorization or "").removeprefix("Bearer ")
+    if not supplied or not hmac.compare_digest(supplied,INTERNAL_TOKEN):
+        raise HTTPException(401,"invalid_internal_token")
 
 
 class Decision(BaseModel):
@@ -94,7 +104,8 @@ def health():
 
 
 @app.post("/api/policy/check")
-def check(x: Decision):
+def check(x: Decision,authorization: str|None=Header(default=None)):
+    authorize(authorization)
     return evaluate(x)
 
 
