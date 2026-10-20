@@ -89,7 +89,9 @@ class EvidenceIngestionTests(unittest.TestCase):
 
     def test_no_external_id_falls_back_to_full_digest(self):
         payload=event(external_id=None)
-        digest=evidence_digest(canonical_evidence(**payload.model_dump()))
+        body=payload.model_dump()
+        body["provenance"]={**body["provenance"],"identity_contract":"canonical-envelope-v1"}
+        digest=evidence_digest(canonical_evidence(**body))
         conn=FakeConnection(None,("EVD-PRIOR",digest))
         with patch.object(API,"db",lambda:connection(conn)):
             value=API.create(payload,authorization="Bearer unit-only-token")
