@@ -48,7 +48,7 @@ def eligible(path: Path) -> bool:
 def prepare_copy(source: Path, destination: Path) -> int:
     source = source.resolve()
     destination = destination.resolve()
-    if source == destination or source in destination.parents is False and destination in source.parents:
+    if source == destination or source in destination.parents or destination in source.parents:
         raise PackagingError("unsafe_source_destination_overlap")
     if destination.exists() and any(destination.iterdir()):
         raise PackagingError("destination_not_empty")
