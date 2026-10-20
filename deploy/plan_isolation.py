@@ -117,10 +117,11 @@ def verify_compose(config: dict, report: dict) -> dict:
                 raise IsolationError("unrecognized_port_binding:" + name)
             ip = binding.get("host_ip", "")
             try:
-                if not ipaddress.ip_address(ip).is_loopback:
-                    raise IsolationError("port_published_outside_loopback:" + name)
+                published_address = ipaddress.ip_address(ip)
             except ValueError as exc:
                 raise IsolationError("missing_or_invalid_port_bind:" + name) from exc
+            if not published_address.is_loopback:
+                raise IsolationError("port_published_outside_loopback:" + name)
     return {**report, "resolved_compose_valid": True, "services": len(services),
             "networks": len(config.get("networks", {})),
             "volumes": len(config.get("volumes", {}))}
