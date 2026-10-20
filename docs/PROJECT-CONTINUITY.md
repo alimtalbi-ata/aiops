@@ -168,3 +168,15 @@ Every material change must update this record and the relevant architecture/deci
 - CI additionally executes `tests/test_redact_logs.py` and `tests/lifecycle-safety-contract.sh`. A cumulative RC1.2 ZIP must be obtained from the successful release-kit GitHub Actions artifact and include runtime and model evaluation reports.
 - The verified CI for RC1.1 is GitHub Actions #39386565967, commit `4dc3032300452612f49e2ef98d44be29f835f9ca`. Its synthetic Temporal and model-fixture tests are PASS, **but it is not a real-model or server deployment acceptance result**.
 - Next: validate RC1.2 CI and packaging checksum, then qualify an actual OpenAI-compatible model offline; expand CMDB/RAG and eventually the ACME Twin, after core exit criteria are met.
+
+## 2026-10-20 — RC1.3 isolation, failure injection and distributable source kit
+
+- **Branch:** `feat/core-analysis-quality-v2`, **PR:** #21; `main` is unchanged. The candidate version is `2.1.0-core-rc1.3`.
+- `deploy/plan_isolation.py` validates the expected project name, container/network/volume prefixes, privileges, all published ports and loopback binding **before deployment**. It emits no secrets. The isolated installer invokes it before Compose operations. `tests/test_deployment_isolation.py` and `tests/isolated-deploy-contract.sh` exercise the contracts.
+- `deploy/status.py` offers a bounded, read-only operational status/health report with no commands, environment values, tokens or raw logs. `tests/test_stack_status.py` covers Docker output variants, project mixing and secret filtering.
+- `tests/test_ai_failure_injection.py` injects falsified evidence IDs, stale observations, client-controlled freshness, contradictory source reports and unauthorized requests; critical claims must fail closed.
+- `deploy/package_tree.py` adds a fallback for **rebuilding a cumulative ZIP from an extracted kit without a Git repository**. `tests/test_package_tree.py` checks source completeness and exclusion of secrets, backups, caches, credential files and symlinks.
+- `docs/CORE-RC13-QUALIFICATION-OPERATIONS.md` documents Windows-to-Debian transfer, isolated install, read-only status, model evaluation and dual SHA-256 verification.
+- **Qualification status:** the previous reconstruction baseline passed full synthetic CI at GitHub Actions #39390130618. The RC1.3 candidate has new tests and awaits a successful full CI execution before its new cumulative ZIP may be called qualified.
+- **Next decision:** inspect RC1.3 CI and artifact, qualify a real OpenAI-compatible model offline, then expand read-only context acquisition/RAG and human-approved guarded effects. LIVE remains disabled; no Debian production changes are authorized.
+
