@@ -52,6 +52,9 @@ def audit(kit, repo, override):
     if not ids:
         raise RuntimeError("REFUSED: isolated stack not found")
     containers = json.loads(run("docker", "inspect", *ids))
+    image_ids = sorted({item["Image"] for item in containers})
+    image_objects = json.loads(run("docker", "image", "inspect", *image_ids))
+    image_by_id = {obj["Id"]: obj for obj in image_objects}
     entries = []
     problems = []
     for item in containers:
@@ -67,12 +70,23 @@ def audit(kit, repo, override):
         observed = set(item["NetworkSettings"]["Networks"])
         if expected != observed:
             problems.append("network_mismatch:" + service)
+        image_labels = (image_by_id[item["Image"]].get("Config", {}).get("Labels") or {})
+        declared_revision = image_labels.get("org.opencontainers.image.revision")
+        source = image_labels.get("org.opencontainers.image.source")
+        image_match = image_by_id[item["Image"]]["Id"] == item["Image"]
+        if not image_match:
+            problems.append("image_identity_mismatch:" + service)
         entries.append({
             "name": name, "service": service,
             "state": item["State"]["Status"],
             "health": item["State"].get("Health", {}).get("Status", "not_defined"),
             "image_reference": item["Config"]["Image"],
             "image_id": item["Image"],
+            "oci_revision": declared_revision,
+            "oci_source": source,
+            "oci_version": image_labels.get("org.opencontainers.image.version"),
+            "image_identity_match": image_match,
+            "provenance_status": "DECLARED_UNVERIFIED" if declared_revision else "MISSING",
             "network_expected": sorted(expected),
             "network_observed": sorted(observed),
             "network_match": expected == observed,
@@ -102,11 +116,17 @@ def audit(kit, repo, override):
         "source_digests_sha256": path_hashes,
         "containers": sorted(entries, key=lambda x: x["name"]),
         "container_count": len(entries),
+        "provenance_summary": {
+            "oci_revision_present": sum(bool(e["oci_revision"]) for e in entries),
+            "oci_revision_missing": sum(not e["oci_revision"] for e in entries),
+            "meaning": "OCI revisions are declared metadata, not verified build-to-source attestations."
+        },
         "validation": {"network_alignment": "PASS" if not problems else "FAIL",
                        "problems": sorted(problems)},
         "limitations": [
             "Manifest is observational, not cryptographically signed.",
             "Git reference is not proof of deployed image provenance.",
+            "OCI labels, even when present, do not independently attest build provenance.",
             "Application/API/DGX connectivity and backups are not validated.",
             "Only running containers are inventoried; stopped services need separate review."
         ]
@@ -136,6 +156,8 @@ def main():
         print("AUDIT_PATH=", path)
         print("CONTAINERS=", data["container_count"])
         print("NETWORK_ALIGNMENT=", data["validation"]["network_alignment"])
+        print("OCI_REVISION_PRESENT=", data["provenance_summary"]["oci_revision_present"])
+        print("OCI_REVISION_MISSING=", data["provenance_summary"]["oci_revision_missing"])
         print("DEPLOYED_GIT_COMMIT=UNVERIFIED")
         return 0 if data["validation"]["network_alignment"] == "PASS" else 1
     except (RuntimeError, OSError, subprocess.CalledProcessError, ValueError, KeyError) as exc:
