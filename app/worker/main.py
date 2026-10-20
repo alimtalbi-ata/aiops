@@ -13,6 +13,12 @@ worker_state={'polling':False,'last_error':None,'attempts':0}
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233');INTEL=os.getenv('INTELLIGENCE_URL','http://aiops2-intelligence:817')
+# Bounded by Temporal's 180-second activity deadline, including ledger writes.
+# Keep at least 30 seconds for persistence and cancellation overhead.
+DGX_HTTP_TIMEOUT_SECONDS=int(os.getenv('AIOPS_DGX_HTTP_TIMEOUT_SECONDS','120'))
+if not 15 <= DGX_HTTP_TIMEOUT_SECONDS <= 150:
+    raise RuntimeError('AIOPS_DGX_HTTP_TIMEOUT_SECONDS must be between 15 and 150')
+
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
 @activity.defn
 async def start_run(a):
@@ -76,7 +82,7 @@ def _execute_stage_blocking(a,attempt):
                 scenario_context=get_json(CORE,f'/api/scenarios/{scenario}',token=ADMIN)
                 incident={'incident_id':detail['run'].get('incident_id'),'run_id':rid,'title':scenario_context.get('scenario',{}).get('name',scenario),'severity':'UNKNOWN','source':'synthetic-scenario','synthetic':mode!='LIVE'}
                 if stage=='DGX_ANALYST':
-                    response=post_json(INTEL,'/api/intelligence/analyze',{'incident':incident,'evidence':source_evidence,'mode':mode,'context':{'scenario':scenario_context}},timeout=50,token=ADMIN)
+                    response=post_json(INTEL,'/api/intelligence/analyze',{'incident':incident,'evidence':source_evidence,'mode':mode,'context':{'scenario':scenario_context}},timeout=DGX_HTTP_TIMEOUT_SECONDS,token=ADMIN)
                     result=response['analysis']
                     evidence_ids=sorted(x['evidence_id'] for x in source_evidence)
                     evidence_key=hashlib.sha256(json.dumps(evidence_ids,separators=(',',':')).encode()).hexdigest()[:16]
@@ -87,7 +93,7 @@ def _execute_stage_blocking(a,attempt):
                 analyst_event=next((e for e in reversed(detail.get('events',[])) if e.get('stage')=='DGX_ANALYST' and e.get('event_type')=='ANALYST_COMPLETED'),None)
                 if not analyst_event or not isinstance(analyst_event.get('payload',{}).get('analysis'),dict):
                     raise RuntimeError('analyst_result_missing')
-                response=post_json(INTEL,'/api/intelligence/critic',{'incident':incident,'evidence':source_evidence,'mode':mode,'context':{'scenario':scenario_context},'analyst':analyst_event['payload']['analysis']},timeout=50,token=ADMIN)
+                response=post_json(INTEL,'/api/intelligence/critic',{'incident':incident,'evidence':source_evidence,'mode':mode,'context':{'scenario':scenario_context},'analyst':analyst_event['payload']['analysis']},timeout=DGX_HTTP_TIMEOUT_SECONDS,token=ADMIN)
                 result=response['critique'];state='PASS' if result.get('validated') is True else 'BLOCKED'
                 analysis_record_id=analyst_event.get('payload',{}).get('analysis_record_id')
                 if not analysis_record_id: raise RuntimeError('analysis_ledger_record_missing')
