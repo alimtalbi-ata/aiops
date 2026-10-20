@@ -34,7 +34,12 @@ def search(source:str|None=None,run_id:str|None=None,limit:int=100,authorization
 def create(x:In,authorization:str|None=Header(default=None)):
     authorize(authorization)
     try:
-        envelope=canonical_evidence(**x.model_dump())
+        supplied=x.model_dump()
+        if "identity_contract" in supplied["provenance"]:
+            raise ValueError("identity_contract_is_reserved_for_evidence_service")
+        supplied["provenance"]={**supplied["provenance"],
+                                "identity_contract":"canonical-envelope-v1"}
+        envelope=canonical_evidence(**supplied)
         digest=evidence_digest(envelope)
     except (ValueError,TypeError) as exc:
         raise HTTPException(422,detail={'code':'invalid_evidence_identity','reason':str(exc)}) from exc
