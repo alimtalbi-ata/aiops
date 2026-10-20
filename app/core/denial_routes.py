@@ -2,8 +2,8 @@
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
-from denial_fencing import claim_denials
-from denial_finalize import finalize_denial
+from core.denial_fencing import claim_denials
+from core.denial_finalize import finalize_denial
 
 class ClaimRequest(BaseModel):
     owner: str = Field(min_length=1,max_length=128)
