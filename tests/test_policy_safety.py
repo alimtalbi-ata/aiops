@@ -58,5 +58,35 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["decision"], "SIMULATE")
 
 
+
+    def test_demo_rejected_critic_is_blocked(self):
+        output=evaluate(decision(mode="DEMO",critic_validated=False))
+        self.assertEqual(output["state"],"BLOCKED")
+        self.assertEqual(output["decision"],"HUMAN_APPROVAL")
+
+    def test_demo_stale_evidence_must_not_simulate_a_success(self):
+        output=evaluate(decision(mode="DEMO",evidence_fresh=False))
+        self.assertEqual(output["state"],"BLOCKED")
+        self.assertEqual(output["decision"],"ENRICH")
+
+    def test_demo_unknown_severity_requires_enrichment(self):
+        output=evaluate(decision(mode="DEMO",severity="UNKNOWN"))
+        self.assertEqual(output["state"],"UNKNOWN")
+        self.assertEqual(output["decision"],"ENRICH")
+
+    def test_demo_low_confidence_does_not_pass(self):
+        output=evaluate(decision(mode="DEMO",confidence=.2))
+        self.assertEqual(output["state"],"BLOCKED")
+
+    def test_live_unknown_severity_cannot_allow_effects(self):
+        output=evaluate(decision(severity="UNKNOWN"))
+        self.assertEqual(output["state"],"UNKNOWN")
+        self.assertNotEqual(output["decision"],"ALLOW")
+
+    def test_simulated_p1_can_pass_only_as_simulation(self):
+        output=evaluate(decision(mode="DEMO",severity="P1"))
+        self.assertEqual(output["state"],"PASS")
+        self.assertEqual(output["decision"],"SIMULATE")
+
 if __name__ == "__main__":
     unittest.main()
