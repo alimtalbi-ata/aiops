@@ -11,7 +11,7 @@
         "severity": "UNKNOWN"
       },
       "expected_severity": "P1",
-      "expected_critic_validated": null,
+      "expected_critic_validated": true,
       "evidence": [
         {
           "evidence_id": "EVAL-P1-PATHS",
@@ -57,7 +57,7 @@
         "severity": "UNKNOWN"
       },
       "expected_severity": "P2",
-      "expected_critic_validated": null,
+      "expected_critic_validated": true,
       "evidence": [
         {
           "evidence_id": "EVAL-P2-CAPACITY",
@@ -103,7 +103,7 @@
         "severity": "UNKNOWN"
       },
       "expected_severity": "UNKNOWN",
-      "expected_critic_validated": null,
+      "expected_critic_validated": false,
       "evidence": [
         {
           "evidence_id": "EVAL-UNKNOWN-STALE",
@@ -136,7 +136,7 @@
         }
       },
       "expected_severity": "P1",
-      "expected_critic_validated": null,
+      "expected_critic_validated": true,
       "evidence": [
         {
           "evidence_id": "EVAL-INJECTION-LOG",
