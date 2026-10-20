@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/deploy" "$TMP/config"
-cp "$ROOT/deploy/init-env.sh" "$ROOT/deploy/install-isolated.sh" "$TMP/deploy/"
+cp "$ROOT/deploy/init-env.sh" "$ROOT/deploy/install-isolated.sh" "$ROOT/deploy/plan_isolation.py" "$TMP/deploy/"
 cp "$ROOT/config/.env.example" "$TMP/config/"
 (
  cd "$TMP"
