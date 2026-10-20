@@ -89,10 +89,19 @@ def evaluate(x: Decision) -> dict:
     elif x.confidence < 0.90:
         reason = "confidence threshold not met"
     else:
+        # No qualified LIVE effect executor, ownership lease, fencing validation,
+        # independently bound human-approval proof or reconciliation workflow
+        # exists yet. The caller's booleans cannot activate an effect.
+        if x.command in ("EXECUTE","RESOLVE","REMEDIATE"):
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "LIVE_EFFECTS_NOT_QUALIFIED: real effect adapters and fencing are disabled",
+            }
         return {
             "state": "PASS",
             "decision": "ALLOW",
-            "reason": "required evidence, approval and safety checks are satisfied",
+            "reason": "read-only live disposition satisfied; no effect permitted",
         }
 
     return {"state": "BLOCKED", "decision": "HUMAN_APPROVAL", "reason": reason}
