@@ -1,8 +1,8 @@
 import json
 from decimal import Decimal, InvalidOperation
 
-from critic_denial_prepare import prepare_critic_denial
-from critic_denial_block import block_with_denial
+from core.critic_denial_prepare import prepare_critic_denial
+from core.critic_denial_block import block_with_denial
 
 
 def equal_confidence(stored, reported):
