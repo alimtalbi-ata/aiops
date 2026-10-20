@@ -16,4 +16,7 @@ grep -Fq "idempotency_key text not null unique" "$SQL"
 grep -Fq "migration_checksum_changed" deploy/migrate.sh
 grep -Fq "BEGIN;" deploy/migrate.sh
 grep -Fq "COMMIT;" deploy/migrate.sh
+grep -Fq 'ux_evidence_source_payload_hash' db/migrations/010_evidence_identity.sql
+grep -Fq 'ux_evidence_source_external_identity' db/migrations/010_evidence_identity.sql
+grep -Fq 'on aiops.evidence(source,external_id)' db/migrations/010_evidence_identity.sql
 echo 'MIGRATION_CONTRACT=PASS'
