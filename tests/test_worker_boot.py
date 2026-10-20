@@ -44,7 +44,8 @@ class WorkerBootContractTests(unittest.TestCase):
 
     def test_external_io_is_not_executed_on_event_loop(self):
         import inspect
-        from worker import main
+        with patch.dict(os.environ,{"AIOPS_INTERNAL_TOKEN":"test-token","TEMPORAL_ADDRESS":"127.0.0.1:7233"}):
+            from worker import main
         self.assertTrue(inspect.iscoroutinefunction(main.start_run))
         self.assertTrue(inspect.iscoroutinefunction(main.execute_stage))
         self.assertTrue(inspect.iscoroutinefunction(main.finish_run))
