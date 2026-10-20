@@ -149,6 +149,29 @@ jobs:
         env:
           PGPASSWORD: ci-only-password
         run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f tests/sql/evidence-identity-invariants.sql
+      - name: Rehearse PostgreSQL logical backup and isolated restore
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          set -Eeuo pipefail
+          # Disposable CI PostgreSQL only; never reach an operator's server.
+          pg_dump -h 127.0.0.1 -U aiops -d aiops -Fc -f /tmp/aiops-restore-rehearsal.dump
+          test -s /tmp/aiops-restore-rehearsal.dump
+          pg_restore --list /tmp/aiops-restore-rehearsal.dump >/dev/null
+          psql -h 127.0.0.1 -U aiops -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE aiops_restore_rehearsal'
+          pg_restore -h 127.0.0.1 -U aiops -d aiops_restore_rehearsal --no-owner --exit-on-error --single-transaction /tmp/aiops-restore-rehearsal.dump
+          src="$(psql -h 127.0.0.1 -U aiops -d aiops -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='aiops'")"
+          restored="$(psql -h 127.0.0.1 -U aiops -d aiops_restore_rehearsal -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='aiops'")"
+          [[ "$src" -gt 0 && "$src" == "$restored" ]] || { echo 'FAIL|restore_table_count_mismatch'; exit 1; }
+          for table in evidence analysis_records critique_records policy_decisions; do
+            src_count="$(psql -h 127.0.0.1 -U aiops -d aiops -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM aiops.$table")"
+            restored_count="$(psql -h 127.0.0.1 -U aiops -d aiops_restore_rehearsal -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM aiops.$table")"
+            [[ "$src_count" == "$restored_count" ]] || { echo "FAIL|restore_data_mismatch|$table"; exit 1; }
+          done
+          psql -h 127.0.0.1 -U aiops -d postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE aiops_restore_rehearsal'
+          rm -f /tmp/aiops-restore-rehearsal.dump
+          echo 'POSTGRES_RESTORE_REHEARSAL=PASS|scope=disposable_ci_only'
+
       - name: Reapply Evidence identity migration to prove idempotency
         env:
           PGPASSWORD: ci-only-password
