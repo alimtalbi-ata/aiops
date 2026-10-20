@@ -14,7 +14,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$ROOT/reports"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-psql -d postgres -At -v ON_ERROR_STOP=1 -c "SELECT 1 FROM pg_database WHERE datname='$TARGET'" | grep -qx 0 && { echo 'FAIL|existing_dr_target'; exit 2; } || true
 if [[ "$(psql -d postgres -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_database WHERE datname='$TARGET'")" != 0 ]]; then
   echo 'FAIL|existing_dr_target'; exit 2
 fi
