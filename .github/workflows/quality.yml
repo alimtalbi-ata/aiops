@@ -62,7 +62,7 @@ jobs:
       - name: Temporal worker boot contract tests
         run: python -m unittest discover -s tests -p "test_worker_boot.py" -v
       - name: Static, SQL and Temporal contract audits
-        run: bash tests/static-audit.sh && bash tests/sql-audit.sh && bash tests/migration-contract.sh && bash tests/core-ledger-contract.sh && bash tests/backup-contract.sh && bash tests/temporal-contract.sh
+        run: bash tests/static-audit.sh && bash tests/sql-audit.sh && bash tests/migration-contract.sh && bash tests/core-ledger-contract.sh && bash tests/backup-contract.sh && bash tests/temporal-contract.sh && bash tests/lifecycle-safety-contract.sh
       - name: Offline backup verification and restore safety tests
         run: python -m unittest discover -s tests -p "test_backup_verification.py" -v
       - name: Secret preflight tests
@@ -270,6 +270,7 @@ jobs:
           bash tests/migration-contract.sh
           bash tests/core-ledger-contract.sh
           bash tests/backup-contract.sh
+          bash tests/lifecycle-safety-contract.sh
           bash tests/isolated-deploy-contract.sh
           bash tests/temporal-contract.sh
       - name: Generate isolated packaging environment
