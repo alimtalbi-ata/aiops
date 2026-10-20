@@ -109,7 +109,7 @@ class BackupVerificationTests(unittest.TestCase):
             if path.name=="SHA256SUMS":
                 continue
             entries.append(hashlib.sha256(path.read_bytes()).hexdigest()+"  ./"+path.name)
-        (self.root/"SHA256SUMS").write_text("\\n".join(entries)+"\\n",encoding="utf-8")
+        (self.root/"SHA256SUMS").write_text("\n".join(entries)+"\n",encoding="utf-8")
 
     def test_missing_temporal_visibility_dump_is_rejected(self):
         (self.root/"temporal_visibility.dump").unlink()
