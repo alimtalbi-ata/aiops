@@ -33,9 +33,9 @@ def check_resource(kind: str, name: str, project: str) -> str | None:
     if kind=="container":
         code,value,error=docker("container","inspect",name)
     elif kind=="network":
-        code,value=docker("network","inspect",name)
+        code,value,error=docker("network","inspect",name)
     elif kind=="volume":
-        code,value=docker("volume","inspect",name)
+        code,value,error=docker("volume","inspect",name)
     else:
         return "unknown_resource_kind"
 
