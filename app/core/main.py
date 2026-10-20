@@ -162,6 +162,16 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select version,status from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
+        # Temporal retries can arrive after a successful commit but with the
+        # previous expected_version. Resolve the *same* idempotent semantic event
+        # before checking its stale version; conflicting key reuse still fails.
+        if x.event_key:
+            previous=c.execute('select sequence,stage,event_type,status from aiops.run_events where run_id=%s and event_key=%s',
+                               (rid,x.event_key)).fetchone()
+            if previous:
+                if tuple(previous[1:])!=(x.stage,x.event_type,x.status):
+                    raise HTTPException(409,'event_key_reused_for_different_semantic_event')
+                return {'run_id':rid,'sequence':previous[0],'version':row[0],'idempotent':True}
         if row[0]!=x.expected_version:raise HTTPException(409,'stale run version')
         if x.evidence_ids:
             n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(x.evidence_ids,)).fetchone()[0]
