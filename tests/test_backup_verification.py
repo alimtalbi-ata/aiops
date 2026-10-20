@@ -126,6 +126,30 @@ class BackupVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"checksum_manifest_coverage_incomplete"):
             CHECK.verify_backup(self.root,"aiops2-rebuild")
 
+    def test_duplicate_tar_member_with_valid_checksum_is_rejected(self):
+        archive=self.root/"aiops2-n8n-data.tar.gz"
+        with tarfile.open(archive,"w:gz") as tar:
+            for data in (b"first",b"second"):
+                member=tarfile.TarInfo("./duplicate.txt")
+                member.size=len(data)
+                tar.addfile(member,io.BytesIO(data))
+        self._rebuild_checksums()
+        with self.assertRaisesRegex(ValueError,"backup_tar_duplicate_or_root_member"):
+            CHECK.verify_backup(self.root,"aiops2-rebuild")
+
+    def test_standard_tar_root_directory_entry_is_accepted(self):
+        archive=self.root/"aiops2-n8n-data.tar.gz"
+        with tarfile.open(archive,"w:gz") as tar:
+            root=tarfile.TarInfo("./")
+            root.type=tarfile.DIRTYPE
+            tar.addfile(root)
+            data=b"normal file"
+            member=tarfile.TarInfo("./file.txt")
+            member.size=len(data)
+            tar.addfile(member,io.BytesIO(data))
+        self._rebuild_checksums()
+        self.assertEqual(CHECK.verify_backup(self.root,"aiops2-rebuild")["result"],"PASS")
+
     def test_missing_temporal_visibility_dump_is_rejected(self):
         (self.root/"temporal_visibility.dump").unlink()
         with self.assertRaisesRegex(ValueError,"missing_or_empty"):
