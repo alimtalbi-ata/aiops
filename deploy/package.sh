@@ -27,31 +27,37 @@ else
   SOURCE_PACKAGING_MODE="extracted_source_tree"
 fi
 mkdir -p "$TMP/09-Qualification"
-if [[ "$(printenv REQUIRE_RUNTIME_REPORT || true)" == "1" ]]; then
+QUALIFICATION="static-unit-only"
+MODEL_QUALITY="NOT_RUN"
+if [[ "${REQUIRE_RUNTIME_REPORT:-0}" == "1" ]]; then
   compgen -G "reports/runtime-e2e-*.json" >/dev/null || { echo 'FAIL|runtime_qualification_report_missing'; exit 3; }
   [[ -s reports/ai-core-evaluation.json ]] || { echo 'FAIL|ai_quality_report_missing'; exit 3; }
   python3 -c 'import json; r=json.load(open("reports/ai-core-evaluation.json",encoding="utf-8")); assert r.get("result")=="PASS" and r.get("ledger_persistence",{}).get("status")=="PASS" and r.get("qualification_kind")=="deterministic-integration-fixture", "AI evaluation not qualified"'
-  python3 -c 'import json,sys; files=sys.argv[1:]; assert files, "no runtime report"; reports=[json.load(open(p,encoding="utf-8")) for p in files]; assert all(r.get("result")=="PASS" and r.get("live_execution")=="disabled" for r in reports), "runtime report not PASS or live flag unexpected"' reports/runtime-e2e-*.json
+  python3 -c 'import json,sys; files=sys.argv[1:]; assert files, "no runtime report"; reports=[json.load(open(p,encoding="utf-8")) for p in files]; assert all(r.get("result")=="PASS" and r.get("live_execution")=="disabled" for r in reports), "runtime report not PASS or flag unexpected"' reports/runtime-e2e-*.json
+  for report in reports/runtime-e2e-*.json reports/ai-core-evaluation.json; do
+    [[ -f "$report" ]] && cp "$report" "$TMP/09-Qualification/"
+  done
+  QUALIFICATION="CI-runtime-e2e-PASS"
+  MODEL_QUALITY="PASS"
 fi
-for report in reports/runtime-e2e-*.json reports/ai-core-evaluation.json; do
- [[ -f "$report" ]] && cp "$report" "$TMP/09-Qualification/"
-done
-QUALIFICATION="static-unit-only"
-compgen -G "$TMP/09-Qualification/runtime-e2e-*.json" >/dev/null && QUALIFICATION="CI-runtime-e2e-PASS"
-MODEL_QUALITY="NOT_RUN"
-if [[ -s "$TMP/09-Qualification/ai-core-evaluation.json" ]]; then
- MODEL_QUALITY="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1],encoding="utf-8")).get("result","UNKNOWN"))' "$TMP/09-Qualification/ai-core-evaluation.json")"
+# An extracted kit may contain stale reports: never inherit CI acceptance without
+# the explicit REQUIRE_RUNTIME_REPORT=1 gate and current machine-readable proofs.
+GIT_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+if [[ -z "$GIT_COMMIT" || "$SOURCE_PACKAGING_MODE" != "versioned_git_tree" ]]; then
+  GIT_COMMIT="$(sed -n 's/^git_commit=//p' "$ROOT/RELEASE-MANIFEST.txt" 2>/dev/null | head -1 || true)"
+  [[ "$GIT_COMMIT" =~ ^[a-f0-9]{40}$ ]] || GIT_COMMIT="UNKNOWN_EXTRACTED_SOURCE"
 fi
 {
  echo "product=AIOps 2.0"
  echo "version=$VERSION"
  echo "source_packaging_mode=$SOURCE_PACKAGING_MODE"
  echo "built_utc=$STAMP"
- echo "git_commit=$(git rev-parse HEAD)"
+ echo "git_commit=$GIT_COMMIT"
  echo "qualification=$QUALIFICATION"
  echo "synthetic_analyst_critic_quality=$MODEL_QUALITY"
  echo "real_model_qualification=NOT_RUN"
  echo "production_qualification=NOT_RUN"
+ echo "ci_evidence_carried=$([[ "$QUALIFICATION" == "CI-runtime-e2e-PASS" ]] && echo yes || echo no)"
  echo "author=Abdelhalim Talbi"
 } > "$TMP/RELEASE-MANIFEST.txt"
 (cd "$TMP" && find . -type f ! -name FILES-SHA256SUMS -print0 | sort -z | xargs -0 sha256sum) > "$TMP/FILES-SHA256SUMS"
