@@ -10,13 +10,14 @@ cp "$ROOT/config/.env.example" "$TMP/config/"
  cd "$TMP"
  bash deploy/install-isolated.sh --configure-only >/dev/null
  grep -Fxq 'AIOPS_STACK_ID=aiops2-rebuild' .env
+ grep -Fxq 'COMPOSE_PROJECT_NAME=aiops2-rebuild' .env
  grep -Fxq 'AIOPS_BIND_IP=127.0.0.1' .env
  grep -Fxq 'AIOPS_PORTAL_HOST_PORT=17777' .env
  [[ "$(stat -c '%a' .env)" == 600 ]]
  [[ "$(wc -l < .env)" -gt 20 ]]
 )
 # Compose rendering is validated without creating any container.
-docker compose -f "$ROOT/compose.yml" --env-file "$TMP/.env" config --format json > "$TMP/isolated.json"
+env -u COMPOSE_PROJECT_NAME -u AIOPS_STACK_ID docker compose -f "$ROOT/compose.yml" --env-file "$TMP/.env" -p aiops2-rebuild config --format json > "$TMP/isolated.json"
 python3 - "$TMP/isolated.json" <<'PY'
 import json,sys
 data=json.load(open(sys.argv[1],encoding="utf-8"))
