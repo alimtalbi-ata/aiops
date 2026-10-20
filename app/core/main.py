@@ -493,3 +493,79 @@ def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=No
         case_id=new('LRN')
         c.execute('insert into aiops.learning_cases(learning_case_id,idempotency_key,source_run_id,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible,label,evidence_ids,analysis_id,critique_id,verification_id,exclusion_reasons,reviewed_at,reviewed_by,review_note) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(case_id,idem,rid,revision,case_type,synthetic,human_reviewed,outcome_verified,gold_eligible,json.dumps(label),json.dumps(evidence_ids),x.get('analysis_id'),x.get('critique_id'),verification_id,json.dumps(x.get('exclusion_reasons') or []),datetime.datetime.now(datetime.timezone.utc) if human_reviewed else None,reviewer or None,review_note or None))
     return {'learning_case_id':case_id,'revision':revision,'synthetic':synthetic,'gold_eligible':gold_eligible,'execution_allowed':False,'idempotent':False}
+
+# V2.7 denial intent journal. Only a rejected Critic can be recorded.
+@app.post('/api/runs/{rid}/denial-intent')
+def record_denial_intent(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    aid=x.get('analysis_id'); cid=x.get('critique_id')
+    ids=x.get('evidence_ids'); policy_input=x.get('policy_input')
+    if not aid or not cid or not isinstance(ids,list) or not ids or not isinstance(policy_input,dict):
+        raise HTTPException(422,'denial_intent_requires_ledger_and_evidence')
+    ids=sorted(set(ids))
+    if policy_input.get('critic_validated') is not False or policy_input.get('command')!='EXECUTE':
+        raise HTTPException(422,'denial_intent_must_be_rejected_critic')
+    with db() as c:
+        valid=c.execute("""
+            SELECT 1 FROM aiops.critique_records q
+            JOIN aiops.analysis_records a ON a.analysis_id=q.analysis_id
+            WHERE q.critique_id=%s AND q.run_id=%s AND q.analysis_id=%s
+              AND a.run_id=%s AND q.validated=false
+        """,(cid,rid,aid,rid)).fetchone()
+        if not valid:raise HTTPException(409,'critic_denial_not_verified')
+        present=c.execute('SELECT count(*) FROM aiops.evidence WHERE evidence_id=any(%s)',(ids,)).fetchone()[0]
+        if present!=len(ids):raise HTTPException(422,'unknown_evidence')
+        old=c.execute('SELECT evidence_ids,policy_input,status FROM aiops.critic_denial_outbox WHERE run_id=%s AND critique_id=%s',(rid,cid)).fetchone()
+        if old:
+            if sorted(old[0])!=ids or old[1]!=policy_input:
+                raise HTTPException(409,'denial_intent_conflict')
+            return {'run_id':rid,'critique_id':cid,'status':old[2],'idempotent':True}
+        c.execute("""
+            INSERT INTO aiops.critic_denial_outbox
+              (run_id,critique_id,analysis_id,evidence_ids,policy_input)
+            VALUES (%s,%s,%s,%s,%s)
+        """,(rid,cid,aid,ids,json.dumps(policy_input)))
+    return {'run_id':rid,'critique_id':cid,'status':'PENDING','idempotent':False}
+
+
+@app.get('/api/denial-intents/pending')
+def pending_denial_intents(limit:int=20,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    if not 1<=limit<=50:raise HTTPException(422,'invalid_limit')
+    with db() as c:
+        rows=c.execute("""
+            SELECT run_id,critique_id,analysis_id,evidence_ids,policy_input
+            FROM aiops.critic_denial_outbox WHERE status='PENDING'
+            ORDER BY created_at LIMIT %s
+        """,(limit,)).fetchall()
+    return {'items':[dict(zip(['run_id','critique_id','analysis_id','evidence_ids','policy_input'],r)) for r in rows]}
+
+
+@app.post('/api/runs/{rid}/denial-intent/{cid}/reconciled')
+def reconcile_denial_intent(rid:str,cid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    pid=x.get('policy_decision_id')
+    if not pid:raise HTTPException(422,'policy_decision_id_required')
+    with db() as c:
+        row=c.execute("""
+            SELECT o.analysis_id,o.status,o.policy_decision_id
+            FROM aiops.critic_denial_outbox o
+            WHERE o.run_id=%s AND o.critique_id=%s FOR UPDATE
+        """,(rid,cid)).fetchone()
+        if not row:raise HTTPException(404,'denial_intent_not_found')
+        if row[1]=='RECONCILED':
+            if row[2]!=pid:raise HTTPException(409,'reconciliation_conflict')
+            return {'status':'RECONCILED','idempotent':True}
+        match=c.execute("""
+            SELECT 1 FROM aiops.policy_decisions
+            WHERE policy_decision_id=%s AND run_id=%s AND analysis_id=%s
+              AND critique_id=%s AND state='BLOCKED'
+              AND decision IN ('HUMAN_APPROVAL','ESCALATE')
+        """,(pid,rid,row[0],cid)).fetchone()
+        if not match:raise HTTPException(409,'policy_denial_not_verified')
+        c.execute("""
+            UPDATE aiops.critic_denial_outbox
+            SET status='RECONCILED',policy_decision_id=%s,reconciled_at=now()
+            WHERE run_id=%s AND critique_id=%s
+        """,(pid,rid,cid))
+    return {'status':'RECONCILED','idempotent':False}
