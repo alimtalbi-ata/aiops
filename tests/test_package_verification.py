@@ -121,7 +121,7 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
                         info.external_attr=(stat.S_IFLNK | 0o777)<<16
                     target.writestr(info,data)
             path.with_suffix(".zip.sha256").write_text(
-                hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\\n")
+                hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\n")
             with self.assertRaisesRegex(ValueError,"archive_symlink_forbidden"):
                 MODULE.verify(path)
 
@@ -133,15 +133,15 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
                 entries={name:source.read(name) for name in source.namelist()
                          if name!="FILES-SHA256SUMS"}
             entries["docs/high-compression-fixture.txt"]=oversized
-            entries["FILES-SHA256SUMS"]=("\\n".join(
+            entries["FILES-SHA256SUMS"]=("\n".join(
                 hashlib.sha256(data).hexdigest()+"  ./"+name
                 for name,data in sorted(entries.items())
-            )+"\\n").encode()
+            )+"\n").encode()
             with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as target:
                 for name,data in entries.items():
                     target.writestr(name,data)
             path.with_suffix(".zip.sha256").write_text(
-                hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\\n")
+                hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\n")
             with self.assertRaisesRegex(ValueError,"archive_compression_ratio_limit_exceeded"):
                 MODULE.verify(path)
 
