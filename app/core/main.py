@@ -536,7 +536,7 @@ def pending_denial_intents(limit:int=20,authorization:str|None=Header(default=No
     if not 1<=limit<=50:raise HTTPException(422,'invalid_limit')
     with db() as c:
         rows=c.execute("""
-            SELECT run_id,critique_id,analysis_id,evidence_ids,policy_input
+            SELECT o.run_id,o.critique_id,o.analysis_id,o.evidence_ids,o.policy_input
             FROM aiops.critic_denial_outbox o JOIN aiops.runs r ON r.run_id=o.run_id
             WHERE o.status='PENDING' AND r.status='BLOCKED'
             ORDER BY o.created_at LIMIT %s
