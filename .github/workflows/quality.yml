@@ -67,6 +67,10 @@ jobs:
         run: bash tests/static-audit.sh && bash tests/sql-audit.sh && bash tests/migration-contract.sh && bash tests/core-ledger-contract.sh && bash tests/backup-contract.sh && bash tests/temporal-contract.sh && bash tests/lifecycle-safety-contract.sh
       - name: Offline backup verification and restore safety tests
         run: python -m unittest discover -s tests -p "test_backup_verification.py" -v
+      - name: Docker ownership and isolated deployment tests
+        run: |
+          python -m unittest discover -s tests -p "test_docker_ownership.py" -v
+          python -m unittest discover -s tests -p "test_deployment_isolation.py" -v
       - name: Secret preflight tests
         run: bash tests/test_preflight_secrets.sh
       - name: Isolated deployment identity contract
