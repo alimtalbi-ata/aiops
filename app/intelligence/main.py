@@ -114,6 +114,36 @@ def auth(value):
     if not supplied or not hmac.compare_digest(supplied, TOKEN):
         raise HTTPException(401, 'invalid_internal_token')
 
+def downgrade_inconsistent_critic(raw):
+    """Fail-closed repair of one LLM logical contradiction, before Pydantic validation.
+
+    Never remove issues, modify claim checks, synthesize evidence, or promote a
+    negative decision. All malformed fields still fail strict Pydantic validation.
+    """
+    if not isinstance(raw, dict) or raw.get('validated') is not True:
+        return raw
+    checks = raw.get('claim_checks')
+    issues = raw.get('issues', [])
+    unsafe_actions = raw.get('unsafe_actions', [])
+    if not isinstance(checks, list) or not checks:
+        return raw  # Contract failure is not repairable.
+    if not isinstance(issues, list) or not isinstance(unsafe_actions, list):
+        return raw
+    if not all(isinstance(check, dict) and type(check.get('supported')) is bool for check in checks):
+        return raw
+
+    challenged = bool(issues or unsafe_actions or any(check['supported'] is False for check in checks))
+    if challenged:
+        repaired = dict(raw)
+        repaired['validated'] = False
+        # Preserve ESCALATE, never preserve an optimistic recommendation.
+        if repaired.get('final_recommendation') != 'ESCALATE':
+            repaired['final_recommendation'] = 'HUMAN_APPROVAL'
+        LOG.warning('critic_contract_downgraded: contradictory validation flag')
+        return repaired
+    return raw
+
+
 def call_model(system, payload, schema):
     if not BASE or not MODEL:
         raise HTTPException(503, 'llm_provider_not_configured')
@@ -131,7 +161,10 @@ def call_model(system, payload, schema):
         r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
         r.raise_for_status()
         raw = r.json()['choices'][0]['message']['content']
-        return schema.model_validate(json.loads(raw))
+        decoded = json.loads(raw)
+        if schema is Critique:
+            decoded = downgrade_inconsistent_critic(decoded)
+        return schema.model_validate(decoded)
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError, ValidationError) as exc:
         LOG.warning('model call or contract validation failed: %s', type(exc).__name__)
         raise HTTPException(502, 'model_unavailable_or_invalid_output') from exc
@@ -192,7 +225,7 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
     unknown = bad_refs(x.analyst, x.evidence)
     payload = x.model_dump(mode='json')
     payload['unknown_analyst_evidence_ids'] = unknown
-    system = 'You are the independent AIOps Critic. Challenge claims against supplied evidence, identify missing or stale proof, contradictions and unsafe proposals. The system-generated _aiops_quality freshness metadata is authoritative; stale, future-dated or unknown-age observations cannot establish current state. Do not invent evidence. Recommend only OBSERVE, ENRICH, ESCALATE or HUMAN_APPROVAL. Return only the requested JSON contract.'
+    system = 'You are the independent AIOps Critic. Challenge claims against supplied evidence, identify missing or stale proof, contradictions and unsafe proposals. The system-generated _aiops_quality freshness metadata is authoritative; stale, future-dated or unknown-age observations cannot establish current state. Do not invent evidence. Recommend only OBSERVE, ENRICH, ESCALATE or HUMAN_APPROVAL. Set validated=false whenever issues or unsafe_actions exist, or any claim_check is unsupported; never claim validation while listing objections. Return only the requested JSON contract.'
     annotated_evidence,freshness=annotate_evidence_freshness(x.evidence)
     payload['evidence']=annotated_evidence
     payload['context']={**payload.get('context',{}),'evidence_freshness':freshness}
@@ -230,5 +263,5 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
             result.issues.append(Issue(code=('CONTRADICTION' if reason=='divergent_snapshots_not_challenged' else 'SCHEMA_OR_COVERAGE'),
                                        description='Deterministic evidence guard: '+reason, evidence_ids=[]))
         result.final_recommendation='HUMAN_APPROVAL'
-    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.2','evidence_freshness':freshness,'execution_allowed':False}
+    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.3','evidence_freshness':freshness,'execution_allowed':False}
 
