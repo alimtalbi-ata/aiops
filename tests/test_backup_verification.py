@@ -150,6 +150,32 @@ class BackupVerificationTests(unittest.TestCase):
         self._rebuild_checksums()
         self.assertEqual(CHECK.verify_backup(self.root,"aiops2-rebuild")["result"],"PASS")
 
+    def test_tar_file_as_directory_ancestor_is_rejected(self):
+        archive=self.root/"aiops2-n8n-data.tar.gz"
+        with tarfile.open(archive,"w:gz") as tar:
+            for name in ("./parent","./parent/child.txt"):
+                data=b"fixture"
+                member=tarfile.TarInfo(name)
+                member.size=len(data)
+                tar.addfile(member,io.BytesIO(data))
+        self._rebuild_checksums()
+        with self.assertRaisesRegex(ValueError,"backup_tar_file_directory_collision"):
+            CHECK.verify_backup(self.root,"aiops2-rebuild")
+
+    def test_tar_late_file_replacing_directory_is_rejected(self):
+        archive=self.root/"aiops2-n8n-data.tar.gz"
+        with tarfile.open(archive,"w:gz") as tar:
+            data=b"fixture"
+            child=tarfile.TarInfo("./parent/child.txt")
+            child.size=len(data)
+            tar.addfile(child,io.BytesIO(data))
+            parent=tarfile.TarInfo("./parent")
+            parent.size=len(data)
+            tar.addfile(parent,io.BytesIO(data))
+        self._rebuild_checksums()
+        with self.assertRaisesRegex(ValueError,"backup_tar_file_directory_collision"):
+            CHECK.verify_backup(self.root,"aiops2-rebuild")
+
     def test_missing_temporal_visibility_dump_is_rejected(self):
         (self.root/"temporal_visibility.dump").unlink()
         with self.assertRaisesRegex(ValueError,"missing_or_empty"):
