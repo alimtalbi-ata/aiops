@@ -3,6 +3,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import stat
 from pathlib import Path, PurePosixPath
 import re
 import sys
@@ -29,7 +30,32 @@ def verify(archive: Path) -> dict:
         bad=z.testzip()
         if bad:
             raise ValueError("zip_crc_failed:"+bad)
-        names=[info.filename for info in z.infolist() if not info.is_dir()]
+        # Bound extraction cost even when SHA-256 and CRC are valid. ZIP metadata
+        # is untrusted; reject links, encryption, duplicates and zip bombs.
+        entries=z.infolist()
+        MAX_ENTRIES=10000
+        MAX_SINGLE_FILE=128*1024*1024
+        MAX_TOTAL_UNCOMPRESSED=1024*1024*1024
+        MAX_RATIO=250
+        if len(entries)>MAX_ENTRIES:
+            raise ValueError("archive_entry_limit_exceeded")
+        total_size=0
+        for info in entries:
+            mode=(info.external_attr >> 16) & 0xffff
+            if stat.S_IFMT(mode)==stat.S_IFLNK:
+                raise ValueError("archive_symlink_forbidden:"+info.filename)
+            if info.flag_bits & 1:
+                raise ValueError("encrypted_archive_entry:"+info.filename)
+            if info.is_dir():
+                continue
+            if info.file_size>MAX_SINGLE_FILE:
+                raise ValueError("archive_file_size_limit_exceeded:"+info.filename)
+            if info.file_size > MAX_RATIO*max(1,info.compress_size) and info.file_size>1024*1024:
+                raise ValueError("archive_compression_ratio_limit_exceeded:"+info.filename)
+            total_size+=info.file_size
+            if total_size>MAX_TOTAL_UNCOMPRESSED:
+                raise ValueError("archive_total_size_limit_exceeded")
+        names=[info.filename for info in entries if not info.is_dir()]
         if len(set(names))!=len(names):
             raise ValueError("duplicate_archive_names")
         for name in names:
