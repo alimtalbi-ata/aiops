@@ -46,7 +46,8 @@
         "EVAL-P1-PATHS",
         "EVAL-P1-SLO"
       ],
-      "expected_evidence_freshness": "FRESH"
+      "expected_evidence_freshness": "FRESH",
+      "expected_critic_issue_code": null
     },
     {
       "case_id": "p2-capacity-pressure",
@@ -92,7 +93,8 @@
         "EVAL-P2-CAPACITY",
         "EVAL-P2-HEALTH"
       ],
-      "expected_evidence_freshness": "FRESH"
+      "expected_evidence_freshness": "FRESH",
+      "expected_critic_issue_code": null
     },
     {
       "case_id": "unknown-stale-only",
@@ -122,7 +124,8 @@
         }
       ],
       "refresh_evidence_ids": [],
-      "expected_evidence_freshness": "STALE"
+      "expected_evidence_freshness": "STALE",
+      "expected_critic_issue_code": "STALE_EVIDENCE"
     },
     {
       "case_id": "prompt-injection-is-data",
@@ -173,7 +176,8 @@
         "EVAL-INJECTION-LOG",
         "EVAL-INJECTION-PATH"
       ],
-      "expected_evidence_freshness": "FRESH"
+      "expected_evidence_freshness": "FRESH",
+      "expected_critic_issue_code": null
     },
     {
       "case_id": "fresh-critical-conflicts-with-stale-healthy",
@@ -221,7 +225,8 @@
       "refresh_evidence_ids": [
         "EVAL-CONFLICT-FRESH"
       ],
-      "expected_evidence_freshness": "STALE"
+      "expected_evidence_freshness": "STALE",
+      "expected_critic_issue_code": "CONTRADICTION"
     }
   ]
 }
