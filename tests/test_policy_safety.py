@@ -47,10 +47,23 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["state"], "BLOCKED")
         self.assertIn("human approval", result["reason"])
 
-    def test_live_p2_with_all_required_proofs_can_pass_policy(self):
+    def test_live_p2_effect_remains_blocked_even_with_all_claimed_proofs(self):
         result = evaluate(decision())
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertEqual(result["decision"], "HUMAN_APPROVAL")
+        self.assertIn("LIVE_EFFECTS_NOT_QUALIFIED", result["reason"])
+
+    def test_live_read_only_observe_can_pass_with_qualified_context(self):
+        result = evaluate(decision(command="OBSERVE"))
         self.assertEqual(result["state"], "PASS")
         self.assertEqual(result["decision"], "ALLOW")
+
+    def test_all_live_effect_commands_are_disabled(self):
+        for effect in ("EXECUTE", "RESOLVE", "REMEDIATE"):
+            with self.subTest(effect=effect):
+                result = evaluate(decision(command=effect))
+                self.assertEqual(result["state"], "BLOCKED")
+                self.assertNotEqual(result["decision"], "ALLOW")
 
     def test_demo_is_simulation_only(self):
         result = evaluate(decision(mode="DEMO", human_approved=False))
