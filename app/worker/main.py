@@ -146,10 +146,28 @@ def recover_committed_critic_block(rid):
             and e.get('event_type')=='CRITIC_COMPLETED'
             for e in detail.get('events',[])
         )
-        if completed or status!='RUNNING':
+        if status!='RUNNING':
             raise AtomicDenialBlockError(
-                'critic_replay_requires_durable_resume'
+                'critic_replay_invalid_run_state'
             )
+        if completed:
+            try:
+                result=post_json(
+                    CORE,
+                    f'/api/runs/{rid}/critic-denial-resume',
+                    {},
+                    timeout=15,
+                    token=ADMIN
+                )
+                if (result.get('run_id')!=rid
+                        or result.get('status')!='BLOCKED'
+                        or not result.get('denial_hash')):
+                    raise ValueError('critic_resume_invalid_response')
+                return recover_committed_critic_block(rid)
+            except Exception as exc:
+                raise AtomicDenialBlockError(
+                    'critic_durable_resume_unconfirmed'
+                ) from exc
         return None
     receipt=get_json(
         CORE,f'/api/runs/{rid}/critic-denial-block/receipt',
@@ -260,14 +278,16 @@ def _execute_stage_blocking(a,attempt):
                 if state=='BLOCKED':
                     try:
                         block=post_json(
-                        CORE,f'/api/runs/{rid}/critic-denial-block',{
-                            'expected_version':saved['version'],
-                            'idempotency_key':f'CRITIC-BLOCK-{rid}',
-                            'analysis_id':analysis_record_id,
-                            'critique_id':critique_record['critique_id'],
-                            'evidence_ids':evidence_ids,
-                            'policy_input':denial_snapshot,
-                        },timeout=15,token=ADMIN)
+                            CORE,
+                            f'/api/runs/{rid}/critic-denial-resume',
+                            {},
+                            timeout=15,
+                            token=ADMIN
+                        )
+                        if (block.get('run_id')!=rid
+                                or block.get('status')!='BLOCKED'
+                                or not block.get('denial_hash')):
+                            raise ValueError('critic_resume_invalid_response')
                     except Exception as exc:
                         raise AtomicDenialBlockError(
                             'atomic_denial_block_unconfirmed'

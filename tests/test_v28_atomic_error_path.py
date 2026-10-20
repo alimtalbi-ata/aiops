@@ -28,7 +28,9 @@ class AtomicErrorPathTests(unittest.TestCase):
 
         source=ast.get_source_segment(SOURCE.read_text(),fn)
         self.assertIn("atomic_denial_block_unconfirmed",source)
-        self.assertIn("critic-denial-block",source)
+        self.assertIn("critic-denial-resume",source)
+        self.assertIn("except AtomicDenialBlockError:",source)
+        self.assertIn("atomic_denial_block_unconfirmed",source)
 
 if __name__=="__main__":
     unittest.main()
