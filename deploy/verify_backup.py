@@ -65,15 +65,25 @@ def verify_backup(folder: Path, expected_stack: str) -> dict:
                 raise ValueError("postgres_custom_dump_invalid:"+name)
     for suffix in ("n8n-data","glpi-data","grafana-data","prometheus-data"):
         name="aiops2-"+suffix+".tar.gz"
+        # Restore uses privileged tar into stack-owned volumes. Reject special
+        # files and links entirely rather than trusting tar extraction semantics.
+        # Bounds are checked before any destination volume is mutated.
+        member_count=0
+        declared_bytes=0
         with tarfile.open(folder/name,mode="r|gz") as tar:
             for member in tar:
+                member_count+=1
+                if member_count>1000000:
+                    raise ValueError("backup_tar_member_limit:"+name)
                 path=PurePosixPath(member.name)
-                if path.is_absolute() or ".." in path.parts:
+                if path.is_absolute() or ".." in path.parts or "\\\\" in member.name:
                     raise ValueError("unsafe_tar_member:"+name)
-                if member.issym() or member.islnk():
-                    target=PurePosixPath(member.linkname)
-                    if target.is_absolute() or ".." in target.parts:
-                        raise ValueError("unsafe_tar_link:"+name)
+                if not (member.isfile() or member.isdir()):
+                    raise ValueError("backup_tar_special_member_forbidden:"+name)
+                if member.isfile():
+                    declared_bytes+=member.size
+                    if member.size>100*1024**3 or declared_bytes>500*1024**3:
+                        raise ValueError("backup_tar_size_limit:"+name)
     return {"result":"PASS","stack_id":expected_stack,"format_version":2,
             "files_verified":len(checksums),"application_consistent":data.get("application_consistent",False)}
 
