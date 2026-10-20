@@ -10,11 +10,11 @@ import sys
 from pathlib import Path
 
 SENSITIVE_NAME = re.compile(r"(PASSWORD|PASSWD|SECRET|TOKEN|API[_-]?KEY|CREDENTIAL|ENCRYPTION[_-]?KEY|AUTHORIZATION|PRIVATE[_-]?KEY)", re.I)
-ASSIGNMENT = re.compile(r"(?i)\b([A-Z][A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|ENCRYPTION_KEY|CREDENTIAL|AUTHORIZATION|PRIVATE_KEY)[A-Z0-9_]*)\s*([=:])\s*([^\s,;]+)")
+ASSIGNMENT = re.compile(r"(?i)\b([A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API[_-]?KEY|ENCRYPTION[_-]?KEY|CREDENTIAL|AUTHORIZATION|PRIVATE[_-]?KEY)[A-Z0-9_]*)\s*([=:])\s*([^\s,;]+)")
 BEARER = re.compile(r"(?i)(\bBearer\s+)[^\s,;]+")
 PG_URI = re.compile(r"(?i)(\bpostgres(?:ql)?://[^:/\s]+:)[^@\s]+(@)")
 COMMON_URL = re.compile(r"(?i)(\b(?:https?|mysql|mariadb)://[^:/\s]+:)[^@\s]+(@)")
-PASSWORD_OPT = re.compile(r"(?i)(\b(?:--password|--token|--api-key)\s*(?:=|\s)\s*)[^\s,;]+")
+PASSWORD_OPT = re.compile(r"(?i)(--(?:password|token|api-key)\s*(?:=|\s)\s*)[^\s,;]+")
 
 
 def load_secret_values(env_file: Path) -> list[str]:
