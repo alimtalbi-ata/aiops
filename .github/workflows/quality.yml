@@ -52,6 +52,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_freshness.py" -v
       - name: Evidence integrity and model grounding tests
         run: python -m unittest discover -s tests -p "test_evidence_contract.py" -v
+      - name: Evidence identity and replay contract tests
+        run: |
+          python -m unittest discover -s tests -p "test_evidence_identity.py" -v
+          python -m unittest discover -s tests -p "test_evidence_ingestion.py" -v
       - name: Temporal worker boot contract tests
         run: python -m unittest discover -s tests -p "test_worker_boot.py" -v
       - name: Static, SQL and Temporal contract audits
@@ -122,6 +126,14 @@ jobs:
         env:
           PGPASSWORD: ci-only-password
         run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f tests/sql/ledger-invariants.sql
+      - name: Verify atomic Evidence identity and append-only constraints
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f tests/sql/evidence-identity-invariants.sql
+      - name: Reapply Evidence identity migration to prove idempotency
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f db/migrations/010_evidence_identity.sql
       - name: Reapply decision ledger migration to prove idempotency
         env:
           PGPASSWORD: ci-only-password
@@ -187,6 +199,8 @@ jobs:
         run: bash deploy/migrate.sh
       - name: Qualify real Temporal workflow against deterministic synthetic provider
         run: bash tests/runtime-e2e.sh
+      - name: Qualify Evidence replay, deduplication and cross-run isolation
+        run: bash tests/evidence-e2e.sh
       - name: Build deterministic model evaluation runner
         run: docker compose --env-file .env --profile test --profile qualification build aiops2-model-evaluator
       - name: Score evidence-grounded Analyst/Critic fixtures and persist evaluation
@@ -242,6 +256,8 @@ jobs:
           python -m unittest discover -s tests -p "test_safety_invariants.py" -v
           python -m unittest discover -s tests -p "test_freshness.py" -v
           python -m unittest discover -s tests -p "test_evidence_contract.py" -v
+          python -m unittest discover -s tests -p "test_evidence_identity.py" -v
+          python -m unittest discover -s tests -p "test_evidence_ingestion.py" -v
           python -m unittest discover -s tests -p "test_worker_boot.py" -v
           bash tests/static-audit.sh
           bash tests/sql-audit.sh
