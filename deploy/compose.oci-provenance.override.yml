@@ -1,0 +1,37 @@
+# Opt-in OCI provenance labels for local AIOps builds only.
+# Add AFTER compose.yml and rootless connectivity override when building.
+# Requires verified full 40-hex commit and a CLEAN tracked Git worktree.
+# A label is a declared build input, NOT independent proof of reproducibility.
+# Do not feed secrets or runtime configuration values into labels.
+x-aiops-provenance-labels: &aiops-provenance-labels
+  org.opencontainers.image.source: "https://github.com/alimtalbi-ata/aiops"
+  org.opencontainers.image.revision: "${AIOPS_BUILD_REVISION:?AIOPS_BUILD_REVISION_required}"
+  org.opencontainers.image.version: "${AIOPS_BUILD_VERSION:?AIOPS_BUILD_VERSION_required}"
+services:
+  aiops2-core:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-twin:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-evidence:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-policy:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-intelligence:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-copilot:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-worker:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-simulator:
+    build:
+      labels: *aiops-provenance-labels
+  aiops2-portal:
+    build:
+      labels: *aiops-provenance-labels
