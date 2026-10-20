@@ -1,16 +1,24 @@
-# ACME AioOps 2.0 — Final Big Bang Deployment Kit
+# AIOps 2.0 — Core Reconstruction Deployment Kit
 
 **Author: Abdelhalim Talbi**
 
 This kit is a clean rebuild of the AioOps runtime. It is designed to deploy the largest coherent functional baseline in one operation rather than accumulate another historical version.
 
-## First deployment
+## Recommended first deployment (non-destructive)
 
 ```bash
-./deploy/install.sh
+bash deploy/install-isolated.sh
 ```
 
-The installer creates a new `.env` with random credentials (or validates an existing `.env`), builds the application images, starts the stack, checks exposed services and launches a deterministic synthetic Golden Demo. Legacy retirement is separate and must only be enabled deliberately with `RETIRE_LEGACY=1`. See `docs/SECURITY.md` for the explicit, isolated-only demo mode.
+This is the recommended entry point on a Debian host already running older AIOps stacks. It creates an isolated Compose project `aiops2-rebuild`, uses its own named containers, networks and volumes, publishes dashboards to loopback on alternate ports, generates random development secrets and runs installation plus qualification. No legacy container is stopped or removed.
+
+The standard `bash deploy/install.sh` entry point targets the stack identity selected in `.env`, and must only be used after reviewing that identity. **RETIRE_LEGACY=1 is refused during installation.** Retirement is a separate authorized operation after successful qualification and a verified private backup. See `docs/DEPLOYMENT-ISOLATED-REBUILD-RUNBOOK.md` and `docs/SECURITY.md`.
+
+## Current release
+
+Version `2.1.0-core-rc1.2` adds non-destructive lifecycle guards, project-scoped topology checks, strict qualification project ownership checks, and a redacted diagnostic collector. Deterministic Analyst/Critic and Temporal synthetic E2E are CI-qualified; a genuine model and LIVE adapters still require separate qualification.
+
+Use `bash deploy/diagnose.sh` to capture private, redacted diagnostics (review before sharing). The cumulative release ZIP includes sources, installation scripts, Compose, SQL migrations, documentation, and the CI qualification reports with checksums.
 
 ## External interfaces
 
