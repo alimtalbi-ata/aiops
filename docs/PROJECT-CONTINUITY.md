@@ -146,3 +146,14 @@ Every material change must update this record and the relevant architecture/deci
 5. Expand ACME digital twin and produce an actual reproducible UI demonstration and video only after Core acceptance.
 6. Continue using GitHub PRs/CI release ZIPs as source of truth; minimize chat-to-Debian round trips.
 
+## 2026-10-20 — Core functional deep audit and target-driven redevelopment
+
+**Active development:** branch `feat/core-analysis-quality-v2`, [PR #21](https://github.com/alimtalbi-ata/aiops/pull/21). Current source of truth: [target architecture deep audit](TARGET-ARCHITECTURE-DEEP-AUDIT-2026-10-20.md). An isolated synthetic Core workflow + model-fixture evaluation + cumulative ZIP had passed at commit `a739676bc44974be7ba52cd101ff716d6c497dfe` in [CI #39371406277](https://github.com/alimtalbi-ata/aiops/actions/runs/39371406277). Subsequent hardening modifications MUST pass new CI before receiving their own PASS status.
+
+**Confirmed improvements on the feature branch:** evidence freshness and duplicate/provenance guard; Analyst/Critic deterministic post-model quality checks; blind synthetic inference baseline not keyed to `case_id`; all-case denominators and separate critic/stale/contradiction scoring; synthetic Policy fail-closed; Evidence/Policy service authentication; Temporal workflow import isolation and non-blocking HTTP dispatch; semantic retry-safe event keys; removal of hardcoded secrets and destructive install defaults. Source existence is not qualification; inspect latest CI, exact SHA and artifacts.
+
+**Known unqualified gaps:** real inference accuracy/calibration on DGX, real RAG/CMDB/observability read-only connectors, full conversation Copilot, per-scenario ACME twin isolation, LIVE effect/fencing/HITL recovery, chaos/load tests and Debian production acceptance. Leave LIVE effects disabled. The tiny deterministic CI suite is not a real-model accuracy benchmark.
+
+**Next acceptance sequence:** (1) latest green CI including runtime+model+package gates; (2) frozen external model and prompt version, adversarial/held-out evaluation; (3) real read-only evidence/CMDB/RAG qualification; (4) HITL/fencing and safe remediation simulation; (5) ACME twin/chaos, then demo/recordings.
+
+**Single-entry install:** `bash 00-Deployment/install.sh` delegates to `deploy/install-isolated.sh`; archives carry no shared development passwords. Never use legacy destructive Big Bang as the standard deployment path.
