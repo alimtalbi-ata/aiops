@@ -190,3 +190,10 @@ Every material change must update this record and the relevant architecture/deci
 - **Pending gate:** RC1.4 full CI and cumulative artifact qualification. Do not describe RC1.4 as qualified until the `release-kit` job succeeds on the exact commit; keep RC1.3 as the last verified release candidate until then.
 - **Next priority:** run the isolated reconstruction from a fresh directory on the Debian host only after a qualified kit is available; check real inference service connectivity, Analyst/Critic grounding/abstention and policies, then advance read-only CMDB/RAG acquisition. Keep simulated evidence distinct from real evidence; do not enable LIVE remediation without independent end-to-end qualification.
 
+
+## 2026-10-20 — V27 provider completion guard candidate
+
+- Based on draft PR #30 branch `fix/critic-policy-denial-ledger-v26-20261020` at `b870f484fa009441fe37050b733cf729ff2e2f4b`; `main` remains untouched. Dedicated V27 branch adds a strict terminal assistant completion check for initial Analyst/Critic and bounded Critic schema repair.
+- Reuses previously developed `shared/provider_completion.py` instead of duplicating logic; updates mocked provider fixtures, adds direct and HTTP regression tests, and adds release-blocking CI coverage. See `docs/PROVIDER-COMPLETION-GATE-V27.md`.
+- **Verified locally:** six isolated helper tests PASS, Python compileall PASS. **Not yet verified:** integration tests and CI on the new commit, container builds, actual model inference, disposable E2E and production.
+- New branch is a candidate only. Do not merge or deploy until CI and real-provider compatibility are reviewed. LIVE effects stay disabled.

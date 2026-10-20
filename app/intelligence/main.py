@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from typing import Literal
 from shared.freshness import annotate_evidence_freshness
 from shared.evidence_contract import validate_evidence, analysis_quality_errors, critique_quality_errors
+from shared.provider_completion import extract_complete_completion
 
 app = FastAPI(title='AIOps Analyst and Critic Adapter', version='2.0.0')
 LOG = logging.getLogger('aiops2.intelligence')
@@ -160,7 +161,7 @@ def call_model(system, payload, schema):
     try:
         r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
         r.raise_for_status()
-        raw = r.json()['choices'][0]['message']['content']
+        raw = extract_complete_completion(r.json())
         decoded = json.loads(raw)
         if schema is Critique:
             decoded = downgrade_inconsistent_critic(decoded)
@@ -193,7 +194,7 @@ def call_model(system, payload, schema):
                     url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
                 )
                 repaired_response.raise_for_status()
-                repaired = json.loads(repaired_response.json()['choices'][0]['message']['content'])
+                repaired = json.loads(extract_complete_completion(repaired_response.json()))
                 if schema is Critique:
                     repaired = downgrade_inconsistent_critic(repaired)
                 # The retry cannot discard the critique's adverse findings.
