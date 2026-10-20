@@ -17,7 +17,14 @@ command -v zip >/dev/null || { echo "FAIL|zip_missing"; exit 2; }
 OUT="$ROOT/dist/AIOps-${VERSION}-Core-Deployment-Kit-${STAMP}.zip"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-git archive --format=tar HEAD | tar -xf - -C "$TMP"
+if git -C "$ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
+  git archive --format=tar HEAD | tar -xf - -C "$TMP"
+  SOURCE_PACKAGING_MODE="versioned_git_tree"
+else
+  # The kit must also be repackageable after extraction on a non-Git host.
+  python3 deploy/package_tree.py --source "$ROOT" --destination "$TMP"
+  SOURCE_PACKAGING_MODE="extracted_source_tree"
+fi
 mkdir -p "$TMP/09-Qualification"
 if [[ "$(printenv REQUIRE_RUNTIME_REPORT || true)" == "1" ]]; then
   compgen -G "reports/runtime-e2e-*.json" >/dev/null || { echo 'FAIL|runtime_qualification_report_missing'; exit 3; }
@@ -37,6 +44,7 @@ fi
 {
  echo "product=AIOps 2.0"
  echo "version=$VERSION"
+ echo "source_packaging_mode=$SOURCE_PACKAGING_MODE"
  echo "built_utc=$STAMP"
  echo "git_commit=$(git rev-parse HEAD)"
  echo "qualification=$QUALIFICATION"
