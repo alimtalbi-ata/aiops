@@ -170,6 +170,25 @@ jobs:
           PGPASSWORD: ci-only-password
         run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f db/migrations/009_ai_decision_ledger.sql
 
+  mariadb-dr-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Rehearse isolated MariaDB backup and restore
+        env:
+          AIOPS_CI_DR: "YES"
+        run: bash tests/mariadb-dr-rehearsal.sh
+      - name: Upload MariaDB disaster recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-mariadb-dr-report
+          path: reports/mariadb-dr-rehearsal.json
+          if-no-files-found: ignore
+          retention-days: 30
+
   migration-runner-upgrade:
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -260,6 +279,7 @@ jobs:
       - quality-build-package
       - database-migrations
       - migration-runner-upgrade
+      - mariadb-dr-rehearsal
       - runtime-e2e
     timeout-minutes: 10
     steps:
