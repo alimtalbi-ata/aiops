@@ -59,7 +59,7 @@ jobs:
       - name: Build every application image
         run: docker compose --env-file .env build
       - name: Build opt-in model evaluation runner
-        run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
+        run: docker compose --env-file .env --profile test --profile qualification build aiops2-model-evaluator
 
   database-migrations:
     runs-on: ubuntu-latest
@@ -184,7 +184,7 @@ jobs:
       - name: Score evidence-grounded Analyst/Critic fixtures and persist evaluation
         run: |
           mkdir -p reports
-          AIOPS_EVAL_UID="$(id -u)" AIOPS_EVAL_GID="$(id -g)" docker compose --env-file .env --profile qualification run --rm aiops2-model-evaluator
+          AIOPS_EVAL_UID="$(id -u)" AIOPS_EVAL_GID="$(id -g)" docker compose --env-file .env --profile test --profile qualification run --rm aiops2-model-evaluator
           bash tests/model-evaluation-e2e.sh
       - name: Upload runtime qualification report
         if: always()
