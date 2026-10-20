@@ -73,6 +73,7 @@ def verify_backup(folder: Path, expected_stack: str) -> dict:
         # Bounds are checked before any destination volume is mutated.
         member_count=0
         declared_bytes=0
+        seen_paths=set()
         with tarfile.open(folder/name,mode="r|gz") as tar:
             for member in tar:
                 member_count+=1
@@ -81,6 +82,12 @@ def verify_backup(folder: Path, expected_stack: str) -> dict:
                 path=PurePosixPath(member.name)
                 if path.is_absolute() or ".." in path.parts or "\\\\" in member.name:
                     raise ValueError("unsafe_tar_member:"+name)
+                # Multiple archive entries for the same path allow the last one
+                # to overwrite a previously verified file at extraction time.
+                normalized=tuple(part for part in path.parts if part not in (".",""))
+                if not normalized or normalized in seen_paths:
+                    raise ValueError("backup_tar_duplicate_or_root_member:"+name)
+                seen_paths.add(normalized)
                 if not (member.isfile() or member.isdir()):
                     raise ValueError("backup_tar_special_member_forbidden:"+name)
                 if member.isfile():
