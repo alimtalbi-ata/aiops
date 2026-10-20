@@ -20,6 +20,59 @@ if not 15 <= DGX_HTTP_TIMEOUT_SECONDS <= 150:
     raise RuntimeError('AIOPS_DGX_HTTP_TIMEOUT_SECONDS must be between 15 and 150')
 
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
+def critic_denial_input(mode,analysis,critique,evidence):
+    ids=sorted({x['evidence_id'] for x in evidence})
+    fresh=assess_evidence_freshness(evidence)
+    return {
+        'mode':mode, 'command':'EXECUTE',
+        'severity':analysis.get('severity','UNKNOWN'),
+        'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),
+        'evidence_count':len(ids), 'critic_validated':False,
+        'redundancy_ok':False, 'evidence_fresh':fresh['status']=='FRESH',
+        'preconditions_verified':False, 'fencing_verified':False,'human_approved':False,
+    }
+
+
+def durable_denial_intent(rid,mode,analysis,critique,analysis_id,critique_id,evidence):
+    ids=sorted({x['evidence_id'] for x in evidence})
+    return post_json(CORE,f'/api/runs/{rid}/denial-intent',{
+        'analysis_id':analysis_id,'critique_id':critique_id,
+        'evidence_ids':ids,
+        'policy_input':critic_denial_input(mode,analysis,critique,evidence),
+    },timeout=15,token=ADMIN)
+
+
+def reconcile_denial_batch():
+    # Repeatable outbox scan: failures never change a run from BLOCKED to ALLOW.
+    items=get_json(CORE,'/api/denial-intents/pending?limit=20',token=ADMIN).get('items',[])
+    for item in items:
+        rid=item['run_id']; cid=item['critique_id']
+        try:
+            verdict=post_json(POLICY,'/api/policy/check',item['policy_input'],timeout=5,token=ADMIN)
+            if verdict.get('state')!='BLOCKED' or verdict.get('decision') not in ('HUMAN_APPROVAL','ESCALATE'):
+                raise RuntimeError('reconciler_refused_unsafe_policy_verdict')
+            saved=post_json(CORE,f'/api/runs/{rid}/policy-record',{
+                'policy':verdict,'analysis_id':item['analysis_id'],
+                'critique_id':cid,'evidence_ids':item['evidence_ids'],
+                'policy_version':'2.1.0','policy_input':item['policy_input'],
+            },timeout=15,token=ADMIN)
+            post_json(CORE,f'/api/runs/{rid}/denial-intent/{cid}/reconciled',{
+                'policy_decision_id':saved['policy_decision_id'],
+            },timeout=15,token=ADMIN)
+        except Exception as exc:
+            log.warning('critic_denial_reconciliation_pending: %s',type(exc).__name__)
+
+
+async def reconcile_denial_loop():
+    # Independent of Temporal task queue; also recovers after Worker restart.
+    while True:
+        try:
+            await asyncio.to_thread(reconcile_denial_batch)
+        except Exception as exc:
+            log.warning('critic_denial_reconciliation_scan_failed: %s',type(exc).__name__)
+        await asyncio.sleep(10)
+
+
 def persist_critic_denial(rid, mode, analysis, critique, analysis_id, critique_id, evidence, token):
     """Persist an explicit fail-closed Policy verdict for a rejected Critic.
 
@@ -139,6 +192,13 @@ def _execute_stage_blocking(a,attempt):
                 saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
+                    # Commit a durable intent before contacting Policy. If Core is
+                    # unavailable, block the run anyway; never resume effect stages.
+                    try:
+                        durable_denial_intent(rid,mode,analyst_event['payload']['analysis'],result,
+                                              analysis_record_id,critique_record['critique_id'],source_evidence)
+                    except Exception as intent_error:
+                        log.error('critic_denial_intent_persistence_failed: %s',type(intent_error).__name__)
                     # Persist the independent policy denial before stopping the
                     # workflow. If persistence is unavailable, stop anyway:
                     # never continue to HITL or any effect stage.
@@ -223,4 +283,6 @@ async def worker_main():
    log.exception('Temporal polling worker unavailable; retrying in 5s')
    await asyncio.sleep(5)
 @app.on_event('startup')
-async def startup():asyncio.create_task(worker_main())
+async def startup():
+ asyncio.create_task(worker_main())
+ asyncio.create_task(reconcile_denial_loop())
