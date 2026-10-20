@@ -157,3 +157,14 @@ Every material change must update this record and the relevant architecture/deci
 **Next acceptance sequence:** (1) latest green CI including runtime+model+package gates; (2) frozen external model and prompt version, adversarial/held-out evaluation; (3) real read-only evidence/CMDB/RAG qualification; (4) HITL/fencing and safe remediation simulation; (5) ACME twin/chaos, then demo/recordings.
 
 **Single-entry install:** `bash 00-Deployment/install.sh` delegates to `deploy/install-isolated.sh`; archives carry no shared development passwords. Never use legacy destructive Big Bang as the standard deployment path.
+
+## 2026-10-20 — Core RC1.2 isolated lifecycle, secure diagnostics
+
+- Release candidate: `2.1.0-core-rc1.2` on `feat/core-analysis-quality-v2`, PR #21. Do not merge to `main` or claim production qualification without explicit review.
+- Isolation is the supported first installation path (`bash deploy/install-isolated.sh`). The installer and big-bang wrapper now reject `RETIRE_LEGACY=1` *before* any other operation; retirement remains a separate, explicit post-qualification decision.
+- `tests/seed-demo.sh` verifies only the PostgreSQL service owned by the selected Compose project and requires populated topology.
+- `tests/qualification.sh` verifies Compose project identity and container ownership, not merely container names or healthy-looking unrelated processes.
+- `deploy/diagnose.sh` discovers containers by Compose service and project, sanitizes logs via `deploy/redact_logs.py` using known environment secret values and patterns, and writes a SHA-256 verification manifest. Bundles are private, not publication-ready.
+- CI additionally executes `tests/test_redact_logs.py` and `tests/lifecycle-safety-contract.sh`. A cumulative RC1.2 ZIP must be obtained from the successful release-kit GitHub Actions artifact and include runtime and model evaluation reports.
+- The verified CI for RC1.1 is GitHub Actions #39386565967, commit `4dc3032300452612f49e2ef98d44be29f835f9ca`. Its synthetic Temporal and model-fixture tests are PASS, **but it is not a real-model or server deployment acceptance result**.
+- Next: validate RC1.2 CI and packaging checksum, then qualify an actual OpenAI-compatible model offline; expand CMDB/RAG and eventually the ACME Twin, after core exit criteria are met.
