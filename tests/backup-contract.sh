@@ -6,6 +6,14 @@ for pattern in 'aiops.dump' 'n8n.dump' 'temporal.dump' 'glpi-mariadb.sql' 'aiops
 done
 grep -Fq 'CONFIRM_RESTORE' deploy/restore.sh
 grep -Fq 'CONFIRM_TARGET_DATABASES' deploy/restore.sh
-grep -Fq 'sha256sum -c SHA256SUMS' deploy/restore.sh
+grep -Fq 'python3 deploy/verify_backup.py' deploy/restore.sh
+grep -Fq 'CONFIRM_STACK_ID' deploy/restore.sh
+grep -Fq 'CONFIRM_DATA_LOSS' deploy/restore.sh
+grep -Fq 'RESTORE_VERIFY_ONLY=PASS' deploy/restore.sh
+grep -Fq 'temporal_visibility.dump' deploy/backup.sh
+grep -Fq 'temporal_visibility.dump' deploy/restore.sh
+grep -Fq 'BACKUP-MANIFEST.json' deploy/backup.sh
+grep -Fq 'AIOPS_STACK_ID' deploy/backup.sh
+grep -Fq 'ux_evidence_source_external_identity' db/migrations/010_evidence_identity.sql
 grep -Fq 'never upload' deploy/backup.sh || grep -Fq 'Never upload' deploy/backup.sh
 echo 'BACKUP_RESTORE_CONTRACT=PASS'
