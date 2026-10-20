@@ -58,8 +58,8 @@ def plan(env: dict[str, str], *, expected_stack: str | None = None) -> dict:
         address = ipaddress.ip_address(raw_ip)
     except ValueError as exc:
         raise IsolationError("invalid_bind_address") from exc
-    if not address.is_loopback:
-        raise IsolationError("nonloopback_bind_not_allowed_in_isolated_mode")
+    if str(address) != "127.0.0.1":
+        raise IsolationError("isolated_mode_requires_ipv4_loopback")
     ports: dict[str, int] = {}
     for key in PORT_FIELDS:
         raw_port = env.get(key, "")
@@ -102,6 +102,7 @@ def verify_compose(config: dict, report: dict) -> dict:
                 raise IsolationError("unisolated_" + category + ":" + str(key))
             if obj.get("external"):
                 raise IsolationError("external_" + category + "_forbidden")
+    resolved_ports: set[int] = set()
     for name, definition in services.items():
         if not isinstance(definition, dict):
             raise IsolationError("invalid_service:" + name)
@@ -120,8 +121,17 @@ def verify_compose(config: dict, report: dict) -> dict:
                 published_address = ipaddress.ip_address(ip)
             except ValueError as exc:
                 raise IsolationError("missing_or_invalid_port_bind:" + name) from exc
-            if not published_address.is_loopback:
+            if str(published_address) != "127.0.0.1":
                 raise IsolationError("port_published_outside_loopback:" + name)
+            try:
+                published = int(binding["published"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise IsolationError("invalid_resolved_port:" + name) from exc
+            if published in resolved_ports:
+                raise IsolationError("duplicate_resolved_host_port:" + name)
+            resolved_ports.add(published)
+    if resolved_ports != set(report["ports"].values()):
+        raise IsolationError("published_port_set_differs_from_configured_isolated_ports")
     return {**report, "resolved_compose_valid": True, "services": len(services),
             "networks": len(config.get("networks", {})),
             "volumes": len(config.get("volumes", {}))}
