@@ -16,7 +16,9 @@ The standard `bash deploy/install.sh` entry point targets the stack identity sel
 
 ## Current release
 
-Version `2.1.0-core-rc1.2` adds non-destructive lifecycle guards, project-scoped topology checks, strict qualification project ownership checks, and a redacted diagnostic collector. Deterministic Analyst/Critic and Temporal synthetic E2E are CI-qualified; a genuine model and LIVE adapters still require separate qualification.
+Version `2.1.0-core-rc1.3` extends the isolated deployment checks to resolved Docker Compose networks, volumes, project identity and host port publication. It adds a secret-safe read-only stack status report, adversarial Analyst/Critic tests and offline re-packaging from an extracted ZIP. Deterministic Analyst/Critic and Temporal synthetic E2E are CI-qualified; a genuine model and LIVE adapters still require separate qualification.
+
+Use `python3 deploy/status.py --env .env` for a read-only operational inventory without secrets. Run `python3 deploy/plan_isolation.py --env .env` to verify the isolated deployment plan without Docker. `deploy/package_tree.py` enables rebuilding a source kit outside a Git checkout.
 
 Use `bash deploy/diagnose.sh` to capture private, redacted diagnostics (review before sharing). The cumulative release ZIP includes sources, installation scripts, Compose, SQL migrations, documentation, and the CI qualification reports with checksums.
 
@@ -50,6 +52,8 @@ The Simulator is isolated on `aiops2-execution`; it does not have direct access 
 `tests/static-audit.sh` checks source structure and naming. `tests/qualification.sh` checks the running stack. `tests/synthetic-e2e.sh` exercises Portal → Core → Temporal → Worker and waits for the Run inventory to contain the generated Run.
 
 See `docs/` for architecture, data contracts, network boundaries, deployment, demo and resilience strategy.
+
+For the current engineering batch, see [RC1.3 deployment and qualification](docs/CORE-RC13-QUALIFICATION-OPERATIONS.md).
 
 ## Core qualification and model evaluation
 
