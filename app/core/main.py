@@ -515,17 +515,19 @@ def record_denial_intent(rid:str,x:dict,authorization:str|None=Header(default=No
         if not valid:raise HTTPException(409,'critic_denial_not_verified')
         present=c.execute('SELECT count(*) FROM aiops.evidence WHERE evidence_id=any(%s)',(ids,)).fetchone()[0]
         if present!=len(ids):raise HTTPException(422,'unknown_evidence')
-        old=c.execute('SELECT evidence_ids,policy_input,status FROM aiops.critic_denial_outbox WHERE run_id=%s AND critique_id=%s',(rid,cid)).fetchone()
-        if old:
-            if sorted(old[0])!=ids or old[1]!=policy_input:
-                raise HTTPException(409,'denial_intent_conflict')
-            return {'run_id':rid,'critique_id':cid,'status':old[2],'idempotent':True}
-        c.execute("""
+        inserted=c.execute("""
             INSERT INTO aiops.critic_denial_outbox
               (run_id,critique_id,analysis_id,evidence_ids,policy_input)
             VALUES (%s,%s,%s,%s,%s)
-        """,(rid,cid,aid,ids,json.dumps(policy_input)))
-    return {'run_id':rid,'critique_id':cid,'status':'PENDING','idempotent':False}
+            ON CONFLICT (run_id, critique_id) DO NOTHING
+            RETURNING run_id
+        """,(rid,cid,aid,ids,json.dumps(policy_input))).fetchone()
+        if inserted:
+            return {'run_id':rid,'critique_id':cid,'status':'PENDING','idempotent':False}
+        old=c.execute('SELECT analysis_id,evidence_ids,policy_input,status FROM aiops.critic_denial_outbox WHERE run_id=%s AND critique_id=%s',(rid,cid)).fetchone()
+        if not old or old[0]!=aid or sorted(old[1])!=ids or old[2]!=policy_input:
+            raise HTTPException(409,'denial_intent_conflict')
+        return {'run_id':rid,'critique_id':cid,'status':old[3],'idempotent':True}
 
 
 @app.get('/api/denial-intents/pending')
@@ -535,8 +537,9 @@ def pending_denial_intents(limit:int=20,authorization:str|None=Header(default=No
     with db() as c:
         rows=c.execute("""
             SELECT run_id,critique_id,analysis_id,evidence_ids,policy_input
-            FROM aiops.critic_denial_outbox WHERE status='PENDING'
-            ORDER BY created_at LIMIT %s
+            FROM aiops.critic_denial_outbox o JOIN aiops.runs r ON r.run_id=o.run_id
+            WHERE o.status='PENDING' AND r.status='BLOCKED'
+            ORDER BY o.created_at LIMIT %s
         """,(limit,)).fetchall()
     return {'items':[dict(zip(['run_id','critique_id','analysis_id','evidence_ids','policy_input'],r)) for r in rows]}
 
