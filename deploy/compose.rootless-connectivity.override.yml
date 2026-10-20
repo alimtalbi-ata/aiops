@@ -1,0 +1,15 @@
+# AIOps 2.0 isolated rootless deployment override.
+# Opt-in: docker compose -f compose.yml -f deploy/compose.rootless-connectivity.override.yml ...
+# Preserve this override for ALL subsequent compose operations on this stack.
+# External egress for DGX NIM is intentionally limited to intelligence.
+# The n8n Postgres database remains on the internal data network.
+services:
+  aiops2-intelligence:
+    networks:
+      aiops2-control: {}
+      aiops2-public: {}
+  aiops2-n8n:
+    networks:
+      aiops2-control: {}
+      aiops2-integration: {}
+      aiops2-data: {}
