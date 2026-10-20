@@ -55,7 +55,17 @@ def _execute_stage_blocking(a,attempt):
         if synthetic and stage=='OBSERVE':
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'SET_STATE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'state':'DEGRADED','health':0.42}},token=ADMIN)
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'OBSERVE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL'}},token=ADMIN)
-            observed=datetime.datetime.now(datetime.timezone.utc).isoformat()
+            # STAGE_STARTED is an immutable, idempotent event. Reuse its actual
+            # recorded timestamp so Temporal retry cannot create a conflicting
+            # observation with the same source/external identity.
+            timeline=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
+            stable_event=next((e for e in timeline.get('events',[])
+                               if e.get('sequence')==started['sequence']
+                               and e.get('stage')=='OBSERVE'
+                               and e.get('event_type')=='STAGE_STARTED'),None)
+            if not stable_event or not stable_event.get('occurred_at'):
+                raise RuntimeError('stable_observation_timestamp_unavailable')
+            observed=stable_event['occurred_at']
             post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fc-errors','observed_at':observed,'claim':'Synthetic ACME scenario reports FC errors at 184 errors/min on ACME-SAN-FABRIC-A.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL','mode':mode,'run_id':rid}},token=ADMIN)
             post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fabric-health','observed_at':observed,'claim':'Synthetic ACME scenario reports ACME-SAN-FABRIC-A degraded with health 0.42.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','state':'DEGRADED','health':0.42,'mode':mode,'run_id':rid}},token=ADMIN)
         if stage in ('DGX_ANALYST','DGX_CRITIC'):
