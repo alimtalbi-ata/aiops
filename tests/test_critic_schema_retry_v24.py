@@ -47,6 +47,18 @@ class CriticRetryTests(unittest.TestCase):
                 ai.call_model("Critic",{},ai.Critique)
         self.assertEqual(e.exception.status_code,502)
 
+    def test_repair_cannot_delete_unsupported_claim(self):
+        original=critic_payload()
+        original["claim_checks"][0]["assumptions"]=["x"]
+        fixed=critic_payload()
+        fixed["claim_checks"]=[dict(claim="Different claim",supported=True,
+                                    supporting_evidence_ids=["E1"],
+                                    contradicting_evidence_ids=[])]
+        with patch.object(ai,"BASE","http://example/v1"), patch.object(ai,"MODEL","synthetic"), patch.object(ai.requests,"post",side_effect=[response(original),response(fixed)]):
+            with self.assertRaises(HTTPException) as e:
+                ai.call_model("Critic",{},ai.Critique)
+        self.assertEqual(e.exception.status_code,502)
+
     def test_valid_critic_no_retry(self):
         with patch.object(ai,"BASE","http://example/v1"), patch.object(ai,"MODEL","synthetic"), patch.object(ai.requests,"post",return_value=response(critic_payload())) as post:
             result=ai.call_model("Critic",{},ai.Critique)
