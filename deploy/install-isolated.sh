@@ -56,6 +56,8 @@ bash deploy/check-secrets.sh .env
 docker compose --env-file .env config --quiet
 docker compose --env-file .env config --format json |
   python3 deploy/plan_isolation.py --env .env --expected-stack "$STACK_ID" --compose-stdin
+docker compose --env-file .env config --format json |
+  python3 deploy/check-docker-ownership.py --project "$STACK_ID"
 PORTAL_PORT="$(sed -n 's/^AIOPS_PORTAL_HOST_PORT=//p' .env | head -1)"
 export BASE_URL="http://127.0.0.1:$PORTAL_PORT"
 echo "ISOLATED_INSTALL_BEGIN|stack_id=$STACK_ID|no_destructive_legacy_actions=true"
