@@ -38,12 +38,31 @@ def evaluate(x: Decision) -> dict:
             "reason": "no evidence available",
         }
 
+    # Even a simulation must not present unsupported AI claims as an approved
+    # diagnostic. DEMO/REPLAY/STORY can skip *effect* preconditions, never
+    # evidence integrity or independent review.
     if x.mode in ("DEMO", "REPLAY", "STORY"):
+        if not x.critic_validated:
+            return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
+                    "reason":"synthetic diagnostic rejected or not validated by independent critic"}
+        if not x.evidence_fresh:
+            return {"state":"BLOCKED","decision":"ENRICH",
+                    "reason":"synthetic diagnostic lacks fresh current-state evidence"}
+        if x.severity == "UNKNOWN":
+            return {"state":"UNKNOWN","decision":"ENRICH",
+                    "reason":"synthetic incident severity is still unknown"}
+        if x.confidence < 0.65:
+            return {"state":"BLOCKED","decision":"ENRICH",
+                    "reason":"synthetic diagnostic confidence below qualification threshold"}
         return {
             "state": "PASS",
             "decision": "SIMULATE",
-            "reason": "synthetic mode: no production mutation permitted",
+            "reason": "critic validated and evidence fresh; no production mutation permitted",
         }
+
+    if x.severity == "UNKNOWN":
+        return {"state":"UNKNOWN","decision":"HUMAN_APPROVAL",
+                "reason":"LIVE incident severity is unknown; enrich before action"}
 
     if not x.critic_validated:
         reason = "critic validation is missing or failed"
