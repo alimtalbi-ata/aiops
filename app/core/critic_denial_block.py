@@ -36,7 +36,42 @@ def block_with_denial(conn, rid, expected_version, idem,
         if (receipt[0]!=rid or receipt[1]!="BLOCK"
                 or response.get("denial_hash")!=digest):
             raise ValueError("denial_block_idempotency_conflict")
+        journal=conn.execute(
+            'SELECT analysis_id,evidence_ids,policy_input,denial_hash,status '
+            'FROM aiops.critic_denial_resume '
+            'WHERE run_id=%s AND critique_id=%s FOR UPDATE',
+            (rid,cid)
+        ).fetchone()
+        outbox=conn.execute(
+            'SELECT analysis_id,evidence_ids,policy_input '
+            'FROM aiops.critic_denial_outbox '
+            'WHERE run_id=%s AND critique_id=%s',
+            (rid,cid)
+        ).fetchone()
+        if (not journal or journal[0]!=aid
+                or sorted(journal[1])!=ids
+                or journal[2]!=policy_input
+                or journal[3]!=digest
+                or journal[4]!='COMMITTED'
+                or not outbox or outbox[0]!=aid
+                or sorted(outbox[1])!=ids
+                or outbox[2]!=policy_input):
+            raise ValueError('denial_block_committed_replay_inconsistent')
         return dict(response,idempotent=True)
+
+    prepared=conn.execute(
+        'SELECT analysis_id,evidence_ids,policy_input,denial_hash,status '
+        'FROM aiops.critic_denial_resume '
+        'WHERE run_id=%s AND critique_id=%s FOR UPDATE',
+        (rid,cid)
+    ).fetchone()
+    if not prepared:
+        raise ValueError('denial_block_not_prepared')
+    if (prepared[0]!=aid or sorted(prepared[1])!=ids
+            or prepared[2]!=policy_input
+            or prepared[3]!=digest
+            or prepared[4]!='PREPARED'):
+        raise ValueError('denial_block_preparation_conflict')
 
     status,version,mode=row
     if version!=expected_version:
@@ -99,4 +134,14 @@ def block_with_denial(conn, rid, expected_version, idem,
           (receipt_id,run_id,idempotency_key,command,response)
         VALUES (%s,%s,%s,'BLOCK',%s)
     """,(new("RCPT"),rid,idem,json.dumps(response)))
+    committed=conn.execute(
+        "UPDATE aiops.critic_denial_resume "
+        "SET status='COMMITTED',committed_at=now() "
+        "WHERE run_id=%s AND critique_id=%s "
+        "AND status='PREPARED' "
+        "RETURNING run_id",
+        (rid,cid)
+    ).fetchone()
+    if not committed:
+        raise ValueError('denial_block_commit_transition_failed')
     return dict(response,idempotent=False)
