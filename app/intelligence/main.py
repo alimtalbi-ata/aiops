@@ -212,9 +212,22 @@ def call_model(system, payload, schema):
                     old_checks = decoded.get('claim_checks')
                     new_checks = repaired.get('claim_checks')
                     if isinstance(old_checks, list) and isinstance(new_checks, list):
-                        if any(c not in new_checks for c in old_checks
-                               if isinstance(c, dict) and c.get('supported') is False):
-                            raise ValueError('critic_repair_dropped_unsupported_check')
+                        # A schema repair may remove forbidden keys, but must preserve
+                        # the semantic contents of every unsupported claim.
+                        def supported_projection(check):
+                            return {
+                                'claim': check.get('claim'),
+                                'supported': check.get('supported'),
+                                'supporting_evidence_ids': check.get('supporting_evidence_ids', []),
+                                'contradicting_evidence_ids': check.get('contradicting_evidence_ids', []),
+                            }
+                        remaining = [supported_projection(c) for c in new_checks if isinstance(c, dict)]
+                        for check in old_checks:
+                            if isinstance(check, dict) and check.get('supported') is False:
+                                projection = supported_projection(check)
+                                if projection not in remaining:
+                                    raise ValueError('critic_repair_dropped_unsupported_check')
+                                remaining.remove(projection)
                     else:
                         raise ValueError('critic_repair_missing_claim_checks')
                 LOG.info('critic_schema_retry: candidate_response_received')
