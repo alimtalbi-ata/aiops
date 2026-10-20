@@ -118,3 +118,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Operations:** Add a checksummed upgrade runner that verifies the legacy schema before adopting migrations 000–008; full-stack database/volume backup and explicitly guarded restore; redacted diagnostics; a cumulative ZIP and checksum; synthetic model-evaluation fixtures with NOT_RUN semantics if no provider is configured.
 - **Reliability:** Internal POST calls are not retried implicitly because a timeout may occur after commit; idempotency and Temporal retry policy own the retry boundary. GET calls may retry transient transport/server errors; client errors are not retried.
 - **Qualification:** CI builds all application images, runs unit/static/security contracts, applies the complete migration chain to disposable PostgreSQL, and exercises the upgrade runner on a legacy-only schema. Real-model inference, full Temporal E2E, host installation and live adapters remain unqualified.
+
+## ADR-0015 — Require completed assistant generation before Analyst/Critic acceptance
+
+- **Date:** 2026-10-20
+- **Status:** Proposed; CI and real-provider compatibility pending
+- **Decision:** Reject missing or nonterminal finish metadata, non-assistant messages, refusals and tool calls before parsing initial or repaired model JSON. Never equate parseable JSON with completed inference.
+- **Reason:** Partial/filtered model responses must not become grounded incident diagnoses or policy inputs.
+- **Consequence:** OpenAI-compatible providers omitting finish metadata require explicit adapter qualification; no permissive fallback, no LIVE remediation.

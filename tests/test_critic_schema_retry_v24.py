@@ -23,7 +23,7 @@ def critic_payload():
 def response(payload):
     r=Mock()
     r.raise_for_status.return_value=None
-    r.json.return_value={"choices":[{"message":{"content":json.dumps(payload)}}]}
+    r.json.return_value={"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":json.dumps(payload)}}]}
     return r
 
 class CriticRetryTests(unittest.TestCase):
