@@ -27,9 +27,6 @@ def verify(archive: Path) -> dict:
     if match.group(1)!=sha256(archive.read_bytes()):
         raise ValueError("outer_checksum_mismatch")
     with zipfile.ZipFile(archive) as z:
-        bad=z.testzip()
-        if bad:
-            raise ValueError("zip_crc_failed:"+bad)
         # Bound extraction cost even when SHA-256 and CRC are valid. ZIP metadata
         # is untrusted; reject links, encryption, duplicates and zip bombs.
         entries=z.infolist()
@@ -55,6 +52,9 @@ def verify(archive: Path) -> dict:
             total_size+=info.file_size
             if total_size>MAX_TOTAL_UNCOMPRESSED:
                 raise ValueError("archive_total_size_limit_exceeded")
+        bad=z.testzip()
+        if bad:
+            raise ValueError("zip_crc_failed:"+bad)
         names=[info.filename for info in entries if not info.is_dir()]
         if len(set(names))!=len(names):
             raise ValueError("duplicate_archive_names")
