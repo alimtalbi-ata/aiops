@@ -51,7 +51,7 @@ fi
  zip -qr "$OUT" . -x '.env' '.git/*' '*__pycache__*' '*.pyc' 'backups/*' 'reports/*' '.venv/*'
 )
 unzip -tqq "$OUT" >/dev/null || { echo "FAIL|zip_integrity_check"; exit 4; }
-sha256sum "$OUT" > "$OUT.sha256"
+( cd "$(dirname "$OUT")" && sha256sum "$(basename "$OUT")" ) > "$OUT.sha256"
 echo "PACKAGE=$OUT"
 echo "CHECKSUM=$OUT.sha256"
 echo "PACKAGE_EXCLUDES=.env,git metadata,backups,reports,python caches"
