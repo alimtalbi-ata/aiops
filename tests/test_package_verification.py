@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import stat
 import tempfile
 import unittest
 import zipfile
@@ -105,6 +106,43 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
                 hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\n"
             )
             with self.assertRaisesRegex(ValueError,"qualified_release_missing_ci_evidence"):
+                MODULE.verify(path)
+
+
+    def test_symlink_archive_member_rejected_even_with_valid_checksum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=fixture(tmp)
+            with zipfile.ZipFile(path) as source:
+                contents=[(info, source.read(info.filename)) for info in source.infolist()]
+            with zipfile.ZipFile(path,"w") as target:
+                for info,data in contents:
+                    if info.filename=="compose.yml":
+                        info.create_system=3
+                        info.external_attr=(stat.S_IFLNK | 0o777)<<16
+                    target.writestr(info,data)
+            path.with_suffix(".zip.sha256").write_text(
+                hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\\n")
+            with self.assertRaisesRegex(ValueError,"archive_symlink_forbidden"):
+                MODULE.verify(path)
+
+    def test_archive_expansion_ratio_rejected_even_with_valid_checksum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=fixture(tmp)
+            oversized=b"0"*(2*1024*1024)
+            with zipfile.ZipFile(path) as source:
+                entries={name:source.read(name) for name in source.namelist()
+                         if name!="FILES-SHA256SUMS"}
+            entries["docs/high-compression-fixture.txt"]=oversized
+            entries["FILES-SHA256SUMS"]=("\\n".join(
+                hashlib.sha256(data).hexdigest()+"  ./"+name
+                for name,data in sorted(entries.items())
+            )+"\\n").encode()
+            with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as target:
+                for name,data in entries.items():
+                    target.writestr(name,data)
+            path.with_suffix(".zip.sha256").write_text(
+                hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\\n")
+            with self.assertRaisesRegex(ValueError,"archive_compression_ratio_limit_exceeded"):
                 MODULE.verify(path)
 
 
