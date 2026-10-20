@@ -12,15 +12,26 @@ import subprocess
 import sys
 
 
-def docker(*args: str) -> tuple[int, str]:
-    p=subprocess.run(["docker", *args], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+def docker(*args: str) -> tuple[int, str, str]:
+    p=subprocess.run(["docker", *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                      text=True, check=False, timeout=15)
-    return p.returncode, p.stdout
+    # stderr is processed for error classification only and is NEVER displayed.
+    return p.returncode, p.stdout, p.stderr
+
+def is_missing(kind: str, stderr: str) -> bool:
+    raw=stderr.lower()
+    if kind=="container":
+        return "no such object" in raw or "no such container" in raw
+    if kind=="network":
+        return "network" in raw and "not found" in raw or "no such network" in raw
+    if kind=="volume":
+        return "no such volume" in raw
+    return False
 
 
 def check_resource(kind: str, name: str, project: str) -> str | None:
     if kind=="container":
-        code,value=docker("container","inspect",name)
+        code,value,error=docker("container","inspect",name)
     elif kind=="network":
         code,value=docker("network","inspect",name)
     elif kind=="volume":
@@ -29,7 +40,9 @@ def check_resource(kind: str, name: str, project: str) -> str | None:
         return "unknown_resource_kind"
 
     if code:
-        return None
+        if is_missing(kind,error):
+            return None
+        return f"{kind}_inspect_unavailable:{name}"
     try:
         parsed=json.loads(value)[0]
     except (ValueError,IndexError,TypeError):
