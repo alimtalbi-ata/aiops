@@ -38,17 +38,38 @@ Generated diagnostics go under `reports/`. Review redacted logs before sharing. 
 - Never edit an applied migration. Add the next numbered migration.
 - Before upgrading an existing host, take and verify a database backup and inspect the exact schema signature. Do not use destructive volume deletion as a migration strategy.
 
+## Project-scoped recovery: verify before any effect
+
+Backups are stored privately under `/home/aiops` or another explicitly chosen directory. The script uses the `AIOPS_STACK_ID` declared in the local `.env`, validates Compose ownership labels on every database container and volume, and records a private `BACKUP-MANIFEST.json` with SHA-256 checksums. A backup with an incomplete marker must never be restored.
+
+```bash
+# Back up only the intended, running stack:
+bash deploy/backup.sh
+
+# Read-only verification (NO service stop, NO DB or volume mutation):
+bash deploy/restore.sh --verify-only /home/aiops/backups/<backup-folder>
+
+# An actual restore is destructive and is intentionally NOT automatic:
+CONFIRM_RESTORE=YES CONFIRM_TARGET_DATABASES=YES \
+CONFIRM_DATA_LOSS=YES CONFIRM_STACK_ID=aiops2-rebuild \
+bash deploy/restore.sh /home/aiops/backups/<backup-folder>
+```
+
+`restore.sh` stops application writers, restores the selected stack's databases and named volumes, and performs service/migration qualification. An error aborts the script; investigate before retrying. Restoring to an `aiops2` (non-isolated) project requires `ALLOW_NONISOLATED_RESTORE=YES` in addition to the normal confirmations.
+
+**Limitations:** Online volume snapshots are not guaranteed application-consistent; this does not substitute for a dedicated disposable restore test. The private `.env.private` is preserved in the backup but is never silently copied into a fresh stack. Verify credentials and dependencies before using a restored database. Store these backups encrypted and never upload them to GitHub.
+
 ## Recovery
 
 1. Stop and preserve the failed host state if the failure could involve data corruption.
 2. Create a separate diagnostics bundle and keep it private until redaction is reviewed.
 3. Confirm the backup's `SHA256SUMS`, database version, Git commit and target environment.
-4. Restore only into a deliberate recovery target. The restore script requires both `CONFIRM_RESTORE=YES` and `CONFIRM_TARGET_DATABASES=YES`.
+4. Restore only into a deliberate recovery target. The restore script requires `CONFIRM_RESTORE=YES`, `CONFIRM_TARGET_DATABASES=YES`, `CONFIRM_DATA_LOSS=YES`, and `CONFIRM_STACK_ID=<actual-isolated-stack>`. A non-isolated target requires a separate explicit override.
 5. Run the migration runner, then service qualification and synthetic E2E.
 6. Compare run counts, latest run versions, event/evidence counts and AI ledger integrity with the pre-incident inventory.
 7. Do not declare recovery successful based solely on PostgreSQL accepting a dump; confirm application semantics and a replayable incident scenario.
 
-The full-stack backup includes PostgreSQL dumps for AIOps, n8n and Temporal; a MariaDB dump for GLPI; persistent n8n, GLPI, Grafana and Prometheus volumes; a private `.env`; a Git commit reference; and SHA-256 checksums. Backups contain secrets and must be encrypted at rest and stored outside GitHub. The scripts do not upload backups anywhere.
+The full-stack backup includes PostgreSQL dumps for AIOps, n8n, Temporal and Temporal visibility; a MariaDB dump for GLPI; persistent n8n, GLPI, Grafana and Prometheus volumes; a private `.env`; a Git commit reference; and SHA-256 checksums. Backups contain secrets and must be encrypted at rest and stored outside GitHub. The scripts do not upload backups anywhere.
 
 ## Cumulative ZIP
 
