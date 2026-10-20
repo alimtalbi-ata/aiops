@@ -5,6 +5,7 @@ from pydantic import BaseModel,Field
 from shared.db import db
 from denial_routes import register_denial_routes
 from critic_denial_block import block_with_denial
+from critic_denial_resume import resume_critic_denial
 from shared.ids import new
 from shared.domain import transition,STAGES
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
@@ -179,6 +180,20 @@ def critic_denial_block(rid:str,x:dict,authorization:str|None=Header(default=Non
             )
     except ValueError as exc:
         raise HTTPException(409,str(exc))
+
+@app.post('/api/runs/{rid}/critic-denial-resume')
+def critic_denial_resume_endpoint(
+    rid:str,authorization:str|None=Header(default=None)
+):
+    auth(bearer(authorization))
+    try:
+        with db() as c:
+            return resume_critic_denial(
+                c,rid,transition,append_event,new
+            )
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
 
 @app.post('/api/scenarios/register')
 def register_scenario(x:dict,authorization:str|None=Header(default=None)):

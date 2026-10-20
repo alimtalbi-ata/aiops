@@ -251,7 +251,11 @@ def _execute_stage_blocking(a,attempt):
                 evidence_ids=sorted(x['evidence_id'] for x in source_evidence)
                 evidence_key=hashlib.sha256(json.dumps(evidence_ids,separators=(',',':')).encode()).hexdigest()[:16]
                 critique_record=post_json(CORE,f'/api/runs/{rid}/critique-record',{'critique':result,'analysis_id':analysis_record_id,'evidence_ids':evidence_ids,'idempotency_key':f'CRITIC-{rid}-{analysis_record_id}-{evidence_key}','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown')},timeout=15,token=ADMIN)
-                saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
+                denial_snapshot=critic_denial_input(
+                    mode,analyst_event['payload']['analysis'],
+                    result,source_evidence
+                ) if state=='BLOCKED' else None
+                saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'denial_policy_input':denial_snapshot,'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
                     try:
@@ -262,9 +266,7 @@ def _execute_stage_blocking(a,attempt):
                             'analysis_id':analysis_record_id,
                             'critique_id':critique_record['critique_id'],
                             'evidence_ids':evidence_ids,
-                            'policy_input':critic_denial_input(
-                                mode,analyst_event['payload']['analysis'],
-                                result,source_evidence),
+                            'policy_input':denial_snapshot,
                         },timeout=15,token=ADMIN)
                     except Exception as exc:
                         raise AtomicDenialBlockError(
