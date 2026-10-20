@@ -40,6 +40,8 @@ def verify(archive: Path) -> dict:
         required={"RELEASE-MANIFEST.txt","FILES-SHA256SUMS","compose.yml",
                   "deploy/install.sh","deploy/migrate.sh","app/worker/workflow.py",
                   "db/migrations/009_ai_decision_ledger.sql",
+                  "db/migrations/010_evidence_identity.sql",
+                  "deploy/verify_backup.py","tests/evidence-e2e.sh",
                   "tests/runtime-e2e.sh","tests/model-evaluation-e2e.sh",
                   "09-Qualification/ai-core-evaluation.json"}
         if not required.issubset(names):
