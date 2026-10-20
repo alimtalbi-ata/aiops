@@ -1,4 +1,4 @@
-import os,asyncio,datetime,hashlib,json,logging
+import os,asyncio,datetime,hashlib,json,logging,uuid
 from fastapi import FastAPI,HTTPException,Header
 from temporalio import activity
 from temporalio.client import Client
@@ -10,6 +10,7 @@ from shared.freshness import assess_evidence_freshness
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 log=logging.getLogger('aiops2.worker')
 worker_state={'polling':False,'last_error':None,'attempts':0}
+DENIAL_WORKER_OWNER='worker-'+uuid.uuid4().hex
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233');INTEL=os.getenv('INTELLIGENCE_URL','http://aiops2-intelligence:817')
@@ -42,25 +43,43 @@ def durable_denial_intent(rid,mode,analysis,critique,analysis_id,critique_id,evi
     },timeout=15,token=ADMIN)
 
 
+class AtomicDenialBlockError(Exception):
+    pass
+
+
 def reconcile_denial_batch():
-    # Repeatable outbox scan: failures never change a run from BLOCKED to ALLOW.
-    items=get_json(CORE,'/api/denial-intents/pending?limit=20',token=ADMIN).get('items',[])
+    owner=globals().get('DENIAL_WORKER_OWNER')
+    if not owner:
+        import uuid
+        owner='worker-'+uuid.uuid4().hex
+    items=post_json(CORE,'/api/denial-intents/claim',{
+        'owner':owner,
+        'limit':5,
+        'lease_seconds':300,
+    },timeout=15,token=ADMIN).get('items',[])
     for item in items:
-        rid=item['run_id']; cid=item['critique_id']
+        rid=item['run_id']
+        cid=item['critique_id']
         try:
-            verdict=post_json(POLICY,'/api/policy/check',item['policy_input'],timeout=5,token=ADMIN)
-            if verdict.get('state')!='BLOCKED' or verdict.get('decision') not in ('HUMAN_APPROVAL','ESCALATE'):
-                raise RuntimeError('reconciler_refused_unsafe_policy_verdict')
-            saved=post_json(CORE,f'/api/runs/{rid}/policy-record',{
-                'policy':verdict,'analysis_id':item['analysis_id'],
-                'critique_id':cid,'evidence_ids':item['evidence_ids'],
-                'policy_version':'2.1.0','policy_input':item['policy_input'],
-            },timeout=15,token=ADMIN)
-            post_json(CORE,f'/api/runs/{rid}/denial-intent/{cid}/reconciled',{
-                'policy_decision_id':saved['policy_decision_id'],
-            },timeout=15,token=ADMIN)
+            verdict=post_json(
+                POLICY,'/api/policy/check',
+                item['policy_input'],timeout=5,token=ADMIN)
+            if (verdict.get('state')!='BLOCKED'
+                    or verdict.get('decision') not in
+                    ('HUMAN_APPROVAL','ESCALATE')):
+                raise RuntimeError('unsafe_policy_verdict')
+            post_json(
+                CORE,
+                f'/api/runs/{rid}/denial-intent/{cid}/finalize',
+                {
+                    'owner':owner,
+                    'fencing_token':item['fencing_token'],
+                    'verdict':verdict,
+                },timeout=15,token=ADMIN)
         except Exception as exc:
-            log.warning('critic_denial_reconciliation_pending: %s',type(exc).__name__)
+            log.warning(
+                'critic_denial_reconciliation_pending run=%s critic=%s error=%s',
+                rid,cid,type(exc).__name__)
 
 
 async def reconcile_denial_loop():
@@ -118,9 +137,42 @@ async def start_run(a):
 async def execute_stage(a):
     return await asyncio.to_thread(_execute_stage_blocking,a,activity.info().attempt)
 
+def recover_committed_critic_block(rid):
+    detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
+    if detail.get('run',{}).get('status')!='BLOCKED':
+        return None
+    receipt=get_json(
+        CORE,f'/api/runs/{rid}/critic-denial-block/receipt',
+        token=ADMIN
+    )
+    if (receipt.get('run_id')!=rid
+            or receipt.get('status')!='BLOCKED'
+            or not receipt.get('denial_hash')
+            or not receipt.get('critique_id')
+            or not receipt.get('analysis_id')
+            or receipt.get('outbox_status') not in ('PENDING','RECONCILED')
+            or receipt.get('current_version')!=detail['run'].get('version')
+            or not isinstance(receipt.get('version'),int)
+            or receipt['version']>receipt['current_version']):
+        raise RuntimeError('atomic_denial_receipt_inconsistent')
+    return {
+        'run_id':rid,
+        'stage':'DGX_CRITIC',
+        'status':'BLOCKED',
+        'version':receipt['version'],
+        'policy_denial_recorded':False,
+        'denial_intent_durable':True,
+        'recovered_from_receipt':True,
+    }
+
+
 def _execute_stage_blocking(a,attempt):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
-    started=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':version,'stage':stage,'event_type':'STAGE_STARTED','event_key':f'{stage}:START','status':'RUNNING','confidence':None,'payload':{'attempt':attempt,'executor':'temporal'}})
+    if stage=='DGX_CRITIC':
+        recovered=recover_committed_critic_block(rid)
+        if recovered is not None:
+            return recovered
+    started=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':version,'stage':stage,'event_type':'STAGE_STARTED','event_key':f'{stage}:START','status':'RUNNING','confidence':None,'payload':{'executor':'temporal','retry_stable':True}})
     v=started['version']
     try:
         # This baseline has no qualified LIVE evidence/CMDB/RAG/analyst/critic/remediation adapters.
@@ -192,29 +244,31 @@ def _execute_stage_blocking(a,attempt):
                 saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
-                    # Commit a durable intent before contacting Policy. If Core is
-                    # unavailable, block the run anyway; never resume effect stages.
                     try:
-                        durable_denial_intent(rid,mode,analyst_event['payload']['analysis'],result,
-                                              analysis_record_id,critique_record['critique_id'],source_evidence)
-                    except Exception as intent_error:
-                        log.error('critic_denial_intent_persistence_failed: %s',type(intent_error).__name__)
-                    # Persist the independent policy denial before stopping the
-                    # workflow. If persistence is unavailable, stop anyway:
-                    # never continue to HITL or any effect stage.
-                    policy_decision_id=None
-                    try:
-                        policy_decision_id=persist_critic_denial(
-                            rid,mode,analyst_event['payload']['analysis'],result,
-                            analysis_record_id,critique_record['critique_id'],
-                            source_evidence,ADMIN)
-                    except Exception as denial_error:
-                        log.warning('critic_denial_persistence_failed: %s',type(denial_error).__name__)
-                    blocked=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':saved['version'],'idempotency_key':f'CRITIC-BLOCK-{rid}','command':'BLOCK'})
-                    return {'run_id':rid,'stage':stage,'status':'BLOCKED',
-                            'version':blocked['version'],
-                            'policy_denial_recorded':policy_decision_id is not None}
+                        block=post_json(
+                        CORE,f'/api/runs/{rid}/critic-denial-block',{
+                            'expected_version':saved['version'],
+                            'idempotency_key':f'CRITIC-BLOCK-{rid}',
+                            'analysis_id':analysis_record_id,
+                            'critique_id':critique_record['critique_id'],
+                            'evidence_ids':evidence_ids,
+                            'policy_input':critic_denial_input(
+                                mode,analyst_event['payload']['analysis'],
+                                result,source_evidence),
+                        },timeout=15,token=ADMIN)
+                    except Exception as exc:
+                        raise AtomicDenialBlockError(
+                            'atomic_denial_block_unconfirmed'
+                        ) from exc
+                    return {
+                        'run_id':rid,'stage':stage,'status':'BLOCKED',
+                        'version':block['version'],
+                        'policy_denial_recorded':False,
+                        'denial_intent_durable':True,
+                    }
                 return saved
+            except AtomicDenialBlockError:
+                raise
             except Exception as exc:
                 blocked_event=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'INTELLIGENCE_UNAVAILABLE','event_key':f'{stage}:UNAVAILABLE','status':'BLOCKED','decision':'HUMAN_APPROVAL','confidence':0,'payload':{'reason':type(exc).__name__,'synthetic_evidence_created':False,'execution_allowed':False}})
                 blocked=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':blocked_event['version'],'idempotency_key':f'INTELLIGENCE-BLOCK-{rid}-{stage}','command':'BLOCK'})
