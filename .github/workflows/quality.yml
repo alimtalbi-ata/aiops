@@ -59,7 +59,7 @@ jobs:
       - name: Build every application image
         run: docker compose --env-file .env build
       - name: Build opt-in model evaluation runner
-        run: docker compose --env-file .env --profile test --profile qualification build aiops2-model-evaluator
+        run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
     runs-on: ubuntu-latest
@@ -180,7 +180,7 @@ jobs:
       - name: Qualify real Temporal workflow against deterministic synthetic provider
         run: bash tests/runtime-e2e.sh
       - name: Build deterministic model evaluation runner
-        run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
+        run: docker compose --env-file .env --profile test --profile qualification build aiops2-model-evaluator
       - name: Score evidence-grounded Analyst/Critic fixtures and persist evaluation
         run: |
           mkdir -p reports
