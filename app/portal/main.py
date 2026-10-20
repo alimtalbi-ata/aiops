@@ -16,12 +16,114 @@ def demo():
     iid=post_json(CORE,'/api/incidents',{'external_id':f'DEMO-GOLDEN-PAYMENT-{demo_id}','title':'Payment latency following FC fabric degradation','severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo','synthetic':True,'payload':{'seed':20261018}})['incident_id']
     run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':f'DEMO-GOLDEN-PAYMENT-{demo_id}'})
     return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
-@app.get('/',response_class=HTMLResponse)
+from portal.ui_theme import shell, panel, table, pretty, esc
+
+def _get(path,base=CORE):
+    try:
+        return get_json(base,path)
+    except Exception as exc:
+        return {"status":"UNKNOWN","error_type":type(exc).__name__}
+
+def _runs():
+    response=_get("/api/runs")
+    return response.get("items",[]) if isinstance(response.get("items"),list) else []
+
+def _run_id(r):
+    return r.get("run_id","UNKNOWN")
+
+@app.get("/",response_class=HTMLResponse)
 def home():
-    d=get_json(CORE,'/api/dashboard');runs=get_json(CORE,'/api/runs')['items'];t=get_json(TWIN,'/api/twin/summary')
-    cards=[('Open P1',d['open_p1']),('Incidents',d['open_incidents']),('Running',d['running']),('Blocked',d['blocked']),('Twin nodes',d['twin_nodes']),('Degraded',d['degraded_nodes'])]
-    cards_html=''.join(f'<div class="card"><span>{html.escape(str(k))}</span><strong>{v}</strong></div>' for k,v in cards)
-    rows=''.join(f'<tr><td><code>{html.escape(str(r["run_id"]))}</code></td><td>{r["mode"]}</td><td><b>{r["status"]}</b></td><td>{r["overall_confidence"]}</td><td>{r["scenario_id"]}</td></tr>' for r in runs[:15]) or '<tr><td colspan="5">UNKNOWN — aucun run</td></tr>'
-    return f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ACME AioOps</title><style>
-body{{margin:0;background:#07111d;color:#e9f2f8;font:14px system-ui,Segoe UI,sans-serif}}header{{position:sticky;top:0;background:#0b1c2b;border-bottom:1px solid #25445a;padding:16px 28px;display:flex;justify-content:space-between;z-index:2}}main{{max-width:1500px;margin:auto;padding:26px}}h1{{font-size:34px;margin:0 0 6px}}h2{{margin-top:30px}}.muted{{color:#8fa7b8}}.grid{{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}}.card{{background:#0d2031;border:1px solid #23445b;border-radius:14px;padding:15px;min-height:78px}}.card span{{display:block;color:#9eb5c5;font-size:12px}}.card strong{{display:block;font-size:30px;margin-top:9px}}.two{{display:grid;grid-template-columns:2fr 1fr;gap:16px}}.panel{{background:#0c1d2d;border:1px solid #23445b;border-radius:14px;padding:18px;margin-top:16px}}table{{width:100%;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid #1d394e;text-align:left}}button{{border:0;border-radius:9px;padding:11px 15px;background:#2188c7;color:#fff;cursor:pointer;margin-right:8px}}button.secondary{{background:#18384e}}textarea{{width:100%;min-height:80px;background:#07131f;color:#fff;border:1px solid #2a4b61;border-radius:9px;padding:10px;box-sizing:border-box}}pre{{white-space:pre-wrap}}code{{color:#b8d8eb}}@media(max-width:1100px){{.grid{{grid-template-columns:repeat(3,1fr)}}.two{{grid-template-columns:1fr}}}}@media(max-width:650px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
-</style></head><body><header><b>ACME AioOps 2.0</b><span class="muted">Digital Twin · Canonical Run Engine · Evidence · Policy · Copilot</span></header><main><h1>Operations Command Center</h1><div class="muted">Synthetic/demo data is explicitly labelled. Unsupported claims remain UNKNOWN.</div><div class="grid" style="margin-top:20px">{cards_html}</div><div class="panel"><button onclick="demo()">Launch Golden DEMO</button><button class="secondary" onclick="location.reload()">Refresh</button><span id="demo" class="muted"></span></div><div class="two"><section class="panel"><h2>Canonical Runs</h2><table><tr><th>Run</th><th>Mode</th><th>Status</th><th>Confidence</th><th>Scenario</th></tr>{rows}</table></section><section class="panel"><h2>Digital Twin</h2><pre>{html.escape(json.dumps(t,indent=2,default=str))}</pre></section></div><section class="panel"><h2>AI Copilot</h2><textarea id="q" placeholder="Ex: Pourquoi le service Payment est-il à risque ? Quelles preuves avons-nous ?"></textarea><button onclick="ask()" style="margin-top:10px">Ask Copilot</button><pre id="a" class="muted"></pre></section></main><script>async function demo(){{let r=await fetch('/api/demo',{{method:'POST'}});document.getElementById('demo').textContent=await r.text();setTimeout(()=>location.reload(),1500)}}async function ask(){{let q=document.getElementById('q').value;let r=await fetch('/api/copilot',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{question:q}})}});document.getElementById('a').textContent=JSON.stringify(await r.json(),null,2)}}</script></body></html>'''
+    d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
+    cards=[
+        ("Incidents ouverts",d.get("open_incidents"),"#E24B4A"),
+        ("P1 ouverts",d.get("open_p1"),"#EF9F27"),
+        ("Runs actifs",d.get("running"),"#7F77DD"),
+        ("Runs bloqués",d.get("blocked"),"#378ADD"),
+        ("Nœuds Twin",t.get("nodes"),"#1D9E75"),
+        ("Équipements dégradés",d.get("degraded_nodes"),"#639922"),
+    ]
+    tiles="".join(
+        f'<div class="tile" style="--c:{color}"><strong>{esc("INCONNU" if v is None else v)}</strong><span>{esc(k)}</span></div>'
+        for k,v,color in cards
+    )
+    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("scenario_id","UNKNOWN")) for r in _runs()[:15]]
+    content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
+    content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
+    content+=panel("Digital Twin — état courant",pretty(t))
+    content+=panel("Démo ACME — simulation uniquement",
+        '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
+    return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
+
+@app.get("/runs",response_class=HTMLResponse)
+def runs_page():
+    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("overall_confidence","INCONNU"),r.get("scenario_id","UNKNOWN")) for r in _runs()]
+    return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows)))
+
+@app.get("/timeline",response_class=HTMLResponse)
+def timeline_page():
+    items=_runs()
+    if not items:
+        return shell("/timeline","Timeline incident","Les événements proviennent de Core ; aucun événement de démonstration n'est inventé.",panel("Chronologie",'<p>INCONNU — aucun run accessible.</p>'))
+    rid=str(items[0].get("run_id",""))
+    if not rid:
+        return shell("/timeline","Timeline incident","Événements non disponibles.",panel("Chronologie",'<p>INCONNU — run_id absent.</p>'))
+    detail=_get("/api/runs/"+__import__("urllib.parse",fromlist=["quote"]).quote(rid,safe=""))
+    events=detail.get("events",[]) if isinstance(detail.get("events"),list) else []
+    cards=""
+    for e in events:
+        status=e.get("status","UNKNOWN")
+        color={"PASS":"#1D9E75","BLOCKED":"#E24B4A","FAIL":"#E24B4A","RUNNING":"#EF9F27"}.get(status,"#7F77DD")
+        cards+=f'<article class="event" style="--c:{color}"><small>#{esc(e.get("sequence","?"))} · {esc(e.get("stage","UNKNOWN"))} · {esc(e.get("occurred_at","horodatage indisponible"))}</small><h3>{esc(e.get("event_type","UNKNOWN"))}</h3><p>{esc(status)}</p><span class="chip">{esc(e.get("event_key","sans clé"))}</span></article>'
+    if not cards: cards='<p>INCONNU — événements non disponibles pour ce run.</p>'
+    content=panel("Run sélectionné : "+rid,'<p>Timeline canonique, pas un scénario fictif.</p><div class="timeline">'+cards+'</div>')
+    return shell("/timeline","Timeline incident","Chronologie des événements persistés dans Core ; dernier run en tête de liste.",content,mode=items[0].get("mode","INCONNU"))
+
+@app.get("/twin",response_class=HTMLResponse)
+def twin_page():
+    summary=_get("/api/twin/summary",TWIN)
+    graph=_get("/api/twin/graph",TWIN)
+    nodes=graph.get("nodes",[]) if isinstance(graph.get("nodes"),list) else []
+    edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
+    body=panel("Résumé Digital Twin",pretty(summary))
+    body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
+        [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
+    body+=panel("Relations de dépendance",table(["Source","Relation","Cible"],
+        [(x.get("source_id"),x.get("relation_type"),x.get("target_id")) for x in edges[:300]]))
+    body+=panel("Impact ACME-SAN-FABRIC-A",pretty(_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)))
+    return shell("/twin","Digital Twin ACME","Topologie et dépendances observables, distinctes des injections de simulation.",body)
+
+@app.get("/evidence",response_class=HTMLResponse)
+def evidence_page():
+    body=panel("Traçabilité des preuves",'<p>Les preuves doivent porter provenance, fraîcheur, lien au run et mode SYNTHETIC/LIVE. Aucun indicateur de confiance artificiel n’est produit par cette vue.</p>')
+    body+=panel("Point de contrôle",'<p>Consulter les identifiants de preuves dans les événements Core. La liste transversale Evidence exige un adaptateur et un contrôle de droits complémentaires.</p>')
+    return shell("/evidence","Preuves & Observabilité","Evidence ledger, liens de causalité et limites d’acquisition.",body)
+
+@app.get("/policy",response_class=HTMLResponse)
+def policy_page():
+    rows=[(_run_id(r),r.get("status","UNKNOWN"),r.get("mode","UNKNOWN")) for r in _runs() if r.get("status") in ("BLOCKED","WAITING")]
+    body=panel("Exécutions bloquées / en attente",table(["Run","État","Mode"],rows))
+    body+=panel("Contrôles d'autorisation",'<p>Critic rejeté : blocage atomique, reçu et outbox. Approbation HITL, ownership et fencing sont requis avant effet. Cette page ne crée aucune validation.</p>')
+    return shell("/policy","Policy & HITL","Décisions, approbations et barrières de sécurité — lecture seule.",body)
+
+@app.get("/copilot",response_class=HTMLResponse)
+def copilot_page():
+    body=panel("Assistant IA et contestation",
+        '<p>Questionner les incidents, la CMDB, les preuves et les décisions. Les réponses doivent citer leurs sources, confiance et limites.</p>'
+        '<label for="q">Votre question</label><textarea id="q" placeholder="Quelles preuves soutiennent le diagnostic ?"></textarea>'
+        '<p><button type="button" id="ask">Interroger Copilot</button></p><pre class="log" id="answer" role="status" aria-live="polite">Aucune réponse.</pre>'
+        '<script>document.getElementById("ask").addEventListener("click",async function(){const out=document.getElementById("answer");out.textContent="Chargement…";try{const r=await fetch("/api/copilot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:document.getElementById("q").value})});out.textContent=JSON.stringify(await r.json(),null,2);if(!r.ok)out.textContent="Erreur HTTP "+r.status+" : "+out.textContent;}catch(e){out.textContent="Copilot indisponible";}});</script>')
+    return shell("/copilot","Copilot","Conversation contextualisée ; une réponse non étayée ne constitue pas une preuve.",body)
+
+@app.get("/qualification",response_class=HTMLResponse)
+def qualification_page():
+    checks=[("QF178–179","35 tests unitaires rapportés sur Debian isolée","Rapporté, non CI"),
+      ("QF187","HTTP auth 401/401/409","Rapporté sur Debian"),
+      ("QF188","Reprise HTTP et idempotence","Rapporté sur Debian"),
+      ("QF189","8 requêtes concurrentes, 1 commit","Rapporté sur Debian"),
+      ("QF190","Réponse client perdue, rejeu sans doublon","Rapporté sur Debian"),
+      ("Temporal E2E","Reprise complète / pas de double appel IA","NON QUALIFIÉ"),
+      ("Digital Twin E2E","Injection → analyse → gate → UI","NON QUALIFIÉ"),
+      ("LIVE / Production","Critères de sécurité et reprise","NO-GO")]
+    return shell("/qualification","Qualification","Provenance explicite des essais, points bloquants et gates de promotion.",
+      panel("Matrice de qualification",table(["Campagne","Périmètre","État"],checks))+
+      panel("Règle d'audit",'<p>Résultats QF issus des journaux opérateur ; ne pas les présenter comme un succès GitHub Actions sans preuve de workflow.</p>'))
