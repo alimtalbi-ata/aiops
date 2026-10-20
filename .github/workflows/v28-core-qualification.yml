@@ -1,0 +1,54 @@
+name: V2.8 Core qualification (isolated)
+
+on:
+  push:
+    branches:
+      - feat/v28-transactional-denial-fencing-20261020
+  pull_request:
+    paths:
+      - 'app/core/**'
+      - 'app/shared/**'
+      - 'app/worker/**'
+      - 'tests/**'
+      - '.github/workflows/v28-core-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: app/requirements.txt
+      - name: Dependencies
+        run: python -m pip install -r app/requirements.txt
+      - name: Compile Core and Worker
+        run: python -m compileall -q app/core app/shared app/worker tests
+      - name: V2.8 isolated unit suite
+        run: python -m unittest discover -s tests -p 'test_v28_*.py' -q
+      - name: Import Core from packaged Python path
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-v28-nonproduction-import-only
+        run: python -c "import core.main; print('V28_CORE_IMPORT=PASS')"
+
+  docker-import-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build distinct Core image (no container ports or databases)
+        run: docker build -f app/core/Dockerfile -t aiops2-core:v28-ci-import app
+      - name: Import packaged application with no network
+        run: |
+          docker run --rm --network none \
+            -e AIOPS_INTERNAL_TOKEN=ci-v28-nonproduction-import-only \
+            --entrypoint python aiops2-core:v28-ci-import \
+            -c "import core.main; print('V28_DOCKER_IMPORT=PASS')"
