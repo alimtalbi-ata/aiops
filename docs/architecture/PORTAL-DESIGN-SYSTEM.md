@@ -1,0 +1,73 @@
+# Charte UI cible — portails AIOps 2.0 / ACME Digital Twin
+
+**Auteur : Abdelhalim Talbi.** **Référence graphique :** fichier utilisateur `Timeline AIOps : de l’incident à la remédiation.html` (fourni le 20/10/2026). **Statut :** guide d'implémentation / prototype de composants; non-recette UI Windows.
+
+## Ce que l'on reprend du modèle HTML
+
+- Hero bleu nuit / halos violets et verts, titre à dégradé multicolore.
+- Typographie system-ui, responsive jusqu'au smartphone, content area centrée.
+- KPI sous forme de cartes aux accents colorés, panneaux arrondis, chips/pills, logs monospace contrastés.
+- Timeline verticale (événement, état, stage, date, clé), rail, pastilles de phases, progression.
+- Navigation cohérente, sections découpées, modes clair/sombre et `prefers-reduced-motion`.
+- Codes couleur sémantiques : rouge incident/refus, orange observation, violet analyse, bleu orchestration/ticket, vert validation, vert olive vérification/résolution.
+
+**Ne pas reprendre comme faits** les valeurs 4 s, 21 s, 2 min 33, 14→1, latence 48 ms, SSD-07, « ticket résolu » ou « remédiation réussie » présentes dans l'exemple. Ce sont des **données illustratives**, non des mesures de la plateforme.
+
+## Architecture technique UI
+
+Le module partagé `app/portal/ui_theme.py` définit `shell(page,title,description,body,mode)`, `panel()`, `table()` et `pretty()`. La vue `app/portal/main.py` compose toutes les pages à partir de ce shell. Le HTML échappe les valeurs issues de la base et des API avant insertion. Les CSS sont centralisés, sans dépendance CDN. Les rendus serveur n'intègrent pas de jetons internes dans le navigateur.
+
+Une refonte ultérieure peut extraire le CSS et les composants en fichiers statiques versionnés (cache CSP, tests snapshot visuels). La structure actuelle facilite ce futur découpage.
+
+## Matrice complète des pages cible
+
+| URL actuelle | Page | Données utilisées / statut | Suite fonctionnelle |
+|---|---|---|---|
+| `/` | Operations cockpit | Core dashboard + Twin summary + runs | filtres temps, erreurs / SLO |
+| `/runs` | Incidents & Runs | Core /api/runs | recherche, pagination, détail run |
+| `/timeline` | Timeline | événements Core du premier run courant | choix du run, flux live et replay |
+| `/twin` | Digital Twin ACME | Twin summary, graph, impact + tables | graphe interactif, zoom, chemin critique, bitemporel |
+| `/evidence` | Preuves et observabilité | guide / état explicite, pas d'agrégation API | evidence API, provenance, Loki/Prometheus |
+| `/policy` | Policy & HITL | runs BLOCKED / WAITING | gates, acteurs, approbations authentifiées |
+| `/copilot` | Copilot | proxy API /api/copilot préexistant | citations, critic challenge, RBAC, historique |
+| `/qualification` | Qualification & audit | matrice documentaire des tests rapportés | lecture des manifestes CI et cas d'essai |
+| cible | Remédiation et vérification | **NON IMPLÉMENTÉ** | playbooks signés, scopes, approvals, preuve d'effet, rollback |
+| cible | CMDB/Change | **NON IMPLÉMENTÉ** | écarts configuration, changement récent, impact |
+| cible | Administration & sécurité | **NON IMPLÉMENTÉ** | RBAC, utilisateurs, journaux d'accès, secrets serveur |
+| cible | Demo Studio | **NON QUALIFIÉ** | dataset seedé, start/stop/reset isolés, snapshots réels |
+
+**Important :** « page créée » ne signifie pas « fonctionnalité sous-jacente qualifiée ». Les pages Evidence et Policy sont pour l'instant principalement de lecture/documentation et ne réalisent pas de modification d'état. Aucun graphique Twin interactif n'est revendiqué.
+
+## Critères de qualité UI
+
+1. Chaque page présente un titre, un mode, une source de données, sa disponibilité et sa fraîcheur si connue.
+2. Données manquantes = `INCONNU` ou `NON QUALIFIÉ`; jamais une valeur simulée sans badge « SYNTHETIC ».
+3. Action dangereuse désactivée par défaut; backend applique aussi l'autorisation (ne jamais dépendre seulement du bouton désactivé).
+4. Clavier et focus visible; respect des préférences d'animation; contrôle de contraste.
+5. Pas d'HTML brut non échappé depuis des incidents, modèles ou journaux.
+6. Les animations sont purement cosmétiques; état machine lisible sans elles.
+7. Timeline fondée sur `sequence` et `occurred_at` canoniques, pas sur des timestamps fictifs.
+8. Séparer les statuts d'activité, de santé, de preuve et de qualification.
+9. Optimisation cible desktop 1920x1080, laptop et écran mobile 390px; tests screenshots réels avant promotion.
+10. Rechercher des performances raisonnables avec pagination, rendu partiel, non-blocage des appels amont.
+
+## Audit UI et critères d'acceptation non encore satisfaits
+
+- [ ] Test d'import Python / FastAPI du nouveau portail dans GitHub Actions.
+- [ ] HTTP GET 200 de chaque page, après installation et avec Core/Twin simulés.
+- [ ] Tests anti-injection HTML / XSS sur sorties utilisateur.
+- [ ] Vérification WCAG de base et clavier (Playwright ou navigateur réel).
+- [ ] Captures écran réelles de chaque page, non substituées par maquettes.
+- [ ] Test visuel responsive desktop/tablette/mobile, thème clair/sombre.
+- [ ] Test complet Digital Twin ACME, qualité graphe/impact.
+- [ ] Découplage proxy Copilot et authn/RBAC pour actions accessibles depuis le navigateur.
+- [ ] Autorisation backend sur toute action DEMO ou LIVE ; refus par défaut.
+- [ ] Mise en page toutes les autres interfaces éventuelles hors `app/portal` après inventaire.
+
+## Feuille de route
+
+V2.8-A — Shell commun et routes de consultation. V2.8-B — composant timeline animé sur événements réels, graph Twin interactif accessible. V2.8-C — pages Evidence/Policy branchées aux API réelles avec RBAC. V2.8-D — Demo Studio qualifié ACME à graine fixe, capture testée. V2.9 — consolidation ergonomie, captures et campagne utilisateur.
+
+## Adaptation par rapport au HTML fourni
+
+Le code référent était une timeline statique illustrant un incident SSD et des délais fixes. Le portail adapte **le langage visuel** à une source serveur canonique : pages distinctes, valeurs dynamiques ou état INCONNU, thèmes, navigation et capacités limitées tant que les gates ne sont pas qualifiés. Il ne reproduit ni une métrique arbitraire ni une exécution automatique de remédiation.
