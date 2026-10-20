@@ -9,6 +9,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import uuid
 from pathlib import Path
 import sys
 import requests
@@ -117,10 +118,56 @@ def main():
     coverage_ok=all(r["analysis_ok"] and r["critic_ok"] for r in rows) and len(injection)==1 and len(conflict)==1
     gates={k:metrics[k]>=v for k,v in thresholds.items()}
     gates["coverage"]=coverage_ok
-    report={"qualification":"AIOps 2.0 model-backed Analyst/Critic evaluation","dataset_version":dataset.get("dataset_version"),"dataset_sha256":hashlib.sha256(Path(args.dataset).read_bytes()).hexdigest(),"generated_at_utc":dt.datetime.now(dt.timezone.utc).isoformat(),"provider_configured_service":base,"mode":"DEMO","execution_allowed":False,"thresholds":thresholds,"metrics":metrics,"gates":gates,"result":"PASS" if all(gates.values()) else "FAIL","cases":rows,"limitations":["Synthetic fixture data only.","A deterministic CI provider is an integration test, not a real-model quality result.","A passing score qualifies only the exact provider/model/prompt versions recorded by the service and must be repeated after changes."]}
-    report_path=Path(args.report); report_path.parent.mkdir(parents=True,exist_ok=True); report_path.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
+    providers=sorted({r.get("provider") for r in rows if r.get("provider")})
+    models=sorted({r.get("model") for r in rows if r.get("model")})
+    prompts=sorted({p for r in rows for p in (r.get("analyst_prompt_version"),r.get("critic_prompt_version")) if p})
+    dataset_sha=hashlib.sha256(Path(args.dataset).read_bytes()).hexdigest()
+    evaluation_id="EVAL-"+uuid.uuid4().hex
+    qualification_kind="deterministic-integration-fixture" if any("ci-deterministic" in str(m) for m in models) else "configured-model-evaluation"
+    report={"qualification":"AIOps 2.0 advisory Analyst/Critic evaluation",
+            "evaluation_id":evaluation_id,
+            "dataset_version":dataset.get("dataset_version"),"dataset_sha256":dataset_sha,
+            "generated_at_utc":dt.datetime.now(dt.timezone.utc).isoformat(),
+            "provider":",".join(providers) or "unavailable","model":",".join(models) or "unavailable",
+            "prompt_version":"+".join(prompts) or "unavailable",
+            "policy_version":os.getenv("AIOPS_POLICY_VERSION","policy-v2.0"),
+            "retrieval_version":os.getenv("AIOPS_RETRIEVAL_VERSION","none"),
+            "qualification_kind":qualification_kind,
+            "provider_configured_service":base,"mode":"DEMO","execution_allowed":False,
+            "thresholds":thresholds,"metrics":metrics,"gates":gates,
+            "result":"PASS" if all(gates.values()) else "FAIL","cases":rows,
+            "limitations":["Synthetic fixture data only.","Deterministic fake provider qualifies contracts, not real-model accuracy.","All metrics must be re-evaluated for each model, prompt, retrieval and dataset version."]}
+    core_url=os.getenv("AIOPS_CORE_URL","").rstrip("/")
+    required=os.getenv("AIOPS_REQUIRE_EVAL_PERSISTENCE","0")=="1"
+    report["ledger_persistence"]={"status":"NOT_CONFIGURED"}
+    if core_url:
+        ledger_payload={"evaluation_id":evaluation_id,"dataset_version":report["dataset_version"],
+            "dataset_hash":dataset_sha,"provider":report["provider"],"model":report["model"],
+            "prompt_version":report["prompt_version"],"policy_version":report["policy_version"],
+            "retrieval_version":report["retrieval_version"],"sample_count":n,
+            "metrics":{**metrics,"thresholds":thresholds,"gates":gates,
+                       "quality_result":report["result"],"qualification_kind":qualification_kind},
+            "gate_decision":report["result"],
+            "artifact_uri":os.getenv("AIOPS_EVAL_ARTIFACT_URI","reports/ai-core-evaluation.json")}
+        try:
+            resp=session.post(core_url+"/api/model-evaluations",json=ledger_payload,timeout=(3,15))
+            resp.raise_for_status()
+            data=resp.json()
+            report["persisted_evaluation_id"]=data.get("evaluation_id")
+            report["ledger_persistence"]={"status":"PASS","idempotent":bool(data.get("idempotent",False))}
+        except (requests.RequestException,ValueError,KeyError,TypeError) as error:
+            report["ledger_persistence"]={"status":"FAIL","error":type(error).__name__}
+    elif required:
+        report["ledger_persistence"]={"status":"FAIL","error":"core_url_not_configured"}
+    if required:
+        report["gates"]["ledger_persistence"]=report["ledger_persistence"]["status"]=="PASS"
+        if not report["gates"]["ledger_persistence"]:
+            report["result"]="FAIL"
+    report_path=Path(args.report)
+    report_path.parent.mkdir(parents=True,exist_ok=True)
+    report_path.write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
     print("EVALUATION_REPORT="+str(report_path))
-    print("EVALUATION_RESULT="+report["result"]+"|"+json.dumps(metrics,sort_keys=True))
+    print("EVALUATION_RESULT="+report["result"]+"|"+json.dumps(metrics,sort_keys=True)+"|ledger="+report["ledger_persistence"]["status"])
     return 0 if report["result"]=="PASS" else 1
 
 if __name__=="__main__":

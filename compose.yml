@@ -322,6 +322,10 @@ services:
     restart: "no"
     environment:
       AIOPS_INTELLIGENCE_URL: http://aiops2-intelligence:817
+      AIOPS_CORE_URL: http://aiops2-core:810
+      AIOPS_REQUIRE_EVAL_PERSISTENCE: "1"
+      AIOPS_POLICY_VERSION: policy-v2.0
+      AIOPS_RETRIEVAL_VERSION: none
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       AIOPS_EVAL_DATASET: /opt/aiops/eval/ai-core-cases.json
       AIOPS_EVAL_REPORT: /reports/ai-core-evaluation.json
@@ -335,6 +339,7 @@ services:
     networks: [aiops2-control]
     depends_on:
       aiops2-intelligence: {condition: service_healthy}
+      aiops2-core: {condition: service_healthy}
 
 networks:
   aiops2-public: {name: aiops2-public}
