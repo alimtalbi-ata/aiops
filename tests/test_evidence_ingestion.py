@@ -64,8 +64,8 @@ class EvidenceIngestionTests(unittest.TestCase):
         self.assertFalse(value["deduplicated"])
         self.assertEqual(value["evidence_id"],"EVD-NEW")
         self.assertIn("on conflict do nothing",conn.calls[0][0])
-        self.assertEqual(conn.calls[0][1][3],"Synthetic SAN multipath degraded")
-        self.assertEqual(conn.calls[0][1][2],"2026-10-20T06:00:00.000000Z")
+        self.assertEqual(conn.calls[0][1][4],"Synthetic SAN multipath degraded")
+        self.assertEqual(conn.calls[0][1][3],"2026-10-20T06:00:00.000000Z")
 
     def test_exact_replay_returns_existing_evidence(self):
         payload=event()
