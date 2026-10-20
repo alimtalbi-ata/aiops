@@ -3,7 +3,7 @@
 **Author:** Abdelhalim Talbi  
 **Repository:** https://github.com/alimtalbi-ata/aiops  
 **Default branch:** `main` (protected by workflow; work on branches and propose PRs)  
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-20
 
 ## Why this document exists
 
@@ -179,4 +179,14 @@ Every material change must update this record and the relevant architecture/deci
 - `docs/CORE-RC13-QUALIFICATION-OPERATIONS.md` documents Windows-to-Debian transfer, isolated install, read-only status, model evaluation and dual SHA-256 verification.
 - **Qualification status:** the previous reconstruction baseline passed full synthetic CI at GitHub Actions #39390130618. The RC1.3 candidate has new tests and awaits a successful full CI execution before its new cumulative ZIP may be called qualified.
 - **Next decision:** inspect RC1.3 CI and artifact, qualify a real OpenAI-compatible model offline, then expand read-only context acquisition/RAG and human-approved guarded effects. LIVE remains disabled; no Debian production changes are authorized.
+
+## 2026-10-20 — RC1.4 Docker resource ownership and CI isolation guard
+
+- **Branch:** `feat/core-analysis-quality-v2`; **PR:** #21. `main` remains unmodified by this batch. Version advances from `2.1.0-core-rc1.3` to `2.1.0-core-rc1.4`.
+- **Verified previous baseline:** GitHub Actions run #39399054380 passed all five jobs (quality/build, fresh database migration, legacy upgrade, runtime Temporal E2E, release-kit) and published the RC1.3 cumulative ZIP with machine-readable synthetic-qualification reports. This is not a host-specific Debian or real-model acceptance test.
+- **New fence:** `deploy/check-docker-ownership.py` checks pre-existing containers, networks and volumes against `com.docker.compose.project`. It is called by `deploy/install-isolated.sh` after rendering the Compose model but before installation. Foreign-owned or unlabeled resources fail closed; no delete/retire/prune is attempted.
+- **Regression suite:** `tests/test_docker_ownership.py` checks ownership mismatch, correct owner, absent resources and unreadable inspection data. It is release-blocking in CI.
+- **Runbook:** `docs/CORE-RC14-RESOURCE-OWNERSHIP.md` specifies the fence, non-destructive installation and limitations.
+- **Pending gate:** RC1.4 full CI and cumulative artifact qualification. Do not describe RC1.4 as qualified until the `release-kit` job succeeds on the exact commit; keep RC1.3 as the last verified release candidate until then.
+- **Next priority:** run the isolated reconstruction from a fresh directory on the Debian host only after a qualified kit is available; check real inference service connectivity, Analyst/Critic grounding/abstention and policies, then advance read-only CMDB/RAG acquisition. Keep simulated evidence distinct from real evidence; do not enable LIVE remediation without independent end-to-end qualification.
 
