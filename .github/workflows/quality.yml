@@ -30,6 +30,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+      - name: Analyst Critic fail-closed fault injection
+        run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
       - name: AI evaluation harness tests
@@ -252,6 +254,7 @@ jobs:
           python -m compileall -q app tests tools
           python -m unittest discover -s tests -p "test_policy_safety.py" -v
           python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+          python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
           python -m unittest discover -s tests -p "test_portal_demo.py" -v
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
           python -m unittest discover -s tests -p "test_model_evaluation_api.py" -v
