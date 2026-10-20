@@ -42,6 +42,8 @@ for suffix in n8n-data glpi-data grafana-data prometheus-data; do
     echo "FAIL|stack_volume_missing|$volume"; exit 4;
   }
   [[ "$actual" == "$volume" ]] || { echo "FAIL|wrong_volume|$volume|$actual"; exit 4; }
+  label="$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}' "$volume")"
+  [[ "$label" == "$STACK_ID" ]] || { echo "FAIL|backup_volume_project_label_mismatch|$volume"; exit 4; }
   docker run --rm --network none --user 0:0 --entrypoint /bin/sh \
     -v "$volume:/source:ro" "$ARCHIVE_IMAGE" -c 'tar czf - -C /source .' \
     > "$OUT/$logical.tar.gz"
