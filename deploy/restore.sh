@@ -46,6 +46,8 @@ for suffix in n8n-data glpi-data grafana-data prometheus-data; do
   [[ "$(docker volume inspect --format '{{.Name}}' "$volume" 2>/dev/null)" == "$volume" ]] || {
     echo "FAIL|restore_volume_not_owned_by_target|$volume"; exit 4;
   }
+  label="$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}' "$volume")"
+  [[ "$label" == "$STACK_ID" ]] || { echo "FAIL|restore_volume_project_label_mismatch|$volume"; exit 4; }
 done
 
 echo "RESTORE_START|stack_id=$STACK_ID|backup=$BACKUP"
