@@ -164,6 +164,61 @@ def call_model(system, payload, schema):
         decoded = json.loads(raw)
         if schema is Critique:
             decoded = downgrade_inconsistent_critic(decoded)
+            try:
+                return schema.model_validate(decoded)
+            except ValidationError as first_error:
+                # One bounded, model-generated repair attempt. Never discard
+                # objections, invent evidence, or relax extra='forbid'.
+                # Do not log raw model output (incident data may be sensitive).
+                errors = [
+                    {'loc': list(e['loc']), 'type': e['type']}
+                    for e in first_error.errors(include_input=False, include_url=False)
+                ]
+                LOG.warning('critic_schema_retry: %s', errors[:10])
+                repair_body = dict(body)
+                repair_body['messages'] = [
+                    body['messages'][0],
+                    {'role': 'user', 'content': json.dumps({
+                        'task': 'Rewrite the following Critic JSON to satisfy the supplied JSON schema exactly. '
+                                'No extra properties including assumptions in claim_checks. '
+                                'Preserve all substantive objections, negative claim checks, '
+                                'limitations, unsafe actions, and evidence IDs. '
+                                'Do not upgrade validated from false to true. '
+                                'Return only one complete JSON object.',
+                        'original': decoded,
+                        'schema_errors': errors,
+                    }, ensure_ascii=False)},
+                ]
+                repaired_response = requests.post(
+                    url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
+                )
+                repaired_response.raise_for_status()
+                repaired = json.loads(repaired_response.json()['choices'][0]['message']['content'])
+                if schema is Critique:
+                    repaired = downgrade_inconsistent_critic(repaired)
+                # The retry cannot discard the critique's adverse findings.
+                if isinstance(repaired, dict) and isinstance(decoded, dict):
+                    if decoded.get('validated') is False:
+                        repaired['validated'] = False
+                    for field in ('issues', 'unsafe_actions', 'additional_evidence_needed', 'limitations'):
+                        before = decoded.get(field)
+                        after = repaired.get(field)
+                        if isinstance(before, list) and before:
+                            if not isinstance(after, list):
+                                raise ValueError('critic_repair_missing_adverse_field:' + field)
+                            for entry in before:
+                                if entry not in after:
+                                    raise ValueError('critic_repair_dropped_adverse_item:' + field)
+                    old_checks = decoded.get('claim_checks')
+                    new_checks = repaired.get('claim_checks')
+                    if isinstance(old_checks, list) and isinstance(new_checks, list):
+                        if any(c not in new_checks for c in old_checks
+                               if isinstance(c, dict) and c.get('supported') is False):
+                            raise ValueError('critic_repair_dropped_unsupported_check')
+                    else:
+                        raise ValueError('critic_repair_missing_claim_checks')
+                LOG.info('critic_schema_retry: candidate_response_received')
+                return schema.model_validate(repaired)
         return schema.model_validate(decoded)
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError, ValidationError) as exc:
         LOG.warning('model call or contract validation failed: %s', type(exc).__name__)
@@ -225,7 +280,7 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
     unknown = bad_refs(x.analyst, x.evidence)
     payload = x.model_dump(mode='json')
     payload['unknown_analyst_evidence_ids'] = unknown
-    system = 'You are the independent AIOps Critic. Challenge claims against supplied evidence, identify missing or stale proof, contradictions and unsafe proposals. The system-generated _aiops_quality freshness metadata is authoritative; stale, future-dated or unknown-age observations cannot establish current state. Do not invent evidence. Recommend only OBSERVE, ENRICH, ESCALATE or HUMAN_APPROVAL. Set validated=false whenever issues or unsafe_actions exist, or any claim_check is unsupported; never claim validation while listing objections. Return only the requested JSON contract.'
+    system = 'You are the independent AIOps Critic. Challenge claims against supplied evidence, identify missing or stale proof, contradictions and unsafe proposals. The system-generated _aiops_quality freshness metadata is authoritative; stale, future-dated or unknown-age observations cannot establish current state. Do not invent evidence. Recommend only OBSERVE, ENRICH, ESCALATE or HUMAN_APPROVAL. Set validated=false whenever issues or unsafe_actions exist, or any claim_check is unsupported; never claim validation while listing objections. In claim_checks use only claim, supported, supporting_evidence_ids, contradicting_evidence_ids; never output assumptions there. Return only the requested JSON contract.'
     annotated_evidence,freshness=annotate_evidence_freshness(x.evidence)
     payload['evidence']=annotated_evidence
     payload['context']={**payload.get('context',{}),'evidence_freshness':freshness}
@@ -263,5 +318,5 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
             result.issues.append(Issue(code=('CONTRADICTION' if reason=='divergent_snapshots_not_challenged' else 'SCHEMA_OR_COVERAGE'),
                                        description='Deterministic evidence guard: '+reason, evidence_ids=[]))
         result.final_recommendation='HUMAN_APPROVAL'
-    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.3','evidence_freshness':freshness,'execution_allowed':False}
+    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.4','evidence_freshness':freshness,'execution_allowed':False}
 
