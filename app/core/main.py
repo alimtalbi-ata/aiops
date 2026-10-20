@@ -3,9 +3,9 @@ from shared.safety import canonical_sha256, gold_set_eligible, critical_approval
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
 from shared.db import db
-from denial_routes import register_denial_routes
-from critic_denial_block import block_with_denial
-from critic_denial_resume import resume_critic_denial
+from core.denial_routes import register_denial_routes
+from core.critic_denial_block import block_with_denial
+from core.critic_denial_resume import resume_critic_denial
 from shared.ids import new
 from shared.domain import transition,STAGES
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
