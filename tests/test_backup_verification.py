@@ -111,6 +111,21 @@ class BackupVerificationTests(unittest.TestCase):
             entries.append(hashlib.sha256(path.read_bytes()).hexdigest()+"  ./"+path.name)
         (self.root/"SHA256SUMS").write_text("\n".join(entries)+"\n",encoding="utf-8")
 
+    def test_redirected_backup_file_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as external:
+            target=pathlib.Path(external)/"fake.dump"
+            target.write_bytes((self.root/"aiops.dump").read_bytes())
+            (self.root/"aiops.dump").unlink()
+            (self.root/"aiops.dump").symlink_to(target)
+            with self.assertRaisesRegex(ValueError,"backup_symlink_file_forbidden"):
+                CHECK.verify_backup(self.root,"aiops2-rebuild")
+
+    def test_checksum_manifest_extraneous_file_is_rejected(self):
+        (self.root/"unexpected-secret.txt").write_text("synthetic test only")
+        self._rebuild_checksums()
+        with self.assertRaisesRegex(ValueError,"checksum_manifest_coverage_incomplete"):
+            CHECK.verify_backup(self.root,"aiops2-rebuild")
+
     def test_missing_temporal_visibility_dump_is_rejected(self):
         (self.root/"temporal_visibility.dump").unlink()
         with self.assertRaisesRegex(ValueError,"missing_or_empty"):
