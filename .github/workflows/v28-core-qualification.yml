@@ -9,6 +9,7 @@ on:
       - 'app/core/**'
       - 'app/shared/**'
       - 'app/worker/**'
+      - 'app/portal/**'
       - 'tests/**'
       - '.github/workflows/v28-core-qualification.yml'
   workflow_dispatch:
@@ -30,9 +31,15 @@ jobs:
       - name: Dependencies
         run: python -m pip install -r app/requirements.txt
       - name: Compile Core and Worker
-        run: python -m compileall -q app/core app/shared app/worker tests
+        run: python -m compileall -q app/core app/shared app/worker app/portal tests
       - name: V2.8 isolated unit suite
         run: python -m unittest discover -s tests -p 'test_v28_*.py' -q
+      - name: Import Portal routes from packaged Python path
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-v28-nonproduction-import-only
+          AIOPS_ADMIN_TOKEN: ci-v28-nonproduction-import-only
+        run: python -c "import portal.main; print('V28_PORTAL_IMPORT=PASS')"
       - name: Import Core from packaged Python path
         env:
           PYTHONPATH: app
