@@ -50,6 +50,7 @@ services:
     container_name: ${AIOPS_STACK_ID:-aiops2}-evidence
     restart: unless-stopped
     environment:
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
     expose: ["812"]
     networks: [aiops2-control, aiops2-data]
@@ -60,6 +61,8 @@ services:
     build: {context: ./app, dockerfile: policy/Dockerfile}
     container_name: ${AIOPS_STACK_ID:-aiops2}-policy
     restart: unless-stopped
+    environment:
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["813"]
     networks: [aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health')"], interval: 5s, timeout: 3s, retries: 20}
