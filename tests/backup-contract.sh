@@ -16,4 +16,6 @@ grep -Fq 'BACKUP-MANIFEST.json' deploy/backup.sh
 grep -Fq 'AIOPS_STACK_ID' deploy/backup.sh
 grep -Fq 'ux_evidence_source_external_identity' db/migrations/010_evidence_identity.sql
 grep -Fq 'never upload' deploy/backup.sh || grep -Fq 'Never upload' deploy/backup.sh
+grep -Fq 'backup_volume_project_label_mismatch' deploy/backup.sh
+grep -Fq 'restore_volume_project_label_mismatch' deploy/restore.sh
 echo 'BACKUP_RESTORE_CONTRACT=PASS'
