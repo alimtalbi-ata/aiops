@@ -19,11 +19,15 @@ def docker(*args: str) -> tuple[int, str]:
 
 
 def check_resource(kind: str, name: str, project: str) -> str | None:
-    code, value=docker("inspect" if kind == "container" else
-                       "network" if kind == "network" else "volume",
-                       "inspect" if kind != "container" else "--type", 
-                       *([] if kind != "container" else ["container"]),
-                       name) if kind=="container" else docker(kind,"inspect",name)
+    if kind=="container":
+        code,value=docker("container","inspect",name)
+    elif kind=="network":
+        code,value=docker("network","inspect",name)
+    elif kind=="volume":
+        code,value=docker("volume","inspect",name)
+    else:
+        return "unknown_resource_kind"
+
     if code:
         return None
     try:
