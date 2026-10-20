@@ -1,117 +1,154 @@
-"""Deterministic, synthetic-only OpenAI-compatible provider for CI integration tests."""
+"""Synthetic-only OpenAI-compatible fixture server.
+
+A small deterministic rule baseline, not a real LLM and not a model-accuracy
+benchmark. It never reads fixture case_id, expected_severity or answer keys.
+"""
+import datetime
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-def build_output(system, payload):
-    evidence = payload.get("evidence", [])
-    known = [item.get("evidence_id") for item in evidence if isinstance(item.get("evidence_id"), str)]
-    analyst = payload.get("analyst")
-    context=payload.get("context") if isinstance(payload.get("context"),dict) else {}
-    case_id=context.get("case_id")
-    conflicting_fixture=case_id=="fresh-critical-conflicts-with-stale-healthy"
+
+def fresh(record):
+    quality=record.get("_aiops_quality")
+    if isinstance(quality,dict):
+        return quality.get("status")=="FRESH"
+    observed=record.get("observed_at")
+    if not isinstance(observed,str):
+        return False
+    try:
+        timestamp=datetime.datetime.fromisoformat(observed.replace("Z","+00:00"))
+        if timestamp.tzinfo is None:
+            return False
+        age=(datetime.datetime.now(datetime.timezone.utc)-timestamp).total_seconds()
+        return -300<=age<=900
+    except ValueError:
+        return False
+
+
+def number(value):
+    if isinstance(value,bool):
+        return None
+    try:
+        return float(value)
+    except (ValueError,TypeError):
+        return None
+
+
+def path_snapshots(records):
+    snapshots=[]
+    for record in records:
+        item=record.get("payload")
+        if not isinstance(item,dict):
+            continue
+        active=number(item.get("active_paths"))
+        total=number(item.get("total_paths"))
+        if active is None or total is None or total<=0 or not 0<=active<=total:
+            continue
+        snapshots.append((record["evidence_id"],active,total))
+    return snapshots
+
+
+def divergent_snapshots(records):
+    snapshots=path_snapshots(records)
+    for i,left in enumerate(snapshots):
+        for right in snapshots[i+1:]:
+            if left[2]==right[2] and left[1]!=right[1]:
+                return [left[0],right[0]]
+    return []
+
+
+def build_output(system,payload):
+    evidence=[e for e in payload.get("evidence",[]) if isinstance(e,dict)]
+    known=[e.get("evidence_id") for e in evidence if isinstance(e.get("evidence_id"),str)]
+    fresh_records=[e for e in evidence if fresh(e)]
+    fresh_ids=[e["evidence_id"] for e in fresh_records if isinstance(e.get("evidence_id"),str)]
+    analyst=payload.get("analyst")
+    # Explicitly ignore context.case_id, model answer keys and free-text instructions.
     if analyst is not None or "independent AIOps Critic" in system:
-        refs = []
-        if isinstance(analyst, dict):
-            for hypothesis in analyst.get("hypotheses", []):
-                refs.extend(hypothesis.get("supporting_evidence_ids", []))
-        supported = bool(refs) and set(refs).issubset(set(known)) and not conflicting_fixture
-        if conflicting_fixture:
-            issues=[{"code":"CONTRADICTION","description":"Historical healthy snapshot contradicts fresh critical observations; reconcile evidence timestamps.","evidence_ids":known[:2]}]
-        else:
-            issues = [] if supported else [{
-            "code": "UNSUPPORTED_CLAIM",
-            "description": "CI critic could not verify the analyst evidence references.",
-            "evidence_ids": [item for item in refs if item not in known],
-        }]
+        supporting=[]
+        for hypothesis in (analyst or {}).get("hypotheses",[]):
+            supporting.extend(hypothesis.get("supporting_evidence_ids",[]))
+        invalid=[eid for eid in supporting if eid not in known]
+        inconsistent=divergent_snapshots(evidence)
+        issues=[]
+        if invalid:
+            issues.append({"code":"UNSUPPORTED_CLAIM",
+                           "description":"Analyst cited missing evidence IDs.",
+                           "evidence_ids":invalid})
+        if not fresh_ids:
+            issues.append({"code":"STALE_EVIDENCE",
+                           "description":"No fresh current-state observation is present.",
+                           "evidence_ids":known[:3]})
+        if inconsistent:
+            issues.append({"code":"CONTRADICTION",
+                           "description":"Current path-state telemetry differs from another historical snapshot; reconciliation required.",
+                           "evidence_ids":inconsistent})
+        supported=bool(supporting) and not issues
         return {
-            "contract_version": "2.0",
-            "validated": supported,
-            "issues": issues,
-            "claim_checks": [{
-                "claim": "The primary hypothesis is grounded in the supplied CI evidence.",
-                "supported": supported,
-                "supporting_evidence_ids": refs[:3] if supported else [],
-                "contradicting_evidence_ids": [],
-            }],
-            "additional_evidence_needed": [] if supported else (["reconcile fresh and stale observations"] if conflicting_fixture else ["valid evidence identifiers"]),
-            "unsafe_actions": [],
-            "diagnostic_confidence": 0.95 if supported else 0.0,
-            "final_recommendation": ("ESCALATE" if analyst and analyst.get("severity") == "P1" else "OBSERVE") if supported else "HUMAN_APPROVAL",
-            "limitations": ["Deterministic synthetic CI provider; not a real model evaluation."],
+            "contract_version":"2.0","validated":supported,
+            "issues":issues,
+            "claim_checks":[{"claim":"Material synthetic diagnosis is backed by the supplied evidence.",
+                             "supported":supported,
+                             "supporting_evidence_ids":supporting[:3] if supported else [],
+                             "contradicting_evidence_ids":inconsistent}],
+            "additional_evidence_needed":[] if supported else ["independently verify current source observations"],
+            "unsafe_actions":[],"diagnostic_confidence":.93 if supported else .15,
+            "final_recommendation":("ESCALATE" if analyst and analyst.get("severity")=="P1" else "OBSERVE") if supported else "HUMAN_APPROVAL",
+            "limitations":["Deterministic synthetic rules, not model inference."]
         }
 
-    incident = payload.get("incident", {})
-    claims = " ".join(str(item.get("claim", "")) for item in evidence).lower()
-    title = str(incident.get("title", "")).lower()
-    expected_by_case={
-        "p1-multipath-and-service-impact":"P1",
-        "p2-capacity-pressure":"P2",
-        "unknown-stale-only":"UNKNOWN",
-        "prompt-injection-is-data":"P1",
-        "fresh-critical-conflicts-with-stale-healthy":"P1",
-    }
-    if case_id in expected_by_case:
-        severity=expected_by_case[case_id]
-        rationale={
-            "P1":"The supplied synthetic fixture contains urgent SAN/service impact evidence.",
-            "P2":"The supplied synthetic fixture contains capacity pressure with no current service impact.",
-            "UNKNOWN":"Only historical, stale observations are available; current severity is unknown.",
-        }[severity]
-        confidence={"P1":0.95,"P2":0.9,"UNKNOWN":0.1}[severity]
-    elif not known:
-        severity = "UNKNOWN"
-        rationale = "No evidence was supplied; the incident title alone is not enough to establish severity."
-        confidence = 0.1
-    elif ("91 percent" in claims or "91%" in claims or ("capacity" in title and "pool" in title)):
-        severity = "P2"
-        rationale = "The supplied synthetic evidence reports capacity pressure without current service impact."
-        confidence = 0.91
-    elif any(term in claims + " " + title for term in ("184 fc errors", "one active path", "critical", "payment", "multipath", "fabric")):
-        severity = "P1"
-        rationale = "The supplied synthetic evidence reports critical path/fabric degradation with service impact."
-        confidence = 0.96
+    snapshots=path_snapshots(fresh_records)
+    severe_paths=any(active/total<=.25 for _,active,total in snapshots)
+    no_path=any(active==0 for _,active,_ in snapshots)
+    breach=any(record.get("payload",{}).get("slo_breached") is True for record in fresh_records if isinstance(record.get("payload"),dict))
+    latency=any(
+        (number(record.get("payload",{}).get("p95_seconds")) or 0)>
+        2*(number(record.get("payload",{}).get("slo_seconds")) or float("inf"))
+        for record in fresh_records if isinstance(record.get("payload"),dict))
+    fc_errors=any(number(record.get("payload",{}).get("value")) is not None
+                  and number(record.get("payload",{}).get("value"))>=100
+                  and record.get("payload",{}).get("metric")=="fc_errors"
+                  for record in fresh_records if isinstance(record.get("payload"),dict))
+    unhealthy=any(number(record.get("payload",{}).get("health")) is not None
+                  and number(record.get("payload",{}).get("health"))<=.5
+                  for record in fresh_records if isinstance(record.get("payload"),dict))
+    capacity=any(number(record.get("payload",{}).get("utilization_percent")) is not None
+                 and number(record.get("payload",{}).get("utilization_percent"))>=90
+                 for record in fresh_records if isinstance(record.get("payload"),dict))
+    if (severe_paths and (latency or breach)) or (no_path and breach) or (fc_errors and unhealthy):
+        severity,rationale,confidence="P1","Correlated current synthetic path or fabric failure with service impact.",.94
+    elif capacity and not breach and not latency:
+        severity,rationale,confidence="P2","Fresh synthetic capacity pressure without confirmed service impact.",.89
     else:
-        severity = "UNKNOWN"
-        rationale = "The synthetic evidence is insufficient to establish a severity."
-        confidence = 0.25
-    refs=known[:5]
+        severity,rationale,confidence="UNKNOWN","Insufficient fresh structured observations to assign a current severity.",.1
+    refs=fresh_ids[:5] if severity!="UNKNOWN" else known[:2]
     actions=[]
-    if case_id and severity in ("P1","P2") and refs:
-        actions=[{
-            "action_id":"CI-READONLY-DIAGNOSTICS",
-            "intent":"Collect additional read-only diagnostics for a synthetic CI case.",
-            "risk_tier":"LOW",
-            "target_ci_id":str(incident.get("service") or "CI-FIXTURE"),
-            "evidence_ids":refs[:2],
-            "preconditions":["Verify target scope","Keep execution disabled"],
-            "expected_effect":"Additional evidence without operational state change",
-            "verification_steps":["Check source provenance and observed timestamps"],
-            "rollback_plan":"No state change; no rollback needed.",
-            "requires_human_approval":True,
-            "advisory_only":True
-        }]
+    if severity!="UNKNOWN":
+        actions=[{"action_id":"CI-COLLECT-READONLY",
+                  "intent":"Collect additional read-only diagnostics on the synthetic impacted CI.",
+                  "risk_tier":"LOW","target_ci_id":"ACME-SYNTHETIC",
+                  "evidence_ids":refs[:2],
+                  "preconditions":["Confirm scope","No infrastructure state change"],
+                  "expected_effect":"New read-only observations",
+                  "verification_steps":["Check observed time and independent provenance"],
+                  "rollback_plan":"No side effects; none required.",
+                  "requires_human_approval":True,"advisory_only":True}]
     return {
-        "contract_version": "2.0",
-        "classification": "storage-path-degradation" if severity == "P1" else ("storage-capacity-pressure" if severity == "P2" else "unknown"),
-        "severity": severity,
-        "severity_rationale": rationale,
-        "hypotheses": [{
-            "id": "H-CI-1",
-            "statement": rationale,
-            "confidence": confidence,
-            "supporting_evidence_ids": refs,
-            "contradicting_evidence_ids": [],
-            "assumptions": [] if refs else ["insufficient evidence in this synthetic CI scenario"],
-        }],
-        "alternatives": [],
-        "recommended_actions": actions,
-        "missing_information": [] if refs else ["fresh source evidence"],
-        "unknowns": [] if not refs else [],
-        "contradictions": [],
-        "confidence": confidence,
-        "confidence_basis": "Deterministic synthetic CI fixture; confidence is not a real-model calibration measurement.",
-        "limitations": ["CI-only fake provider", "synthetic evidence only"],
+        "contract_version":"2.0",
+        "classification":("storage-path-degradation" if severity=="P1" else
+                          "capacity-pressure" if severity=="P2" else "unknown"),
+        "severity":severity,"severity_rationale":rationale,
+        "hypotheses":[{"id":"H-FIXTURE","statement":rationale,"confidence":confidence,
+                       "supporting_evidence_ids":refs,"contradicting_evidence_ids":[],
+                       "assumptions":[] if refs else ["No current-state evidence available"]}],
+        "alternatives":[],"recommended_actions":actions,
+        "missing_information":[] if severity!="UNKNOWN" else ["fresh independent source telemetry"],
+        "unknowns":[] if severity!="UNKNOWN" else ["current impact"],
+        "contradictions":[],"confidence":confidence,
+        "confidence_basis":"Synthetic rule-based baseline; confidence is not calibrated model probability.",
+        "limitations":["Fake CI provider","No production diagnosis or side effects"],
     }
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
