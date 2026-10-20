@@ -26,7 +26,7 @@ class OwnershipFenceTests(unittest.TestCase):
 
     def test_foreign_volume_is_blocked_even_if_name_matches(self):
         original={"Labels":{"com.docker.compose.project":"aiops2"}}
-        with patch.object(MODULE,"docker",return_value=(0,json.dumps([original]))):
+        with patch.object(MODULE,"docker",return_value=(0,json.dumps([original]),"")):
             error=MODULE.check_resource("volume",PROJECT+"-data",PROJECT)
         self.assertEqual(error,"volume_owned_by_other_project:"+PROJECT+"-data")
 
