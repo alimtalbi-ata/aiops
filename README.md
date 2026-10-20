@@ -10,13 +10,13 @@ This kit is a clean rebuild of the AioOps runtime. It is designed to deploy the 
 bash deploy/install-isolated.sh
 ```
 
-This is the recommended entry point on a Debian host already running older AIOps stacks. It creates an isolated Compose project `aiops2-rebuild`, uses its own named containers, networks and volumes, publishes dashboards to loopback on alternate ports, generates random development secrets and runs installation plus qualification. No legacy container is stopped or removed.
+This is the recommended entry point on a Debian host already running older AIOps stacks. It creates an isolated Compose project `aiops2-rebuild`, verifies existing Docker resource ownership, uses its own named containers, networks and volumes, publishes dashboards to loopback on alternate ports, generates random development secrets and runs installation plus qualification. No legacy container is stopped or removed.
 
 The standard `bash deploy/install.sh` entry point targets the stack identity selected in `.env`, and must only be used after reviewing that identity. **RETIRE_LEGACY=1 is refused during installation.** Retirement is a separate authorized operation after successful qualification and a verified private backup. See `docs/DEPLOYMENT-ISOLATED-REBUILD-RUNBOOK.md` and `docs/SECURITY.md`.
 
 ## Current release
 
-Version `2.1.0-core-rc1.3` extends the isolated deployment checks to resolved Docker Compose networks, volumes, project identity and host port publication. It adds a secret-safe read-only stack status report, adversarial Analyst/Critic tests and offline re-packaging from an extracted ZIP. Deterministic Analyst/Critic and Temporal synthetic E2E are CI-qualified; a genuine model and LIVE adapters still require separate qualification.
+Version `2.1.0-core-rc1.4` extends the isolated deployment checks to resolved Docker Compose networks, volumes, project identity and host port publication. It includes the RC1.3 status report, Analyst/Critic tests and offline packaging; RC1.4 adds a read-only Docker resource ownership fence that rejects attempts to adopt existing containers, networks or volumes belonging to another Compose project. Deterministic Analyst/Critic and Temporal synthetic E2E are CI-qualified; a genuine model and LIVE adapters still require separate qualification.
 
 Use `python3 deploy/status.py --env .env` for a read-only operational inventory without secrets. Run `python3 deploy/plan_isolation.py --env .env` to verify the isolated deployment plan without Docker. `deploy/package_tree.py` enables rebuilding a source kit outside a Git checkout.
 
