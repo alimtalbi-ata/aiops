@@ -17,8 +17,9 @@ command -v zip >/dev/null || { echo "FAIL|zip_missing"; exit 2; }
 OUT="$ROOT/dist/AIOps-${VERSION}-Core-Deployment-Kit-${STAMP}.zip"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-if git -C "$ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
-  git archive --format=tar HEAD | tar -xf - -C "$TMP"
+GIT_TOPLEVEL="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$GIT_TOPLEVEL" && "$(cd "$GIT_TOPLEVEL" && pwd -P)" == "$ROOT" ]]; then
+  git -C "$ROOT" archive --format=tar HEAD | tar -xf - -C "$TMP"
   SOURCE_PACKAGING_MODE="versioned_git_tree"
 else
   # The kit must also be repackageable after extraction on a non-Git host.
