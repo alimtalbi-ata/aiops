@@ -302,6 +302,25 @@ jobs:
           kits=(dist/*.zip)
           [[ "${#kits[@]}" == "1" ]] || { echo "FAIL|expected_one_cumulative_zip"; exit 1; }
           python3 tests/verify-package.py "${kits[0]}"
+      - name: Verify extracted ZIP can repackage offline without inheriting CI status
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          originals=(dist/*.zip)
+          [[ "${#originals[@]}" -eq 1 ]]
+          sandbox="$(mktemp -d)"
+          trap 'rm -rf "$sandbox"' EXIT
+          mkdir -p "$sandbox/extracted"
+          unzip -q "${originals[0]}" -d "$sandbox/extracted"
+          (
+            cd "$sandbox/extracted"
+            REQUIRE_RUNTIME_REPORT=0 bash deploy/package.sh
+            repackaged=(dist/*.zip)
+            [[ "${#repackaged[@]}" -eq 1 ]]
+            verification="$(python3 tests/verify-package.py "${repackaged[0]}")"
+            echo "$verification"
+            grep -Fq 'qualification=UNQUALIFIED_SOURCE_ONLY' <<< "$verification"
+          )
       - name: Upload qualified cumulative deployment kit and checksum
         uses: actions/upload-artifact@v4
         with:
