@@ -42,6 +42,16 @@ class WorkerBootContractTests(unittest.TestCase):
         self.assertIn('"execute_stage"',source)
         self.assertIn('result_type=dict',source)
 
+    def test_external_io_is_not_executed_on_event_loop(self):
+        import inspect
+        from worker import main
+        self.assertTrue(inspect.iscoroutinefunction(main.start_run))
+        self.assertTrue(inspect.iscoroutinefunction(main.execute_stage))
+        self.assertTrue(inspect.iscoroutinefunction(main.finish_run))
+        source=(ROOT/'app'/'worker'/'main.py').read_text(encoding='utf-8')
+        self.assertIn("asyncio.to_thread(_execute_stage_blocking",source)
+        self.assertNotIn("activity.info().attempt,'executor'",source)
+
     def test_worker_activity_calls_use_absolute_core_urls(self):
         source=(ROOT/'app'/'worker'/'main.py').read_text(encoding='utf-8')
         self.assertNotIn("call('POST',f'/api",source)
