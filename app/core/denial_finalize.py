@@ -3,7 +3,7 @@ import datetime
 import hashlib
 import json
 
-from denial_fencing import validate_finalization
+from core.denial_fencing import validate_finalization
 
 
 def finalize_denial(conn, rid, cid, owner, token, verdict):
