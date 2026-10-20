@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
+import stat
 import sys
 import tarfile
 
@@ -51,10 +52,12 @@ def verify_backup(folder: Path, expected_stack: str) -> dict:
         if path.is_absolute() or len(path.parts)!=1 or name in checksums:
             raise ValueError("unsafe_or_repeated_checksum_target")
         checksums[name]=match.group(1)
-    if not declared.issubset(checksums):
+    if declared!=set(checksums):
         raise ValueError("checksum_manifest_coverage_incomplete")
     for name,expected_digest in checksums.items():
         path=folder/name
+        if path.is_symlink():
+            raise ValueError("backup_symlink_file_forbidden:"+name)
         if not path.is_file() or path.stat().st_size==0:
             raise ValueError("missing_or_empty_backup_file:"+name)
         if file_sha256(path)!=expected_digest:
