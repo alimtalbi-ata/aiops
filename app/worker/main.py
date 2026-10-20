@@ -20,6 +20,42 @@ if not 15 <= DGX_HTTP_TIMEOUT_SECONDS <= 150:
     raise RuntimeError('AIOPS_DGX_HTTP_TIMEOUT_SECONDS must be between 15 and 150')
 
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
+def persist_critic_denial(rid, mode, analysis, critique, analysis_id, critique_id, evidence, token):
+    """Persist an explicit fail-closed Policy verdict for a rejected Critic.
+
+    This is a terminal denial record, not a transition to the POLICY stage.
+    It never approves HITL, remediation or a LIVE effect.
+    """
+    evidence_ids=sorted({x['evidence_id'] for x in evidence})
+    fresh=assess_evidence_freshness(evidence)
+    policy_input={
+        'mode':mode, 'command':'EXECUTE',
+        'severity':analysis.get('severity','UNKNOWN'),
+        'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),
+        'evidence_count':len(evidence_ids),
+        'critic_validated':False,
+        'redundancy_ok':False,
+        'evidence_fresh':fresh['status']=='FRESH',
+        'preconditions_verified':False,
+        'fencing_verified':False,
+        'human_approved':False,
+    }
+    verdict=post_json(POLICY,'/api/policy/check',policy_input,timeout=15,token=token)
+    if verdict.get('state')!='BLOCKED' or verdict.get('decision') not in ('HUMAN_APPROVAL','ESCALATE'):
+        raise RuntimeError('unsafe_policy_response_for_rejected_critic')
+    record=post_json(CORE,f'/api/runs/{rid}/policy-record',{
+        'policy':verdict,'analysis_id':analysis_id,'critique_id':critique_id,
+        'evidence_ids':evidence_ids,'policy_version':'2.1.0',
+        'policy_input':policy_input,
+    },timeout=15,token=token)
+    post_json(CORE,f'/api/runs/{rid}/gates',{
+        'stage':'POLICY','state':'BLOCKED','decision':verdict['decision'],
+        'reason':verdict.get('reason','critic rejected'),'evidence_ids':evidence_ids,
+        'required_evidence':['analyst','critic','observation'],
+    },timeout=15,token=token)
+    return record['policy_decision_id']
+
+
 @activity.defn
 async def start_run(a):
     # Requests are blocking I/O. Run them off the shared FastAPI/Temporal event loop.
@@ -103,8 +139,21 @@ def _execute_stage_blocking(a,attempt):
                 saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
+                    # Persist the independent policy denial before stopping the
+                    # workflow. If persistence is unavailable, stop anyway:
+                    # never continue to HITL or any effect stage.
+                    policy_decision_id=None
+                    try:
+                        policy_decision_id=persist_critic_denial(
+                            rid,mode,analyst_event['payload']['analysis'],result,
+                            analysis_record_id,critique_record['critique_id'],
+                            source_evidence,ADMIN)
+                    except Exception as denial_error:
+                        log.warning('critic_denial_persistence_failed: %s',type(denial_error).__name__)
                     blocked=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':saved['version'],'idempotency_key':f'CRITIC-BLOCK-{rid}','command':'BLOCK'})
-                    return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked['version']}
+                    return {'run_id':rid,'stage':stage,'status':'BLOCKED',
+                            'version':blocked['version'],
+                            'policy_denial_recorded':policy_decision_id is not None}
                 return saved
             except Exception as exc:
                 blocked_event=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'INTELLIGENCE_UNAVAILABLE','event_key':f'{stage}:UNAVAILABLE','status':'BLOCKED','decision':'HUMAN_APPROVAL','confidence':0,'payload':{'reason':type(exc).__name__,'synthetic_evidence_created':False,'execution_allowed':False}})
