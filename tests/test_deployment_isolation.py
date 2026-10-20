@@ -32,11 +32,19 @@ def compose_fixture():
     return {
         "name": stack,
         "services": {
-            "aiops2-core": {
-                "container_name": stack + "-core",
+            service: {
+                "container_name": stack + "-" + service.removeprefix("aiops2-"),
                 "networks": ["aiops2-control"],
-                "ports": [{"host_ip": "127.0.0.1", "published": "17777", "target": 777}],
+                "ports": [{"host_ip": "127.0.0.1", "published": str(port), "target": 8000}],
             }
+            for service, port in (
+                ("aiops2-core", 17777),
+                ("aiops2-glpi", 18080),
+                ("aiops2-n8n", 15678),
+                ("aiops2-prometheus", 19090),
+                ("aiops2-grafana", 13000),
+                ("aiops2-alertmanager", 19093),
+            )
         },
         "networks": {"aiops2-control": {"name": stack + "-control", "internal": True}},
         "volumes": {"aiops2-postgres-data": {"name": stack + "-postgres-data"}},
@@ -91,7 +99,7 @@ class IsolatedDeploymentPlanTests(unittest.TestCase):
         plan = ISOLATION.plan(env_fixture())
         result = ISOLATION.verify_compose(compose_fixture(), plan)
         self.assertTrue(result["resolved_compose_valid"])
-        self.assertEqual(result["services"], 1)
+        self.assertEqual(result["services"], 6)
 
     def test_external_networks_and_host_privilege_rejected(self):
         model = compose_fixture()
@@ -117,6 +125,22 @@ class IsolatedDeploymentPlanTests(unittest.TestCase):
         model = compose_fixture()
         model["services"]["aiops2-core"]["ports"][0]["host_ip"] = "0.0.0.0"
         with self.assertRaisesRegex(ISOLATION.IsolationError, "port_published_outside_loopback"):
+            ISOLATION.verify_compose(model, ISOLATION.plan(env_fixture()))
+
+    def test_unexpected_extra_published_port_is_rejected(self):
+        model = compose_fixture()
+        model["services"]["aiops2-core"]["ports"].append(
+            {"host_ip": "127.0.0.1", "published": "19999", "target": 818}
+        )
+        with self.assertRaisesRegex(ISOLATION.IsolationError, "published_port_set_differs"):
+            ISOLATION.verify_compose(model, ISOLATION.plan(env_fixture()))
+
+    def test_duplicate_published_host_port_is_rejected(self):
+        model = compose_fixture()
+        model["services"]["aiops2-core"]["ports"].append(
+            {"host_ip": "127.0.0.1", "published": "18080", "target": 9191}
+        )
+        with self.assertRaisesRegex(ISOLATION.IsolationError, "duplicate_resolved"):
             ISOLATION.verify_compose(model, ISOLATION.plan(env_fixture()))
 
     def test_cli_configure_only_produces_no_secret_report(self):
