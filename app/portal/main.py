@@ -94,12 +94,14 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     from portal.demo_explain import render_critic_explanation
     from urllib.parse import quote
     items=_runs()
+    registry=_get("/api/incidents")
+    incidents=registry.get("items",[]) if isinstance(registry.get("items"),list) else []
     selected=run_id or next((str(x.get("run_id")) for x in items if x.get("status") in ("RUNNING","CREATED")),None)
     selected=selected or next((str(x.get("run_id")) for x in items if x.get("run_id")),None)
-    content=panel("Explorateur des incidents — recherche et filtres",incident_explorer(items,selected,q,status))
+    content=panel("Explorateur des incidents — recherche et filtres",incident_explorer(items,selected,q,status,incidents=incidents))
     content+=panel("Périmètre et transparence",
-        "<p>Cette liste montre les runs réellement accessibles dans Core : réussis, bloqués, échoués ou en cours. "
-        "Les incidents sans run n'y figurent pas. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
+        "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
+        "Les listes sont limitées aux enregistrements renvoyés par Core. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
     if not selected:
         content+=panel("Timeline","<p>Aucun run accessible depuis Core.</p>")
         return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
