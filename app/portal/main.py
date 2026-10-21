@@ -202,11 +202,16 @@ def demo_run_detail(rid:str):
       'async function refresh(){if(!active||pending)return;pending=true;'
       'try{const response=await fetch("/api/demo-status/"+encodeURIComponent(rid),{cache:"no-store"});'
       'if(!response.ok){status.textContent="Statut indisponible : HTTP "+response.status;return;}'
-      'const result=await response.json();state.textContent=JSON.stringify(result,null,2);'
+      'const result=await response.json();state.textContent=JSON.stringify({run_id:result.run_id,status:result.status,mode:result.mode},null,2);'
+      'const trace=document.getElementById("run-watch-trace");'
+      'if(trace)trace.textContent=JSON.stringify({events:result.events,ledger:result.ledger,gates:result.gates},null,2);'
       'if(["RESOLVED","BLOCKED","FAILED","CANCELLED"].includes(result.status)){active=false;status.textContent="État terminal. Recharger la page pour voir les derniers registres Analyst/Critic/Policy.";}}'
       'catch(e){status.textContent="Suivi temporairement indisponible";}finally{pending=false;}}'
       'document.getElementById("run-watch-refresh").addEventListener("click",()=>{active=true;refresh();});'
       'refresh();setInterval(refresh,5000);})();</script>')
+    body+=panel("Timeline et registres en direct",
+      '<p class="muted">Données en lecture seule provenant de Core ; aucune chronologie n’est inventée.</p>'
+      '<pre id="run-watch-trace" class="log">Chargement des éléments de preuve…</pre>')
     body+=panel("État canonique du run",pretty(detail))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
@@ -227,7 +232,13 @@ def demo_status(rid:str):
     detail=_get("/api/runs/"+rid)
     if detail.get("status")=="UNKNOWN":
         return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
-    return {"run_id":rid,"status":detail.get("status","UNKNOWN"),"mode":allowed.get("mode"),"source":"Core"}
+    ledger=_get("/api/runs/"+rid+"/ai-ledger")
+    gates=_get("/api/runs/"+rid+"/gates")
+    events=detail.get("events",None)
+    if not isinstance(events,list):
+        events="INCONNU"
+    return {"run_id":rid,"status":detail.get("status","UNKNOWN"),"mode":allowed.get("mode"),
+            "source":"Core","events":events,"ledger":ledger,"gates":gates}
 
 @app.get("/qualification",response_class=HTMLResponse)
 def qualification_page():
