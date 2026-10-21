@@ -23,6 +23,26 @@ def demo(authorization:str|None=Header(default=None)):
     iid=post_json(CORE,'/api/incidents',{'external_id':f'DEMO-GOLDEN-PAYMENT-{demo_id}','title':'Payment latency following FC fabric degradation','severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo','synthetic':True,'payload':{'seed':20261018}})['incident_id']
     run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':f'DEMO-GOLDEN-PAYMENT-{demo_id}'})
     return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
+@app.post('/api/demo-enriched')
+def demo_enriched(authorization:str|None=Header(default=None)):
+    """Independent DEMO B launch: evidence richer, but never pre-approve Critic."""
+    if os.getenv('AIOPS_DEMO_LAUNCH_ENABLED')!='true':
+        raise HTTPException(403,'demo_launch_disabled')
+    secret=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
+    bearer=(authorization or '').removeprefix('Bearer ')
+    if not secret or not hmac.compare_digest(bearer,secret):
+        raise HTTPException(401,'invalid internal token')
+    demo_id=uuid.uuid4().hex
+    external=f'DEMO-ENRICHED-{demo_id}'
+    iid=post_json(CORE,'/api/incidents',{'external_id':external,
+        'title':'Synthetic ACME payments SAN degradation — multi-source investigation',
+        'severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo-enriched',
+        'synthetic':True,'payload':{'scenario_variant':'evidence-enriched','synthetic':True}})['incident_id']
+    run=post_json(CORE,'/api/runs',{'mode':'DEMO',
+        'scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,
+        'idempotency_key':external})
+    return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
+
 from portal.ui_theme import shell, panel, table, pretty, esc
 from portal.twin_graph import graph_panel
 
