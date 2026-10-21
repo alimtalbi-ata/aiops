@@ -219,5 +219,17 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertEqual(response["status"],"RESOLVED")
         self.assertEqual(response["events"][0]["sequence"],1)
 
+    def test_demo_run_timeline_uses_canonical_core_events(self):
+        def get(base,path):
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+            if path=="/api/runs/RUN-DEMO":
+                return {"run":{"status":"RESOLVED"},"events":[{"sequence":3,"occurred_at":"2026-10-21T08:00:00Z","stage":"CRITIC","event_type":"CRITIC_COMPLETED","status":"DONE","decision":"SIMULATE"}]}
+            return {"items":[]}
+        with patch.object(self.portal,"get_json",side_effect=get):
+            result=self.portal.demo_run_detail("RUN-DEMO")
+        self.assertIn("Timeline canonique des événements",result)
+        self.assertIn("CRITIC_COMPLETED",result)
+        self.assertIn("2026-10-21T08:00:00Z",result)
+
 if __name__=="__main__":
     unittest.main()
