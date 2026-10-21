@@ -34,6 +34,20 @@ jobs:
         run: python -m compileall -q app/core app/shared app/worker app/portal tests
       - name: V2.8 isolated unit suite
         run: python -m unittest discover -s tests -p 'test_v28_*.py' -q
+      - name: Generate offline ACME demo in CI
+        env:
+          PYTHONPATH: app
+        run: |
+          python tools/build_acme_offline_demo.py --output reports/acme-demo-offline.html
+          test -s reports/acme-demo-offline.html
+          grep -Fq 'DONNÉES 100 % SYNTHÉTIQUES' reports/acme-demo-offline.html
+      - name: Publish offline ACME demo as qualified CI candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-digital-twin-offline-demo
+          path: reports/acme-demo-offline.html
+          if-no-files-found: error
+          retention-days: 14
       - name: Import Portal routes from packaged Python path
         env:
           PYTHONPATH: app
