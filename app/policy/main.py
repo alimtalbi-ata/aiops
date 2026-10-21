@@ -4,9 +4,9 @@ import os,hmac
 from fastapi import FastAPI,Header,HTTPException
 from pydantic import BaseModel, Field
 try:
-    from policy import autonomy_store
+    from policy import autonomy_store, execution_fence
 except ModuleNotFoundError:
-    from app.policy import autonomy_store
+    from app.policy import autonomy_store, execution_fence
 
 app = FastAPI(title="ACME Policy Engine", version="2.2.0")
 INTERNAL_TOKEN=os.getenv("AIOPS_INTERNAL_TOKEN","")
@@ -179,3 +179,19 @@ def autonomy_change(x:ModeChange,authorization: str|None=Header(default=None)):
     try: return autonomy_store.set_mode(x.mode,x.actor,x.reason,x.expected_revision)
     except RuntimeError: raise HTTPException(409,"revision_conflict")
     except (OSError,ValueError): raise HTTPException(503,"policy_state_unavailable")
+
+class SimulationAdmission(BaseModel):
+    operation_id: str = Field(min_length=1,max_length=128)
+    expected_revision: int = Field(ge=0)
+    operation_class: Literal["ROUTINE_PREAPPROVED","STANDARD_CHANGE","AUTONOMOUS_REMEDIATION"]
+
+@app.post("/api/policy/simulation/reserve")
+def simulation_reserve(x:SimulationAdmission,authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    result=execution_fence.reserve(x.operation_id,x.expected_revision,x.operation_class)
+    return {**result,"scope":"SIMULATION_ONLY","execution_allowed":False}
+
+@app.get("/api/policy/simulation/summary")
+def simulation_summary(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    return execution_fence.summary()
