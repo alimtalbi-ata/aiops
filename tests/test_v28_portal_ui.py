@@ -187,5 +187,27 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("/api/demo-status/",page)
         self.assertIn("setInterval(refresh,5000)",page)
 
+    def test_demo_live_trace_is_source_backed(self):
+        def get(base,path):
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+            if path=="/api/runs/RUN-DEMO":return {"status":"BLOCKED","events":[{"event_type":"CRITIC_COMPLETED"}]}
+            if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
+            if path.endswith("/gates"):return {"decision":"BLOCKED"}
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            response=self.portal.demo_status("RUN-DEMO")
+        self.assertEqual(response["status"],"BLOCKED")
+        self.assertEqual(response["events"][0]["event_type"],"CRITIC_COMPLETED")
+        self.assertEqual(response["ledger"]["critic"],"REJECTED")
+        self.assertEqual(response["gates"]["decision"],"BLOCKED")
+
+    def test_demo_missing_event_list_is_not_invented(self):
+        def get(base,path):
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+            return {"status":"RUNNING"}
+        with patch.object(self.portal,"get_json",side_effect=get):
+            response=self.portal.demo_status("RUN-DEMO")
+        self.assertEqual(response["events"],"INCONNU")
+
 if __name__=="__main__":
     unittest.main()
