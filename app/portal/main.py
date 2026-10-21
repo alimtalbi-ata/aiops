@@ -90,7 +90,7 @@ def runs_page():
 @app.get("/timeline",response_class=HTMLResponse)
 def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     """Real incident/run selector with event-by-event explanations and AI registers."""
-    from portal.timeline_explain import event_box,run_selector,incident_explorer
+    from portal.timeline_explain import event_box,run_selector,incident_explorer,investigation_overview
     from portal.demo_explain import render_critic_explanation
     from urllib.parse import quote
     items=_runs()
@@ -112,6 +112,10 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     .timeline .event p{margin:8px 0}
     .timeline .event details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
     .timeline .event pre{font-size:.85rem;max-height:400px;overflow:auto}
+    .investigation-warning{border-left:4px solid #d97706;padding:12px;background:var(--bg)}
+    .investigation-steps{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:16px}
+    .investigation-steps a{padding:6px 10px;border:1px solid var(--line);border-radius:8px;text-decoration:none}
+    .timeline .event{scroll-margin-top:90px}
     @media(max-width:700px){.timeline{margin-left:6px;padding-left:15px}.timeline .event{padding:13px}}
     </style>'''
     content+=panel("Explorateur des incidents — recherche et filtres",
@@ -135,6 +139,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     cards="".join(event_box(e,i) for i,e in enumerate(events,1))
     if not cards:
         cards="<p>Aucun événement disponible depuis Core.</p>"
+    content+=panel("Diagnostic et accès rapide",investigation_overview(match,events,incidents))
     content+=panel("Run sélectionné : "+selected,
         '<p><strong>État :</strong> '+esc(match.get("status","INCONNU"))+
         ' · <strong>Mode :</strong> '+esc(match.get("mode","INCONNU"))+
