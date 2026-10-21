@@ -9,6 +9,10 @@ except ImportError:
     m=None
 @unittest.skipIf(m is None,"requires policy image dependencies")
 class AutonomyTests(unittest.TestCase):
+    def setUp(self):
+        self._state_patch=patch.object(m.autonomy_store,"status",return_value={"mode":os.getenv("AIOPS_POLICY_AUTONOMY_MODE","STOP_AUTO"),"healthy":True})
+        self._state_patch.start()
+        self.addCleanup(self._state_patch.stop)
     def request(self,cls="AUTONOMOUS_REMEDIATION"):
         return m.Decision(mode="LIVE",command="EXECUTE",severity="P2",confidence=.99,
           evidence_count=5,critic_validated=True,redundancy_ok=True,
