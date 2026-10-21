@@ -71,3 +71,16 @@ Ouvrir ensuite `reports/acme-demo-offline.html` dans un navigateur. Le document 
 **Recette minimale :** HTML généré, graine de topologie cohérente, recherche de nœud, filtres site/état, zoom et restauration, visualisation des impacts du jeu synthétique, mention « NON QUALIFIÉ production », pas de chargement externe, pas de bouton LIVE.
 
 **Distinction nécessaire :** cette maquette utilisable n'est pas la qualification intégrée Temporal + DGX + Evidence/Policy. Pour la démo connectée à la stack V2.8, continuer à utiliser uniquement le profil E2E isolé et son jeu de tests; ne jamais activer `AIOPS_DEMO_LAUNCH_ENABLED` dans un environnement opérationnel.
+
+
+## Demo Studio connecté — V2.8, 21/10/2026
+
+La nouvelle route `GET /demo-studio` du portail ACME propose une première vue **connectée en lecture seule** aux API existantes :
+- état de consultation du dashboard Core, disponibilité du graphe Twin et d'un calcul d'impact sur `ACME-SAN-FABRIC-A`;
+- graphe interactif avec surbrillance des seuls nœuds explicitement renvoyés par Twin;
+- tableau limité aux runs déjà présents en mode `DEMO`, `REPLAY` ou `STORY`;
+- accès au suivi de qualification et à la timeline. Les erreurs amont restent `INCONNU`.
+
+Ce n'est pas un orchestrateur de scénario : aucune action `POST /api/demo`, aucun déclenchement Temporal ni approbation HITL n'est autorisé depuis cette page. C'est un premier cockpit démontrable sans effet. Le générateur HTML hors ligne demeure une option pour les présentations Windows sans stack.
+
+**Gates encore ouverts :** revue d'authentification du portail, données synthétiques contrôlées, injection/réinitialisation uniquement dans une stack isolée, test navigateur réel, cohérence des événements Core avec les preuves et qualité des réponses Analyst/Critic. Les deux workflows du commit `96b08ff` ne sont pas tous verts : la CI V2.8 est passée mais la revue globale a échoué sur le job de rehearsal MariaDB (erreur socket). Ne pas confondre cette anomalie avec le statut du nouveau Demo Studio; vérifier le SHA actuel en CI.
