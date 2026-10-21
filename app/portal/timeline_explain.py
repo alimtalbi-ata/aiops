@@ -54,3 +54,35 @@ def run_selector(runs, selected):
         links.append('<li><a href="/timeline?run_id=' + quote(rid, safe="") + '"' + current + '>'
                      + safe(rid) + ' · ' + safe(x.get("status")) + ' · ' + safe(x.get("mode")) + '</a></li>')
     return '<ul>' + ''.join(links) + '</ul>' if links else '<p>Aucun run accessible.</p>'
+
+
+def incident_explorer(runs, selected, query="", status_filter="ALL"):
+    """Group the existing Core run registry by incident_id; never invent incidents."""
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for run in runs:
+        if isinstance(run, dict) and run.get("incident_id"):
+            grouped[str(run["incident_id"])].append(run)
+    output = ['<form method="get" action="/timeline"><label>Rechercher un incident ou run '
+              '<input name="q" value="' + safe(query) + '" placeholder="INC-… / RUN-…"></label> '
+              '<label>État <select name="status">']
+    for value in ("ALL", "RUNNING", "CREATED", "RESOLVED", "BLOCKED", "FAILED", "CANCELLED"):
+        output.append('<option value="' + value + '"' + (' selected' if value == status_filter else '') +
+                      '>' + value + '</option>')
+    output.append('</select></label> <button type="submit">Filtrer</button></form>')
+    q = query.casefold()
+    shown = 0
+    for incident, siblings in grouped.items():
+        matching = [x for x in siblings if
+                    (status_filter == "ALL" or x.get("status") == status_filter) and
+                    (not q or q in incident.casefold() or q in str(x.get("run_id", "")).casefold())]
+        if not matching:
+            continue
+        shown += 1
+        output.append('<details' + (' open' if any(x.get("run_id") == selected for x in siblings) else '') +
+                      '><summary><strong>' + safe(incident) + '</strong> · ' +
+                      str(len(siblings)) + ' run(s), ' + str(len(matching)) +
+                      ' affiché(s)</summary>' + run_selector(matching, selected) + '</details>')
+    if not shown:
+        output.append('<p>Aucun run correspondant aux filtres.</p>')
+    return ''.join(output)
