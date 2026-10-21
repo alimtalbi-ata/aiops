@@ -29,9 +29,22 @@ class Decision(BaseModel):
     preconditions_verified: bool = False
     fencing_verified: bool = False
     human_approved: bool = False
+    freeze_active: bool | None = None
+    management_exception_verified: bool = False
+    change_approval_verified: bool = False
 
 
 def evaluate(x: Decision) -> dict:
+    effect = x.command in ("EXECUTE", "RESOLVE", "REMEDIATE")
+    if effect and os.getenv("AIOPS_POLICY_EMERGENCY_STOP", "true").lower() != "false":
+        return {"state":"BLOCKED","decision":"ESCALATE",
+                "reason":"EMERGENCY_STOP_ACTIVE: effect prohibited"}
+    if effect and x.freeze_active is None:
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
+                "reason":"FREEZE_STATUS_UNKNOWN: effect prohibited"}
+    if effect and x.freeze_active and not (x.management_exception_verified and x.change_approval_verified):
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
+                "reason":"CHANGE_FREEZE_ACTIVE: management exception and Change approval required"}
     # Severity is an independent safety signal: never downgrade P1 to UNKNOWN
     # or ALLOW merely because evidence is missing or confidence is high.
     if x.mode == "LIVE" and x.severity == "P1":
