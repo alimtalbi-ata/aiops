@@ -130,5 +130,28 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertNotIn("RUN-LIVE",page)
         self.assertIn('"impact_known":true',page)
 
+    def test_demo_run_details_are_source_backed(self):
+        def get(base,path,**kw):
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
+            if path=="/api/runs/RUN-DEMO-42":return {"run_id":"RUN-DEMO-42","status":"RESOLVED"}
+            if path.endswith("/ai-ledger"):return {"analysis":"ANL-SOURCE-42","critic":"CRT-SOURCE-42"}
+            if path.endswith("/gates"):return {"decision":"SIMULATE"}
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("read-only violation")):
+                result=self.portal.demo_run_detail("RUN-DEMO-42")
+        self.assertIn("ANL-SOURCE-42",result)
+        self.assertIn("CRT-SOURCE-42",result)
+        self.assertIn("SIMULATE",result)
+
+    def test_demo_run_details_exclude_live_and_invalid_ids(self):
+        from fastapi import HTTPException
+        with patch.object(self.portal,"get_json",return_value={"items":[{"run_id":"RUN-LIVE","mode":"LIVE"}]}):
+            with self.assertRaises(HTTPException) as failure:
+                self.portal.demo_run_detail("RUN-LIVE")
+            self.assertEqual(failure.exception.status_code,404)
+        with self.assertRaises(HTTPException):
+            self.portal.demo_run_detail("../../secrets")
+
 if __name__=="__main__":
     unittest.main()
