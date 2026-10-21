@@ -14,6 +14,10 @@ except ImportError:
     mod=None
 @unittest.skipIf(mod is None,"FastAPI/Pydantic unavailable on host")
 class PolicyFreezeTests(unittest.TestCase):
+    def setUp(self):
+        self._state_patch=patch.object(mod.autonomy_store,"status",return_value={"mode":os.getenv("AIOPS_POLICY_AUTONOMY_MODE","STOP_AUTO"),"healthy":True})
+        self._state_patch.start()
+        self.addCleanup(self._state_patch.stop)
     def sample(self,**kw):
         values=dict(mode="LIVE",command="EXECUTE",severity="P2",confidence=.99,
             evidence_count=5,critic_validated=True,redundancy_ok=True,
