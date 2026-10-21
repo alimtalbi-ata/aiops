@@ -85,5 +85,17 @@ class PortalPageContractTests(unittest.TestCase):
                           "edges":[{"source_id":"a","target_id":"missing"}]})
         self.assertIn("0 relations",page)
 
+    def test_twin_impact_marks_only_authoritative_affected_nodes(self):
+        from portal.twin_graph import graph_panel
+        graph={"nodes":[{"node_id":"san-a","name":"SAN"},{"node_id":"svc-pay","name":"Payment"}],
+               "edges":[{"source_id":"san-a","target_id":"svc-pay"}]}
+        impact={"root":"san-a","affected":[{"node_id":"san-a"},{"node_id":"svc-pay"}]}
+        page=graph_panel(graph,impact=impact)
+        self.assertIn('"impact_known":true',page)
+        self.assertIn('"impact_ids":["san-a","svc-pay"]',page)
+        unknown=graph_panel(graph,impact={"status":"UNKNOWN"})
+        self.assertIn('"impact_known":false',unknown)
+        self.assertIn('"impact_ids":[]',unknown)
+
 if __name__=="__main__":
     unittest.main()
