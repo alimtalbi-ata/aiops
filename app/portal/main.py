@@ -213,6 +213,13 @@ def demo_run_detail(rid:str):
       '<p class="muted">Données en lecture seule provenant de Core ; aucune chronologie n’est inventée.</p>'
       '<pre id="run-watch-trace" class="log">Chargement des éléments de preuve…</pre>')
     body+=panel("État canonique du run",pretty(detail))
+    events=detail.get("events") if isinstance(detail.get("events"),list) else []
+    rows=[(e.get("sequence","?"),e.get("occurred_at","INCONNU"),e.get("stage","INCONNU"),
+           e.get("event_type","INCONNU"),e.get("status","INCONNU"),e.get("decision","INCONNU"))
+          for e in events if isinstance(e,dict)]
+    body+=panel("Timeline canonique des événements",
+      table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
+      if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
     body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
