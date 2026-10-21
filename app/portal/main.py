@@ -88,23 +88,43 @@ def runs_page():
     return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows)))
 
 @app.get("/timeline",response_class=HTMLResponse)
-def timeline_page():
+def timeline_page(run_id:str|None=None):
+    """Real incident/run selector with event-by-event explanations and AI registers."""
+    from portal.timeline_explain import event_box,run_selector
+    from portal.demo_explain import render_critic_explanation
+    from urllib.parse import quote
     items=_runs()
-    if not items:
-        return shell("/timeline","Timeline incident","Les événements proviennent de Core ; aucun événement de démonstration n'est inventé.",panel("Chronologie",'<p>INCONNU — aucun run accessible.</p>'))
-    rid=str(items[0].get("run_id",""))
-    if not rid:
-        return shell("/timeline","Timeline incident","Événements non disponibles.",panel("Chronologie",'<p>INCONNU — run_id absent.</p>'))
-    detail=_get("/api/runs/"+__import__("urllib.parse",fromlist=["quote"]).quote(rid,safe=""))
-    events=detail.get("events",[]) if isinstance(detail.get("events"),list) else []
-    cards=""
-    for e in events:
-        status=e.get("status","UNKNOWN")
-        color={"PASS":"#1D9E75","BLOCKED":"#E24B4A","FAIL":"#E24B4A","RUNNING":"#EF9F27"}.get(status,"#7F77DD")
-        cards+=f'<article class="event" style="--c:{color}"><small>#{esc(e.get("sequence","?"))} · {esc(e.get("stage","UNKNOWN"))} · {esc(e.get("occurred_at","horodatage indisponible"))}</small><h3>{esc(e.get("event_type","UNKNOWN"))}</h3><p>{esc(status)}</p><span class="chip">{esc(e.get("event_key","sans clé"))}</span></article>'
-    if not cards: cards='<p>INCONNU — événements non disponibles pour ce run.</p>'
-    content=panel("Run sélectionné : "+rid,'<p>Timeline canonique, pas un scénario fictif.</p><div class="timeline">'+cards+'</div>')
-    return shell("/timeline","Timeline incident","Chronologie des événements persistés dans Core ; dernier run en tête de liste.",content,mode=items[0].get("mode","INCONNU"))
+    selected=run_id or next((str(x.get("run_id")) for x in items if x.get("status") in ("RUNNING","CREATED")),None)
+    selected=selected or next((str(x.get("run_id")) for x in items if x.get("run_id")),None)
+    content=panel("Incidents / runs enregistrés — sélectionner une exécution",run_selector(items,selected))
+    content+=panel("Périmètre et transparence",
+        "<p>Cette liste montre les runs réellement accessibles dans Core : réussis, bloqués, échoués ou en cours. "
+        "Les incidents sans run n'y figurent pas. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
+    if not selected:
+        content+=panel("Timeline","<p>Aucun run accessible depuis Core.</p>")
+        return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",selected):
+        raise HTTPException(404,"invalid_run_id")
+    match=next((x for x in items if x.get("run_id")==selected),None)
+    if not match:
+        raise HTTPException(404,"run_not_in_registry")
+    key=quote(selected,safe="")
+    detail=_get("/api/runs/"+key)
+    ledger=_get("/api/runs/"+key+"/ai-ledger")
+    events=detail.get("events") if isinstance(detail.get("events"),list) else []
+    cards="".join(event_box(e,i) for i,e in enumerate(events,1))
+    if not cards:
+        cards="<p>Aucun événement disponible depuis Core.</p>"
+    content+=panel("Run sélectionné : "+selected,
+        '<p><strong>État :</strong> '+esc(match.get("status","INCONNU"))+
+        ' · <strong>Mode :</strong> '+esc(match.get("mode","INCONNU"))+
+        ' · <a href="/demo-studio/run/'+key+'">Détail Demo Studio (si mode DEMO)</a></p>'
+        +'<div class="timeline">'+cards+'</div>')
+    content+=panel("Raisonnement observable — Analyst / Critic",render_critic_explanation(ledger))
+    content+=panel("Registres IA et Policy complets",pretty(ledger))
+    return shell("/timeline","Timeline des incidents",
+        "Historique réel Core, explications étape par étape, succès et blocages compris.",
+        content,mode=match.get("mode","INCONNU"))
 
 @app.get("/twin",response_class=HTMLResponse)
 def twin_page():
