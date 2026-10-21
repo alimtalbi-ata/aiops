@@ -56,10 +56,17 @@ for(const [key,value] of Object.entries(attrs||{}))el.setAttribute(key,String(va
 if(text!==undefined)el.textContent=String(text);
 return el;
 }
-function draw(query=""){
+function draw(){
 svg.replaceChildren();
-const shown=data.nodes.filter(n=>!query||String(n.name||n.node_id).toLowerCase().includes(query.toLowerCase())).slice(0,120);
-const included=new Set(shown.map(n=>String(n.node_id)));
+const query=document.getElementById("graph-filter").value.trim().toLowerCase();
+const site=siteInput.value,state=stateInput.value;
+const shown=data.nodes.filter(n=>
+(!query||String(n.name||n.node_id).toLowerCase().includes(query))&&
+(!site||String(n.site||"INCONNU")===site)&&
+(!state||String(n.state||"INCONNU")===state)
+).slice(0,120);
+const w=900/scale,h=520/scale;
+svg.setAttribute("viewBox",String((900-w)/2)+" "+String((520-h)/2)+" "+String(w)+" "+String(h));
 const cols=Math.max(1,Math.ceil(Math.sqrt(shown.length*1.7)));
 const rows=Math.max(1,Math.ceil(shown.length/cols));
 const xy=new Map();
@@ -87,7 +94,11 @@ svg.append(group);
 if(!shown.length){detail.textContent="Aucun nœud correspondant à la recherche.";}
 }
 draw();
-document.getElementById("graph-filter").addEventListener("input",e=>draw(e.target.value));
-document.getElementById("graph-reset").addEventListener("click",()=>{document.getElementById("graph-filter").value="";draw();detail.textContent="Sélectionner un nœud du graphe.";});
+document.getElementById("graph-filter").addEventListener("input",draw);
+siteInput.addEventListener("change",draw);
+stateInput.addEventListener("change",draw);
+document.getElementById("graph-zoom-in").addEventListener("click",()=>{scale=Math.min(3,scale*1.25);draw();});
+document.getElementById("graph-zoom-out").addEventListener("click",()=>{scale=Math.max(0.65,scale/1.25);draw();});
+document.getElementById("graph-reset").addEventListener("click",()=>{document.getElementById("graph-filter").value="";siteInput.value="";stateInput.value="";scale=1;draw();detail.textContent="Sélectionner un nœud du graphe.";});
 })();
 </script>''' % (len(safe_nodes),len(safe_edges),payload)
