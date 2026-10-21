@@ -22,6 +22,26 @@ def generate(seed=20261021, count=12):
                 "scenario":"SAN_FABRIC_A_DEGRADATION","correlation_id":correlation,
                 "kind":kind,"ci_id":ci,"metric":measurement,"value":value,"unit":unit,
                 "source":"acme-simulator-v291"})
+        # Independent healthy fabric B, path redundancy, and application traces.
+        rows.append({"timestamp":t,"scope":"ACME","synthetic":True,
+            "scenario":"SAN_FABRIC_A_DEGRADATION","correlation_id":correlation,
+            "kind":"metric","ci_id":"ACME-SAN-FABRIC-B","metric":"fc_crc_errors_delta",
+            "value":rng.randint(0,1),"unit":"count/30s","source":"acme-simulator-v292"})
+        rows.append({"timestamp":t,"scope":"ACME","synthetic":True,
+            "scenario":"SAN_FABRIC_A_DEGRADATION","correlation_id":correlation,
+            "kind":"metric","ci_id":"ACME-SRV-RHEL01","metric":"multipath_active_paths",
+            "value":4 if not degraded else 3,"unit":"paths","source":"acme-simulator-v292"})
+        rows.append({"timestamp":t,"scope":"ACME","synthetic":True,
+            "scenario":"SAN_FABRIC_A_DEGRADATION","correlation_id":correlation,
+            "kind":"trace","ci_id":"ACME-SVC-PAYMENTS","operation":"authorize_payment",
+            "duration_ms":p95,"status":"OK" if not degraded else "SLOW",
+            "source":"acme-simulator-v292"})
+        if idx in (5,6):
+            rows.append({"timestamp":t,"scope":"ACME","synthetic":True,
+                "scenario":"SAN_FABRIC_A_DEGRADATION","correlation_id":correlation,
+                "kind":"log","ci_id":"ACME-SRV-RHEL01","severity":"WARNING",
+                "message":"dm-multipath: path degraded on fabric A; alternate fabric B paths active",
+                "source":"acme-simulator-v292"})
         if idx==5:
             rows.append({"timestamp":t,"scope":"ACME","synthetic":True,
                 "scenario":"SAN_FABRIC_A_DEGRADATION","correlation_id":correlation,
