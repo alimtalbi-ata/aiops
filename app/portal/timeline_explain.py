@@ -66,6 +66,56 @@ def event_facts(e):
     return "".join(parts) or "<p>Aucune donnée détaillée enregistrée pour cet événement.</p>"
 
 
+
+def investigation_overview(run, events, incidents=None, now=None):
+    """Read-only summary and anchors, no inferred resolution or forced state."""
+    from datetime import datetime, timezone
+    from html import escape as h
+    from urllib.parse import quote
+    run = run if isinstance(run, dict) else {}
+    events = events if isinstance(events, list) else []
+    incident_id = str(run.get("incident_id") or "")
+    incident = next((v for v in (incidents or []) if isinstance(v,dict) and
+                     str(v.get("incident_id")) == incident_id), {})
+    state = str(run.get("status") or "UNKNOWN")
+    pieces = ['<section class="investigation-summary"><h3>Synthèse de l’investigation</h3>',
+              '<p><strong>Incident :</strong> ' + safe(incident.get("title") or incident_id or "Inconnu") +
+              ' · <strong>Sévérité :</strong> ' + safe(incident.get("severity")) + '</p>',
+              '<p><strong>État enregistré :</strong> ' + safe(state) +
+              ' · <strong>Mode :</strong> ' + safe(run.get("mode")) + '</p>']
+    if state in ("RUNNING", "CREATED"):
+        timestamp = run.get("started_at") or run.get("created_at")
+        try:
+            when = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                raise ValueError("timestamp has no timezone")
+            clock = now or datetime.now(timezone.utc)
+            age = (clock - when).total_seconds()
+            if age > 1800:
+                pieces.append('<p class="investigation-warning"><strong>À vérifier :</strong> run toujours ' +
+                              safe(state) + ' depuis plus de 30 minutes (' +
+                              safe(timestamp) + '). Statut potentiellement ancien, aucune preuve d’activité actuelle.</p>')
+            elif age >= 0:
+                pieces.append('<p>Statut en cours enregistré ; activité effective non confirmée.</p>')
+        except (ValueError, TypeError, OverflowError):
+            pieces.append('<p>Fraîcheur du statut non vérifiable (horodatage absent ou invalide).</p>')
+    if events:
+        last = next((e for e in reversed(events) if isinstance(e,dict)), {})
+        pieces.append('<p><strong>Dernier événement :</strong> ' +
+                      safe(last.get("stage")) + ' / ' + safe(last.get("event_type")) +
+                      ' · ' + safe(last.get("status")) + '</p>')
+    pieces.append('<nav class="investigation-steps" aria-label="Accès rapide aux étapes"><strong>Accès rapide : </strong>')
+    for number,event in enumerate(events,1):
+        if not isinstance(event,dict):
+            continue
+        stage = str(event.get("stage") or "INCONNU")
+        status = str(event.get("status") or "UNKNOWN")
+        if number == 1 or stage in ("DGX_ANALYST","DGX_CRITIC","POLICY") or status in ("BLOCKED","FAILED"):
+            pieces.append('<a href="#event-' + str(number) + '">' +
+                          safe(stage) + ' #' + str(number) + ' (' + safe(status) + ')</a> ')
+    pieces.append('</nav></section>')
+    return "".join(pieces)
+
 def event_box(e, n):
     if not isinstance(e, dict):
         return ""
@@ -80,7 +130,7 @@ def event_box(e, n):
         explanation = "Le Critic n'a pas validé la poursuite automatique. Voir ses objections dans le panneau ci-dessous."
     if event == "STATE_TRANSITION" and status == "BLOCKED":
         explanation = "Le run a été arrêté ; les événements précédents et les registres déterminent pourquoi."
-    return ('<article class="event"><h3>Box #' + str(n) + ' · ' + safe(title) + '</h3>'
+    return ('<article class="event" id="event-' + str(n) + '"><h3>Box #' + str(n) + ' · ' + safe(title) + '</h3>'
             '<p><strong>Étape technique :</strong> ' + safe(stage) + '</p>'
             '<p><strong>Quand :</strong> ' + safe(e.get("occurred_at")) + '</p>'
             '<p><strong>Événement :</strong> ' + safe(event) + ' · <strong>État :</strong> ' + safe(status)
