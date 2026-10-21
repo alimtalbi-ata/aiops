@@ -107,5 +107,28 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("siteInput.addEventListener",page)
         self.assertIn("stateInput.addEventListener",page)
 
+    def test_connected_demo_studio_remains_read_only_on_upstream_failure(self):
+        self.assertIn("/demo-studio",{r.path for r in self.portal.app.routes})
+        with patch.object(self.portal,"get_json",side_effect=ConnectionError("backend unavailable")):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("unexpected write")):
+                page=self.portal.demo_studio()
+        self.assertIn("LECTURE SEULE",page)
+        self.assertIn("INCONNU",page)
+        self.assertIn("Demo Studio",page)
+
+    def test_connected_demo_studio_uses_twin_payload_only(self):
+        def getter(base,path,**kwargs):
+            if path=="/api/dashboard":return {"open_p1":0}
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED","scenario_id":"ACME"},{"run_id":"RUN-LIVE","mode":"LIVE","status":"RUNNING"}]}
+            if path=="/api/twin/graph":return {"nodes":[{"node_id":"ACME-SAN-FABRIC-A","name":"SAN"}],"edges":[]}
+            if path.startswith("/api/twin/impact/"):return {"root":"ACME-SAN-FABRIC-A","affected":[{"node_id":"ACME-SAN-FABRIC-A"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=getter):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("unexpected write")):
+                page=self.portal.demo_studio()
+        self.assertIn("RUN-DEMO",page)
+        self.assertNotIn("RUN-LIVE",page)
+        self.assertIn('"impact_known":true',page)
+
 if __name__=="__main__":
     unittest.main()
