@@ -89,7 +89,7 @@ def event_box(e, n):
             '<p><strong>Pourquoi :</strong> ' + safe(objective) + '</p>'
             '<p><strong>Ce qui s’est passé :</strong> ' + safe(explanation) + '</p>'
             + event_facts(e)
-            '<small>Source : événement Core persistant ; explication fonctionnelle, pas raisonnement interne caché du modèle.</small></article>')
+            + '<small>Source : événement Core persistant ; explication fonctionnelle, pas raisonnement interne caché du modèle.</small></article>')
 
 def run_selector(runs, selected):
     links = []
