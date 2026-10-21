@@ -98,3 +98,12 @@ Le portail ajoute le drill-down `GET /demo-studio/run/{run_id}`. Depuis `/demo-s
 Aucun résultat n'est rempli artificiellement. Les données manquantes sont conservées en état `INCONNU`. Les runs LIVE ne sont pas accessibles par cette navigation. Ce drill-down permet une présentation **données réelles du test** sans activer un lancement de scénario depuis le navigateur. Pour créer des runs de démonstration, utiliser le runner E2E déjà qualifié dans une stack isolée; capturer les identifiants et les journaux et ouvrir ensuite le Studio.
 
 **Prochain incrément** : liaison Evidence run_id, projection des événements en timeline sélectionnable, session DEMO dédiée avec authentification opérateur, lancement en un clic dans la stack développement seulement et bouton de reset sans toucher aux autres versions. Test navigateur et provider DGX restent à effectuer.
+
+
+## Lancement depuis le navigateur (incrément V2.8 du 21/10/2026)
+
+Dans le profil développement uniquement, définir `AIOPS_DEMO_LAUNCH_ENABLED=true` pour **le conteneur Portal** (ne pas l'activer sur une stack que l'on souhaite conserver immuable). La page `/demo-studio` affiche alors un champ de jeton interne et le bouton « Lancer la démonstration ACME ». Le navigateur transmet le jeton via `Authorization: Bearer` vers `POST /api/demo`, puis le retire immédiatement du champ et ouvre `/demo-studio/run/{run_id}` en cas de succès. Le jeton n'est pas inséré dans l'URL, les journaux ou le stockage navigateur. Le Core génère les événements et Temporal exécute la chaîne existante. Le résultat s'actualise par rechargement de la page : **suivi continu automatique non encore implémenté**.
+
+Cette interaction repose sur la même API déjà couverte par le scénario `tests/runtime-e2e.sh`; elle n'établit pas à elle seule la qualification d'un nouveau scénario ACME. Ne présenter comme vérifiées que les sorties du run correspondant au même `run_id`.
+
+Préflight : services Core/Worker/Temporal/Intelligence/Evidence/Twin disponibles, migrations appliquées, configuration DEMO, fournisseur synthétique ou provider explicitement configuré. Ne pas utiliser l'interface pour administrer un environnement non dédié au développement. La limitation actuelle est l'authentification par jeton opérateur : une session OIDC/RBAC devra remplacer ce flux avant toute exposition externe.
