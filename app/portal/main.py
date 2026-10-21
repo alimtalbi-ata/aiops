@@ -94,6 +94,25 @@ def twin_page():
     edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
     body=panel("Résumé Digital Twin",pretty(summary))
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
+        body+=panel("Lancer le scénario synthétique ACME",
+          '<p>Dev uniquement : jeton opérateur saisi localement, jamais conservé dans la page. '
+          'Le lancement crée un incident DEMO avec une identité unique et demande son exécution par Core/Temporal.</p>'
+          '<label for="operator-token">Jeton interne de la stack de développement</label>'
+          '<input id="operator-token" type="password" autocomplete="off" style="width:100%;max-width:440px">'
+          '<p><button id="launch-acme" type="button">Lancer la démonstration ACME</button></p>'
+          '<p id="launch-status" role="status" aria-live="polite">En attente.</p>'
+          '<script>(function(){const b=document.getElementById("launch-acme");'
+          'b.addEventListener("click",async()=>{const t=document.getElementById("operator-token");'
+          'const status=document.getElementById("launch-status");const token=t.value;t.value="";'
+          'if(!token){status.textContent="Jeton requis";return;}b.disabled=true;'
+          'status.textContent="Création du run DEMO…";'
+          'try{const response=await fetch("/api/demo",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:"{}"});'
+          'if(!response.ok){status.textContent="Échec du lancement : HTTP "+response.status;return;}'
+          'const data=await response.json();const rid=String(data.run_id||"");'
+          'if(!/^[A-Za-z0-9_-]{1,128}$/.test(rid)){status.textContent="Réponse de lancement sans identifiant valide";return;}'
+          'location.assign("/demo-studio/run/"+encodeURIComponent(rid));'
+          '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
     body+=graph_panel(graph,impact=impact)
     body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
         [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
@@ -155,8 +174,8 @@ def demo_studio():
       'valider en stack V2.8 isolée avant de permettre le lancement depuis ce portail.</p>'
       '<p><a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
     return shell("/demo-studio","ACME Demo Studio",
-      "Démonstration intégrée en lecture seule — sources Core et Twin réelles, aucun effet.",
-      body,mode="LECTURE SEULE")
+      "Démonstration intégrée ACME — lecture des sources Core/Twin et lancement optionnel en mode développement.",
+      body,mode="DEVELOPPEMENT DEMO" if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true" else "LECTURE SEULE")
 
 @app.get("/demo-studio/run/{rid}",response_class=HTMLResponse)
 def demo_run_detail(rid:str):
