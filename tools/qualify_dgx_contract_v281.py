@@ -20,6 +20,31 @@ ai = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ai)
 
 
+def summarize_quality(analysis, critique):
+    """Bounded, synthetic-only diagnostic explanation; no raw provider output."""
+    known = {"E-SAN-PORT", "E-SAN-PATHS"}
+    hypotheses = [
+        {"id": h.get("id"), "confidence": h.get("confidence"),
+         "supporting_evidence_ids": [e for e in h.get("supporting_evidence_ids", []) if e in known],
+         "assumptions_count": len(h.get("assumptions", []))}
+        for h in analysis.get("hypotheses", [])[:20]
+    ]
+    objections = [
+        {"code": i.get("code", "UNKNOWN"),
+         "description": str(i.get("description", ""))[:350],
+         "evidence_ids": [e for e in i.get("evidence_ids", []) if e in known]}
+        for i in critique.get("issues", [])[:30]
+    ]
+    checks = [
+        {"supported": x.get("supported") is True,
+         "evidence_ids": [e for e in x.get("supporting_evidence_ids", []) if e in known]}
+        for x in critique.get("claim_checks", [])[:30]
+    ]
+    return {"hypotheses": hypotheses, "critic_objections": objections,
+            "claim_checks": checks, "unsafe_actions_count": len(critique.get("unsafe_actions", [])),
+            "analyst_confidence_is_model_asserted_not_calibrated": True}
+
+
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="/reports/dgx-contract-v281.json")
@@ -63,6 +88,7 @@ def run():
         result["critic"] = {"status": "PASS", "latency_seconds": round(time.monotonic()-start, 2),
                             "validated": c["validated"], "recommendation": c["final_recommendation"],
                             "issues_count": len(c["issues"])}
+        result["diagnostic_quality"] = summarize_quality(a, c)
         result["result"] = "PASS"
     except Exception as exc:
         # Avoid leaking provider responses, prompts, evidence or keys.
