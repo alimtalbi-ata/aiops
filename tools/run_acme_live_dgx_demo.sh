@@ -51,14 +51,16 @@ if [[ "$ready" != 1 ]]; then
   docker logs --tail 35 aiops2-rebuild-intelligence 2>&1 | sed -E 's/(Bearer |token=|password=)[^ ]+/\\1[REDACTED]/Ig'
   exit 1
 fi
-echo "PHASE=SYNTHETIC_INCIDENT_REAL_INFERENCE"
+echo "PHASE=SYNTHETIC_INCIDENT_REAL_INFERENCE"\necho "DEMO_VARIANT=${AIOPS_DEMO_VARIANT:-baseline}"
 # Keep token inside Portal. Use a unique temporary output path for this run.
 launch="$(mktemp)"
 trap 'rm -f "$launch"; restore' EXIT
 docker exec aiops2-rebuild-portal python -c '
 import os,json,urllib.request
 token=os.environ["AIOPS_INTERNAL_TOKEN"]
-req=urllib.request.Request("http://127.0.0.1:777/api/demo",data=b"{}",method="POST",headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
+variant=os.environ.get("AIOPS_DEMO_VARIANT","baseline")
+endpoint="/api/demo-enriched" if variant=="enriched" else "/api/demo"
+req=urllib.request.Request("http://127.0.0.1:777"+endpoint,data=b"{}",method="POST",headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
 with urllib.request.urlopen(req,timeout=30) as r: print(json.dumps(json.load(r)))
 ' > "$launch"
 rid="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["run_id"])' "$launch")"
