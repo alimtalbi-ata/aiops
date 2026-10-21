@@ -67,6 +67,29 @@ def event_facts(e):
 
 
 
+
+def evidence_catalog(items):
+    """Bounded, escaped evidence provenance from Core; no raw payload."""
+    import json
+    if not isinstance(items,list) or not items:
+        return '<p>Aucune preuve détaillée liée à ce run.</p>'
+    parts=['<p>Source : Evidence Core. Payload brut non exposé.</p>']
+    for e in items[:200]:
+        if not isinstance(e,dict) or not e.get("evidence_id"):
+            continue
+        eid=str(e["evidence_id"])
+        if len(eid)>128 or not all(c.isalnum() or c in "-_" for c in eid):
+            continue
+        parts.append('<details id="proof-'+eid+'"><summary>'+safe(eid)+' · '+
+                     safe(e.get("source"))+' · '+safe(e.get("claim"))+'</summary>'+
+                     '<p><strong>Observé :</strong> '+safe(e.get("observed_at"))+
+                     ' · <strong>Connu :</strong> '+safe(e.get("known_at"))+'</p>'+
+                     '<p><strong>Identifiant externe :</strong> '+safe(e.get("external_id"))+
+                     ' · <strong>Confiance :</strong> '+safe(e.get("confidence"))+'</p>'+
+                     '<p><strong>Hash :</strong> '+safe(e.get("payload_hash"))+'</p>'+
+                     '<pre>'+escape(json.dumps(e.get("provenance") or {},ensure_ascii=False,default=str)[:4000])+'</pre></details>')
+    return "".join(parts)
+
 def investigation_overview(run, events, incidents=None, now=None):
     """Read-only summary and anchors, no inferred resolution or forced state."""
     from datetime import datetime, timezone
