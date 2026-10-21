@@ -1,13 +1,11 @@
 import importlib.util,os,unittest
 from pathlib import Path
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"app"))
 from unittest.mock import patch
 p=Path(__file__).resolve().parents[1]/"app/policy/main.py"
-try:
-    spec=importlib.util.spec_from_file_location("policy_modes",p)
-    m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-except ImportError:
-    m=None
-@unittest.skipIf(m is None,"requires policy image dependencies")
+spec=importlib.util.spec_from_file_location("policy_modes",p)
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 class AutonomyTests(unittest.TestCase):
     def setUp(self):
         self._state_patch=patch.object(m.autonomy_store,"status",return_value={"mode":os.getenv("AIOPS_POLICY_AUTONOMY_MODE","STOP_AUTO"),"healthy":True})
