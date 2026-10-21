@@ -32,10 +32,20 @@ class Decision(BaseModel):
     freeze_active: bool | None = None
     management_exception_verified: bool = False
     change_approval_verified: bool = False
+    operation_class: Literal["OBSERVATION","ROUTINE_PREAPPROVED","STANDARD_CHANGE","EXCEPTIONAL_CHANGE","AUTONOMOUS_REMEDIATION"] = "AUTONOMOUS_REMEDIATION"
 
 
 def evaluate(x: Decision) -> dict:
     effect = x.command in ("EXECUTE", "RESOLVE", "REMEDIATE")
+    autonomy_mode = os.getenv("AIOPS_POLICY_AUTONOMY_MODE", "STOP_AUTO")
+    if autonomy_mode not in ("NORMAL", "FREEZE", "STOP_AUTO"):
+        return {"state":"BLOCKED","decision":"ESCALATE","reason":"INVALID_AUTONOMY_MODE"}
+    if effect and autonomy_mode == "STOP_AUTO" and x.operation_class == "AUTONOMOUS_REMEDIATION":
+        return {"state":"BLOCKED","decision":"ESCALATE","reason":"AUTONOMOUS_REMEDIATION_SUSPENDED"}
+    if effect and autonomy_mode == "FREEZE" and x.operation_class not in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE"):
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL","reason":"FREEZE_RESTRICTS_OPERATION_CLASS"}
+    if effect and x.operation_class in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE") and not x.preconditions_verified:
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL","reason":"PREAPPROVED_OPERATION_NOT_VERIFIED"}
     if effect and os.getenv("AIOPS_POLICY_EMERGENCY_STOP", "true").lower() != "false":
         return {"state":"BLOCKED","decision":"ESCALATE",
                 "reason":"EMERGENCY_STOP_ACTIVE: effect prohibited"}
