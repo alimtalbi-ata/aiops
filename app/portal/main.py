@@ -96,9 +96,27 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     items=_runs()
     registry=_get("/api/incidents")
     incidents=registry.get("items",[]) if isinstance(registry.get("items"),list) else []
-    selected=run_id or next((str(x.get("run_id")) for x in items if x.get("status") in ("RUNNING","CREATED")),None)
-    selected=selected or next((str(x.get("run_id")) for x in items if x.get("run_id")),None)
-    content=panel("Explorateur des incidents — recherche et filtres",incident_explorer(items,selected,q,status,incidents=incidents))
+    # Core returns most recent runs first; do not promote stale RUNNING rows by default.
+    selected=run_id or next((str(x.get("run_id")) for x in items if x.get("run_id")),None)
+    content='''<style>
+    main{max-width:1500px}
+    .timeline-ui input,.timeline-ui select{font:inherit;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;min-width:170px}
+    .timeline-ui form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px}
+    .timeline-ui label{display:flex;flex-direction:column;gap:5px;font-weight:600}
+    .timeline-ui details{margin:10px 0;padding:10px 14px;border:1px solid var(--line);border-radius:10px}
+    .timeline-ui summary{cursor:pointer;line-height:1.6}
+    .timeline-ui li{padding:4px 0}
+    .timeline-ui a[aria-current="page"]{font-weight:700;color:#6560c5}
+    .timeline .event{line-height:1.65;font-size:1rem;padding:20px 23px}
+    .timeline .event h3{font-size:1.12rem}
+    .timeline .event p{margin:8px 0}
+    .timeline .event details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+    .timeline .event pre{font-size:.85rem;max-height:400px;overflow:auto}
+    @media(max-width:700px){.timeline{margin-left:6px;padding-left:15px}.timeline .event{padding:13px}}
+    </style>'''
+    content+=panel("Explorateur des incidents — recherche et filtres",
+        '<div class="timeline-ui">'+incident_explorer(items,selected,q,status,incidents=incidents)+'</div>')
+
     content+=panel("Périmètre et transparence",
         "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
         "Les listes sont limitées aux enregistrements renvoyés par Core. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
