@@ -207,7 +207,7 @@ def demo_run_detail(rid:str):
       'catch(e){status.textContent="Suivi temporairement indisponible";}finally{pending=false;}}'
       'document.getElementById("run-watch-refresh").addEventListener("click",()=>{active=true;refresh();});'
       'refresh();setInterval(refresh,5000);})();</script>')
-    body=panel("État canonique du run",pretty(detail))
+    body+=panel("État canonique du run",pretty(detail))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
     body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
