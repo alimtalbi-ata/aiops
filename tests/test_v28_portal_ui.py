@@ -64,5 +64,26 @@ class PortalPageContractTests(unittest.TestCase):
                     self.portal.demo(None)
                 self.assertEqual(missing.exception.status_code,401)
 
+    def test_twin_graph_escapes_hostile_label(self):
+        from portal.twin_graph import graph_panel
+        unsafe = '</script><img src=x onerror=alert(1)>'
+        graph = {"nodes":[{"node_id":"n1","name":unsafe,"type":"SWITCH","state":"DEGRADED"}],"edges":[]}
+        page = graph_panel(graph)
+        self.assertNotIn('</script><img',page)
+        self.assertIn('twin-graph',page)
+        self.assertIn('application/json',page)
+        self.assertIn('textContent',page)
+
+    def test_twin_graph_rejects_missing_data(self):
+        from portal.twin_graph import graph_panel
+        self.assertIn("INCONNU",graph_panel({"nodes":None,"edges":[]}))
+        self.assertIn("INCONNU",graph_panel(None))
+
+    def test_twin_graph_filters_orphan_edges(self):
+        from portal.twin_graph import graph_panel
+        page=graph_panel({"nodes":[{"node_id":"a","name":"SAN"}],
+                          "edges":[{"source_id":"a","target_id":"missing"}]})
+        self.assertIn("0 relations",page)
+
 if __name__=="__main__":
     unittest.main()
