@@ -18,6 +18,54 @@ STAGES = {
 def safe(x):
     return escape(str(x if x is not None else "INCONNU")[:700])
 
+def event_facts(e):
+    """Render only bounded, recorded Core event data; never invent AI rationale."""
+    payload = e.get("payload") if isinstance(e.get("payload"), dict) else {}
+    refs = e.get("evidence_ids") if isinstance(e.get("evidence_ids"), list) else []
+    parts = []
+    if refs:
+        parts.append("<p><strong>Preuves liées :</strong> " +
+                     ", ".join(safe(x) for x in refs[:30]) + "</p>")
+    if e.get("confidence") is not None:
+        parts.append("<p><strong>Confiance enregistrée :</strong> " +
+                     safe(e["confidence"]) + " (non calibrée)</p>")
+    analysis = payload.get("analysis")
+    if isinstance(analysis, dict):
+        parts.append("<p><strong>Résultat Analyst :</strong> sévérité " +
+                     safe(analysis.get("severity")) + ", confiance " +
+                     safe(analysis.get("confidence")) + "</p>")
+        hypotheses = analysis.get("hypotheses")
+        if isinstance(hypotheses, list):
+            for h in hypotheses[:5]:
+                if isinstance(h, dict):
+                    parts.append("<p><strong>Hypothèse :</strong> " +
+                                 safe(h.get("statement")) + " · preuves " +
+                                 ", ".join(safe(x) for x in h.get("supporting_evidence_ids", [])[:10]) +
+                                 "</p>")
+    critique = payload.get("critique")
+    if isinstance(critique, dict):
+        parts.append("<p><strong>Résultat Critic :</strong> validé=" +
+                     safe(critique.get("validated")) + " · recommandation " +
+                     safe(critique.get("final_recommendation")) + "</p>")
+        issues = critique.get("issues")
+        if isinstance(issues, list):
+            for issue in issues[:12]:
+                if isinstance(issue, dict):
+                    parts.append("<p><strong>Objection " + safe(issue.get("code")) +
+                                 " :</strong> " + safe(issue.get("description")) + "</p>")
+    for field in ("reason", "error", "failure_reason", "message"):
+        if isinstance(payload.get(field), (str, int, float)):
+            parts.append("<p><strong>" + safe(field) + " :</strong> " +
+                         safe(payload[field]) + "</p>")
+    # Other fields remain accessible as a bounded, escaped inspectable record.
+    import json
+    if payload:
+        serialized = json.dumps(payload, ensure_ascii=False, default=str)
+        parts.append("<details><summary>Entrées/sorties enregistrées (JSON Core)</summary><pre>" +
+                     escape(serialized[:12000]) + "</pre></details>")
+    return "".join(parts) or "<p>Aucune donnée détaillée enregistrée pour cet événement.</p>"
+
+
 def event_box(e, n):
     if not isinstance(e, dict):
         return ""
@@ -40,6 +88,7 @@ def event_box(e, n):
             '<p><strong>Que fait la plateforme :</strong> ' + safe(activity) + '</p>'
             '<p><strong>Pourquoi :</strong> ' + safe(objective) + '</p>'
             '<p><strong>Ce qui s’est passé :</strong> ' + safe(explanation) + '</p>'
+            + event_facts(e)
             '<small>Source : événement Core persistant ; explication fonctionnelle, pas raisonnement interne caché du modèle.</small></article>')
 
 def run_selector(runs, selected):
