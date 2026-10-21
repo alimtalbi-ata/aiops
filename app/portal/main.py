@@ -124,6 +124,36 @@ def copilot_page():
         '<script>document.getElementById("ask").addEventListener("click",async function(){const out=document.getElementById("answer");out.textContent="Chargement…";try{const r=await fetch("/api/copilot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:document.getElementById("q").value})});out.textContent=JSON.stringify(await r.json(),null,2);if(!r.ok)out.textContent="Erreur HTTP "+r.status+" : "+out.textContent;}catch(e){out.textContent="Copilot indisponible";}});</script>')
     return shell("/copilot","Copilot","Conversation contextualisée ; une réponse non étayée ne constitue pas une preuve.",body)
 
+@app.get("/demo-studio",response_class=HTMLResponse)
+def demo_studio():
+    """Safe read-only ACME storyboard: no launch, effects, or credentials in browser."""
+    dashboard=_get("/api/dashboard")
+    graph=_get("/api/twin/graph",TWIN)
+    impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    runs=_runs()
+    demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
+    body=panel("Préflight — qualification en lecture seule",
+        '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
+        'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
+        +table(["Contrôle","Résultat"],[
+          ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
+          ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
+          ("Impact SAN-A","DISPONIBLE" if isinstance(impact.get("affected"),list) and impact.get("root") else "INCONNU"),
+          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)))
+        ]))
+    body+=graph_panel(graph,impact=impact)
+    body+=panel("Exécutions de démonstration déjà enregistrées",
+      table(["Run","Mode","État","Scénario"],[
+       (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
+        r.get("status","INCONNU"),r.get("scenario_id","INCONNU")) for r in demo_runs[:30]]))
+    body+=panel("Qualification et prochaines étapes",
+      '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
+      'valider en stack V2.8 isolée avant de permettre le lancement depuis ce portail.</p>'
+      '<p><a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
+    return shell("/demo-studio","ACME Demo Studio",
+      "Démonstration intégrée en lecture seule — sources Core et Twin réelles, aucun effet.",
+      body,mode="LECTURE SEULE")
+
 @app.get("/qualification",response_class=HTMLResponse)
 def qualification_page():
     checks=[("QF178–179","35 tests unitaires rapportés sur Debian isolée","Rapporté, non CI"),
