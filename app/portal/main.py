@@ -1,4 +1,4 @@
-import os,json,html,uuid,hmac
+import os,json,html,uuid,hmac,re
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -146,6 +146,10 @@ def demo_studio():
       table(["Run","Mode","État","Scénario"],[
        (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
         r.get("status","INCONNU"),r.get("scenario_id","INCONNU")) for r in demo_runs[:30]]))
+    import urllib.parse
+    if demo_runs:
+        links="".join('<li><a href="/demo-studio/run/'+urllib.parse.quote(str(r.get("run_id","")),safe="")+'">'+esc(r.get("run_id","INCONNU"))+'</a></li>' for r in demo_runs[:30] if re.fullmatch(r"[A-Za-z0-9_-]{1,128}",str(r.get("run_id",""))))
+        body+=panel("Ouvrir les traces Analyst/Critic/Policy","<ul>"+links+"</ul>")
     body+=panel("Qualification et prochaines étapes",
       '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
       'valider en stack V2.8 isolée avant de permettre le lancement depuis ce portail.</p>'
@@ -153,6 +157,29 @@ def demo_studio():
     return shell("/demo-studio","ACME Demo Studio",
       "Démonstration intégrée en lecture seule — sources Core et Twin réelles, aucun effet.",
       body,mode="LECTURE SEULE")
+
+@app.get("/demo-studio/run/{rid}",response_class=HTMLResponse)
+def demo_run_detail(rid:str):
+    """Show source-backed demo evidence, never substitute fixtures for live records."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+        raise HTTPException(404,"invalid_demo_run_id")
+    candidates=_runs()
+    matched=next((r for r in candidates if r.get("run_id")==rid and r.get("mode") in ("DEMO","REPLAY","STORY")),None)
+    if not matched:
+        raise HTTPException(404,"demo_run_not_found")
+    from urllib.parse import quote
+    key=quote(rid,safe="")
+    detail=_get("/api/runs/"+key)
+    ledger=_get("/api/runs/"+key+"/ai-ledger")
+    gate=_get("/api/runs/"+key+"/gates")
+    body=panel("État canonique du run",pretty(detail))
+    body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
+    body+=panel("Gates et décisions",pretty(gate))
+    body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
+      'Aucune remédiation, ré-exécution ni approbation n’est disponible ici.</p>')
+    return shell("/demo-studio","Démonstration · "+rid,
+      "Parcours incident, analyse et décisions depuis le registre Core.",
+      body,mode=matched.get("mode","DEMO"))
 
 @app.get("/qualification",response_class=HTMLResponse)
 def qualification_page():
