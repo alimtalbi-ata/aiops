@@ -107,3 +107,10 @@ Dans le profil développement uniquement, définir `AIOPS_DEMO_LAUNCH_ENABLED=tr
 Cette interaction repose sur la même API déjà couverte par le scénario `tests/runtime-e2e.sh`; elle n'établit pas à elle seule la qualification d'un nouveau scénario ACME. Ne présenter comme vérifiées que les sorties du run correspondant au même `run_id`.
 
 Préflight : services Core/Worker/Temporal/Intelligence/Evidence/Twin disponibles, migrations appliquées, configuration DEMO, fournisseur synthétique ou provider explicitement configuré. Ne pas utiliser l'interface pour administrer un environnement non dédié au développement. La limitation actuelle est l'authentification par jeton opérateur : une session OIDC/RBAC devra remplacer ce flux avant toute exposition externe.
+
+
+## Suivi dynamique d'un run — incrément du 21/10/2026
+
+Le bouton de lancement du scénario ACME est désormais localisé sur `/demo-studio` (et non sur la page `/twin`). Après lancement, l'interface ouvre `/demo-studio/run/{run_id}`; cette page consulte toutes les 5 secondes `GET /api/demo-status/{run_id}` et affiche l'état canonique Core jusqu'à `RESOLVED`, `BLOCKED`, `FAILED` ou `CANCELLED`. Un bouton permet la vérification manuelle. La route de statut vérifie que l'identifiant figure bien dans le registre en mode `DEMO`, `REPLAY` ou `STORY`; aucun effet ni relancement n'est produit par ces lectures.
+
+**Limites** : les registres Analyst/Critic/Policy sont chargés à l'ouverture de la page; ils demandent encore un rechargement après état terminal. Les tests de lecture seule n'établissent pas une vérification navigateur. Ne pas annoncer un suivi complet de Temporal tant que les traces d'exécution et les événements horodatés ne sont pas intégrés dans cette vue.
