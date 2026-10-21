@@ -243,6 +243,33 @@ def _execute_stage_blocking(a,attempt):
             observed=stable_event['occurred_at']
             post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fc-errors','observed_at':observed,'claim':'Synthetic ACME scenario reports FC errors at 184 errors/min on ACME-SAN-FABRIC-A.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL','mode':mode,'run_id':rid}},token=ADMIN)
             post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fabric-health','observed_at':observed,'claim':'Synthetic ACME scenario reports ACME-SAN-FABRIC-A degraded with health 0.42.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','state':'DEGRADED','health':0.42,'mode':mode,'run_id':rid}},token=ADMIN)
+            # DEMO B adds independent-looking *synthetic* observation types; all
+            # provenance stays explicitly synthetic and remains open to Critic.
+            run_detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
+            incident_id=str(run_detail.get('run',{}).get('incident_id',''))
+            if incident_id.startswith('INC-DEMO-ENRICHED-'):
+                enriched=[
+                    ('multipath', 'Synthetic RHEL multipath snapshot: 3/4 active paths, one degraded; path ownership unverified.',
+                     {'node_id':'ACME-SRV-RHEL01','active_paths':3,'total_paths':4,'failed_paths':1}),
+                    ('fabric-b', 'Synthetic redundant fabric B reports healthy, not an independently acquired measurement.',
+                     {'node_id':'ACME-SAN-FABRIC-B','state':'HEALTHY','health':0.98}),
+                    ('payment-latency', 'Synthetic payment service latency rose from 90ms baseline to 340ms p95.',
+                     {'node_id':'ACME-SVC-PAYMENTS','metric':'p95_latency_ms','value':340,'baseline':90}),
+                    ('payment-errors', 'Synthetic payment gateway reports 1.8% errors, baseline 0.1%; correlation not proven.',
+                     {'node_id':'ACME-SVC-PAYMENTS','metric':'error_rate_percent','value':1.8,'baseline':0.1}),
+                ]
+                for suffix,claim,payload in enriched:
+                    post_json(EVID,'/api/evidence',{
+                        'source':'acme-enriched-simulator',
+                        'external_id':f'{rid}:{suffix}',
+                        'observed_at':observed,
+                        'claim':claim,
+                        'confidence':0.75,
+                        'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE',
+                            'adapter':'acme-enriched-simulator','scenario_id':scenario,
+                            'observed_at':observed},
+                        'payload':{**payload,'mode':mode,'run_id':rid,'synthetic':True}
+                    },token=ADMIN)
         if stage in ('DGX_ANALYST','DGX_CRITIC'):
             try:
                 detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
