@@ -22,5 +22,13 @@ class EvidenceCatalogTests(unittest.TestCase):
         self.assertNotIn("<script>",html)
         self.assertNotIn("<img",html)
         self.assertIn("&lt;script&gt;",html)
+    def test_stage_marker_is_not_diagnostic_proof(self):
+        html=m.evidence_catalog([{"evidence_id":"EVD-MARK","source":"run:R1:normalize",
+                "claim":"NORMALIZE completed","provenance":{"record_type":"stage_marker",
+                "synthetic":True}}])
+        self.assertIn("1 marqueur(s) d’exécution",html)
+        self.assertIn("ne démontrent pas une dégradation SAN",html)
+        self.assertIn("non probant pour le diagnostic",html)
+
 if __name__=="__main__":
     unittest.main()
