@@ -232,12 +232,13 @@ def demo_status(rid:str):
     detail=_get("/api/runs/"+rid)
     if detail.get("status")=="UNKNOWN":
         return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
+    run=detail.get("run",{}) if isinstance(detail.get("run"),dict) else detail
     ledger=_get("/api/runs/"+rid+"/ai-ledger")
     gates=_get("/api/runs/"+rid+"/gates")
     events=detail.get("events",None)
     if not isinstance(events,list):
         events="INCONNU"
-    return {"run_id":rid,"status":detail.get("status","UNKNOWN"),"mode":allowed.get("mode"),
+    return {"run_id":rid,"status":run.get("status","UNKNOWN"),"mode":allowed.get("mode"),
             "source":"Core","events":events,"ledger":ledger,"gates":gates}
 
 @app.get("/qualification",response_class=HTMLResponse)
