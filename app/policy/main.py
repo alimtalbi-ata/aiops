@@ -195,3 +195,9 @@ def simulation_reserve(x:SimulationAdmission,authorization: str|None=Header(defa
 def simulation_summary(authorization: str|None=Header(default=None)):
     authorize(authorization)
     return execution_fence.summary()
+
+@app.get("/api/policy/simulation/decisions")
+def simulation_decisions(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    try: return {"scope":"SIMULATION_ONLY","items":execution_fence.decisions()}
+    except Exception: raise HTTPException(503,"policy_audit_unavailable")
