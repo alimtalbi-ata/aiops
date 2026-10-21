@@ -31,12 +31,26 @@ services:
 EOF
 echo "PHASE=DGX_PROVIDER_ACTIVATION"
 "${compose[@]}" -f "$override" up -d --no-deps --force-recreate aiops2-intelligence
-docker exec aiops2-rebuild-intelligence python -c '
-import json,urllib.request
-with urllib.request.urlopen("http://127.0.0.1:817/ready",timeout=15) as r: data=json.load(r)
-assert data.get("provider_configured") is True
+ready=0
+for i in $(seq 1 45); do
+  if docker exec aiops2-rebuild-intelligence python -c '
+import json, urllib.request
+with urllib.request.urlopen("http://127.0.0.1:817/ready", timeout=3) as response:
+    info = json.load(response)
+assert info.get("status") == "ready"
+assert info.get("provider_configured") is True
 print("DGX_ADAPTER_READY=YES")
-'
+' 2>/dev/null; then
+    ready=1
+    break
+  fi
+  sleep 2
+done
+if [[ "$ready" != 1 ]]; then
+  echo "FAIL|dgx_adapter_not_ready_after_90s"
+  docker logs --tail 35 aiops2-rebuild-intelligence 2>&1 | sed -E 's/(Bearer |token=|password=)[^ ]+/\\1[REDACTED]/Ig'
+  exit 1
+fi
 echo "PHASE=SYNTHETIC_INCIDENT_REAL_INFERENCE"
 # Keep token inside Portal. Use a unique temporary output path for this run.
 launch="$(mktemp)"
