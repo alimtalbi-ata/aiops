@@ -33,6 +33,7 @@ def event_box(e, n):
     if event == "STATE_TRANSITION" and status == "BLOCKED":
         explanation = "Le run a été arrêté ; les événements précédents et les registres déterminent pourquoi."
     return ('<article class="event"><h3>Box #' + str(n) + ' · ' + safe(title) + '</h3>'
+            '<p><strong>Étape technique :</strong> ' + safe(stage) + '</p>'
             '<p><strong>Quand :</strong> ' + safe(e.get("occurred_at")) + '</p>'
             '<p><strong>Événement :</strong> ' + safe(event) + ' · <strong>État :</strong> ' + safe(status)
             + ' · <strong>Décision :</strong> ' + safe(e.get("decision")) + '</p>'
