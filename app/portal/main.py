@@ -384,3 +384,26 @@ def acme_stories_page():
     return shell("/demo-studio","Histoires métier ACME",
                  "Parcours clients, sécurité, limites et preuves réellement disponibles.",body)
 
+
+@app.get("/policy-control",response_class=HTMLResponse)
+def policy_control_center():
+    """Read-only control center; changes are deliberately not available here."""
+    url=os.getenv("POLICY_URL","http://aiops2-policy:813")
+    state=_get("/api/policy/autonomy",url)
+    history=_get("/api/policy/autonomy/history",url)
+    status=state.get("mode","UNKNOWN")
+    entries=history.get("items",[]) if isinstance(history.get("items"),list) else []
+    rows=[(str(e.get("revision","?")),str(e.get("mode","?")),
+           str(e.get("actor","?")),str(e.get("reason","?")),str(e.get("changed_at","?")))
+          for e in entries if isinstance(e,dict)]
+    body=panel("Mode opérationnel actuel",
+        '<p><strong>'+esc(status)+'</strong> — '+esc(state.get("source","source indisponible"))+'</p>'+
+        '<p>Affichage en lecture seule. Aucun bouton de réactivation n’est disponible. '
+        'Une autorisation indépendante et un contrôle au point d’exécution sont nécessaires avant toute remédiation.</p>')
+    body+=panel("Historique audité",table(["Révision","Mode","Acteur","Motif","Date"],rows)
+          if rows else '<p>Aucun historique accessible. L’état réel ne doit pas être supposé.</p>')
+    body+=panel("Maturité et limites",
+        '<p>Le registre et les API nécessitent déploiement et qualification. '
+        'Le mode STOP_AUTO par défaut n’équivaut pas à une interposition déjà déployée chez les exécuteurs.</p>')
+    return shell("/policy-control","Policy Control Center",
+                 "Contrôle d’autonomie AIOps — état et historique, lecture seule.",body)
