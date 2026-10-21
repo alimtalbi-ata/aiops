@@ -3,6 +3,7 @@ import os,hmac
 
 from fastapi import FastAPI,Header,HTTPException
 from pydantic import BaseModel, Field
+from policy import autonomy_store
 
 app = FastAPI(title="ACME Policy Engine", version="2.2.0")
 INTERNAL_TOKEN=os.getenv("AIOPS_INTERNAL_TOKEN","")
@@ -37,7 +38,10 @@ class Decision(BaseModel):
 
 def evaluate(x: Decision) -> dict:
     effect = x.command in ("EXECUTE", "RESOLVE", "REMEDIATE")
-    autonomy_mode = os.getenv("AIOPS_POLICY_AUTONOMY_MODE", "STOP_AUTO")
+    persisted=autonomy_store.status()
+    autonomy_mode=persisted["mode"]
+    if not persisted["healthy"]:
+        return {"state":"BLOCKED","decision":"ESCALATE","reason":"AUTONOMY_STATE_UNAVAILABLE"}
     if autonomy_mode not in ("NORMAL", "FREEZE", "STOP_AUTO"):
         return {"state":"BLOCKED","decision":"ESCALATE","reason":"INVALID_AUTONOMY_MODE"}
     if effect and autonomy_mode == "STOP_AUTO" and x.operation_class == "AUTONOMOUS_REMEDIATION":
@@ -144,3 +148,31 @@ def check(x: Decision,authorization: str|None=Header(default=None)):
 @app.get("/metrics")
 def metrics():
     return "aiops_policy_up 1\n"
+
+
+class ModeChange(BaseModel):
+    mode: Literal["NORMAL","FREEZE","STOP_AUTO"]
+    actor: str = Field(min_length=1,max_length=128)
+    reason: str = Field(min_length=12,max_length=1024)
+    expected_revision: int = Field(ge=0)
+
+@app.get("/api/policy/autonomy")
+def autonomy_read(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    return autonomy_store.status()
+
+@app.get("/api/policy/autonomy/history")
+def autonomy_history(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    try: return {"items":autonomy_store.history()}
+    except Exception: raise HTTPException(503,"policy_state_unavailable")
+
+@app.post("/api/policy/autonomy")
+def autonomy_change(x:ModeChange,authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    # Internal token alone is not sufficient to establish a management authorization.
+    # Conservative MVP: only tightening to STOP_AUTO is supported via API.
+    if x.mode!="STOP_AUTO": raise HTTPException(403,"relaxation_requires_independent_admin_authorization")
+    try: return autonomy_store.set_mode(x.mode,x.actor,x.reason,x.expected_revision)
+    except RuntimeError: raise HTTPException(409,"revision_conflict")
+    except (OSError,ValueError): raise HTTPException(503,"policy_state_unavailable")
