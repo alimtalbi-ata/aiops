@@ -3,6 +3,7 @@ import os,re
 from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel,Field
 from shared.http import get_json
+from copilot.acme_knowledge import retrieve
 
 app=FastAPI(title='ACME AioOps Copilot',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810')
@@ -78,4 +79,8 @@ def query(x:Q):
         detail=get_json(CORE,'/api/runs/'+x.run_id)
         ledger=get_json(CORE,'/api/runs/'+x.run_id+'/ai-ledger')
         evidence=get_json(CORE,'/api/runs/'+x.run_id+'/evidence')
-    return grounded_answer(x.question,x.run_id,runs,incidents,nodes,detail,ledger,evidence)
+    answer=grounded_answer(x.question,x.run_id,runs,incidents,nodes,detail,ledger,evidence)
+    docs=retrieve(x.question)
+    answer['rag_context']={'scope':'ACME','documents':docs,
+       'note':'Références de démonstration synthétiques, non validées comme procédures de production.'}
+    return answer
