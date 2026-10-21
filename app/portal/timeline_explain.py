@@ -56,33 +56,48 @@ def run_selector(runs, selected):
     return '<ul>' + ''.join(links) + '</ul>' if links else '<p>Aucun run accessible.</p>'
 
 
-def incident_explorer(runs, selected, query="", status_filter="ALL"):
-    """Group the existing Core run registry by incident_id; never invent incidents."""
+def incident_explorer(runs, selected, query="", status_filter="ALL", incidents=None):
+    """Group persisted runs by Core incident; display unexecuted incidents honestly."""
     from collections import defaultdict
     grouped = defaultdict(list)
     for run in runs:
         if isinstance(run, dict) and run.get("incident_id"):
             grouped[str(run["incident_id"])].append(run)
+    catalog = {}
+    for record in (incidents or []):
+        if isinstance(record, dict) and record.get("incident_id"):
+            catalog[str(record["incident_id"])] = record
+    for incident in grouped:
+        catalog.setdefault(incident, {"incident_id": incident})
     output = ['<form method="get" action="/timeline"><label>Rechercher un incident ou run '
               '<input name="q" value="' + safe(query) + '" placeholder="INC-… / RUN-…"></label> '
               '<label>État <select name="status">']
-    for value in ("ALL", "RUNNING", "CREATED", "RESOLVED", "BLOCKED", "FAILED", "CANCELLED"):
+    for value in ("ALL", "RUNNING", "CREATED", "RESOLVED", "BLOCKED", "FAILED", "CANCELLED", "NO_RUN"):
         output.append('<option value="' + value + '"' + (' selected' if value == status_filter else '') +
                       '>' + value + '</option>')
     output.append('</select></label> <button type="submit">Filtrer</button></form>')
     q = query.casefold()
     shown = 0
-    for incident, siblings in grouped.items():
+    for incident, meta in catalog.items():
+        siblings = grouped.get(incident, [])
         matching = [x for x in siblings if
                     (status_filter == "ALL" or x.get("status") == status_filter) and
                     (not q or q in incident.casefold() or q in str(x.get("run_id", "")).casefold())]
-        if not matching:
+        empty = not siblings and status_filter in ("ALL", "NO_RUN")
+        matches_query = not q or q in incident.casefold() or q in str(meta.get("title", "")).casefold()
+        if not matching and not (empty and matches_query):
             continue
         shown += 1
         output.append('<details' + (' open' if any(x.get("run_id") == selected for x in siblings) else '') +
-                      '><summary><strong>' + safe(incident) + '</strong> · ' +
-                      str(len(siblings)) + ' run(s), ' + str(len(matching)) +
-                      ' affiché(s)</summary>' + run_selector(matching, selected) + '</details>')
+                      '><summary><strong>' + safe(incident) + '</strong> — ' +
+                      safe(meta.get("title") or "Titre non disponible") + ' · ' +
+                      safe(meta.get("severity") or "Sévérité inconnue") +
+                      ' · ' + str(len(siblings)) + ' run(s)</summary>')
+        if matching:
+            output.append(run_selector(matching, selected))
+        else:
+            output.append('<p>Aucun run enregistré pour cet incident.</p>')
+        output.append('</details>')
     if not shown:
-        output.append('<p>Aucun run correspondant aux filtres.</p>')
+        output.append('<p>Aucun incident correspondant aux filtres.</p>')
     return ''.join(output)
