@@ -16,7 +16,7 @@ class DgxJsonDecodingTests(unittest.TestCase):
         self.assertEqual(MODULE.decode_model_json(' {"severity":"P1"} '), {"severity": "P1"})
 
     def test_complete_json_markdown_fence(self):
-        self.assertEqual(MODULE.decode_model_json('```json\n{"severity":"P2"}\n```'), {"severity": "P2})
+        self.assertEqual(MODULE.decode_model_json('```json\n{"severity":"P2"}\n```'), {"severity": "P2"})
 
     def test_case_insensitive_json_fence(self):
         self.assertEqual(MODULE.decode_model_json('```JSON\n{"ok":true}\n```'), {"ok": True})
