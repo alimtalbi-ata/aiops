@@ -80,3 +80,12 @@ La page Cockpit conservait un bouton DEMO désactivé mais la route `POST /api/d
 ### État de qualification UI
 
 Le workflow CI V2.8 sur le SHA `68c8385` a été observé **SUCCESS** pour `AIOps quality gates` et `V2.8 Core qualification`. Ceci qualifie les jobs CI exécutés, **pas** une recette browser ni Digital Twin E2E. Le test ajouté sur la route DEMO après ce SHA nécessite une nouvelle vérification sur son commit propre.
+
+
+## Incrément QF192 — Graph Twin et correction CI (21/10/2026)
+
+- Route `/twin`: graphe SVG orienté, navigation au clavier, recherche et dépendances directes, borné à 120 nœuds/300 relations affichés. Le graphe suit le contrat `GET /api/twin/graph`.
+- Le résultat de `GET /api/twin/impact/ACME-SAN-FABRIC-A` marque uniquement les nœuds explicitement renvoyés par le service Twin. Si la réponse est manquante ou invalide, le statut d'impact demeure `INCONNU`, jamais calculé par supposition côté UI.
+- L'ancienne CI globale échouait après la sécurisation du endpoint `POST /api/demo` : tests unitaires et E2E supposaient un lancement sans jeton. Correction : tests unitaires activent explicitement le mode DEMO et transmettent le jeton de qualification; l'override `.github/compose.e2e.yml` active la démo uniquement dans le profil jetable et le script E2E obtient le jeton directement depuis le conteneur Portal. Aucune réouverture du endpoint non authentifié en production.
+- Validation en cours sur les nouveaux commits : **ne pas déclarer SUCCESS avant confirmation GitHub Actions**. Toute CI rouge est un point bloquant.
+- Restent non qualifiés : rendu navigateur réel, WCAG, grands graphes, performance et graphe complet ACME connecté à une campagne synthétique transactionnelle.
