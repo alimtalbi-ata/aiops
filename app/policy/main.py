@@ -3,7 +3,10 @@ import os,hmac
 
 from fastapi import FastAPI,Header,HTTPException
 from pydantic import BaseModel, Field
-from policy import autonomy_store
+try:
+    from policy import autonomy_store
+except ModuleNotFoundError:
+    from app.policy import autonomy_store
 
 app = FastAPI(title="ACME Policy Engine", version="2.2.0")
 INTERNAL_TOKEN=os.getenv("AIOPS_INTERNAL_TOKEN","")
