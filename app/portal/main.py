@@ -220,6 +220,8 @@ def demo_run_detail(rid:str):
     body+=panel("Timeline canonique des événements",
       table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
+    from portal.demo_explain import render_critic_explanation
+    body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
     body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
