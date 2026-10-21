@@ -32,3 +32,16 @@ def reserve(operation_id,expected_revision,operation_class):
                 return {"admitted":True,"reason":"SIMULATION_RESERVATION_ONLY","revision":revision,"execution_allowed":False}
     except (sqlite3.Error,OSError):
         return {"admitted":False,"reason":"POLICY_STORE_UNAVAILABLE","revision":None}
+
+def summary():
+    """Read-only counts; never claim LIVE execution occurred."""
+    try:
+        with store.LOCK:
+            with store._connect() as db:
+                exists=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='admission_attempts'").fetchone()
+                count=db.execute("SELECT COUNT(*) FROM admission_attempts").fetchone()[0] if exists else 0
+        return {"scope":"SIMULATION_ONLY","reservations_recorded":count,
+                "live_effects_qualified":False,"healthy":True}
+    except (sqlite3.Error,OSError):
+        return {"scope":"SIMULATION_ONLY","reservations_recorded":None,
+                "live_effects_qualified":False,"healthy":False}
