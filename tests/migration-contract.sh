@@ -22,7 +22,7 @@ grep -Fq "sed -E " deploy/migrate.sh
 grep -Fq "BEGIN|COMMIT" deploy/migrate.sh
 migration_fixture="$(mktemp)"
 trap 'rm -f "$migration_fixture"' EXIT
-printf '%s\\n' 'BEGIN;' 'CREATE TABLE example(id integer);' 'COMMIT;' > "$migration_fixture"
+printf '%s\n' 'BEGIN;' 'CREATE TABLE example(id integer);' 'COMMIT;' > "$migration_fixture"
 normalized="$(sed -E '/^[[:space:]]*(BEGIN|COMMIT)[[:space:]]*;[[:space:]]*$/Id' "$migration_fixture")"
 [[ "$normalized" == 'CREATE TABLE example(id integer);' ]] || { echo 'FAIL|legacy_transaction_wrappers_not_removed'; exit 1; }
 grep -Fq 'ux_evidence_source_payload_hash' db/migrations/010_evidence_identity.sql
