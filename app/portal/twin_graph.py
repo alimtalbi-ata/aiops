@@ -35,7 +35,7 @@ def graph_panel(graph, max_nodes=120, max_edges=300, impact=None):
     return '''<section class="panel" aria-label="Graphe de dépendances">
 <h2>Topologie interactive</h2><p class="muted">Données du registre Twin, sous-ensemble borné : %d nœuds / %d relations. Sélectionnez un nœud pour voir ses dépendances directes. Impact issu du calcul Twin, si disponible.</p>
 <div class="graph-controls"><button type="button" id="graph-reset" class="secondary">Réinitialiser</button>
-<label for="graph-filter">Recherche :</label><input id="graph-filter" type="search" placeholder="Nœud ou nom">
+<label for="graph-filter">Recherche :</label><input id="graph-filter" type="search" placeholder="Nœud ou nom">\n<label for="graph-site">Site :</label><select id="graph-site"><option value="">Tous les sites</option></select>\n<label for="graph-state">État :</label><select id="graph-state"><option value="">Tous les états</option></select>\n<button id="graph-zoom-in" type="button" aria-label="Zoom avant">＋</button><button id="graph-zoom-out" type="button" aria-label="Zoom arrière">－</button>
 </div><svg id="twin-graph" role="img" aria-label="Graphe orienté des dépendances ACME" viewBox="0 0 900 520" style="width:100%%;min-height:320px;background:var(--bg);border-radius:12px;border:1px solid var(--line)"></svg>
 <p id="graph-detail" role="status" aria-live="polite">Sélectionner un nœud du graphe.</p></section>
 <script id="twin-graph-data" type="application/json">%s</script>
@@ -49,7 +49,7 @@ const data=JSON.parse(raw.textContent);
 const NS="http://www.w3.org/2000/svg";
 const detail=document.getElementById("graph-detail");
 const lookup=new Map(data.nodes.map(n=>[String(n.node_id),n]));
-const impact=new Set(data.impact_ids||[]);
+const impact=new Set(data.impact_ids||[]);\nconst siteInput=document.getElementById("graph-site");\nconst stateInput=document.getElementById("graph-state");\nlet scale=1;\nfor(const [control,key] of [[siteInput,"site"],[stateInput,"state"]]){\nfor(const value of [...new Set(data.nodes.map(n=>String(n[key]||"INCONNU")))].sort()){const option=document.createElement("option");option.value=value;option.textContent=value;control.append(option);}\n}
 function elem(name,attrs,text){
 const el=document.createElementNS(NS,name);
 for(const [key,value] of Object.entries(attrs||{}))el.setAttribute(key,String(value));
