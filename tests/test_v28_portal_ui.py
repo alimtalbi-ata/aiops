@@ -153,5 +153,18 @@ class PortalPageContractTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             self.portal.demo_run_detail("../../secrets")
 
+    def test_demo_launch_control_is_opt_in_only(self):
+        with patch.dict(os.environ,{"AIOPS_DEMO_LAUNCH_ENABLED":"false"}):
+            with patch.object(self.portal,"get_json",side_effect=ConnectionError("offline")):
+                page=self.portal.demo_studio()
+                self.assertNotIn('id="launch-acme"',page)
+        with patch.dict(os.environ,{"AIOPS_DEMO_LAUNCH_ENABLED":"true"}):
+            with patch.object(self.portal,"get_json",side_effect=ConnectionError("offline")):
+                page=self.portal.demo_studio()
+                self.assertIn('id="launch-acme"',page)
+                self.assertIn('type="password"',page)
+                self.assertIn('t.value=""',page)
+                self.assertIn('"/api/demo"',page)
+
 if __name__=="__main__":
     unittest.main()
