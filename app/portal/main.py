@@ -191,6 +191,22 @@ def demo_run_detail(rid:str):
     detail=_get("/api/runs/"+key)
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     gate=_get("/api/runs/"+key+"/gates")
+    body=panel("Suivi de l'exécution",
+      '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
+      '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
+      '<pre id="run-watch-state" class="log">En attente du premier rafraîchissement.</pre>'
+      '<script>(function(){const rid='+json.dumps(rid)+
+      ';const state=document.getElementById("run-watch-state");'
+      'const status=document.getElementById("run-watch-status");'
+      'let active=true;let pending=false;'
+      'async function refresh(){if(!active||pending)return;pending=true;'
+      'try{const response=await fetch("/api/demo-status/"+encodeURIComponent(rid),{cache:"no-store"});'
+      'if(!response.ok){status.textContent="Statut indisponible : HTTP "+response.status;return;}'
+      'const result=await response.json();state.textContent=JSON.stringify(result,null,2);'
+      'if(["RESOLVED","BLOCKED","FAILED","CANCELLED"].includes(result.status)){active=false;status.textContent="État terminal. Recharger la page pour voir les derniers registres Analyst/Critic/Policy.";}}'
+      'catch(e){status.textContent="Suivi temporairement indisponible";}finally{pending=false;}}'
+      'document.getElementById("run-watch-refresh").addEventListener("click",()=>{active=true;refresh();});'
+      'refresh();setInterval(refresh,5000);})();</script>')
     body=panel("État canonique du run",pretty(detail))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
@@ -199,6 +215,19 @@ def demo_run_detail(rid:str):
     return shell("/demo-studio","Démonstration · "+rid,
       "Parcours incident, analyse et décisions depuis le registre Core.",
       body,mode=matched.get("mode","DEMO"))
+
+@app.get("/api/demo-status/{rid}")
+def demo_status(rid:str):
+    """Read-only polling endpoint with strict DEMO ownership checked against Core."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+        raise HTTPException(404,"invalid_run_id")
+    allowed=next((r for r in _runs() if r.get("run_id")==rid and r.get("mode") in ("DEMO","REPLAY","STORY")),None)
+    if not allowed:
+        raise HTTPException(404,"demo_run_not_found")
+    detail=_get("/api/runs/"+rid)
+    if detail.get("status")=="UNKNOWN":
+        return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
+    return {"run_id":rid,"status":detail.get("status","UNKNOWN"),"mode":allowed.get("mode"),"source":"Core"}
 
 @app.get("/qualification",response_class=HTMLResponse)
 def qualification_page():
