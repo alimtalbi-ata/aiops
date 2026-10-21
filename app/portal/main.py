@@ -425,3 +425,56 @@ def policy_control_center():
         'Le mode STOP_AUTO par défaut n’équivaut pas à une interposition déjà déployée chez les exécuteurs.</p>')
     return shell("/policy-control","Policy Control Center",
                  "Contrôle d’autonomie AIOps — état et historique, lecture seule.",body)
+
+@app.get("/policy-story",response_class=HTMLResponse)
+def policy_story():
+    """Static, browser-driven demo: no server writes and no operational policy control."""
+    script = """
+(function(){
+ const events=[
+  ["Claire — Paie","Je ne peux pas accéder à PAYROLL-X. La clôture des salaires est prioritaire."],
+  ["AIOps","Incident qualifié. Je recherche les dépendances et les signaux techniques."],
+  ["Observabilité ACME","HTTP 503, 0/2 backends sains sur le load balancer simulé."],
+  ["Analyst — simulation","Hypothèse : pool de backends indisponible. Un redémarrage pourrait être envisagé après diagnostic."],
+  ["Policy — simulation","Freeze de fin de mois : modification non autorisée sans dérogation management et Change."],
+  ["Management — simulation","Documentez le risque, l’impact et le plan de retour arrière avant toute décision."],
+  ["AIOps — simulation","Je prépare la demande de changement ; aucune action réelle n’est déclenchée."],
+  ["Policy STOP_AUTO — simulation","Arrêt des remédiations autonomes activé dans cette histoire uniquement."],
+  ["Contrôle final — simulation","Ancienne réservation devenue invalide. Exécution refusée."],
+  ["Synthèse","Incident ouvert, approbation en attente, zéro redémarrage, aucune résolution revendiquée."]
+ ];
+ let pos=-1;
+ const output=document.getElementById("story-events");
+ const status=document.getElementById("story-progress");
+ function paint(){
+  output.replaceChildren();
+  for(let i=0;i<=pos;i++){
+   const box=document.createElement("section");box.className="card";
+   const strong=document.createElement("strong");strong.textContent=events[i][0];
+   const paragraph=document.createElement("p");paragraph.textContent=events[i][1];
+   box.append(strong,paragraph);output.appendChild(box);
+  }
+  status.textContent="Étape "+(pos+1)+" / "+events.length+" — simulation locale, aucune API d'écriture";
+  document.getElementById("story-next").disabled=pos===events.length-1;
+ }
+ document.getElementById("story-next").addEventListener("click",()=>{if(pos<events.length-1){pos++;paint();}});
+ document.getElementById("story-reset").addEventListener("click",()=>{pos=-1;paint();});
+ paint();
+})();
+"""
+    body=panel("Simulation interactive : incident Paie",
+       '<p><strong>FICTIF / SANS EFFET</strong> — ce parcours raconte une enquête AIOps et '
+       'illustre le blocage des remédiations automatiques pendant un freeze. '
+       'Ce n’est pas une réponse DGX en temps réel, un changement Policy réel ou une approbation management.</p>'
+       '<p><button id="story-next" type="button">Étape suivante</button> '
+       '<button id="story-reset" type="button">Recommencer</button></p>'
+       '<p id="story-progress" role="status" aria-live="polite"></p>'
+       '<div id="story-events"></div><script>'+script+'</script>')
+    body+=panel("Preuves et limites",
+        '<p>Données et dialogues simulés. Aucun ticket GLPI, aucune modification de CI, '
+        'aucun redémarrage, aucune approbation réelle. '
+        'Le contrôle transactionnel STOP_AUTO est testé séparément dans le banc Policy.</p>'
+        '<p><a href="/acme-stories">Autres histoires métier</a> · '
+        '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
+    return shell("/demo-studio","ACME — Freeze Button Story",
+        "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
