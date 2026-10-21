@@ -97,5 +97,15 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn('"impact_known":false',unknown)
         self.assertIn('"impact_ids":[]',unknown)
 
+    def test_twin_graph_zoom_and_faceted_filters_present(self):
+        from portal.twin_graph import graph_panel
+        page=graph_panel({"nodes":[{"node_id":"s1","name":"Switch 1","site":"PARIS","state":"DEGRADED"}],"edges":[]})
+        for control in ("graph-zoom-in","graph-zoom-out","graph-site","graph-state"):
+            self.assertIn(control,page)
+        self.assertIn("Math.min(3,scale*1.25)",page)
+        self.assertIn("Math.max(0.65,scale/1.25)",page)
+        self.assertIn("siteInput.addEventListener",page)
+        self.assertIn("stateInput.addEventListener",page)
+
 if __name__=="__main__":
     unittest.main()
