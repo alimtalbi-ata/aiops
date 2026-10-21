@@ -166,5 +166,26 @@ class PortalPageContractTests(unittest.TestCase):
                 self.assertIn('t.value=""',page)
                 self.assertIn('"/api/demo"',page)
 
+    def test_demo_poll_status_filters_live_runs(self):
+        from fastapi import HTTPException
+        with patch.object(self.portal,"get_json",side_effect=lambda base,path: (
+            {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"},{"run_id":"RUN-LIVE","mode":"LIVE"}]}
+            if path=="/api/runs" else {"status":"RUNNING"})):
+            result=self.portal.demo_status("RUN-DEMO")
+            self.assertEqual(result["status"],"RUNNING")
+            with self.assertRaises(HTTPException) as exc:
+                self.portal.demo_status("RUN-LIVE")
+            self.assertEqual(exc.exception.status_code,404)
+
+    def test_demo_detail_contains_live_status_poll(self):
+        def get(base,path):
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+            return {"status":"RUNNING"}
+        with patch.object(self.portal,"get_json",side_effect=get):
+            page=self.portal.demo_run_detail("RUN-DEMO")
+        self.assertIn('id="run-watch-status"',page)
+        self.assertIn("/api/demo-status/",page)
+        self.assertIn("setInterval(refresh,5000)",page)
+
 if __name__=="__main__":
     unittest.main()
