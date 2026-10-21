@@ -84,3 +84,17 @@ La nouvelle route `GET /demo-studio` du portail ACME propose une première vue *
 Ce n'est pas un orchestrateur de scénario : aucune action `POST /api/demo`, aucun déclenchement Temporal ni approbation HITL n'est autorisé depuis cette page. C'est un premier cockpit démontrable sans effet. Le générateur HTML hors ligne demeure une option pour les présentations Windows sans stack.
 
 **Gates encore ouverts :** revue d'authentification du portail, données synthétiques contrôlées, injection/réinitialisation uniquement dans une stack isolée, test navigateur réel, cohérence des événements Core avec les preuves et qualité des réponses Analyst/Critic. Les deux workflows du commit `96b08ff` ne sont pas tous verts : la CI V2.8 est passée mais la revue globale a échoué sur le job de rehearsal MariaDB (erreur socket). Ne pas confondre cette anomalie avec le statut du nouveau Demo Studio; vérifier le SHA actuel en CI.
+
+
+## Parcours démonstratif réellement connecté — 21/10/2026
+
+La CI du commit `53a9c0c` est **SUCCESS** sur les workflows `V2.8 Core qualification` et `AIOps quality gates`, incluant le `runtime-e2e` sur un fournisseur IA synthétique déterministe. Cette qualification **n'est pas une inférence DGX réelle ni une installation en production**.
+
+Le portail ajoute le drill-down `GET /demo-studio/run/{run_id}`. Depuis `/demo-studio`, choisir un run enregistré de mode `DEMO/REPLAY/STORY` pour afficher directement les trois lectures Core :
+- `GET /api/runs/{run_id}` — run canonique;
+- `GET /api/runs/{run_id}/ai-ledger` — Analyst/Critic/Policy persistés;
+- `GET /api/runs/{run_id}/gates` — barrières et décisions.
+
+Aucun résultat n'est rempli artificiellement. Les données manquantes sont conservées en état `INCONNU`. Les runs LIVE ne sont pas accessibles par cette navigation. Ce drill-down permet une présentation **données réelles du test** sans activer un lancement de scénario depuis le navigateur. Pour créer des runs de démonstration, utiliser le runner E2E déjà qualifié dans une stack isolée; capturer les identifiants et les journaux et ouvrir ensuite le Studio.
+
+**Prochain incrément** : liaison Evidence run_id, projection des événements en timeline sélectionnable, session DEMO dédiée avec authentification opérateur, lancement en un clic dans la stack développement seulement et bouton de reset sans toucher aux autres versions. Test navigateur et provider DGX restent à effectuer.
