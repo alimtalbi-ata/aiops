@@ -53,3 +53,21 @@ Montrer une anomalie SAN synthétique sur `ACME-SAN-FABRIC-A`, la topologie de d
 Un pipeline isolé doit produire les preuves suivantes : version/sha des images, santé de chaque service, catalogue et graphe de dépendance cohérents, horodatages du scénario, traces d'appels Analyst/Critic avec provenance, décisions Policy/HITL, états du journal et outbox, rejeu et concurrence, captures réelles des interfaces, rapport d'échec et procédure de nettoyage.
 
 Ce fichier est une **documentation de démonstration** et ne doit pas être présenté comme une capture, un enregistrement vidéo ou un rapport d'E2E exécuté.
+
+
+## Lot DEMO-OFFLINE (21 octobre 2026) — générateur autonome
+
+**Objectif : fournir immédiatement une démonstration consultable sans accès à Debian ou aux stacks opérationnelles.** Cette démo est une maquette HTML interactive avec nœuds/relations ACME **entièrement fictifs**, timeline illustrative et blocage Policy simulé. Elle ne réalise ni appels DGX ni propagation d'effet réelle.
+
+Depuis la racine d'un clone de la branche V2.8 :
+
+```bash
+python3 tools/build_acme_offline_demo.py --output reports/acme-demo-offline.html
+python3 -m unittest discover -s tests -p 'test_v28_acme_offline_demo.py' -v
+```
+
+Ouvrir ensuite `reports/acme-demo-offline.html` dans un navigateur. Le document est autonome et ne nécessite aucun serveur Web. Il ne contient aucun jeton et ne contactera ni Core, ni PostgreSQL, ni Digital Twin de production. Les nœuds sont marqués dégradés ou sains selon un dataset de démonstration fictif; tous les chiffres éventuels sont *illustratifs*.
+
+**Recette minimale :** HTML généré, graine de topologie cohérente, recherche de nœud, filtres site/état, zoom et restauration, visualisation des impacts du jeu synthétique, mention « NON QUALIFIÉ production », pas de chargement externe, pas de bouton LIVE.
+
+**Distinction nécessaire :** cette maquette utilisable n'est pas la qualification intégrée Temporal + DGX + Evidence/Policy. Pour la démo connectée à la stack V2.8, continuer à utiliser uniquement le profil E2E isolé et son jeu de tests; ne jamais activer `AIOPS_DEMO_LAUNCH_ENABLED` dans un environnement opérationnel.
