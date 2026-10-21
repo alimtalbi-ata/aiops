@@ -320,6 +320,20 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
 def gates(rid:str):
     with db() as c:rows=c.execute('select stage,state,required_evidence,evidence_ids,decision,reason,evaluated_at from aiops.gates where run_id=%s order by evaluated_at',(rid,)).fetchall()
     k=['stage','state','required_evidence','evidence_ids','decision','reason','evaluated_at'];return {'items':[dict(zip(k,r)) for r in rows]}
+@app.get('/api/incidents')
+def list_incidents(limit:int=100):
+    """Read-only incident registry, including incidents without runs."""
+    count=max(1,min(limit,500))
+    with db() as c:
+        rows=c.execute(
+            'select incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic '
+            'from aiops.incidents order by opened_at desc limit %s',(count,)
+        ).fetchall()
+    fields=['incident_id','external_id','title','severity','state','service_id',
+            'opened_at','source','synthetic']
+    return {'items':[dict(zip(fields,row)) for row in rows], 'limit':count}
+
+
 @app.get('/api/runs')
 def list_runs():
     with db() as c:r=c.execute('select run_id,incident_id,mode,scenario_id,status,version,overall_confidence,created_at,started_at,completed_at from aiops.runs order by created_at desc limit 100').fetchall()
