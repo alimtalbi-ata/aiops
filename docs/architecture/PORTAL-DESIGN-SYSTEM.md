@@ -89,3 +89,10 @@ Le workflow CI V2.8 sur le SHA `68c8385` a été observé **SUCCESS** pour `AIOp
 - L'ancienne CI globale échouait après la sécurisation du endpoint `POST /api/demo` : tests unitaires et E2E supposaient un lancement sans jeton. Correction : tests unitaires activent explicitement le mode DEMO et transmettent le jeton de qualification; l'override `.github/compose.e2e.yml` active la démo uniquement dans le profil jetable et le script E2E obtient le jeton directement depuis le conteneur Portal. Aucune réouverture du endpoint non authentifié en production.
 - Validation en cours sur les nouveaux commits : **ne pas déclarer SUCCESS avant confirmation GitHub Actions**. Toute CI rouge est un point bloquant.
 - Restent non qualifiés : rendu navigateur réel, WCAG, grands graphes, performance et graphe complet ACME connecté à une campagne synthétique transactionnelle.
+
+
+## Incrément QF193 — exploration du graphe (21/10/2026)
+
+Le composant SVG Digital Twin ajoute un zoom borné (facteur 0,65 à 3), un filtre texte, des facettes site/état dérivées des nœuds transmis, et une réinitialisation globale. Les filtres s'appliquent seulement aux nœuds du sous-ensemble affichable : cette vue n'est pas un inventaire exhaustif d'un grand graphe. Les relations orphelines ne sont pas dessinées. Les états/impacts restent issus de la réponse Twin ; les couleurs ne constituent pas une preuve de diagnostic.
+
+Qualification requise : tests unitaires GitHub, navigation clavier, rendu navigateur réel et vérification de l'échantillonnage sur plus de 120 nœuds. Ne pas promouvoir sans E2E complet.
