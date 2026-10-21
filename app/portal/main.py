@@ -1,5 +1,5 @@
-import os,json,html,uuid
-from fastapi import FastAPI,Request
+import os,json,html,uuid,hmac
+from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
@@ -11,7 +11,14 @@ def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_j
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')
-def demo():
+def demo(authorization:str|None=Header(default=None)):
+    # The disabled browser button is not an authorization boundary.
+    if os.getenv('AIOPS_DEMO_LAUNCH_ENABLED')!='true':
+        raise HTTPException(403,'demo_launch_disabled')
+    secret=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
+    bearer=(authorization or '').removeprefix('Bearer ')
+    if not secret or not hmac.compare_digest(bearer,secret):
+        raise HTTPException(401,'invalid internal token')
     demo_id=uuid.uuid4().hex
     iid=post_json(CORE,'/api/incidents',{'external_id':f'DEMO-GOLDEN-PAYMENT-{demo_id}','title':'Payment latency following FC fabric degradation','severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo','synthetic':True,'payload':{'seed':20261018}})['incident_id']
     run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':f'DEMO-GOLDEN-PAYMENT-{demo_id}'})
