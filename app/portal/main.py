@@ -120,6 +120,11 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         ' · <strong>Mode :</strong> '+esc(match.get("mode","INCONNU"))+
         ' · <a href="/demo-studio/run/'+key+'">Détail Demo Studio (si mode DEMO)</a></p>'
         +'<div class="timeline">'+cards+'</div>')
+    if match.get("status") in ("CREATED","RUNNING"):
+        content+=panel("Actualisation de l'investigation",
+            '<p>Ce run est en cours. Actualisation automatique toutes les 10 secondes ; '
+            'aucune action n’est déclenchée.</p>'
+            '<script>setTimeout(function(){window.location.reload()},10000)</script>')
     content+=panel("Raisonnement observable — Analyst / Critic",render_critic_explanation(ledger))
     content+=panel("Registres IA et Policy complets",pretty(ledger))
     return shell("/timeline","Timeline des incidents",
