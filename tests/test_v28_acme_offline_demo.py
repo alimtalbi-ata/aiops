@@ -15,7 +15,7 @@ class AcmeOfflineDemoTests(unittest.TestCase):
         self.assertIn("DONNÉES 100 % SYNTHÉTIQUES",page)
         self.assertIn("ACME-SAN-FABRIC-A",page)
         self.assertIn("Paiement ACME",page)
-        self.assertIn('"production_qualified": false',page)
+        self.assertIn('&quot;production_qualified&quot;: false',page)
         self.assertNotIn("http://aiops2-",page)
         self.assertNotIn("api/demo",page)
 
