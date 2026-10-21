@@ -71,3 +71,12 @@ V2.8-A — Shell commun et routes de consultation. V2.8-B — composant timeline
 ## Adaptation par rapport au HTML fourni
 
 Le code référent était une timeline statique illustrant un incident SSD et des délais fixes. Le portail adapte **le langage visuel** à une source serveur canonique : pages distinctes, valeurs dynamiques ou état INCONNU, thèmes, navigation et capacités limitées tant que les gates ne sont pas qualifiés. Il ne reproduit ni une métrique arbitraire ni une exécution automatique de remédiation.
+
+
+## Décision de sécurité UI/Backend — QF191 (21/10/2026)
+
+La page Cockpit conservait un bouton DEMO désactivé mais la route `POST /api/demo` restait appelable directement. **Correction sur branche V2.8 :** route bloquée par défaut (HTTP 403), lancement autorisé uniquement après `AIOPS_DEMO_LAUNCH_ENABLED=true` et validation de `Authorization: Bearer` contre le jeton interne configuré (comparaison constant-time). Tests automatisés négatifs couvrant le défaut d'autorisation et les jetons erronés; leur passage CI doit être confirmé séparément. Cette route demeure exclusivement destinée à une stack synthétique isolée. La présence d'un flag d'activation ne suffit pas à qualifier une mise en production. Une authentification d'utilisateur/RBAC, protection CSRF et scope de demo restent nécessaires avant exposition externe.
+
+### État de qualification UI
+
+Le workflow CI V2.8 sur le SHA `68c8385` a été observé **SUCCESS** pour `AIOps quality gates` et `V2.8 Core qualification`. Ceci qualifie les jobs CI exécutés, **pas** une recette browser ni Digital Twin E2E. Le test ajouté sur la route DEMO après ce SHA nécessite une nouvelle vérification sur son commit propre.
