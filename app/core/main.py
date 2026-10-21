@@ -338,6 +338,27 @@ def list_incidents(limit:int=100):
 def list_runs():
     with db() as c:r=c.execute('select run_id,incident_id,mode,scenario_id,status,version,overall_confidence,created_at,started_at,completed_at from aiops.runs order by created_at desc limit 100').fetchall()
     k=['run_id','incident_id','mode','scenario_id','status','version','overall_confidence','created_at','started_at','completed_at'];return {'items':[dict(zip(k,x)) for x in r]}
+@app.get('/api/runs/{rid}/evidence')
+def run_evidence(rid:str):
+    """Bounded read-only evidence linked to recorded events of this run."""
+    with db() as c:
+        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone():
+            raise HTTPException(404,'run not found')
+        rows=c.execute(
+            """select distinct e.evidence_id,e.source,e.external_id,e.observed_at,
+                      e.known_at,e.claim,e.confidence,e.provenance,e.payload_hash
+               from aiops.evidence e
+               where exists (
+                 select 1 from aiops.run_events re
+                 where re.run_id=%s and re.evidence_ids @> jsonb_build_array(e.evidence_id)
+               ) order by e.evidence_id limit 200""",(rid,)
+        ).fetchall()
+    keys=['evidence_id','source','external_id','observed_at','known_at',
+          'claim','confidence','provenance','payload_hash']
+    return {'run_id':rid,'items':[dict(zip(keys,row)) for row in rows],
+            'limit':200,'payload_excluded':True}
+
+
 @app.get('/api/runs/{rid}')
 def get_run(rid:str):
     with db() as c:
