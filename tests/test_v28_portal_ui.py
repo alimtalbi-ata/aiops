@@ -209,5 +209,15 @@ class PortalPageContractTests(unittest.TestCase):
             response=self.portal.demo_status("RUN-DEMO")
         self.assertEqual(response["events"],"INCONNU")
 
+    def test_demo_status_parses_actual_core_nested_run_contract(self):
+        def get(base,path):
+            if path=="/api/runs":return {"items":[{"run_id":"RUN-X","mode":"DEMO"}]}
+            if path=="/api/runs/RUN-X":return {"run":{"run_id":"RUN-X","status":"RESOLVED"},"events":[{"sequence":1,"event_type":"STAGE_COMPLETED"}]}
+            return {"items":[]}
+        with patch.object(self.portal,"get_json",side_effect=get):
+            response=self.portal.demo_status("RUN-X")
+        self.assertEqual(response["status"],"RESOLVED")
+        self.assertEqual(response["events"][0]["sequence"],1)
+
 if __name__=="__main__":
     unittest.main()
