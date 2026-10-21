@@ -1,5 +1,6 @@
 """Fail-closed, local persisted autonomy state. Prototype: read-only integration only."""
 import json,os,sqlite3,threading
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime,timezone
 
@@ -7,12 +8,17 @@ MODES=("NORMAL","FREEZE","STOP_AUTO")
 LOCK=threading.RLock()
 PATH=Path(os.getenv("AIOPS_POLICY_STATE_DB","/var/lib/aiops-policy/autonomy.sqlite3"))
 
+@contextmanager
 def _connect():
     PATH.parent.mkdir(parents=True,exist_ok=True)
     conn=sqlite3.connect(str(PATH),timeout=5)
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("CREATE TABLE IF NOT EXISTS mode_history (revision INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, changed_at TEXT NOT NULL)")
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 def status():
     # Any storage error must never result in authorization.
