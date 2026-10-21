@@ -7,3 +7,7 @@ services:
     depends_on:
       aiops2-test-llm:
         condition: service_healthy
+
+  aiops2-portal:
+    environment:
+      AIOPS_DEMO_LAUNCH_ENABLED: "true"
