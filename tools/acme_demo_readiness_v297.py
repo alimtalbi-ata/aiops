@@ -18,7 +18,7 @@ def assess(health, urls, assets):
 
 def main():
     p=argparse.ArgumentParser()
-    p.add_argument("--portal",default="http://127.0.0.1:17777")
+    p.add_argument("--portal",default="http://10.79.94.202:17777")
     p.add_argument("--output",type=Path,default=Path("/tmp/acme-demo-readiness.json"))
     args=p.parse_args()
     svc={}
