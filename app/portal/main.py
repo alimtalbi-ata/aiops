@@ -93,12 +93,13 @@ def twin_page():
     nodes=graph.get("nodes",[]) if isinstance(graph.get("nodes"),list) else []
     edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
     body=panel("Résumé Digital Twin",pretty(summary))
-    body+=graph_panel(graph)
+    impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    body+=graph_panel(graph,impact=impact)
     body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
         [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
     body+=panel("Relations de dépendance",table(["Source","Relation","Cible"],
         [(x.get("source_id"),x.get("relation_type"),x.get("target_id")) for x in edges[:300]]))
-    body+=panel("Impact ACME-SAN-FABRIC-A",pretty(_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)))
+    body+=panel("Impact ACME-SAN-FABRIC-A",pretty(impact))
     return shell("/twin","Digital Twin ACME","Topologie et dépendances observables, distinctes des injections de simulation.",body)
 
 @app.get("/evidence",response_class=HTMLResponse)
