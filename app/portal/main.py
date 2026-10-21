@@ -90,7 +90,7 @@ def runs_page():
 @app.get("/timeline",response_class=HTMLResponse)
 def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     """Real incident/run selector with event-by-event explanations and AI registers."""
-    from portal.timeline_explain import event_box,run_selector,incident_explorer,investigation_overview
+    from portal.timeline_explain import event_box,run_selector,incident_explorer,investigation_overview,evidence_catalog
     from portal.demo_explain import render_critic_explanation
     from urllib.parse import quote
     items=_runs()
@@ -135,6 +135,8 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     key=quote(selected,safe="")
     detail=_get("/api/runs/"+key)
     ledger=_get("/api/runs/"+key+"/ai-ledger")
+    evidence_response=_get("/api/runs/"+key+"/evidence")
+    evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
     events=detail.get("events") if isinstance(detail.get("events"),list) else []
     cards="".join(event_box(e,i) for i,e in enumerate(events,1))
     if not cards:
@@ -150,6 +152,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
             '<p>Ce run est en cours. Actualisation automatique toutes les 10 secondes ; '
             'aucune action n’est déclenchée.</p>'
             '<script>setTimeout(function(){window.location.reload()},10000)</script>')
+    content+=panel("Registre des preuves liées — provenance vérifiable",evidence_catalog(evidence_items))
     content+=panel("Raisonnement observable — Analyst / Critic",render_critic_explanation(ledger))
     content+=panel("Registres IA et Policy complets",pretty(ledger))
     return shell("/timeline","Timeline des incidents",
