@@ -336,3 +336,24 @@ def qualification_page():
     return shell("/qualification","Qualification","Provenance explicite des essais, points bloquants et gates de promotion.",
       panel("Matrice de qualification",table(["Campagne","Périmètre","État"],checks))+
       panel("Règle d'audit",'<p>Résultats QF issus des journaux opérateur ; ne pas les présenter comme un succès GitHub Actions sans preuve de workflow.</p>'))
+
+@app.get("/qualification-lab",response_class=HTMLResponse)
+def qualification_lab(mode:str="simple",seed:int=20261021):
+    """Read-only simulation preview: no model evaluation or privileged actions."""
+    from portal.qualification_lab import MODES,preview
+    if mode not in MODES or not 0<=seed<=2147483647:
+        raise HTTPException(422,"invalid_lab_parameters")
+    rows=preview(mode,seed)
+    form='<form method="get" action="/qualification-lab"><label>Mode <select name="mode">'
+    for option in MODES:
+        form+='<option value="'+esc(option)+'"'+(' selected' if option==mode else '')+'>'+esc(option)+'</option>'
+    form+='</select></label> <label>Graine <input type="number" min="0" max="2147483647" name="seed" value="'+str(seed)+'"></label> <button type="submit">Prévisualiser</button></form>'
+    body=panel("Pilotage des scénarios ACME — lecture seule",form+
+         '<p><strong>'+str(len(rows))+' observations de démonstration.</strong> Aucune inférence DGX, aucun score IA, aucun événement Evidence, aucune action HITL ou GLPI.</p>')
+    rendered=''.join('<tr><td>'+esc(e["timestamp"])+'</td><td>'+esc(e["ci_id"])+
+        '</td><td>'+esc(e["kind"])+'</td><td>'+esc(e["description"])+'</td></tr>' for e in rows)
+    body+=panel("Observations simulées",'<table><thead><tr><th>Horodatage</th><th>CI ACME</th><th>Type</th><th>Description</th></tr></thead><tbody>'+rendered+'</tbody></table>')
+    body+=panel("Qualification des raisonnements",
+         '<p>Le banc burn-in et ses KPI ne seront affichés ici qu’après exécution de vraies prédictions Analyst/Critic. Aucun score synthétique n’est présenté comme un résultat de modèle.</p>')
+    return shell("/qualification","Laboratoire ACME","Scénarios simples, complexes, chaos et smoke screen — prévisualisation sécurisée.",body)
+
