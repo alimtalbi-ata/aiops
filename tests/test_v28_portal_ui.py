@@ -42,5 +42,27 @@ class PortalPageContractTests(unittest.TestCase):
         with patch.object(self.portal,"get_json",side_effect=ConnectionError("backend unavailable")):
             self.assertIn("INCONNU",self.portal.home())
 
+    def test_demo_disabled_rejects_before_side_effects(self):
+        from fastapi import HTTPException
+        with patch.dict(os.environ,{"AIOPS_DEMO_LAUNCH_ENABLED":"false"}):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("unsafe side effect")):
+                with self.assertRaises(HTTPException) as ctx:
+                    self.portal.demo()
+                self.assertEqual(ctx.exception.status_code,403)
+
+    def test_demo_enabled_requires_real_token(self):
+        from fastapi import HTTPException
+        with patch.dict(os.environ,{
+            "AIOPS_DEMO_LAUNCH_ENABLED":"true",
+            "AIOPS_INTERNAL_TOKEN":"ci-test-only-secret",
+        }):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("unsafe side effect")):
+                with self.assertRaises(HTTPException) as ctx:
+                    self.portal.demo("Bearer invalid")
+                self.assertEqual(ctx.exception.status_code,401)
+                with self.assertRaises(HTTPException) as missing:
+                    self.portal.demo(None)
+                self.assertEqual(missing.exception.status_code,401)
+
 if __name__=="__main__":
     unittest.main()
