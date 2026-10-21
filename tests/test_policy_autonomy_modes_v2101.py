@@ -8,7 +8,7 @@ spec=importlib.util.spec_from_file_location("policy_modes",p)
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 class AutonomyTests(unittest.TestCase):
     def setUp(self):
-        self._state_patch=patch.object(m.autonomy_store,"status",return_value={"mode":os.getenv("AIOPS_POLICY_AUTONOMY_MODE","STOP_AUTO"),"healthy":True})
+        self._state_patch=patch.object(m.autonomy_store,"status",side_effect=lambda: {"mode":os.getenv("AIOPS_POLICY_AUTONOMY_MODE","STOP_AUTO"),"healthy":True})
         self._state_patch.start()
         self.addCleanup(self._state_patch.stop)
     def request(self,cls="AUTONOMOUS_REMEDIATION"):
