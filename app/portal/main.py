@@ -357,3 +357,30 @@ def qualification_lab(mode:str="simple",seed:int=20261021):
          '<p>Le banc burn-in et ses KPI ne seront affichés ici qu’après exécution de vraies prédictions Analyst/Critic. Aucun score synthétique n’est présenté comme un résultat de modèle.</p>')
     return shell("/qualification","Laboratoire ACME","Scénarios simples, complexes, chaos et smoke screen — prévisualisation sécurisée.",body)
 
+
+@app.get("/acme-stories",response_class=HTMLResponse)
+def acme_stories_page():
+    """Client narrative catalog; links only to previously verified running features."""
+    from portal.acme_stories import STORIES
+    maturity={
+        "TABLETOP_ONLY":"Simulation narrative uniquement",
+        "HISTORICAL_DGX":"Parcours DGX historique disponible",
+        "BENCHMARK_ONLY":"Générateur / qualification hors ligne",
+    }
+    body='<p>Choisir une histoire pour expliquer le problème métier, les preuves, les décisions IA et le contrôle humain. Aucun incident ni ticket n’est créé par cette page.</p>'
+    for story in STORIES:
+        lines=[
+            ("Demandeur",story["persona"]),("Impact métier",story["business_impact"]),
+            ("Service",story["service"]),("Signal initial",story["symptom"]),
+            ("Hypothèse à confirmer",story["hypothesis"]),
+            ("Contrôle humain",story["control"]),("Résultat à présenter",story["outcome"]),
+            ("Maturité",maturity[story["status"]]),
+        ]
+        body+=panel(story["title"],table(["Rubrique","Scénario ACME"],lines))
+    body+=panel("Démonstrations vérifiables",
+        '<p><a href="/demo-studio/run/RUN-A4449145A6E377FF">Analyse DGX historique et Critic</a> · '
+        '<a href="/qualification-lab">Laboratoire de scénarios</a> · '
+        '<a href="/copilot">Copilot ACME</a></p>')
+    return shell("/demo-studio","Histoires métier ACME",
+                 "Parcours clients, sécurité, limites et preuves réellement disponibles.",body)
+
