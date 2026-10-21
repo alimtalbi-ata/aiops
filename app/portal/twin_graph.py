@@ -6,7 +6,7 @@ Graph is limited to keep client work bounded; long inventories remain in tables.
 import json
 from html import escape
 
-def graph_panel(graph, max_nodes=120, max_edges=300):
+def graph_panel(graph, max_nodes=120, max_edges=300, impact=None):
     if not isinstance(graph,dict):
         return '<p class="muted">INCONNU — graphe indisponible.</p>'
     nodes=graph.get("nodes")
@@ -28,9 +28,12 @@ def graph_panel(graph, max_nodes=120, max_edges=300):
         target=str(e.get("target_id",""))
         if source in ids and target in ids and source!=target:
             safe_edges.append({"source_id":source,"target_id":target,"relation_type":e.get("relation_type")})
-    payload=json.dumps({"nodes":safe_nodes,"edges":safe_edges},ensure_ascii=True,separators=(",",":")).replace("<","\\u003c").replace(">","\\u003e").replace("&","\\u0026")
+    affected = impact.get("affected",[]) if isinstance(impact,dict) else []
+    impact_known = isinstance(affected,list) and isinstance(impact,dict) and isinstance(impact.get("root"),str)
+    impact_ids = [str(row.get("node_id")) for row in affected if isinstance(row,dict) and row.get("node_id") in ids] if impact_known else []
+    payload=json.dumps({"nodes":safe_nodes,"edges":safe_edges,"impact_ids":impact_ids,"impact_known":impact_known},ensure_ascii=True,separators=(",",":")).replace("<","\\u003c").replace(">","\\u003e").replace("&","\\u0026")
     return '''<section class="panel" aria-label="Graphe de dépendances">
-<h2>Topologie interactive</h2><p class="muted">Données du registre Twin, sous-ensemble borné : %d nœuds / %d relations. Sélectionnez un nœud pour voir ses dépendances directes.</p>
+<h2>Topologie interactive</h2><p class="muted">Données du registre Twin, sous-ensemble borné : %d nœuds / %d relations. Sélectionnez un nœud pour voir ses dépendances directes. Impact issu du calcul Twin, si disponible.</p>
 <div class="graph-controls"><button type="button" id="graph-reset" class="secondary">Réinitialiser</button>
 <label for="graph-filter">Recherche :</label><input id="graph-filter" type="search" placeholder="Nœud ou nom">
 </div><svg id="twin-graph" role="img" aria-label="Graphe orienté des dépendances ACME" viewBox="0 0 900 520" style="width:100%%;min-height:320px;background:var(--bg);border-radius:12px;border:1px solid var(--line)"></svg>
@@ -46,6 +49,7 @@ const data=JSON.parse(raw.textContent);
 const NS="http://www.w3.org/2000/svg";
 const detail=document.getElementById("graph-detail");
 const lookup=new Map(data.nodes.map(n=>[String(n.node_id),n]));
+const impact=new Set(data.impact_ids||[]);
 function elem(name,attrs,text){
 const el=document.createElementNS(NS,name);
 for(const [key,value] of Object.entries(attrs||{}))el.setAttribute(key,String(value));
@@ -72,10 +76,10 @@ const [x,y]=xy.get(String(n.node_id));
 const state=String(n.state||"UNKNOWN").toUpperCase();
 const color=state==="FAILED"?"#E24B4A":state==="DEGRADED"?"#EF9F27":"#1D9E75";
 const group=elem("g",{tabindex:"0",role:"button","aria-label":String(n.name||n.node_id),"data-node-id":n.node_id});
-group.append(elem("circle",{cx:x,cy:y,r:19,fill:color,stroke:"#ffffff","stroke-width":2}));
+group.append(elem("circle",{cx:x,cy:y,r:19,fill:color,stroke:impact.has(String(n.node_id))?"#D4537E":"#ffffff","stroke-width":impact.has(String(n.node_id))?5:2}));
 group.append(elem("text",{x,y:y+31,"text-anchor":"middle",fill:"currentColor","font-size":11},String(n.name||n.node_id).slice(0,25)));
 const select=()=>{const id=String(n.node_id);const links=data.edges.filter(e=>String(e.source_id)===id||String(e.target_id)===id);
-detail.textContent=String(n.name||id)+" ("+state+") · "+links.length+" relation(s) directes · "+String(n.type||"INCONNU");};
+detail.textContent=String(n.name||id)+" ("+state+") · "+links.length+" relation(s) directes · "+String(n.type||"INCONNU")+" · impact calculé : "+(data.impact_known?(impact.has(id)?"OUI":"NON"):"INCONNU");};
 group.addEventListener("click",select);
 group.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select();}});
 svg.append(group);
