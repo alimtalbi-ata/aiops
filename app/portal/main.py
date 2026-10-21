@@ -24,6 +24,7 @@ def demo(authorization:str|None=Header(default=None)):
     run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':f'DEMO-GOLDEN-PAYMENT-{demo_id}'})
     return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
 from portal.ui_theme import shell, panel, table, pretty, esc
+from portal.twin_graph import graph_panel
 
 def _get(path,base=CORE):
     try:
@@ -92,6 +93,7 @@ def twin_page():
     nodes=graph.get("nodes",[]) if isinstance(graph.get("nodes"),list) else []
     edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
     body=panel("Résumé Digital Twin",pretty(summary))
+    body+=graph_panel(graph)
     body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
         [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
     body+=panel("Relations de dépendance",table(["Source","Relation","Cible"],
