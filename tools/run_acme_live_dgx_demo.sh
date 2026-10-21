@@ -51,7 +51,8 @@ if [[ "$ready" != 1 ]]; then
   docker logs --tail 35 aiops2-rebuild-intelligence 2>&1 | sed -E 's/(Bearer |token=|password=)[^ ]+/\\1[REDACTED]/Ig'
   exit 1
 fi
-echo "PHASE=SYNTHETIC_INCIDENT_REAL_INFERENCE"\necho "DEMO_VARIANT=${AIOPS_DEMO_VARIANT:-baseline}"
+echo "PHASE=SYNTHETIC_INCIDENT_REAL_INFERENCE"
+echo "DEMO_VARIANT=${AIOPS_DEMO_VARIANT:-baseline}"
 # Keep token inside Portal. Use a unique temporary output path for this run.
 launch="$(mktemp)"
 trap 'rm -f "$launch"; restore' EXIT
