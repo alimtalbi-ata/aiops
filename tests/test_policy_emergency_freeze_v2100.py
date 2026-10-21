@@ -1,18 +1,16 @@
 import ast,os,unittest
 from pathlib import Path
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"app"))
 from unittest.mock import patch
 p=Path(__file__).resolve().parents[1]/"app/policy/main.py"
 tree=ast.parse(p.read_text())
 decision=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=="Decision")
 evaluate=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="evaluate")
 # Load the full policy module only when FastAPI/Pydantic dependencies are installed.
-try:
-    import importlib.util
-    spec=importlib.util.spec_from_file_location("acme_policy",p)
-    mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
-except ImportError:
-    mod=None
-@unittest.skipIf(mod is None,"FastAPI/Pydantic unavailable on host")
+import importlib.util
+spec=importlib.util.spec_from_file_location("acme_policy",p)
+mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
 class PolicyFreezeTests(unittest.TestCase):
     def setUp(self):
         self._state_patch=patch.object(mod.autonomy_store,"status",return_value={"mode":"NORMAL","healthy":True})
