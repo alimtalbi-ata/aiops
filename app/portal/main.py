@@ -88,15 +88,15 @@ def runs_page():
     return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows)))
 
 @app.get("/timeline",response_class=HTMLResponse)
-def timeline_page(run_id:str|None=None):
+def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     """Real incident/run selector with event-by-event explanations and AI registers."""
-    from portal.timeline_explain import event_box,run_selector
+    from portal.timeline_explain import event_box,run_selector,incident_explorer
     from portal.demo_explain import render_critic_explanation
     from urllib.parse import quote
     items=_runs()
     selected=run_id or next((str(x.get("run_id")) for x in items if x.get("status") in ("RUNNING","CREATED")),None)
     selected=selected or next((str(x.get("run_id")) for x in items if x.get("run_id")),None)
-    content=panel("Incidents / runs enregistrés — sélectionner une exécution",run_selector(items,selected))
+    content=panel("Explorateur des incidents — recherche et filtres",incident_explorer(items,selected,q,status))
     content+=panel("Périmètre et transparence",
         "<p>Cette liste montre les runs réellement accessibles dans Core : réussis, bloqués, échoués ou en cours. "
         "Les incidents sans run n'y figurent pas. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
