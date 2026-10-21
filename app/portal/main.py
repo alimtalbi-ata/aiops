@@ -391,6 +391,8 @@ def policy_control_center():
     url=os.getenv("POLICY_URL","http://aiops2-policy:813")
     state=_get("/api/policy/autonomy",url)
     history=_get("/api/policy/autonomy/history",url)
+    simulation=_get("/api/policy/simulation/summary",url)
+    decisions=_get("/api/policy/simulation/decisions",url)
     status=state.get("mode","UNKNOWN")
     entries=history.get("items",[]) if isinstance(history.get("items"),list) else []
     rows=[(str(e.get("revision","?")),str(e.get("mode","?")),
@@ -402,6 +404,22 @@ def policy_control_center():
         'Une autorisation indépendante et un contrôle au point d’exécution sont nécessaires avant toute remédiation.</p>')
     body+=panel("Historique audité",table(["Révision","Mode","Acteur","Motif","Date"],rows)
           if rows else '<p>Aucun historique accessible. L’état réel ne doit pas être supposé.</p>')
+    if simulation.get("healthy") is True:
+        body+=panel("KPI de simulation",
+            table(["Mesure","Valeur"],[
+              ("Réservations simulées",str(simulation.get("reservations_recorded","INCONNU"))),
+              ("Refus enregistrés",str(simulation.get("refusals_recorded","INCONNU"))),
+              ("Effets LIVE qualifiés","NON"),
+            ]))
+    else:
+        body+=panel("KPI indisponibles",'<p>Source Policy indisponible ou qualification non déployée. Aucun chiffre supposé.</p>')
+    audit=decisions.get("items",[]) if isinstance(decisions.get("items"),list) else []
+    if audit:
+        body+=panel("Décisions de simulation récentes",table(
+            ["Opération","Révision","Classe","Décision","Horodatage"],[
+              (str(e.get("operation_id","?")),str(e.get("revision","?")),
+               str(e.get("operation_class","?")),str(e.get("reason","?")),
+               str(e.get("recorded_at","?"))) for e in audit if isinstance(e,dict)]))
     body+=panel("Maturité et limites",
         '<p>Le registre et les API nécessitent déploiement et qualification. '
         'Le mode STOP_AUTO par défaut n’équivaut pas à une interposition déjà déployée chez les exécuteurs.</p>')
