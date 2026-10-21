@@ -55,7 +55,7 @@ echo "PHASE=SYNTHETIC_INCIDENT_REAL_INFERENCE"\necho "DEMO_VARIANT=${AIOPS_DEMO_
 # Keep token inside Portal. Use a unique temporary output path for this run.
 launch="$(mktemp)"
 trap 'rm -f "$launch"; restore' EXIT
-docker exec aiops2-rebuild-portal python -c '
+docker exec -e AIOPS_DEMO_VARIANT="${AIOPS_DEMO_VARIANT:-baseline}" aiops2-rebuild-portal python -c '
 import os,json,urllib.request
 token=os.environ["AIOPS_INTERNAL_TOKEN"]
 variant=os.environ.get("AIOPS_DEMO_VARIANT","baseline")
