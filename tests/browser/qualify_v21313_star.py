@@ -10,6 +10,11 @@ def main():
   b=pw.chromium.launch(headless=True);page=b.new_page(viewport={"width":1280,"height":800})
   page.on("pageerror",lambda e:errors.append(str(e)))
   page.goto(a.url,wait_until="load")
+  checks["vector_icons"] = page.locator(".visual svg").count() == 3
+  checks["optional_detail"] = page.locator("#more").count() == 1 and page.locator("#more-text").count() == 1
+  page.locator("#more summary").click()
+  checks["detail_expands"] = page.locator("#more").get_attribute("open") is not None
+  checks["scene_focus"] = page.locator("#visual").get_attribute("data-focus") == "0"
   checks["twelve_scenes"]=page.locator("#steps button").count()==12
   checks["business_default"]=page.locator("#lead").inner_text().startswith("Le service critique")
   page.locator("#audience").select_option("technical")
@@ -18,6 +23,7 @@ def main():
   checks["evidence_open"]=page.locator("#evidence-panel").is_visible() and page.locator("#evidence-toggle").get_attribute("aria-expanded")=="true"
   checks["provenance"]=page.get_by_text("SIMULATED_TARGET").count()>0 and page.get_by_text("OPERATOR_SUPPLIED_EXPORT").count()>0
   page.locator("#next").click()
+  checks["animated_focus_changes"] = page.locator("#visual").get_attribute("data-focus") == "1"
   checks["evidence_changes_with_scene"]="Topologie illustrative" in page.locator("#evidence-detail").inner_text()
   page.locator("#evidence-toggle").click()
   checks["evidence_closed"]=not page.locator("#evidence-panel").is_visible()
