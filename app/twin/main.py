@@ -3,6 +3,23 @@ from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 @app.get('/health')
 def health(): return {'status':'ok','component':'twin','authority':'canonical-topology'}
+@app.get('/api/twin/acme-quality')
+def acme_quality():
+    """Read-only topology integrity audit; findings aren't simulated asset states."""
+    with db() as c:
+        nodes=c.execute("select node_id,type,name,site,state from aiops.twin_nodes where node_id like 'ACME-%' order by node_id").fetchall()
+        edges=c.execute("select source_id,target_id,relation_type from aiops.twin_edges where source_id like 'ACME-%' or target_id like 'ACME-%'").fetchall()
+    ids={row[0] for row in nodes}
+    missing=sorted({end for a,b,_ in edges for end in (a,b) if end not in ids})
+    services=[row[0] for row in nodes if row[1]=='SERVICE']
+    links={a for a,b,_ in edges}
+    isolated=sorted(ci for ci in services if ci not in links)
+    return {'scope':'ACME','nodes':len(nodes),'relationships':len(edges),
+            'orphan_edge_endpoints':missing,'services_without_outgoing_relation':isolated,
+            'quality_status':'PASS' if not missing and not isolated else 'REVIEW',
+            'note':'Structural consistency only; does not prove live asset health.'}
+
+
 @app.get('/api/twin/summary')
 def summary():
     with db() as c:

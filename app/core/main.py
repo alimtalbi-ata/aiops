@@ -3,6 +3,9 @@ from shared.safety import canonical_sha256, gold_set_eligible, critical_approval
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
 from shared.db import db
+from core.denial_routes import register_denial_routes
+from core.critic_denial_block import block_with_denial
+from core.critic_denial_resume import resume_critic_denial
 from shared.ids import new
 from shared.domain import transition,STAGES
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
@@ -29,11 +32,34 @@ class ModelEvaluationIn(BaseModel):
 def auth(token):
     if token!=ADMIN: raise HTTPException(401,'invalid internal token')
 def bearer(authorization): return (authorization or '').removeprefix('Bearer ')
+register_denial_routes(app,db,auth,bearer)
 def append_event(c,rid,stage,etype,status,eids=None,decision=None,confidence=None,payload=None,event_key=None):
     if event_key:
-        old=c.execute('select sequence from aiops.run_events where run_id=%s and event_key=%s',(rid,event_key)).fetchone()
+        old=c.execute(
+            'select sequence,stage,event_type,status,evidence_ids,decision,confidence,payload '
+            'from aiops.run_events where run_id=%s and event_key=%s',
+            (rid,event_key)
+        ).fetchone()
         if old:
-            row=c.execute('select version from aiops.runs where run_id=%s',(rid,)).fetchone()
+            def canonical(value):
+                if isinstance(value,str):
+                    value=json.loads(value)
+                return json.dumps(value,sort_keys=True,separators=(',',':'))
+            same=(
+                old[1]==stage
+                and old[2]==etype
+                and old[3]==status
+                and canonical(old[4])==canonical(eids or [])
+                and old[5]==decision
+                and old[6]==confidence
+                and canonical(old[7])==canonical(payload or {})
+            )
+            if not same:
+                raise ValueError('event_idempotency_conflict')
+            row=c.execute(
+                'select version from aiops.runs where run_id=%s',
+                (rid,)
+            ).fetchone()
             return old[0],row[0],True
     seq=c.execute('select coalesce(max(sequence),0)+1 from aiops.run_events where run_id=%s',(rid,)).fetchone()[0]
     c.execute('insert into aiops.run_events(event_id,run_id,sequence,stage,event_type,status,evidence_ids,decision,confidence,payload,event_key) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(new('EVT'),rid,seq,stage,etype,status,json.dumps(eids or []),decision,confidence,json.dumps(payload or {}),event_key))
@@ -80,8 +106,15 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
-        rec=c.execute('select response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
-        if rec:return rec[0]
+        rec=c.execute(
+            'select run_id,command,response from aiops.command_receipts '
+            'where idempotency_key=%s',
+            (x.idempotency_key,)
+        ).fetchone()
+        if rec:
+            if rec[0]!=rid or rec[1]!=x.command:
+                raise HTTPException(409,'command_idempotency_conflict')
+            return rec[2]
         status,version,mode=row
         if version!=x.expected_version:raise HTTPException(409,'stale run version')
         target={'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED','RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'}[x.command]
@@ -92,6 +125,76 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
         c.execute("update aiops.runs set status=%s,version=%s,started_at=case when %s='START' and started_at is null then now() else started_at end,completed_at=case when %s in ('RESOLVE','FAIL','CANCEL') then now() else completed_at end where run_id=%s",(target,nv,x.command,x.command,rid))
         append_event(c,rid,'RUN','STATE_TRANSITION',target,decision=x.command,payload={'mode':mode,'expected_version':version,'new_version':nv},event_key='command-'+x.idempotency_key)
         resp={'run_id':rid,'status':target,'version':nv}; c.execute('insert into aiops.command_receipts(receipt_id,run_id,idempotency_key,command,response) values(%s,%s,%s,%s,%s)',(new('RCPT'),rid,x.idempotency_key,x.command,json.dumps(resp))); return resp
+@app.get('/api/runs/{rid}/critic-denial-block/receipt')
+def get_critic_denial_block_receipt(
+    rid:str,authorization:str|None=Header(default=None)
+):
+    auth(bearer(authorization))
+    with db() as c:
+        row=c.execute(
+            'SELECT command,response FROM aiops.command_receipts '
+            'WHERE run_id=%s AND idempotency_key=%s',
+            (rid,'CRITIC-BLOCK-'+rid)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404,'atomic_denial_receipt_not_found')
+        command,response=row
+        if command!='BLOCK' or not isinstance(response,dict):
+            raise HTTPException(409,'unexpected_receipt_command')
+        cid=response.get('critique_id')
+        if (response.get('run_id')!=rid
+                or response.get('status')!='BLOCKED'
+                or not response.get('denial_hash') or not cid):
+            raise HTTPException(409,'atomic_denial_receipt_invalid')
+        state=c.execute(
+            'SELECT status,version FROM aiops.runs WHERE run_id=%s',
+            (rid,)
+        ).fetchone()
+        intent=c.execute(
+            'SELECT analysis_id,status FROM aiops.critic_denial_outbox '
+            'WHERE run_id=%s AND critique_id=%s',
+            (rid,cid)
+        ).fetchone()
+        if (not state or state[0]!='BLOCKED'
+                or state[1]<response['version']
+                or not intent
+                or intent[1] not in ('PENDING','RECONCILED')):
+            raise HTTPException(409,'atomic_denial_state_inconsistent')
+        return dict(response,analysis_id=intent[0],
+                    outbox_status=intent[1],
+                    current_version=state[1])
+
+@app.post('/api/runs/{rid}/critic-denial-block')
+def critic_denial_block(rid:str,x:dict,authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    required=('expected_version','idempotency_key','analysis_id',
+              'critique_id','evidence_ids','policy_input')
+    if any(k not in x for k in required):
+        raise HTTPException(422,'critic_denial_block_missing_fields')
+    try:
+        with db() as c:
+            return block_with_denial(
+                c,rid,x['expected_version'],x['idempotency_key'],
+                x['analysis_id'],x['critique_id'],x['evidence_ids'],
+                x['policy_input'],transition,append_event,new
+            )
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
+@app.post('/api/runs/{rid}/critic-denial-resume')
+def critic_denial_resume_endpoint(
+    rid:str,authorization:str|None=Header(default=None)
+):
+    auth(bearer(authorization))
+    try:
+        with db() as c:
+            return resume_critic_denial(
+                c,rid,transition,append_event,new
+            )
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
+
 @app.post('/api/scenarios/register')
 def register_scenario(x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
@@ -166,12 +269,34 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
         # previous expected_version. Resolve the *same* idempotent semantic event
         # before checking its stale version; conflicting key reuse still fails.
         if x.event_key:
-            previous=c.execute('select sequence,stage,event_type,status from aiops.run_events where run_id=%s and event_key=%s',
-                               (rid,x.event_key)).fetchone()
+            previous=c.execute(
+                'SELECT sequence,stage,event_type,status,evidence_ids,'
+                'decision,confidence,payload FROM aiops.run_events '
+                'WHERE run_id=%s AND event_key=%s',
+                (rid,x.event_key)
+            ).fetchone()
             if previous:
-                if tuple(previous[1:])!=(x.stage,x.event_type,x.status):
-                    raise HTTPException(409,'event_key_reused_for_different_semantic_event')
-                return {'run_id':rid,'sequence':previous[0],'version':row[0],'idempotent':True}
+                def canonical(value):
+                    if isinstance(value,str):
+                        value=json.loads(value)
+                    return json.dumps(value,sort_keys=True,separators=(',',':'))
+                same=(
+                    previous[1]==x.stage
+                    and previous[2]==x.event_type
+                    and previous[3]==x.status
+                    and canonical(previous[4])==canonical(x.evidence_ids or [])
+                    and previous[5]==x.decision
+                    and previous[6]==x.confidence
+                    and canonical(previous[7])==canonical(x.payload or {})
+                )
+                if not same:
+                    raise HTTPException(409,'event_idempotency_conflict')
+                return {
+                    'run_id':rid,
+                    'sequence':previous[0],
+                    'version':row[0],
+                    'idempotent':True
+                }
         if row[0]!=x.expected_version:raise HTTPException(409,'stale run version')
         if x.evidence_ids:
             n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(x.evidence_ids,)).fetchone()[0]
@@ -195,10 +320,45 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
 def gates(rid:str):
     with db() as c:rows=c.execute('select stage,state,required_evidence,evidence_ids,decision,reason,evaluated_at from aiops.gates where run_id=%s order by evaluated_at',(rid,)).fetchall()
     k=['stage','state','required_evidence','evidence_ids','decision','reason','evaluated_at'];return {'items':[dict(zip(k,r)) for r in rows]}
+@app.get('/api/incidents')
+def list_incidents(limit:int=100):
+    """Read-only incident registry, including incidents without runs."""
+    count=max(1,min(limit,500))
+    with db() as c:
+        rows=c.execute(
+            'select incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic '
+            'from aiops.incidents order by opened_at desc limit %s',(count,)
+        ).fetchall()
+    fields=['incident_id','external_id','title','severity','state','service_id',
+            'opened_at','source','synthetic']
+    return {'items':[dict(zip(fields,row)) for row in rows], 'limit':count}
+
+
 @app.get('/api/runs')
 def list_runs():
     with db() as c:r=c.execute('select run_id,incident_id,mode,scenario_id,status,version,overall_confidence,created_at,started_at,completed_at from aiops.runs order by created_at desc limit 100').fetchall()
     k=['run_id','incident_id','mode','scenario_id','status','version','overall_confidence','created_at','started_at','completed_at'];return {'items':[dict(zip(k,x)) for x in r]}
+@app.get('/api/runs/{rid}/evidence')
+def run_evidence(rid:str):
+    """Bounded read-only evidence linked to recorded events of this run."""
+    with db() as c:
+        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone():
+            raise HTTPException(404,'run not found')
+        rows=c.execute(
+            """select distinct e.evidence_id,e.source,e.external_id,e.observed_at,
+                      e.known_at,e.claim,e.confidence,e.provenance,e.payload_hash
+               from aiops.evidence e
+               where exists (
+                 select 1 from aiops.run_events re
+                 where re.run_id=%s and re.evidence_ids @> jsonb_build_array(e.evidence_id)
+               ) order by e.evidence_id limit 200""",(rid,)
+        ).fetchall()
+    keys=['evidence_id','source','external_id','observed_at','known_at',
+          'claim','confidence','provenance','payload_hash']
+    return {'run_id':rid,'items':[dict(zip(keys,row)) for row in rows],
+            'limit':200,'payload_excluded':True}
+
+
 @app.get('/api/runs/{rid}')
 def get_run(rid:str):
     with db() as c:
@@ -269,7 +429,13 @@ def persist_policy_decision(rid:str,x:dict,authorization:str|None=Header(default
     canonical=json.dumps({'run_id':rid,'policy':policy,'proof':proof,'policy_version':x.get('policy_version','2.1.0')},sort_keys=True,separators=(',',':'))
     digest=hashlib.sha256(canonical.encode()).hexdigest()
     with db() as c:
-        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
+        if not c.execute('select 1 from aiops.runs where run_id=%s FOR UPDATE',(rid,)).fetchone(): raise HTTPException(404,'run not found')
+        protected=c.execute(
+            'SELECT 1 FROM aiops.critic_denial_outbox WHERE run_id=%s AND critique_id=%s',
+            (rid,x.get('critique_id'))
+        ).fetchone()
+        if protected:
+            raise HTTPException(409,'fenced_finalization_required')
         old=c.execute('select policy_decision_id from aiops.policy_decisions where run_id=%s and input_hash=%s',(rid,digest)).fetchone()
         if old:return {'policy_decision_id':old[0],'input_hash':digest,'idempotent':True}
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0] if evidence_ids else 0
@@ -506,6 +672,12 @@ def record_denial_intent(rid:str,x:dict,authorization:str|None=Header(default=No
     if policy_input.get('critic_validated') is not False or policy_input.get('command')!='EXECUTE':
         raise HTTPException(422,'denial_intent_must_be_rejected_critic')
     with db() as c:
+        locked=c.execute(
+            'SELECT status FROM aiops.runs WHERE run_id=%s FOR UPDATE',
+            (rid,)
+        ).fetchone()
+        if not locked:
+            raise HTTPException(404,'run_not_found')
         valid=c.execute("""
             SELECT 1 FROM aiops.critique_records q
             JOIN aiops.analysis_records a ON a.analysis_id=q.analysis_id
@@ -545,30 +717,6 @@ def pending_denial_intents(limit:int=20,authorization:str|None=Header(default=No
 
 
 @app.post('/api/runs/{rid}/denial-intent/{cid}/reconciled')
-def reconcile_denial_intent(rid:str,cid:str,x:dict,authorization:str|None=Header(default=None)):
+def reconcile_denial_intent(rid:str,cid:str,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
-    pid=x.get('policy_decision_id')
-    if not pid:raise HTTPException(422,'policy_decision_id_required')
-    with db() as c:
-        row=c.execute("""
-            SELECT o.analysis_id,o.status,o.policy_decision_id
-            FROM aiops.critic_denial_outbox o
-            WHERE o.run_id=%s AND o.critique_id=%s FOR UPDATE
-        """,(rid,cid)).fetchone()
-        if not row:raise HTTPException(404,'denial_intent_not_found')
-        if row[1]=='RECONCILED':
-            if row[2]!=pid:raise HTTPException(409,'reconciliation_conflict')
-            return {'status':'RECONCILED','idempotent':True}
-        match=c.execute("""
-            SELECT 1 FROM aiops.policy_decisions
-            WHERE policy_decision_id=%s AND run_id=%s AND analysis_id=%s
-              AND critique_id=%s AND state='BLOCKED'
-              AND decision IN ('HUMAN_APPROVAL','ESCALATE')
-        """,(pid,rid,row[0],cid)).fetchone()
-        if not match:raise HTTPException(409,'policy_denial_not_verified')
-        c.execute("""
-            UPDATE aiops.critic_denial_outbox
-            SET status='RECONCILED',policy_decision_id=%s,reconciled_at=now()
-            WHERE run_id=%s AND critique_id=%s
-        """,(pid,rid,cid))
-    return {'status':'RECONCILED','idempotent':False}
+    raise HTTPException(409,'fenced_finalization_required')

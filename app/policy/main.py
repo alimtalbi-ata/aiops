@@ -3,6 +3,10 @@ import os,hmac
 
 from fastapi import FastAPI,Header,HTTPException
 from pydantic import BaseModel, Field
+try:
+    from policy import autonomy_store, execution_fence
+except ModuleNotFoundError:
+    from app.policy import autonomy_store, execution_fence
 
 app = FastAPI(title="ACME Policy Engine", version="2.2.0")
 INTERNAL_TOKEN=os.getenv("AIOPS_INTERNAL_TOKEN","")
@@ -29,9 +33,35 @@ class Decision(BaseModel):
     preconditions_verified: bool = False
     fencing_verified: bool = False
     human_approved: bool = False
+    freeze_active: bool | None = None
+    management_exception_verified: bool = False
+    change_approval_verified: bool = False
+    operation_class: Literal["OBSERVATION","ROUTINE_PREAPPROVED","STANDARD_CHANGE","EXCEPTIONAL_CHANGE","AUTONOMOUS_REMEDIATION"] = "AUTONOMOUS_REMEDIATION"
 
 
 def evaluate(x: Decision) -> dict:
+    effect = x.command in ("EXECUTE", "RESOLVE", "REMEDIATE")
+    persisted=autonomy_store.status()
+    autonomy_mode=persisted["mode"]
+    if not persisted["healthy"]:
+        return {"state":"BLOCKED","decision":"ESCALATE","reason":"AUTONOMY_STATE_UNAVAILABLE"}
+    if autonomy_mode not in ("NORMAL", "FREEZE", "STOP_AUTO"):
+        return {"state":"BLOCKED","decision":"ESCALATE","reason":"INVALID_AUTONOMY_MODE"}
+    if effect and autonomy_mode == "STOP_AUTO" and x.operation_class == "AUTONOMOUS_REMEDIATION":
+        return {"state":"BLOCKED","decision":"ESCALATE","reason":"AUTONOMOUS_REMEDIATION_SUSPENDED"}
+    if effect and autonomy_mode == "FREEZE" and x.operation_class not in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE"):
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL","reason":"FREEZE_RESTRICTS_OPERATION_CLASS"}
+    if effect and x.operation_class in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE") and not x.preconditions_verified:
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL","reason":"PREAPPROVED_OPERATION_NOT_VERIFIED"}
+    if effect and os.getenv("AIOPS_POLICY_EMERGENCY_STOP", "true").lower() != "false":
+        return {"state":"BLOCKED","decision":"ESCALATE",
+                "reason":"EMERGENCY_STOP_ACTIVE: effect prohibited"}
+    if effect and x.freeze_active is None:
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
+                "reason":"FREEZE_STATUS_UNKNOWN: effect prohibited"}
+    if effect and x.freeze_active and not (x.management_exception_verified and x.change_approval_verified):
+        return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
+                "reason":"CHANGE_FREEZE_ACTIVE: management exception and Change approval required"}
     # Severity is an independent safety signal: never downgrade P1 to UNKNOWN
     # or ALLOW merely because evidence is missing or confidence is high.
     if x.mode == "LIVE" and x.severity == "P1":
@@ -121,3 +151,53 @@ def check(x: Decision,authorization: str|None=Header(default=None)):
 @app.get("/metrics")
 def metrics():
     return "aiops_policy_up 1\n"
+
+
+class ModeChange(BaseModel):
+    mode: Literal["NORMAL","FREEZE","STOP_AUTO"]
+    actor: str = Field(min_length=1,max_length=128)
+    reason: str = Field(min_length=12,max_length=1024)
+    expected_revision: int = Field(ge=0)
+
+@app.get("/api/policy/autonomy")
+def autonomy_read(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    return autonomy_store.status()
+
+@app.get("/api/policy/autonomy/history")
+def autonomy_history(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    try: return {"items":autonomy_store.history()}
+    except Exception: raise HTTPException(503,"policy_state_unavailable")
+
+@app.post("/api/policy/autonomy")
+def autonomy_change(x:ModeChange,authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    # Internal token alone is not sufficient to establish a management authorization.
+    # Conservative MVP: only tightening to STOP_AUTO is supported via API.
+    if x.mode!="STOP_AUTO": raise HTTPException(403,"relaxation_requires_independent_admin_authorization")
+    try: return autonomy_store.set_mode(x.mode,x.actor,x.reason,x.expected_revision)
+    except RuntimeError: raise HTTPException(409,"revision_conflict")
+    except (OSError,ValueError): raise HTTPException(503,"policy_state_unavailable")
+
+class SimulationAdmission(BaseModel):
+    operation_id: str = Field(min_length=1,max_length=128)
+    expected_revision: int = Field(ge=0)
+    operation_class: Literal["ROUTINE_PREAPPROVED","STANDARD_CHANGE","AUTONOMOUS_REMEDIATION"]
+
+@app.post("/api/policy/simulation/reserve")
+def simulation_reserve(x:SimulationAdmission,authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    result=execution_fence.reserve(x.operation_id,x.expected_revision,x.operation_class)
+    return {**result,"scope":"SIMULATION_ONLY","execution_allowed":False}
+
+@app.get("/api/policy/simulation/summary")
+def simulation_summary(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    return execution_fence.summary()
+
+@app.get("/api/policy/simulation/decisions")
+def simulation_decisions(authorization: str|None=Header(default=None)):
+    authorize(authorization)
+    try: return {"scope":"SIMULATION_ONLY","items":execution_fence.decisions()}
+    except Exception: raise HTTPException(503,"policy_audit_unavailable")

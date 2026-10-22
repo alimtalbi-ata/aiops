@@ -19,8 +19,9 @@ class PortalDemoTests(unittest.TestCase):
             {"run_id": "RUN-UNIT-1"},
             {"run_id": "RUN-UNIT-1", "workflow_id": "WF-UNIT-1"},
         ]
-        with patch.object(MODULE, "post_json", side_effect=responses) as post:
-            result = MODULE.demo()
+        with patch.dict(os.environ,{"AIOPS_DEMO_LAUNCH_ENABLED":"true"}):
+            with patch.object(MODULE, "post_json", side_effect=responses) as post:
+                result = MODULE.demo("Bearer "+os.environ["AIOPS_INTERNAL_TOKEN"])
         self.assertEqual(result["workflow_id"], "WF-UNIT-1")
         self.assertEqual(post.call_count, 3)
         incident_call = post.call_args_list[0]
@@ -36,9 +37,10 @@ class PortalDemoTests(unittest.TestCase):
     def test_each_demo_launch_has_a_fresh_identity(self):
         def invoke():
             responses = [{"incident_id": "INC"}, {"run_id": "RUN"}, {"workflow_id": "WF"}]
-            with patch.object(MODULE, "post_json", side_effect=responses) as post:
-                MODULE.demo()
-                return post.call_args_list[0].args[2]["external_id"]
+            with patch.dict(os.environ,{"AIOPS_DEMO_LAUNCH_ENABLED":"true"}):
+                with patch.object(MODULE, "post_json", side_effect=responses) as post:
+                    MODULE.demo("Bearer "+os.environ["AIOPS_INTERNAL_TOKEN"])
+                    return post.call_args_list[0].args[2]["external_id"]
         self.assertNotEqual(invoke(), invoke())
 
 if __name__ == "__main__":

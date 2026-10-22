@@ -16,6 +16,15 @@ grep -Fq "idempotency_key text not null unique" "$SQL"
 grep -Fq "migration_checksum_changed" deploy/migrate.sh
 grep -Fq "BEGIN;" deploy/migrate.sh
 grep -Fq "COMMIT;" deploy/migrate.sh
+# The runner must keep a single transaction around DDL and its journal entry,
+# even when historical SQL migrations include standalone transaction wrappers.
+grep -Fq "sed -E " deploy/migrate.sh
+grep -Fq "BEGIN|COMMIT" deploy/migrate.sh
+migration_fixture="$(mktemp)"
+trap 'rm -f "$migration_fixture"' EXIT
+printf '%s\n' 'BEGIN;' 'CREATE TABLE example(id integer);' 'COMMIT;' > "$migration_fixture"
+normalized="$(sed -E '/^[[:space:]]*(BEGIN|COMMIT)[[:space:]]*;[[:space:]]*$/Id' "$migration_fixture")"
+[[ "$normalized" == 'CREATE TABLE example(id integer);' ]] || { echo 'FAIL|legacy_transaction_wrappers_not_removed'; exit 1; }
 grep -Fq 'ux_evidence_source_payload_hash' db/migrations/010_evidence_identity.sql
 grep -Fq 'ux_evidence_source_external_identity' db/migrations/010_evidence_identity.sql
 grep -Fq 'on aiops.evidence(source,external_id)' db/migrations/010_evidence_identity.sql

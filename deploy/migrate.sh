@@ -39,7 +39,11 @@ for file in db/migrations/00[9]_*.sql db/migrations/0[1-9][0-9]_*.sql db/migrati
   fi
   {
     printf 'BEGIN;\n'
-    cat "$file"
+    # Historical migration files may have their own standalone BEGIN/COMMIT.
+    # Remove only those wrapper lines: the runner owns the transaction so
+    # DDL and its checksum journal entry commit or roll back together.
+    # Hash the unchanged source above, preserving migration immutability.
+    sed -E '/^[[:space:]]*(BEGIN|COMMIT)[[:space:]]*;[[:space:]]*$/Id' "$file"
     printf "\ninsert into public.aiops_schema_migrations(version,checksum,execution_mode) values ('%s','%s','APPLIED');\nCOMMIT;\n" "$version" "$checksum"
   } | psqlc -q
   echo "MIGRATION=APPLIED|$version"

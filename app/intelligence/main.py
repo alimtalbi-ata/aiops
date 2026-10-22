@@ -144,6 +144,26 @@ def downgrade_inconsistent_critic(raw):
     return raw
 
 
+def decode_model_json(raw):
+    """Decode a complete JSON object or a single complete Markdown JSON fence.
+
+    Never extract partial objects from prose, or silently complete truncated
+    output. Pydantic still enforces the strict Analyst/Critic contract.
+    """
+    if not isinstance(raw, str):
+        raise ValueError('llm_response_content_not_text')
+    text = raw.strip()
+    if text.startswith('```'):
+        lines = text.splitlines()
+        if len(lines) < 3 or lines[0].strip().lower() not in ('```json', '```') or lines[-1].strip() != '```':
+            raise ValueError('llm_json_fence_incomplete_or_invalid')
+        text = '\n'.join(lines[1:-1]).strip()
+    decoded = json.loads(text)
+    if not isinstance(decoded, dict):
+        raise ValueError('llm_json_object_required')
+    return decoded
+
+
 def call_model(system, payload, schema):
     if not BASE or not MODEL:
         raise HTTPException(503, 'llm_provider_not_configured')
@@ -161,7 +181,7 @@ def call_model(system, payload, schema):
         r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
         r.raise_for_status()
         raw = r.json()['choices'][0]['message']['content']
-        decoded = json.loads(raw)
+        decoded = decode_model_json(raw)
         if schema is Critique:
             decoded = downgrade_inconsistent_critic(decoded)
             try:
@@ -193,7 +213,7 @@ def call_model(system, payload, schema):
                     url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
                 )
                 repaired_response.raise_for_status()
-                repaired = json.loads(repaired_response.json()['choices'][0]['message']['content'])
+                repaired = decode_model_json(repaired_response.json()['choices'][0]['message']['content'])
                 if schema is Critique:
                     repaired = downgrade_inconsistent_critic(repaired)
                 # The retry cannot discard the critique's adverse findings.
