@@ -33,6 +33,7 @@ def main():
         checks["pause_label"]=page.locator("#toggle").inner_text().strip()=="⏸ Pause"
         page.locator("#toggle").click()
         checks["resume_label"]=page.locator("#toggle").inner_text().strip()=="▶ Lecture"
+        page.evaluate("document.activeElement.blur()")
         page.keyboard.press("ArrowRight")
         checks["keyboard"]=page.locator("#counter").inner_text()=="2 / 12"
         checks["provenance"]=page.get_by_text("SIMULATED_TARGET").count()>0
