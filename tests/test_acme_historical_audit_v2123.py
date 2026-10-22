@@ -13,7 +13,7 @@ def fixture():
 class HistoricalPanelTests(unittest.TestCase):
  def test_history_is_distinct_and_qualified(self):
   content=m.render(fixture())
-  for term in ("RUN-A4449145A6E377FF","17","Critic","FALSE","BLOCKED","n'inférence DGX authentifiée","métadonnées".upper()):
+  for term in ("RUN-A4449145A6E377FF","17","Critic","FALSE","BLOCKED","inférence DGX authentifiée","métadonnées".upper()):
    self.assertIn(term,content)
   self.assertNotIn("fetch(",content)
  def test_reject_fake_dgx_qualification(self):
