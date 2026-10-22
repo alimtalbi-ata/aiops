@@ -1,5 +1,5 @@
 <!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AIOps — STAR Mission Control · V2.13.12</title>
+<title>AIOps — STAR Mission Control · V2.13.13</title>
 <style>
 :root{color-scheme:dark;--bg:#08111e;--panel:#142235;--line:#344961;--text:#f1f6fe;--muted:#b1c3d5;--teal:#56e0c2}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:clamp(15px,1.3vw,18px)/1.5 system-ui,sans-serif}
@@ -16,6 +16,7 @@ aside h2{font-size:1rem;margin:0 0 12px}aside .detail{margin:0 0 26px;min-height
 button,select{background:#233751;color:var(--text);border:1px solid #57728f;border-radius:10px;padding:10px 15px;font:inherit;cursor:pointer}button:hover,button:focus-visible,select:focus-visible{outline:2px solid var(--teal)}
 button.primary{background:#126456}button[aria-pressed=true]{border-color:var(--teal)}.progress{width:100%;height:6px;border:0;border-radius:9px;background:#263b55}.progress>div{height:100%;border-radius:9px;background:var(--teal);transition:width .25s}.counter{font-variant-numeric:tabular-nums;margin-left:auto;color:var(--muted)}
 nav{max-width:1240px;margin:auto;padding:0 22px 24px;display:flex;flex-wrap:wrap;gap:5px}nav button{padding:5px 10px;font-size:.85rem}nav button[aria-current=step]{background:#126456;border-color:var(--teal)}
+.audience{font-size:.82rem;color:var(--muted)}.evidence-toggle{border:1px solid #57728f;background:transparent}.evidence-panel{max-width:1240px;margin:0 auto 12px;padding:12px 22px}.evidence-panel[hidden]{display:none}.evidence-panel section{padding:16px;border:1px solid var(--line);background:var(--panel);border-radius:12px}.evidence-panel p{margin:6px 0}.evidence-panel h2{font-size:1rem;margin:0 0 8px}.evidence-panel strong{color:#ffe1a1}
 footer{font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 body.presenter main{grid-template-columns:1fr;max-width:1080px}body.presenter aside{display:none}body.presenter .headline{font-size:clamp(2.8rem,5vw,5.1rem);max-width:22ch}body.presenter .lead{font-size:clamp(1.3rem,2.3vw,1.8rem)}body.presenter .scene{margin-top:24px}
 .status{font-size:.82rem;color:var(--muted)}.status strong{color:var(--teal)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
@@ -25,8 +26,8 @@ body.presenter main{grid-template-columns:1fr;max-width:1080px}body.presenter as
 <body><header><div><h1>AIOps · Mission Control</h1><small>Un incident, 12 décisions · présentation guidée</small></div><span class="provenance">SIMULATED_TARGET · aucune action LIVE</span></header>
 <main><article aria-live="polite" aria-atomic="true"><div class="step" id="step">01 — SITUATION</div><h2 class="headline" id="headline"></h2><p class="lead" id="lead"></p><section class="scene"><div class="kind">Ce que l'on observe dans ce récit</div><div class="visual" aria-label="Schéma de dépendances simulé"><div class="node" id="n1">Service métier</div><div class="arrow">→</div><div class="node" id="n2">Infrastructure</div><div class="arrow">→</div><div class="node" id="n3">Décision</div></div></section></article>
 <aside><h2>Lecture de l'architecte</h2><p class="kind">Pourquoi cela compte</p><p class="detail" id="why"></p><p class="kind">Preuve et limite</p><p class="detail" id="proof"></p><p class="kind">Question du comité</p><p class="detail" id="question"></p></aside></main>
-<div class="controls"><div class="progress" aria-hidden="true"><div id="bar"></div></div><button id="prev" aria-label="Étape précédente">◀ Précédent</button><button id="toggle" class="primary" aria-pressed="false">▶ Lecture</button><button id="next">Suivant ▶</button><button id="reset">↻ Recommencer</button><button id="presenter" type="button" aria-pressed="false">▣ Mode présentateur</button><label for="pace">Rythme</label><select id="pace"><option value="12000">Posé · 12 s</option><option value="8000" selected>Normal · 8 s</option><option value="5000">Rapide · 5 s</option></select><span class="status" id="autostatus" aria-live="polite">Lecture arrêtée</span><span class="counter" id="counter">1 / 12</span></div>
-<nav aria-label="Choisir une scène" id="steps"></nav>
+<div class="controls"><div class="progress" aria-hidden="true"><div id="bar"></div></div><button id="prev" aria-label="Étape précédente">◀ Précédent</button><button id="toggle" class="primary" aria-pressed="false">▶ Lecture</button><button id="next">Suivant ▶</button><button id="reset">↻ Recommencer</button><button id="presenter" type="button" aria-pressed="false">▣ Mode présentateur</button><button id="evidence-toggle" type="button" aria-expanded="false" aria-controls="evidence-panel" class="evidence-toggle">ⓘ Sources et limites</button><label class="audience" for="audience">Public</label><select id="audience" aria-label="Niveau de lecture"><option value="business">Métier</option><option value="technical">Technique</option></select><label for="pace">Rythme</label><select id="pace"><option value="12000">Posé · 12 s</option><option value="8000" selected>Normal · 8 s</option><option value="5000">Rapide · 5 s</option></select><span class="status" id="autostatus" aria-live="polite">Lecture arrêtée</span><span class="counter" id="counter">1 / 12</span></div>
+<nav aria-label="Choisir une scène" id="steps"></nav><div id="evidence-panel" class="evidence-panel" hidden><section><h2>Provenance de cette scène</h2><p><strong>SIMULATED_TARGET</strong> — scénario fictif, sans collecte live ni intervention réelle.</p><p id="evidence-detail"></p><p>Une source historique opérateur (OPERATOR_SUPPLIED_EXPORT) n’est pas utilisée dans cette vue et nécessite un accès distinct approuvé.</p></section></div>
 <footer>© AIOps · Scénario fictif ACME. Chaque étape illustre une capacité cible, pas un résultat d'inférence DGX attesté. Historique Core et Evidence non accessibles dans cette vue. Raccourcis : ← → espace, Home, End.</footer>
 <script>
 "use strict";
@@ -50,11 +51,12 @@ const buttons=[];
 function render(){
  const s=scenes[pos];$("step").textContent=String(pos+1).padStart(2,"0")+" — "+s[0];
  $("headline").textContent=s[1];$("lead").textContent=s[2];$("why").textContent=s[3];
- $("proof").textContent=s[4];$("question").textContent=s[5];$("counter").textContent=(pos+1)+" / "+scenes.length;
+ $("proof").textContent=s[4];$("question").textContent=s[5];$("evidence-detail").textContent=s[4];$("counter").textContent=(pos+1)+" / "+scenes.length;
  $("bar").style.width=((pos+1)/scenes.length*100)+"%";
  ["n1","n2","n3"].forEach((id,i)=>$(id).classList.toggle("active",i===s[6]));
  buttons.forEach((button,i)=>button.setAttribute("aria-current",i===pos?"step":"false"));
  $("prev").disabled=pos===0;$("next").disabled=pos===scenes.length-1;
+ $("lead").textContent=$("audience").value==="technical"?s[3]:s[2];
 }
 function pause(){playing=false;clearTimeout(handle);handle=null;$("toggle").textContent="▶ Lecture";$("toggle").setAttribute("aria-pressed","false");$("autostatus").textContent="Lecture arrêtée"}
 function tick(){clearTimeout(handle);if(!playing)return;if(pos===scenes.length-1){pause();return}$("autostatus").textContent="Défilement automatique · "+(Number($("pace").value)/1000)+" s";handle=setTimeout(()=>{if(!playing)return;pos++;render();tick()},Number($("pace").value))}
@@ -64,6 +66,8 @@ $("prev").addEventListener("click",()=>move(pos-1));$("next").addEventListener("
 $("reset").addEventListener("click",()=>{pause();move(0)});
 $("toggle").addEventListener("click",()=>{playing=!playing;$("toggle").setAttribute("aria-pressed",String(playing));$("toggle").textContent=playing?"⏸ Pause":"▶ Lecture";tick()});
 $("pace").addEventListener("change",()=>{if(playing)tick()});
+$("audience").addEventListener("change",render);
+$("evidence-toggle").addEventListener("click",()=>{const open=$("evidence-panel").hidden;$("evidence-panel").hidden=!open;$("evidence-toggle").setAttribute("aria-expanded",String(open))});
 $("presenter").addEventListener("click",()=>{const active=document.body.classList.toggle("presenter");$("presenter").setAttribute("aria-pressed",String(active));$("presenter").textContent=active?"▣ Afficher les notes":"▣ Mode présentateur"});
 document.addEventListener("keydown",e=>{if(["SELECT","INPUT","TEXTAREA","BUTTON"].includes(document.activeElement.tagName))return;if(e.key==="ArrowRight"){e.preventDefault();move(pos+1)}if(e.key==="ArrowLeft"){e.preventDefault();move(pos-1)}if(e.key==="Home"){e.preventDefault();move(0)}if(e.key==="End"){e.preventDefault();move(11)}if(e.code==="Space"){e.preventDefault();$("toggle").click()}});
 document.addEventListener("visibilitychange",()=>{if(document.hidden)pause()});
