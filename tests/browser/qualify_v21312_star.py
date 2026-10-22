@@ -5,7 +5,7 @@ For http(s) supply the portal URL ending in /demo/star. Never mutates backend st
 import argparse
 import json
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 def main():
     parser = argparse.ArgumentParser()
@@ -28,7 +28,7 @@ def main():
         page.locator("#pace").select_option("5000")
         page.locator("#toggle").click()
         checks["playing_state"] = page.locator("#toggle").get_attribute("aria-pressed") == "true" and "5 s" in page.locator("#autostatus").inner_text()
-        page.wait_for_function("document.querySelector('#counter').textContent === '2 / 12'", timeout=8500)
+        expect(page.locator("#counter")).to_have_text("2 / 12", timeout=8500)
         checks["automatic_advance"] = page.locator("#counter").inner_text() == "2 / 12"
         page.locator("#toggle").click()
         checks["paused_state"] = page.locator("#toggle").get_attribute("aria-pressed") == "false"
