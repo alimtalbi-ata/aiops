@@ -2,7 +2,10 @@
 """Local offline ACME qualification. No network or container operations."""
 import argparse,hashlib,json,os,subprocess,sys
 from pathlib import Path
-from summarize_core_historical_v2125 import summarize
+try:
+    from tools.summarize_core_historical_v2125 import summarize
+except ModuleNotFoundError:
+    from summarize_core_historical_v2125 import summarize
 EXPECTED=('index.html','ACME-MISSION-CONTROL.html','ACME-HISTORICAL-AUDIT.html')
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def qualify(run_path,ledger_path,evidence_path,repo,output):
