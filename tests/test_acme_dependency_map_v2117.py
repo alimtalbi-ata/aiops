@@ -25,5 +25,5 @@ class DependencyMapTests(unittest.TestCase):
         stories[0]["title"]="</script><script>alert(1)</script>"
         result=m.build(stories)
         self.assertNotIn("</script><script>alert(1)",result)
-        self.assertIn(r"\\u003c/script\\u003e",result)
+        self.assertIn(r"\u003c/script\u003e",result)
 if __name__=="__main__":unittest.main()
