@@ -1,0 +1,34 @@
+name: STAR browser manifest bridge (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_browser_manifest_gate.py'
+      - 'demo/star_capture_identity_guard.py'
+      - 'demo/star_png_integrity.py'
+      - 'demo/star_portal_storyboard.py'
+      - 'tests/test_star_browser_manifest_gate.py'
+      - 'docs/demo/STAR-BROWSER-MANIFEST-BRIDGE-HLD-LLD-V21336.md'
+      - '.github/workflows/star-browser-manifest-bridge-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile offline bridge
+        run: python -m py_compile demo/star_browser_manifest_gate.py tests/test_star_browser_manifest_gate.py
+      - name: Test synthetic identity, integrity, chronology and storyboard
+        run: python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
