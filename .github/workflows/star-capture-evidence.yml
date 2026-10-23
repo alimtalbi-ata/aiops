@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - 'demo/star_capture_evidence.py'
+      - 'demo/star_png_integrity.py'
       - 'demo/star_snapshot_choreography.py'
       - 'tests/test_star_capture_evidence.py'
+      - 'tests/test_star_png_integrity.py'
       - 'demo/star_portal_storyboard.py'
       - 'tests/test_star_portal_storyboard.py'
       - 'demo/star_portal_transport.py'
@@ -31,6 +33,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile modules
-        run: python -m py_compile demo/star_capture_evidence.py demo/star_snapshot_choreography.py demo/star_portal_storyboard.py demo/star_portal_transport.py
+        run: python -m py_compile demo/star_png_integrity.py demo/star_capture_evidence.py demo/star_snapshot_choreography.py demo/star_portal_storyboard.py demo/star_portal_transport.py
       - name: Verify offline integrity and storyboard contracts
-        run: python -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v && python -m unittest discover -s tests -p 'test_star_portal_storyboard.py' -v && python -m unittest discover -s tests -p 'test_star_portal_transport.py' -v
+        run: python -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v && python -m unittest discover -s tests -p 'test_star_png_integrity.py' -v && python -m unittest discover -s tests -p 'test_star_portal_storyboard.py' -v && python -m unittest discover -s tests -p 'test_star_portal_transport.py' -v
