@@ -9,7 +9,10 @@ from shared.simulation_policy_contract import policy_command_for_mode
 
 class SimulationPolicyWiringTests(unittest.TestCase):
     def test_worker_uses_mapping_only_at_normal_policy_stage(self):
-        worker = (Path(__file__).resolve().parents[1] / "app/worker/main.py").read_text()
+        root = Path(__file__).resolve().parents[1]
+        self.assertTrue((root / "app/shared/simulation_policy_contract.py").is_file())
+        self.assertFalse((root / "shared/simulation_policy_contract.py").exists())
+        worker = (root / "app/worker/main.py").read_text()
         self.assertIn("from shared.simulation_policy_contract import policy_command_for_mode", worker)
         self.assertIn("'command':policy_command_for_mode(mode)", worker)
         # Critic-denial policy must remain an EXECUTE request, therefore BLOCKED.
