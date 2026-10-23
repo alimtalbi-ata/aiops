@@ -1,0 +1,18 @@
+{
+  "schema": "STAR_EVIDENCE_BUNDLE_V1",
+  "run_id": "RUN-ACME-0001",
+  "incident_id": "ACME-DEMO-SAN-001",
+  "correlation_id": "CORR-ACME-0001",
+  "provenance": "SIMULATED_TARGET",
+  "snapshots": [
+    {
+      "cue": "detect",
+      "service": "grafana",
+      "view": "alert_dashboard",
+      "proof_state": "simulated",
+      "provenance": "SIMULATED_TARGET",
+      "run_id": "RUN-ACME-0001",
+      "correlation_id": "CORR-ACME-0001"
+    }
+  ]
+}
