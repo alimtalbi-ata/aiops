@@ -4,10 +4,16 @@ import unittest
 from pathlib import Path
 from demo.star_capture_evidence import verify_manifest
 
-# Minimal PNG fixture with valid signature and IHDR dimensions; no browser claim.
-PNG = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR" +
-       b"\x00\x00\x00\x01\x00\x00\x00\x01" +
-       b"\x08\x02\x00\x00\x00" + b"\x00\x00\x00\x00")
+# Structurally complete SYNTHETIC PNG, not a browser/runtime screenshot.
+import struct
+import zlib
+
+def _chunk(kind, payload=b""):
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+
+PNG = (b"\x89PNG\r\n\x1a\n" +
+       _chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)) +
+       _chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00")) + _chunk(b"IEND"))
 
 class CaptureEvidenceTests(unittest.TestCase):
     def setUp(self):
@@ -47,6 +53,14 @@ class CaptureEvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_manifest(self.root, "ACME-TEST-001", {
                 "detect": {**self.record, "screenshot_path": "evidence/../alert.png"}
+            })
+
+    def test_valid_sha_but_malformed_png_rejected(self):
+        malformed = PNG[:-12]
+        (self.root / "evidence/alert.png").write_bytes(malformed)
+        with self.assertRaisesRegex(ValueError, "IEND"):
+            verify_manifest(self.root, "ACME-TEST-001", {
+                "detect": {**self.record, "sha256": hashlib.sha256(malformed).hexdigest()}
             })
 
     def test_synthetic_cannot_be_claimed_as_real(self):
