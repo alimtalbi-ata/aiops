@@ -19,8 +19,15 @@ def verify_legacy_pngs(document: dict, root: Path) -> dict:
     seen_names = set()
     for original, row in zip(captures, report["entries"]):
         name = original.get("file")
-        if name is None and original.get("screenshot"):
-            name = Path(original["screenshot"]).name
+        if name is None and isinstance(original.get("screenshot"), str):
+            historical = original["screenshot"]
+            # Historical absolute paths must be a canonical POSIX path with no traversal.
+            if ("\\" in historical or "\x00" in historical or
+                    any(part in ("", ".", "..") for part in historical.split("/")[1:]) or
+                    not historical.startswith("/home/aiops/")):
+                row["migration_note"] = "unsafe_historical_path"
+                continue
+            name = historical.rsplit("/", 1)[-1]
         # Legacy absolute paths are not trusted; require an exact leaf basename.
         if not isinstance(name, str) or name != Path(name).name or not name.endswith(".png"):
             continue
