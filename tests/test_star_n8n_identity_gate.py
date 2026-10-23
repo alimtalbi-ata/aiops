@@ -50,6 +50,17 @@ class N8nIdentityGateTests(unittest.TestCase):
                 payload["prepare_analyst_03"]["run_id"] = invalid
                 verify_handoff(payload)
 
+    def test_identity_alias_or_shadow_field_rejected_at_every_stage(self):
+        for stage in STAGES:
+            for shadow in ({"runId": "RUN-OTHER-999"},
+                           {"identity": {"run_id": "RUN-OTHER-999"}},
+                           {"run_id_shadow": "RUN-OTHER-999"}):
+                with self.subTest(stage=stage, shadow=shadow), self.assertRaisesRegex(
+                        IdentityRejected, "identity schema mismatch"):
+                    payload = sample()
+                    payload[stage].update(shadow)
+                    verify_handoff(payload)
+
     def test_extra_stage_rejected(self):
         with self.assertRaises(IdentityRejected):
             verify_handoff({**sample(), "post_hoc_recovery": dict(IDENTITY)})
