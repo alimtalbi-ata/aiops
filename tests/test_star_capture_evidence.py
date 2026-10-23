@@ -63,6 +63,16 @@ class CaptureEvidenceTests(unittest.TestCase):
                 "detect": {**self.record, "sha256": hashlib.sha256(malformed).hexdigest()}
             })
 
+    def test_same_png_cannot_prove_two_distinct_scenes(self):
+        # Different filenames/metadata are insufficient if bytes are identical.
+        (self.root / "evidence/second.png").write_bytes(PNG)
+        ticket = {**self.record, "service": "glpi", "view": "incident_ticket",
+                  "source_url": "http://localhost:8080/front/ticket.form.php?id=123",
+                  "screenshot_path": "evidence/second.png",
+                  "captured_at": "2026-10-23T10:00:30+02:00"}
+        with self.assertRaisesRegex(ValueError, "reused"):
+            verify_manifest(self.root, "ACME-TEST-001", {"detect": self.record, "ticket": ticket})
+
     def test_synthetic_cannot_be_claimed_as_real(self):
         with self.assertRaises(ValueError):
             verify_manifest(self.root, "ACME-TEST-001", {
