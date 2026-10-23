@@ -71,3 +71,10 @@ Il ne corrige pas le workflow n8n de production : il contrôle uniquement des
 observations expurgées. Le succès technique n8n, l'identité métier, la validation
 HITL et les effets LIVE restent des validations indépendantes. Aucun changement
 Debian, aucun import et aucune capture runtime ne sont requis pour ce contrôle.
+
+
+## Addendum V2.13.44 — ancrage temporel indépendant (23 octobre 2026)
+
+Le nouveau `demo/star_event_capture_alignment.py` confronte, **hors réseau**, les manifestes Chromium et PNG déjà qualifiés à une **ancre d'événement externe fournie séparément**, avec les mêmes `run_id`, `correlation_id`, `event_ref`. Tolérance bornée par défaut : 3 s d'écart d'horloge et 120 s de délai après l'événement. Les captures hors fenêtre, les ancres manquantes, les identités contradictoires et les mélanges de provenance fixture/runtime sont refusés. La source d'événement et son SHA-256 déclaré ne sont **pas authentifiés** par ce module ; le résultat reste `CONSISTENT_UNAUTHENTICATED`, sans validation HITL ou métier.
+
+HLD/LLD, limites, rollback et qualification : `docs/demo/STAR-EVENT-CAPTURE-TIME-ALIGNMENT-V21344.md`. CI offline dédiée : `.github/workflows/star-event-capture-alignment-offline.yml`. Aucune navigation Debian, aucun ticket ni conteneur modifié.
