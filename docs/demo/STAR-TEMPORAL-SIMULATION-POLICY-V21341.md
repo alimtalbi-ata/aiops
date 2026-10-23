@@ -27,3 +27,9 @@ Accept only if dedicated CI passes on exact SHA **and** subsequent synthetic Run
 ## Docker packaging correction
 
 The worker Dockerfile uses `COPY shared /app/shared` with build context `./app`. Therefore the helper must be located at `app/shared/simulation_policy_contract.py`, **not** the repository-root `shared/` directory. A previous intermediate commit used the wrong path and produced an unhealthy worker in isolated CI run 39989661396 (no production involvement). The branch has been corrected; CI now imports the same module path as the container via `PYTHONPATH=app:.` and asserts the packaged file exists. Promotion requires a new full E2E pass.
+
+## Final isolated E2E qualification — PASS (23 October 2026)
+
+[Quality Gates #39990075704](https://github.com/alimtalbi-ata/aiops/actions/runs/39990075704) **PASS**, including runtime-e2e, database migrations, build/package, MariaDB rehearsal, migration runner and release kit. Genuine GitHub CI artifact `aiops2-runtime-e2e-report` records synthetic run `RUN-2E4FD6F4E57F2967`: **RESOLVED**, Analyst=1, Critic=1 (validated), Policy=1 (**PASS|SIMULATE**), evidence=13, effect receipts=**0**, P1, 29 events. The deterministic five-case advisory evaluation also reports PASS with `ci-deterministic` provider. These are **isolated CI fixtures**, not DGX production, Debian runtime screenshots, real Payments incident closure, authenticated HITL, or authorization to execute LIVE actions.
+
+This qualifies the simulation Policy contract and resolves the specific synthetic Quality Gates blocker. It does **not** close the separate V1 02/03 `RUN_ID_MISSING` diagnostic or authenticate the ACME STAR portal snapshots.
