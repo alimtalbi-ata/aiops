@@ -26,11 +26,22 @@ _ALLOWED_FIELDS = frozenset({
     "source_url_redacted", "event_time_alignment", "runtime_page_authenticated",
     "business_outcome_verified", "human_approval_authenticated",
 })
-_REDACTED_ROUTES = frozenset({
-    "{origin}/front/ticket.form.php?{id_redacted}",
-    "{origin}/{workflow_route_redacted}/executions/{event_ref}",
-    "{origin}/d/{dashboard_uid}/{slug_redacted}",
-})
+_REDACTED_ROUTE_BY_SERVICE = {
+    "glpi": "{origin}/front/ticket.form.php?{id_redacted}",
+    "n8n": "{origin}/{workflow_route_redacted}/executions/{event_ref}",
+    "grafana": "{origin}/d/{dashboard_uid}/{slug_redacted}",
+}
+_TIME_UNVERIFIED = "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate keys instead of trusting JSON's last-key-wins behavior."""
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate capture manifest JSON key")
+        result[key] = value
+    return result
 _FORBIDDEN = {"runtime_authenticated", "runtime_page_authenticated", "business_validated",
               "business_outcome_verified", "human_approval_authenticated", "live_action_authorized",
               "remediation_executed", "release_promotable", "verified_real_capture", "claim_real"}
@@ -61,16 +72,18 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         manifest_file = _file(root, name, ".json")
         if manifest_file.stat().st_size > 16_384:
             raise ValueError("oversized capture manifest")
-        item = json.loads(manifest_file.read_text(encoding="utf-8"))
+        item = json.loads(manifest_file.read_text(encoding="utf-8"),
+                          object_pairs_hook=_unique_json_object)
         if not isinstance(item, dict) or item.get("schema") != "star-browser-evidence/v1":
             raise ValueError("invalid Chromium manifest schema")
         if set(item) - _ALLOWED_FIELDS:
             raise ValueError("unexpected capture metadata fields")
-        if "source_url_redacted" in item and item["source_url_redacted"] not in _REDACTED_ROUTES:
-            raise ValueError("unsafe or unredacted source URL")
-        if ("event_time_alignment" in item and
-                item["event_time_alignment"] != "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"):
-            raise ValueError("unverified event alignment cannot claim success")
+        # Both fields are mandatory: absence must not bypass the trust boundary.
+        # A valid route from another service is still the WRONG application page.
+        if item.get("source_url_redacted") != _REDACTED_ROUTE_BY_SERVICE.get(item.get("service")):
+            raise ValueError("missing, unsafe or cross-service capture route")
+        if item.get("event_time_alignment") != _TIME_UNVERIFIED:
+            raise ValueError("missing or falsely attested event time alignment")
         if any(item.get(k) not in (None, False) for k in _FORBIDDEN):
             raise ValueError("untrusted browser manifest claims authority")
         cue_name = item.get("cue")
