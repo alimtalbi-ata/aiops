@@ -14,7 +14,7 @@ For DEMO/REPLAY/STORY, the worker now requests Policy `command=OBSERVE` as a **n
 
 ## LLD — code and tests
 
-- `shared/simulation_policy_contract.py`: pure `policy_command_for_mode` mapping; unknown modes raise ValueError.
+- `app/shared/simulation_policy_contract.py`: pure `policy_command_for_mode` mapping; unknown modes raise ValueError.
 - `app/worker/main.py`: mapping used only when assembling the normal POLICY stage input. Denial paths are unchanged.
 - `tests/test_simulation_policy_contract.py`: three offline contract tests (DEMO/REPLAY/STORY, LIVE, unknown mode).
 - `tests/test_simulation_policy_wiring.py`: validates actual worker wiring and evaluates Policy with mocked healthy autonomy state and emergency stop **enabled**, requiring `PASS|SIMULATE` for synthetic modes and `BLOCKED|ESCALATE` for LIVE.
@@ -23,3 +23,7 @@ For DEMO/REPLAY/STORY, the worker now requests Policy `command=OBSERVE` as a **n
 ## Acceptance, limits and rollback
 
 Accept only if dedicated CI passes on exact SHA **and** subsequent synthetic Runtime E2E reaches RESOLVED with Analyst, Critic, Policy PASS|SIMULATE, evidence and zero effect receipts. A technically successful n8n/Temporal run is not sufficient to assert business success. If E2E still fails, preserve the fail-closed gate and inspect the sanitized Policy reason. No authentic Debian application screenshots were collected. Revert the worker mapping commit and related helper/tests/docs on the PR branch to roll back; never merge main automatically.
+
+## Docker packaging correction
+
+The worker Dockerfile uses `COPY shared /app/shared` with build context `./app`. Therefore the helper must be located at `app/shared/simulation_policy_contract.py`, **not** the repository-root `shared/` directory. A previous intermediate commit used the wrong path and produced an unhealthy worker in isolated CI run 39989661396 (no production involvement). The branch has been corrected; CI now imports the same module path as the container via `PYTHONPATH=app:.` and asserts the packaged file exists. Promotion requires a new full E2E pass.
