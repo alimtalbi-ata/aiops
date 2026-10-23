@@ -18,3 +18,6 @@ The offline V2.13.30-derived local candidate with V2.13.31 firewall passed 248/2
 
 ## CI follow-up (2026-10-23)
 The first Quality Gates run after fixing the import progressed beyond `ModuleNotFoundError: policy`, but policy tests then failed because the GitHub runner cannot initialize the default `/var/lib/aiops-policy` SQLite path. Commit `befdbf58` adds an isolated temporary SQLite fixture, an explicit NORMAL state and a **test-process-only** emergency-stop override to exercise denial ordering. This is **not** a runtime configuration change, and does not enable LIVE effects. Quality Gates and Runtime E2E remain unqualified until their subsequent CI results are inspected.
+
+## CI artifact 39913953996: runtime E2E root symptom
+The **actual GitHub Actions artifact**, not a Debian screenshot, reports `result=FAIL`, `run_status=BLOCKED`, `failure_reason=expected_synthetic_run_resolved_without_effects_but_status_BLOCKED`, and zero Analyst/Critic/Policy/Evidence records. The synthetic `run_id` was created, but the business workflow did not qualify. Do **not** rewrite the E2E test to accept BLOCKED as RESOLVED. Next step: inspect the isolated CI worker run events and stage denial reason; never alter the production V1 bridge.
