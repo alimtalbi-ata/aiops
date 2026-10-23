@@ -15,3 +15,6 @@ The historical 02 Webhook→RAG→Canonical Identity→Call Analyst and 03 Prepa
 
 ## Qualification and rollback
 The offline V2.13.30-derived local candidate with V2.13.31 firewall passed 248/248 STAR tests and compileall; this **does not qualify the exact GitHub checkout or Debian runtime**. Review GitHub Snapshot Metadata and Quality Gates at the new SHA. No automatic merge. Revert only the specific V2.13.31 commits on the PR branch after checking HEAD, without force-push.
+
+## CI follow-up (2026-10-23)
+The first Quality Gates run after fixing the import progressed beyond `ModuleNotFoundError: policy`, but policy tests then failed because the GitHub runner cannot initialize the default `/var/lib/aiops-policy` SQLite path. Commit `befdbf58` adds an isolated temporary SQLite fixture, an explicit NORMAL state and a **test-process-only** emergency-stop override to exercise denial ordering. This is **not** a runtime configuration change, and does not enable LIVE effects. Quality Gates and Runtime E2E remain unqualified until their subsequent CI results are inspected.
