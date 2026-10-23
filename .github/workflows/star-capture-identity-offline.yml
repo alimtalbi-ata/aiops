@@ -1,0 +1,32 @@
+name: STAR capture identity gate (offline)
+on:
+  pull_request:
+    paths:
+      - 'demo/star_capture_identity_guard.py'
+      - 'tests/test_star_capture_identity_guard.py'
+      - 'docs/demo/STAR-CAPTURE-IDENTITY-HLD-LLD-V21335.md'
+      - '.github/workflows/star-capture-identity-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-identity-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - name: Checkout PR SHA without persisted token
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile identity contract
+        run: python -m py_compile demo/star_capture_identity_guard.py
+      - name: Run isolated identity tests
+        run: python -m unittest discover -s tests -p 'test_star_capture_identity_guard.py' -v
