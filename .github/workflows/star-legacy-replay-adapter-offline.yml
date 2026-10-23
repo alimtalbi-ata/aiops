@@ -1,0 +1,31 @@
+name: STAR legacy replay adapter (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_legacy_replay_adapter.py'
+      - 'tests/test_star_legacy_replay_adapter.py'
+      - 'docs/recovery/LEGACY-V2134-REPLAY-ADAPTER-20261023.md'
+      - '.github/workflows/star-legacy-replay-adapter-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-replay-adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile adapter and tests
+        run: python -m py_compile demo/star_legacy_replay_adapter.py tests/test_star_legacy_replay_adapter.py
+      - name: Offline deterministic tests
+        run: python -m unittest discover -s tests -p 'test_star_legacy_replay_adapter.py' -v
