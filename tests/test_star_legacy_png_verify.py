@@ -37,4 +37,26 @@ class LegacyPngVerify(unittest.TestCase):
             d={"browser":"Chromium","automation":"Playwright","captures":[
                 {"name":"a","service":"Grafana","status":"PASS","file":"a.png","sha256":"a"*64}]}
             self.assertFalse(verify_legacy_pngs(d,root)["entries"][0]["capture_file_available"])
+    def test_duplicate_filename_cannot_claim_second_verified_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data=self._sample()
+            (Path(tmp)/"shared.png").write_bytes(data)
+            h=hashlib.sha256(data).hexdigest()
+            d={"browser":"Chromium","automation":"Playwright","captures":[
+                {"name":"08-glpi","service":"GLPI","status":"PASS","file":"shared.png","sha256":h},
+                {"name":"09-n8n","service":"n8n","status":"PASS","file":"shared.png","sha256":h}]}
+            items=verify_legacy_pngs(d,Path(tmp))["entries"]
+            self.assertTrue(items[0]["integrity_verified"])
+            self.assertFalse(items[1]["integrity_verified"])
+            self.assertEqual(items[1]["migration_note"],"duplicate_filename")
+    def test_failed_legacy_capture_never_qualifies_even_with_matching_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data=self._sample()
+            (Path(tmp)/"failed.png").write_bytes(data)
+            d={"browser":"Chromium","automation":"Playwright","captures":[
+                {"name":"08-glpi","service":"GLPI","status":"FAIL",
+                 "file":"failed.png","sha256":hashlib.sha256(data).hexdigest()}]}
+            entry=verify_legacy_pngs(d,Path(tmp))["entries"][0]
+            self.assertFalse(entry["integrity_verified"])
+            self.assertEqual(entry["migration_note"],"legacy_capture_failed")
 if __name__=="__main__":unittest.main()
