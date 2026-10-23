@@ -3,10 +3,10 @@
 This is offline integrity verification, never runtime/business authentication.
 """
 from __future__ import annotations
-import hashlib
 from pathlib import Path
 from collections.abc import Mapping
 from demo.star_legacy_playwright_audit import audit_legacy_manifest
+from demo.star_png_integrity import inspect_png
 
 def verify_legacy_pngs(document: dict, root: Path) -> dict:
     report = audit_legacy_manifest(document)
@@ -29,12 +29,11 @@ def verify_legacy_pngs(document: dict, root: Path) -> dict:
         expected=original.get("sha256")
         if not isinstance(expected,str) or len(expected)!=64 or any(x not in "0123456789abcdef" for x in expected):
             continue
-        if p.stat().st_size > 24 * 1024 * 1024 or p.stat().st_size < 24:
-            continue
-        data=p.read_bytes()
-        if not data.startswith(b"\x89PNG\r\n\x1a\n") or b"IEND" not in data[-20:]:
+        try:
+            actual, _ = inspect_png(p)
+        except (OSError, ValueError):
             continue
         row["capture_file_available"]=True
-        row["integrity_verified"]=hashlib.sha256(data).hexdigest()==expected
+        row["integrity_verified"]=actual==expected
         # Offline byte integrity is NEVER live origin attestation.
     return report
