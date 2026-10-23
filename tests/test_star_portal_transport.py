@@ -4,9 +4,18 @@ import tempfile
 import unittest
 from pathlib import Path
 from demo.star_portal_transport import export_storyboard
-from demo.star_capture_evidence import PNG_SIGNATURE
+from demo.star_png_integrity import PNG_SIGNATURE
+import struct
+import zlib
 
-PNG = PNG_SIGNATURE + b"\x00\x00\x00\x0dIHDR" + b"\x00\x00\x00\x01\x00\x00\x00\x01" + b"\x08\x02\x00\x00\x00" + b"\x00\x00\x00\x00"
+# Complete synthetic PNG; no browser or runtime evidence is claimed.
+def _chunk(kind, payload=b""):
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+
+PNG = (PNG_SIGNATURE +
+       _chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)) +
+       _chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00")) +
+       _chunk(b"IEND"))
 
 class PortalTransportTests(unittest.TestCase):
     def test_export_nine_cues_without_claiming_browser_proof(self):
