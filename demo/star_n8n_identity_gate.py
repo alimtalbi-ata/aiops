@@ -25,6 +25,11 @@ class IdentityRejected(ValueError):
 def _identity(stage: str, payload: object) -> dict[str, str]:
     if not isinstance(payload, Mapping):
         raise IdentityRejected(f"{stage}: missing identity object")
+    # Refuse unknown/alias fields: a second identity must not be hidden beside
+    # the canonical one (e.g. runId, identity.run_id or a shadow run_id).
+    # The input contract is intentionally *only* the three canonical strings.
+    if set(payload) != set(FIELDS):
+        raise IdentityRejected(f"{stage}: identity schema mismatch")
     result: dict[str, str] = {}
     for field in FIELDS:
         value = payload.get(field)
