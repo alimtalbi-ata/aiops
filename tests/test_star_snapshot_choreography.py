@@ -21,7 +21,8 @@ class SnapshotChoreographyTests(unittest.TestCase):
                   "captured_at": "2026-10-22T20:00:00+02:00",
                   "run_id": "DEMO-ONLY", "screenshot_path": "evidence/demo.png",
                   "sha256": "a" * 64}
-        self.assertTrue(validate_capture("detect", record)["verified_real_capture"])
+        self.assertTrue(validate_capture("detect", record)["metadata_complete"])
+        self.assertFalse(validate_capture("detect", record)["verified_real_capture"])
         with self.assertRaises(ValueError):
             validate_capture("detect", {**record, "sha256": "bad"})
 

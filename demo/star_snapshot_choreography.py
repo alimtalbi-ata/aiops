@@ -64,7 +64,8 @@ def validate_capture(cue_name: str, record: Mapping[str, object]) -> dict[str, o
         "view": cue.view,
         "required_state": cue.required_state,
         "proof_state": state,
-        "verified_real_capture": state == ProofState.CAPTURED.value,
+        "metadata_complete": state == ProofState.CAPTURED.value,
+        "verified_real_capture": False,  # Metadata cannot authenticate a runtime screenshot.
     }
 
 def build_timeline(records: Mapping[str, Mapping[str, object]]) -> list[dict[str, object]]:
