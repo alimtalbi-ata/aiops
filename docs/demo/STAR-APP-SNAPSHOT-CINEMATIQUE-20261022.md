@@ -56,3 +56,18 @@ L'adaptateur navigateur Chromium lecture seule V2.13.34 est **candidat local en 
 Le contrôle hors ligne `demo/star_browser_manifest_gate.py` impose désormais la présence d'un gabarit de lien profond **expurgé et propre au service attendu** : Grafana pour détection/vérification, n8n pour exécutions, GLPI V1 pour ticket/HITL/clôture. Un manifeste de scène Grafana qui contient une route GLPI, même valide en soi, est rejeté. Les clés JSON dupliquées sont rejetées ; `event_time_alignment` est obligatoire et reste `UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP`.
 
 Ce correctif ne constitue ni une capture runtime, ni une preuve d'anonymisation humaine, ni une validation HITL/métier. Les captures authentiques :17777 / n8n / Grafana / GLPI V1 :8080 nécessitent toujours l'adaptateur Chromium autorisé, les pages exactes et une corrélation événementielle indépendante. Le diagnostic V1 02→03 `RUN_ID_MISSING` reste ouvert. Aucun port ou service Debian n'a été modifié.
+
+
+### Qualification V2.13.42 — identités n8n 02→03 sans alias (23/10/2026)
+
+Le contrat hors ligne `demo/star_n8n_identity_gate.py` impose maintenant **exactement**
+`run_id`, `incident_id`, `correlation_id` pour chacun des quatre relevés
+`webhook_02`, `rag_02`, `canonical_02`, `prepare_analyst_03`. Tout champ
+additionnel (`runId`, `identity`, `run_id_shadow`) entraîne
+`IDENTITY_UNVERIFIED` avant toute interprétation. Ce durcissement évite de
+qualifier une observation portant simultanément deux identités contradictoires.
+
+Il ne corrige pas le workflow n8n de production : il contrôle uniquement des
+observations expurgées. Le succès technique n8n, l'identité métier, la validation
+HITL et les effets LIVE restent des validations indépendantes. Aucun changement
+Debian, aucun import et aucune capture runtime ne sont requis pour ce contrôle.
