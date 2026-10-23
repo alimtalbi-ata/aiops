@@ -12,7 +12,7 @@
 | Code PR #36 / V2.13.46 | `demo/star_legacy_replay_adapter.py` | Réutilisé directement ; pas de nouveau moteur replay. |
 | Code PR #36 / V2.13.x | `demo/star_portal_transport.py`, `demo/star_scene_scripts.py`, `demo/star_snapshot_choreography.py` | Contrats réutilisés : neuf checkpoints et vues exactes. |
 
-Les SHA historiques proviennent de `docs/recovery/LEGACY-V2134-REPLAY-ADAPTER-20261023.md` ; ils **ne constituent pas une nouvelle vérification des archives originales** lors de ce cycle. Le candidat offline V2.13.46 et les sources GitHub de la PR ont été inspectés avant développement.
+Les SHA historiques ont été **revérifiés sur les octets des trois ZIP originaux de la Library le 24 octobre 2026**, sans extraction vers GitHub : V2.13.4 archive `83d71029197e0c23310a5e466ad68dfcb6e04683160bc3e0e5b9302edbe85550` ; V2.13.6.1 archive `0f382f64a3da7ad0e81c3fde33a2c800ea73844f1ea7f38711ab7b17979a5f29` ; V2.13.10 archive `cdca139131dbbac7adb2f811077c25e94dd01899a6ec33c37ea067d26a351d87`. `build_real_replay.py` fait 12 103 octets, SHA `f71a568f4229402a6f6b5238552efbdd18fa41320c8c285afedc386812bbb97d`, identique dans V2.13.4 et V2.13.6.1. `tests/test_replay.py` (1 762 octets) et `tools/assemble_hybrid.py` (2 628 octets) sont également identiques entre les deux archives. Le portail V2.13.10 `portal_demo_public_v21310.py` (1 762 octets) porte le SHA `5bee897914ec958af0f715f24eee229b9f9539a3df5da4f9c43cb8746ad60ee0`. Les sources GitHub de la PR ont été inspectées avant développement. Aucun secret ni contenu des archives n'est publié.
 
 ## Besoin métier et HLD/LLD
 
