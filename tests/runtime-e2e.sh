@@ -17,13 +17,21 @@ ANALYSIS_SEVERITY="UNKNOWN"
 CRITIQUE_VALIDATED="false"
 POLICY_RESULT="UNKNOWN"
 EVENT_TYPES=""
+EVENT_COUNT=0
+LAST_EVENT_STAGE="UNKNOWN"
+LAST_EVENT_TYPE="UNKNOWN"
 DB_USER="$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-)"
 DB_NAME="$(grep -m1 '^POSTGRES_DB=' .env | cut -d= -f2-)"
 DB_USER="${DB_USER:-aiops}"; DB_NAME="${DB_NAME:-aiops}"
 psqlc() { docker compose --env-file .env exec -T aiops2-postgres psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -Atqc "$1"; }
 write_report() {
-  RESULT="$RESULT" FAILURE="$FAILURE" RUN_ID="$RUN_ID" RUN_STATUS="$RUN_STATUS" ANALYSIS_COUNT="$ANALYSIS_COUNT" CRITIQUE_COUNT="$CRITIQUE_COUNT" POLICY_COUNT="$POLICY_COUNT" EVIDENCE_COUNT="$EVIDENCE_COUNT" EFFECT_COUNT="$EFFECT_COUNT" ANALYSIS_SEVERITY="$ANALYSIS_SEVERITY" CRITIQUE_VALIDATED="$CRITIQUE_VALIDATED" POLICY_RESULT="$POLICY_RESULT" EVENT_TYPES="$EVENT_TYPES" python3 - <<'PY'
-import json, os, pathlib, datetime
+  RESULT="$RESULT" FAILURE="$FAILURE" RUN_ID="$RUN_ID" RUN_STATUS="$RUN_STATUS" ANALYSIS_COUNT="$ANALYSIS_COUNT" CRITIQUE_COUNT="$CRITIQUE_COUNT" POLICY_COUNT="$POLICY_COUNT" EVIDENCE_COUNT="$EVIDENCE_COUNT" EFFECT_COUNT="$EFFECT_COUNT" ANALYSIS_SEVERITY="$ANALYSIS_SEVERITY" CRITIQUE_VALIDATED="$CRITIQUE_VALIDATED" POLICY_RESULT="$POLICY_RESULT" EVENT_TYPES="$EVENT_TYPES" EVENT_COUNT="$EVENT_COUNT" LAST_EVENT_STAGE="$LAST_EVENT_STAGE" LAST_EVENT_TYPE="$LAST_EVENT_TYPE" python3 - <<'PY'
+import json, os, pathlib, datetime, re
+
+def safe_label(name):
+    value=os.getenv(name, 'UNKNOWN')
+    return value if re.fullmatch(r'[A-Z][A-Z0-9_]{0,63}', value) else 'REDACTED'
+
 p=pathlib.Path("reports")/("runtime-e2e-"+(os.getenv("RUN_ID") or "startup")+".json")
 data={
  "qualification":"AIOps 2.0 Temporal synthetic end-to-end",
@@ -40,7 +48,10 @@ data={
  "analysis_severity":os.getenv("ANALYSIS_SEVERITY"),
  "critique_validated":os.getenv("CRITIQUE_VALIDATED")=="true",
  "policy_result":os.getenv("POLICY_RESULT"),
- "event_types":[x for x in os.getenv("EVENT_TYPES","").split(",") if x],
+ "event_types":[x for x in os.getenv("EVENT_TYPES","").split(",") if re.fullmatch(r'[A-Z][A-Z0-9_]{0,63}',x)],
+ "event_count":int(os.getenv("EVENT_COUNT","0")),
+ "last_event_stage":safe_label("LAST_EVENT_STAGE"),
+ "last_event_type":safe_label("LAST_EVENT_TYPE"),
  "mode":"DEMO",
  "live_execution":"disabled",
  "note":"Synthetic CI provider and twin evidence only; this is not real-model or production qualification."
@@ -74,7 +85,9 @@ for i in $(seq 1 180); do
   [[ "$RUN_STATUS" =~ ^(BLOCKED|RESOLVED|FAILED|CANCELLED)$ ]] && break
   sleep 1
 done
-[[ "$RUN_STATUS" == "RESOLVED" ]] || { FAILURE="expected_synthetic_run_resolved_without_effects_but_status_$RUN_STATUS"; exit 1; }
+EVENT_COUNT="$(psqlc "select count(*) from aiops.run_events where run_id='$RUN_ID'")"
+LAST_EVENT_STAGE="$(psqlc "select coalesce(stage,'UNKNOWN') from aiops.run_events where run_id='$RUN_ID' order by sequence desc limit 1")"
+LAST_EVENT_TYPE="$(psqlc "select coalesce(event_type,'UNKNOWN') from aiops.run_events where run_id='$RUN_ID' order by sequence desc limit 1")"
 ANALYSIS_COUNT="$(psqlc "select count(*) from aiops.analysis_records where run_id='$RUN_ID'")"
 CRITIQUE_COUNT="$(psqlc "select count(*) from aiops.critique_records where run_id='$RUN_ID'")"
 POLICY_COUNT="$(psqlc "select count(*) from aiops.policy_decisions where run_id='$RUN_ID'")"
@@ -84,6 +97,9 @@ ANALYSIS_SEVERITY="$(psqlc "select coalesce(output->>'severity','UNKNOWN') from 
 CRITIQUE_VALIDATED="$(psqlc "select coalesce(validated,false)::text from aiops.critique_records where run_id='$RUN_ID' order by created_at desc limit 1")"
 POLICY_RESULT="$(psqlc "select coalesce(state,'UNKNOWN')||'|'||coalesce(decision,'UNKNOWN') from aiops.policy_decisions where run_id='$RUN_ID' order by created_at desc limit 1")"
 EVENT_TYPES="$(psqlc "select coalesce(string_agg(event_type,',' order by sequence),'') from aiops.run_events where run_id='$RUN_ID'")"
+# Collect diagnostic counts even for BLOCKED runs. Previously this check ran
+# before the queries, yielding misleading zero counts in failure artifacts.
+[[ "$RUN_STATUS" == "RESOLVED" ]] || { FAILURE="expected_synthetic_run_resolved_without_effects_but_status_$RUN_STATUS"; exit 1; }
 [[ "$ANALYSIS_COUNT" -ge 1 ]] || { FAILURE="analysis_record_missing"; exit 1; }
 [[ "$CRITIQUE_COUNT" -ge 1 ]] || { FAILURE="critique_record_missing"; exit 1; }
 [[ "$POLICY_COUNT" -ge 1 ]] || { FAILURE="policy_decision_missing"; exit 1; }
