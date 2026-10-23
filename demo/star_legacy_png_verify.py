@@ -14,6 +14,7 @@ def verify_legacy_pngs(document: dict, root: Path) -> dict:
     base = root.resolve(strict=True)
     if not base.is_dir() or root.is_symlink():
         raise ValueError("invalid evidence root")
+    seen_names = set()
     for original, row in zip(captures, report["entries"]):
         name = original.get("file")
         if name is None and original.get("screenshot"):
@@ -22,6 +23,14 @@ def verify_legacy_pngs(document: dict, root: Path) -> dict:
         if not isinstance(name, str) or name != Path(name).name or not name.endswith(".png"):
             continue
         if "/" in name or "\\" in name or name.startswith("."):
+            continue
+        # Repeated filenames make historical attribution ambiguous: fail closed.
+        if name in seen_names:
+            row["migration_note"] = "duplicate_filename"
+            continue
+        seen_names.add(name)
+        if original.get("status") != "PASS":
+            row["migration_note"] = "legacy_capture_failed"
             continue
         p = root / name
         if p.is_symlink() or not p.is_file() or p.resolve().parent != base:
