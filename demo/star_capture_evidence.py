@@ -46,6 +46,7 @@ def verify_manifest(
         raise ValueError("unrecognized STAR cue")
     entries = []
     previous = None
+    seen_digests: set[str] = set()
     for cue_name, cue in CUE_BY_NAME.items():
         record = capture_records.get(cue_name)
         if record is None:
@@ -64,6 +65,12 @@ def verify_manifest(
             raise ValueError("invalid expected SHA")
         if actual_digest != declared_digest:
             raise ValueError("screenshot hash mismatch")
+        # Two distinct STAR scenes cannot be substantiated by identical PNG
+        # bytes, even if both records carry a valid SHA-256. This catches
+        # accidental replay/relabeling of the same image across applications.
+        if actual_digest in seen_digests:
+            raise ValueError("screenshot reused across STAR cues")
+        seen_digests.add(actual_digest)
         captured = datetime.fromisoformat(str(record["captured_at"]).replace("Z", "+00:00"))
         if previous is not None and captured < previous:
             raise ValueError("nonmonotonic capture timeline")
