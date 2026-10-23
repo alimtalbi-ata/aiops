@@ -16,7 +16,7 @@
 
 **Besoin métier :** rejouer de façon déterministe une séquence historique SAN/Payments, de l'ingestion au diagnostic Analyst/Critic puis à la décision Policy, sans inventer de preuve, d'identité ou de remédiation. L'ancien générateur V2.13.4 accepte uniquement DEMO/BLOCKED, produit un HTML offline et dépend d'exports Core run.json, ai-ledger.json et evidence.json. Il ne convient pas tel quel au scénario synthétique récent DEMO/RESOLVED.
 
-**Adaptation livrée :** demo/star_legacy_replay_adapter.py fournit la fonction pure build_replay(run, ledger, evidence) et le schéma star-core-legacy-replay/v1. Elle accepte DEMO/BLOCKED et DEMO/RESOLVED, refuse LIVE et les identités run_id divergentes, exige les références Evidence connues et uniques, et émet seulement des champs explicitement autorisés (sévérité P1/P2/P3, booléen validated, confidence finie de 0 à 1). Les identifiants Evidence et les valeurs libres du journal ne sont jamais recopiés dans les frames.
+**Adaptation livrée :** demo/star_legacy_replay_adapter.py fournit la fonction pure build_replay(run, ledger, evidence) et le schéma star-core-legacy-replay/v1. Elle accepte DEMO/BLOCKED et DEMO/RESOLVED, refuse LIVE et les identités run_id divergentes, exige les références Evidence connues et uniques (y compris les identifiants historiques courts comme E1), et émet seulement des champs explicitement autorisés (sévérité P1/P2/P3, booléen validated, confidence finie de 0 à 1). Les identifiants Evidence et les valeurs libres du journal ne sont jamais recopiés dans les frames.
 
 **Chronologie :** tri stable uniquement si chaque enregistrement porte un timestamp exploitable avec fuseau. Dans le cas contraire, l'ordre des collections est conservé et la chronologie est explicitement non prouvée. Les trois empreintes SHA-256 portent sur la représentation JSON canonique des objets en mémoire, **pas** sur les octets originaux des fichiers exportés et **pas** sur leur origine runtime.
 
@@ -24,11 +24,11 @@
 
 ## Qualification effectivement réalisée (23 octobre 2026)
 
-- 9 tests unitaires nouveaux : PASS, fixtures exclusivement synthétiques.
+- 10 tests unitaires nouveaux : PASS, fixtures exclusivement synthétiques.
 - 5 tests originaux V2.13.4 : PASS en répertoire temporaire, sur fixtures synthétiques.
 - Assemblage complet V2.13.4 : PASS dans un répertoire temporaire avec les trois pages HTML originales et des exports synthétiques DEMO/BLOCKED ; aucune API appelée.
 - Compilation Python du nouvel adaptateur et des tests : PASS.
-- CI dédiée : état à vérifier sur le commit GitHub ; ne pas confondre avec qualification Debian.
+- CI dédiée : PASS sur le commit GitHub initial, puis nouvelle qualification à contrôler après correction de compatibilité E1 ; ne pas confondre avec qualification Debian.
 - Les tests historiques **ne** prouvent **pas** la sécurité de diffusion des pages originales. Le script ancien intègre des métadonnées opérateur dans du HTML et reste quarantainé.
 
 ## Limitations, migration et retour arrière
