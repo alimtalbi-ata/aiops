@@ -85,4 +85,24 @@ class LegacyPngVerify(unittest.TestCase):
             self.assertTrue(json.loads(out)["entries"][0]["integrity_verified"])
             with patch.object(sys,"argv",args), self.assertRaises(FileExistsError):
                 main()
+    def test_historical_path_traversal_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data=self._sample()
+            (Path(tmp)/"real.png").write_bytes(data)
+            d={"browser":"Chromium","automation":"Playwright","results":[
+               {"name":"old","status":"PASS","screenshot":"/home/aiops/../real.png",
+                "sha256":hashlib.sha256(data).hexdigest()}]}
+            result=verify_legacy_pngs(d,Path(tmp))["entries"][0]
+            self.assertFalse(result["integrity_verified"])
+            self.assertEqual(result["migration_note"],"unsafe_historical_path")
+    def test_canonical_historical_path_can_verify_offline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data=self._sample()
+            (Path(tmp)/"real.png").write_bytes(data)
+            d={"browser":"Chromium","automation":"Playwright","results":[
+               {"name":"old","status":"PASS","screenshot":"/home/aiops/evidence/real.png",
+                "sha256":hashlib.sha256(data).hexdigest()}]}
+            result=verify_legacy_pngs(d,Path(tmp))["entries"][0]
+            self.assertTrue(result["integrity_verified"])
+            self.assertFalse(result["runtime_authenticated"])
 if __name__=="__main__":unittest.main()
