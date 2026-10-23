@@ -6,6 +6,8 @@ on:
       - 'demo/star_capture_evidence.py'
       - 'demo/star_snapshot_choreography.py'
       - 'tests/test_star_capture_evidence.py'
+      - 'demo/star_portal_storyboard.py'
+      - 'tests/test_star_portal_storyboard.py'
       - 'tests/test_star_snapshot_choreography.py'
       - '.github/workflows/star-capture-evidence.yml'
   workflow_dispatch:
@@ -28,5 +30,5 @@ jobs:
           python-version: '3.12'
       - name: Compile modules
         run: python -m py_compile demo/star_capture_evidence.py demo/star_snapshot_choreography.py
-      - name: Verify offline integrity contracts
-        run: python -m unittest discover -s tests -p 'test_star_*choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v
+      - name: Verify offline integrity and storyboard contracts
+        run: python -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v && python -m unittest discover -s tests -p 'test_star_portal_storyboard.py' -v
