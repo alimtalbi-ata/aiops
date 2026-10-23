@@ -31,6 +31,8 @@ class BrowserManifestGateTests(unittest.TestCase):
                      "captured_at": "2026-10-23T11:00:00+00:00", "sha256": hashlib.sha256(PNG).hexdigest(),
                      "screenshot_file": "detect.png", "provenance": "ISOLATED_TEST_FIXTURE",
                      "capture_transport": "LOCAL_HTML_FIXTURE_NO_HTTP",
+                     "source_url_redacted": "{origin}/d/{dashboard_uid}/{slug_redacted}",
+                     "event_time_alignment": "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP",
                      "anonymization": "SELECTOR_MASKS_UNREVIEWED",
                      "qualification": "CAPTURED_UNREVIEWED_NOT_BUSINESS_PROOF"}
         self.write()
@@ -120,15 +122,49 @@ class BrowserManifestGateTests(unittest.TestCase):
                            ("source_url_redacted", "{origin}/unexpected/path"),
                            ("event_time_alignment", "VERIFIED")):
             with self.subTest(key=key, value=value):
+                original = self.item.get(key)
                 self.item[key] = value
                 self.write()
                 with self.assertRaises(ValueError):
                     self.run_gate()
-                self.item.pop(key)
-        self.item["source_url_redacted"] = "{origin}/d/{dashboard_uid}/{slug_redacted}"
-        self.item["event_time_alignment"] = "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"
+                if original is None:
+                    self.item.pop(key)
+                else:
+                    self.item[key] = original
         self.write()
         self.assertEqual(self.run_gate()["entries"][0]["status"], "simulated")
+
+    def test_required_provenance_fields_fail_closed(self):
+        for field in ("source_url_redacted", "event_time_alignment"):
+            with self.subTest(field=field):
+                previous = self.item.pop(field)
+                self.write()
+                with self.assertRaises(ValueError):
+                    self.run_gate()
+                self.item[field] = previous
+
+    def test_cross_service_redacted_route_rejected(self):
+        for wrong_route in (
+            "{origin}/front/ticket.form.php?{id_redacted}",
+            "{origin}/{workflow_route_redacted}/executions/{event_ref}",
+        ):
+            with self.subTest(route=wrong_route):
+                self.item["source_url_redacted"] = wrong_route
+                self.write()
+                with self.assertRaisesRegex(ValueError, "cross-service"):
+                    self.run_gate()
+        self.item["source_url_redacted"] = "{origin}/d/{dashboard_uid}/{slug_redacted}"
+
+    def test_duplicate_json_keys_rejected_even_if_final_value_is_safe(self):
+        self.write()
+        manifest_path = self.root / "detect.json"
+        raw = manifest_path.read_text()
+        self.assertIn('"source_url_redacted"', raw)
+        raw = raw.replace('"source_url_redacted":',
+                          '"source_url_redacted": "http://evil.invalid/token", "source_url_redacted":', 1)
+        manifest_path.write_text(raw)
+        with self.assertRaisesRegex(ValueError, "duplicate capture manifest JSON key"):
+            self.run_gate()
 
     def test_naive_timestamp_rejected(self):
         self.item["captured_at"] = "2026-10-23T11:00:00"
