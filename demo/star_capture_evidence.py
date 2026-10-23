@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Mapping
 
 from demo.star_snapshot_choreography import CUE_BY_NAME, validate_capture
+from demo.star_png_integrity import inspect_png
 
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,95}$")
 
@@ -28,27 +28,6 @@ def _contained_file(evidence_root: Path, relative_path: str) -> Path:
     if not target.is_relative_to(base) or not target.is_file():
         raise ValueError("capture escaped evidence root or not a file")
     return target
-
-def inspect_png(path: Path, max_bytes: int = 15_000_000) -> tuple[str, int]:
-    """Digest and byte-check a capture, never interpret image pixels as proof."""
-    if path.stat().st_size > max_bytes or path.stat().st_size < 33:
-        raise ValueError("capture size outside limits")
-    sha = hashlib.sha256()
-    total = 0
-    with path.open("rb") as fh:
-        header = fh.read(24)
-        if (header[:8] != PNG_SIGNATURE or header[12:16] != b"IHDR"
-                or int.from_bytes(header[16:20], "big") == 0
-                or int.from_bytes(header[20:24], "big") == 0):
-            raise ValueError("invalid PNG signature or dimensions")
-        sha.update(header)
-        total += len(header)
-        while chunk := fh.read(65536):
-            sha.update(chunk)
-            total += len(chunk)
-            if total > max_bytes:
-                raise ValueError("oversized PNG")
-    return sha.hexdigest(), total
 
 def verify_manifest(
     evidence_root: Path,
