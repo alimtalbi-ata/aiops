@@ -42,3 +42,10 @@ Les transitions STAR doivent gérer les états **en attente**, **capture manquan
 - **Critères de promotion :** CI STAR PASS sur le SHA exact, revue des liens n8n/Grafana/GLPI V1 :8080, qualification Chromium isolée puis captures réelles opérateur liées à l'événement ; validation métier distincte du statut n8n.
 
 **Continuité V1 02/03 :** l'erreur `RUN_ID_MISSING` n'est pas corrigée par ce contrôle de provenance. La chaîne Webhook → RAG → Canonical Identity → Call Analyst → Prepare Analyst Payload doit être diagnostiquée sur exports et exécutions expurgés, sans mutation de la production.
+
+
+## V2.13.34 — Contrôle anti-réutilisation des captures
+
+Le collecteur `demo/star_capture_evidence.py` rejette désormais un même SHA-256 PNG utilisé pour deux scènes STAR différentes, même si les chemins et métadonnées sont distincts. Test adversarial : `test_same_png_cannot_prove_two_distinct_scenes`. Il s'agit d'une **vérification d'intégrité locale**, non d'une authentification de la provenance runtime ou de la décision HITL. Une capture n8n réussie ne prouve pas une validation métier.
+
+L'adaptateur navigateur Chromium lecture seule V2.13.34 est **candidat local en attente de publication** : dry-run par défaut, origine et deep link exacts, GET seulement, isolation fixture hors réseau, identité DOM strictement égale, GLPI V1 `:8080`, fenêtre Grafana absolue, PNG/manifestes à revue humaine. Aucun test sur les instances Debian réelles n'est revendiqué. Le portail unique `:17777`, le bridge V1, les tickets, la CMDB et les workflows historiques restent inchangés. La priorité demeure la propagation de `run_id` de 02 Webhook→RAG→Canonical Identity→Call Analyst jusqu'à 03 Prepare Analyst Payload, sans fabrication d'identité.
