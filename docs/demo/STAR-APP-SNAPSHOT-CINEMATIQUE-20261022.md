@@ -49,3 +49,10 @@ Les transitions STAR doivent gérer les états **en attente**, **capture manquan
 Le collecteur `demo/star_capture_evidence.py` rejette désormais un même SHA-256 PNG utilisé pour deux scènes STAR différentes, même si les chemins et métadonnées sont distincts. Test adversarial : `test_same_png_cannot_prove_two_distinct_scenes`. Il s'agit d'une **vérification d'intégrité locale**, non d'une authentification de la provenance runtime ou de la décision HITL. Une capture n8n réussie ne prouve pas une validation métier.
 
 L'adaptateur navigateur Chromium lecture seule V2.13.34 est **candidat local en attente de publication** : dry-run par défaut, origine et deep link exacts, GET seulement, isolation fixture hors réseau, identité DOM strictement égale, GLPI V1 `:8080`, fenêtre Grafana absolue, PNG/manifestes à revue humaine. Aucun test sur les instances Debian réelles n'est revendiqué. Le portail unique `:17777`, le bridge V1, les tickets, la CMDB et les workflows historiques restent inchangés. La priorité demeure la propagation de `run_id` de 02 Webhook→RAG→Canonical Identity→Call Analyst jusqu'à 03 Prepare Analyst Payload, sans fabrication d'identité.
+
+
+## Addendum V2.13.38 — liaison stricte des pages (23 octobre 2026)
+
+Le contrôle hors ligne `demo/star_browser_manifest_gate.py` impose désormais la présence d'un gabarit de lien profond **expurgé et propre au service attendu** : Grafana pour détection/vérification, n8n pour exécutions, GLPI V1 pour ticket/HITL/clôture. Un manifeste de scène Grafana qui contient une route GLPI, même valide en soi, est rejeté. Les clés JSON dupliquées sont rejetées ; `event_time_alignment` est obligatoire et reste `UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP`.
+
+Ce correctif ne constitue ni une capture runtime, ni une preuve d'anonymisation humaine, ni une validation HITL/métier. Les captures authentiques :17777 / n8n / Grafana / GLPI V1 :8080 nécessitent toujours l'adaptateur Chromium autorisé, les pages exactes et une corrélation événementielle indépendante. Le diagnostic V1 02→03 `RUN_ID_MISSING` reste ouvert. Aucun port ou service Debian n'a été modifié.
