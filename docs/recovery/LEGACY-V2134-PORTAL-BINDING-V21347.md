@@ -1,0 +1,33 @@
+# V2.13.47 — Hybrid Replay V2.13.4 → cinématique STAR (offline)
+
+**Statut :** adaptateur Python sans accès réseau, testé sur données synthétiques. Aucune modification du portail :17777 ni capture Debian. La PR #36 reste en draft.
+
+## Patrimoine réutilisé sans duplication
+
+| Original / version | Chemin / empreinte SHA-256 | Décision |
+|---|---|---|
+| AIOPS-V2.13.4-HYBRID-REPLAY-STAR.zip / V2.13.4 | `tools/build_real_replay.py` / `f71a568f4229402a6f6b5238552efbdd18fa41320c8c285afedc386812bbb97d` | Original complet déjà inventorié ; conserver en quarantaine, ne pas exécuter sur exports opérateur. |
+| Même archive / V2.13.4 | `tools/assemble_hybrid.py` / `ffce55bf4c100642e751e73857a90e50b6f9bc030e4caba8f2bc71268db437d3` | Déjà dans `recovery/legacy_v2134/tools/assemble_hybrid.py` ; ne pas recopier. |
+| AIOPS-V2.13.6.1-HYBRID-FINAL.zip / V2.13.6.1 | `01-Demo/tools/build_real_replay.py` / même SHA-256 | Doublon identifié dans l'inventaire V2.13.46. |
+| Code PR #36 / V2.13.46 | `demo/star_legacy_replay_adapter.py` | Réutilisé directement ; pas de nouveau moteur replay. |
+| Code PR #36 / V2.13.x | `demo/star_portal_transport.py`, `demo/star_scene_scripts.py`, `demo/star_snapshot_choreography.py` | Contrats réutilisés : neuf checkpoints et vues exactes. |
+
+Les SHA historiques proviennent de `docs/recovery/LEGACY-V2134-REPLAY-ADAPTER-20261023.md` ; ils **ne constituent pas une nouvelle vérification des archives originales** lors de ce cycle. Le candidat offline V2.13.46 et les sources GitHub de la PR ont été inspectés avant développement.
+
+## Besoin métier et HLD/LLD
+
+Relier explicitement une scène ACME STAR à une ligne d'export Core (events, stages, analyses, critiques, policy_decisions), sans transformer cette association déclarée en preuve runtime, HITL, ticket ou clôture.
+
+`bind_replay_to_transport(transport, replay, bindings)` consomme les schémas existants `star-portal-transport-v1` et `star-core-legacy-replay/v1`. Exemple de mapping : `{"detect":{"source":"events","source_index":1}}`. `export_legacy_portal_binding(manifest, root, scenario, run, ledger, evidence, bindings)` compose les adaptateurs existants avec un manifeste local.
+
+Flux : exports DEMO → `build_replay` (identité, références Evidence, SHA256 JSON canonique) → `bind_replay_to_transport` ← `export_storyboard` (manifeste, neuf vues) → document `star-legacy-portal-binding/v1`. Bibliothèque standard Python 3.12, aucun accès API, DB ou conteneur.
+
+Seuls SAN_FABRIC_P1/PAYMENTS_P2 et DEMO/BLOCKED ou DEMO/RESOLVED sont admissibles. Chaque binding doit référencer une ligne existante, unique et de famille compatible avec le checkpoint. Une scène sans référence est `unbound`. Les rapprochements sont `operator_declared_unattested`, **jamais** déduits automatiquement d'un horodatage. Identité contradictoire, famille incompatible, index booléen, source réutilisée, timestamp illisible, état LIVE/HITL revendiqué et digest malformé sont refusés. Les champs privés des entrées ne sont pas recopiés.
+
+## Qualification et limites
+
+Tests locaux effectivement exécutés le 24 octobre : **15 nouveaux tests PASS**, **10 tests existants replay PASS**, **2 tests transport PASS**, compilation Python PASS. Les deux scénarios ont été assemblés offline avec manifestes synthétiques sans captures. CI GitHub à vérifier après publication, et aucune qualification globale ou Debian revendiquée.
+
+Aucune route FastAPI, page :17777, capture n8n/Grafana/GLPI, HITL réelle, clôture métier ou remédiation LIVE n'est créée. Les SHA d'export portent sur JSON canonique, pas sur les octets originaux ni sur une provenance runtime authentifiée. L'intégration au portail reste à faire.
+
+**Rollback :** supprimer de la branche PR le module, ses tests, la CI dédiée et cette note ; aucun état externe n'est modifié. Pas de merge automatique.
