@@ -78,6 +78,8 @@ class LegacyPngVerify(unittest.TestCase):
             with patch.object(sys,"argv",args):
                 main()
             out=target.read_text(encoding="utf-8")
+            self.assertEqual(json.loads(out)["entry_count"], 1)
+            self.assertTrue(out.endswith("\n"))
             self.assertNotIn("private",out)
             self.assertNotIn("token=",out)
             self.assertTrue(json.loads(out)["entries"][0]["integrity_verified"])
