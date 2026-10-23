@@ -1,10 +1,13 @@
 import hashlib
+import json
+import sys
+from unittest.mock import patch
 import struct
 import zlib
 import tempfile
 import unittest
 from pathlib import Path
-from demo.star_legacy_png_verify import verify_legacy_pngs
+from demo.star_legacy_png_verify import verify_legacy_pngs, main
 
 class LegacyPngVerify(unittest.TestCase):
     def _sample(self):
@@ -59,4 +62,25 @@ class LegacyPngVerify(unittest.TestCase):
             entry=verify_legacy_pngs(d,Path(tmp))["entries"][0]
             self.assertFalse(entry["integrity_verified"])
             self.assertEqual(entry["migration_note"],"legacy_capture_failed")
+    def test_cli_writes_sanitized_report_and_refuses_overwrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            data=self._sample()
+            (root/"grafana.png").write_bytes(data)
+            manifest=root/"manifest.json"
+            manifest.write_text(json.dumps({
+                "browser":"Chromium","automation":"Playwright",
+                "captures":[{"name":"10-grafana","service":"Grafana","status":"PASS",
+                  "file":"grafana.png","url":"http://127.0.0.1:3000/login?token=private",
+                  "sha256":hashlib.sha256(data).hexdigest()}]}),encoding="utf-8")
+            target=root/"report.json"
+            args=["audit",str(manifest),"--root",str(root),"--output",str(target)]
+            with patch.object(sys,"argv",args):
+                main()
+            out=target.read_text(encoding="utf-8")
+            self.assertNotIn("private",out)
+            self.assertNotIn("token=",out)
+            self.assertTrue(json.loads(out)["entries"][0]["integrity_verified"])
+            with patch.object(sys,"argv",args), self.assertRaises(FileExistsError):
+                main()
 if __name__=="__main__":unittest.main()
