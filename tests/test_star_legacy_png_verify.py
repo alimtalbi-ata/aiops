@@ -1,4 +1,6 @@
 import hashlib
+import struct
+import zlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,8 +8,12 @@ from demo.star_legacy_png_verify import verify_legacy_pngs
 
 class LegacyPngVerify(unittest.TestCase):
     def _sample(self):
-        # Minimal signature and trailer fixture, not a rendered or runtime PNG.
-        return b"\x89PNG\r\n\x1a\n" + b"FICTIVE_FILE_BYTES" + b"IEND" + b"\x00"*4
+        # Structurally valid 1x1 synthetic PNG, not a screenshot or runtime proof.
+        def chunk(kind, data):
+            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+        header = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        pixels = zlib.compress(b"\x00\x00\x00\x00")
+        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
     def test_byte_match_never_authenticates_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/"grafana.png";data=self._sample();p.write_bytes(data)
