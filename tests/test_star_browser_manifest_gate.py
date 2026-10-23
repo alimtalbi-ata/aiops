@@ -113,6 +113,23 @@ class BrowserManifestGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_gate()
 
+    def test_unexpected_fields_and_unredacted_url_rejected(self):
+        for key, value in (("secret", "do-not-publish"),
+                           ("runtime_validated", True),
+                           ("source_url_redacted", "http://localhost:8080/front/ticket.form.php?id=441"),
+                           ("source_url_redacted", "{origin}/unexpected/path"),
+                           ("event_time_alignment", "VERIFIED")):
+            with self.subTest(key=key, value=value):
+                self.item[key] = value
+                self.write()
+                with self.assertRaises(ValueError):
+                    self.run_gate()
+                self.item.pop(key)
+        self.item["source_url_redacted"] = "{origin}/d/{dashboard_uid}/{slug_redacted}"
+        self.item["event_time_alignment"] = "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"
+        self.write()
+        self.assertEqual(self.run_gate()["entries"][0]["status"], "simulated")
+
     def test_naive_timestamp_rejected(self):
         self.item["captured_at"] = "2026-10-23T11:00:00"
         self.write()
