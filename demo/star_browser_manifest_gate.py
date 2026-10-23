@@ -18,6 +18,19 @@ from demo.star_snapshot_choreography import CUES, CUE_BY_NAME
 _BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.(?:json|png)$")
 _SHA = re.compile(r"^[a-f0-9]{64}$")
 _ALLOWED_PROVENANCE = {"ISOLATED_TEST_FIXTURE", "OPERATOR_BROWSER_UNREVIEWED"}
+# Strict schema: unexpected metadata can conceal secrets or forge attestations.
+_ALLOWED_FIELDS = frozenset({
+    "schema", "cue", "service", "view", "run_id", "correlation_id", "event_ref",
+    "expected_state", "observed_state", "captured_at", "sha256", "screenshot_file",
+    "provenance", "capture_transport", "anonymization", "qualification",
+    "source_url_redacted", "event_time_alignment", "runtime_page_authenticated",
+    "business_outcome_verified", "human_approval_authenticated",
+})
+_REDACTED_ROUTES = frozenset({
+    "{origin}/front/ticket.form.php?{id_redacted}",
+    "{origin}/{workflow_route_redacted}/executions/{event_ref}",
+    "{origin}/d/{dashboard_uid}/{slug_redacted}",
+})
 _FORBIDDEN = {"runtime_authenticated", "runtime_page_authenticated", "business_validated",
               "business_outcome_verified", "human_approval_authenticated", "live_action_authorized",
               "remediation_executed", "release_promotable", "verified_real_capture", "claim_real"}
@@ -51,6 +64,13 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         item = json.loads(manifest_file.read_text(encoding="utf-8"))
         if not isinstance(item, dict) or item.get("schema") != "star-browser-evidence/v1":
             raise ValueError("invalid Chromium manifest schema")
+        if set(item) - _ALLOWED_FIELDS:
+            raise ValueError("unexpected capture metadata fields")
+        if "source_url_redacted" in item and item["source_url_redacted"] not in _REDACTED_ROUTES:
+            raise ValueError("unsafe or unredacted source URL")
+        if ("event_time_alignment" in item and
+                item["event_time_alignment"] != "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"):
+            raise ValueError("unverified event alignment cannot claim success")
         if any(item.get(k) not in (None, False) for k in _FORBIDDEN):
             raise ValueError("untrusted browser manifest claims authority")
         cue_name = item.get("cue")
