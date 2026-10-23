@@ -1,0 +1,32 @@
+name: STAR screenshot integrity collector
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_capture_evidence.py'
+      - 'demo/star_snapshot_choreography.py'
+      - 'tests/test_star_capture_evidence.py'
+      - 'tests/test_star_snapshot_choreography.py'
+      - '.github/workflows/star-capture-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-capture-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile modules
+        run: python -m py_compile demo/star_capture_evidence.py demo/star_snapshot_choreography.py
+      - name: Verify offline integrity contracts
+        run: python -m unittest discover -s tests -p 'test_star_*choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v
