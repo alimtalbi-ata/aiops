@@ -30,3 +30,15 @@ Les transitions STAR doivent gérer les états **en attente**, **capture manquan
 
 ## Tests locaux
 `python3 -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v` (à exécuter dans le checkout). Aucun résultat de test n'est revendiqué par cette note.
+
+## Addendum V2.13.30 — HLD/LLD : frontière de provenance (23 octobre 2026)
+
+**Portée du correctif effectivement poussé :** `demo/star_snapshot_choreography.py` et ses tests contractuels. Aucun service Debian, port, ticket ou workflow V1 n'est modifié.
+
+- **HLD :** capture navigateur (future, autorisée, lecture seule) → manifeste de preuve expurgé → validation syntaxique de provenance → vérification locale PNG/SHA-256/deep link/identité → revue humaine. Aucune étape intermédiaire ne transforme une image synthétique en preuve runtime.
+- **LLD :** `validate_capture` refuse désormais `run_id` invalide, horodatage sans fuseau, chemins PNG absolus/relatifs traversants, chemins encodés ou ambigus, URL avec userinfo, fragment, espaces, paramètres non autorisés ou doublons. Les seules clés de requête admises sont `id`, `executionId`, `orgId`, `from`, `to`, `viewPanel`, `var-run_id`. Toute nouvelle clé exige une revue de sécurité et un test.
+- **Limite essentielle :** `metadata_complete=True` reste une simple vérification de forme ; `verified_real_capture=False` demeure inconditionnel. Le contrôle d'URL n'est **pas** une preuve de navigation, d'origine authentifiée, d'état métier ou d'anonymisation effective.
+- **Rollback :** revert isolé des commits de ce correctif sur la branche de PR, sans toucher à `main` ni aux services. Ne jamais contourner le refus en ajoutant un `run_id` fabriqué.
+- **Critères de promotion :** CI STAR PASS sur le SHA exact, revue des liens n8n/Grafana/GLPI V1 :8080, qualification Chromium isolée puis captures réelles opérateur liées à l'événement ; validation métier distincte du statut n8n.
+
+**Continuité V1 02/03 :** l'erreur `RUN_ID_MISSING` n'est pas corrigée par ce contrôle de provenance. La chaîne Webhook → RAG → Canonical Identity → Call Analyst → Prepare Analyst Payload doit être diagnostiquée sur exports et exécutions expurgés, sans mutation de la production.
