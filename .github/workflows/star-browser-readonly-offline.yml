@@ -1,0 +1,47 @@
+name: STAR Chromium read-only fixture qualification
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_snapshot_browser.py'
+      - 'demo/star_snapshot_choreography.py'
+      - 'tests/test_star_snapshot_browser.py'
+      - 'tests/test_star_snapshot_browser_hardening.py'
+      - 'demo/star_browser_manifest_gate.py'
+      - 'demo/star_browser_request_fence.py'
+      - 'tests/test_star_browser_request_fence.py'
+      - 'demo/star_capture_identity_guard.py'
+      - 'demo/star_png_integrity.py'
+      - 'docs/demo/STAR-BROWSER-READONLY-HLD-LLD-V21334.md'
+      - '.github/workflows/star-browser-readonly-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-browser-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - name: Checkout exact PR SHA without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated Chromium dependency
+        run: |
+          python -m pip install 'playwright==1.57.0'
+          python -m playwright install --with-deps chromium
+      - name: Compile capture contract
+        run: python -m py_compile demo/star_snapshot_browser.py
+      - name: Qualify Chromium on local synthetic HTML only
+        run: |
+          python -m unittest discover -s tests -p 'test_star_snapshot_browser.py' -v
+          python -m unittest discover -s tests -p 'test_star_snapshot_browser_hardening.py' -v
+          python -m unittest discover -s tests -p 'test_star_browser_request_fence.py' -v
