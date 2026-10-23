@@ -13,6 +13,7 @@ import re
 from collections.abc import Mapping
 
 _RUN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{2,95}\Z")
+_EVIDENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}\Z")
 _GROUPS = (("events", "run"), ("stages", "run"),
            ("analyses", "ledger"), ("critiques", "ledger"),
            ("policy_decisions", "ledger"))
@@ -65,7 +66,7 @@ def build_replay(run: Mapping, ledger: Mapping, evidence: Mapping) -> dict:
         raise ValueError("only explicitly DEMO BLOCKED/RESOLVED exports supported")
     items = _rows(evidence.get("items"), "evidence.items")
     ids = [item.get("evidence_id") for item in items]
-    if any(not isinstance(i, str) or not _RUN.fullmatch(i) for i in ids) or len(set(ids)) != len(ids):
+    if any(not isinstance(i, str) or not _EVIDENCE.fullmatch(i) for i in ids) or len(set(ids)) != len(ids):
         raise ValueError("missing, invalid or duplicate evidence ID")
     known = set(ids)
     frames = []
