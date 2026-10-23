@@ -83,8 +83,22 @@ def _validate_provenance_surface(record: Mapping[str, object]) -> None:
         raise ValueError("capture timestamp must include timezone")
 
 
+# Untrusted metadata cannot attest runtime, business, HITL or LIVE execution.
+FORBIDDEN_ATTESTATIONS = frozenset({
+    "claim_real", "verified_real_capture", "runtime_authenticated",
+    "business_validated", "human_approval_authenticated",
+    "remediation_executed", "release_promotable", "live_action_authorized",
+})
+
+def _reject_attestation_claims(record: Mapping[str, object]) -> None:
+    if any(record.get(key) is not None and record.get(key) is not False
+           for key in FORBIDDEN_ATTESTATIONS):
+        raise ValueError("untrusted snapshot cannot assert runtime/business/HITL/LIVE attestation")
+
+
 def validate_capture(cue_name: str, record: Mapping[str, object]) -> dict[str, object]:
     """Validate provenance metadata without trusting arbitrary paths or claims."""
+    _reject_attestation_claims(record)
     if cue_name not in CUE_BY_NAME:
         raise ValueError("unknown cue")
     cue = CUE_BY_NAME[cue_name]
@@ -113,6 +127,9 @@ def validate_capture(cue_name: str, record: Mapping[str, object]) -> dict[str, o
         "proof_state": state,
         "metadata_complete": state == ProofState.CAPTURED.value,
         "verified_real_capture": False,  # Metadata cannot authenticate a runtime screenshot.
+        "business_validated": False,
+        "human_approval_authenticated": False,
+        "live_action_authorized": False,
     }
 
 def build_timeline(records: Mapping[str, Mapping[str, object]]) -> list[dict[str, object]]:
