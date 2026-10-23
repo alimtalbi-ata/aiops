@@ -8,6 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping
+from datetime import datetime
+from pathlib import PurePosixPath
+from urllib.parse import parse_qsl, urlsplit
+import re
 
 class ProofState(str, Enum):
     MISSING = "missing"
@@ -35,6 +39,50 @@ CUES = (
 )
 CUE_BY_NAME = {cue.cue: cue for cue in CUES}
 
+# This contract validates only operator-supplied metadata, never a runtime page.
+_ALLOWED_QUERY_KEYS = frozenset({"id", "executionId", "orgId", "from", "to", "viewPanel", "var-run_id"})
+_SAFE_VALUE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,95}$")
+
+def _validate_provenance_surface(record: Mapping[str, object]) -> None:
+    run_id = str(record["run_id"])
+    if not _RUN_ID.fullmatch(run_id):
+        raise ValueError("unsafe run_id")
+    raw_path = str(record["screenshot_path"])
+    if ("\\" in raw_path or "%" in raw_path or "//" in raw_path
+            or any(c.isspace() or ord(c) < 32 for c in raw_path)
+            or ":" in raw_path or not raw_path.endswith(".png")):
+        raise ValueError("invalid evidence-relative PNG path")
+    parts = raw_path.split("/")
+    if (len(parts) < 2 or parts[0] != "evidence"
+            or any(part in ("", ".", "..") for part in parts)
+            or PurePosixPath(raw_path).is_absolute()):
+        raise ValueError("invalid evidence-relative PNG path")
+    url = str(record["source_url"])
+    if "\\" in url or any(c.isspace() or ord(c) < 32 for c in url):
+        raise ValueError("unsafe capture source URL")
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+        pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except ValueError as exc:
+        raise ValueError("unsafe capture source URL") from exc
+    if (parsed.scheme not in ("http", "https") or not parsed.hostname
+            or parsed.username is not None or parsed.password is not None
+            or parsed.fragment or (port is not None and port < 1)):
+        raise ValueError("unsafe capture source URL")
+    keys = [key for key, _ in pairs]
+    if (len(keys) != len(set(keys)) or any(key not in _ALLOWED_QUERY_KEYS
+            or not _SAFE_VALUE.fullmatch(value) for key, value in pairs)):
+        raise ValueError("unsafe capture source query")
+    try:
+        stamp = datetime.fromisoformat(str(record["captured_at"]).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("invalid capture timestamp") from exc
+    if stamp.tzinfo is None or stamp.utcoffset() is None:
+        raise ValueError("capture timestamp must include timezone")
+
+
 def validate_capture(cue_name: str, record: Mapping[str, object]) -> dict[str, object]:
     """Validate provenance metadata without trusting arbitrary paths or claims."""
     if cue_name not in CUE_BY_NAME:
@@ -54,8 +102,7 @@ def validate_capture(cue_name: str, record: Mapping[str, object]) -> dict[str, o
             raise ValueError("invalid sha256")
         if not str(record["source_url"]).startswith(("https://", "http://")):
             raise ValueError("invalid capture source")
-        if not str(record["screenshot_path"]).startswith("evidence/"):
-            raise ValueError("capture path outside evidence directory")
+        _validate_provenance_surface(record)
     elif record.get("claim_real") is True:
         raise ValueError("synthetic or missing asset must not claim real capture")
     return {
