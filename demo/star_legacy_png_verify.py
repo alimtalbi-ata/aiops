@@ -3,6 +3,8 @@
 This is offline integrity verification, never runtime/business authentication.
 """
 from __future__ import annotations
+import argparse
+import json
 from pathlib import Path
 from collections.abc import Mapping
 from demo.star_legacy_playwright_audit import audit_legacy_manifest
@@ -46,3 +48,22 @@ def verify_legacy_pngs(document: dict, root: Path) -> dict:
         row["integrity_verified"]=actual==expected
         # Offline byte integrity is NEVER live origin attestation.
     return report
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Offline F20.13 legacy PNG byte audit")
+    parser.add_argument("manifest", type=Path)
+    parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    document = json.loads(args.manifest.read_text(encoding="utf-8"))
+    report = verify_legacy_pngs(document, args.root)
+    if args.output.is_symlink():
+        raise ValueError("symlink output is forbidden")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open("x", encoding="utf-8") as stream:
+        json.dump(report, stream, indent=2, ensure_ascii=False)
+        stream.write("\\n")
+    print("LEGACY_PNG_BYTES_AUDITED;RUNTIME_UNATTESTED")
+
+if __name__ == "__main__":
+    main()
