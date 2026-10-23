@@ -76,6 +76,13 @@ class HistoricalReplayAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_replay(*data)
 
+    def test_original_v2134_short_evidence_ids_supported(self):
+        data = list(fixture("BLOCKED"))
+        data[0]["events"][0]["evidence_ids"] = ["E1"]
+        data[2]["items"][0]["evidence_id"] = "E1"
+        doc = build_replay(*data)
+        self.assertEqual(doc["frames"][0]["evidence_ref_count"], 1)
+
     def test_no_frames_never_claims_chronology(self):
         data = list(fixture())
         for key in ("events", "stages"):
