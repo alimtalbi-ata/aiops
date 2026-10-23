@@ -88,6 +88,7 @@ def bind_replay_to_transport(transport: Mapping, replay: Mapping,
         lookup[key] = frame
     used = set()
     overlay = []
+    previous_declared_time = None
     for cue in CUES:
         binding = bindings.get(cue.cue)
         if binding is None:
@@ -113,6 +114,10 @@ def bind_replay_to_transport(transport: Mapping, replay: Mapping,
                 raise ValueError("unsafe declared timestamp") from exc
             if dt.tzinfo is None or dt.utcoffset() is None:
                 raise ValueError("unqualified declared timestamp")
+            # Declared timestamps must be ordered; this does NOT attest runtime.
+            if previous_declared_time is not None and dt < previous_declared_time:
+                raise ValueError("nonmonotonic declared STAR checkpoint chronology")
+            previous_declared_time = dt
         overlay.append({
             "cue": cue.cue,
             "binding_status": "operator_declared_unattested",

@@ -31,3 +31,7 @@ Tests locaux effectivement exécutés le 24 octobre : **15 nouveaux tests PASS**
 Aucune route FastAPI, page :17777, capture n8n/Grafana/GLPI, HITL réelle, clôture métier ou remédiation LIVE n'est créée. Les SHA d'export portent sur JSON canonique, pas sur les octets originaux ni sur une provenance runtime authentifiée. L'intégration au portail reste à faire.
 
 **Rollback :** supprimer de la branche PR le module, ses tests, la CI dédiée et cette note ; aucun état externe n'est modifié. Pas de merge automatique.
+
+## Correctif V2.13.48 — ordre temporel des checkpoints déclarés
+
+Le raccordement replay→STAR refuse désormais un checkpoint lié dont l'horodatage déclaré précède celui d'un checkpoint lié antérieur. Les timestamps ISO-8601 avec fuseau sont comparés comme instants (pas comme chaînes), et les scènes non liées restent explicitement `unbound`. Ce contrôle détecte un mapping incohérent sans prétendre authentifier l'horloge, l'événement, la capture ou l'exécution métier. Tests synthétiques ajoutés : chronologie inversée refusée et horodatages égaux acceptés sans attestation runtime. **17/17 tests de binding locaux réussis** ; CI du commit à vérifier. Aucun déploiement ni changement de production.

@@ -127,6 +127,23 @@ class LegacyPortalBindingTests(unittest.TestCase):
         r["frames"].append(dict(r["frames"][0]))
         with self.assertRaises(ValueError): bind_replay_to_transport(t, r, {})
 
+    def test_out_of_order_declared_checkpoint_time_refused(self):
+        t, r = sample()
+        r["frames"][1]["timestamp"] = "2026-10-23T17:59:59Z"
+        with self.assertRaisesRegex(ValueError, "nonmonotonic"):
+            bind_replay_to_transport(t, r, {
+                "detect": {"source": "events", "source_index": 1},
+                "enrich": {"source": "stages", "source_index": 1}})
+
+    def test_equal_declared_checkpoint_time_accepted_without_attestation(self):
+        t, r = sample()
+        r["frames"][1]["timestamp"] = "2026-10-23T18:00:00+00:00"
+        doc = bind_replay_to_transport(t, r, {
+            "detect": {"source": "events", "source_index": 1},
+            "enrich": {"source": "stages", "source_index": 1}})
+        self.assertFalse(doc["safety"]["runtime_authenticated"])
+        self.assertEqual(doc["bindings"][2]["binding_status"], "operator_declared_unattested")
+
 
 if __name__ == "__main__":
     unittest.main()
