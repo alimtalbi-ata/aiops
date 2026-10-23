@@ -62,7 +62,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x", encoding="utf-8") as stream:
         json.dump(report, stream, indent=2, ensure_ascii=False)
-        stream.write("\\n")
+        stream.write("\n")
     print("LEGACY_PNG_BYTES_AUDITED;RUNTIME_UNATTESTED")
 
 if __name__ == "__main__":
