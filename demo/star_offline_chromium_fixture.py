@@ -9,6 +9,7 @@ import asyncio
 import hashlib
 import json
 from pathlib import Path
+from demo.star_snapshot_choreography import CUE_BY_NAME
 
 def validate_fixture_plan(plan: dict, fixtures: dict, root: Path) -> list[tuple[str, Path]]:
     if not isinstance(plan, dict) or plan.get("schema") != "star-browser-capture-tasks-v1":
@@ -24,10 +25,15 @@ def validate_fixture_plan(plan: dict, fixtures: dict, root: Path) -> list[tuple[
     if not isinstance(tasks, list) or len(tasks) > 9 or set(fixtures) != {t.get("cue") for t in tasks if isinstance(t, dict)}:
         raise ValueError("one fixture required per planned cue")
     reviewed = []
+    seen_cues = set()
     for task in tasks:
         if not isinstance(task, dict) or task.get("capture_performed") is not False or task.get("authenticated_runtime_proof") is not False:
             raise ValueError("forged task state")
         cue = task.get("cue")
+        # Each cue becomes an output PNG filename: enforce exact vocabulary.
+        if not isinstance(cue, str) or cue not in CUE_BY_NAME or cue in seen_cues:
+            raise ValueError("unknown or duplicate STAR cue")
+        seen_cues.add(cue)
         name = fixtures[cue]
         if not isinstance(name, str) or not name.endswith(".html") or "/" in name or "\\" in name or name.startswith("."):
             raise ValueError("unsafe fixture path")
