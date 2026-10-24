@@ -67,6 +67,41 @@ class JoinCapturePlansTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "capture requirement"):
             join_capture_plans(plan_capture_identity("RUN-123"), gap)
 
+    def test_reused_n8n_execution_in_serialized_plan_rejected(self):
+        plan = plan_capture_identity("RUN-123", {
+            "execution_by_cue": {"correlate": "EXEC-001", "enrich": "EXEC-002"}
+        })
+        plan["steps"][2]["supplied_identifiers"]["execution_id"] = "EXEC-001"
+        with self.assertRaisesRegex(ValueError, "reused n8n execution"):
+            join_capture_plans(plan, historical())
+
+    def test_forged_ready_count_rejected(self):
+        for invalid in (True, -1, 1, "0"):
+            with self.subTest(value=invalid):
+                plan = plan_capture_identity("RUN-123")
+                plan["capture_attempt_ready_count"] = invalid
+                with self.assertRaisesRegex(ValueError, "readiness summary"):
+                    join_capture_plans(plan, historical())
+
+    def test_untrusted_read_only_contract_rejected(self):
+        for invalid in (None, False, 1):
+            with self.subTest(value=invalid):
+                plan = plan_capture_identity("RUN-123")
+                plan["read_only"] = invalid
+                with self.assertRaisesRegex(ValueError, "safety contract"):
+                    join_capture_plans(plan, historical())
+
+    def test_historical_attestation_contract_rejected(self):
+        for key, invalid in (
+            ("historical_byte_integrity_is_not_runtime_attestation", False),
+            ("live_remediation_authorized", True),
+        ):
+            with self.subTest(key=key):
+                gap = historical()
+                gap[key] = invalid
+                with self.assertRaisesRegex(ValueError, "safety contract"):
+                    join_capture_plans(plan_capture_identity("RUN-123"), gap)
+
     def test_misaligned_steps_rejected(self):
         gap = historical()
         gap["steps"][0]["cue"] = "analyze"
