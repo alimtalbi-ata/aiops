@@ -9,6 +9,8 @@ on:
       - 'tests/test_noc_unified_chromium.py'
       - 'demo/noc_browser_evidence_gate.py'
       - 'tests/test_noc_browser_evidence_gate.py'
+      - 'demo/noc_evidence_index.py'
+      - 'tests/test_noc_evidence_index.py'
       - 'demo/noc_unified_offline.py'
       - 'demo/noc_wallboard.py'
       - 'demo/noc_checkmk_offline_wallboard.py'
@@ -41,6 +43,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_star_offline_chromium_nine_scenes.py' -v
           python -m unittest discover -s tests -p 'test_noc_unified_chromium.py' -v
           python -m unittest discover -s tests -p 'test_noc_browser_evidence_gate.py' -v
+          python -m unittest discover -s tests -p 'test_noc_evidence_index.py' -v
+          python -c 'import os,json; from pathlib import Path; from demo.noc_evidence_index import build_noc_evidence_index; p=Path(os.environ["AIOPS_NOC_BROWSER_EVIDENCE_DIR"]); (p/"evidence-index.json").write_text(json.dumps(build_noc_evidence_index(p),indent=2)+"\\n",encoding="utf-8")'
           python -c 'import os; from pathlib import Path; from demo.noc_browser_evidence_gate import verify_noc_offline_browser_evidence; print(verify_noc_offline_browser_evidence(Path(os.environ["AIOPS_NOC_BROWSER_EVIDENCE_DIR"])))'
       - name: Upload explicitly offline NOC browser evidence
         if: always()
