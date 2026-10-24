@@ -127,6 +127,31 @@ class BrowserContractTests(unittest.TestCase):
             manifest = json.loads((Path(td) / result["manifest"]).read_text())
             self.assertFalse(manifest["runtime_page_authenticated"])
 
+    def test_corrupt_chromium_png_is_rejected_without_evidence(self):
+        # The old header-only gate accepted an arbitrary PNG signature.
+        # Regress truncated chunks and a valid screenshot with a bad IEND CRC.
+        from unittest.mock import patch
+        from playwright.sync_api import Page
+        original_screenshot = Page.screenshot
+
+        def corrupt_crc(page, *args, **kwargs):
+            png = bytearray(original_screenshot(page, *args, **kwargs))
+            png[-1] ^= 0x01
+            return bytes(png)
+
+        for label, payload in (
+            ("truncated", b"\\x89PNG\\r\\n\\x1a\\n" + b"invalid"),
+            ("crc_corrupted", None),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
+                with patch.object(Page, "screenshot",
+                                  return_value=payload) if payload is not None else patch.object(
+                                      Page, "screenshot", new=corrupt_crc):
+                    with self.assertRaises(ValueError):
+                        capture(self.plan(), Path(td), approved_read=True,
+                                fixture_html=FIXTURE_HTML)
+                self.assertEqual(list(Path(td).iterdir()), [])
+
     def test_dom_mutation_during_screenshot_fails_closed(self):
         # Deterministic Chromium race regression: mutate the DOM at the
         # screenshot boundary, not via timing-sensitive setTimeout sleeps.
