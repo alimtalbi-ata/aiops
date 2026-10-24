@@ -6,6 +6,10 @@ on:
       - 'demo/star_png_integrity.py'
       - 'tests/test_star_offline_chromium_render.py'
       - 'tests/test_star_offline_chromium_nine_scenes.py'
+      - 'tests/test_noc_unified_chromium.py'
+      - 'demo/noc_unified_offline.py'
+      - 'demo/noc_wallboard.py'
+      - 'demo/noc_checkmk_offline_wallboard.py'
       - '.github/workflows/star-offline-chromium-real-render.yml'
   workflow_dispatch:
 
@@ -31,3 +35,4 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_star_offline_chromium_render.py' -v
           python -m unittest discover -s tests -p 'test_star_offline_chromium_nine_scenes.py' -v
+          python -m unittest discover -s tests -p 'test_noc_unified_chromium.py' -v
