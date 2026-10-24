@@ -30,6 +30,8 @@ def plan_capture_identity(run_id: str, known: dict | None = None) -> dict:
         raise ValueError("invalid per-cue execution map")
     if any(not isinstance(v, str) or not _ID.fullmatch(v) for v in per_cue.values()):
         raise ValueError("invalid n8n execution identity")
+    if len(set(per_cue.values())) != len(per_cue):
+        raise ValueError("n8n execution identity reused across distinct STAR cues")
     if any(not isinstance(v, str) or not _ID.fullmatch(v) for k,v in known.items() if k != "execution_by_cue"):
         raise ValueError("unsafe evidence identity")
     steps=[]
