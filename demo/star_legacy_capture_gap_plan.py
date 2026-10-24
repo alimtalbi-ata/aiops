@@ -21,6 +21,13 @@ def build_gap_plan(audit: dict, run_id: str) -> dict:
         if not isinstance(item, dict):
             raise ValueError("invalid audit entry")
         service = item.get("application")
+        if service not in (*counts, "ucp", "other"):
+            raise ValueError("unknown historical application")
+        for key in ("integrity_verified", "runtime_authenticated", "business_state_verified", "eligible_for_star_proof"):
+            if item.get(key, False) not in (True, False) or not isinstance(item.get(key, False), bool):
+                raise ValueError("invalid historical attestation field")
+        if any(item.get(key, False) is True for key in ("runtime_authenticated", "business_state_verified", "eligible_for_star_proof")):
+            raise ValueError("historical audit cannot assert runtime attestation")
         if service in counts and item.get("integrity_verified") is True:
             counts[service] += 1
     steps = []
