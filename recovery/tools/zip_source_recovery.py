@@ -36,6 +36,29 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _validated_infos(z: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    """Apply the same whole-archive structural fence before audit OR extraction."""
+    infos = [i for i in z.infolist() if not i.is_dir()]
+    if len(infos) > MAX_MEMBERS:
+        raise ValueError("too many archive members")
+    used_paths, total = set(), 0
+    for item in infos:
+        name = item.filename
+        if not _safe_name(name):
+            raise ValueError("unsafe ZIP member path")
+        folded = name.casefold()
+        if folded in used_paths:
+            raise ValueError("duplicate ZIP member path")
+        used_paths.add(folded)
+        if stat.S_IFMT(item.external_attr >> 16) not in (0, stat.S_IFREG):
+            raise ValueError("nonregular ZIP member")
+        total += item.file_size
+        if (item.file_size > MAX_MEMBER or total > MAX_TOTAL or
+                (item.file_size > 1024 and item.file_size > MAX_RATIO * max(item.compress_size, 1))):
+            raise ValueError("oversized or high-ratio ZIP member")
+    return infos
+
+
 def inventory(archives: list[Path]) -> dict:
     """Read only original ZIPs, produce metadata; never export member contents."""
     records, seen_hashes = [], {}
@@ -49,24 +72,8 @@ def inventory(archives: list[Path]) -> dict:
         if re.fullmatch(r"213\d{1,3}", version):
             version = "2.13." + version[3:]
         with zipfile.ZipFile(archive) as z:
-            infos = [i for i in z.infolist() if not i.is_dir()]
-            if len(infos) > MAX_MEMBERS:
-                raise ValueError("too many archive members")
-            used_paths, total = set(), 0
-            for item in infos:
+            for item in _validated_infos(z):
                 name = item.filename
-                if not _safe_name(name):
-                    raise ValueError("unsafe ZIP member path")
-                folded = name.casefold()
-                if folded in used_paths:
-                    raise ValueError("duplicate ZIP member path")
-                used_paths.add(folded)
-                mode = item.external_attr >> 16
-                if stat.S_IFMT(mode) not in (0, stat.S_IFREG):
-                    raise ValueError("nonregular ZIP member")
-                total += item.file_size
-                if item.file_size > MAX_MEMBER or total > MAX_TOTAL or (item.file_size > 1024 and item.file_size > MAX_RATIO * max(item.compress_size, 1)):
-                    raise ValueError("oversized or high-ratio ZIP member")
                 if PurePosixPath(name).suffix.lower() not in EXTENSIONS or BLOCKED_NAMES.search(name):
                     continue
                 data = z.read(item)
@@ -93,22 +100,32 @@ def inventory(archives: list[Path]) -> dict:
             "complete_source_attested": False, "member_count": len(records), "members": records}
 
 
-def recover(archive: Path, member: str, destination: Path) -> dict:
-    """Extract one reviewed file to a fresh quarantine path, never overwrite."""
+def recover(archive: Path, member: str, destination: Path, *,
+            expected_archive_sha256: str, expected_member_sha256: str) -> dict:
+    """Quarantine a reviewed exact member, pinned to original archive and bytes.
+
+    SHA pins must come from a separately reviewed inventory. The archive must
+    still pass all structural checks, not only checks on the selected member.
+    """
     if not _safe_name(member) or BLOCKED_NAMES.search(member) or PurePosixPath(member).suffix.lower() not in EXTENSIONS:
         raise ValueError("member not eligible for quarantine")
-    if archive.is_symlink() or destination.is_symlink():
-        raise ValueError("symlink refused")
+    for digest in (expected_archive_sha256, expected_member_sha256):
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("explicit lowercase SHA-256 pins required")
+    if (archive.is_symlink() or not archive.is_file() or archive.suffix.lower() != ".zip"
+            or destination.is_symlink()):
+        raise ValueError("regular ZIP and non-symlink quarantine required")
+    with archive.open("rb") as stream:
+        archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+    if archive_hash != expected_archive_sha256:
+        raise ValueError("archive SHA-256 differs from reviewed inventory")
     with zipfile.ZipFile(archive) as z:
-        infos = [i for i in z.infolist() if i.filename == member]
-        if len(infos) != 1 or infos[0].is_dir() or infos[0].file_size > MAX_MEMBER:
-            raise ValueError("missing, duplicate or oversized member")
-        info = infos[0]
-        if info.file_size > 1024 and info.file_size > MAX_RATIO * max(info.compress_size, 1):
-            raise ValueError("compression ratio exceeded")
-        if stat.S_IFMT(info.external_attr >> 16) not in (0, stat.S_IFREG):
-            raise ValueError("nonregular ZIP member")
-        data = z.read(info)
+        infos = [i for i in _validated_infos(z) if i.filename == member]
+        if len(infos) != 1:
+            raise ValueError("missing or ambiguous member")
+        data = z.read(infos[0])
+        if len(data) != infos[0].file_size or _sha(data) != expected_member_sha256:
+            raise ValueError("member bytes differ from reviewed inventory")
     if BLOCKED_CONTENT.search(data):
         raise ValueError("sensitive-looking content requires private manual review")
     if member.endswith(".py"):
@@ -140,14 +157,19 @@ def main() -> None:
     parser.add_argument("--apply", action="store_true", help="explicit extraction of exactly one member")
     parser.add_argument("--allow", help="exact ZIP member path for extraction")
     parser.add_argument("--quarantine", type=Path, help="existing empty or private quarantine directory")
+    parser.add_argument("--expected-archive-sha256", help="reviewed archive digest from inventory")
+    parser.add_argument("--expected-member-sha256", help="reviewed member digest from inventory")
     args = parser.parse_args()
     if args.apply:
-        if len(args.archives) != 1 or not args.allow or args.quarantine is None:
-            parser.error("--apply requires one ZIP, --allow exact member and --quarantine")
-        result = recover(args.archives[0], args.allow, args.quarantine)
+        if (len(args.archives) != 1 or not args.allow or args.quarantine is None or
+                not args.expected_archive_sha256 or not args.expected_member_sha256):
+            parser.error("--apply requires one ZIP, --allow, --quarantine and both SHA-256 pins")
+        result = recover(args.archives[0], args.allow, args.quarantine,
+                         expected_archive_sha256=args.expected_archive_sha256,
+                         expected_member_sha256=args.expected_member_sha256)
     else:
-        if args.allow or args.quarantine:
-            parser.error("--allow/--quarantine require --apply")
+        if args.allow or args.quarantine or args.expected_archive_sha256 or args.expected_member_sha256:
+            parser.error("extraction options and SHA-256 pins require --apply")
         result = inventory(args.archives)
     encoded = json.dumps(result, sort_keys=True, ensure_ascii=False, indent=2) + "\n"
     if args.output:
