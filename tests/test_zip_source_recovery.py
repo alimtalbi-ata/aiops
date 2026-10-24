@@ -168,14 +168,14 @@ class RecoveryTests(unittest.TestCase):
 
     def test_nested_inventory_metadata_only_dedup_and_quarantine(self):
         inner = self.inner_zip([
-            ("tools/replay.py", "x=1\\n"),
-            ("tools/replay_copy.py", "x=1\\n"),
-            ("tools/broken.py", "def broken(:\\n"),
-            ("tools/sensitive.py", "-----BEGIN PRIVATE KEY-----\\nSYNTHETIC\\n"),
+            ("tools/replay.py", "x=1\n"),
+            ("tools/replay_copy.py", "x=1\n"),
+            ("tools/broken.py", "def broken(:\n"),
+            ("tools/sensitive.py", "-----BEGIN PRIVATE KEY-----\nSYNTHETIC\n"),
             ("tokens.json", '{"token":"synthetic"}'),
             ("diagrams/image.svg", "<svg>synthetic</svg>"),
         ])
-        self.make([("bundle/source.zip", inner), ("safe.py", "pass\\n")])
+        self.make([("bundle/source.zip", inner), ("safe.py", "pass\n")])
         report = inventory([self.archive], inspect_nested=True)
         self.assertEqual(report["member_count"], 1)
         self.assertEqual(report["nested_member_count"], 4)
@@ -192,7 +192,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(list(self.dest.iterdir()), [])
 
     def test_nested_path_escape_is_rejected_before_inventory(self):
-        inner = self.inner_zip([("../escape.py", "pass\\n")])
+        inner = self.inner_zip([("../escape.py", "pass\n")])
         self.make([("bundle/source.zip", inner)])
         with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
             inventory([self.archive], inspect_nested=True)
@@ -206,15 +206,15 @@ class RecoveryTests(unittest.TestCase):
 
     def test_nested_large_binary_is_opaque_not_source(self):
         media = os.urandom(2 * 1024 * 1024 + 512)
-        inner = self.inner_zip([("media/photo.png", media), ("tools/replay.py", "pass\\n")])
+        inner = self.inner_zip([("media/photo.png", media), ("tools/replay.py", "pass\n")])
         self.make([("bundle/source.zip", inner)])
         report = inventory([self.archive], inspect_nested=True)
         self.assertEqual(report["nested_member_count"], 1)
         self.assertEqual(report["nested_members"][0]["member_path"], "tools/replay.py")
 
     def test_nested_zip_within_zip_never_recurses(self):
-        third = self.inner_zip([("not_to_inspect.py", "pass\\n")])
-        inner = self.inner_zip([("third.zip", third), ("tools/one.py", "pass\\n")])
+        third = self.inner_zip([("not_to_inspect.py", "pass\n")])
+        inner = self.inner_zip([("third.zip", third), ("tools/one.py", "pass\n")])
         self.make([("bundle/source.zip", inner)])
         report = inventory([self.archive], inspect_nested=True)
         self.assertEqual(report["nested_member_count"], 1)
@@ -222,19 +222,19 @@ class RecoveryTests(unittest.TestCase):
         self.assertNotIn("not_to_inspect.py", str(report))
 
     def test_nested_member_count_budget_refuses_unbounded_catalogue(self):
-        inner = self.inner_zip([(f"tools/f{i}.py", "pass\\n") for i in range(1001)])
+        inner = self.inner_zip([(f"tools/f{i}.py", "pass\n") for i in range(1001)])
         self.make([("bundle/source.zip", inner)])
         with self.assertRaisesRegex(ValueError, "inspection budget exceeded"):
             inventory([self.archive], inspect_nested=True)
 
     def test_nested_archive_count_budget_refuses_many_inner_zips(self):
-        inner = self.inner_zip([("tools/one.py", "pass\\n")])
+        inner = self.inner_zip([("tools/one.py", "pass\n")])
         self.make([(f"bundle/part{i}.zip", inner) for i in range(9)])
         with self.assertRaisesRegex(ValueError, "too many nested ZIPs"):
             inventory([self.archive], inspect_nested=True)
 
     def test_nested_cli_inventory_only_and_apply_refused(self):
-        inner = self.inner_zip([("tools/one.py", "pass\\n")])
+        inner = self.inner_zip([("tools/one.py", "pass\n")])
         self.make([("bundle/source.zip", inner)])
         report_path = self.root / "nested.json"
         args = ["zip_source_recovery", str(self.archive), "--inspect-nested", "--output", str(report_path)]
