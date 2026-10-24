@@ -16,7 +16,7 @@ def render_unified_noc(catalog:dict,host_export:dict,service_export:dict)->str:
     # from either page cannot affect or disguise the other.
     left=html.escape(synthetic,quote=True)
     right=html.escape(observed,quote=True)
-    return """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+    page = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AIOps — NOC unifié hors ligne</title><style>
 :root{color-scheme:dark;font:15px system-ui;background:#071321;color:white}
@@ -30,10 +30,11 @@ mark{padding:3px 7px;background:#72561e;color:#fff}
 <p><mark>MODE HORS LIGNE · SOURCES NON AUTHENTIFIÉES</mark> Les vues restent séparées :
 la simulation n'est jamais fusionnée avec des mesures exportées.</p>
 <main><section><h2>Scénario ACME — SYNTHÉTIQUE</h2>
-<iframe sandbox="allow-scripts" title="NOC scénario synthétique" srcdoc='" + left + "'></iframe></section>
+<iframe sandbox="allow-scripts" title="NOC scénario synthétique" srcdoc="__SIM__"></iframe></section>
 <section><h2>Checkmk — EXPORT NON AUTHENTIFIÉ</h2>
-<iframe sandbox="allow-scripts" title="NOC Checkmk hors ligne" srcdoc='" + right + "'></iframe></section></main>
+<iframe sandbox="allow-scripts" title="NOC Checkmk hors ligne" srcdoc="__CHECK__"></iframe></section></main>
 <p>Aucune requête réseau, authentification ou action LIVE n'est effectuée.</p></body></html>"""
+    return page.replace("__SIM__", left).replace("__CHECK__", right)
 
 def main():
     p=argparse.ArgumentParser()
