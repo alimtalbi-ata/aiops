@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from demo.star_snapshot_choreography import CUE_BY_NAME
 from demo.star_capture_identity_guard import verify_snapshot_identity
 from demo.star_browser_request_fence import ReadOnlyRequestPolicy
+from demo.star_png_integrity import inspect_png, MAX_BYTES as MAX_PNG_BYTES
 
 IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,95}$")
 EVENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$")
@@ -363,7 +364,7 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
                 raise ValueError("checkpoint state changed during screenshot")
             if blocked or (fixture_html is None and page.url != plan.url):
                 raise ValueError("unsafe network activity or page navigation during capture")
-            if len(screenshot) > MAX_SCREENSHOT or not screenshot.startswith(b"\x89PNG\r\n\x1a\n"):
+            if len(screenshot) > min(MAX_SCREENSHOT, MAX_PNG_BYTES) or not screenshot.startswith(b"\x89PNG\r\n\x1a\n"):
                 raise ValueError("invalid screenshot payload")
             stamp = datetime.now(timezone.utc).isoformat()
         finally:
@@ -391,6 +392,12 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
                 "qualification": "CAPTURED_UNREVIEWED_NOT_BUSINESS_PROOF"}
     _write_new(screenshot_path, screenshot)
     try:
+        # Reuse the bounded PNG CRC/chunk validator already used by the
+        # offline evidence verifier. A PNG signature alone is not integrity.
+        # A malformed browser payload must leave neither PNG nor manifest.
+        validated_sha, validated_size = inspect_png(screenshot_path)
+        if validated_sha != digest or validated_size != len(screenshot):
+            raise ValueError("screenshot PNG changed before evidence manifest")
         _write_new(manifest_path, (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)+"\n").encode())
     except Exception:
         screenshot_path.unlink(missing_ok=True)
