@@ -1,8 +1,11 @@
 """Exercise both NOC srcdoc panes in actual isolated Chromium."""
 import asyncio
 import json
+import hashlib
+import os
 import unittest
 from pathlib import Path
+from demo.star_png_integrity import inspect_png
 from demo.noc_unified_offline import render_unified_noc
 
 CAT = Path(__file__).resolve().parents[1]/"demo/rag_ops_fixture_catalog.json"
@@ -32,6 +35,23 @@ class UnifiedBrowserTest(unittest.TestCase):
                     self.assertTrue(await frames.nth(0).content_frame.locator("text=ACME Payments").count()>0)
                     self.assertTrue(await frames.nth(1).content_frame.locator("text=FC port").count()>0)
                     self.assertTrue(await page.locator("text=MODE HORS LIGNE").count()>0)
+                    evidence_root=os.environ.get("AIOPS_NOC_BROWSER_EVIDENCE_DIR")
+                    if evidence_root:
+                        output=Path(evidence_root)
+                        output.mkdir(parents=True,exist_ok=True)
+                        captured=[]
+                        for name,frame in (("unified",page),("synthetic",frames.nth(0)),("checkmk-export",frames.nth(1))):
+                            file=output/(name+".png")
+                            await frame.screenshot(path=str(file),timeout=15000)
+                            digest,size=inspect_png(file)
+                            self.assertGreater(size,100)
+                            captured.append({"file":file.name,"sha256":digest,"size_bytes":size,
+                                             "evidence_type":"LOCAL_OFFLINE_BROWSER_RENDER",
+                                             "runtime_authenticated":False})
+                        manifest={"schema":"aiops-noc-offline-browser-artifacts-v1","captures":captured,
+                                  "source":"SYNTHETIC_AND_UNVERIFIED_EXPORTS",
+                                  "runtime_proof_count":0,"live_remediation_authorized":False}
+                        (output/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\\n",encoding="utf-8")
                 finally:
                     await browser.close()
         asyncio.run(run())
