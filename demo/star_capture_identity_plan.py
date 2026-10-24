@@ -23,14 +23,21 @@ def plan_capture_identity(run_id: str, known: dict | None = None) -> dict:
     if not isinstance(run_id, str) or not _ID.fullmatch(run_id):
         raise ValueError("invalid run_id")
     known = {} if known is None else known
-    if not isinstance(known, dict) or any(key not in {"alert_id", "execution_id", "ticket_id", "approval_id"} for key in known):
+    if not isinstance(known, dict) or any(key not in {"alert_id", "ticket_id", "approval_id", "execution_by_cue"} for key in known):
         raise ValueError("unknown evidence identity")
-    if any(not isinstance(value, str) or not _ID.fullmatch(value) for value in known.values()):
+    per_cue = known.get("execution_by_cue", {})
+    if not isinstance(per_cue, dict) or any(k not in {"correlate", "enrich", "analyze", "simulate"} for k in per_cue):
+        raise ValueError("invalid per-cue execution map")
+    if any(not isinstance(v, str) or not _ID.fullmatch(v) for v in per_cue.values()):
+        raise ValueError("invalid n8n execution identity")
+    if any(not isinstance(v, str) or not _ID.fullmatch(v) for k,v in known.items() if k != "execution_by_cue"):
         raise ValueError("unsafe evidence identity")
     steps=[]
     for cue in CUES:
         supplied={"run_id":run_id}
         supplied.update({key:known[key] for key in _REQUIRED[cue.cue] if key in known})
+        if cue.cue in per_cue:
+            supplied["execution_id"] = per_cue[cue.cue]
         missing=[key for key in _REQUIRED[cue.cue] if key not in supplied]
         steps.append({
             "cue": cue.cue, "application": cue.service, "expected_view": cue.view,
