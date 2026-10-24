@@ -14,6 +14,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
+import unicodedata
 import zipfile
 
 MAX_MEMBERS = 5000
@@ -23,6 +24,8 @@ MAX_RATIO = 200
 EXTENSIONS = {".py", ".js", ".ts", ".html", ".css", ".sh", ".yml", ".yaml", ".toml", ".json", ".md"}
 BLOCKED_NAMES = re.compile(r"(?:^|[._/-])(?:\.env|credentials?|secrets?|tokens?|cookies?|sessions?|private|id_rsa|\.git)(?:[._/-]|$)", re.I)
 BLOCKED_CONTENT = re.compile(rb"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|Bearer\s+[A-Za-z0-9._~+/=-]{16,}", re.I)
+WINDOWS_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)})
+WINDOWS_INVALID = frozenset('< > " | ? *'.replace(" ", ""))
 VERSION = re.compile(r"(?i)v(\d+(?:[._]\d+){1,5}|\d{4,6})(?!\d)")
 
 
@@ -30,7 +33,17 @@ def _safe_name(name: str) -> bool:
     if not name or "\\" in name or "\x00" in name or name.startswith("/") or ":" in name:
         return False
     path = PurePosixPath(name)
-    return not any(part in {"", ".", ".."} for part in name.split("/")) and len(path.parts) <= 20 and len(name) <= 240
+    parts = name.split("/")
+    # Preserve deterministic identity across Windows/Linux checkout and ZIP tools.
+    # Windows device names (including CON.py) and NFC aliases are unsafe.
+    if unicodedata.normalize("NFC", name) != name:
+        return False
+    for part in parts:
+        if (part in {"", ".", ".."} or part.endswith((".", " "))
+                or any(ord(ch) < 32 or ord(ch) == 127 or ch in WINDOWS_INVALID for ch in part)
+                or part.split(".", 1)[0].upper() in WINDOWS_RESERVED):
+            return False
+    return len(path.parts) <= 20 and len(name) <= 240
 
 
 def _sha(data: bytes) -> str:
