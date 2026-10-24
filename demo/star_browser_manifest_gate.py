@@ -14,6 +14,7 @@ from typing import Mapping, Sequence
 from demo.star_capture_identity_guard import verify_snapshot_identity
 from demo.star_png_integrity import inspect_png
 from demo.star_snapshot_choreography import CUES, CUE_BY_NAME
+from demo.star_checkpoint_reconciliation import reconcile_checkpoints
 
 _BASENAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.(?:json|png)$")
 _SHA = re.compile(r"^[a-f0-9]{64}$")
@@ -57,7 +58,7 @@ def _file(root: Path, name: str, extension: str) -> Path:
 
 
 def verify_browser_manifests(root: Path, expected: Mapping[str, object],
-                             filenames: Sequence[str]) -> dict[str, object]:
+                             filenames: Sequence[str], *, require_complete: bool = False) -> dict[str, object]:
     """Return a sanitized storyboard-compatible report with no URLs or secrets."""
     run_id, correlation_id, refs = expected.get("run_id"), expected.get("correlation_id"), expected.get("events")
     if not isinstance(refs, dict) or not refs or set(refs) - set(CUE_BY_NAME):
@@ -66,7 +67,10 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         raise ValueError("duplicate or excessive manifest files")
     if not root.is_dir() or root.is_symlink():
         raise ValueError("unsafe evidence root")
+    if require_complete and (set(refs) != set(CUE_BY_NAME) or len(filenames) != len(CUES)):
+        raise ValueError("complete STAR capture requires all canonical checkpoints")
     entries: dict[str, dict[str, object]] = {}
+    validated_captures: list[dict[str, object]] = []
     hashes: set[str] = set()
     for name in filenames:
         manifest_file = _file(root, name, ".json")
@@ -114,6 +118,11 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         if actual != digest or actual in hashes:
             raise ValueError("screenshot hash mismatch or reuse")
         hashes.add(actual)
+        if require_complete:
+            validated_captures.append({key: item.get(key) for key in (
+                "cue", "run_id", "correlation_id", "event_ref", "sha256",
+                "provenance", "qualification", "runtime_page_authenticated",
+                "business_outcome_verified", "human_approval_authenticated")})
         try:
             captured = datetime.fromisoformat(item["captured_at"].replace("Z", "+00:00"))
         except (ValueError, KeyError, AttributeError) as exc:
@@ -128,6 +137,8 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
     timestamps = [datetime.fromisoformat(e["captured_at"]) for e in ordered if "captured_at" in e]
     if timestamps != sorted(timestamps):
         raise ValueError("capture chronology contradicted")
+    if require_complete:
+        reconcile_checkpoints(expected, validated_captures)
     return {"schema": "star-capture-evidence-v1", "run_id": run_id, "entries": ordered,
             "integrity_checked": all(e["status"] == "integrity_checked" for e in ordered),
             "runtime_authenticated": False, "business_validated": False,
