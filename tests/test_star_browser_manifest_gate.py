@@ -100,6 +100,17 @@ class BrowserManifestGateTests(unittest.TestCase):
         self.assertTrue(all(e["status"] == "simulated" for e in report["entries"]))
         self.assertFalse(report["runtime_authenticated"])
         self.assertFalse(report["integrity_checked"])
+        self.assertRegex(report["capture_set_sha256"], r"^[0-9a-f]{64}$")
+        # Input manifest ordering must not affect the canonical replay digest.
+        reversed_report = verify_browser_manifests(
+            self.root, canonical, list(reversed(names)), require_complete=True)
+        self.assertEqual(report["capture_set_sha256"], reversed_report["capture_set_sha256"])
+        # A new capture timestamp changes the digest even when image bytes match.
+        changed = json.loads((self.root / "verify.json").read_text())
+        changed["captured_at"] = "2026-10-23T11:00:30+00:00"
+        (self.root / "verify.json").write_text(json.dumps(changed), encoding="utf-8")
+        updated_report = verify_browser_manifests(self.root, canonical, names, require_complete=True)
+        self.assertNotEqual(report["capture_set_sha256"], updated_report["capture_set_sha256"])
         # A missing explicit false attestation is rejected by strict reconciliation.
         tampered = json.loads((self.root / "detect.json").read_text())
         del tampered["runtime_page_authenticated"]
