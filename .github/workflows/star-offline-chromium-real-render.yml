@@ -21,6 +21,7 @@ on:
       - 'tests/test_noc_star_trace_page.py'
       - 'demo/noc_star_trace_bundle.py'
       - 'tests/test_noc_star_trace_bundle.py'
+      - 'tests/test_noc_star_navigation_chromium.py'
       - 'demo/noc_unified_offline.py'
       - 'demo/noc_wallboard.py'
       - 'demo/noc_checkmk_offline_wallboard.py'
@@ -59,6 +60,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_noc_star_event_binding.py' -v
           python -m unittest discover -s tests -p 'test_noc_star_trace_page.py' -v
           python -m unittest discover -s tests -p 'test_noc_star_trace_bundle.py' -v
+          python -m unittest discover -s tests -p 'test_noc_star_navigation_chromium.py' -v
           python -m demo.noc_star_trace_bundle "${AIOPS_NOC_BROWSER_EVIDENCE_DIR}/evidence-index.json" --output-dir "${AIOPS_NOC_BROWSER_EVIDENCE_DIR}"
 
           python -c 'import os,json; from pathlib import Path; from demo.noc_star_cue_map import bind_noc_evidence_to_star; p=Path(os.environ["AIOPS_NOC_BROWSER_EVIDENCE_DIR"]); (p/"star-cue-map.json").write_text(json.dumps(bind_noc_evidence_to_star(json.loads((p/"evidence-index.json").read_text(encoding="utf-8"))),indent=2)+"\\n",encoding="utf-8")'
