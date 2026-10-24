@@ -22,6 +22,17 @@ class LegacyCaptureGapPlanTests(unittest.TestCase):
     def test_rejects_forged_or_missing_metadata(self):
         with self.assertRaises(ValueError): build_gap_plan({"schema":"wrong","entries":[]},"RUN-123")
         with self.assertRaises(ValueError): build_gap_plan({"schema":"aiops-legacy-playwright-audit-v1","entries":[]},"../bad")
+    def test_rejects_forged_business_or_runtime_proof(self):
+        for key in ("runtime_authenticated", "business_state_verified", "eligible_for_star_proof"):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                build_gap_plan({"schema":"aiops-legacy-playwright-audit-v1",
+                    "entries":[{"application":"grafana", key:True}]}, "RUN-TEST-123")
+    def test_rejects_invalid_attestation_types_and_unknown_application(self):
+        for bad in ({"application":"grafana","integrity_verified":"true"},
+                    {"application":"Grafana","integrity_verified":True}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                build_gap_plan({"schema":"aiops-legacy-playwright-audit-v1",
+                    "entries":[bad]}, "RUN-TEST-123")
     def test_cli_exclusive_safe_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp); source=d/"audit.json"; out=d/"plan.json"
