@@ -32,7 +32,17 @@ jobs:
           python -m pip install 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
       - name: Execute Chromium render on local fixture only
+        env:
+          AIOPS_NOC_BROWSER_EVIDENCE_DIR: ${{ runner.temp }}/noc-browser-evidence
         run: |
           python -m unittest discover -s tests -p 'test_star_offline_chromium_render.py' -v
           python -m unittest discover -s tests -p 'test_star_offline_chromium_nine_scenes.py' -v
           python -m unittest discover -s tests -p 'test_noc_unified_chromium.py' -v
+      - name: Upload explicitly offline NOC browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noc-offline-browser-evidence
+          path: ${{ runner.temp }}/noc-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
