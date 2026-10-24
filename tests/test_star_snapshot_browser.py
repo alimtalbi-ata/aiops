@@ -127,6 +127,39 @@ class BrowserContractTests(unittest.TestCase):
             manifest = json.loads((Path(td) / result["manifest"]).read_text())
             self.assertFalse(manifest["runtime_page_authenticated"])
 
+    def test_dom_mutation_during_screenshot_fails_closed(self):
+        # Deterministic Chromium race regression: mutate the DOM at the
+        # screenshot boundary, not via timing-sensitive setTimeout sleeps.
+        from unittest.mock import patch
+        from playwright.sync_api import Page
+
+        original_screenshot = Page.screenshot
+        mutations = (
+            ("late_login", """() => {
+                document.body.insertAdjacentHTML('beforeend',
+                    '<form action="/login"><input type="password"></form>');
+            }"""),
+            ("swapped_run", """() => {
+                document.querySelector('#run').textContent = 'RUN-ATTACK-999';
+            }"""),
+            ("swapped_state", """() => {
+                document.querySelector('#state').textContent = 'failed';
+            }"""),
+        )
+        for label, mutation in mutations:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
+                called = []
+                def mutating_screenshot(page, *args, **kwargs):
+                    called.append(True)
+                    page.evaluate(mutation)
+                    return original_screenshot(page, *args, **kwargs)
+
+                with patch.object(Page, "screenshot", new=mutating_screenshot):
+                    with self.assertRaises(ValueError):
+                        capture(self.plan(), Path(td), approved_read=True, fixture_html=FIXTURE_HTML)
+                self.assertEqual(called, [True])
+                self.assertEqual(list(Path(td).iterdir()), [])
+
     def test_js_error_fails_closed(self):
         html = FIXTURE_HTML.replace("</body>", "<script>throw new Error('fixture error')</script></body>")
         with tempfile.TemporaryDirectory() as td:
