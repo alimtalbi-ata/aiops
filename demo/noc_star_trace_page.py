@@ -6,8 +6,8 @@ from demo.noc_star_event_binding import bind_synthetic_star_events
 def render_noc_star_trace(index:dict, events:list)->str:
     trace=bind_synthetic_star_events(index,events)
     esc=lambda value:html.escape(str(value),quote=True)
-    rows="".join("<tr><td>"+esc(item["cue"])+"</td><td>"+esc(item["event_id"])+"</td><td><code>"+esc(item["event_sha256"])+"</code></td></tr>" for item in trace["events"])
-    captures="".join("<tr><td>"+esc(item["file"])+"</td><td>"+esc(", ".join(item["illustrative_cues"]))+"</td><td>"+esc(item["relationship"])+"</td></tr>" for item in trace["captures"])
+    rows="".join('<tr id="cue-'+esc(item["cue"])+'"><td>'+esc(item["cue"])+"</td><td>"+esc(item["event_id"])+"</td><td><code>"+esc(item["event_sha256"])+"</code></td></tr>" for item in trace["events"])
+    captures="".join("<tr><td>"+esc(item["file"])+"</td><td>"+", ".join('<a href="#cue-'+esc(cue)+'">'+esc(cue)+"</a>" for cue in item["illustrative_cues"])+"</td><td>"+esc(item["relationship"])+"</td></tr>" for item in trace["captures"])
     return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>STAR · preuves illustratives</title>
 <style>:root{color-scheme:dark;background:#08192a;color:#eef7ff;font:15px system-ui}body{padding:20px;max-width:1200px;margin:auto}
 section{background:#163148;padding:16px;margin:16px 0;border-radius:10px}
