@@ -21,4 +21,9 @@ class NocDrilldownTests(unittest.TestCase):
         data=self.data();snapshot=build_noc_snapshot(data)
         snapshot["alerts"][0]["asset_id"]="mds-fc02"
         with self.assertRaises(ValueError):build_noc_drilldown(snapshot,data)
+    def test_orphan_alert_asset_is_rejected_not_silently_dropped(self):
+        data=self.data();snapshot=build_noc_snapshot(data)
+        snapshot["alerts"][0]["asset_id"]="unknown-asset-999"
+        with self.assertRaisesRegex(ValueError,"absent from synthetic dependency topology"):
+            build_noc_drilldown(snapshot,data)
 if __name__=="__main__":unittest.main()
