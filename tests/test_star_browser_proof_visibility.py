@@ -5,8 +5,27 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests.test_star_browser_mask_proof_gate import HTML, plan
-from demo.star_snapshot_browser import capture
+from demo.star_snapshot_browser import CapturePlan, capture
+
+RUN = "RUN-ACME-SYNTHETIC-057"
+CORR = "CORR-ACME-SYNTHETIC-057"
+EVENT = "EXEC-057"
+ORIGIN = "http://127.0.0.1:5678"
+HTML = f"""<html><body><div id='proof'>
+<span id='run'>{RUN}</span><span id='correlation'>{CORR}</span>
+<span id='event'>{EVENT}</span><span id='state'>completed</span>
+</div><div id='private'>SYNTHETIC PRIVATE DATA</div></body></html>"""
+
+
+def plan():
+    return CapturePlan(
+        cue="correlate", run_id=RUN, correlation_id=CORR, event_ref=EVENT,
+        url=ORIGIN + "/workflow/wf057/executions/" + EVENT,
+        expected_state="completed", identity_selector="#run",
+        event_selector="#event", state_selector="#state",
+        redact_selectors=("#private",), allowed_origin=ORIGIN,
+        environment="ISOLATED_TEST_FIXTURE", correlation_selector="#correlation",
+    )
 
 
 class ProofVisibilityTests(unittest.TestCase):
