@@ -56,6 +56,13 @@ def create_noc_router(read_model:Callable[[],dict|None]):
             return validate_noc_runtime_snapshot(data)
         except (ValueError,KeyError,TypeError):
             raise HTTPException(status_code=503,detail="NOC data unavailable or unverified")
+    @router.get("/api/platform/components")
+    def platform_components():
+        from demo.noc_platform_registry import build_portal_component_registry
+        # Until the host portal supplies trustworthy health observations,
+        # all components remain UNKNOWN and every route remains unmounted.
+        return build_portal_component_registry()
+
     @router.get("/noc",response_class=HTMLResponse)
     def noc_dashboard():
         data=noc_state()
