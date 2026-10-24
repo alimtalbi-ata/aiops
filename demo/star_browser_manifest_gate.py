@@ -5,6 +5,7 @@ Expected IDs MUST originate independently from canonical ingress, not manifests.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -137,9 +138,23 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
     timestamps = [datetime.fromisoformat(e["captured_at"]) for e in ordered if "captured_at" in e]
     if timestamps != sorted(timestamps):
         raise ValueError("capture chronology contradicted")
+    capture_set_sha256 = None
     if require_complete:
+        # Only after PNG-byte verification, independent identity checks and
+        # full nine-cue coverage. This binds an offline replay to a fixed
+        # capture set; it does NOT authenticate the underlying application.
         reconcile_checkpoints(expected, validated_captures)
-    return {"schema": "star-capture-evidence-v1", "run_id": run_id, "entries": ordered,
+        binding = {"schema": "star-capture-set-binding/v1",
+                   "run_id": run_id, "correlation_id": correlation_id,
+                   "events": {cue.cue: refs[cue.cue] for cue in CUES},
+                   "entries": ordered}
+        canonical = json.dumps(binding, sort_keys=True, ensure_ascii=True,
+                               separators=(",", ":"), allow_nan=False).encode("utf-8")
+        capture_set_sha256 = hashlib.sha256(canonical).hexdigest()
+    report = {"schema": "star-capture-evidence-v1", "run_id": run_id, "entries": ordered,
             "integrity_checked": all(e["status"] == "integrity_checked" for e in ordered),
             "runtime_authenticated": False, "business_validated": False,
             "human_approval_authenticated": False, "live_action_authorized": False}
+    if require_complete:
+        report["capture_set_sha256"] = capture_set_sha256
+    return report
