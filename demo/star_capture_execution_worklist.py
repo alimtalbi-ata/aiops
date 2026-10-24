@@ -16,8 +16,16 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
         raise ValueError("invalid STAR cue sequence")
     if identity.get("runtime_proof_count") != 0 or historical.get("missing_runtime_captures") != 9:
         raise ValueError("untrusted plan claims runtime evidence")
+    # These plans are untrusted inputs (including when read from historical
+    # exports). Never let a forged summary promote a capture to runtime proof.
+    if (identity.get("read_only") is not True
+            or historical.get("historical_byte_integrity_is_not_runtime_attestation") is not True
+            or historical.get("live_remediation_authorized") is not False):
+        raise ValueError("untrusted plan safety contract")
     from demo.star_snapshot_choreography import CUES
     steps = []
+    seen_execution_ids: set[str] = set()
+    ready_count = 0
     for index, cue in enumerate(CUES):
         left, right = a[index], b[index]
         if not isinstance(left, dict) or not isinstance(right, dict):
@@ -46,6 +54,14 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
             raise ValueError("cue run_id mismatch")
         if any(not isinstance(value, str) or not _ID.fullmatch(value) for value in supplied.values()):
             raise ValueError("malformed cue identity")
+        # A single n8n execution cannot prove two distinct STAR checkpoints.
+        # Re-check here: callers can tamper with serialized identity plans
+        # after plan_capture_identity() has validated the original input.
+        execution_id = supplied.get("execution_id")
+        if execution_id is not None:
+            if execution_id in seen_execution_ids:
+                raise ValueError("reused n8n execution identity")
+            seen_execution_ids.add(execution_id)
         expected_missing = [key for key in _REQUIRED[cue.cue] if key not in supplied]
         if left.get("required_identifiers") != list(_REQUIRED[cue.cue]):
             raise ValueError("tampered required identifiers")
@@ -54,6 +70,7 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
         ready = left.get("capture_ready_for_attempt")
         if not isinstance(ready, bool) or ready != (not expected_missing):
             raise ValueError("forged capture readiness")
+        ready_count += int(ready)
         steps.append({
             "cue": cue.cue, "application": cue.service, "expected_view": cue.view,
             "status": "READY_FOR_READ_ONLY_CAPTURE" if ready else "MISSING_IDENTIFIERS",
@@ -61,9 +78,12 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
             "historical_png_matches": right.get("legacy_png_byte_matches_for_application"),
             "runtime_proof": False,
         })
+    declared_ready = identity.get("capture_attempt_ready_count")
+    if type(declared_ready) is not int or declared_ready != ready_count:
+        raise ValueError("forged capture readiness summary")
     return {"schema": "star-capture-execution-worklist-v1",
             "run_id": identity["run_id"], "steps": steps,
-            "ready_for_attempt": sum(x["status"] == "READY_FOR_READ_ONLY_CAPTURE" for x in steps),
+            "ready_for_attempt": ready_count,
             "runtime_proof_count": 0, "read_only": True, "live_action_authorized": False}
 
 def main() -> None:
