@@ -55,6 +55,16 @@ class BrowserManifestGateTests(unittest.TestCase):
         self.assertEqual(frames[0]["capture_status"], "simulated")
         self.assertEqual(frames[1]["capture_status"], "missing")
 
+    def test_complete_mode_refuses_partial_canonical_map(self):
+        with self.assertRaisesRegex(ValueError, "all canonical checkpoints"):
+            verify_browser_manifests(self.root, EXPECTED, ["detect.json"], require_complete=True)
+
+    def test_complete_mode_refuses_nine_expected_with_one_capture(self):
+        from demo.star_snapshot_choreography import CUES
+        canonical = {**EXPECTED, "events": {cue.cue: "EVENT-" + str(i + 100) for i, cue in enumerate(CUES)}}
+        with self.assertRaisesRegex(ValueError, "all canonical checkpoints"):
+            verify_browser_manifests(self.root, canonical, ["detect.json"], require_complete=True)
+
     def test_operator_manifest_is_only_integrity_checked(self):
         self.item["provenance"] = "OPERATOR_BROWSER_UNREVIEWED"
         self.item["capture_transport"] = "READ_ONLY_BROWSER_HTTP_GET"
