@@ -29,6 +29,24 @@ class JoinCapturePlansTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "runtime"):
             join_capture_plans(plan, historical())
 
+    def test_forged_readiness_is_rejected(self):
+        p = plan_capture_identity("RUN-123")
+        p["steps"][0]["capture_ready_for_attempt"] = True
+        with self.assertRaisesRegex(ValueError, "forged capture readiness"):
+            join_capture_plans(p, historical())
+
+    def test_removed_required_identifier_is_rejected(self):
+        p = plan_capture_identity("RUN-123", {"alert_id": "ALT-123"})
+        del p["steps"][0]["supplied_identifiers"]["alert_id"]
+        with self.assertRaisesRegex(ValueError, "tampered missing identifiers"):
+            join_capture_plans(p, historical())
+
+    def test_mismatched_cue_run_is_rejected(self):
+        p = plan_capture_identity("RUN-123")
+        p["steps"][0]["supplied_identifiers"]["run_id"] = "RUN-OTHER"
+        with self.assertRaisesRegex(ValueError, "cue run_id mismatch"):
+            join_capture_plans(p, historical())
+
     def test_misaligned_steps_rejected(self):
         gap = historical()
         gap["steps"][0]["cue"] = "analyze"
