@@ -13,6 +13,11 @@ class UnifiedNocTests(unittest.TestCase):
         self.assertIn("EXPORT NON AUTHENTIFIÉ",page)
         self.assertEqual(page.count('sandbox="allow-scripts"'),2)
         self.assertEqual(page.count("srcdoc="),2)
+        self.assertNotIn("__SIM__",page)
+        self.assertNotIn("__CHECK__",page)
+        self.assertIn("&lt;!doctype html&gt;",page)
+        self.assertIn("ACME Payments",page)
+        self.assertIn("FC port",page)
         self.assertNotIn("allow-same-origin",page)
     def test_unverified_export_cannot_claim_runtime(self):
         with self.assertRaises(ValueError):
