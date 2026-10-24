@@ -9,6 +9,7 @@ import argparse
 import ast
 from contextlib import contextmanager
 import hashlib
+import io
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -23,6 +24,10 @@ MAX_MEMBER = 2 * 1024 * 1024
 # Never recurse into, extract or execute their contents in this recovery tool.
 MAX_OPAQUE_ZIP = 32 * 1024 * 1024
 MAX_TOTAL = 64 * 1024 * 1024
+MAX_NESTED_ARCHIVES = 8
+MAX_NESTED_MEMBERS = 1000
+# One global budget across every inspected inner ZIP; never recursive.
+MAX_NESTED_TOTAL = 64 * 1024 * 1024
 MAX_RATIO = 200
 EXTENSIONS = {".py", ".js", ".ts", ".html", ".css", ".sh", ".yml", ".yaml", ".toml", ".json", ".md"}
 BLOCKED_NAMES = re.compile(r"(?:^|[._/-])(?:\.env|credentials?|secrets?|tokens?|cookies?|sessions?|private|id_rsa|\.git)(?:[._/-]|$)", re.I)
@@ -53,7 +58,7 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _validated_infos(z: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+def _validated_infos(z: zipfile.ZipFile, *, nested: bool = False) -> list[zipfile.ZipInfo]:
     """Apply the same whole-archive structural fence before audit OR extraction."""
     infos = [i for i in z.infolist() if not i.is_dir()]
     if len(infos) > MAX_MEMBERS:
@@ -70,7 +75,11 @@ def _validated_infos(z: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
         if stat.S_IFMT(item.external_attr >> 16) not in (0, stat.S_IFREG):
             raise ValueError("nonregular ZIP member")
         total += item.file_size
-        member_limit = MAX_OPAQUE_ZIP if PurePosixPath(name).suffix.lower() == '.zip' else MAX_MEMBER
+        extension = PurePosixPath(name).suffix.lower()
+        # Inner archive non-source assets (diagrams/media) are never read or
+        # exported. Permit bounded opaque media without relaxing source limits.
+        member_limit = (MAX_OPAQUE_ZIP if extension == ".zip"
+                        or (nested and extension not in EXTENSIONS) else MAX_MEMBER)
         if (item.file_size > member_limit or total > MAX_TOTAL or
                 (item.file_size > 1024 and item.file_size > MAX_RATIO * max(item.compress_size, 1))):
             raise ValueError("oversized or high-ratio ZIP member")
@@ -103,9 +112,64 @@ def _open_stable_archive(archive: Path):
             os.close(fd)
 
 
-def inventory(archives: list[Path]) -> dict:
+def _inspect_nested_members(data: bytes, *, outer: str, outer_sha: str,
+                            nested_path: str, nested_sha: str,
+                            seen: dict[str, dict], budget: dict[str, int]) -> list[dict]:
+    """Inventory a single bounded inner ZIP; never extract or recurse.
+
+    The original nested ZIP bytes are already SHA-pinned by the outer reader.
+    Budget is shared across all nested ZIPs in this invocation, including
+    excluded/opaque entries, so adversarial archives cannot evade the cap.
+    """
+    results: list[dict] = []
+    with zipfile.ZipFile(io.BytesIO(data)) as inner:
+        infos = _validated_infos(inner, nested=True)
+        budget["members"] += len(infos)
+        budget["bytes"] += sum(info.file_size for info in infos)
+        if budget["members"] > MAX_NESTED_MEMBERS or budget["bytes"] > MAX_NESTED_TOTAL:
+            raise ValueError("nested ZIP inspection budget exceeded")
+        for info in infos:
+            name = info.filename
+            extension = PurePosixPath(name).suffix.lower()
+            if BLOCKED_NAMES.search(name) or extension not in EXTENSIONS:
+                continue  # No source bytes, media, or nested ZIP extraction.
+            if info.file_size > MAX_MEMBER:
+                raise ValueError("oversized nested source member")
+            raw = inner.read(info)  # CRC checked by zipfile; bounded by preflight.
+            if len(raw) != info.file_size:
+                raise ValueError("invalid nested ZIP member size")
+            digest = _sha(raw)
+            sensitive = bool(BLOCKED_CONTENT.search(raw))
+            syntax = "not_checked"
+            if extension == ".py" and not sensitive:
+                try:
+                    ast.parse(raw.decode("utf-8"), filename=name)
+                    syntax = "parse_pass_not_completeness"
+                except (SyntaxError, UnicodeError, ValueError):
+                    syntax = "parse_failed"
+            origin = {"archive": outer, "nested_zip": nested_path, "path": name}
+            previous = seen.setdefault(digest, origin)
+            results.append({
+                "archive": outer, "archive_sha256": outer_sha,
+                "nested_archive_member": nested_path,
+                "nested_archive_sha256": nested_sha,
+                "member_path": name, "member_sha256": digest,
+                "bytes": len(raw), "duplicate_of": None if previous == origin else previous,
+                "sensitive_pattern_detected": sensitive, "python_syntax": syntax,
+                "reuse_status": "quarantine_review_required",
+                "import_authorized": False,
+            })
+    return results
+
+
+def inventory(archives: list[Path], *, inspect_nested: bool = False) -> dict:
     """Read only original ZIPs, produce metadata; never export member contents."""
+    if type(inspect_nested) is not bool:
+        raise ValueError("inspect_nested must be boolean")
     records, seen_hashes, opaque_archives = [], {}, []
+    nested_members: list[dict] = []
+    nested_seen: dict[str, dict] = {}
+    nested_budget = {"members": 0, "bytes": 0}
     for archive in sorted(archives, key=lambda p: p.name):
         if archive.is_symlink() or not archive.is_file() or archive.suffix.lower() != ".zip":
             raise ValueError("source must be a regular ZIP, not a symlink")
@@ -131,9 +195,17 @@ def inventory(archives: list[Path]) -> dict:
                         opaque_archives.append({
                             "archive": archive.name, "archive_sha256": archive_hash,
                             "member_path": name, "member_sha256": digest,
-                            "bytes": len(data), "status": "OPAQUE_NESTED_ZIP_NOT_INSPECTED",
+                            "bytes": len(data), "status": ("NESTED_METADATA_ONLY_INSPECTED"
+                                                       if inspect_nested else "OPAQUE_NESTED_ZIP_NOT_INSPECTED"),
                             "import_authorized": False,
                         })
+                        if inspect_nested:
+                            if len(opaque_archives) > MAX_NESTED_ARCHIVES:
+                                raise ValueError("too many nested ZIPs to inspect")
+                            nested_members.extend(_inspect_nested_members(
+                                data, outer=archive.name, outer_sha=archive_hash,
+                                nested_path=name, nested_sha=digest,
+                                seen=nested_seen, budget=nested_budget))
                         continue
                     sensitive = bool(BLOCKED_CONTENT.search(data))
                     syntax = "not_checked"
@@ -153,7 +225,9 @@ def inventory(archives: list[Path]) -> dict:
                     })
     return {"schema": "aiops-zip-source-inventory/v1", "runtime_attested": False,
             "complete_source_attested": False, "member_count": len(records), "members": records,
-            "opaque_archive_count": len(opaque_archives), "opaque_archives": opaque_archives}
+            "opaque_archive_count": len(opaque_archives), "opaque_archives": opaque_archives,
+            "nested_inspection_requested": inspect_nested,
+            "nested_member_count": len(nested_members), "nested_members": nested_members}
 
 
 def recover(archive: Path, member: str, destination: Path, *,
@@ -210,12 +284,16 @@ def main() -> None:
     parser.add_argument("archives", nargs="+", type=Path)
     parser.add_argument("--output", type=Path, help="metadata-only JSON (new file only)")
     parser.add_argument("--apply", action="store_true", help="explicit extraction of exactly one member")
+    parser.add_argument("--inspect-nested", action="store_true",
+                        help="metadata-only one-level ZIP inspection; no extraction or recursive imports")
     parser.add_argument("--allow", help="exact ZIP member path for extraction")
     parser.add_argument("--quarantine", type=Path, help="existing empty or private quarantine directory")
     parser.add_argument("--expected-archive-sha256", help="reviewed archive digest from inventory")
     parser.add_argument("--expected-member-sha256", help="reviewed member digest from inventory")
     args = parser.parse_args()
     if args.apply:
+        if args.inspect_nested:
+            parser.error("--inspect-nested is inventory-only")
         if (len(args.archives) != 1 or not args.allow or args.quarantine is None or
                 not args.expected_archive_sha256 or not args.expected_member_sha256):
             parser.error("--apply requires one ZIP, --allow, --quarantine and both SHA-256 pins")
@@ -225,7 +303,7 @@ def main() -> None:
     else:
         if args.allow or args.quarantine or args.expected_archive_sha256 or args.expected_member_sha256:
             parser.error("extraction options and SHA-256 pins require --apply")
-        result = inventory(args.archives)
+        result = inventory(args.archives, inspect_nested=args.inspect_nested)
     encoded = json.dumps(result, sort_keys=True, ensure_ascii=False, indent=2) + "\n"
     if args.output:
         with args.output.open("x", encoding="utf-8") as stream:
