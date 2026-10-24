@@ -12,9 +12,9 @@ import re
 from demo.star_snapshot_browser import CapturePlan, validate_plan
 from demo.star_snapshot_choreography import CUES
 
-_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{2,95}\\Z")
-_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\\Z")
-_DIGITS = re.compile(r"[0-9]{1,18}\\Z")
+_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{2,95}\Z")
+_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
+_DIGITS = re.compile(r"[0-9]{1,18}\Z")
 _PORTS = {"grafana": 3000, "n8n": 5678, "glpi": 8080}
 _ENVIRONMENTS = {"ISOLATED_TEST_FIXTURE", "OPERATOR_BROWSER_UNREVIEWED"}
 
