@@ -1,18 +1,7 @@
-"""Pure offline tests; manifest gate is replaced by synthetic return values."""
-import sys
-import types
+"""Pure offline tests; real manifest gate import, synthetic mocked return values."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-
-# A tiny synthetic dependency allows running these tests without a full checkout.
-# On GitHub the real module is imported, and the same function is patched below.
-try:
-    import demo.star_browser_manifest_gate
-except ImportError:
-    stub = types.ModuleType("demo.star_browser_manifest_gate")
-    stub.verify_browser_manifests = lambda *a, **k: None
-    sys.modules["demo.star_browser_manifest_gate"] = stub
 
 from demo.star_capture_set_replay_gate import verify_pinned_replay_captures
 
