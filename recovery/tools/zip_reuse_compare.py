@@ -85,6 +85,34 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
             or document.get("nested_member_count", len(nested)) != len(nested)
             or (nested and document.get("nested_inspection_requested") is not True)):
         raise ValueError("inconsistent nested ZIP source inventory")
+    # Bind every nested source to its parent ZIP fingerprint from the same
+    # reviewed inventory. A fabricated nested row cannot borrow an arbitrary
+    # plausible-looking SHA or path and be classified as reusable.
+    inspected_nested_archives = set()
+    if nested:
+        opaque = document.get("opaque_archives")
+        if (not isinstance(opaque, list)
+                or type(document.get("opaque_archive_count")) is not int
+                or document["opaque_archive_count"] != len(opaque)):
+            raise ValueError("nested source lacks parent ZIP inventory")
+        for parent in opaque:
+            if not isinstance(parent, dict):
+                raise ValueError("invalid parent ZIP inventory")
+            if parent.get("status") != "NESTED_METADATA_ONLY_INSPECTED":
+                continue
+            origin = (parent.get("archive"), parent.get("archive_sha256"),
+                      parent.get("member_path"), parent.get("member_sha256"))
+            if (not all(isinstance(x, str) for x in origin)
+                    or not _safe_name(origin[0]) or "/" in origin[0] or "\\" in origin[0]
+                    or not origin[0].lower().endswith(".zip")
+                    or not _SHA.fullmatch(origin[1])
+                    or not _safe_name(origin[2]) or not origin[2].lower().endswith(".zip")
+                    or BLOCKED_NAMES.search(origin[2])
+                    or not _SHA.fullmatch(origin[3])
+                    or parent.get("import_authorized") is not False
+                    or origin in inspected_nested_archives):
+                raise ValueError("unsafe or duplicated parent ZIP provenance")
+            inspected_nested_archives.add(origin)
     if not isinstance(checkout, dict):
         raise ValueError("invalid checkout index")
     by_hash: dict[str, list[str]] = {}
@@ -120,7 +148,9 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
                     or BLOCKED_NAMES.search(nested_path) or not nested_path.lower().endswith(".zip")
                     or not isinstance(nested_sha, str) or not _SHA.fullmatch(nested_sha)
                     or item.get("import_authorized") is not False
-                    or item.get("reuse_status") != "quarantine_review_required"):
+                    or item.get("reuse_status") != "quarantine_review_required"
+                    or (archive, archive_hash, nested_path, nested_sha)
+                       not in inspected_nested_archives):
                 raise ValueError("unsafe or unreviewed nested source provenance")
         elif "nested_archive_member" in item or "nested_archive_sha256" in item:
             raise ValueError("outer member contains nested provenance")
