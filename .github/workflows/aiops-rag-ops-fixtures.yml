@@ -21,6 +21,8 @@ on:
       - 'tests/test_noc_livestatus_loopback.py'
       - 'demo/noc_livestatus_services.py'
       - 'tests/test_noc_livestatus_services.py'
+      - 'demo/noc_checkmk_consolidation.py'
+      - 'tests/test_noc_checkmk_consolidation.py'
       - '.github/workflows/aiops-rag-ops-fixtures.yml'
   workflow_dispatch:
 permissions:
@@ -48,3 +50,4 @@ jobs:
           python -m unittest discover -s tests -p 'test_noc_livestatus_import.py' -v
           python -m unittest discover -s tests -p 'test_noc_livestatus_loopback.py' -v
           python -m unittest discover -s tests -p 'test_noc_livestatus_services.py' -v
+          python -m unittest discover -s tests -p 'test_noc_checkmk_consolidation.py' -v
