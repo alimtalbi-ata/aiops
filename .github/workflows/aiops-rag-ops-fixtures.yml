@@ -11,6 +11,8 @@ on:
       - 'tests/test_noc_wallboard.py'
       - 'demo/noc_topology.py'
       - 'tests/test_noc_topology.py'
+      - 'demo/noc_drilldown.py'
+      - 'tests/test_noc_drilldown.py'
       - '.github/workflows/aiops-rag-ops-fixtures.yml'
   workflow_dispatch:
 permissions:
@@ -33,3 +35,4 @@ jobs:
           python -m unittest discover -s tests -p 'test_noc_synthetic_snapshot.py' -v
           python -m unittest discover -s tests -p 'test_noc_wallboard.py' -v
           python -m unittest discover -s tests -p 'test_noc_topology.py' -v
+          python -m unittest discover -s tests -p 'test_noc_drilldown.py' -v
