@@ -158,7 +158,8 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         binding = {"schema": "star-capture-set-binding/v1",
                    "run_id": run_id, "correlation_id": correlation_id,
                    "events": {cue.cue: refs[cue.cue] for cue in CUES},
-                   "entries": ordered}
+                   "entries": [{k: v for k, v in entry.items() if k != "manifest_sha256"}
+                               for entry in ordered]}
         canonical = json.dumps(binding, sort_keys=True, ensure_ascii=True,
                                separators=(",", ":"), allow_nan=False).encode("utf-8")
         capture_set_sha256 = hashlib.sha256(canonical).hexdigest()
