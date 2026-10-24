@@ -47,6 +47,26 @@ class JoinCapturePlansTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cue run_id mismatch"):
             join_capture_plans(p, historical())
 
+    def test_historical_business_state_cannot_be_substituted(self):
+        gap = historical()
+        gap["steps"][0]["expected_state"] = "resolved"
+        with self.assertRaisesRegex(ValueError, "business state"):
+            join_capture_plans(plan_capture_identity("RUN-123"), gap)
+
+    def test_invalid_historical_png_count_is_rejected(self):
+        for invalid in (-1, True, "5", 129):
+            with self.subTest(value=invalid):
+                gap = historical()
+                gap["steps"][0]["legacy_png_byte_matches_for_application"] = invalid
+                with self.assertRaisesRegex(ValueError, "PNG match count"):
+                    join_capture_plans(plan_capture_identity("RUN-123"), gap)
+
+    def test_legacy_capture_requirement_cannot_be_suppressed(self):
+        gap = historical()
+        gap["steps"][0]["capture_required"] = False
+        with self.assertRaisesRegex(ValueError, "capture requirement"):
+            join_capture_plans(plan_capture_identity("RUN-123"), gap)
+
     def test_misaligned_steps_rejected(self):
         gap = historical()
         gap["steps"][0]["cue"] = "analyze"
