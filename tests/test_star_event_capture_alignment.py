@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest.mock import patch
 
 from demo.star_event_capture_alignment import verify_event_capture_alignment
 
@@ -108,6 +109,25 @@ class EventCaptureAlignmentTests(unittest.TestCase):
         path.write_text(path.read_text().replace('"cue": "detect",', '"cue": "detect", "cue": "ticket",'))
         with self.assertRaises(ValueError):
             self.verify()
+
+    def test_rejects_manifest_replaced_between_integrity_and_time_check(self):
+        # This mutation previously passed: both timestamps were within the
+        # allowed window, but the second read was NOT the validated manifest.
+        from demo.star_browser_manifest_gate import verify_browser_manifests as real_gate
+
+        def swap_after_gate(root, expected, filenames, **kwargs):
+            verified = real_gate(root, expected, filenames, **kwargs)
+            self.manifest["captured_at"] = "2026-10-23T18:00:20Z"
+            self.write_manifest()
+            return verified
+
+        with patch("demo.star_event_capture_alignment.verify_browser_manifests",
+                   side_effect=swap_after_gate):
+            with self.assertRaisesRegex(ValueError, "manifest changed"):
+                self.verify()
+
+    def test_unchanged_manifest_bytes_pass_time_alignment(self):
+        self.assertEqual(self.verify()["entries"][0]["lag_seconds"], 30)
 
     def test_rejects_tampered_png(self):
         (self.root / "detect.png").write_bytes(b"not a png")
