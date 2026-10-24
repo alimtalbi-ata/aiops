@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -59,43 +60,68 @@ def _validated_infos(z: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
     return infos
 
 
+
+@contextmanager
+def _open_stable_archive(archive: Path):
+    """Hash and parse the *same* regular ZIP descriptor, never reopen its path.
+
+    O_NOFOLLOW closes the symlink-swap window after Path.is_symlink().
+    O_NONBLOCK prevents a replaced FIFO from blocking the recovery worker.
+    """
+    if archive.suffix.lower() != ".zip":
+        raise ValueError("source must be a ZIP")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    fd = os.open(archive, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("source must be a regular ZIP")
+        with os.fdopen(fd, "rb") as stream:
+            fd = -1  # fdopen owns the descriptor from this point onward.
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            stream.seek(0)
+            yield stream, digest
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 def inventory(archives: list[Path]) -> dict:
     """Read only original ZIPs, produce metadata; never export member contents."""
     records, seen_hashes = [], {}
     for archive in sorted(archives, key=lambda p: p.name):
         if archive.is_symlink() or not archive.is_file() or archive.suffix.lower() != ".zip":
             raise ValueError("source must be a regular ZIP, not a symlink")
-        with archive.open("rb") as stream:
-            archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
         version_match = VERSION.search(archive.name)
         version = version_match.group(1).replace("_", ".") if version_match else "unknown"
         if re.fullmatch(r"213\d{1,3}", version):
             version = "2.13." + version[3:]
-        with zipfile.ZipFile(archive) as z:
-            for item in _validated_infos(z):
-                name = item.filename
-                if PurePosixPath(name).suffix.lower() not in EXTENSIONS or BLOCKED_NAMES.search(name):
-                    continue
-                data = z.read(item)
-                if len(data) != item.file_size:
-                    raise ValueError("invalid ZIP member size")
-                digest = _sha(data)
-                sensitive = bool(BLOCKED_CONTENT.search(data))
-                syntax = "not_checked"
-                if name.endswith(".py") and not sensitive:
-                    try:
-                        ast.parse(data.decode("utf-8"), filename=name)
-                        syntax = "parse_pass_not_completeness"
-                    except (SyntaxError, UnicodeError, ValueError):
-                        syntax = "parse_failed"
-                first = seen_hashes.setdefault(digest, {"archive": archive.name, "path": name})
-                records.append({
-                    "archive": archive.name, "archive_sha256": archive_hash,
-                    "version": version, "member_path": name, "member_sha256": digest,
-                    "bytes": len(data), "duplicate_of": None if first == {"archive": archive.name, "path": name} else first,
-                    "sensitive_pattern_detected": sensitive, "python_syntax": syntax,
-                    "reuse_status": "quarantine_review_required",
-                })
+        with _open_stable_archive(archive) as (stream, archive_hash):
+            with zipfile.ZipFile(stream) as z:
+                for item in _validated_infos(z):
+                    name = item.filename
+                    if PurePosixPath(name).suffix.lower() not in EXTENSIONS or BLOCKED_NAMES.search(name):
+                        continue
+                    data = z.read(item)
+                    if len(data) != item.file_size:
+                        raise ValueError("invalid ZIP member size")
+                    digest = _sha(data)
+                    sensitive = bool(BLOCKED_CONTENT.search(data))
+                    syntax = "not_checked"
+                    if name.endswith(".py") and not sensitive:
+                        try:
+                            ast.parse(data.decode("utf-8"), filename=name)
+                            syntax = "parse_pass_not_completeness"
+                        except (SyntaxError, UnicodeError, ValueError):
+                            syntax = "parse_failed"
+                    first = seen_hashes.setdefault(digest, {"archive": archive.name, "path": name})
+                    records.append({
+                        "archive": archive.name, "archive_sha256": archive_hash,
+                        "version": version, "member_path": name, "member_sha256": digest,
+                        "bytes": len(data), "duplicate_of": None if first == {"archive": archive.name, "path": name} else first,
+                        "sensitive_pattern_detected": sensitive, "python_syntax": syntax,
+                        "reuse_status": "quarantine_review_required",
+                    })
     return {"schema": "aiops-zip-source-inventory/v1", "runtime_attested": False,
             "complete_source_attested": False, "member_count": len(records), "members": records}
 
@@ -115,17 +141,16 @@ def recover(archive: Path, member: str, destination: Path, *,
     if (archive.is_symlink() or not archive.is_file() or archive.suffix.lower() != ".zip"
             or destination.is_symlink()):
         raise ValueError("regular ZIP and non-symlink quarantine required")
-    with archive.open("rb") as stream:
-        archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-    if archive_hash != expected_archive_sha256:
-        raise ValueError("archive SHA-256 differs from reviewed inventory")
-    with zipfile.ZipFile(archive) as z:
-        infos = [i for i in _validated_infos(z) if i.filename == member]
-        if len(infos) != 1:
-            raise ValueError("missing or ambiguous member")
-        data = z.read(infos[0])
-        if len(data) != infos[0].file_size or _sha(data) != expected_member_sha256:
-            raise ValueError("member bytes differ from reviewed inventory")
+    with _open_stable_archive(archive) as (stream, archive_hash):
+        if archive_hash != expected_archive_sha256:
+            raise ValueError("archive SHA-256 differs from reviewed inventory")
+        with zipfile.ZipFile(stream) as z:
+            infos = [i for i in _validated_infos(z) if i.filename == member]
+            if len(infos) != 1:
+                raise ValueError("missing or ambiguous member")
+            data = z.read(infos[0])
+            if len(data) != infos[0].file_size or _sha(data) != expected_member_sha256:
+                raise ValueError("member bytes differ from reviewed inventory")
     if BLOCKED_CONTENT.search(data):
         raise ValueError("sensitive-looking content requires private manual review")
     if member.endswith(".py"):
