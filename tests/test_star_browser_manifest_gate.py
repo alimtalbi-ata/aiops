@@ -79,7 +79,7 @@ class BrowserManifestGateTests(unittest.TestCase):
             event_ref = "EVENT-" + str(index + 100)
             refs[cue.cue] = event_ref
             # Each synthetic image is distinct; hash reuse must never pass.
-            png = (b"\\x89PNG\\r\\n\\x1a\\n" +
+            png = (b"\x89PNG\r\n\x1a\n" +
                    chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)) +
                    chunk(b"IDAT", zlib.compress(bytes([0, index, 0, 0]))) + chunk(b"IEND"))
             (self.root / (cue.cue + ".png")).write_bytes(png)
