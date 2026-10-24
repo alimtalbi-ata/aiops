@@ -22,6 +22,14 @@ class StarTraceTests(unittest.TestCase):
         rows=events();rows[0]["payload"]["log"]="<script>attack</script>"
         page=render_noc_star_trace(index(),rows)
         self.assertNotIn("<script>attack</script>",page)
+    def test_capture_links_navigate_to_cue_anchors(self):
+        page=render_noc_star_trace(index(),events())
+        for cue in CUES:
+            self.assertIn('id="cue-'+cue+'"',page)
+        self.assertIn('href="#cue-detect"',page)
+        self.assertIn('href="#cue-verify"',page)
+        self.assertNotIn('href="http',page)
+
     def test_cross_run_rejected(self):
         rows=events();rows[0]["run_id"]="OTHER"
         with self.assertRaises(ValueError):render_noc_star_trace(index(),rows)
