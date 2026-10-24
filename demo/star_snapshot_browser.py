@@ -183,6 +183,12 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
     if not approved_read:
         return {"result": "DRY_RUN", "cue": plan.cue, "service": meta["service"],
                 "runtime_authenticated": False, "effects": "NONE"}
+    # Provenance is a security boundary, not a descriptive label. An isolated
+    # fixture must be supplied as local HTML; otherwise an operator opt-in
+    # could cause a real HTTP request to be mislabelled as synthetic evidence.
+    # Reject before importing Playwright, launching Chromium or opening URLs.
+    if plan.environment == "ISOLATED_TEST_FIXTURE" and fixture_html is None:
+        raise ValueError("isolated fixture requires local HTML; runtime browsing forbidden")
     # Operator browsing is a separate, deliberate authorization boundary.
     # --capture alone must not make an unreviewed plan contact any runtime.
     if (fixture_html is None and
