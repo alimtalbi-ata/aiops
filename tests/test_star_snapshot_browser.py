@@ -97,6 +97,36 @@ class BrowserContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_plan(replace(p,url=self.origin+"/d/wrong/dashboardABC"))
 
+    def test_visible_password_login_overlay_rejected_even_with_matching_proof(self):
+        # F20.13 historical PASS reports included actual login screens.
+        # Valid-looking run/correlation/event DOM must not override login UI.
+        html = FIXTURE_HTML.replace(
+            "</body>", '<form action="/login"><input type="password" /></form></body>'
+        )
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(ValueError, "login surface"):
+                capture(self.plan(), Path(td), approved_read=True, fixture_html=html)
+            self.assertEqual(list(Path(td).iterdir()), [])
+
+    def test_visible_signin_form_without_password_rejected(self):
+        html = FIXTURE_HTML.replace(
+            "</body>", '<form action="/signin"><input name="username" /></form></body>'
+        )
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(ValueError, "login surface"):
+                capture(self.plan(), Path(td), approved_read=True, fixture_html=html)
+            self.assertEqual(list(Path(td).iterdir()), [])
+
+    def test_hidden_password_widget_does_not_invalidate_event_view(self):
+        html = FIXTURE_HTML.replace(
+            "</body>", '<form action="/login" style="display:none"><input type="password" /></form></body>'
+        )
+        with tempfile.TemporaryDirectory() as td:
+            result = capture(self.plan(), Path(td), approved_read=True, fixture_html=html)
+            self.assertEqual(result["result"], "CAPTURED_UNREVIEWED")
+            manifest = json.loads((Path(td) / result["manifest"]).read_text())
+            self.assertFalse(manifest["runtime_page_authenticated"])
+
     def test_js_error_fails_closed(self):
         html = FIXTURE_HTML.replace("</body>", "<script>throw new Error('fixture error')</script></body>")
         with tempfile.TemporaryDirectory() as td:
