@@ -16,7 +16,8 @@ class StarTraceTests(unittest.TestCase):
         page=render_noc_star_trace(index(),events())
         self.assertIn("OFFLINE_TEST",page)
         self.assertIn("RUN-DEMO",page)
-        self.assertEqual(page.count("<tr><td>"),12)
+        self.assertEqual(page.count('<tr id="cue-'),9)
+        self.assertEqual(page.count("<tr><td>"),3)
         self.assertIn("ILLUSTRATIVE_SYNTHETIC_HASH_BINDING",page)
     def test_xss_escaped(self):
         rows=events();rows[0]["payload"]["log"]="<script>attack</script>"
