@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from typing import Mapping, Sequence
+import hashlib
 import json
 import re
 
@@ -46,17 +47,22 @@ def _timestamp(value: object) -> datetime:
     return result
 
 
-def _read_manifest(root: Path, name: str) -> dict[str, object]:
+def _read_manifest(root: Path, name: str) -> tuple[dict[str, object], str]:
     # File name and symlink constraints are also enforced by the bridge.
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.json", name):
         raise ValueError("unsafe manifest filename")
     path = root / name
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 16384:
         raise ValueError("unsafe manifest file")
-    item = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_object)
+    # Decode, hash and parse one immutable byte buffer: the bridge must have
+    # verified exactly these bytes before their timestamps can be trusted.
+    raw = path.read_bytes()
+    if len(raw) > 16_384:
+        raise ValueError("unsafe manifest file")
+    item = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
     if not isinstance(item, dict):
         raise ValueError("invalid manifest object")
-    return item
+    return item, hashlib.sha256(raw).hexdigest()
 
 
 def verify_event_capture_alignment(
@@ -82,16 +88,22 @@ def verify_event_capture_alignment(
         raise ValueError("independent event anchors required")
     # Validate canonical IDs, service/view, PNG SHA/CRC, duplicate images,
     # manifest schema and monotonic capture order before time checks.
-    report = verify_browser_manifests(root, expected, filenames)
+    report = verify_browser_manifests(root, expected, filenames,
+                                      include_manifest_digests=True)
     manifests = [_read_manifest(root, name) for name in filenames]
-    cues = {item["cue"] for item in manifests}
+    verified_bytes = {entry["cue"]: entry["manifest_sha256"]
+                      for entry in report["entries"] if "manifest_sha256" in entry}
+    for item, digest in manifests:
+        if verified_bytes.get(item.get("cue")) != digest:
+            raise ValueError("manifest changed after PNG and identity verification")
+    cues = {item["cue"] for item, _ in manifests}
     if set(anchors) != cues:
         raise ValueError("one independent event anchor per captured cue required")
     canonical = expected.get("events")
     if not isinstance(canonical, Mapping):
         raise ValueError("canonical event references required")
     results: dict[str, dict[str, object]] = {}
-    for item in manifests:
+    for item, _ in manifests:
         cue = item["cue"]
         anchor = anchors[cue]
         if not isinstance(anchor, Mapping) or set(anchor) != _ANCHOR_FIELDS:
