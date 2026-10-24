@@ -24,6 +24,12 @@ class CaptureIdentityPlanTests(unittest.TestCase):
         self.assertEqual(p["steps"][1]["supplied_identifiers"]["execution_id"],"EXE-101")
         self.assertEqual(p["steps"][2]["supplied_identifiers"]["execution_id"],"EXE-102")
         self.assertFalse(p["steps"][3]["capture_ready_for_attempt"])
+    def test_duplicate_n8n_execution_across_cues_is_blocked(self):
+        with self.assertRaisesRegex(ValueError, "reused"):
+            plan_capture_identity("RUN-123", {"execution_by_cue":{
+                "correlate":"EXE-101", "analyze":"EXE-101"
+            }})
+
     def test_invalid_identities_fail_closed(self):
         for known in ({"ticket_id":"../bad"},{"password":"secret"},{"alert_id":True}):
             with self.subTest(known=known),self.assertRaises(ValueError):
