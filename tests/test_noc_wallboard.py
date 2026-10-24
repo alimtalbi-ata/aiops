@@ -20,6 +20,21 @@ class NocWallboardTests(unittest.TestCase):
         self.assertIn("DONNÉES SYNTHÉTIQUES",page)
         self.assertIn('data-filter="CRIT"',page)
         self.assertNotIn("checkmk_live=true",page)
+    def test_asset_drilldown_renders_rag_runbooks(self):
+        catalog=json.loads((Path(__file__).resolve().parents[1]/"demo/rag_ops_fixture_catalog.json").read_text(encoding="utf8"))
+        page=render_noc_wallboard(self.snapshot(),catalog)
+        self.assertIn("Diagnostic par équipement",page)
+        self.assertIn("<details>",page)
+        self.assertIn("SYN-FOS-FC-CRC-001",page)
+        self.assertIn("inspect simulated CRC delta",page)
+        self.assertIn("aucune commande LIVE",page)
+    def test_mismatched_corpus_rejected(self):
+        catalog=json.loads((Path(__file__).resolve().parents[1]/"demo/rag_ops_fixture_catalog.json").read_text(encoding="utf8"))
+        snapshot=self.snapshot()
+        snapshot["alerts"][0]["asset_id"]="not-original"
+        with self.assertRaises(ValueError):
+            render_noc_wallboard(snapshot,catalog)
+
     def test_xss_is_escaped(self):
         state=self.snapshot()
         state["hosts"]["<img src=x onerror=alert(1)>"]={"state":"CRIT","alerts":1}
