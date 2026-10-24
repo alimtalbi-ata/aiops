@@ -179,6 +179,7 @@ class RecoveryTests(unittest.TestCase):
         report = inventory([self.archive], inspect_nested=True)
         self.assertEqual(report["member_count"], 1)
         self.assertEqual(report["nested_member_count"], 4)
+        self.assertEqual(report["nested_asset_count"], 0)
         self.assertEqual(report["opaque_archive_count"], 1)
         self.assertEqual(report["opaque_archives"][0]["status"], "NESTED_METADATA_ONLY_INSPECTED")
         members = {row["member_path"]: row for row in report["nested_members"]}
@@ -211,6 +212,9 @@ class RecoveryTests(unittest.TestCase):
         report = inventory([self.archive], inspect_nested=True)
         self.assertEqual(report["nested_member_count"], 1)
         self.assertEqual(report["nested_members"][0]["member_path"], "tools/replay.py")
+        self.assertEqual(report["nested_asset_count"], 1)
+        self.assertEqual(report["nested_assets"][0]["member_sha256"], hashlib.sha256(media).hexdigest())
+        self.assertEqual(report["nested_assets"][0]["status"], "OPAQUE_ASSET_METADATA_ONLY_NOT_PARSED")
 
     def test_nested_zip_within_zip_never_recurses(self):
         third = self.inner_zip([("not_to_inspect.py", "pass\n")])
@@ -220,6 +224,23 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(report["nested_member_count"], 1)
         self.assertEqual(report["nested_members"][0]["member_path"], "tools/one.py")
         self.assertNotIn("not_to_inspect.py", str(report))
+        self.assertEqual(report["nested_asset_count"], 1)
+        self.assertEqual(report["nested_assets"][0]["status"], "NESTED_ZIP_NOT_RECURSED")
+
+    def test_nested_architecture_document_hashes_without_parsing(self):
+        files = [("03_HLD_Architecture_Logique.pdf", b"%PDF-1.7 synthetic"),
+                 ("04_LLD_Conception_Detaillee.docx", b"PK synthetic not parsed"),
+                 ("01_Organigramme_AIOps_v2130.png", b"PNG synthetic not rendered")]
+        inner = self.inner_zip(files)
+        self.make([("architecture/diagrams.zip", inner)])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["nested_member_count"], 0)
+        self.assertEqual(report["nested_asset_count"], 3)
+        self.assertEqual(
+            {row["member_path"]: row["member_sha256"] for row in report["nested_assets"]},
+            {name: hashlib.sha256(data).hexdigest() for name, data in files})
+        self.assertTrue(all(row["import_authorized"] is False for row in report["nested_assets"]))
+        self.assertEqual(list(self.dest.iterdir()), [])
 
     def test_nested_member_count_budget_refuses_unbounded_catalogue(self):
         inner = self.inner_zip([(f"tools/f{i}.py", "pass\n") for i in range(1001)])
