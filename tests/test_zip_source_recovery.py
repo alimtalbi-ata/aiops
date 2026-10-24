@@ -133,7 +133,7 @@ class RecoveryTests(unittest.TestCase):
         # architecture ZIP. Never interpret nested bytes as source code.
         nested = os.urandom(2 * 1024 * 1024 + 1024)
         self.make([("architecture/diagrams.zip", nested),
-                   ("tools/replay.py", "x=1\\n")])
+                   ("tools/replay.py", "x=1\n")])
         result = inventory([self.archive])
         self.assertEqual(result["member_count"], 1)
         self.assertEqual(result["opaque_archive_count"], 1)
@@ -148,7 +148,7 @@ class RecoveryTests(unittest.TestCase):
 
     def test_nested_zip_compression_bomb_is_rejected(self):
         self.make([("architecture/diagrams.zip", b"0" * (2 * 1024 * 1024 + 1024)),
-                   ("tools/replay.py", "x=1\\n")])
+                   ("tools/replay.py", "x=1\n")])
         with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
             inventory([self.archive])
         with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
