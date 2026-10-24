@@ -75,6 +75,9 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
             "cue": cue.cue, "application": cue.service, "expected_view": cue.view,
             "status": "READY_FOR_READ_ONLY_CAPTURE" if ready else "MISSING_IDENTIFIERS",
             "missing_identifiers": left.get("missing_identifiers"),
+            # Preserve validated business IDs per scene so a future isolated
+            # Chromium collector can navigate the actual execution/ticket.
+            "capture_identifiers": {key: supplied[key] for key in _REQUIRED[cue.cue] if key in supplied},
             "historical_png_matches": right.get("legacy_png_byte_matches_for_application"),
             "runtime_proof": False,
         })
