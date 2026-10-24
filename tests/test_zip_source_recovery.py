@@ -1,11 +1,13 @@
 """Isolated, synthetic ZIP fixtures: no prod services, ports or private data."""
 import hashlib
 import os
+import sys
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
 import zipfile
-from recovery.tools.zip_source_recovery import inventory, recover
+from recovery.tools.zip_source_recovery import inventory, recover, main
 
 
 class RecoveryTests(unittest.TestCase):
@@ -21,6 +23,14 @@ class RecoveryTests(unittest.TestCase):
         with zipfile.ZipFile(self.archive, "w", zipfile.ZIP_DEFLATED) as z:
             for path, value in files:
                 z.writestr(path, value)
+
+    def pinned(self, member, *, archive=None, destination=None, archive_pin=None, member_pin=None):
+        source = archive or self.archive
+        with zipfile.ZipFile(source) as z:
+            content = z.read(member)
+        return recover(source, member, destination or self.dest,
+                       expected_archive_sha256=archive_pin or hashlib.sha256(source.read_bytes()).hexdigest(),
+                       expected_member_sha256=member_pin or hashlib.sha256(content).hexdigest())
 
     def test_inventory_sha_and_version(self):
         self.make([("tools/replay.py", "print('synthetic')\n")])
@@ -68,24 +78,24 @@ class RecoveryTests(unittest.TestCase):
         self.assertTrue(m["members"][0]["sensitive_pattern_detected"])
         self.assertNotIn(secret, str(m))
         with self.assertRaises(ValueError):
-            recover(self.archive, "safe.py", self.dest)
+            self.pinned("safe.py")
 
     def test_invalid_python_syntax_never_called_complete(self):
         self.make([("bad.py", "def broken(:\n")])
         self.assertEqual(inventory([self.archive])["members"][0]["python_syntax"], "parse_failed")
         with self.assertRaises(SyntaxError):
-            recover(self.archive, "bad.py", self.dest)
+            self.pinned("bad.py")
 
     def test_apply_extracts_one_file_with_no_overwrite(self):
         self.make([("tools/one.py", "x=42\n"), ("tools/two.py", "y=2\n")])
-        result = recover(self.archive, "tools/one.py", self.dest)
+        result = self.pinned("tools/one.py")
         self.assertEqual(result["status"], "QUARANTINED_NOT_QUALIFIED")
         files = list(self.dest.iterdir())
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0].read_text(), "x=42\n")
         self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
         with self.assertRaises(FileExistsError):
-            recover(self.archive, "tools/one.py", self.dest)
+            self.pinned("tools/one.py")
 
     def test_symlink_archive_and_quarantine_rejected(self):
         self.make([("safe.py", "x=1\n")])
@@ -96,14 +106,72 @@ class RecoveryTests(unittest.TestCase):
         target = self.root / "linkdir"
         target.symlink_to(self.dest, target_is_directory=True)
         with self.assertRaises(ValueError):
-            recover(self.archive, "safe.py", target)
+            self.pinned("safe.py", destination=target)
 
     def test_oversize_and_high_ratio(self):
         self.make([("bomb.py", "x" * (2 * 1024 * 1024 + 1))])
         with self.assertRaises(ValueError):
             inventory([self.archive])
         with self.assertRaises(ValueError):
-            recover(self.archive, "bomb.py", self.dest)
+            self.pinned("bomb.py")
+
+    def test_missing_pins_refused(self):
+        self.make([("safe.py", "x=1\n")])
+        with self.assertRaises(TypeError):
+            recover(self.archive, "safe.py", self.dest)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_archive_changed_after_review_fails_closed(self):
+        self.make([("safe.py", "x=1\n")])
+        original = inventory([self.archive])["members"][0]
+        self.make([("safe.py", "x=2\n")])
+        with self.assertRaisesRegex(ValueError, "archive SHA-256"):
+            self.pinned("safe.py", archive_pin=original["archive_sha256"],
+                        member_pin=original["member_sha256"])
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_wrong_member_pin_fails_closed(self):
+        self.make([("safe.py", "x=1\n")])
+        with self.assertRaisesRegex(ValueError, "member bytes"):
+            self.pinned("safe.py", member_pin="0" * 64)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_extraction_rejects_unrelated_unsafe_archive_member(self):
+        self.make([("safe.py", "x=1\n"), ("../outside.py", "x=2\n")])
+        with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
+            self.pinned("safe.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_extraction_rejects_duplicate_casefold_names(self):
+        self.make([("safe.py", "x=1\n"), ("SAFE.py", "x=2\n")])
+        with self.assertRaisesRegex(ValueError, "duplicate ZIP member path"):
+            self.pinned("safe.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_extraction_rejects_oversized_unrelated_member(self):
+        self.make([("safe.py", "x=1\n"), ("huge.py", "x" * (2 * 1024 * 1024 + 1))])
+        with self.assertRaisesRegex(ValueError, "oversized"):
+            self.pinned("safe.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_cli_requires_both_reviewed_pins(self):
+        self.make([("safe.py", "x=1\n")])
+        args = ["zip_source_recovery", str(self.archive), "--apply", "--allow", "safe.py",
+                "--quarantine", str(self.dest)]
+        with patch.object(sys, "argv", args), self.assertRaises(SystemExit) as caught:
+            main()
+        self.assertEqual(caught.exception.code, 2)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_cli_pinned_quarantine(self):
+        self.make([("safe.py", "x=1\n")])
+        row = inventory([self.archive])["members"][0]
+        args = ["zip_source_recovery", str(self.archive), "--apply", "--allow", "safe.py",
+                "--quarantine", str(self.dest), "--expected-archive-sha256", row["archive_sha256"],
+                "--expected-member-sha256", row["member_sha256"]]
+        with patch.object(sys, "argv", args):
+            main()
+        self.assertEqual(len(list(self.dest.iterdir())), 1)
 
     def test_nonzip_fails(self):
         self.archive.write_text("not a zip")
