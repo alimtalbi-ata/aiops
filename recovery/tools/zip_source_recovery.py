@@ -19,6 +19,9 @@ import zipfile
 
 MAX_MEMBERS = 5000
 MAX_MEMBER = 2 * 1024 * 1024
+# Nested ZIPs in historical cumulative releases are opaque metadata only.
+# Never recurse into, extract or execute their contents in this recovery tool.
+MAX_OPAQUE_ZIP = 32 * 1024 * 1024
 MAX_TOTAL = 64 * 1024 * 1024
 MAX_RATIO = 200
 EXTENSIONS = {".py", ".js", ".ts", ".html", ".css", ".sh", ".yml", ".yaml", ".toml", ".json", ".md"}
@@ -67,7 +70,8 @@ def _validated_infos(z: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
         if stat.S_IFMT(item.external_attr >> 16) not in (0, stat.S_IFREG):
             raise ValueError("nonregular ZIP member")
         total += item.file_size
-        if (item.file_size > MAX_MEMBER or total > MAX_TOTAL or
+        member_limit = MAX_OPAQUE_ZIP if PurePosixPath(name).suffix.lower() == '.zip' else MAX_MEMBER
+        if (item.file_size > member_limit or total > MAX_TOTAL or
                 (item.file_size > 1024 and item.file_size > MAX_RATIO * max(item.compress_size, 1))):
             raise ValueError("oversized or high-ratio ZIP member")
     return infos
@@ -101,7 +105,7 @@ def _open_stable_archive(archive: Path):
 
 def inventory(archives: list[Path]) -> dict:
     """Read only original ZIPs, produce metadata; never export member contents."""
-    records, seen_hashes = [], {}
+    records, seen_hashes, opaque_archives = [], {}, []
     for archive in sorted(archives, key=lambda p: p.name):
         if archive.is_symlink() or not archive.is_file() or archive.suffix.lower() != ".zip":
             raise ValueError("source must be a regular ZIP, not a symlink")
@@ -113,12 +117,24 @@ def inventory(archives: list[Path]) -> dict:
             with zipfile.ZipFile(stream) as z:
                 for item in _validated_infos(z):
                     name = item.filename
-                    if PurePosixPath(name).suffix.lower() not in EXTENSIONS or BLOCKED_NAMES.search(name):
+                    if BLOCKED_NAMES.search(name):
+                        continue
+                    extension = PurePosixPath(name).suffix.lower()
+                    if extension not in EXTENSIONS and extension != ".zip":
                         continue
                     data = z.read(item)
                     if len(data) != item.file_size:
                         raise ValueError("invalid ZIP member size")
                     digest = _sha(data)
+                    if extension == ".zip":
+                        # No nested ZIP parsing, no recursive imports, no source claim.
+                        opaque_archives.append({
+                            "archive": archive.name, "archive_sha256": archive_hash,
+                            "member_path": name, "member_sha256": digest,
+                            "bytes": len(data), "status": "OPAQUE_NESTED_ZIP_NOT_INSPECTED",
+                            "import_authorized": False,
+                        })
+                        continue
                     sensitive = bool(BLOCKED_CONTENT.search(data))
                     syntax = "not_checked"
                     if name.endswith(".py") and not sensitive:
@@ -136,7 +152,8 @@ def inventory(archives: list[Path]) -> dict:
                         "reuse_status": "quarantine_review_required",
                     })
     return {"schema": "aiops-zip-source-inventory/v1", "runtime_attested": False,
-            "complete_source_attested": False, "member_count": len(records), "members": records}
+            "complete_source_attested": False, "member_count": len(records), "members": records,
+            "opaque_archive_count": len(opaque_archives), "opaque_archives": opaque_archives}
 
 
 def recover(archive: Path, member: str, destination: Path, *,
