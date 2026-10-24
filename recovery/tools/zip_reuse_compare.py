@@ -76,6 +76,15 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
             or document.get("member_count") != len(document["members"])
             or len(document["members"]) > 5000):
         raise ValueError("unsupported or inconsistent ZIP inventory")
+    # V2.13.64 introduced optional one-level, metadata-only nested sources.
+    # Compare their exact hashes to the same checkout without extracting them.
+    # Older inventories without nested fields retain their original behavior.
+    nested = document.get("nested_members", [])
+    if (not isinstance(nested, list) or len(nested) > 1000
+            or type(document.get("nested_member_count", len(nested))) is not int
+            or document.get("nested_member_count", len(nested)) != len(nested)
+            or (nested and document.get("nested_inspection_requested") is not True)):
+        raise ValueError("inconsistent nested ZIP source inventory")
     if not isinstance(checkout, dict):
         raise ValueError("invalid checkout index")
     by_hash: dict[str, list[str]] = {}
@@ -88,7 +97,11 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
     for paths in by_hash.values():
         paths.sort()
     entries, identities = [], set()
-    for item in document["members"]:
+    # Explicit origin_kind prevents same-path files in an outer ZIP and an
+    # embedded ZIP from silently collapsing into a single identity.
+    for origin_kind, item in (
+            [( "outer", row) for row in document["members"]] +
+            [( "nested", row) for row in nested]):
         if not isinstance(item, dict):
             raise ValueError("invalid inventory member")
         archive, path = item.get("archive"), item.get("member_path")
@@ -100,7 +113,18 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
                 or not isinstance(digest, str) or not _SHA.fullmatch(digest)
                 or not isinstance(archive_hash, str) or not _SHA.fullmatch(archive_hash)):
             raise ValueError("invalid inventory path or SHA-256")
-        key = (archive, path)
+        nested_path = item.get("nested_archive_member") if origin_kind == "nested" else None
+        nested_sha = item.get("nested_archive_sha256") if origin_kind == "nested" else None
+        if origin_kind == "nested":
+            if (not isinstance(nested_path, str) or not _safe_name(nested_path)
+                    or BLOCKED_NAMES.search(nested_path) or not nested_path.lower().endswith(".zip")
+                    or not isinstance(nested_sha, str) or not _SHA.fullmatch(nested_sha)
+                    or item.get("import_authorized") is not False
+                    or item.get("reuse_status") != "quarantine_review_required"):
+                raise ValueError("unsafe or unreviewed nested source provenance")
+        elif "nested_archive_member" in item or "nested_archive_sha256" in item:
+            raise ValueError("outer member contains nested provenance")
+        key = (archive, nested_path, path)
         if key in identities:
             raise ValueError("duplicate inventory identity")
         identities.add(key)
@@ -114,13 +138,17 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
             status = "DIVERGENT_PATH_REVIEW"
         else:
             status = "NEW_CANDIDATE_REVIEW"
-        entries.append({
+        entry = {
             "archive": archive, "archive_sha256": archive_hash,
             "member_path": path, "member_sha256": digest,
-            "status": status,
+            "origin_kind": origin_kind, "status": status,
             "matching_checkout_paths": by_hash.get(digest, [])[:20] if status.startswith("EXACT_") else [],
             "import_authorized": False,
-        })
+        }
+        if origin_kind == "nested":
+            entry["nested_archive_member"] = nested_path
+            entry["nested_archive_sha256"] = nested_sha
+        entries.append(entry)
     return {
         "schema": "aiops-zip-reuse-comparison/v1",
         "source_schema": document["schema"],
@@ -128,6 +156,7 @@ def compare_inventory(document: dict, checkout: dict[str, str]) -> dict:
         "complete_source_attested": False,
         "import_authorized": False,
         "entry_count": len(entries),
+        "nested_entry_count": len(nested),
         "entries": entries,
     }
 
