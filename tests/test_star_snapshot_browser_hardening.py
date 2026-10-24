@@ -33,6 +33,17 @@ class BrowserHardeningTests(unittest.TestCase):
                 self.assertEqual(capture(plan(), Path(td))["result"], "DRY_RUN")
                 self.assertEqual(list(Path(td).iterdir()), [])
 
+    def test_isolated_provenance_cannot_browse_runtime_even_with_operator_opt_in(self):
+        # A synthetic plan without local HTML must never silently become an
+        # operator HTTP capture, even when the operator opt-in is present.
+        # This check runs before Playwright/Chromium and needs no network.
+        with tempfile.TemporaryDirectory() as td, patch.dict(os.environ, {
+            "AIOPS_STAR_ALLOW_OPERATOR_READ": "1", "AIOPS_STAR_NO_RUNTIME": "0"
+        }):
+            with self.assertRaisesRegex(ValueError, "isolated fixture requires local HTML"):
+                capture(plan(), Path(td), approved_read=True)
+            self.assertEqual(list(Path(td).iterdir()), [])
+
     def test_operator_runtime_requires_separate_opt_in(self):
         p = replace(plan(), environment="OPERATOR_BROWSER_UNREVIEWED")
         with tempfile.TemporaryDirectory() as td, patch.dict(os.environ, {"AIOPS_STAR_ALLOW_OPERATOR_READ": "0", "AIOPS_STAR_NO_RUNTIME": "0"}):
