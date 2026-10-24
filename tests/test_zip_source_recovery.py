@@ -128,6 +128,33 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.pinned("bomb.py")
 
+    def test_cumulative_release_nested_zip_is_opaque_and_sha_pinned(self):
+        # Reproduces V2.13.6.1: a cumulative ZIP contains a >2 MiB
+        # architecture ZIP. Never interpret nested bytes as source code.
+        nested = os.urandom(2 * 1024 * 1024 + 1024)
+        self.make([("architecture/diagrams.zip", nested),
+                   ("tools/replay.py", "x=1\\n")])
+        result = inventory([self.archive])
+        self.assertEqual(result["member_count"], 1)
+        self.assertEqual(result["opaque_archive_count"], 1)
+        record = result["opaque_archives"][0]
+        self.assertEqual(record["member_sha256"], hashlib.sha256(nested).hexdigest())
+        self.assertEqual(record["status"], "OPAQUE_NESTED_ZIP_NOT_INSPECTED")
+        self.assertFalse(record["import_authorized"])
+        self.assertEqual(result["members"][0]["member_path"], "tools/replay.py")
+        with self.assertRaises(ValueError):
+            self.pinned("architecture/diagrams.zip")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_zip_compression_bomb_is_rejected(self):
+        self.make([("architecture/diagrams.zip", b"0" * (2 * 1024 * 1024 + 1024)),
+                   ("tools/replay.py", "x=1\\n")])
+        with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
+            inventory([self.archive])
+        with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
+            self.pinned("tools/replay.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
     def test_missing_pins_refused(self):
         self.make([("safe.py", "x=1\n")])
         with self.assertRaises(TypeError):
