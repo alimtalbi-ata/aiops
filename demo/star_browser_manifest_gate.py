@@ -59,8 +59,11 @@ def _file(root: Path, name: str, extension: str) -> Path:
 
 
 def verify_browser_manifests(root: Path, expected: Mapping[str, object],
-                             filenames: Sequence[str], *, require_complete: bool = False) -> dict[str, object]:
+                             filenames: Sequence[str], *, require_complete: bool = False,
+                             include_manifest_digests: bool = False) -> dict[str, object]:
     """Return a sanitized storyboard-compatible report with no URLs or secrets."""
+    if type(include_manifest_digests) is not bool:
+        raise ValueError("invalid manifest digest mode")
     run_id, correlation_id, refs = expected.get("run_id"), expected.get("correlation_id"), expected.get("events")
     if not isinstance(refs, dict) or not refs or set(refs) - set(CUE_BY_NAME):
         raise ValueError("canonical event references missing or unknown")
@@ -77,7 +80,11 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         manifest_file = _file(root, name, ".json")
         if manifest_file.stat().st_size > 16_384:
             raise ValueError("oversized capture manifest")
-        item = json.loads(manifest_file.read_text(encoding="utf-8"),
+        # Hash the exact bytes parsed, not a later second read of a mutable path.
+        manifest_bytes = manifest_file.read_bytes()
+        if len(manifest_bytes) > 16_384:
+            raise ValueError("oversized capture manifest")
+        item = json.loads(manifest_bytes.decode("utf-8"),
                           object_pairs_hook=_unique_json_object)
         if not isinstance(item, dict) or item.get("schema") != "star-browser-evidence/v1":
             raise ValueError("invalid Chromium manifest schema")
@@ -134,6 +141,10 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
                              "status": "simulated" if provenance == "ISOLATED_TEST_FIXTURE" else "integrity_checked",
                              "view": cue.view, "sha256": actual, "bytes": size,
                              "captured_at": captured.isoformat()}
+        if include_manifest_digests:
+            # Additional read-consistency marker for the event-alignment gate.
+            # Not included in capture_set_sha256, preserving replay pins.
+            entries[cue_name]["manifest_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
     ordered = [entries.get(c.cue, {"cue": c.cue, "status": "missing"}) for c in CUES]
     timestamps = [datetime.fromisoformat(e["captured_at"]) for e in ordered if "captured_at" in e]
     if timestamps != sorted(timestamps):
