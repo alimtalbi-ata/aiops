@@ -5,8 +5,10 @@ on:
     paths:
       - 'recovery/tools/zip_source_recovery.py'
       - 'recovery/tools/zip_reuse_compare.py'
+      - 'recovery/tools/nested_source_quarantine.py'
       - 'tests/test_zip_source_recovery.py'
       - 'tests/test_zip_reuse_compare.py'
+      - 'tests/test_zip_nested_source_quarantine.py'
       - '.github/workflows/star-historical-zip-recovery-offline.yml'
   pull_request:
     paths:
@@ -28,5 +30,5 @@ jobs:
           python-version: '3.12'
       - name: Python syntax and synthetic security regression
         run: |
-          python -m py_compile recovery/tools/zip_source_recovery.py recovery/tools/zip_reuse_compare.py tests/test_zip_source_recovery.py tests/test_zip_reuse_compare.py
+          python -m py_compile recovery/tools/zip_source_recovery.py recovery/tools/zip_reuse_compare.py recovery/tools/nested_source_quarantine.py tests/test_zip_source_recovery.py tests/test_zip_reuse_compare.py tests/test_zip_nested_source_quarantine.py
           python -m unittest discover -s tests -p 'test_zip_*.py' -v
