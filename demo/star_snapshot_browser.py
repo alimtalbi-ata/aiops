@@ -119,6 +119,13 @@ def validate_plan(plan: CapturePlan) -> dict[str, str]:
             raise ValueError("invalid DOM selector")
     if not plan.redact_selectors or len(plan.redact_selectors) > 20:
         raise ValueError("at least one explicit masking selector required")
+    # A screenshot is not useful evidence if its required identity or state
+    # labels are themselves masked. Also reject ambiguous proof selectors.
+    proof_selectors = (plan.identity_selector, plan.correlation_selector,
+                       plan.event_selector, plan.state_selector)
+    if (len(set(proof_selectors)) != len(proof_selectors)
+            or set(proof_selectors).intersection(plan.redact_selectors)):
+        raise ValueError("redaction overlaps required checkpoint proof selectors")
     return {"cue": cue.cue, "service": cue.service, "view": cue.view,
             "required_state": cue.required_state, "origin": origin, "mode": "READ_ONLY_GET"}
 
@@ -254,10 +261,23 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
             if observed_state != plan.expected_state:
                 raise ValueError("observed state contradicts requested cue")
             masks = []
+            proof_selectors = (plan.identity_selector, plan.correlation_selector,
+                               plan.event_selector, plan.state_selector)
             for selector in plan.redact_selectors:
                 locator = page.locator(selector)
                 if locator.count() < 1 or not locator.first.is_visible():
                     raise ValueError("required redaction element missing")
+                # Even distinct selectors can overlap in the DOM: masking an
+                # ancestor (e.g. #app/body) would conceal the exact run,
+                # event and observed state. Fail before writing any evidence.
+                hides_proof = locator.evaluate_all(
+                    """(masks, selectors) => selectors.some(selector =>
+                        [...document.querySelectorAll(selector)].some(proof =>
+                            masks.some(mask => mask.contains(proof))))""",
+                    list(proof_selectors),
+                )
+                if hides_proof:
+                    raise ValueError("redaction DOM region conceals checkpoint proof")
                 masks.append(locator)
             screenshot = page.screenshot(full_page=True, animations="disabled", mask=masks, mask_color="#000000")
             if blocked or (fixture_html is None and page.url != plan.url):
