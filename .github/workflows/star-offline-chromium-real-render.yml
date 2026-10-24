@@ -1,0 +1,30 @@
+name: STAR Chromium actual offline fixture render
+on:
+  pull_request:
+    paths:
+      - 'demo/star_offline_chromium_fixture.py'
+      - 'demo/star_png_integrity.py'
+      - 'tests/test_star_offline_chromium_render.py'
+      - '.github/workflows/star-offline-chromium-real-render.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-local-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated Playwright Chromium
+        run: |
+          python -m pip install 'playwright==1.55.0'
+          python -m playwright install --with-deps chromium
+      - name: Execute Chromium render on local fixture only
+        run: python -m unittest discover -s tests -p 'test_star_offline_chromium_render.py' -v
