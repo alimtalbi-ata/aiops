@@ -1,0 +1,30 @@
+name: STAR n8n 02-03 identity handoff (offline)
+on:
+  push:
+    branches: [feat/v21310-star-portal-continuity-20261022]
+    paths:
+      - demo/star_n8n_identity_gate.py
+      - tests/test_star_n8n_identity_gate.py
+      - .github/workflows/star-n8n-identity-handoff-offline.yml
+  pull_request:
+    paths:
+      - demo/star_n8n_identity_gate.py
+      - tests/test_star_n8n_identity_gate.py
+      - .github/workflows/star-n8n-identity-handoff-offline.yml
+permissions:
+  contents: read
+jobs:
+  offline-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile and qualify sanitized identity gate
+        run: |
+          python -m py_compile demo/star_n8n_identity_gate.py tests/test_star_n8n_identity_gate.py
+          python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v

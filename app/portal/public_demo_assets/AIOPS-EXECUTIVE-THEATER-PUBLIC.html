@@ -1,0 +1,102 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIOps — STAR Mission Control · V2.13.15 · SAN explicable</title>
+<style>
+:root{color-scheme:dark;--bg:#08111e;--panel:#142235;--line:#344961;--text:#f1f6fe;--muted:#b1c3d5;--teal:#56e0c2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:clamp(15px,1.3vw,18px)/1.5 system-ui,sans-serif}
+header,main,footer{max-width:1240px;margin:auto;padding:15px 22px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:1px solid var(--line)}header small{color:var(--muted)}
+h1{font-size:clamp(1.3rem,2vw,1.8rem);margin:0}.provenance{border:1px solid #ae8c4d;border-radius:30px;padding:6px 12px;font-size:.75rem;color:#ffe1a1}
+main{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(210px,1fr);gap:18px;min-height:70vh}
+article,aside{border:1px solid var(--line);border-radius:20px;padding:clamp(17px,3vw,36px);background:var(--panel)}
+.step{letter-spacing:.1em;color:var(--teal);font-weight:750}.headline{font-size:clamp(2rem,4vw,3.5rem);line-height:1.1;margin:22px 0 12px}
+.lead{font-size:clamp(1.1rem,1.9vw,1.4rem);max-width:38ch;color:#e4edf9}
+.scene{margin-top:35px;border-top:1px solid var(--line);padding-top:22px}.visual{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:22px}
+.node{border-radius:12px;border:1px solid var(--line);padding:14px 10px;text-align:center;flex:1;font-size:.86rem}.node.active{border-color:var(--teal);box-shadow:0 0 0 1px #56e0c250}.arrow{color:var(--teal)}
+.node svg{display:block;width:42px;height:42px;margin:0 auto 7px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.node.active{color:#a7fff0;background:#193d45}.node.active svg{filter:drop-shadow(0 0 7px #56e0c255)}.arrow{display:flex;align-items:center;justify-content:center;position:relative;min-width:24px;overflow:hidden}.arrow::after{content:"";position:absolute;width:5px;height:5px;border-radius:50%;background:#56e0c2;animation:flow 2.8s ease-in-out infinite;left:0}.visual[data-focus="0"] .arrow:first-of-type::after{animation-duration:1.7s}.visual[data-focus="2"] .arrow::after{background:#ffd38a}.scene-caption{margin-top:15px;color:var(--muted);font-size:.85rem}.detail-more{padding:9px 0}.detail-more summary{cursor:pointer;color:var(--teal);font-size:.88rem}.detail-more p{color:var(--muted);font-size:.85rem;margin:8px 0}.scene-badge{display:inline-block;margin-top:10px;padding:5px 10px;border:1px solid var(--line);border-radius:20px;color:#d5eafa;font-size:.78rem}@keyframes flow{0%{transform:translateX(0);opacity:0}25%{opacity:1}100%{transform:translateX(22px);opacity:0}}
+.storyline{margin:18px 0 0;padding:12px 15px;background:#102b3b;border:1px solid #355b70;border-radius:12px}.storyline-title{font-size:.77rem;color:#abdccc;text-transform:uppercase;letter-spacing:.08em}.storyline-track{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}.storyline-track span{font-size:.78rem;padding:7px 10px;border:1px solid #536b7d;border-radius:8px;color:#b8c7d8}.storyline-track span.current{border-color:#56e0c2;background:#205547;color:white}.storyline-status{color:#d1e7f5;font-size:.84rem;margin:10px 0 0}.storyline[data-stage="risk"]{border-color:#c18a55}.storyline[data-stage="blocked"]{border-color:#e6b16d}.storyline[data-stage="blocked"] .current{border-color:#ffcf90;background:#654529}.storyline[data-stage="review"]{border-color:#5fa9c3}
+.san-demo{margin:12px 0 0;padding:13px;border:1px solid #355b70;border-radius:12px;background:#0c2332}.san-demo h3{font-size:.85rem;margin:0 0 10px;color:#cfe8f7}.san-route{display:flex;align-items:center;gap:9px;margin:7px 0;flex-wrap:wrap}.san-path{height:6px;border-radius:4px;flex:1;min-width:65px;background:#57cdb5;position:relative}.san-path.degraded{background:repeating-linear-gradient(90deg,#e7ae68 0 9px,transparent 9px 15px);border:1px solid #d79549;height:7px}.san-tag{font-size:.76rem;min-width:104px}.san-health{color:#d5e9f4;font-size:.8rem;margin:8px 0 0}.san-route[data-state="degraded"] .san-tag{color:#ffd49f}.san-hint{font-size:.75rem;color:#b6c8d9;margin:7px 0 0}
+aside h2{font-size:1rem;margin:0 0 12px}aside .detail{margin:0 0 26px;min-height:70px;color:var(--muted)}.kind{font-size:.75rem;color:var(--teal);text-transform:uppercase;letter-spacing:.08em}
+.controls{max-width:1240px;margin:auto;padding:14px 22px 24px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button,select{background:#233751;color:var(--text);border:1px solid #57728f;border-radius:10px;padding:10px 15px;font:inherit;cursor:pointer}button:hover,button:focus-visible,select:focus-visible{outline:2px solid var(--teal)}
+button.primary{background:#126456}button[aria-pressed=true]{border-color:var(--teal)}.progress{width:100%;height:6px;border:0;border-radius:9px;background:#263b55}.progress>div{height:100%;border-radius:9px;background:var(--teal);transition:width .25s}.counter{font-variant-numeric:tabular-nums;margin-left:auto;color:var(--muted)}
+nav{max-width:1240px;margin:auto;padding:0 22px 24px;display:flex;flex-wrap:wrap;gap:5px}nav button{padding:5px 10px;font-size:.85rem}nav button[aria-current=step]{background:#126456;border-color:var(--teal)}
+.audience{font-size:.82rem;color:var(--muted)}.evidence-toggle{border:1px solid #57728f;background:transparent}.evidence-panel{max-width:1240px;margin:0 auto 12px;padding:12px 22px}.evidence-panel[hidden]{display:none}.evidence-panel section{padding:16px;border:1px solid var(--line);background:var(--panel);border-radius:12px}.evidence-panel p{margin:6px 0}.evidence-panel h2{font-size:1rem;margin:0 0 8px}.evidence-panel strong{color:#ffe1a1}
+footer{font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
+body.presenter main{grid-template-columns:1fr;max-width:1080px}body.presenter aside{display:none}body.presenter .headline{font-size:clamp(2.8rem,5vw,5.1rem);max-width:22ch}body.presenter .lead{font-size:clamp(1.3rem,2.3vw,1.8rem)}body.presenter .scene{margin-top:24px}
+.status{font-size:.82rem;color:var(--muted)}.status strong{color:var(--teal)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:760px){main{grid-template-columns:1fr;min-height:0}header{flex-wrap:wrap}aside{padding:18px}.headline{margin:13px 0}.scene{margin-top:16px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+</style></head>
+<body><header><div><h1>AIOps · Mission Control</h1><small>Un incident, 12 décisions · présentation guidée</small></div><span class="provenance">SIMULATED_TARGET · aucune action LIVE</span></header>
+<main><article aria-live="polite" aria-atomic="true"><div class="step" id="step">01 — SITUATION</div><h2 class="headline" id="headline"></h2><p class="lead" id="lead"></p><section class="scene"><div class="kind">Ce que l'on observe dans ce récit</div><div class="visual" id="visual" data-focus="0" role="img" aria-label="Illustration fictive du trajet métier vers infrastructure et décision">
+<div class="node" id="n1"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="8" width="34" height="25" rx="4"/><path d="M12 16h24M15 24h8m-4 9v7m-8 0h26"/></svg>Service métier</div>
+<div class="arrow" aria-hidden="true">→</div>
+<div class="node" id="n2"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="6" width="14" height="13" rx="2"/><rect x="29" y="6" width="14" height="13" rx="2"/><rect x="17" y="29" width="14" height="13" rx="2"/><path d="M12 19v5h12v5m12-10v5H24"/></svg>Fabric SAN</div>
+<div class="arrow" aria-hidden="true">→</div>
+<div class="node" id="n3"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4 39 10v13c0 11-7 17-15 21C16 40 9 34 9 23V10Z"/><path d="m17 24 5 5 10-11"/></svg>Décision sûre</div></div><div class="scene-caption" id="visual-caption">Schéma explicatif simulé, sans télémétrie LIVE.</div><div class="san-demo" id="san-demo" data-state="nominal" aria-label="Simulation des chemins Fibre Channel redondants"><h3>Chemins SAN · modèle fictif</h3><div class="san-route" id="san-a" data-state="nominal"><span class="san-tag">Fabric A</span><span class="san-path" id="san-line-a" aria-hidden="true"></span><span class="san-tag" id="san-a-label">Disponible</span></div><div class="san-route" id="san-b" data-state="nominal"><span class="san-tag">Fabric B</span><span class="san-path" id="san-line-b" aria-hidden="true"></span><span class="san-tag" id="san-b-label">Disponible</span></div><p class="san-health" id="san-health" role="status">Deux chemins illustratifs · aucune donnée mesurée</p><p class="san-hint">Dessin pédagogique, pas un état de multipathing réellement observé.</p></div><div class="storyline" id="storyline" data-stage="signal" aria-label="Chronologie fictive de réponse"><div class="storyline-title">Fil de décision · scénario illustratif</div><div class="storyline-track" id="storyline-track"><span id="phase-signal">Signal</span><span id="phase-analyst">Analyst</span><span id="phase-critic">Critic</span><span id="phase-policy">Policy</span><span id="phase-human">Humain</span></div><p class="storyline-status" id="storyline-status"></p></div><details class="detail-more" id="more"><summary>Comprendre cette étape</summary><p id="more-text"></p></details></section></article>
+<aside><h2>Lecture de l'architecte</h2><p class="kind">Pourquoi cela compte</p><p class="detail" id="why"></p><p class="kind">Preuve et limite</p><p class="detail" id="proof"></p><p class="kind">Question du comité</p><p class="detail" id="question"></p></aside></main>
+<div class="controls"><div class="progress" aria-hidden="true"><div id="bar"></div></div><button id="prev" aria-label="Étape précédente">◀ Précédent</button><button id="toggle" class="primary" aria-pressed="false">▶ Lecture</button><button id="next">Suivant ▶</button><button id="reset">↻ Recommencer</button><button id="presenter" type="button" aria-pressed="false">▣ Mode présentateur</button><button id="evidence-toggle" type="button" aria-expanded="false" aria-controls="evidence-panel" class="evidence-toggle">ⓘ Sources et limites</button><label class="audience" for="audience">Public</label><select id="audience" aria-label="Niveau de lecture"><option value="business">Métier</option><option value="technical">Technique</option></select><label for="pace">Rythme</label><select id="pace"><option value="12000">Posé · 12 s</option><option value="8000" selected>Normal · 8 s</option><option value="5000">Rapide · 5 s</option></select><span class="status" id="autostatus" aria-live="polite">Lecture arrêtée</span><span class="counter" id="counter">1 / 12</span></div>
+<nav aria-label="Choisir une scène" id="steps"></nav><div id="evidence-panel" class="evidence-panel" hidden><section><h2>Provenance de cette scène</h2><p><strong>SIMULATED_TARGET</strong> — scénario fictif, sans collecte live ni intervention réelle.</p><p id="evidence-detail"></p><p>Une source historique opérateur (OPERATOR_SUPPLIED_EXPORT) n’est pas utilisée dans cette vue et nécessite un accès distinct approuvé.</p></section></div>
+<footer>© AIOps · Scénario fictif ACME. Chaque étape illustre une capacité cible, pas un résultat d'inférence DGX attesté. Historique Core et Evidence non accessibles dans cette vue. Raccourcis : ← → espace, Home, End.</footer>
+<script>
+"use strict";
+const scenes=[
+["SITUATION","Un paiement ralentit","Le service critique dégrade l'expérience client. Le signal métier déclenche l'enquête.","Un symptôme utilisateur prime sur une alerte isolée.","Fictif : aucune métrique live présentée.","Quel périmètre métier est affecté?",0],
+["SITUATION","Le SAN entre en jeu","La chaîne applicative dépend d'un fabric Fibre Channel ; plusieurs chemins peuvent être touchés.","Voir les dépendances évite les fausses causalités.","Topologie illustrative, non extraite d'une CMDB validée.", "Quels équipements et chemins sont concernés?",1],
+["TÂCHE","Qualifier sans agir","Objectif : établir l'impact et la priorité avant toute décision automatique.","Séparer observation et autorisation d'action.","Priorité proposée dans le récit, non décidée par Core.", "Quelles preuves manquent?",2],
+["TÂCHE","Corréler les signaux","Logs, chemins SAN et latence sont confrontés sur une même chronologie.","Une corrélation temporelle ne prouve pas la cause.","Exemple de corrélation simulée.", "La chronologie est-elle fiable?",1],
+["ACTION","L'Analyst propose","L'IA suggère une dégradation du fabric et cite les éléments à contrôler.","L'hypothèse doit rester falsifiable.","Dialogue simulé ; pas de nouvel appel DGX.", "Quelle hypothèse concurrente?",2],
+["ACTION","Le Critic conteste","Une contre-analyse teste la solidité des preuves et l'incertitude restante.","Le second avis réduit l'excès de confiance.","Réponse Critic fictive, sans score inventé.", "Pourquoi accepter ce diagnostic?",2],
+["ACTION","Mesurer le risque","Impact sur applications, reprise et fenêtres de changement.","Une action utile peut être trop risquée.","Aucune commande fournisseur exécutée.", "Que perd-on en cas d'échec?",1],
+["ACTION","Policy bloque","La modification intrusive est refusée sans autorisation et preuve suffisante.","Un système sûr doit savoir ne rien faire.","STOP_AUTO illustré ; pas une preuve d'interposition LIVE.", "Qui possède le droit d'autoriser?",2],
+["ACTION","L'humain tranche","L'opérateur examine les alternatives, l'impact et le rollback.","HITL doit être explicite et traçable.","Approbation illustrée, aucune validation réelle.", "Quel est le plan de retour arrière?",2],
+["ACTION","Communication ciblée","Les équipes reçoivent le même diagnostic contextualisé et ses limites.","La coordination évite les actions contradictoires.","Aucun ticket ni message émis par cette page.", "Qui informe le métier?",0],
+["RÉSULTAT","La preuve avant le récit","Les décisions, refus et éléments de preuve doivent être auditables.","Ne pas confondre journal de simulation et événement exécuté.","Exports opérateur accessibles ailleurs seulement après autorisation.", "Peut-on reproduire cette décision?",2],
+["RÉSULTAT","Résilience mesurable","L'ambition : détecter plus tôt, décider plus sûrement et mesurer les gains.","On ne déclare pas un incident résolu sans vérification.","Objectifs cibles, aucun KPI réel revendiqué.", "Quel critère permet le GO production?",0]
+];
+let pos=0, playing=false, handle=null;
+const $=id=>document.getElementById(id);
+const buttons=[];
+function render(){
+ const s=scenes[pos];const degraded=pos>=1 && pos<=10;
+ $("san-demo").dataset.state=degraded?"degraded":"nominal";
+ $("san-a").dataset.state=degraded?"degraded":"nominal";
+ $("san-line-a").classList.toggle("degraded",degraded);
+ $("san-a-label").textContent=degraded?"Dégradé (simulé)":"Disponible";
+ $("san-health").textContent=degraded?"Un chemin illustratif dégradé ; redondance à vérifier, pas de mesure réelle.":"Deux chemins illustratifs ; aucune donnée mesurée.";
+ $("step").textContent=String(pos+1).padStart(2,"0")+" — "+s[0];
+ $("headline").textContent=s[1];$("lead").textContent=s[2];$("why").textContent=s[3];
+ $("proof").textContent=s[4];$("question").textContent=s[5];$("evidence-detail").textContent=s[4];$("counter").textContent=(pos+1)+" / "+scenes.length;
+ $("bar").style.width=((pos+1)/scenes.length*100)+"%";
+ const phases=["signal","signal","signal","signal","analyst","critic","risk","blocked","review","review","review","review"];
+ const active=phases[pos];$("storyline").dataset.stage=active;
+ const phaseIndex=active==="risk"?2:active==="blocked"?3:active==="review"?4:["signal","analyst","critic","policy","human"].indexOf(active);
+ ["signal","analyst","critic","policy","human"].forEach((name,i)=>$("phase-"+name).classList.toggle("current",i===phaseIndex));
+ $("storyline-status").textContent=[
+ "Signal métier détecté dans le récit (fictif).",
+ "Hypothèse de l'Analyst, non issue d'un appel DGX.",
+ "Contre-expertise du Critic (simulation).",
+ "Analyse du risque sans exécution.",
+ "STOP_AUTO : refus d'action illustré, sans preuve LIVE.",
+ "Revue humaine décrite, sans approbation réelle."
+ ][active==="signal"?0:active==="analyst"?1:active==="critic"?2:active==="risk"?3:active==="blocked"?4:5];
+ $("visual").dataset.focus=String(s[6]);$("visual-caption").textContent="Focus : "+["service métier et impact client","fabric SAN et dépendances","gouvernance et décision"][s[6]]+" · illustration simulée";$("more-text").textContent=s[3]+" Limite : "+s[4];
+ ["n1","n2","n3"].forEach((id,i)=>$(id).classList.toggle("active",i===s[6]));
+ buttons.forEach((button,i)=>button.setAttribute("aria-current",i===pos?"step":"false"));
+ $("prev").disabled=pos===0;$("next").disabled=pos===scenes.length-1;
+ $("lead").textContent=$("audience").value==="technical"?s[3]:s[2];
+}
+function pause(){playing=false;clearTimeout(handle);handle=null;$("toggle").textContent="▶ Lecture";$("toggle").setAttribute("aria-pressed","false");$("autostatus").textContent="Lecture arrêtée"}
+function tick(){clearTimeout(handle);if(!playing)return;if(pos===scenes.length-1){pause();return}$("autostatus").textContent="Défilement automatique · "+(Number($("pace").value)/1000)+" s";handle=setTimeout(()=>{if(!playing)return;pos++;render();tick()},Number($("pace").value))}
+function move(n){pos=Math.max(0,Math.min(scenes.length-1,n));render();if(playing)tick()}
+for(let i=0;i<scenes.length;i++){const b=document.createElement("button");b.textContent=String(i+1).padStart(2,"0");b.setAttribute("aria-label","Étape "+(i+1)+": "+scenes[i][1]);b.addEventListener("click",()=>move(i));$("steps").append(b);buttons.push(b)}
+$("prev").addEventListener("click",()=>move(pos-1));$("next").addEventListener("click",()=>move(pos+1));
+$("reset").addEventListener("click",()=>{pause();move(0)});
+$("toggle").addEventListener("click",()=>{playing=!playing;$("toggle").setAttribute("aria-pressed",String(playing));$("toggle").textContent=playing?"⏸ Pause":"▶ Lecture";tick()});
+$("pace").addEventListener("change",()=>{if(playing)tick()});
+$("audience").addEventListener("change",render);
+$("evidence-toggle").addEventListener("click",()=>{const open=$("evidence-panel").hidden;$("evidence-panel").hidden=!open;$("evidence-toggle").setAttribute("aria-expanded",String(open))});
+$("presenter").addEventListener("click",()=>{const active=document.body.classList.toggle("presenter");$("presenter").setAttribute("aria-pressed",String(active));$("presenter").textContent=active?"▣ Afficher les notes":"▣ Mode présentateur"});
+document.addEventListener("keydown",e=>{if(["SELECT","INPUT","TEXTAREA","BUTTON"].includes(document.activeElement.tagName))return;if(e.key==="ArrowRight"){e.preventDefault();move(pos+1)}if(e.key==="ArrowLeft"){e.preventDefault();move(pos-1)}if(e.key==="Home"){e.preventDefault();move(0)}if(e.key==="End"){e.preventDefault();move(11)}if(e.code==="Space"){e.preventDefault();$("toggle").click()}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)pause()});
+render();
+</script></body></html>

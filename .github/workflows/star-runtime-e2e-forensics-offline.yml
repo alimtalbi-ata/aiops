@@ -1,0 +1,27 @@
+name: STAR runtime E2E failure-report contract (offline)
+on:
+  pull_request:
+    paths:
+      - 'tests/runtime-e2e.sh'
+      - 'tests/test_runtime_e2e_failure_report.py'
+      - '.github/workflows/star-runtime-e2e-forensics-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  report-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check shell syntax (no execution)
+        run: bash -n tests/runtime-e2e.sh
+      - name: Exercise real embedded report generator offline
+        run: python -m unittest discover -s tests -p 'test_runtime_e2e_failure_report.py' -v

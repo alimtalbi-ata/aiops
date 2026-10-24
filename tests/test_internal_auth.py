@@ -4,6 +4,7 @@ import os
 import pathlib
 import sys
 import unittest
+import tempfile
 from unittest.mock import patch
 from fastapi import HTTPException
 
@@ -37,8 +38,14 @@ class BoundaryAuthTests(unittest.TestCase):
 
     def test_policy_check_requires_auth(self):
         values=POLICY.Decision(mode='DEMO',command='EXECUTE',severity='P1',confidence=.95,
-            evidence_count=2,critic_validated=True,redundancy_ok=True,evidence_fresh=True)
-        with patch.object(POLICY,'INTERNAL_TOKEN','test-only-internal-token'):
+            evidence_count=2,critic_validated=True,redundancy_ok=True,
+            evidence_fresh=True,freeze_active=False)
+        # Explicitly isolated CI policy state; never touch the default /var/lib path.
+        with tempfile.TemporaryDirectory(prefix='aiops-auth-unit-') as td, \
+             patch.object(POLICY.autonomy_store,'PATH',pathlib.Path(td)/'policy.sqlite3'), \
+             patch.dict(os.environ,{'AIOPS_POLICY_EMERGENCY_STOP':'false'}), \
+             patch.object(POLICY,'INTERNAL_TOKEN','test-only-internal-token'):
+            POLICY.autonomy_store.set_mode('NORMAL','ci-auth','isolated auth unit test baseline',0)
             with self.assertRaises(HTTPException) as exc:
                 POLICY.check(values,authorization='Bearer wrong')
             valid=POLICY.check(values,authorization='Bearer test-only-internal-token')

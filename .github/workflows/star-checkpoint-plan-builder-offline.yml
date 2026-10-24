@@ -1,0 +1,38 @@
+name: STAR F20.13 checkpoint plan builder (isolated)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_checkpoint_plan_builder.py'
+      - 'demo/star_snapshot_browser.py'
+      - 'demo/star_snapshot_choreography.py'
+      - 'demo/star_browser_request_fence.py'
+      - 'tests/test_star_checkpoint_plan_builder.py'
+      - 'docs/demo/STAR-F2013-CHECKPOINT-PLAN-BUILDER-V21354.md'
+      - '.github/workflows/star-checkpoint-plan-builder-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-capture-plans:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Chromium test dependency
+        run: |
+          python -m pip install 'playwright==1.57.0'
+          python -m playwright install --with-deps chromium
+      - name: Syntax and deterministic plan tests
+        run: |
+          python -m py_compile demo/star_checkpoint_plan_builder.py tests/test_star_checkpoint_plan_builder.py
+          python -m unittest discover -s tests -p 'test_star_checkpoint_plan_builder.py' -v

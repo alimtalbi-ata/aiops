@@ -1,0 +1,33 @@
+name: STAR event-to-capture time alignment (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_event_capture_alignment.py'
+      - 'demo/star_browser_manifest_gate.py'
+      - 'demo/star_capture_identity_guard.py'
+      - 'demo/star_png_integrity.py'
+      - 'tests/test_star_event_capture_alignment.py'
+      - '.github/workflows/star-event-capture-alignment-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-temporal-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile offline evidence gate
+        run: python -m py_compile demo/star_event_capture_alignment.py
+      - name: Run synthetic-only temporal contract
+        run: python -m unittest discover -s tests -p 'test_star_event_capture_alignment.py' -v

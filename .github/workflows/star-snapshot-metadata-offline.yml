@@ -1,0 +1,33 @@
+name: STAR snapshot metadata trust (isolated)
+on:
+  push:
+    branches:
+      - feat/v21310-star-portal-continuity-20261022
+    paths:
+      - 'demo/star_snapshot_choreography.py'
+      - 'tests/test_star_snapshot_choreography.py'
+      - 'tests/test_star_snapshot_claim_firewall.py'
+      - '.github/workflows/star-snapshot-metadata-offline.yml'
+  pull_request:
+    paths:
+      - 'demo/star_snapshot_choreography.py'
+      - 'tests/test_star_snapshot_choreography.py'
+      - 'tests/test_star_snapshot_claim_firewall.py'
+      - '.github/workflows/star-snapshot-metadata-offline.yml'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Metadata must not certify a runtime screenshot
+        run: python -m unittest tests.test_star_snapshot_choreography -v
+      - name: Adversarial claim firewall
+        run: python -m unittest discover -s tests -p 'test_star_snapshot_claim_firewall.py' -v
+      - name: Syntax
+        run: python -m compileall -q demo/star_snapshot_choreography.py

@@ -1,6 +1,11 @@
 import unittest
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from app.policy.main import Decision, evaluate
+from app.policy import autonomy_store
 
 
 def decision(**overrides):
@@ -16,12 +21,35 @@ def decision(**overrides):
         "preconditions_verified": True,
         "fencing_verified": True,
         "human_approved": True,
+        "freeze_active": False,  # explicit fixture, never trusted by production callers
     }
     values.update(overrides)
     return Decision(**values)
 
 
 class PolicySafetyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Isolated CI-only policy state: no /var/lib writes and no runtime effect.
+        cls._tmp = tempfile.TemporaryDirectory(prefix="aiops-policy-unit-")
+        cls._path = patch.object(autonomy_store, "PATH", Path(cls._tmp.name) / "policy.sqlite3")
+        cls._env = patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "false"})
+        cls._path.start()
+        cls._env.start()
+        try:
+            autonomy_store.set_mode("NORMAL", "ci-unit", "isolated policy unit test baseline", 0)
+        except Exception:
+            cls._env.stop()
+            cls._path.stop()
+            cls._tmp.cleanup()
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._env.stop()
+        cls._path.stop()
+        cls._tmp.cleanup()
+
     def test_p1_is_always_escalated_even_with_all_proofs(self):
         result = evaluate(decision(severity="P1"))
         self.assertEqual(result["state"], "BLOCKED")

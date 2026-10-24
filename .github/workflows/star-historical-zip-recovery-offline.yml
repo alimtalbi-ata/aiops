@@ -1,0 +1,32 @@
+name: STAR historical ZIP source recovery (isolated)
+on:
+  push:
+    branches: [feat/v21310-star-portal-continuity-20261022]
+    paths:
+      - 'recovery/tools/zip_source_recovery.py'
+      - 'recovery/tools/zip_reuse_compare.py'
+      - 'tests/test_zip_source_recovery.py'
+      - 'tests/test_zip_reuse_compare.py'
+      - '.github/workflows/star-historical-zip-recovery-offline.yml'
+  pull_request:
+    paths:
+      - 'recovery/tools/zip_source_recovery.py'
+      - 'recovery/tools/zip_reuse_compare.py'
+      - 'tests/test_zip_source_recovery.py'
+      - 'tests/test_zip_reuse_compare.py'
+      - '.github/workflows/star-historical-zip-recovery-offline.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-zip-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python syntax and synthetic security regression
+        run: |
+          python -m py_compile recovery/tools/zip_source_recovery.py recovery/tools/zip_reuse_compare.py tests/test_zip_source_recovery.py tests/test_zip_reuse_compare.py
+          python -m unittest discover -s tests -p 'test_zip_*.py' -v

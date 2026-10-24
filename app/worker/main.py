@@ -7,6 +7,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from worker.workflow import IncidentWorkflow, STAGES, RETRY
 from shared.http import post_json,get_json
 from shared.freshness import assess_evidence_freshness
+from shared.simulation_policy_contract import policy_command_for_mode
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 log=logging.getLogger('aiops2.worker')
 worker_state={'polling':False,'last_error':None,'attempts':0}
@@ -345,7 +346,7 @@ def _execute_stage_blocking(a,attempt):
             analysis_record_id=(analyst_event or {}).get('payload',{}).get('analysis_record_id')
             critique_record_id=(critic_event or {}).get('payload',{}).get('critique_record_id')
             freshness=assess_evidence_freshness(source_evidence)
-            policy_input={'mode':mode,'command':'EXECUTE','severity':analysis.get('severity','UNKNOWN'),'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),'evidence_count':len(source_evidence),'critic_validated':critique.get('validated') is True,'redundancy_ok':False if not source_evidence else True,'evidence_fresh':freshness['status']=='FRESH','evidence_freshness':freshness,'preconditions_verified':False,'fencing_verified':False,'human_approved':False}
+            policy_input={'mode':mode,'command':policy_command_for_mode(mode),'severity':analysis.get('severity','UNKNOWN'),'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),'evidence_count':len(source_evidence),'critic_validated':critique.get('validated') is True,'redundancy_ok':False if not source_evidence else True,'evidence_fresh':freshness['status']=='FRESH','evidence_freshness':freshness,'preconditions_verified':False,'fencing_verified':False,'human_approved':False}
             pol=post_json(POLICY,'/api/policy/check',policy_input,token=ADMIN)
             decision_record=post_json(CORE,f'/api/runs/{rid}/policy-record',{'policy':pol,'analysis_id':analysis_record_id,'critique_id':critique_record_id,'evidence_ids':[x['evidence_id'] for x in source_evidence],'policy_version':'2.1.0','policy_input':policy_input},timeout=15,token=ADMIN)
             pol['policy_decision_id']=decision_record['policy_decision_id']
