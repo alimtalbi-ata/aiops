@@ -19,6 +19,21 @@ class JoinCapturePlansTests(unittest.TestCase):
         self.assertEqual(work["ready_for_attempt"], 2)
         self.assertEqual([s["cue"] for s in work["steps"] if s["status"] == "READY_FOR_READ_ONLY_CAPTURE"], ["detect", "verify"])
 
+    def test_validated_business_ids_are_available_to_read_only_capture(self):
+        identities = plan_capture_identity("RUN-123", {
+            "ticket_id":"TKT-100",
+            "execution_by_cue":{"correlate":"EXE-101","analyze":"EXE-102"},
+        })
+        work = join_capture_plans(identities, historical())
+        self.assertEqual(work["steps"][1]["capture_identifiers"],
+                         {"run_id":"RUN-123","execution_id":"EXE-101"})
+        self.assertEqual(work["steps"][3]["capture_identifiers"],
+                         {"run_id":"RUN-123","execution_id":"EXE-102"})
+        self.assertEqual(work["steps"][4]["capture_identifiers"],
+                         {"run_id":"RUN-123","ticket_id":"TKT-100"})
+        self.assertNotIn("execution_id",work["steps"][2]["capture_identifiers"])
+        self.assertEqual(work["runtime_proof_count"],0)
+
     def test_cross_run_mix_rejected(self):
         with self.assertRaisesRegex(ValueError, "run_id mismatch"):
             join_capture_plans(plan_capture_identity("RUN-OTHER"), historical())
