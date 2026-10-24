@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{2,95}\Z")
+_EVENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\\Z")
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
 _ALLOWED = {"ISOLATED_TEST_FIXTURE", "OPERATOR_BROWSER_UNREVIEWED"}
 
@@ -37,7 +38,7 @@ def reconcile_checkpoints(expected: Mapping, captures: list[Mapping]) -> dict:
         if not isinstance(cue, str) or cue not in events or cue in seen:
             raise ValueError("unknown or duplicate checkpoint")
         ref = events[cue]
-        if not isinstance(ref, str) or not _ID.fullmatch(ref):
+        if not isinstance(ref, str) or not _EVENT.fullmatch(ref):
             raise ValueError("invalid independent event reference")
         if (item["run_id"], item["correlation_id"], item["event_ref"]) != (run, corr, ref):
             raise ValueError("capture identity mismatch")
