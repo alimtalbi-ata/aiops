@@ -23,3 +23,7 @@ La prévention des symlinks ne dépend plus uniquement de `Path.is_symlink()` (p
 ## Réversibilité et sécurité
 
 Rollback : revert du commit de cette évolution sur la branche de PR, sans toucher aux fichiers en quarantaine. Aucun merge vers `main`. Ne pas modifier la prod Debian, le bridge V1, les services GLPI/n8n/Grafana, la CMDB, Temporal, les tickets, les ports ou les sessions navigateur. Aucun état métier LIVE n'est validé par ces tests.
+
+## V2.13.53 Windows/Unicode path fence
+
+Whole-archive validation now rejects Windows reserved device stems (`CON.py`, `NUL.txt`, `COM1`, `LPT9`), invalid Windows filename characters, trailing dots/spaces, ASCII controls and non-NFC Unicode aliases. This is an intentional fail-closed portability policy: a path that appears unique on Linux must not overwrite or alias another file when reviewed on Windows. No extraction or production operation was performed. Regression fixtures use synthetic ZIPs. Rollback: revert only the path-fence commit on the PR branch after review; no production state exists to restore.
