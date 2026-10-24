@@ -268,12 +268,24 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
                 if locator.count() < 1 or not locator.first.is_visible():
                     raise ValueError("required redaction element missing")
                 # Even distinct selectors can overlap in the DOM: masking an
-                # ancestor (e.g. #app/body) would conceal the exact run,
-                # event and observed state. Fail before writing any evidence.
+                # ancestor (e.g. #app/body), descendant or CSS-positioned
+                # sibling can conceal the exact run/event/state. Masked pixels
+                # must not overlap any required proof rectangle. Fail closed.
                 hides_proof = locator.evaluate_all(
-                    """(masks, selectors) => selectors.some(selector =>
-                        [...document.querySelectorAll(selector)].some(proof =>
-                            masks.some(mask => mask.contains(proof))))""",
+                    """(masks, selectors) => {
+                        const overlaps = (a, b) => {
+                            const x = a.getBoundingClientRect();
+                            const y = b.getBoundingClientRect();
+                            return x.width > 0 && x.height > 0 &&
+                                   y.width > 0 && y.height > 0 &&
+                                   x.left < y.right && y.left < x.right &&
+                                   x.top < y.bottom && y.top < x.bottom;
+                        };
+                        return selectors.some(selector =>
+                            [...document.querySelectorAll(selector)].some(proof =>
+                                masks.some(mask => mask.contains(proof) ||
+                                    proof.contains(mask) || overlaps(mask, proof))));
+                    }""",
                     list(proof_selectors),
                 )
                 if hides_proof:
