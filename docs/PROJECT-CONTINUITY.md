@@ -190,3 +190,11 @@ Every material change must update this record and the relevant architecture/deci
 - **Pending gate:** RC1.4 full CI and cumulative artifact qualification. Do not describe RC1.4 as qualified until the `release-kit` job succeeds on the exact commit; keep RC1.3 as the last verified release candidate until then.
 - **Next priority:** run the isolated reconstruction from a fresh directory on the Debian host only after a qualified kit is available; check real inference service connectivity, Analyst/Critic grounding/abstention and policies, then advance read-only CMDB/RAG acquisition. Keep simulated evidence distinct from real evidence; do not enable LIVE remediation without independent end-to-end qualification.
 
+
+## 2026-10-24 — NOC/Checkmk/Thruk and multi-vendor RAG archaeology
+
+Historical Oct 16/19 container inventories recovered from Library establish that **Checkmk Community 2.5** and **Thruk** were already present in `/home/aiops/aiops-v1/stack/noc` (Compose project `aiops_noc`), with historic ports Checkmk 8119 and Thruk 8120. Do not redeploy duplicate NOC services; first verify whether the historical configuration and data volumes still exist. Historic HTTP reachability is not proof of functional data correctness.
+
+The reference recovery document is `docs/architecture/AIOPS-NOC-STACK-HISTORICAL-RECOVERY-20261024.md`. Reconstruct the NOC with host/service state, acknowledgements, downtime, impact topology, multi-client scope, and a Demo Director synchronizing Checkmk/Thruk with Grafana, n8n and GLPI. The RAG plan `docs/architecture/AIOPS-RAG-OPS-CORPUS-AND-TRACE-CONTRACT-20261024.md` defines operations runbooks, SNMP/MIB/traps, vendor logs/traces, document provenance and evaluation. Synthetic diagnostic examples live in `demo/rag_ops_fixture_catalog.json` (not authoritative vendor specifications).
+
+Prioritize recovery of original Compose, Thruk config, Checkmk state, RAG index, existing runbooks/observability dashboards from /home/aiops **read-only**, then reuse before rewriting. Continue isolated PR tests; never change Debian services or expose secret material without explicit authorization.
