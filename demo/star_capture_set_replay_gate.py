@@ -40,7 +40,14 @@ def verify_pinned_replay_captures(
     entries = report.get("entries")
     if not isinstance(entries, list) or len(entries) != 9:
         raise ValueError("incomplete replay capture set")
-    statuses = {entry.get("status") for entry in entries if isinstance(entry, dict)}
+    if any(not isinstance(entry, dict) for entry in entries):
+        raise ValueError("invalid replay checkpoint metadata")
+    if any(report.get(flag) is not False for flag in (
+        "runtime_authenticated", "business_validated",
+        "human_approval_authenticated", "live_action_authorized"
+    )):
+        raise ValueError("unexpected runtime or business attestation")
+    statuses = {entry.get("status") for entry in entries}
     if len(statuses) != 1 or not statuses <= {"simulated", "integrity_checked"}:
         raise ValueError("mixed or unknown capture provenance")
     source = next(iter(statuses))
