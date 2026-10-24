@@ -28,6 +28,7 @@ MAX_NESTED_ARCHIVES = 8
 MAX_NESTED_MEMBERS = 1000
 # One global budget across every inspected inner ZIP; never recursive.
 MAX_NESTED_TOTAL = 64 * 1024 * 1024
+OPAQUE_METADATA_EXTENSIONS = frozenset({".pdf", ".docx", ".png", ".svg", ".jpg", ".jpeg", ".zip"})
 MAX_RATIO = 200
 EXTENSIONS = {".py", ".js", ".ts", ".html", ".css", ".sh", ".yml", ".yaml", ".toml", ".json", ".md"}
 BLOCKED_NAMES = re.compile(r"(?:^|[._/-])(?:\.env|credentials?|secrets?|tokens?|cookies?|sessions?|private|id_rsa|\.git)(?:[._/-]|$)", re.I)
@@ -114,7 +115,7 @@ def _open_stable_archive(archive: Path):
 
 def _inspect_nested_members(data: bytes, *, outer: str, outer_sha: str,
                             nested_path: str, nested_sha: str,
-                            seen: dict[str, dict], budget: dict[str, int]) -> list[dict]:
+                            seen: dict[str, dict], budget: dict[str, int]) -> tuple[list[dict], list[dict]]:
     """Inventory a single bounded inner ZIP; never extract or recurse.
 
     The original nested ZIP bytes are already SHA-pinned by the outer reader.
@@ -122,6 +123,7 @@ def _inspect_nested_members(data: bytes, *, outer: str, outer_sha: str,
     excluded/opaque entries, so adversarial archives cannot evade the cap.
     """
     results: list[dict] = []
+    assets: list[dict] = []
     with zipfile.ZipFile(io.BytesIO(data)) as inner:
         infos = _validated_infos(inner, nested=True)
         budget["members"] += len(infos)
@@ -131,14 +133,27 @@ def _inspect_nested_members(data: bytes, *, outer: str, outer_sha: str,
         for info in infos:
             name = info.filename
             extension = PurePosixPath(name).suffix.lower()
-            if BLOCKED_NAMES.search(name) or extension not in EXTENSIONS:
-                continue  # No source bytes, media, or nested ZIP extraction.
-            if info.file_size > MAX_MEMBER:
+            if BLOCKED_NAMES.search(name):
+                continue
+            if extension not in EXTENSIONS and extension not in OPAQUE_METADATA_EXTENSIONS:
+                continue  # Unknown binary; no source bytes or content published.
+            if extension in EXTENSIONS and info.file_size > MAX_MEMBER:
                 raise ValueError("oversized nested source member")
             raw = inner.read(info)  # CRC checked by zipfile; bounded by preflight.
             if len(raw) != info.file_size:
                 raise ValueError("invalid nested ZIP member size")
             digest = _sha(raw)
+            if extension not in EXTENSIONS:
+                assets.append({
+                    "archive": outer, "archive_sha256": outer_sha,
+                    "nested_archive_member": nested_path,
+                    "nested_archive_sha256": nested_sha,
+                    "member_path": name, "member_sha256": digest,
+                    "bytes": len(raw), "status": ("NESTED_ZIP_NOT_RECURSED" if extension == ".zip"
+                                                else "OPAQUE_ASSET_METADATA_ONLY_NOT_PARSED"),
+                    "import_authorized": False,
+                })
+                continue
             sensitive = bool(BLOCKED_CONTENT.search(raw))
             syntax = "not_checked"
             if extension == ".py" and not sensitive:
@@ -159,7 +174,7 @@ def _inspect_nested_members(data: bytes, *, outer: str, outer_sha: str,
                 "reuse_status": "quarantine_review_required",
                 "import_authorized": False,
             })
-    return results
+    return results, assets
 
 
 def inventory(archives: list[Path], *, inspect_nested: bool = False) -> dict:
@@ -168,6 +183,7 @@ def inventory(archives: list[Path], *, inspect_nested: bool = False) -> dict:
         raise ValueError("inspect_nested must be boolean")
     records, seen_hashes, opaque_archives = [], {}, []
     nested_members: list[dict] = []
+    nested_assets: list[dict] = []
     nested_seen: dict[str, dict] = {}
     nested_budget = {"members": 0, "bytes": 0}
     for archive in sorted(archives, key=lambda p: p.name):
@@ -202,10 +218,12 @@ def inventory(archives: list[Path], *, inspect_nested: bool = False) -> dict:
                         if inspect_nested:
                             if len(opaque_archives) > MAX_NESTED_ARCHIVES:
                                 raise ValueError("too many nested ZIPs to inspect")
-                            nested_members.extend(_inspect_nested_members(
+                            sources, assets = _inspect_nested_members(
                                 data, outer=archive.name, outer_sha=archive_hash,
                                 nested_path=name, nested_sha=digest,
-                                seen=nested_seen, budget=nested_budget))
+                                seen=nested_seen, budget=nested_budget)
+                            nested_members.extend(sources)
+                            nested_assets.extend(assets)
                         continue
                     sensitive = bool(BLOCKED_CONTENT.search(data))
                     syntax = "not_checked"
@@ -227,7 +245,8 @@ def inventory(archives: list[Path], *, inspect_nested: bool = False) -> dict:
             "complete_source_attested": False, "member_count": len(records), "members": records,
             "opaque_archive_count": len(opaque_archives), "opaque_archives": opaque_archives,
             "nested_inspection_requested": inspect_nested,
-            "nested_member_count": len(nested_members), "nested_members": nested_members}
+            "nested_member_count": len(nested_members), "nested_members": nested_members,
+            "nested_asset_count": len(nested_assets), "nested_assets": nested_assets}
 
 
 def recover(archive: Path, member: str, destination: Path, *,
