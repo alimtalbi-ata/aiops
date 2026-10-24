@@ -5,6 +5,7 @@ on:
       - 'demo/star_offline_chromium_fixture.py'
       - 'demo/star_png_integrity.py'
       - 'tests/test_star_offline_chromium_render.py'
+      - 'tests/test_star_offline_chromium_nine_scenes.py'
       - '.github/workflows/star-offline-chromium-real-render.yml'
   workflow_dispatch:
 
@@ -27,4 +28,6 @@ jobs:
           python -m pip install 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
       - name: Execute Chromium render on local fixture only
-        run: python -m unittest discover -s tests -p 'test_star_offline_chromium_render.py' -v
+        run: |
+          python -m unittest discover -s tests -p 'test_star_offline_chromium_render.py' -v
+          python -m unittest discover -s tests -p 'test_star_offline_chromium_nine_scenes.py' -v
