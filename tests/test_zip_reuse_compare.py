@@ -39,10 +39,21 @@ def nested_row(name, content, **changes):
 
 def with_nested(*rows, outer=()):
     report = inventory(*outer)
+    parents = {}
+    for entry in rows:
+        key = (entry["archive"], entry["archive_sha256"],
+               entry["nested_archive_member"], entry["nested_archive_sha256"])
+        parents[key] = {
+            "archive": key[0], "archive_sha256": key[1],
+            "member_path": key[2], "member_sha256": key[3],
+            "status": "NESTED_METADATA_ONLY_INSPECTED", "import_authorized": False,
+        }
     report.update({
         "nested_inspection_requested": True,
         "nested_member_count": len(rows),
         "nested_members": list(rows),
+        "opaque_archive_count": len(parents),
+        "opaque_archives": list(parents.values()),
     })
     return report
 
@@ -140,6 +151,25 @@ class CompareTests(unittest.TestCase):
             doc.update(change)
             with self.subTest(change=change), self.assertRaises(ValueError):
                 compare_inventory(doc, {})
+
+    def test_nested_parent_zip_hash_chain_cannot_be_forged(self):
+        original = with_nested(nested_row("tools/replay.py", "pass\n"))
+        for field, value in (("member_sha256", sha("different-parent")),
+                             ("status", "OPAQUE_NESTED_ZIP_NOT_INSPECTED"),
+                             ("import_authorized", True)):
+            with self.subTest(field=field):
+                doc = with_nested(nested_row("tools/replay.py", "pass\n"))
+                doc["opaque_archives"][0][field] = value
+                with self.assertRaises(ValueError):
+                    compare_inventory(doc, {"tools/replay.py": sha("pass\n")})
+        doc = with_nested(nested_row("tools/replay.py", "pass\n"))
+        doc["opaque_archives"] = []
+        with self.assertRaises(ValueError):
+            compare_inventory(doc, {})
+        doc = with_nested(nested_row("tools/replay.py", "pass\n"))
+        doc["opaque_archive_count"] = 99
+        with self.assertRaises(ValueError):
+            compare_inventory(doc, {})
 
     def test_nested_zip_to_checkout_end_to_end_synthetic(self):
         import io
