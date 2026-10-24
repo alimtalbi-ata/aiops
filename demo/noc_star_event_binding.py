@@ -21,21 +21,36 @@ def bind_synthetic_star_events(index:dict,events:list)->dict:
         if row["source_type"]!="SYNTHETIC" or not isinstance(row["payload"],dict):
             raise ValueError("untrusted event origin")
         ids=(row["run_id"],row["incident_id"],row["event_id"])
-        if not all(isinstance(v,str) and 1<=len(v)<=100 and all(c.isalnum() or c in "_-" for c in v) for v in ids):
+        if not all(isinstance(v,str) and 1<=len(v)<=100 and v.isascii() and all(c.isalnum() or c in "_-" for c in v) for v in ids):
             raise ValueError("invalid event identifiers")
         run_ids.add(ids[:2])
         payload=json.dumps(row,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False).encode("utf-8")
+        if len(payload) > 65_536:
+            raise ValueError("synthetic event exceeds bounded hash input")
         items.append({"cue":row["cue"],"event_id":row["event_id"],
                       "event_sha256":hashlib.sha256(payload).hexdigest(),
                       "source_type":"SYNTHETIC","runtime_authenticated":False})
     if len(run_ids)!=1 or len(set(x["event_id"] for x in items))!=9:
         raise ValueError("mixed run or duplicate STAR event")
     run_id,incident_id=next(iter(run_ids))
-    bindings=[{"file":item["file"],"sha256":item["sha256"],
-               "illustrative_cues":item["cue_ids"],
-               "synthetic_event_ids":[e["event_id"] for e in items if e["cue"] in item["cue_ids"]],
-               "relationship":"ILLUSTRATIVE_SYNTHETIC_HASH_BINDING",
-               "runtime_authenticated":False} for item in mapping["bindings"]]
+    # Hash the exact synthetic event-to-capture association, not merely the
+    # separate event and PNG digests. This remains illustrative, never runtime proof.
+    bindings=[]
+    for item in mapping["bindings"]:
+        refs=[{"event_id":e["event_id"],"event_sha256":e["event_sha256"]}
+              for e in items if e["cue"] in item["cue_ids"]]
+        association={"run_id":run_id,"incident_id":incident_id,
+                     "capture_file":item["file"],"capture_sha256":item["sha256"],
+                     "illustrative_cues":item["cue_ids"],"synthetic_events":refs}
+        canonical=json.dumps(association,sort_keys=True,separators=(",",":"),
+                             ensure_ascii=False,allow_nan=False).encode("utf-8")
+        bindings.append({"file":item["file"],"sha256":item["sha256"],
+                         "illustrative_cues":item["cue_ids"],
+                         "synthetic_event_ids":[e["event_id"] for e in refs],
+                         "synthetic_event_hashes":refs,
+                         "binding_sha256":hashlib.sha256(canonical).hexdigest(),
+                         "relationship":"ILLUSTRATIVE_SYNTHETIC_HASH_BINDING",
+                         "runtime_authenticated":False})
     return {"schema":"aiops-noc-synthetic-star-hash-link-v1",
             "run_id":run_id,"incident_id":incident_id,"events":items,
             "captures":bindings,"runtime_authenticated":False,
