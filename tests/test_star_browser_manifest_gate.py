@@ -8,6 +8,7 @@ import zlib
 from pathlib import Path
 
 from demo.star_browser_manifest_gate import verify_browser_manifests
+from demo.star_capture_set_replay_gate import verify_pinned_replay_captures
 from demo.star_portal_storyboard import storyboard
 
 
@@ -101,6 +102,18 @@ class BrowserManifestGateTests(unittest.TestCase):
         self.assertFalse(report["runtime_authenticated"])
         self.assertFalse(report["integrity_checked"])
         self.assertRegex(report["capture_set_sha256"], r"^[0-9a-f]{64}$")
+        # The independent replay pin must be provided explicitly; a matching
+        # fixture is still simulated and requires an explicit fixture flag.
+        with self.assertRaisesRegex(ValueError, "synthetic fixture"):
+            verify_pinned_replay_captures(self.root, canonical, names, report["capture_set_sha256"])
+        pinned = verify_pinned_replay_captures(
+            self.root, canonical, names, report["capture_set_sha256"],
+            allow_synthetic_fixture=True)
+        self.assertEqual(pinned["provenance"], "ISOLATED_TEST_FIXTURE")
+        self.assertFalse(pinned["runtime_authenticated"])
+        with self.assertRaisesRegex(ValueError, "differs"):
+            verify_pinned_replay_captures(
+                self.root, canonical, names, "b" * 64, allow_synthetic_fixture=True)
         # Input manifest ordering must not affect the canonical replay digest.
         reversed_report = verify_browser_manifests(
             self.root, canonical, list(reversed(names)), require_complete=True)
@@ -111,6 +124,11 @@ class BrowserManifestGateTests(unittest.TestCase):
         (self.root / "close.json").write_text(json.dumps(changed), encoding="utf-8")
         updated_report = verify_browser_manifests(self.root, canonical, names, require_complete=True)
         self.assertNotEqual(report["capture_set_sha256"], updated_report["capture_set_sha256"])
+        # A timestamp-only change must invalidate the previously retained pin.
+        with self.assertRaisesRegex(ValueError, "differs"):
+            verify_pinned_replay_captures(
+                self.root, canonical, names, report["capture_set_sha256"],
+                allow_synthetic_fixture=True)
         # A missing explicit false attestation is rejected by strict reconciliation.
         tampered = json.loads((self.root / "detect.json").read_text())
         del tampered["runtime_page_authenticated"]
