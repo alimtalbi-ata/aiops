@@ -106,9 +106,9 @@ class BrowserManifestGateTests(unittest.TestCase):
             self.root, canonical, list(reversed(names)), require_complete=True)
         self.assertEqual(report["capture_set_sha256"], reversed_report["capture_set_sha256"])
         # A new capture timestamp changes the digest even when image bytes match.
-        changed = json.loads((self.root / "verify.json").read_text())
+        changed = json.loads((self.root / "close.json").read_text())
         changed["captured_at"] = "2026-10-23T11:00:30+00:00"
-        (self.root / "verify.json").write_text(json.dumps(changed), encoding="utf-8")
+        (self.root / "close.json").write_text(json.dumps(changed), encoding="utf-8")
         updated_report = verify_browser_manifests(self.root, canonical, names, require_complete=True)
         self.assertNotEqual(report["capture_set_sha256"], updated_report["capture_set_sha256"])
         # A missing explicit false attestation is rejected by strict reconciliation.
