@@ -173,6 +173,65 @@ class RecoveryTests(unittest.TestCase):
             main()
         self.assertEqual(len(list(self.dest.iterdir())), 1)
 
+    def test_inventory_uses_same_descriptor_after_path_replacement(self):
+        """A rename between SHA calculation and ZIP parsing cannot rebind bytes."""
+        self.make([("safe.py", "x=1\n")])
+        original_hash = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        real_zipfile = zipfile.ZipFile
+        moved = self.root / "reviewed-original.zip"
+        replaced = []
+
+        def swap_then_parse(source, *args, **kwargs):
+            if not replaced:
+                self.archive.rename(moved)
+                with real_zipfile(self.archive, "w") as replacement:
+                    replacement.writestr("safe.py", "x=999\n")
+                replaced.append(True)
+            return real_zipfile(source, *args, **kwargs)
+
+        with patch("recovery.tools.zip_source_recovery.zipfile.ZipFile", side_effect=swap_then_parse):
+            report = inventory([self.archive])
+        self.assertTrue(replaced)
+        self.assertEqual(report["members"][0]["archive_sha256"], original_hash)
+        self.assertEqual(report["members"][0]["member_sha256"], hashlib.sha256(b"x=1\n").hexdigest())
+        self.assertNotEqual(hashlib.sha256(self.archive.read_bytes()).hexdigest(), original_hash)
+
+    def test_recover_pinned_descriptor_survives_path_replacement(self):
+        """Selected bytes and whole-ZIP validation stay on the hashed descriptor."""
+        self.make([("safe.py", "x=1\n")])
+        archive_pin = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        member_pin = hashlib.sha256(b"x=1\n").hexdigest()
+        real_zipfile = zipfile.ZipFile
+        moved = self.root / "reviewed-original.zip"
+        replaced = []
+
+        def swap_then_parse(source, *args, **kwargs):
+            if not replaced:
+                self.archive.rename(moved)
+                with real_zipfile(self.archive, "w") as replacement:
+                    replacement.writestr("safe.py", "x=999\n")
+                replaced.append(True)
+            return real_zipfile(source, *args, **kwargs)
+
+        with patch("recovery.tools.zip_source_recovery.zipfile.ZipFile", side_effect=swap_then_parse):
+            result = recover(self.archive, "safe.py", self.dest,
+                             expected_archive_sha256=archive_pin,
+                             expected_member_sha256=member_pin)
+        self.assertEqual(result["status"], "QUARANTINED_NOT_QUALIFIED")
+        self.assertEqual(next(self.dest.iterdir()).read_bytes(), b"x=1\n")
+        self.assertNotEqual(hashlib.sha256(self.archive.read_bytes()).hexdigest(), archive_pin)
+
+    def test_symlink_swap_at_open_refused(self):
+        """O_NOFOLLOW protects even if is_symlink preflight was bypassed."""
+        self.make([("safe.py", "x=1\n")])
+        original = self.root / "reviewed-original.zip"
+        self.archive.rename(original)
+        self.archive.symlink_to(original)
+        with patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "is_file", return_value=True):
+            with self.assertRaises(OSError):
+                inventory([self.archive])
+        self.assertEqual(list(self.dest.iterdir()), [])
+
     def test_nonzip_fails(self):
         self.archive.write_text("not a zip")
         with self.assertRaises(zipfile.BadZipFile):
