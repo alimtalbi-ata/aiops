@@ -51,7 +51,8 @@ class UnifiedBrowserTest(unittest.TestCase):
                         manifest={"schema":"aiops-noc-offline-browser-artifacts-v1","captures":captured,
                                   "source":"SYNTHETIC_AND_UNVERIFIED_EXPORTS",
                                   "runtime_proof_count":0,"live_remediation_authorized":False}
-                        (output/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\\n",encoding="utf-8")
+                        (output/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+                        self.assertEqual(json.loads((output/"manifest.json").read_text(encoding="utf-8")), manifest)
                 finally:
                     await browser.close()
         asyncio.run(run())
