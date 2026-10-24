@@ -16,6 +16,8 @@ jobs:
     env:
       PYTHONPATH: app
       AIOPS_STAR_NO_RUNTIME: '1'
+      # Fake import-only credential: never contact a runtime service.
+      AIOPS_INTERNAL_TOKEN: 'ci-synthetic-import-only-not-a-secret'
     steps:
       - uses: actions/checkout@v4
         with:
