@@ -19,7 +19,7 @@ def reconcile_checkpoints(expected: Mapping, captures: list[Mapping]) -> dict:
     run, corr, events = expected["run_id"], expected["correlation_id"], expected["events"]
     if not all(isinstance(v, str) and _ID.fullmatch(v) for v in (run, corr)):
         raise ValueError("invalid canonical identity")
-    if not isinstance(events, Mapping) or not events:
+    if not isinstance(events, Mapping) or not events or any(not isinstance(k, str) for k in events):
         raise ValueError("missing independent event map")
     if not isinstance(captures, list):
         raise ValueError("invalid captures")
@@ -43,7 +43,7 @@ def reconcile_checkpoints(expected: Mapping, captures: list[Mapping]) -> dict:
             raise ValueError("capture identity mismatch")
         if not isinstance(item["sha256"], str) or not _SHA.fullmatch(item["sha256"]):
             raise ValueError("invalid screenshot checksum")
-        if item["provenance"] not in _ALLOWED or item["qualification"] != "UNREVIEWED":
+        if not isinstance(item["provenance"], str) or item["provenance"] not in _ALLOWED or item["qualification"] != "CAPTURED_UNREVIEWED_NOT_BUSINESS_PROOF":
             raise ValueError("unsupported provenance or claimed qualification")
         for flag in ("runtime_page_authenticated", "business_outcome_verified", "human_approval_authenticated"):
             if item.get(flag) is not False:
