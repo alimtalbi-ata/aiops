@@ -478,3 +478,7 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+# Opt-in read-only STAR replay; handler stays disabled until explicitly enabled.
+from portal.star_legacy_readonly import router as star_legacy_replay_router
+app.include_router(star_legacy_replay_router)

@@ -1,0 +1,31 @@
+name: STAR existing-portal replay route (isolated)
+on:
+  pull_request:
+    paths:
+      - 'app/portal/main.py'
+      - 'app/portal/star_legacy_readonly.py'
+      - 'tests/test_star_portal_offline_route_integration.py'
+      - '.github/workflows/star-legacy-offline-portal-route.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portal-route-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PYTHONPATH: app
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned ASGI test dependencies
+        run: python -m pip install --disable-pip-version-check 'fastapi==0.116.1' 'httpx==0.28.1' 'requests==2.32.4'
+      - name: Compile portal and test
+        run: python -m py_compile app/portal/main.py app/portal/star_legacy_readonly.py tests/test_star_portal_offline_route_integration.py
+      - name: Run synthetic ASGI-only tests
+        run: python -m unittest discover -s tests -p 'test_star_portal_offline_route_integration.py' -v
