@@ -22,7 +22,7 @@ The comparator now includes `nested_members` in addition to `members`. Every nes
 
 Decisions: `EXACT_PATH_DUPLICATE`, `EXACT_BYTES_OTHER_PATH`, `DIVERGENT_PATH_REVIEW`, `NEW_CANDIDATE_REVIEW`, `BLOCKED_REVIEW`. Exact SHA equality proves byte identity **only**, not module completeness, functionality, safety or release readiness. No decision authorizes automatic import.
 
-Fail-closed constraints: nested source count and inspection flag must agree, nested archive path and SHA must be valid, nested member must remain `quarantine_review_required` and `import_authorized=false`; unsafe paths, duplicate provenance keys, sensitive-looking or syntactically broken sources are rejected or blocked. Opaque architecture documents are excluded from source-code comparison. No network, browser, container, service or database calls.
+Fail-closed constraints: nested source count and inspection flag must agree, nested archive path and SHA must be valid and must match the same inventory's `opaque_archives` record with `NESTED_METADATA_ONLY_INSPECTED` status, nested member must remain `quarantine_review_required` and `import_authorized=false`; unsafe paths, duplicate provenance keys, sensitive-looking or syntactically broken sources are rejected or blocked. Opaque architecture documents are excluded from source-code comparison. No network, browser, container, service or database calls.
 
 ## Isolated offline qualification
 
@@ -34,7 +34,7 @@ python -m recovery.tools.zip_reuse_compare /private/zip-inventory.json \
 python -m unittest discover -s tests -p 'test_zip_*.py' -v
 ```
 
-The ZIP and output reports stay private. The checkout should be pinned to a reviewed commit and should contain no runtime secrets. The synthetic tests cover the complete ZIP inventory-to-checkout path, nested exact matches, changed paths, missing candidates, duplicate identities, unsafe nested provenance and blocked sources. The existing isolated historical ZIP workflow runs these tests on PR changes. They **do not** qualify the Debian `:17777` portal, F20.13 real screenshots, or production.
+The ZIP and output reports stay private. The checkout should be pinned to a reviewed commit and should contain no runtime secrets. The synthetic tests cover the complete ZIP inventory-to-checkout path, nested exact matches, changed paths, missing candidates, duplicate identities, forged parent-ZIP SHA/status provenance, unsafe nested provenance and blocked sources. The existing isolated historical ZIP workflow runs these tests on PR changes. They **do not** qualify the Debian `:17777` portal, F20.13 real screenshots, or production.
 
 ## Reuse conditions and rollback
 
