@@ -32,6 +32,14 @@ class ChromiumEvidenceWorkflowContract(unittest.TestCase):
         self.assertLess(source.index("test_noc_unified_chromium.py"),
                         source.index("verify_noc_offline_browser_evidence"))
 
+    def test_derived_json_writers_use_newline_not_literal_backslash_n(self):
+        source = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn('+"\\\\n"', source)
+        self.assertEqual(source.count('+"\\n"'), 2)
+        browser = (WORKFLOW.parents[2] / "tests/test_noc_unified_chromium.py").read_text(encoding="utf-8")
+        self.assertNotIn('+"\\\\n"', browser)
+        self.assertIn("json.loads((output/\"manifest.json\").read_text", browser)
+
     def test_ci_has_no_runtime_target_or_live_promotion(self):
         source = WORKFLOW.read_text(encoding="utf-8")
         self.assertNotIn("10.79.94.202", source)
