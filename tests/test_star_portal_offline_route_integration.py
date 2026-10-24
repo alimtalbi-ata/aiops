@@ -65,6 +65,10 @@ class ExistingPortalReplayRouteTests(unittest.TestCase):
     def test_router_is_registered_exactly_once_in_existing_portal(self):
         from portal.main import app
         self.assertEqual([r.path for r in app.routes].count("/demo/star-replay/{run_id}"), 1)
+        self.stage()
+        response = TestClient(app).get("/demo/star-replay/"+RUN, headers=self.auth)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text.count('<section id="scene-'), 9)
 
     def test_both_scenarios_render_nine_unattested_checkpoints(self):
         for scenario in ("SAN_FABRIC_P1", "PAYMENTS_P2"):
