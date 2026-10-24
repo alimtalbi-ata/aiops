@@ -140,7 +140,7 @@ class BrowserContractTests(unittest.TestCase):
             return bytes(png)
 
         for label, payload in (
-            ("truncated", b"\\x89PNG\\r\\n\\x1a\\n" + b"invalid"),
+            ("truncated", b"\x89PNG\r\n\x1a\n" + b"invalid"),
             ("crc_corrupted", None),
         ):
             with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
