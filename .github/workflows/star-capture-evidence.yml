@@ -26,6 +26,8 @@ on:
       - 'tests/test_star_legacy_playwright_audit.py'
       - 'demo/star_legacy_png_verify.py'
       - 'tests/test_star_legacy_png_verify.py'
+      - 'demo/star_legacy_capture_gap_plan.py'
+      - 'tests/test_star_legacy_capture_gap_plan.py'
       - 'tests/test_star_snapshot_choreography.py'
       - '.github/workflows/star-capture-evidence.yml'
   workflow_dispatch:
@@ -47,6 +49,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile modules
-        run: python -m py_compile demo/star_png_integrity.py demo/star_capture_evidence.py demo/star_snapshot_choreography.py demo/star_portal_storyboard.py demo/star_portal_transport.py demo/star_portal_html.py demo/star_portal_export.py demo/star_scene_scripts.py demo/star_navigable_preview.py demo/star_navigable_export.py demo/star_legacy_playwright_audit.py demo/star_legacy_png_verify.py
+        run: python -m py_compile demo/star_png_integrity.py demo/star_capture_evidence.py demo/star_snapshot_choreography.py demo/star_portal_storyboard.py demo/star_portal_transport.py demo/star_portal_html.py demo/star_portal_export.py demo/star_scene_scripts.py demo/star_navigable_preview.py demo/star_navigable_export.py demo/star_legacy_playwright_audit.py demo/star_legacy_png_verify.py demo/star_legacy_capture_gap_plan.py
       - name: Verify offline integrity and storyboard contracts
-        run: python -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v && python -m unittest discover -s tests -p 'test_star_png_integrity.py' -v && python -m unittest discover -s tests -p 'test_star_portal_storyboard.py' -v && python -m unittest discover -s tests -p 'test_star_portal_transport.py' -v && python -m unittest discover -s tests -p 'test_star_portal_html.py' -v && python -m unittest discover -s tests -p 'test_star_portal_export.py' -v && python -m unittest discover -s tests -p 'test_star_scene_scripts.py' -v && python -m unittest discover -s tests -p 'test_star_navigable_preview.py' -v && python -m unittest discover -s tests -p 'test_star_navigable_export.py' -v && python -m unittest discover -s tests -p 'test_star_legacy_playwright_audit.py' -v && python -m unittest discover -s tests -p 'test_star_legacy_png_verify.py' -v
+        run: python -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v && python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v && python -m unittest discover -s tests -p 'test_star_png_integrity.py' -v && python -m unittest discover -s tests -p 'test_star_portal_storyboard.py' -v && python -m unittest discover -s tests -p 'test_star_portal_transport.py' -v && python -m unittest discover -s tests -p 'test_star_portal_html.py' -v && python -m unittest discover -s tests -p 'test_star_portal_export.py' -v && python -m unittest discover -s tests -p 'test_star_scene_scripts.py' -v && python -m unittest discover -s tests -p 'test_star_navigable_preview.py' -v && python -m unittest discover -s tests -p 'test_star_navigable_export.py' -v && python -m unittest discover -s tests -p 'test_star_legacy_playwright_audit.py' -v && python -m unittest discover -s tests -p 'test_star_legacy_png_verify.py' -v && python -m unittest discover -s tests -p 'test_star_legacy_capture_gap_plan.py' -v
