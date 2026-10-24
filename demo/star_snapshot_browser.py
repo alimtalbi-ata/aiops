@@ -248,6 +248,30 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
                 locator = page.locator(selector)
                 if locator.count() != 1 or not locator.is_visible():
                     raise ValueError("required event DOM element missing or ambiguous")
+                # Playwright is_visible() checks geometry/visibility, NOT CSS
+                # opacity or transparent text. Such DOM values can be correct
+                # while the screenshot contains no legible proof at all.
+                # Check the element and every ancestor before trusting text.
+                painted = locator.evaluate(r"""el => {
+                    const color = getComputedStyle(el).color.toLowerCase().replace(/\s/g, '');
+                    if (color === 'transparent') return false;
+                    const rgba = color.match(/^rgba?\(([^)]*)\)$/);
+                    if (rgba) {
+                        const parts = rgba[1].split(',');
+                        if (parts.length === 4 && Number(parts[3]) <= 0.05) return false;
+                        const slash = rgba[1].split('/');
+                        if (slash.length === 2 && Number(slash[1]) <= 0.05) return false;
+                    }
+                    if (parseFloat(getComputedStyle(el).fontSize) <= 0) return false;
+                    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+                        const style = getComputedStyle(node);
+                        const opacity = Number(style.opacity);
+                        if (!Number.isFinite(opacity) || opacity <= 0.05) return false;
+                    }
+                    return true;
+                }""")
+                if not painted:
+                    raise ValueError("visually hidden checkpoint proof")
                 return locator.inner_text(timeout=4000).strip()
 
             verify_snapshot_identity(
