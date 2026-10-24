@@ -115,9 +115,9 @@ class CompareTests(unittest.TestCase):
 
     def test_nested_sensitive_source_never_marked_reusable(self):
         result = compare_inventory(
-            with_nested(nested_row("tools/secret.py", "pass\n",
+            with_nested(nested_row("tools/safe.py", "pass\n",
                                    sensitive_pattern_detected=True)),
-            {"tools/secret.py": sha("pass\n")})
+            {"tools/safe.py": sha("pass\n")})
         self.assertEqual(result["entries"][0]["status"], "BLOCKED_REVIEW")
         self.assertEqual(result["entries"][0]["matching_checkout_paths"], [])
 
