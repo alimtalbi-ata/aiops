@@ -4,11 +4,14 @@ on:
   pull_request:
     paths:
       - 'demo/star_browser_manifest_gate.py'
+      - 'demo/star_checkpoint_reconciliation.py'
       - 'demo/star_capture_identity_guard.py'
       - 'demo/star_png_integrity.py'
       - 'demo/star_portal_storyboard.py'
       - 'tests/test_star_browser_manifest_gate.py'
+      - 'tests/test_star_checkpoint_reconciliation.py'
       - 'docs/demo/STAR-BROWSER-MANIFEST-BRIDGE-HLD-LLD-V21336.md'
+      - 'docs/demo/STAR-CHECKPOINT-RECONCILIATION-V21358.md'
       - '.github/workflows/star-browser-manifest-bridge-offline.yml'
   workflow_dispatch:
 
@@ -29,6 +32,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile offline bridge
-        run: python -m py_compile demo/star_browser_manifest_gate.py tests/test_star_browser_manifest_gate.py
+        run: python -m py_compile demo/star_browser_manifest_gate.py demo/star_checkpoint_reconciliation.py tests/test_star_browser_manifest_gate.py tests/test_star_checkpoint_reconciliation.py
       - name: Test synthetic identity, integrity, chronology and storyboard
-        run: python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
+        run: |
+          python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_checkpoint_reconciliation.py' -v
