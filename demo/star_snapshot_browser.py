@@ -247,12 +247,17 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
             # Grafana displayed login pages. A login overlay may coexist with
             # stale or injected identity DOM. Never capture that as an event view.
             # No credential values, page text or login URLs are read or logged.
-            if page.locator(
-                'input[type="password"]:visible, '
-                'form[action*="login" i]:visible, '
-                'form[action*="signin" i]:visible'
-            ).count():
-                raise ValueError("login surface obscures requested application checkpoint")
+            def reject_login_surface() -> None:
+                # Recheck after screenshot: an asynchronous SPA can replace
+                # a verified event view with a login overlay mid-capture.
+                if page.locator(
+                    'input[type="password"]:visible, '
+                    'form[action*="login" i]:visible, '
+                    'form[action*="signin" i]:visible'
+                ).count():
+                    raise ValueError("login surface obscures requested application checkpoint")
+
+            reject_login_surface()
 
             def required_text(selector: str) -> str:
                 locator = page.locator(selector)
@@ -344,6 +349,18 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
                     raise ValueError("redaction DOM region conceals checkpoint proof")
                 masks.append(locator)
             screenshot = page.screenshot(full_page=True, animations="disabled", mask=masks, mask_color="#000000")
+            # DOM proof and screenshot are not an atomic browser operation.
+            # Reject an SPA transition that occurs while the PNG is captured.
+            reject_login_surface()
+            verify_snapshot_identity(
+                {"run_id": plan.run_id, "correlation_id": plan.correlation_id,
+                 "event_ref": plan.event_ref},
+                {"run_id": required_text(plan.identity_selector),
+                 "correlation_id": required_text(plan.correlation_selector),
+                 "event_ref": required_text(plan.event_selector)},
+            )
+            if required_text(plan.state_selector) != plan.expected_state:
+                raise ValueError("checkpoint state changed during screenshot")
             if blocked or (fixture_html is None and page.url != plan.url):
                 raise ValueError("unsafe network activity or page navigation during capture")
             if len(screenshot) > MAX_SCREENSHOT or not screenshot.startswith(b"\x89PNG\r\n\x1a\n"):
