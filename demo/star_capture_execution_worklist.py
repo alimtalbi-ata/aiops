@@ -31,9 +31,22 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
             raise ValueError("historical captures cannot attest runtime")
         if left.get("live_action_authorized") is not False:
             raise ValueError("LIVE action forbidden")
+        from demo.star_capture_identity_plan import _REQUIRED, _ID
+        supplied = left.get("supplied_identifiers")
+        if not isinstance(supplied, dict) or set(supplied) - set(_REQUIRED[cue.cue]):
+            raise ValueError("invalid supplied identity fields")
+        if supplied.get("run_id") != identity["run_id"]:
+            raise ValueError("cue run_id mismatch")
+        if any(not isinstance(value, str) or not _ID.fullmatch(value) for value in supplied.values()):
+            raise ValueError("malformed cue identity")
+        expected_missing = [key for key in _REQUIRED[cue.cue] if key not in supplied]
+        if left.get("required_identifiers") != list(_REQUIRED[cue.cue]):
+            raise ValueError("tampered required identifiers")
+        if left.get("missing_identifiers") != expected_missing:
+            raise ValueError("tampered missing identifiers")
         ready = left.get("capture_ready_for_attempt")
-        if not isinstance(ready, bool):
-            raise ValueError("invalid readiness flag")
+        if not isinstance(ready, bool) or ready != (not expected_missing):
+            raise ValueError("forged capture readiness")
         steps.append({
             "cue": cue.cue, "application": cue.service, "expected_view": cue.view,
             "status": "READY_FOR_READ_ONLY_CAPTURE" if ready else "MISSING_IDENTIFIERS",
