@@ -9,7 +9,7 @@ class CheckpointReconciliationTests(unittest.TestCase):
         self.captures = [
             {"cue": cue, "run_id": "RUN-123", "correlation_id": "CORR-123",
              "event_ref": event, "sha256": SHA, "provenance": "ISOLATED_TEST_FIXTURE",
-             "qualification": "UNREVIEWED", "runtime_page_authenticated": False,
+             "qualification": "CAPTURED_UNREVIEWED_NOT_BUSINESS_PROOF", "runtime_page_authenticated": False,
              "business_outcome_verified": False, "human_approval_authenticated": False}
             for cue, event in self.expected["events"].items()
         ]
@@ -41,6 +41,10 @@ class CheckpointReconciliationTests(unittest.TestCase):
         del self.captures[0]["human_approval_authenticated"]
         with self.assertRaises(ValueError):
             reconcile_checkpoints(self.expected, self.captures)
+
+    def test_missing_independent_event_map(self):
+        with self.assertRaises(ValueError):
+            reconcile_checkpoints({**self.expected, "events": {}}, self.captures)
 
     def test_invalid_hash(self):
         self.captures[0]["sha256"] = "bad"
