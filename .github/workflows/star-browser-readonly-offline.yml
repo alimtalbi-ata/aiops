@@ -9,6 +9,7 @@ on:
       - 'tests/test_star_snapshot_browser_hardening.py'
       - 'tests/test_star_browser_mask_proof_gate.py'
       - 'tests/test_star_browser_proof_visibility.py'
+      - 'tests/test_star_browser_css_visibility_v21358.py'
       - 'demo/star_browser_manifest_gate.py'
       - 'demo/star_browser_request_fence.py'
       - 'tests/test_star_browser_request_fence.py'
@@ -42,11 +43,12 @@ jobs:
           python -m pip install 'playwright==1.57.0'
           python -m playwright install --with-deps chromium
       - name: Compile capture contract
-        run: python -m py_compile demo/star_snapshot_browser.py tests/test_star_browser_mask_proof_gate.py tests/test_star_browser_proof_visibility.py
+        run: python -m py_compile demo/star_snapshot_browser.py tests/test_star_browser_mask_proof_gate.py tests/test_star_browser_proof_visibility.py tests/test_star_browser_css_visibility_v21358.py
       - name: Qualify Chromium on local synthetic HTML only
         run: |
           python -m unittest discover -s tests -p 'test_star_snapshot_browser.py' -v
           python -m unittest discover -s tests -p 'test_star_snapshot_browser_hardening.py' -v
           python -m unittest discover -s tests -p 'test_star_browser_mask_proof_gate.py' -v
           python -m unittest discover -s tests -p 'test_star_browser_proof_visibility.py' -v
+          python -m unittest discover -s tests -p 'test_star_browser_css_visibility_v21358.py' -v
           python -m unittest discover -s tests -p 'test_star_browser_request_fence.py' -v

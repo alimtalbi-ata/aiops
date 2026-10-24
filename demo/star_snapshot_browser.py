@@ -263,10 +263,28 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
                         if (slash.length === 2 && Number(slash[1]) <= 0.05) return false;
                     }
                     if (parseFloat(getComputedStyle(el).fontSize) <= 0) return false;
+                    // CSS paint suppression can leave innerText and is_visible()
+                    // unchanged while removing every proof pixel from the PNG.
+                    // Reject uncertain clipping/filter/masking on the entire
+                    // proof ancestry instead of asserting that it is legible.
+                    const transparent = value => {
+                        const v = String(value || '').toLowerCase().replace(/\s/g, '');
+                        if (v === 'transparent') return true;
+                        const rgba = v.match(/^rgba?\(([^)]*)\)$/);
+                        if (!rgba) return false;
+                        const parts = rgba[1].split(',');
+                        if (parts.length === 4 && Number(parts[3]) <= 0.05) return true;
+                        const slash = rgba[1].split('/');
+                        return slash.length === 2 && Number(slash[1]) <= 0.05;
+                    };
+                    if (transparent(getComputedStyle(el).webkitTextFillColor)) return false;
                     for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
                         const style = getComputedStyle(node);
                         const opacity = Number(style.opacity);
                         if (!Number.isFinite(opacity) || opacity <= 0.05) return false;
+                        if (style.filter !== 'none' || style.clipPath !== 'none' ||
+                            style.webkitClipPath !== 'none' || style.maskImage !== 'none' ||
+                            style.webkitMaskImage !== 'none') return false;
                     }
                     return true;
                 }""")
