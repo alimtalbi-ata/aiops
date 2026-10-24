@@ -79,15 +79,15 @@ class CompareTests(unittest.TestCase):
 
     def test_nested_source_exact_bytes_and_path_divergence(self):
         source = with_nested(
-            nested_row("tools/replay.py", "pass\\n"),
-            nested_row("legacy/renamed.py", "x=1\\n"),
-            nested_row("tools/changed.py", "old\\n"),
-            nested_row("tools/unknown.py", "unknown\\n"),
+            nested_row("tools/replay.py", "pass\n"),
+            nested_row("legacy/renamed.py", "x=1\n"),
+            nested_row("tools/changed.py", "old\n"),
+            nested_row("tools/unknown.py", "unknown\n"),
         )
         checkout = {
-            "tools/replay.py": sha("pass\\n"),
-            "current/replay.py": sha("x=1\\n"),
-            "tools/changed.py": sha("new\\n"),
+            "tools/replay.py": sha("pass\n"),
+            "current/replay.py": sha("x=1\n"),
+            "tools/changed.py": sha("new\n"),
         }
         result = compare_inventory(source, checkout)
         self.assertEqual(result["entry_count"], 4)
@@ -105,9 +105,9 @@ class CompareTests(unittest.TestCase):
         self.assertTrue(all(entry["import_authorized"] is False for entry in result["entries"]))
 
     def test_nested_and_outer_same_relative_path_are_independent(self):
-        source = with_nested(nested_row("tools/replay.py", "new\\n"),
-                             outer=(row("tools/replay.py", "old\\n"),))
-        result = compare_inventory(source, {"tools/replay.py": sha("old\\n")})
+        source = with_nested(nested_row("tools/replay.py", "new\n"),
+                             outer=(row("tools/replay.py", "old\n"),))
+        result = compare_inventory(source, {"tools/replay.py": sha("old\n")})
         self.assertEqual(result["entry_count"], 2)
         self.assertEqual([x["origin_kind"] for x in result["entries"]], ["outer", "nested"])
         self.assertEqual([x["status"] for x in result["entries"]],
@@ -115,9 +115,9 @@ class CompareTests(unittest.TestCase):
 
     def test_nested_sensitive_source_never_marked_reusable(self):
         result = compare_inventory(
-            with_nested(nested_row("tools/secret.py", "pass\\n",
+            with_nested(nested_row("tools/secret.py", "pass\n",
                                    sensitive_pattern_detected=True)),
-            {"tools/secret.py": sha("pass\\n")})
+            {"tools/secret.py": sha("pass\n")})
         self.assertEqual(result["entries"][0]["status"], "BLOCKED_REVIEW")
         self.assertEqual(result["entries"][0]["matching_checkout_paths"], [])
 
@@ -131,12 +131,12 @@ class CompareTests(unittest.TestCase):
         ]
         for changes in invalid:
             with self.subTest(changes=changes), self.assertRaises(ValueError):
-                compare_inventory(with_nested(nested_row("safe.py", "pass\\n", **changes)), {})
+                compare_inventory(with_nested(nested_row("safe.py", "pass\n", **changes)), {})
         with self.assertRaises(ValueError):
-            compare_inventory(with_nested(nested_row("safe.py", "pass\\n"),
-                                          nested_row("safe.py", "pass\\n")), {})
+            compare_inventory(with_nested(nested_row("safe.py", "pass\n"),
+                                          nested_row("safe.py", "pass\n")), {})
         for change in ({"nested_member_count": 2}, {"nested_inspection_requested": False}):
-            doc = with_nested(nested_row("safe.py", "pass\\n"))
+            doc = with_nested(nested_row("safe.py", "pass\n"))
             doc.update(change)
             with self.subTest(change=change), self.assertRaises(ValueError):
                 compare_inventory(doc, {})
@@ -150,13 +150,13 @@ class CompareTests(unittest.TestCase):
             archive = root / "AIOPS-V2.13.4-SYNTHETIC.zip"
             inner = io.BytesIO()
             with zipfile.ZipFile(inner, "w", zipfile.ZIP_DEFLATED) as z:
-                z.writestr("tools/replay.py", "pass\\n")
+                z.writestr("tools/replay.py", "pass\n")
                 z.writestr("03_HLD_Architecture_Logique.pdf", b"%PDF-1.7 synthetic")
             with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
                 z.writestr("backup/hybrid.zip", inner.getvalue())
             checkout = root / "checkout"
             (checkout / "tools").mkdir(parents=True)
-            (checkout / "tools" / "replay.py").write_text("pass\\n")
+            (checkout / "tools" / "replay.py").write_text("pass\n")
             source = inspect_zip([archive], inspect_nested=True)
             report = compare_inventory(source, index_checkout(checkout))
             self.assertEqual(source["nested_member_count"], 1)
