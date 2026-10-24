@@ -29,6 +29,31 @@ Run in an isolated checkout with Chromium:
 `AIOPS_STAR_NO_RUNTIME=1 python -m unittest discover -s tests -p 'test_star_snapshot_browser.py' -v`.
 GitHub workflow `STAR Chromium read-only fixture qualification` executes this suite. Passing isolated tests does **not** qualify production portal :17777 or any real application screen.
 
+## V2.13.68 — Screenshot-boundary consistency (isolated regression)
+
+The initial login-surface check alone could not detect a late single-page
+application transition **after** proof DOM inspection but **during** Chromium
+`page.screenshot()`. The collector now repeats the visible login-surface
+check and exact run/correlation/event/state DOM validation immediately after
+the screenshot returns and **before any PNG or manifest is written**. Any
+disagreement rejects the entire capture, preserving the fail-closed evidence
+contract. The existing request fence, mandatory redaction and explicit
+unreviewed provenance are unchanged.
+
+`tests/test_star_snapshot_browser.py::BrowserContractTests.test_dom_mutation_during_screenshot_fails_closed`
+uses a real isolated Chromium fixture and deterministically injects three
+mutations at the screenshot boundary: a visible login form, a changed run ID,
+and a changed business state. All must reject without creating evidence files.
+No historical browser sessions or production data are used. This test addresses
+a safety lesson from the F20.13 source catalog; it **does not** establish
+completeness or authenticity of any historical capture.
+
+This is a before/after DOM consistency gate, **not a transactional browser
+snapshot**: transient changes that appear and disappear between checks may
+remain undetectable. No authentication, human approval or real incident
+outcome is asserted. To roll back, revert the capture-code commit and its
+regression-test commit on the PR branch only; no runtime rollback is needed.
+
 ## Migration, limitations and rollback
 
 The historical source stays in private quarantine. Compare its full code to the current implementation by exact SHA and review before any reuse; do not copy unreviewed selectors, sessions, passwords or endpoints. Remaining work: independent read-only E2E attestation of nine STAR checkpoints, identity 02→03, event-time alignment, screenshots and human provenance review.
