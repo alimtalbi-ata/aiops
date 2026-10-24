@@ -16,6 +16,9 @@ def build_noc_drilldown(snapshot:dict, catalog:dict)->dict:
     node_ids={node["id"] for node in topology["nodes"]}
     if any(alert["asset_id"] not in node_ids for alert in alerts):
         raise ValueError("NOC alert asset absent from synthetic dependency topology")
+    known_assets={node["id"] for node in topology["nodes"]}
+    if any(alert.get("asset_id") not in known_assets for alert in alerts):
+        raise ValueError("orphan NOC alert asset")
     nodes={}
     for node in topology["nodes"]:
         asset=node["id"]
