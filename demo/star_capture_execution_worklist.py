@@ -27,6 +27,13 @@ def join_capture_plans(identity: dict, historical: dict) -> dict:
             raise ValueError("STAR cue/app alignment mismatch")
         if left.get("expected_view") != cue.view or right.get("expected_view") != cue.view:
             raise ValueError("STAR view mismatch")
+        if right.get("expected_state") != cue.required_state:
+            raise ValueError("STAR business state mismatch")
+        historical_matches = right.get("legacy_png_byte_matches_for_application")
+        if type(historical_matches) is not int or historical_matches < 0 or historical_matches > 128:
+            raise ValueError("invalid historical PNG match count")
+        if right.get("capture_required") is not True:
+            raise ValueError("historical capture requirement cannot be cleared")
         if left.get("authenticated_runtime_proof") is not False or right.get("runtime_evidence_status") != "MISSING":
             raise ValueError("historical captures cannot attest runtime")
         if left.get("live_action_authorized") is not False:
