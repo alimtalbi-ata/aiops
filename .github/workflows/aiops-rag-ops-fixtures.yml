@@ -5,6 +5,8 @@ on:
       - 'demo/rag_ops_fixture_catalog.json'
       - 'demo/validate_rag_ops_fixtures.py'
       - 'tests/test_rag_ops_fixtures.py'
+      - 'demo/noc_synthetic_snapshot.py'
+      - 'tests/test_noc_synthetic_snapshot.py'
       - '.github/workflows/aiops-rag-ops-fixtures.yml'
   workflow_dispatch:
 permissions:
@@ -24,3 +26,4 @@ jobs:
         run: |
           python -m demo.validate_rag_ops_fixtures
           python -m unittest discover -s tests -p 'test_rag_ops_fixtures.py' -v
+          python -m unittest discover -s tests -p 'test_noc_synthetic_snapshot.py' -v
