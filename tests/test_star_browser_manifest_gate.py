@@ -136,6 +136,20 @@ class BrowserManifestGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "attestation"):
             verify_browser_manifests(self.root, canonical, names, require_complete=True)
 
+    def test_optional_manifest_bytes_digest_matches_exact_input(self):
+        plain = self.run_gate()
+        verified = verify_browser_manifests(self.root, EXPECTED, ["detect.json"],
+                                            include_manifest_digests=True)
+        self.assertNotIn("manifest_sha256", plain["entries"][0])
+        self.assertEqual(verified["entries"][0]["manifest_sha256"],
+                         hashlib.sha256((self.root / "detect.json").read_bytes()).hexdigest())
+        self.assertEqual(verified["entries"][0]["sha256"], plain["entries"][0]["sha256"])
+
+    def test_invalid_manifest_digest_mode_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "digest mode"):
+            verify_browser_manifests(self.root, EXPECTED, ["detect.json"],
+                                     include_manifest_digests=1)
+
     def test_operator_manifest_is_only_integrity_checked(self):
         self.item["provenance"] = "OPERATOR_BROWSER_UNREVIEWED"
         self.item["capture_transport"] = "READ_ONLY_BROWSER_HTTP_GET"
