@@ -61,6 +61,19 @@ class RecoveryTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     inventory([self.archive])
 
+    def test_windows_reserved_and_noncanonical_paths_rejected(self):
+        """A ZIP valid on Linux must not alias another path on Windows."""
+        for name in ("CON.py", "nested/nul.txt", "LPT9.json", "COM1.py",
+                     "foo. /bar.py", "a?.py", "bad<name.py", "tab\t.py",
+                     "cafe\u0301.py"):
+            with self.subTest(name=name):
+                self.make([(name, "pass\n")])
+                with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
+                    inventory([self.archive])
+                with self.assertRaises(ValueError):
+                    self.pinned(name)
+                self.assertEqual(list(self.dest.iterdir()), [])
+
     def test_duplicate_names_rejected(self):
         self.make([("A.py", "pass"), ("a.py", "pass")])
         with self.assertRaises(ValueError):
