@@ -22,7 +22,9 @@ CANONICAL = {"run_id": "RUN-ACME-001", "correlation_id": "CORR-ACME-001", "event
 
 def report(status="simulated"):
     return {"run_id": "RUN-ACME-001", "capture_set_sha256": DIGEST,
-            "entries": [{"status": status} for _ in range(9)]}
+            "entries": [{"status": status} for _ in range(9)],
+            "runtime_authenticated": False, "business_validated": False,
+            "human_approval_authenticated": False, "live_action_authorized": False}
 
 
 class ReplayGateTests(unittest.TestCase):
@@ -63,6 +65,18 @@ class ReplayGateTests(unittest.TestCase):
         mixed["entries"][-1]["status"] = "integrity_checked"
         with self.assertRaisesRegex(ValueError, "mixed"):
             self.verify(fixture=True, result=mixed)
+
+    def test_malformed_entry_rejected(self):
+        malformed = report()
+        malformed["entries"][-1] = "simulated"
+        with self.assertRaisesRegex(ValueError, "invalid replay checkpoint"):
+            self.verify(fixture=True, result=malformed)
+
+    def test_forged_runtime_attestation_rejected(self):
+        forged = report()
+        forged["runtime_authenticated"] = True
+        with self.assertRaisesRegex(ValueError, "unexpected runtime"):
+            self.verify(fixture=True, result=forged)
 
     def test_incomplete_set_rejected(self):
         short = report()
