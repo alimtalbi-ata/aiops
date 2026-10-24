@@ -8,7 +8,7 @@ import re
 from collections.abc import Mapping
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{2,95}\Z")
-_EVENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\\Z")
+_EVENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}\Z")
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
 _ALLOWED = {"ISOLATED_TEST_FIXTURE", "OPERATOR_BROWSER_UNREVIEWED"}
 
