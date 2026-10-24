@@ -10,6 +10,12 @@ def build_noc_drilldown(snapshot:dict, catalog:dict)->dict:
     indexed={row["doc_id"]:row for row in catalog["scenarios"]}
     if len(alerts)!=len(indexed) or {x["event_id"] for x in alerts}!=set(indexed):
         raise ValueError("NOC alerts and RAG catalog diverged")
+    # A foreign asset must not silently disappear from the drill-down. The
+    # event-id set can still match the RAG corpus while its asset was altered;
+    # in that case the old node-only loop ignored the forged alert entirely.
+    node_ids={node["id"] for node in topology["nodes"]}
+    if any(alert["asset_id"] not in node_ids for alert in alerts):
+        raise ValueError("NOC alert asset absent from synthetic dependency topology")
     nodes={}
     for node in topology["nodes"]:
         asset=node["id"]
