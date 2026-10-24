@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from demo.noc_synthetic_snapshot import build_noc_snapshot
 from demo.validate_rag_ops_fixtures import validate_catalog
+from demo.noc_topology import build_noc_topology
 
 def render_noc_wallboard(snapshot: dict) -> str:
     if not isinstance(snapshot,dict) or snapshot.get("schema")!="aiops-noc-synthetic-snapshot-v1" or snapshot.get("provenance")!="SYNTHETIC_SIMULATION_ONLY":
@@ -25,6 +26,9 @@ def render_noc_wallboard(snapshot: dict) -> str:
     hostrows="".join(row(k,v["state"],str(v["alerts"])+" alert(s)") for k,v in sorted(hosts.items()))
     servicerows="".join(row(k,v["state"],str(v["alerts"])+" alert(s)") for k,v in sorted(services.items()))
     eventrows="".join(row(v["asset_id"],v["state"],v["event_id"]+" · "+v["signal"]) for v in alerts)
+    topology=build_noc_topology(snapshot)
+    node_by_id={n["id"]:n for n in topology["nodes"]}
+    dependency_rows="".join(row(edge["from"]+" → "+edge["to"],node_by_id[edge["from"]]["state"],node_by_id[edge["from"]]["role"]) for edge in topology["edges"])
     return """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AIOps NOC — Simulation</title>
@@ -53,7 +57,7 @@ button[aria-pressed=true]{outline:2px solid #8bc6ff}footer{margin-top:20px;color
 <button data-filter="CRIT" aria-pressed="false">Critiques</button>
 <button data-filter="WARN" aria-pressed="false">Avertissements</button>
 <button data-filter="OK" aria-pressed="false">OK</button></nav>
-<div class="grid"><section><h2>Équipements</h2><table><thead><tr><th>Hôte</th><th>État</th><th>Détail</th></tr></thead><tbody>""" + hostrows + """</tbody></table></section>
+<section><h2>Topologie d’impact SAN → Stockage → Calcul → ACME Payments</h2><small>Relations CMDB SYNTHÉTIQUES — non découvertes dans Checkmk/Thruk</small><table><thead><tr><th>Dépendance</th><th>État source</th><th>Rôle</th></tr></thead><tbody>""" + dependency_rows + """</tbody></table></section><div class="grid"><section><h2>Équipements</h2><table><thead><tr><th>Hôte</th><th>État</th><th>Détail</th></tr></thead><tbody>""" + hostrows + """</tbody></table></section>
 <section><h2>Impact métier</h2><table><thead><tr><th>Service</th><th>État</th><th>Détail</th></tr></thead><tbody>""" + servicerows + """</tbody></table></section>
 <section><h2>Alertes et signaux</h2><table><thead><tr><th>CI</th><th>État</th><th>Événement / signal</th></tr></thead><tbody>""" + eventrows + """</tbody></table></section></div>
 <footer>Mode simulation · Aucune action d'acquittement, aucun redémarrage et aucune remédiation LIVE.</footer>
