@@ -97,6 +97,10 @@ class BrowserManifestGateTests(unittest.TestCase):
             names.append(cue.cue + ".json")
         canonical = {**EXPECTED, "events": refs}
         report = verify_browser_manifests(self.root, canonical, names, require_complete=True)
+        with_digests = verify_browser_manifests(
+            self.root, canonical, names, require_complete=True,
+            include_manifest_digests=True)
+        self.assertEqual(report["capture_set_sha256"], with_digests["capture_set_sha256"])
         self.assertEqual(len(report["entries"]), 9)
         self.assertTrue(all(e["status"] == "simulated" for e in report["entries"]))
         self.assertFalse(report["runtime_authenticated"])
