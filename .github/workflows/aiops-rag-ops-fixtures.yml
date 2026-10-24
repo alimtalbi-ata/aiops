@@ -1,0 +1,26 @@
+name: AIOps simulated NOC RAG corpus qualification
+on:
+  pull_request:
+    paths:
+      - 'demo/rag_ops_fixture_catalog.json'
+      - 'demo/validate_rag_ops_fixtures.py'
+      - 'tests/test_rag_ops_fixtures.py'
+      - '.github/workflows/aiops-rag-ops-fixtures.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-synthetic-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate provenance and RAG synthetic fixtures
+        run: |
+          python -m demo.validate_rag_ops_fixtures
+          python -m unittest discover -s tests -p 'test_rag_ops_fixtures.py' -v
