@@ -243,6 +243,16 @@ def capture(plan: CapturePlan, output_dir: Path, *, approved_read: bool = False,
             page.wait_for_timeout(300)  # bounded observation of asynchronous page requests
             if blocked:
                 raise ValueError("page attempted non-read-only or external network activity")
+            # Historical F20.13 Playwright runs reported PASS while GLPI/n8n/
+            # Grafana displayed login pages. A login overlay may coexist with
+            # stale or injected identity DOM. Never capture that as an event view.
+            # No credential values, page text or login URLs are read or logged.
+            if page.locator(
+                'input[type="password"]:visible, '
+                'form[action*="login" i]:visible, '
+                'form[action*="signin" i]:visible'
+            ).count():
+                raise ValueError("login surface obscures requested application checkpoint")
 
             def required_text(selector: str) -> str:
                 locator = page.locator(selector)
