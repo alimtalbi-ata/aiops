@@ -65,6 +65,48 @@ class BrowserManifestGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "all canonical checkpoints"):
             verify_browser_manifests(self.root, canonical, ["detect.json"], require_complete=True)
 
+    def test_complete_nine_cues_integrates_png_and_identity_gate(self):
+        from datetime import datetime, timedelta, timezone
+        from demo.star_snapshot_choreography import CUES
+        routes = {
+            "grafana": "{origin}/d/{dashboard_uid}/{slug_redacted}",
+            "n8n": "{origin}/{workflow_route_redacted}/executions/{event_ref}",
+            "glpi": "{origin}/front/ticket.form.php?{id_redacted}",
+        }
+        refs = {}
+        names = []
+        for index, cue in enumerate(CUES):
+            event_ref = "EVENT-" + str(index + 100)
+            refs[cue.cue] = event_ref
+            # Each synthetic image is distinct; hash reuse must never pass.
+            png = (b"\\x89PNG\\r\\n\\x1a\\n" +
+                   chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)) +
+                   chunk(b"IDAT", zlib.compress(bytes([0, index, 0, 0]))) + chunk(b"IEND"))
+            (self.root / (cue.cue + ".png")).write_bytes(png)
+            item = {**self.item, "cue": cue.cue, "service": cue.service,
+                    "view": cue.view, "event_ref": event_ref,
+                    "expected_state": cue.required_state, "observed_state": cue.required_state,
+                    "screenshot_file": cue.cue + ".png", "sha256": hashlib.sha256(png).hexdigest(),
+                    "source_url_redacted": routes[cue.service],
+                    "runtime_page_authenticated": False, "business_outcome_verified": False,
+                    "human_approval_authenticated": False,
+                    "captured_at": (datetime(2026, 10, 23, 11, tzinfo=timezone.utc) +
+                                    timedelta(seconds=index)).isoformat()}
+            (self.root / (cue.cue + ".json")).write_text(json.dumps(item), encoding="utf-8")
+            names.append(cue.cue + ".json")
+        canonical = {**EXPECTED, "events": refs}
+        report = verify_browser_manifests(self.root, canonical, names, require_complete=True)
+        self.assertEqual(len(report["entries"]), 9)
+        self.assertTrue(all(e["status"] == "simulated" for e in report["entries"]))
+        self.assertFalse(report["runtime_authenticated"])
+        self.assertFalse(report["integrity_checked"])
+        # A missing explicit false attestation is rejected by strict reconciliation.
+        tampered = json.loads((self.root / "detect.json").read_text())
+        del tampered["runtime_page_authenticated"]
+        (self.root / "detect.json").write_text(json.dumps(tampered), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "attestation"):
+            verify_browser_manifests(self.root, canonical, names, require_complete=True)
+
     def test_operator_manifest_is_only_integrity_checked(self):
         self.item["provenance"] = "OPERATOR_BROWSER_UNREVIEWED"
         self.item["capture_transport"] = "READ_ONLY_BROWSER_HTTP_GET"
