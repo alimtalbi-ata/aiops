@@ -29,7 +29,7 @@ def build_noc_topology(snapshot:dict)->dict:
     services=snapshot.get("business_services")
     if not isinstance(hosts,dict) or not isinstance(services,dict):
         raise ValueError("missing CMDB simulation")
-    if set(hosts)!=set(ASSET_ROLES) or set(services)!={"ACME Payments"}:
+    if not set(ASSET_ROLES).issubset(hosts) or "ACME Payments" not in services:
         raise ValueError("unreviewed dependency dataset")
     nodes=[{"id":a,"role":role,"state":hosts[a]["state"],"kind":"HOST"} for a,role in ASSET_ROLES.items()]
     nodes.append({"id":"ACME Payments","role":"Business service","state":services["ACME Payments"]["state"],"kind":"BUSINESS_SERVICE"})
