@@ -7,12 +7,14 @@ on:
       - 'demo/star_snapshot_choreography.py'
       - 'tests/test_star_snapshot_browser.py'
       - 'tests/test_star_snapshot_browser_hardening.py'
+      - 'tests/test_star_browser_mask_proof_gate.py'
       - 'demo/star_browser_manifest_gate.py'
       - 'demo/star_browser_request_fence.py'
       - 'tests/test_star_browser_request_fence.py'
       - 'demo/star_capture_identity_guard.py'
       - 'demo/star_png_integrity.py'
       - 'docs/demo/STAR-BROWSER-READONLY-HLD-LLD-V21334.md'
+      - 'docs/demo/STAR-BROWSER-MASK-PROOF-FENCE-V21355.md'
       - '.github/workflows/star-browser-readonly-offline.yml'
   workflow_dispatch:
 
@@ -39,9 +41,10 @@ jobs:
           python -m pip install 'playwright==1.57.0'
           python -m playwright install --with-deps chromium
       - name: Compile capture contract
-        run: python -m py_compile demo/star_snapshot_browser.py
+        run: python -m py_compile demo/star_snapshot_browser.py tests/test_star_browser_mask_proof_gate.py
       - name: Qualify Chromium on local synthetic HTML only
         run: |
           python -m unittest discover -s tests -p 'test_star_snapshot_browser.py' -v
           python -m unittest discover -s tests -p 'test_star_snapshot_browser_hardening.py' -v
+          python -m unittest discover -s tests -p 'test_star_browser_mask_proof_gate.py' -v
           python -m unittest discover -s tests -p 'test_star_browser_request_fence.py' -v
