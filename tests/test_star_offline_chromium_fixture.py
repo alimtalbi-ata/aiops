@@ -27,4 +27,22 @@ class OfflineChromiumFixtureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaises(ValueError):
                 validate_fixture_plan(plan(),{},Path(td))
+    def test_unknown_cue_is_rejected_before_screenshot(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/"safe.html").write_text("<p>Fixture</p>",encoding="utf-8")
+            p=plan()
+            p["tasks"][0]["cue"]="../escape"
+            with self.assertRaisesRegex(ValueError,"unknown or duplicate STAR cue"):
+                validate_fixture_plan(p,{"../escape":"safe.html"},root)
+
+    def test_reused_cue_is_rejected_before_screenshot(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/"safe.html").write_text("<p>Fixture</p>",encoding="utf-8")
+            p=plan()
+            p["tasks"].append(dict(p["tasks"][0]))
+            with self.assertRaisesRegex(ValueError,"unknown or duplicate STAR cue"):
+                validate_fixture_plan(p,{"detect":"safe.html"},root)
+
 if __name__=="__main__": unittest.main()
