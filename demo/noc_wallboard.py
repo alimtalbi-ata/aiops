@@ -7,8 +7,9 @@ from pathlib import Path
 from demo.noc_synthetic_snapshot import build_noc_snapshot
 from demo.validate_rag_ops_fixtures import validate_catalog
 from demo.noc_topology import build_noc_topology
+from demo.noc_drilldown import build_noc_drilldown
 
-def render_noc_wallboard(snapshot: dict) -> str:
+def render_noc_wallboard(snapshot: dict, catalog: dict | None = None) -> str:
     if not isinstance(snapshot,dict) or snapshot.get("schema")!="aiops-noc-synthetic-snapshot-v1" or snapshot.get("provenance")!="SYNTHETIC_SIMULATION_ONLY":
         raise ValueError("unsupported NOC snapshot")
     if any(snapshot.get(k) is not False for k in ("runtime_authenticated","checkmk_live","thruk_live","live_remediation_authorized")):
@@ -29,6 +30,12 @@ def render_noc_wallboard(snapshot: dict) -> str:
     topology=build_noc_topology(snapshot)
     node_by_id={n["id"]:n for n in topology["nodes"]}
     dependency_rows="".join(row(edge["from"]+" → "+edge["to"],node_by_id[edge["from"]]["state"],node_by_id[edge["from"]]["role"]) for edge in topology["edges"])
+    detail_panels=""
+    if catalog is not None:
+        drill=build_noc_drilldown(snapshot,catalog)
+        for name,asset in sorted(drill["assets"].items()):
+            sources="".join("<li><strong>"+esc(d["doc_id"])+"</strong> — "+esc(d["sample"])+"<ol>"+"".join("<li>"+esc(a)+"</li>" for a in d["runbook"])+"</ol></li>" for d in asset["diagnostics"])
+            detail_panels+="<details><summary>"+esc(name)+" — "+esc(asset["state"])+"</summary><p>Amont : "+esc(", ".join(asset["upstream"]) or "aucun")+" · Aval : "+esc(", ".join(asset["downstream"]) or "aucun")+"</p><ul>"+sources+"</ul></details>"
     return """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AIOps NOC — Simulation</title>
@@ -37,7 +44,7 @@ def render_noc_wallboard(snapshot: dict) -> str:
 body{margin:0;padding:20px;max-width:1700px}
 header,.grid,.stats{display:grid;gap:14px}.stats{grid-template-columns:repeat(3,minmax(120px,1fr))}
 .grid{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
-section,.metric{background:#10273d;border:1px solid #254866;border-radius:12px;padding:16px}
+section,.metric{background:#10273d;border:1px solid #254866;border-radius:12px;padding:16px}details{margin:8px 0;padding:10px;border:1px solid #254866;border-radius:6px}summary{cursor:pointer}
 h1{margin:0 0 8px;font-size:24px}h2{margin-top:0;font-size:17px}
 .metric strong{font-size:32px;display:block}small{color:#a8c7db}
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px 6px;border-bottom:1px solid #284259}
@@ -57,7 +64,7 @@ button[aria-pressed=true]{outline:2px solid #8bc6ff}footer{margin-top:20px;color
 <button data-filter="CRIT" aria-pressed="false">Critiques</button>
 <button data-filter="WARN" aria-pressed="false">Avertissements</button>
 <button data-filter="OK" aria-pressed="false">OK</button></nav>
-<section><h2>Topologie d’impact SAN → Stockage → Calcul → ACME Payments</h2><small>Relations CMDB SYNTHÉTIQUES — non découvertes dans Checkmk/Thruk</small><table><thead><tr><th>Dépendance</th><th>État source</th><th>Rôle</th></tr></thead><tbody>""" + dependency_rows + """</tbody></table></section><div class="grid"><section><h2>Équipements</h2><table><thead><tr><th>Hôte</th><th>État</th><th>Détail</th></tr></thead><tbody>""" + hostrows + """</tbody></table></section>
+<section><h2>Topologie d’impact SAN → Stockage → Calcul → ACME Payments</h2><small>Relations CMDB SYNTHÉTIQUES — non découvertes dans Checkmk/Thruk</small><table><thead><tr><th>Dépendance</th><th>État source</th><th>Rôle</th></tr></thead><tbody>""" + dependency_rows + """</tbody></table></section><section><h2>Diagnostic par équipement et procédures RAG</h2><small>Runbooks SYNTHÉTIQUES, aucune commande LIVE</small>""" + detail_panels + """</section><div class="grid"><section><h2>Équipements</h2><table><thead><tr><th>Hôte</th><th>État</th><th>Détail</th></tr></thead><tbody>""" + hostrows + """</tbody></table></section>
 <section><h2>Impact métier</h2><table><thead><tr><th>Service</th><th>État</th><th>Détail</th></tr></thead><tbody>""" + servicerows + """</tbody></table></section>
 <section><h2>Alertes et signaux</h2><table><thead><tr><th>CI</th><th>État</th><th>Événement / signal</th></tr></thead><tbody>""" + eventrows + """</tbody></table></section></div>
 <footer>Mode simulation · Aucune action d'acquittement, aucun redémarrage et aucune remédiation LIVE.</footer>
@@ -76,7 +83,7 @@ def main():
     a=p.parse_args()
     catalog=json.loads(a.catalog.read_text(encoding="utf8"))
     validate_catalog(catalog)
-    page=render_noc_wallboard(build_noc_snapshot(catalog))
+    page=render_noc_wallboard(build_noc_snapshot(catalog),catalog)
     a.output.parent.mkdir(parents=True,exist_ok=True)
     with a.output.open("x",encoding="utf8") as stream: stream.write(page)
     print("NOC_SYNTHETIC_WALLBOARD_CREATED")
