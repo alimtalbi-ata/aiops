@@ -30,9 +30,9 @@ mark{padding:3px 7px;background:#72561e;color:#fff}
 <p><mark>MODE HORS LIGNE · SOURCES NON AUTHENTIFIÉES</mark> Les vues restent séparées :
 la simulation n'est jamais fusionnée avec des mesures exportées.</p>
 <main><section><h2>Scénario ACME — SYNTHÉTIQUE</h2>
-<iframe sandbox="allow-scripts" title="NOC scénario synthétique" srcdoc=""""+left+""""></iframe></section>
+<iframe sandbox="allow-scripts" title="NOC scénario synthétique" srcdoc='" + left + "'></iframe></section>
 <section><h2>Checkmk — EXPORT NON AUTHENTIFIÉ</h2>
-<iframe sandbox="allow-scripts" title="NOC Checkmk hors ligne" srcdoc=""""+right+""""></iframe></section></main>
+<iframe sandbox="allow-scripts" title="NOC Checkmk hors ligne" srcdoc='" + right + "'></iframe></section></main>
 <p>Aucune requête réseau, authentification ou action LIVE n'est effectuée.</p></body></html>"""
 
 def main():
