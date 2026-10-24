@@ -179,7 +179,8 @@ class RecoveryTests(unittest.TestCase):
         report = inventory([self.archive], inspect_nested=True)
         self.assertEqual(report["member_count"], 1)
         self.assertEqual(report["nested_member_count"], 4)
-        self.assertEqual(report["nested_asset_count"], 0)
+        self.assertEqual(report["nested_asset_count"], 1)
+        self.assertEqual(report["nested_assets"][0]["member_path"], "diagrams/image.svg")
         self.assertEqual(report["opaque_archive_count"], 1)
         self.assertEqual(report["opaque_archives"][0]["status"], "NESTED_METADATA_ONLY_INSPECTED")
         members = {row["member_path"]: row for row in report["nested_members"]}
