@@ -1,5 +1,7 @@
 """Isolated, synthetic ZIP fixtures: no prod services, ports or private data."""
 import hashlib
+import io
+import json
 import os
 import sys
 from unittest.mock import patch
@@ -153,6 +155,98 @@ class RecoveryTests(unittest.TestCase):
             inventory([self.archive])
         with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
             self.pinned("tools/replay.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    @staticmethod
+    def inner_zip(members):
+        """Build a ZIP in memory; no external files or runtime dependencies."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
+            for name, content in members:
+                z.writestr(name, content)
+        return buffer.getvalue()
+
+    def test_nested_inventory_metadata_only_dedup_and_quarantine(self):
+        inner = self.inner_zip([
+            ("tools/replay.py", "x=1\\n"),
+            ("tools/replay_copy.py", "x=1\\n"),
+            ("tools/broken.py", "def broken(:\\n"),
+            ("tools/sensitive.py", "-----BEGIN PRIVATE KEY-----\\nSYNTHETIC\\n"),
+            ("tokens.json", '{"token":"synthetic"}'),
+            ("diagrams/image.svg", "<svg>synthetic</svg>"),
+        ])
+        self.make([("bundle/source.zip", inner), ("safe.py", "pass\\n")])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["member_count"], 1)
+        self.assertEqual(report["nested_member_count"], 4)
+        self.assertEqual(report["opaque_archive_count"], 1)
+        self.assertEqual(report["opaque_archives"][0]["status"], "NESTED_METADATA_ONLY_INSPECTED")
+        members = {row["member_path"]: row for row in report["nested_members"]}
+        self.assertEqual(members["tools/replay.py"]["python_syntax"], "parse_pass_not_completeness")
+        self.assertEqual(members["tools/broken.py"]["python_syntax"], "parse_failed")
+        self.assertTrue(members["tools/sensitive.py"]["sensitive_pattern_detected"])
+        self.assertEqual(members["tools/replay_copy.py"]["duplicate_of"]["path"], "tools/replay.py")
+        self.assertEqual(members["tools/replay.py"]["nested_archive_sha256"], hashlib.sha256(inner).hexdigest())
+        self.assertTrue(all(row["import_authorized"] is False for row in members.values()))
+        self.assertNotIn("BEGIN PRIVATE KEY", str(report))
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_path_escape_is_rejected_before_inventory(self):
+        inner = self.inner_zip([("../escape.py", "pass\\n")])
+        self.make([("bundle/source.zip", inner)])
+        with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
+            inventory([self.archive], inspect_nested=True)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_compression_bomb_is_rejected(self):
+        inner = self.inner_zip([("bomb.py", "A" * (2 * 1024 * 1024))])
+        self.make([("bundle/source.zip", inner)])
+        with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
+            inventory([self.archive], inspect_nested=True)
+
+    def test_nested_large_binary_is_opaque_not_source(self):
+        media = os.urandom(2 * 1024 * 1024 + 512)
+        inner = self.inner_zip([("media/photo.png", media), ("tools/replay.py", "pass\\n")])
+        self.make([("bundle/source.zip", inner)])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["nested_member_count"], 1)
+        self.assertEqual(report["nested_members"][0]["member_path"], "tools/replay.py")
+
+    def test_nested_zip_within_zip_never_recurses(self):
+        third = self.inner_zip([("not_to_inspect.py", "pass\\n")])
+        inner = self.inner_zip([("third.zip", third), ("tools/one.py", "pass\\n")])
+        self.make([("bundle/source.zip", inner)])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["nested_member_count"], 1)
+        self.assertEqual(report["nested_members"][0]["member_path"], "tools/one.py")
+        self.assertNotIn("not_to_inspect.py", str(report))
+
+    def test_nested_member_count_budget_refuses_unbounded_catalogue(self):
+        inner = self.inner_zip([(f"tools/f{i}.py", "pass\\n") for i in range(1001)])
+        self.make([("bundle/source.zip", inner)])
+        with self.assertRaisesRegex(ValueError, "inspection budget exceeded"):
+            inventory([self.archive], inspect_nested=True)
+
+    def test_nested_archive_count_budget_refuses_many_inner_zips(self):
+        inner = self.inner_zip([("tools/one.py", "pass\\n")])
+        self.make([(f"bundle/part{i}.zip", inner) for i in range(9)])
+        with self.assertRaisesRegex(ValueError, "too many nested ZIPs"):
+            inventory([self.archive], inspect_nested=True)
+
+    def test_nested_cli_inventory_only_and_apply_refused(self):
+        inner = self.inner_zip([("tools/one.py", "pass\\n")])
+        self.make([("bundle/source.zip", inner)])
+        report_path = self.root / "nested.json"
+        args = ["zip_source_recovery", str(self.archive), "--inspect-nested", "--output", str(report_path)]
+        with patch.object(sys, "argv", args):
+            main()
+        self.assertEqual(json.loads(report_path.read_text())["nested_member_count"], 1)
+        args = ["zip_source_recovery", str(self.archive), "--inspect-nested", "--apply",
+                "--allow", "bundle/source.zip", "--quarantine", str(self.dest),
+                "--expected-archive-sha256", "0" * 64, "--expected-member-sha256", "0" * 64]
+        with patch.object(sys, "argv", args), self.assertRaises(SystemExit) as caught:
+            main()
+        self.assertEqual(caught.exception.code, 2)
         self.assertEqual(list(self.dest.iterdir()), [])
 
     def test_missing_pins_refused(self):
