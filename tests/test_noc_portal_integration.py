@@ -52,11 +52,46 @@ class PortalNocContractTests(unittest.TestCase):
         self.assertEqual(view["steps"],[{"name":"detect","state":"WARN"}])
         self.assertEqual(set(view),{"schema","provenance","runtime_authenticated",
                                     "live_remediation_authorized","run_id","incident_id",
-                                    "observed_at","steps"})
+                                    "observed_at","steps","ticket_id","evidence_sha256",
+                                    "evidence_status","evidence_runtime_attested"})
         self.assertNotIn("api_token",view)
         self.assertNotIn("upstream_headers",view)
         self.assertNotIn("private_note",view["steps"][0])
         self.assertEqual(d["steps"][0]["private_note"],"SYNTHETIC-PRIVATE")
+
+    def test_optional_ticket_and_evidence_correlation_is_explicitly_unverified(self):
+        d=data()
+        d["ticket_id"]="GLPI-12345"
+        d["evidence_sha256"]="a"*64
+        d["evidence_runtime_attested"]=False
+        view=public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        self.assertEqual(view["ticket_id"],"GLPI-12345")
+        self.assertEqual(view["evidence_sha256"],"a"*64)
+        self.assertEqual(view["evidence_status"],"UNVERIFIED_DIGEST")
+        self.assertIs(view["evidence_runtime_attested"],False)
+
+    def test_missing_correlation_remains_explicitly_absent(self):
+        view=public_noc_snapshot(data(),now_utc="2026-10-20T12:01:00Z")
+        self.assertIsNone(view["ticket_id"])
+        self.assertIsNone(view["evidence_sha256"])
+        self.assertEqual(view["evidence_status"],"ABSENT")
+        self.assertIs(view["evidence_runtime_attested"],False)
+
+    def test_invalid_ticket_and_evidence_claims_fail_closed(self):
+        for key,invalid in (
+            ("ticket_id","secret with spaces"),
+            ("ticket_id","x"*101),
+            ("ticket_id",42),
+            ("evidence_sha256","bad-digest"),
+            ("evidence_sha256","A"*64),
+            ("evidence_runtime_attested",True),
+            ("evidence_runtime_attested","true"),
+        ):
+            with self.subTest(key=key,invalid=invalid):
+                d=data()
+                d[key]=invalid
+                with self.assertRaises(ValueError):
+                    public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
 
     def test_public_projection_does_not_alias_provider_timeline(self):
         d=data()

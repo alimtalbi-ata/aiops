@@ -6,6 +6,7 @@ The host portal supplies the read model from its real incident pipeline.
 from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 VALID_STATES={"OK","WARN","CRIT","UNKNOWN"}
@@ -43,6 +44,17 @@ def validate_noc_runtime_snapshot(snapshot:dict, *, now_utc:str|None=None, max_a
         raise ValueError("invalid UTC timestamp") from exc
     if ts.tzinfo is None or not 0 <= (now-ts).total_seconds() <= max_age_seconds:
         raise ValueError("stale or future NOC observation")
+    # Optional correlation is a host claim, not capture provenance proof.
+    ticket_id = snapshot.get("ticket_id")
+    if ticket_id is not None and (not isinstance(ticket_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", ticket_id) is None):
+        raise ValueError("invalid ticket correlation")
+    evidence_sha256 = snapshot.get("evidence_sha256")
+    if evidence_sha256 is not None and (not isinstance(evidence_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", evidence_sha256) is None):
+        raise ValueError("invalid evidence digest")
+    if snapshot.get("evidence_runtime_attested", False) is not False:
+        raise ValueError("unverified evidence attestation claim")
     steps=snapshot.get("steps")
     if not isinstance(steps,list) or len(steps)>100:
         raise ValueError("invalid incident timeline")
@@ -64,6 +76,11 @@ def public_noc_snapshot(snapshot:dict, *, now_utc:str|None=None, max_age_seconds
         "live_remediation_authorized": False,
         "run_id": verified["run_id"],
         "incident_id": verified["incident_id"],
+        "ticket_id": verified.get("ticket_id"),
+        "evidence_sha256": verified.get("evidence_sha256"),
+        "evidence_status": ("UNVERIFIED_DIGEST" if verified.get("evidence_sha256")
+                            else "ABSENT"),
+        "evidence_runtime_attested": False,
         "observed_at": verified["observed_at"],
         "steps": [{"name": step["name"], "state": step["state"]}
                   for step in verified["steps"]],
@@ -120,5 +137,8 @@ def create_noc_router(read_model:Callable[[],dict|None],
         rows="".join("<tr><td>"+esc(s["name"])+"</td><td>"+esc(s["state"])+"</td></tr>" for s in data["steps"])
         return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NOC AIOps</title></head>
 <body><h1>NOC AIOps · Lecture seule</h1><p>Source: RUNTIME_READMODEL</p><p>Incident: """+esc(data["incident_id"])+""" · Run: """+esc(data["run_id"])+"""</p>
+<p>Ticket: """+esc(data["ticket_id"] or "ABSENT")+"""</p>
+<p>Evidence SHA-256 (unverified): """+esc(data["evidence_sha256"] or "ABSENT")+"""</p>
+<p>Evidence status: """+esc(data["evidence_status"])+"""</p>
 <p>Observation UTC: """+esc(data["observed_at"])+"""</p><table><thead><tr><th>Étape</th><th>État</th></tr></thead><tbody>"""+rows+"""</tbody></table></body></html>"""
     return router

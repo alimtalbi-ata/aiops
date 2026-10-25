@@ -105,3 +105,16 @@ Le fournisseur du read model peut contenir des champs internes (en-têtes d'auth
 **Provenance et déduplication :** adaptation du code courant de la PR #36, et non restauration d'un fragment de log. Les sources V2.13.4 déjà conservées sous `recovery/legacy_v2134` et le registre `docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md` restent en quarantaine documentaire jusqu'à vérification des originaux complets et SHA-256. Aucune archive, session ou capture privée n'est publiée.
 
 **Rollback :** rétablir uniquement les versions précédentes de `demo/noc_portal_integration.py`, `tests/test_noc_portal_integration.py` et cette note sur la branche de PR ; relancer les tests isolés et reconstruire le kit candidat. Aucun déploiement ni changement de production n'a été autorisé. La bascule reste bloquée jusqu'à la qualification E2E réelle et approbation humaine.
+
+
+## Corrélation explicite ticket / preuve NOC (25 octobre 2026)
+
+**Besoin :** la timeline NOC exposait run_id et incident_id, mais ne distinguait pas l'absence d'un ticket GLPI et l'absence d'une preuve de capture. Le read model peut désormais fournir **optionnellement** ticket_id (identifiant ASCII borné) et evidence_sha256 (64 caractères hexadécimaux minuscules). Ces champs sont validés avant toute projection publique. Une valeur malformée ou une revendication evidence_runtime_attested=true entraîne un refus fail-closed (HTTP 503 via le routeur).
+
+**Provenance et confiance :** un SHA-256 déclaré ne démontre pas que Chromium a capturé l'écran exact au bon checkpoint. L'API publie evidence_status=UNVERIFIED_DIGEST lorsqu'un digest existe, ABSENT sinon, et **toujours** evidence_runtime_attested=false. Les absences sont explicites (null), jamais remplacées par des identifiants fictifs. L'HTML NOC affiche ticket et empreinte avec échappement HTML ; il ne charge aucun service ni image externe. Aucun état de route montée n'est déduit.
+
+**Architecture :** adaptation du contrat existant demo/noc_portal_integration.py, sans route ni port supplémentaire. Le fournisseur du portail devra ultérieurement relier ces valeurs à la chaîne authentifiée run_id / incident_id / ticket_id / checkpoint / capture / SHA et au moteur de replay déterministe. La présente modification **ne réalise pas** cette attestation ni le branchement dans Debian.
+
+**Qualification :** trois tests isolés supplémentaires couvrent la présence d'un ticket et d'une empreinte non attestée, leur absence et le rejet de valeurs ou revendications non conformes. La CI du kit candidat exécute ce fichier ; une réussite CI ne remplace pas l'E2E réel. Aucune source historique fragmentaire n'a été promue en module complet.
+
+**Rollback :** restaurer uniquement les versions précédentes du module, des tests et de cette documentation dans la branche de PR ; reconstruire le ZIP candidat depuis le commit épinglé et exécuter ses vérifications hors ligne. Aucune modification du runtime Debian, de V1/containerd, de GLPI/n8n/Grafana/DB/CMDB ni de la production n'est permise.
