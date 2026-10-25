@@ -53,6 +53,22 @@ def validate_noc_runtime_snapshot(snapshot:dict, *, now_utc:str|None=None, max_a
             raise ValueError("missing step name")
     return snapshot
 
+def public_noc_snapshot(snapshot:dict, *, now_utc:str|None=None, max_age_seconds:int=300)->dict:
+    """Project only reviewed NOC fields; never expose provider-private metadata."""
+    verified = validate_noc_runtime_snapshot(
+        snapshot, now_utc=now_utc, max_age_seconds=max_age_seconds)
+    return {
+        "schema": SCHEMA,
+        "provenance": "RUNTIME_READMODEL",
+        "runtime_authenticated": True,
+        "live_remediation_authorized": False,
+        "run_id": verified["run_id"],
+        "incident_id": verified["incident_id"],
+        "observed_at": verified["observed_at"],
+        "steps": [{"name": step["name"], "state": step["state"]}
+                  for step in verified["steps"]],
+    }
+
 def create_noc_router(read_model:Callable[[],dict|None]):
     """Mount via existing_app.include_router(...); uses caller's auth middleware."""
     from fastapi import APIRouter, HTTPException
@@ -65,8 +81,10 @@ def create_noc_router(read_model:Callable[[],dict|None]):
             data=read_model()
             if data is None:
                 raise ValueError("NOC runtime data unavailable")
-            return validate_noc_runtime_snapshot(data)
-        except (ValueError,KeyError,TypeError):
+            return public_noc_snapshot(data)
+        except Exception:
+            # Fail closed on provider outages and unexpected provider errors.
+            # Never return exception text, tokens or raw upstream payloads.
             raise HTTPException(status_code=503,detail="NOC data unavailable or unverified")
     @router.get("/api/platform/components")
     def platform_components():
