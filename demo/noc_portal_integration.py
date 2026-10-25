@@ -102,6 +102,67 @@ def public_component_registry(component_observations:Callable[[],dict|None]|None
         raise ValueError("component observations unavailable")
     return build_portal_component_registry(observations,now_utc=now_utc)
 
+def render_noc_dashboard(view:dict, registry:dict)->str:
+    """Show the 20-component convergence inventory without claiming mounted routes."""
+    from demo.noc_platform_registry import COMPONENTS
+    from html import escape
+    if (not isinstance(view,dict) or view.get("schema")!=SCHEMA
+            or view.get("provenance")!="RUNTIME_READMODEL"
+            or view.get("runtime_authenticated") is not True
+            or view.get("live_remediation_authorized") is not False
+            or view.get("evidence_runtime_attested") is not False):
+        raise ValueError("unverified NOC dashboard source")
+    if (not isinstance(registry,dict)
+            or registry.get("schema")!="aiops-single-portal-component-registry-v1"
+            or registry.get("live_remediation_authorized") is not False
+            or not isinstance(registry.get("items"),list)
+            or len(registry["items"])!=len(COMPONENTS)):
+        raise ValueError("invalid portal component inventory")
+    component_rows=[]
+    for item,(ident,label,path,category) in zip(registry["items"],COMPONENTS):
+        if (not isinstance(item,dict) or item.get("id")!=ident
+                or item.get("name")!=label or item.get("path")!=path
+                or item.get("category")!=category
+                or item.get("state") not in VALID_STATES
+                or item.get("available_in_portal") is not False
+                or item.get("requires_route_integration") is not True):
+            raise ValueError("contradictory or unattested component route")
+        component_rows.append(
+            '<tr class="component-row"><td>'+escape(label,quote=True)
+            +'</td><td>'+escape(path,quote=True)
+            +'</td><td>'+escape(item["state"],quote=True)
+            +'</td><td>NON ATTESTÉE</td></tr>')
+    esc=lambda value:escape(str(value),quote=True)
+    steps="".join('<tr><td>'+esc(s["name"])+'</td><td>'+esc(s["state"])+'</td></tr>'
+                  for s in view["steps"])
+    return (
+        '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>NOC AIOps · Convergence</title>'
+        '<style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;'
+        'padding:0 1rem;color:#182233}table{border-collapse:collapse;width:100%;'
+        'margin:1rem 0 2rem}th,td{border:1px solid #ccd4df;padding:.5rem;'
+        'text-align:left}th{background:#edf2f8}.warning{background:#fff4d6;'
+        'padding:1rem;border-left:4px solid #b7791f}</style></head><body>'
+        '<h1>NOC AIOps · Lecture seule</h1>'
+        '<p class="warning">Source RUNTIME_READMODEL déclarée par le fournisseur ; '
+        'authentification cryptographique et routes runtime NON ATTESTÉES. '
+        'Aucune remédiation LIVE.</p>'
+        '<p>Incident: '+esc(view["incident_id"])+' · Run: '+esc(view["run_id"])+'</p>'
+        '<p>Ticket: '+esc(view["ticket_id"] or "ABSENT")+'</p>'
+        '<p>Evidence SHA-256 (non vérifié): '+esc(view["evidence_sha256"] or "ABSENT")
+        +' · '+esc(view["evidence_status"])+'</p>'
+        '<p>Observation UTC: '+esc(view["observed_at"])+'</p>'
+        '<h2>Chronologie incident</h2><table><thead><tr><th>Étape</th><th>État</th>'
+        '</tr></thead><tbody>'+steps+'</tbody></table>'
+        '<h2>Convergence des '+str(len(COMPONENTS))+' composants</h2>'
+        '<p>Chemins planifiés uniquement, aucun lien activé sans attestation '
+        'indépendante du montage et de l’authentification.</p>'
+        '<table><thead><tr><th>Composant</th><th>Chemin prévu</th>'
+        '<th>Santé déclarée</th><th>Route</th></tr></thead><tbody>'
+        +''.join(component_rows)+'</tbody></table></body></html>'
+    )
+
 def create_noc_router(read_model:Callable[[],dict|None],
                       component_observations:Callable[[],dict|None]|None=None):
     """Mount via existing_app.include_router(...); uses caller's auth middleware."""
@@ -132,13 +193,9 @@ def create_noc_router(read_model:Callable[[],dict|None],
 
     @router.get("/noc",response_class=HTMLResponse)
     def noc_dashboard():
-        data=noc_state()
-        esc=lambda text:html.escape(str(text),quote=True)
-        rows="".join("<tr><td>"+esc(s["name"])+"</td><td>"+esc(s["state"])+"</td></tr>" for s in data["steps"])
-        return """<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NOC AIOps</title></head>
-<body><h1>NOC AIOps · Lecture seule</h1><p>Source: RUNTIME_READMODEL</p><p>Incident: """+esc(data["incident_id"])+""" · Run: """+esc(data["run_id"])+"""</p>
-<p>Ticket: """+esc(data["ticket_id"] or "ABSENT")+"""</p>
-<p>Evidence SHA-256 (unverified): """+esc(data["evidence_sha256"] or "ABSENT")+"""</p>
-<p>Evidence status: """+esc(data["evidence_status"])+"""</p>
-<p>Observation UTC: """+esc(data["observed_at"])+"""</p><table><thead><tr><th>Étape</th><th>État</th></tr></thead><tbody>"""+rows+"""</tbody></table></body></html>"""
+        try:
+            return render_noc_dashboard(noc_state(), platform_components())
+        except Exception:
+            raise HTTPException(status_code=503,
+                                detail="NOC dashboard unavailable or unverified")
     return router

@@ -118,3 +118,15 @@ Le fournisseur du read model peut contenir des champs internes (en-têtes d'auth
 **Qualification :** trois tests isolés supplémentaires couvrent la présence d'un ticket et d'une empreinte non attestée, leur absence et le rejet de valeurs ou revendications non conformes. La CI du kit candidat exécute ce fichier ; une réussite CI ne remplace pas l'E2E réel. Aucune source historique fragmentaire n'a été promue en module complet.
 
 **Rollback :** restaurer uniquement les versions précédentes du module, des tests et de cette documentation dans la branche de PR ; reconstruire le ZIP candidat depuis le commit épinglé et exécuter ses vérifications hors ligne. Aucune modification du runtime Debian, de V1/containerd, de GLPI/n8n/Grafana/DB/CMDB ni de la production n'est permise.
+
+## Vue de convergence NOC sans promotion abusive de routes (25 octobre 2026)
+
+**Besoin métier :** la route déclarée `/noc` présentait uniquement l'incident ; l'opérateur ne pouvait pas consulter les 20 familles et distinguer une observation de santé d'une route réellement intégrée. Le rendu `render_noc_dashboard()` affiche désormais la chronologie et un tableau des **20 composants**, leurs chemins planifiés et leur état de santé fourni par le registre existant. **Aucun lien vers un backend privé n'est activé** : les chemins sont du texte, chaque route est explicitement `NON ATTESTÉE`. Le composant refuse un inventaire qui revendique `available_in_portal=true`, une route différente du registre ou une identité contradictoire. Les valeurs incident et chronologie sont échappées HTML ; aucun JavaScript ni accès réseau n'est ajouté.
+
+**Interfaces et limites :** réutilisation de `/noc`, `/api/noc/state` et `/api/platform/components` via le routeur FastAPI **déclaré dans le code**, non attesté monté sur Debian :17777. La santé observée et `runtime_authenticated=true` sont des déclarations du fournisseur, pas des preuves cryptographiques. Si le fournisseur d'inventaire est invalide, la page renvoie HTTP 503 générique. Aucune route supplémentaire, aucun port, proxy, conteneur ou backend n'est modifié. La navigation effective vers GLPI/n8n/Grafana/Temporal exige une intégration et une attestation distinctes.
+
+**Provenance et déduplication :** adaptation du module courant `demo/noc_portal_integration.py` et du registre existant `demo/noc_platform_registry.py`, sans réimporter d'archive historique incomplète. Les références F20.13 et Hybrid Replay V2.13.4 restent inventoriées dans `docs/recovery/` et `recovery/legacy_v2134` sans être présentées comme sources complètes qualifiées.
+
+**Tests isolés :** trois régressions dans `tests/test_noc_portal_integration.py` : 20 lignes et absence de liens non attestés, échappement HTML d'une étape hostile, refus d'une route prétendument montée ou détournée. Ces tests ne démontrent pas un montage sur le runtime réel ni la cinématique ACME P1 → Payments P2.
+
+**Rollback :** restaurer sur la branche PR le module, ses tests et cette documentation depuis le commit parent, régénérer et vérifier le ZIP candidat, puis relancer les workflows isolés. Aucun déploiement Debian ou modification LIVE autorisé.

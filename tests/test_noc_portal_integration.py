@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 from demo.noc_portal_integration import (validate_noc_runtime_snapshot, public_noc_snapshot,
-                                         public_component_registry, create_noc_router)
+                                         public_component_registry, create_noc_router, render_noc_dashboard)
 from unittest.mock import patch
 import sys
 import types
@@ -110,6 +110,34 @@ class PortalNocContractTests(unittest.TestCase):
 
 
 class PortalComponentBindingTests(unittest.TestCase):
+    def test_dashboard_displays_20_components_without_unverified_links(self):
+        view=public_noc_snapshot(data(),now_utc="2026-10-20T12:01:00Z")
+        registry=public_component_registry(now_utc="2026-10-25T12:01:00Z")
+        page=render_noc_dashboard(view,registry)
+        self.assertEqual(page.count('class="component-row"'),20)
+        self.assertIn("Thruk operations",page)
+        self.assertIn("/observability/grafana",page)
+        self.assertIn("NON ATTESTÉE",page)
+        self.assertNotIn("<a href=",page)
+
+    def test_dashboard_escapes_untrusted_incident_timeline(self):
+        d=data()
+        d["steps"][0]["name"]="<script>alert(1)</script>"
+        view=public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        page=render_noc_dashboard(
+            view,public_component_registry(now_utc="2026-10-25T12:01:00Z"))
+        self.assertIn("&lt;script&gt;",page)
+        self.assertNotIn("<script>",page)
+
+    def test_dashboard_rejects_forged_route_attestation(self):
+        view=public_noc_snapshot(data(),now_utc="2026-10-20T12:01:00Z")
+        for field,value in (("available_in_portal",True),("path","/evil")):
+            registry=public_component_registry(now_utc="2026-10-25T12:01:00Z")
+            registry["items"][0][field]=value
+            with self.subTest(field=field),self.assertRaisesRegex(
+                    ValueError,"contradictory or unattested"):
+                render_noc_dashboard(view,registry)
+
     def test_no_host_provider_keeps_all_routes_unverified(self):
         registry=public_component_registry(now_utc="2026-10-25T12:01:00Z")
         self.assertEqual(len(registry["items"]),20)
