@@ -1,77 +1,24 @@
-"""Single-portal component registry; status cannot be inferred from configuration.
+"""Compatibility import for existing repository-level NOC checks.
 
-Backend services remain private. A configured component is UNKNOWN until
-the existing portal supplies an authenticated, recent observation.
+The canonical registry lives in app/portal so the existing portal image can
+use it without copying the repository-level demo package into the container.
 """
-from __future__ import annotations
-from datetime import datetime, timezone
+from pathlib import Path
+import sys
 
-COMPONENTS=(
- ("noc","NOC & incidents","/noc","portal"),
- ("checkmk","Checkmk monitoring","/noc/checkmk","monitoring"),
- ("thruk","Thruk operations","/noc/thruk","monitoring"),
- ("grafana","Grafana observability","/observability/grafana","observability"),
- ("prometheus","Prometheus metrics","/observability/metrics","observability"),
- ("alertmanager","Alertmanager alerts","/observability/alerts","observability"),
- ("glpi","GLPI ITSM & CMDB","/itsm","integration"),
- ("n8n","n8n integration flows","/workflows","integration"),
- ("core","Core incident lifecycle","/incidents","engine"),
- ("temporal","Temporal orchestration","/runs","engine"),
- ("worker","Worker activities","/runs/activities","engine"),
- ("intelligence","DGX Analyst & Critic","/intelligence","engine"),
- ("policy","Policy / HITL gate","/decisions","engine"),
- ("evidence","Evidence Center","/evidence","engine"),
- ("rag","RAG knowledge & runbooks","/knowledge","engine"),
- ("digital-twin","Digital Twin","/topology","engine"),
- ("simulator","Controlled simulation","/demo","engine"),
- ("copilot","Operations Copilot","/copilot","engine"),
- ("mattermost","Mattermost notifications","/notifications","integration"),
- ("pagerduty","PagerDuty escalation (mock/optional)","/escalations","integration"),
+_APP_ROOT = Path(__file__).resolve().parents[1] / "app"
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
+
+from portal.platform_registry import (  # noqa: E402
+    CATEGORIES,
+    COMPONENTS,
+    STATES,
+    _parse_utc_z,
+    build_portal_component_registry,
 )
-CATEGORIES={"portal","monitoring","observability","integration","engine"}
-STATES={"OK","WARN","CRIT","UNKNOWN"}
 
-def _parse_utc_z(value: object, error: str) -> datetime:
-    if not isinstance(value, str) or not value.endswith("Z"):
-        raise ValueError(error)
-    try:
-        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
-    except ValueError as exc:
-        raise ValueError(error) from exc
-    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
-        raise ValueError(error)
-    return parsed
-
-def build_portal_component_registry(observations:dict|None=None, *, now_utc:str|None=None, max_age_seconds:int=300)->dict:
-    if observations is None:
-        observations={}
-    if (not isinstance(observations,dict) or type(max_age_seconds) is not int
-            or not 1<=max_age_seconds<=3600):
-        raise ValueError("invalid observations")
-    ids={name for name,_,_,_ in COMPONENTS}
-    if set(observations)-ids:
-        raise ValueError("unexpected component identity")
-    now = _parse_utc_z(now_utc, "invalid clock") if now_utc is not None else datetime.now(timezone.utc)
-    entries=[]
-    for ident,label,path,category in COMPONENTS:
-        row=observations.get(ident)
-        state="UNKNOWN";timestamp=None
-        if row is not None:
-            if (not isinstance(row,dict)
-                    or set(row)!={"state","observed_at","authenticated"}
-                    or not isinstance(row["state"],str) or row["state"] not in STATES
-                    or type(row["authenticated"]) is not bool):
-                raise ValueError("invalid component observation")
-            if row["authenticated"] is True:
-                stamp=row["observed_at"]
-                observed=_parse_utc_z(stamp, "invalid observation timestamp")
-                age=(now-observed).total_seconds()
-                if 0<=age<=max_age_seconds:
-                    state=row["state"];timestamp=stamp
-        entries.append({"id":ident,"name":label,"path":path,"category":category,
-                        "state":state,"observed_at":timestamp,
-                        "available_in_portal":False,
-                        "requires_route_integration":True})
-    return {"schema":"aiops-single-portal-component-registry-v1",
-            "entrypoint":"http://10.79.94.202:17777/",
-            "items":entries,"live_remediation_authorized":False}
+__all__ = [
+    "CATEGORIES", "COMPONENTS", "STATES", "_parse_utc_z",
+    "build_portal_component_registry",
+]
