@@ -236,6 +236,8 @@ class PortalComponentBindingTests(unittest.TestCase):
                     self.routes[path]=handler
                     return handler
                 return register
+                    return handler
+                return register
         class FakeHTTPException(Exception):
             def __init__(self,status_code,detail):
                 self.status_code=status_code
