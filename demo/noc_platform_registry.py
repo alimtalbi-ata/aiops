@@ -31,27 +31,40 @@ COMPONENTS=(
 CATEGORIES={"portal","monitoring","observability","integration","engine"}
 STATES={"OK","WARN","CRIT","UNKNOWN"}
 
+def _parse_utc_z(value: object, error: str) -> datetime:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise ValueError(error)
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise ValueError(error) from exc
+    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+        raise ValueError(error)
+    return parsed
+
 def build_portal_component_registry(observations:dict|None=None, *, now_utc:str|None=None, max_age_seconds:int=300)->dict:
-    if observations is None:observations={}
-    if not isinstance(observations,dict) or not isinstance(max_age_seconds,int) or not 1<=max_age_seconds<=3600:
+    if observations is None:
+        observations={}
+    if (not isinstance(observations,dict) or type(max_age_seconds) is not int
+            or not 1<=max_age_seconds<=3600):
         raise ValueError("invalid observations")
     ids={name for name,_,_,_ in COMPONENTS}
-    if set(observations)-ids:raise ValueError("unexpected component identity")
-    if now_utc is not None:
-        if not isinstance(now_utc,str) or not now_utc.endswith("Z"):raise ValueError("invalid clock")
-        now=datetime.fromisoformat(now_utc.replace("Z","+00:00"))
-    else:now=datetime.now(timezone.utc)
+    if set(observations)-ids:
+        raise ValueError("unexpected component identity")
+    now = _parse_utc_z(now_utc, "invalid clock") if now_utc is not None else datetime.now(timezone.utc)
     entries=[]
     for ident,label,path,category in COMPONENTS:
         row=observations.get(ident)
         state="UNKNOWN";timestamp=None
         if row is not None:
-            if not isinstance(row,dict) or set(row)!={"state","observed_at","authenticated"} or row["state"] not in STATES or type(row["authenticated"]) is not bool:
+            if (not isinstance(row,dict)
+                    or set(row)!={"state","observed_at","authenticated"}
+                    or not isinstance(row["state"],str) or row["state"] not in STATES
+                    or type(row["authenticated"]) is not bool):
                 raise ValueError("invalid component observation")
             if row["authenticated"] is True:
                 stamp=row["observed_at"]
-                if not isinstance(stamp,str) or not stamp.endswith("Z"):raise ValueError("invalid observation timestamp")
-                observed=datetime.fromisoformat(stamp.replace("Z","+00:00"))
+                observed=_parse_utc_z(stamp, "invalid observation timestamp")
                 age=(now-observed).total_seconds()
                 if 0<=age<=max_age_seconds:
                     state=row["state"];timestamp=stamp
