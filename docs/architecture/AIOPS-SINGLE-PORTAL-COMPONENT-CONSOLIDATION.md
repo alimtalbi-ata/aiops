@@ -6,7 +6,7 @@ Point d'entrée public cible unique : **http://10.79.94.202:17777/**. Ne pas exp
 
 ## Inventaire consolidé de 20 familles
 
-`demo/noc_platform_registry.py` centralise les chemins réservés, noms et catégories pour NOC, Checkmk, Thruk, Grafana, Prometheus, Alertmanager, GLPI, n8n, Core, Temporal, Worker, Intelligence/DGX, Policy/HITL, Evidence, RAG, Digital Twin, Simulator, Copilot, Mattermost et PagerDuty. L'API de l'adaptateur du portail **si effectivement inclus dans l'application existante** pourra exposer `/api/platform/components`.
+`app/portal/platform_registry.py` est maintenant la source canonique des 20 familles (NOC, Checkmk, Thruk, Grafana, Prometheus, Alertmanager, GLPI, n8n, Core, Temporal, Worker, DGX Analyst/Critic, Policy/HITL, Evidence, RAG, Digital Twin, Simulator, Copilot, Mattermost et PagerDuty). `demo/noc_platform_registry.py` reste un shim de compatibilité. `GET /api/platform/components` est monté dans le code source de `portal.main:app` et renvoie uniquement le plan statique ; cela ne constitue pas une connexion aux composants.
 
 Chaque composant est `UNKNOWN` par défaut. Seule une observation fraîche (≤ 300 s), horodatée en UTC et authentifiée peut lui donner un autre état. **Les chemins prévus sont actuellement tous marqués `available_in_portal=false` et `requires_route_integration=true`**, même si un état observé est bon. Aucun iframe ou redirection vers un port interne ne doit être ajouté automatiquement.
 
@@ -35,6 +35,12 @@ Chaque composant est `UNKNOWN` par défaut. Seule une observation fraîche (≤ 
 
 ## État de ce commit
 
-**Livré dans la branche de PR :** registre de composants, contrôles de fraîcheur/provenance, endpoint prévu `/api/platform/components` au sein du routeur NOC non encore monté, tests. **Non livré :** connexion aux applications, authentification active du portail, routes graphiques unifiées, automatisation E2E réelle, déploiement sur Debian. Aucun état « OK » n'est inventé.
+**Livré dans le code de la branche :** `GET /api/platform/components` est enregistré une seule fois dans l'application FastAPI existante et expose 20 entrées `UNKNOWN`, `route_mounted=false`, `runtime_authenticated=false`, sans fournisseur de santé ni appel réseau. **Non livré / non attesté :** `/noc`, `/api/noc/state`, les routes graphiques des composants, SSO/authentification runtime, connexions réelles, automatisation E2E et déploiement Debian. Aucun état « OK » n'est inventé.
 
 La présence historique de Checkmk Community 2.5 et Thruk au sein de l'ancienne stack est une piste d'intégration ; ses ports et conteneurs doivent être revérifiés sur la machine avant tout rattachement.
+
+## Endpoint de registre statique (25 octobre 2026)
+
+Le module `app/portal/platform_registry_router.py` ajoute uniquement `GET /api/platform/components` via `app.include_router(...)` dans `app/portal/main.py`. Il réutilise l'application existante : aucun serveur, listener, port, proxy, tâche ou accès fournisseur n'est lancé. La réponse indique `source_mode=STATIC_REGISTRY_PLAN`, `component_observation_source=ABSENT`, `route_mount_attested=false`, `runtime_e2e_qualified=false` et `production_qualified=false`. Chaque ligne demeure `UNKNOWN`, sans timestamp ni attestation. Les valeurs en query string ne peuvent pas promouvoir un composant.
+
+La route est testée avec un client ASGI isolé. Cela prouve le montage dans le code importé en CI, pas le déploiement du même artefact ni l'authentification de la machine cible. `/noc` et `/api/noc/state` utilisent un adaptateur distinct dans `demo/noc_portal_integration.py` et restent non montés dans l'application de production connue ; le read model réel n'est pas fourni.
