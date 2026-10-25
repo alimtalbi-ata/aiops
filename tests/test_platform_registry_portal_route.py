@@ -71,5 +71,47 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+
+    def test_static_noc_convergence_page_is_mounted_once_and_read_only(self):
+        routes = [route for route in app.routes
+                  if getattr(route, "path", None) == "/noc"]
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(set(routes[0].methods or ()), {"GET"})
+        with TestClient(app) as client:
+            response = client.get("/noc")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("text/html", response.headers["content-type"])
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+            self.assertEqual(response.headers["x-frame-options"], "DENY")
+            self.assertIn("connect-src 'none'", response.headers["content-security-policy"])
+            self.assertEqual(response.text.count('class="component-row"'), 20)
+            self.assertIn("PLAN STATIQUE — PAS UN ÉCRAN NOC RUNTIME", response.text)
+            self.assertIn("Qualification production : <code>NON</code>", response.text)
+
+    def test_noc_page_shows_unknown_routes_without_forged_links_or_external_code(self):
+        with TestClient(app) as client:
+            response = client.get("/noc")
+        body = response.text
+        for label in ("Checkmk monitoring", "Thruk operations", "GLPI ITSM &amp; CMDB",
+                      "n8n integration flows", "Grafana observability",
+                      "Temporal orchestration", "DGX Analyst &amp; Critic"):
+            with self.subTest(label=label):
+                self.assertIn(label, body)
+        self.assertEqual(body.count("<strong>INCONNU</strong>"), 20)
+        self.assertEqual(body.count("<td>ABSENTE</td>"), 20)
+        self.assertEqual(body.count("<td>NON · À INTÉGRER</td>"), 20)
+        self.assertEqual(body.count("<td>NON</td>"), 20)
+        self.assertNotIn("<a ", body.lower())
+        self.assertNotIn("<script", body.lower())
+        self.assertNotIn("<form", body.lower())
+        self.assertNotIn("fetch(", body.lower())
+        self.assertIn("Cette page est servie localement par le portail existant", body)
+
+    def test_noc_inventory_rejects_non_get_methods(self):
+        with TestClient(app) as client:
+            response = client.post("/noc", json={"state": "OK", "authenticated": True})
+        self.assertEqual(response.status_code, 405)
+
 if __name__ == "__main__":
     unittest.main()
