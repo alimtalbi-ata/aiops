@@ -260,4 +260,52 @@ class PortalComponentBindingTests(unittest.TestCase):
             self.assertEqual(caught.exception.status_code,503)
             self.assertNotIn("PRIVATE-SECRET",caught.exception.detail)
 
+
+class HttpNocReadModelRouteTests(unittest.TestCase):
+    def _mount(self, read_model):
+        class FakeRouter:
+            def __init__(self): self.routes={}
+            def get(self,path,response_class=None):
+                def register(handler):
+                    self.routes[path]=handler
+                    return handler
+        class FakeHTTPException(Exception):
+            def __init__(self,status_code,detail):
+                self.status_code=status_code
+                self.detail=detail
+        fake_fastapi=types.ModuleType("fastapi")
+        fake_fastapi.APIRouter=FakeRouter
+        fake_fastapi.HTTPException=FakeHTTPException
+        fake_responses=types.ModuleType("fastapi.responses")
+        fake_responses.HTMLResponse=object
+        patcher=patch.dict(sys.modules,{"fastapi":fake_fastapi,
+                                       "fastapi.responses":fake_responses})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return create_noc_router(read_model),FakeHTTPException
+
+    def test_http_noc_route_projects_only_allowlisted_fields(self):
+        payload=data()
+        payload["observed_at"]=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        payload["api_token"]="DO-NOT-LEAK"
+        router,_=self._mount(lambda:payload)
+        view=router.routes["/api/noc/state"]()
+        self.assertEqual(view["run_id"],"RUN-001")
+        self.assertNotIn("api_token",view)
+        self.assertIs(view["live_remediation_authorized"],False)
+
+    def test_http_noc_route_fails_closed_for_synthetic_and_provider_errors(self):
+        synthetic=data()
+        synthetic["observed_at"]=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        synthetic["provenance"]="SYNTHETIC"
+        for provider in (lambda:synthetic,
+                         lambda:(_ for _ in ()).throw(RuntimeError("PRIVATE-SECRET")),
+                         lambda:None):
+            with self.subTest(provider=repr(provider)):
+                router,exc=self._mount(provider)
+                with self.assertRaises(exc) as caught:
+                    router.routes["/api/noc/state"]()
+                self.assertEqual(caught.exception.status_code,503)
+                self.assertNotIn("PRIVATE-SECRET",caught.exception.detail)
+
 if __name__=="__main__":unittest.main()
