@@ -12,7 +12,7 @@ import re
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from deploy.single_portal_candidate_kit import APPROVED, SENSITIVE, safe_path, sha256, source_paths, registry_routes
+from deploy.single_portal_candidate_kit import APPROVED, SENSITIVE, safe_path, sha256, source_paths, registry_routes, candidate_readme
 
 MAX_FILES = 64
 MAX_MEMBER = 4_000_000
@@ -67,6 +67,8 @@ def verify(archive_path: Path, checkout: Path | None = None) -> dict:
     expected_lines = [f"{sha256(data[name])}  {name}" for name in sorted(set(names) - {"metadata/SHA256SUMS"})]
     if checksum_lines != expected_lines:
         raise ValueError("candidate checksum manifest mismatch")
+    if data["metadata/README.md"] != candidate_readme().encode("utf-8"):
+        raise ValueError("candidate README mismatch: unauthorized instructions or status")
     manifest = _json(data["metadata/source-manifest.json"])
     if (manifest.get("schema") != "aiops-single-portal-candidate-kit-v1" or
             manifest.get("production_qualified") is not False or

@@ -78,6 +78,25 @@ class VerifyCandidateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "route attestation"):
                 verifier.verify(archive)
 
+    def test_reject_forged_readme_even_if_resigned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"; root.mkdir()
+            archive, _ = self.make_kit(root)
+            self.mutate(archive, "metadata/README.md",
+                        lambda b: b.replace(b"Deployment: BLOCKED", b"Deployment: APPROVED"),
+                        resign=True)
+            with self.assertRaisesRegex(ValueError, "candidate README mismatch"):
+                verifier.verify(archive)
+
+    def test_reject_extra_readme_instructions_even_if_resigned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"; root.mkdir()
+            archive, _ = self.make_kit(root)
+            self.mutate(archive, "metadata/README.md",
+                        lambda b: b + b"\\nPRODUCTION APPROVED\\n", resign=True)
+            with self.assertRaisesRegex(ValueError, "candidate README mismatch"):
+                verifier.verify(archive)
+
     def test_reject_production_claim_even_if_resigned(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"; root.mkdir()

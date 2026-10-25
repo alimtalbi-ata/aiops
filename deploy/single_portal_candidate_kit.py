@@ -97,6 +97,27 @@ def registry_routes(source: bytes) -> list[dict]:
     return routes
 
 
+def candidate_readme() -> str:
+    """Canonical non-deployable candidate notice; verifier checks exact bytes."""
+    return (
+        "# AIOps 2.0 — CANDIDATE ONLY / NO PRODUCTION DEPLOYMENT\n\n"
+        "All 20 routes are PLANNED, not authenticated or mounted. The sole target "
+        "entrypoint is :17777; this archive starts no server and opens no ports.\n\n"
+        "Embedded sources are a reviewed subset. Recover the remaining sources "
+        "from the exact Git commit in metadata/source-manifest.json and verify "
+        "each file's SHA-256 before use. Do not use an unpinned branch.\n\n"
+        "Preflight (READ-ONLY): inspect actual portal route table, auth, existing "
+        "service bindings and backups. Do not contact Debian from CI.\n"
+        "Qualification: isolated synthetic ACME SAN P1 / Payments P2, identity "
+        "02->03 fail-closed, offline Chromium PNG/SHA, Temporal and Policy tests. "
+        "A CI PASS is not production attestation.\n"
+        "Deployment: BLOCKED pending authenticated real-runtime E2E, backup "
+        "verification and explicit human approval.\n"
+        "Rollback: no deployment was made by this kit. For a separately approved "
+        "future change, restore the previous portal image/config/routes from "
+        "verified backups and requalify without touching V1/containerd.\n"
+    )
+
 def build(root: Path, output: Path, expected_commit: str | None = None) -> dict:
     root = root.resolve(strict=True)
     output = output.absolute()
@@ -130,24 +151,7 @@ def build(root: Path, output: Path, expected_commit: str | None = None) -> dict:
                 "source_mode": "reviewed_subset_plus_pinned_git_sha256_references",
                 "source_inventory": inventory, "embedded_count": len(included),
                 "route_count": len(routes)}
-    readme = (
-        "# AIOps 2.0 — CANDIDATE ONLY / NO PRODUCTION DEPLOYMENT\n\n"
-        "All 20 routes are PLANNED, not authenticated or mounted. The sole target "
-        "entrypoint is :17777; this archive starts no server and opens no ports.\n\n"
-        "Embedded sources are a reviewed subset. Recover the remaining sources "
-        "from the exact Git commit in metadata/source-manifest.json and verify "
-        "each file's SHA-256 before use. Do not use an unpinned branch.\n\n"
-        "Preflight (READ-ONLY): inspect actual portal route table, auth, existing "
-        "service bindings and backups. Do not contact Debian from CI.\n"
-        "Qualification: isolated synthetic ACME SAN P1 / Payments P2, identity "
-        "02->03 fail-closed, offline Chromium PNG/SHA, Temporal and Policy tests. "
-        "A CI PASS is not production attestation.\n"
-        "Deployment: BLOCKED pending authenticated real-runtime E2E, backup "
-        "verification and explicit human approval.\n"
-        "Rollback: no deployment was made by this kit. For a separately approved "
-        "future change, restore the previous portal image/config/routes from "
-        "verified backups and requalify without touching V1/containerd.\n"
-    )
+    readme = candidate_readme()
     included["metadata/source-manifest.json"] = (
         json.dumps(manifest, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode()
     included["metadata/planned-routes.json"] = (
