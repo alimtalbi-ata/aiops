@@ -23,3 +23,26 @@ Le portail existant présente des routes accessibles anonymement en HTTP. Ne pas
 
 ## Données probantes et limites
 `AIOPS_V21310_IMPORT=PASS` est une qualification de chargement FastAPI, **pas** une qualification navigateur ou une mise en production. Aucun effet LIVE, aucune inférence DGX nouvellement attestée.
+
+
+## Mise à jour de la branche PR #36 — 25 octobre 2026 (source uniquement)
+
+Le code candidat réutilise maintenant l'application FastAPI existante : `app/portal/main.py`
+enregistre `portal.portal_demo_public_v21310.router`, qui fournit uniquement
+`GET /demo/` et `GET /demo/star`. Le second endpoint sert l'asset HTML local
+`app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html`. La page est
+synthétique et autonome (pas de formulaire, appel `fetch` ou script distant dans
+l'asset contrôlé) ; l'asset interdit les connexions réseau via sa politique CSP.
+Cette intégration ne crée ni écouteur ni service, et n'écrit pas dans Core, GLPI,
+n8n, Grafana, DB ou CMDB. Un test d'import isolé du portail vérifie le montage
+des deux routes, avec un jeton CI synthétique et sans contacter les services.
+
+Le contrat NOC `/noc`, `/api/noc/state`, `/api/platform/components` demeure
+non monté : aucune fonction authentifiée de lecture du pipeline réel ni middleware
+runtime attesté n'a été démontré. Les 20 routes de composants restent planifiées,
+pas qualifiées. L'état Debian rapporté pour cette ligne reste V2.13.9.3 ; ce
+changement source/CI ne constitue ni test Chromium sur l'hôte, ni déploiement,
+ni approbation de bascule.
+
+**Rollback source-only :** restaurer les fichiers modifiés de la PR au commit
+parent validé et relancer la CI. Aucune action runtime n'est nécessaire.
