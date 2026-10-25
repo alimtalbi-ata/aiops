@@ -18,7 +18,7 @@ class VerifyCandidateTests(unittest.TestCase):
         for name in names:
             file = root / name
             file.parent.mkdir(parents=True, exist_ok=True)
-            if name == "demo/noc_platform_registry.py":
+            if name == "app/portal/platform_registry.py":
                 components = tuple((f"svc-{n}", f"Service {n}", f"/service/{n}", "engine") for n in range(20))
                 file.write_text("COMPONENTS=" + repr(components) + "\n", encoding="utf-8")
             else:
