@@ -70,7 +70,7 @@ class CandidateKitTests(unittest.TestCase):
             ("svc-0", "Service 0", "/", "engine"),
             ("svc 0", "Service 0", "/service/0", "engine"),
             ("svc-0", "Service 0", "/service/0", "unrecognized"),
-            ("svc-0", "Service\\n0", "/service/0", "engine"),
+            ("svc-0", "Service\n0", "/service/0", "engine"),
         ]
         for row in invalid_rows:
             with self.subTest(row=row):
