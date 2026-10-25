@@ -20,9 +20,9 @@ La CI `single-portal-candidate-kit.yml` publie le ZIP et son SHA-256 comme artef
 
 ## Routes : état constaté dans le code, pas dans le runtime
 
-Le registre `demo/noc_platform_registry.py` contient 20 familles : NOC, Checkmk, Thruk, Grafana, Prometheus, Alertmanager, GLPI, n8n, Core, Temporal, Worker, DGX Analyst/Critic, Policy/HITL, Evidence, RAG, Digital Twin, Simulator, Copilot, Mattermost, PagerDuty. Les chemins réservés figurent dans `metadata/planned-routes.json`.
+La source canonique `app/portal/platform_registry.py` décrit 20 familles : NOC, Checkmk, Thruk, Grafana, Prometheus, Alertmanager, GLPI, n8n, Core, Temporal, Worker, DGX Analyst/Critic, Policy/HITL, Evidence, RAG, Digital Twin, Simulator, Copilot, Mattermost et PagerDuty. `demo/noc_platform_registry.py` réexporte ce registre pour les tests et adaptateurs historiques. Les chemins réservés figurent dans `metadata/planned-routes.json`.
 
-**Statut du code vérifié :** `demo/noc_portal_integration.py` définit `create_noc_router`, proposant `/noc`, `/api/noc/state` et `/api/platform/components`, mais ce routeur n'est **pas prouvé monté** dans le portail déployé. Tous les chemins du registre restent `route_mounted=false`, `state=UNKNOWN`, `runtime_authenticated=false`. Aucune route GLPI/n8n/Grafana n'est attestée fonctionnelle sous `:17777`. Le ZIP ne crée aucun listener et ne configure aucun proxy.
+**Statut du code courant :** `GET /api/platform/components` est maintenant enregistré dans `app/portal/main.py` via `portal.platform_registry_router`; il publie le plan statique uniquement. Les 20 routes métier restent `route_mounted=false`, `state=UNKNOWN`, `runtime_authenticated=false` et `available_in_portal=false`. `/noc` et `/api/noc/state` appartiennent au routeur séparé `demo/noc_portal_integration.py`, non monté dans l'application principale. Aucune connexion GLPI/n8n/Grafana, aucune auth runtime ni aucun E2E réel ne sont attestés. Le ZIP ne crée aucun listener et ne configure aucun proxy.
 
 ## Préflight en lecture seule (procédure à faire approuver, NON exécutée)
 
@@ -175,3 +175,12 @@ sont pas ajoutées au kit.
 **Rollback :** revert des changements source, test, workflow et documentation de
 la PR ; aucun rollback runtime, DB, conteneur ou port n'est requis. Production
 reste NO-GO en attendant l'E2E authentifié du runtime et l'approbation explicite.
+
+
+## Endpoint statique et incohérence de port de configuration — 25 octobre 2026
+
+**Changement fonctionnel de code :** `app/portal/platform_registry_router.py` expose `GET /api/platform/components` depuis l'application FastAPI existante. Le test `tests/test_platform_registry_portal_route.py` utilise `fastapi.testclient.TestClient`, vérifie le montage unique, les entêtes anti-cache, les vingt identifiants uniques et l'absence de promotion par query string. Les champs `route_mount_attested`, `runtime_e2e_qualified`, `production_qualified` et `live_remediation_authorized` restent `false`; l'observation est `ABSENT`. Aucune écriture, connexion externe, capture ou action de remédiation n'est déclenchée.
+
+**Point de blocage constaté dans le Compose suivi par Git :** le service `aiops2-portal` de `compose.yml` expose le port interne 777 sur `${AIOPS_BIND_IP:-127.0.0.1}:${AIOPS_PORTAL_HOST_PORT:-7777}:777`. Les valeurs par défaut configurent donc le portail sur l'hôte en loopback:7777 et non sur `10.79.94.202:17777`. Ce même Compose publie par défaut (sur loopback) Prometheus:9090, Grafana:3000, Alertmanager:9093, GLPI:8080 et n8n:5678. Il s'agit d'une configuration source de la branche, **pas d'une observation du runtime Debian**. Elle n'est pas conforme au point d'entrée cible unique sans profil de déploiement supplémentaire. Aucun changement Compose/port n'a été appliqué dans ce cycle, car les conteneurs/configurations en service ne sont pas attestés et toute modification de production est interdite.
+
+**Prochain prérequis :** audit strictement read-only de la table de routes réelle, de l'image et du binding existant, puis définition et revue d'un profil d'intégration n'exposant aucun port interne. Ne pas lancer `docker compose up/down`, ne pas redémarrer/recréer de conteneur, ne pas modifier le pare-feu. Le test ASGI valide le code source isolé uniquement ; il ne qualifie pas le bind cible, le SSO ou les écrans réels. 
