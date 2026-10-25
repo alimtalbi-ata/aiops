@@ -3,9 +3,12 @@ on:
   pull_request:
     paths:
       - 'app/portal/main.py'
+      - 'app/portal/platform_registry.py'
+      - 'app/portal/platform_registry_router.py'
       - 'app/portal/portal_demo_public_v21310.py'
       - 'app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html'
       - 'tests/test_portal_demo_public_v21310.py'
+      - 'tests/test_platform_registry_portal_route.py'
       - 'deploy/single_portal_candidate_kit.py'
       - 'tests/test_single_portal_candidate_kit.py'
       - 'tests/test_verify_single_portal_candidate_kit.py'
@@ -36,7 +39,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install minimal dependencies for existing portal import test
-        run: python -m pip install --disable-pip-version-check 'fastapi==0.116.1' 'requests==2.32.4'
+        run: python -m pip install --disable-pip-version-check 'fastapi==0.116.1' 'requests==2.32.4' 'httpx==0.28.1'
       - name: Test offline packaging and CI admission contracts
         run: |
           python -m unittest discover -s tests -p 'test_single_portal_candidate_kit.py' -v
@@ -44,6 +47,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
           python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
           python -m unittest discover -s tests -p 'test_portal_demo_public_v21310.py' -v
+          python -m unittest discover -s tests -p 'test_platform_registry_portal_route.py' -v
           python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
         shell: bash
