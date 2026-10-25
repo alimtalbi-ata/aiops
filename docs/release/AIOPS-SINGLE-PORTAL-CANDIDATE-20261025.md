@@ -141,3 +141,37 @@ Le fournisseur du read model peut contenir des champs internes (en-têtes d'auth
 **Intégration et provenance :** contrat Python pur entre `demo/noc_portal_integration.py` et le gate existant ; aucune nouvelle route, API réseau, écriture GLPI/n8n/DB, port, conteneur ni connexion Debian. Les deux sources et leurs tests sont désormais inclus dans le sous-ensemble du ZIP candidat, les autres sources restent référencées par commit Git et SHA-256. Il s'agit d'une réutilisation de code actuel, **pas** de la promotion d'un fragment historique. Les originaux F20.13 et Hybrid Replay restent en quarantaine jusqu'à qualification complète.
 
 **Tests/rollback :** les tests synthétiques vérifient absence explicite, identité cohérente, divergence, étape manquante, alias frauduleux, incohérence avec le NOC, projection sans fuite et attestation forgée. La CI du kit exécute aussi la suite existante `test_star_n8n_identity_gate.py`. Pour annuler, restaurer uniquement ces cinq fichiers depuis le commit parent sur la branche de PR, reconstruire et vérifier le ZIP hors ligne ; **aucune intervention sur :17777**. Montage du routeur et E2E réel restent NON ATTESTÉS ; production NON AUTORISÉE.
+
+
+## Mise à jour PR #36 — route STAR publique et récupération historique (25 octobre)
+
+Le portail candidat enregistre désormais, dans `app/portal/main.py`, le routeur
+public strictement synthétique `portal_demo_public_v21310.router` sur la même
+application FastAPI : `GET /demo/` et `GET /demo/star`. Le scénario ne lance pas
+de processus ni d'appel aux API métier ; l'asset HTML local est inclus dans la
+liste d'embarquement explicite du kit cumulatif. La CI vérifie que la route est
+présente après import isolé du portail, que l'asset reste autonome, et que le ZIP
+embarque les octets exacts et leur SHA-256 dans le manifeste. Ces contrôles sont
+source-level/offline, non une attestation de la route sur Debian.
+
+Le registre NOC reste indépendant et **non monté**, faute de read model issu du
+pipeline réel et de mécanisme d'authentification/provenance runtime qualifié. Les
+20 routes de composants restent `UNKNOWN`, `route_mounted=false` et
+`runtime_authenticated=false`.
+
+La récupération historique ne remplace pas les originaux : le registre existant
+`docs/recovery/OCTOBER-2026-CUMULATIVE-ZIP-OPAQUE-NESTED-V21363.md` consigne
+l'archive originale `AIOPS-V21310-STAR-PORTAL.zip` (SHA-256
+`cdca139131dbbac7adb2f811077c25e94dd01899a6ec33c37ea067d26a351d87`) et le
+SHA-256 de son membre historique `portal_demo_public_v21310.py`
+(`5bee897914ec958af0f715f24eee229b9f9539a3df5da4f9c43cb8746ad60ee0`).
+La version actuelle du fichier dans cette PR est un objet Git distinct :
+`128b3fae541e070d29ab8cb78e3e8bfbd5880d0b` (Git blob SHA, pas SHA-256 du fichier).
+La branche utilise la version actuelle revue, sans écraser ni republier l'archive
+historique. Le générateur continue de calculer les sommes SHA-256 des octets
+courants embarqués ; les archives privées, sessions et captures historiques ne
+sont pas ajoutées au kit.
+
+**Rollback :** revert des changements source, test, workflow et documentation de
+la PR ; aucun rollback runtime, DB, conteneur ou port n'est requis. Production
+reste NO-GO en attendant l'E2E authentifié du runtime et l'approbation explicite.
