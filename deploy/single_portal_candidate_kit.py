@@ -86,11 +86,18 @@ def registry_routes(source: bytes) -> list[dict]:
     if len(components) != 20:
         raise ValueError("unexpected component registry size")
     ids = set()
+    paths = set()
     routes = []
     for ident, label, path, category in components:
-        if ident in ids or not path.startswith("/") or path.startswith("//"):
+        if (not all(isinstance(value, str) for value in (ident, label, path, category))
+                or not re.fullmatch(r"[a-z][a-z0-9-]*", ident)
+                or not re.fullmatch(r"/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)*", path)
+                or not label.strip() or not label.isprintable()
+                or category not in {"portal", "monitoring", "observability", "integration", "engine"}
+                or ident in ids or path in paths):
             raise ValueError("unsafe or duplicate planned route")
         ids.add(ident)
+        paths.add(path)
         routes.append({"id": ident, "name": label, "path": path, "category": category,
                        "state": "UNKNOWN", "route_mounted": False,
                        "runtime_authenticated": False, "integration_required": True})
