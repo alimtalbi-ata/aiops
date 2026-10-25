@@ -39,6 +39,7 @@ APPROVED = (
     "docs/architecture/AIOPS-SINGLE-PORTAL-COMPONENT-CONSOLIDATION.md",
     "docs/architecture/AIOPS-SINGLE-PORTAL-RUNTIME-DEMO-INTEGRATION.md",
     "docs/release/AIOPS-SINGLE-PORTAL-CANDIDATE-20261025.md",
+    "docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md",
     "docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md",
     "docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md",
     "tests/test_noc_browser_workflow_contract.py",
