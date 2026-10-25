@@ -91,7 +91,7 @@ def registry_routes(source: bytes) -> list[dict]:
     for ident, label, path, category in components:
         if (not all(isinstance(value, str) for value in (ident, label, path, category))
                 or not re.fullmatch(r"[a-z][a-z0-9-]*", ident)
-                or not re.fullmatch(r"/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)*", path)
+                or not re.fullmatch(r"/[a-z][a-z0-9-]*(?:/[a-z0-9][a-z0-9-]*)*", path)
                 or not label.strip() or not label.isprintable()
                 or category not in {"portal", "monitoring", "observability", "integration", "engine"}
                 or ident in ids or path in paths):
