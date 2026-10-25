@@ -7,6 +7,7 @@ on:
       - 'tests/test_verify_single_portal_candidate_kit.py'
       - 'deploy/verify_single_portal_candidate_kit.py'
       - 'tests/test_noc_browser_workflow_contract.py'
+      - 'tests/test_noc_portal_integration.py'
       - 'demo/noc_platform_registry.py'
       - 'demo/noc_portal_integration.py'
       - 'docs/release/**'
@@ -33,6 +34,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_single_portal_candidate_kit.py' -v
           python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
           python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
+          python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
         shell: bash
         run: |

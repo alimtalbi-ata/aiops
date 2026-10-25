@@ -33,6 +33,7 @@ APPROVED = (
     "docs/architecture/AIOPS-SINGLE-PORTAL-COMPONENT-CONSOLIDATION.md",
     "docs/architecture/AIOPS-SINGLE-PORTAL-RUNTIME-DEMO-INTEGRATION.md",
     "tests/test_noc_browser_workflow_contract.py",
+    "tests/test_noc_portal_integration.py",
 )
 ROOTS = {"app", "demo", "deploy", "recovery", "integration", "tests", "docs",
          "config", "schemas", "db", "tools", ".github"}

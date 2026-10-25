@@ -11,7 +11,19 @@ from typing import Any
 VALID_STATES={"OK","WARN","CRIT","UNKNOWN"}
 SCHEMA="aiops-noc-runtime-readmodel-v1"
 
-def validate_noc_runtime_snapshot(snapshot:dict)->dict:
+def validate_noc_runtime_snapshot(snapshot:dict, *, now_utc:str|None=None, max_age_seconds:int=300)->dict:
+    """Validate a fresh authenticated read model, never an old replay as live NOC."""
+    if type(max_age_seconds) is not int or not 1 <= max_age_seconds <= 3600:
+        raise ValueError("invalid NOC freshness policy")
+    if now_utc is None:
+        now = datetime.now(timezone.utc)
+    else:
+        if not isinstance(now_utc,str) or not now_utc.endswith("Z"):
+            raise ValueError("invalid NOC clock")
+        try:
+            now = datetime.fromisoformat(now_utc.replace("Z","+00:00"))
+        except ValueError as exc:
+            raise ValueError("invalid NOC clock") from exc
     if not isinstance(snapshot,dict) or snapshot.get("schema")!=SCHEMA:
         raise ValueError("missing runtime read model")
     if snapshot.get("provenance")!="RUNTIME_READMODEL" or snapshot.get("runtime_authenticated") is not True:
@@ -29,8 +41,8 @@ def validate_noc_runtime_snapshot(snapshot:dict)->dict:
         ts=datetime.fromisoformat(observed.replace("Z","+00:00"))
     except ValueError as exc:
         raise ValueError("invalid UTC timestamp") from exc
-    if ts.tzinfo is None or ts>datetime.now(timezone.utc):
-        raise ValueError("invalid observation time")
+    if ts.tzinfo is None or not 0 <= (now-ts).total_seconds() <= max_age_seconds:
+        raise ValueError("stale or future NOC observation")
     steps=snapshot.get("steps")
     if not isinstance(steps,list) or len(steps)>100:
         raise ValueError("invalid incident timeline")
