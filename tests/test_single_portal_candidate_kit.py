@@ -38,6 +38,9 @@ class CandidateKitTests(unittest.TestCase):
                 "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
                 "tests/test_portal_demo_public_v21310.py",
                 "tests/test_platform_registry_portal_route.py",
+                "docs/release/AIOPS-SINGLE-PORTAL-CANDIDATE-20261025.md",
+                "docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md",
+                "docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md",
             }
             self.assertTrue(required_portal_sources.issubset(set(kit.APPROVED)))
             self.assertTrue(kit.safe_path(
