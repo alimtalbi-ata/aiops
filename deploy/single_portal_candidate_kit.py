@@ -19,6 +19,8 @@ from pathlib import Path, PurePosixPath
 APPROVED = (
     ".github/workflows/star-offline-chromium-real-render.yml",
     "app/portal/main.py",
+    "app/portal/platform_registry.py",
+    "app/portal/platform_registry_router.py",
     "app/portal/portal_demo_public_v21310.py",
     "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
     "deploy/single_portal_candidate_kit.py",
@@ -39,6 +41,7 @@ APPROVED = (
     "tests/test_noc_browser_workflow_contract.py",
     "tests/test_noc_portal_integration.py",
     "tests/test_portal_demo_public_v21310.py",
+    "tests/test_platform_registry_portal_route.py",
     "tests/test_star_n8n_identity_gate.py",
 )
 ROOTS = {"app", "demo", "deploy", "recovery", "integration", "tests", "docs",
@@ -115,7 +118,8 @@ def candidate_readme() -> str:
     """Canonical non-deployable candidate notice; verifier checks exact bytes."""
     return (
         "# AIOps 2.0 — CANDIDATE ONLY / NO PRODUCTION DEPLOYMENT\n\n"
-        "All 20 routes are PLANNED, not authenticated or mounted. The sole target "
+        "GET /api/platform/components returns a static plan only: all 20 service routes "
+        "remain PLANNED, UNKNOWN, unmounted and unauthenticated. The sole target "
         "entrypoint is :17777; this archive starts no server and opens no ports.\n\n"
         "Embedded sources are a reviewed subset. Recover the remaining sources "
         "from the exact Git commit in metadata/source-manifest.json and verify "
@@ -159,7 +163,7 @@ def build(root: Path, output: Path, expected_commit: str | None = None) -> dict:
             included["sources/" + name] = data
     if set(APPROVED) != {item["path"] for item in inventory if item["embedded"]}:
         raise ValueError("approved source missing from pinned tree")
-    routes = registry_routes(included["sources/demo/noc_platform_registry.py"])
+    routes = registry_routes(included["sources/app/portal/platform_registry.py"])
     manifest = {"schema": "aiops-single-portal-candidate-kit-v1", "commit": commit,
                 "production_qualified": False, "runtime_e2e_qualified": False,
                 "source_mode": "reviewed_subset_plus_pinned_git_sha256_references",
