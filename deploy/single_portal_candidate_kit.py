@@ -18,6 +18,9 @@ from pathlib import Path, PurePosixPath
 
 APPROVED = (
     ".github/workflows/star-offline-chromium-real-render.yml",
+    "app/portal/main.py",
+    "app/portal/portal_demo_public_v21310.py",
+    "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
     "deploy/single_portal_candidate_kit.py",
     "deploy/verify_single_portal_candidate_kit.py",
     "demo/noc_browser_evidence_gate.py",
@@ -35,11 +38,12 @@ APPROVED = (
     "docs/architecture/AIOPS-SINGLE-PORTAL-RUNTIME-DEMO-INTEGRATION.md",
     "tests/test_noc_browser_workflow_contract.py",
     "tests/test_noc_portal_integration.py",
+    "tests/test_portal_demo_public_v21310.py",
     "tests/test_star_n8n_identity_gate.py",
 )
 ROOTS = {"app", "demo", "deploy", "recovery", "integration", "tests", "docs",
          "config", "schemas", "db", "tools", ".github"}
-EXTENSIONS = {".py", ".sh", ".md", ".yml", ".yaml", ".toml", ".sql", ".json"}
+EXTENSIONS = {".py", ".sh", ".md", ".yml", ".yaml", ".toml", ".sql", ".json", ".html"}
 EXCLUDED_PARTS = {".git", "backups", "secrets", "sessions", "exports", "captures",
                   "screenshots", "credentials", "__pycache__", "node_modules",
                   "dist", "reports", ".venv", "venv"}
