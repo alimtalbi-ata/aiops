@@ -59,3 +59,5 @@ python -m deploy.verify_single_portal_candidate_kit \
 ```
 
 **Rollback :** aucun accès Debian, réseau, conteneur ni base. Si le vérificateur refuse le kit, supprimer uniquement le ZIP candidat local, corriger sur la branche de PR, relancer les tests et ne pas forcer sa publication. Les 20 familles de composants restent `UNKNOWN` et non attestées sous :17777. La bascule nécessite une qualification E2E du runtime réel et une approbation humaine explicite.
+
+Le ZIP candidat embarque maintenant le générateur et le vérificateur dans `sources/deploy/`. Après extraction **hors production**, la vérification interne peut être relancée avec `PYTHONPATH=sources python -m deploy.verify_single_portal_candidate_kit --archive <zip>` ; ce mode sans `--checkout` ne valide pas les références aux sources non embarquées. La CI utilise obligatoirement `--checkout .` pour vérifier leur provenance.
