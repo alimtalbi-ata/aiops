@@ -4,6 +4,8 @@ on:
     paths:
       - 'deploy/single_portal_candidate_kit.py'
       - 'tests/test_single_portal_candidate_kit.py'
+      - 'tests/test_verify_single_portal_candidate_kit.py'
+      - 'deploy/verify_single_portal_candidate_kit.py'
       - 'tests/test_noc_browser_workflow_contract.py'
       - 'demo/noc_platform_registry.py'
       - 'demo/noc_portal_integration.py'
@@ -29,6 +31,7 @@ jobs:
       - name: Test offline packaging and CI admission contracts
         run: |
           python -m unittest discover -s tests -p 'test_single_portal_candidate_kit.py' -v
+          python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
           python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
         shell: bash
@@ -39,6 +42,9 @@ jobs:
             --commit "$(git rev-parse HEAD)" \
             --output "$RUNNER_TEMP/AIOps-Single-Portal-CANDIDATE.zip"
           unzip -tqq "$RUNNER_TEMP/AIOps-Single-Portal-CANDIDATE.zip"
+          python -m deploy.verify_single_portal_candidate_kit \
+            --archive "$RUNNER_TEMP/AIOps-Single-Portal-CANDIDATE.zip" \
+            --checkout .
           (cd "$RUNNER_TEMP" && sha256sum AIOps-Single-Portal-CANDIDATE.zip > AIOps-Single-Portal-CANDIDATE.zip.sha256)
       - name: Upload offline candidate and checksum
         uses: actions/upload-artifact@v4
