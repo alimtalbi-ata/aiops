@@ -18,6 +18,8 @@ from pathlib import Path, PurePosixPath
 
 APPROVED = (
     ".github/workflows/star-offline-chromium-real-render.yml",
+    "deploy/single_portal_candidate_kit.py",
+    "deploy/verify_single_portal_candidate_kit.py",
     "demo/noc_browser_evidence_gate.py",
     "demo/noc_evidence_index.py",
     "demo/noc_platform_registry.py",
