@@ -39,6 +39,7 @@ class CandidateKitTests(unittest.TestCase):
                 "tests/test_portal_demo_public_v21310.py",
                 "tests/test_platform_registry_portal_route.py",
                 "docs/release/AIOPS-SINGLE-PORTAL-CANDIDATE-20261025.md",
+                "docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md",
                 "docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md",
                 "docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md",
             }
@@ -65,6 +66,7 @@ class CandidateKitTests(unittest.TestCase):
                 self.assertIn("sources/app/portal/main.py", z.namelist())
                 self.assertIn("sources/app/portal/portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/tests/test_portal_demo_public_v21310.py", z.namelist())
+                self.assertIn("sources/docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md", z.namelist())
                 self.assertTrue(all(not row["route_mounted"] and
                                     not row["runtime_authenticated"]
                                     for row in routes["routes"]))
