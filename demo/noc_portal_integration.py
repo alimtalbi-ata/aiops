@@ -69,7 +69,24 @@ def public_noc_snapshot(snapshot:dict, *, now_utc:str|None=None, max_age_seconds
                   for step in verified["steps"]],
     }
 
-def create_noc_router(read_model:Callable[[],dict|None]):
+def public_component_registry(component_observations:Callable[[],dict|None]|None=None, *, now_utc:str|None=None)->dict:
+    """Expose only validated, fresh host observations; never infer route mounting.
+
+    No provider means UNKNOWN for all components. A configured provider that
+    fails or returns malformed data must not silently become a healthy view.
+    """
+    from demo.noc_platform_registry import build_portal_component_registry
+    if component_observations is None:
+        return build_portal_component_registry(now_utc=now_utc)
+    if not callable(component_observations):
+        raise ValueError("invalid component observation provider")
+    observations=component_observations()
+    if not isinstance(observations,dict):
+        raise ValueError("component observations unavailable")
+    return build_portal_component_registry(observations,now_utc=now_utc)
+
+def create_noc_router(read_model:Callable[[],dict|None],
+                      component_observations:Callable[[],dict|None]|None=None):
     """Mount via existing_app.include_router(...); uses caller's auth middleware."""
     from fastapi import APIRouter, HTTPException
     from fastapi.responses import HTMLResponse
@@ -88,10 +105,13 @@ def create_noc_router(read_model:Callable[[],dict|None]):
             raise HTTPException(status_code=503,detail="NOC data unavailable or unverified")
     @router.get("/api/platform/components")
     def platform_components():
-        from demo.noc_platform_registry import build_portal_component_registry
-        # Until the host portal supplies trustworthy health observations,
-        # all components remain UNKNOWN and every route remains unmounted.
-        return build_portal_component_registry()
+        try:
+            # Host-supplied read-only health only. Route availability remains
+            # false until separately attested by the existing portal.
+            return public_component_registry(component_observations)
+        except Exception:
+            raise HTTPException(status_code=503,
+                                detail="Component observations unavailable or unverified")
 
     @router.get("/noc",response_class=HTMLResponse)
     def noc_dashboard():
