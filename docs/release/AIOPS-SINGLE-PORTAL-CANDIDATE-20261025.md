@@ -45,3 +45,17 @@ Le kit ne réimporte pas les archives historiques. Le registre `docs/recovery/HI
 **Bascule interdite** tant que le portail réellement déployé, l'auth/SSO, les connexions des 20 familles, le replay déterministe, les neuf captures attestées et le runtime E2E Temporal ne sont pas qualifiés, et tant qu'une approbation humaine explicite manque.
 
 Le kit lui-même ne modifie aucun système : rollback du kit = suppression locale du ZIP candidat. Pour une future intégration approuvée, conserver et vérifier l'image/configuration/routes précédentes et les sauvegardes, prévoir un retour atomique à la version antérieure sur environnement d'intégration, puis prouver la restauration avant toute décision de production. Ne pas toucher à V1/containerd.
+
+## Vérification indépendante du ZIP candidat (25 octobre 2026)
+
+Le module `deploy/verify_single_portal_candidate_kit.py` est exécuté hors ligne **avant publication** du ZIP dans la CI. Il refuse les entrées ZIP dupliquées, chemins dangereux, liens symboliques, archives chiffrées, tailles excessives, sommes SHA-256 incohérentes, sources embarquées divergentes, motifs de secrets, revendications de qualification production et routes déclarées montées ou authentifiées sans preuve. Les routes sont comparées au registre Python embarqué.
+
+Avec `--checkout .`, il exige un checkout Git propre au commit exact du manifeste et recalcule les SHA-256 de **toutes** les sources éligibles, même non embarquées. Sans `--checkout`, il n'atteste que l'intégrité interne du ZIP ; la provenance des sources absentes reste non vérifiée. Aucun mode n'atteste les routes runtime, l'authentification, les captures ou la qualification production.
+
+```bash
+python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
+python -m deploy.verify_single_portal_candidate_kit \
+  --archive /tmp/AIOps-Single-Portal-CANDIDATE.zip --checkout .
+```
+
+**Rollback :** aucun accès Debian, réseau, conteneur ni base. Si le vérificateur refuse le kit, supprimer uniquement le ZIP candidat local, corriger sur la branche de PR, relancer les tests et ne pas forcer sa publication. Les 20 familles de composants restent `UNKNOWN` et non attestées sous :17777. La bascule nécessite une qualification E2E du runtime réel et une approbation humaine explicite.
