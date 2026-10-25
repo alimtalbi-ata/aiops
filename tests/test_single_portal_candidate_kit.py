@@ -17,7 +17,7 @@ class CandidateKitTests(unittest.TestCase):
         for name in names:
             file = root / name
             file.parent.mkdir(parents=True, exist_ok=True)
-            if name == "demo/noc_platform_registry.py":
+            if name == "app/portal/platform_registry.py":
                 components = tuple((f"svc-{n}", f"Service {n}", f"/service/{n}", "engine")
                                    for n in range(20))
                 file.write_text("COMPONENTS=" + repr(components) + "\n", encoding="utf-8")
@@ -32,9 +32,12 @@ class CandidateKitTests(unittest.TestCase):
             names = self.fixture(root)
             required_portal_sources = {
                 "app/portal/main.py",
+                "app/portal/platform_registry.py",
+                "app/portal/platform_registry_router.py",
                 "app/portal/portal_demo_public_v21310.py",
                 "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
                 "tests/test_portal_demo_public_v21310.py",
+                "tests/test_platform_registry_portal_route.py",
             }
             self.assertTrue(required_portal_sources.issubset(set(kit.APPROVED)))
             self.assertTrue(kit.safe_path(
