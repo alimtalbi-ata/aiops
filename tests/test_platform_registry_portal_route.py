@@ -42,6 +42,13 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
             self.assertIs(payload["runtime_e2e_qualified"], False)
             self.assertIs(payload["production_qualified"], False)
             self.assertIs(payload["live_remediation_authorized"], False)
+            self.assertEqual(payload["portal_route_presence_source"], "IN_PROCESS_ASGI_ROUTE_TABLE")
+            self.assertEqual(payload["portal_route_presence_scope"], "EXACT_GET_PATH_ONLY")
+            self.assertIs(payload["portal_route_presence_is_runtime_attestation"], False)
+            actual_get_paths = {
+                getattr(route, "path", None) for route in app.routes
+                if "GET" in (getattr(route, "methods", None) or ())
+            }
             items = payload["items"]
             self.assertEqual(len(items), 20)
             self.assertEqual(len({item["id"] for item in items}), 20)
@@ -53,6 +60,12 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
                     self.assertIs(item["runtime_authenticated"], False)
                     self.assertIs(item["available_in_portal"], False)
                     self.assertIs(item["requires_route_integration"], True)
+                    present = item["path"] in actual_get_paths
+                    self.assertIs(item["portal_get_path_present"], present)
+                    self.assertEqual(
+                        item["portal_get_path_evidence"],
+                        "EXACT_GET_PATH_MATCH" if present else "NO_EXACT_GET_PATH",
+                    )
 
     def test_client_supplied_query_cannot_promote_health_or_attestation(self):
         with TestClient(app) as client:
@@ -64,6 +77,13 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
         self.assertTrue(all(row["runtime_authenticated"] is False
                             for row in response.json()["items"]))
         self.assertIs(response.json()["route_mount_attested"], False)
+        self.assertIs(response.json()["portal_route_presence_is_runtime_attestation"], False)
+        expected_paths = {
+            getattr(route, "path", None) for route in app.routes
+            if "GET" in (getattr(route, "methods", None) or ())
+        }
+        self.assertTrue(all(row["portal_get_path_present"] == (row["path"] in expected_paths)
+                            for row in response.json()["items"]))
 
     def test_non_get_method_is_not_exposed(self):
         with TestClient(app) as client:
@@ -86,6 +106,17 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
             self.assertEqual(response.headers["x-frame-options"], "DENY")
             self.assertIn("connect-src 'none'", response.headers["content-security-policy"])
             self.assertEqual(response.text.count('class="component-row"'), 20)
+            registry = client.get("/api/platform/components").json()
+            present_count = sum(1 for item in registry["items"] if item["portal_get_path_present"])
+            self.assertEqual(
+                response.text.count("<td>PRÉSENTE · GET (CHEMIN UNIQUEMENT)</td>"),
+                present_count,
+            )
+            self.assertEqual(
+                response.text.count("<td>ABSENTE · GET EXACT</td>"),
+                20 - present_count,
+            )
+            self.assertIn("GET exact dans le code", response.text)
             self.assertIn("PLAN STATIQUE — PAS UN ÉCRAN NOC RUNTIME", response.text)
             self.assertIn("Qualification production : <code>NON</code>", response.text)
 
