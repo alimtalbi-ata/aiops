@@ -1,6 +1,10 @@
 import unittest
 from datetime import datetime, timezone
-from demo.noc_portal_integration import validate_noc_runtime_snapshot, public_noc_snapshot
+from demo.noc_portal_integration import (validate_noc_runtime_snapshot, public_noc_snapshot,
+                                         public_component_registry, create_noc_router)
+from unittest.mock import patch
+import sys
+import types
 def data():
     return {"schema":"aiops-noc-runtime-readmodel-v1",
             "provenance":"RUNTIME_READMODEL","runtime_authenticated":True,
@@ -68,5 +72,68 @@ class PortalNocContractTests(unittest.TestCase):
         d["runtime_authenticated"]=True
         with self.assertRaisesRegex(ValueError,"stale or future"):
             public_noc_snapshot(d,now_utc="2026-10-20T12:10:00Z")
+
+
+class PortalComponentBindingTests(unittest.TestCase):
+    def test_no_host_provider_keeps_all_routes_unverified(self):
+        registry=public_component_registry(now_utc="2026-10-25T12:01:00Z")
+        self.assertEqual(len(registry["items"]),20)
+        self.assertTrue(all(item["state"]=="UNKNOWN" and
+                            item["available_in_portal"] is False and
+                            item["requires_route_integration"] is True
+                            for item in registry["items"]))
+
+    def test_fresh_host_observation_updates_state_not_route_attestation(self):
+        observations={"thruk":{"state":"WARN","observed_at":"2026-10-25T12:00:00Z",
+                               "authenticated":True}}
+        registry=public_component_registry(lambda:observations,
+                                           now_utc="2026-10-25T12:01:00Z")
+        thruk=next(item for item in registry["items"] if item["id"]=="thruk")
+        self.assertEqual(thruk["state"],"WARN")
+        self.assertFalse(thruk["available_in_portal"])
+        self.assertTrue(thruk["requires_route_integration"])
+        stale=public_component_registry(lambda:observations,
+                                        now_utc="2026-10-25T12:06:00Z")
+        self.assertEqual(next(item for item in stale["items"]
+                              if item["id"]=="thruk")["state"],"UNKNOWN")
+
+    def test_bad_provider_fails_closed(self):
+        for provider in (42, lambda:None, lambda:{"unknown":{}},
+                         lambda:{"thruk":{"state":"OK","authenticated":True}},
+                         lambda:(_ for _ in ()).throw(RuntimeError("PRIVATE-SECRET"))):
+            with self.subTest(provider=repr(provider)), self.assertRaises(Exception):
+                public_component_registry(provider,now_utc="2026-10-25T12:01:00Z")
+
+    def test_http_component_route_uses_provider_and_redacts_failures(self):
+        class FakeRouter:
+            def __init__(self):self.routes={}
+            def get(self,path,response_class=None):
+                def register(handler):
+                    self.routes[path]=handler
+                    return handler
+                return register
+        class FakeHTTPException(Exception):
+            def __init__(self,status_code,detail):
+                self.status_code=status_code
+                self.detail=detail
+        fake_fastapi=types.ModuleType("fastapi")
+        fake_fastapi.APIRouter=FakeRouter
+        fake_fastapi.HTTPException=FakeHTTPException
+        fake_responses=types.ModuleType("fastapi.responses")
+        fake_responses.HTMLResponse=object
+        now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        observations={"thruk":{"state":"OK","observed_at":now,"authenticated":True}}
+        with patch.dict(sys.modules,{"fastapi":fake_fastapi,
+                                     "fastapi.responses":fake_responses}):
+            router=create_noc_router(lambda:data(),lambda:observations)
+            view=router.routes["/api/platform/components"]()
+            self.assertEqual(next(x for x in view["items"] if x["id"]=="thruk")["state"],"OK")
+            self.assertFalse(next(x for x in view["items"] if x["id"]=="thruk")["available_in_portal"])
+            failed=create_noc_router(lambda:data(),
+                                     lambda:(_ for _ in ()).throw(RuntimeError("PRIVATE-SECRET")))
+            with self.assertRaises(FakeHTTPException) as caught:
+                failed.routes["/api/platform/components"]()
+            self.assertEqual(caught.exception.status_code,503)
+            self.assertNotIn("PRIVATE-SECRET",caught.exception.detail)
 
 if __name__=="__main__":unittest.main()
