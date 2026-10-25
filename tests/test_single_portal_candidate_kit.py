@@ -49,6 +49,35 @@ class CandidateKitTests(unittest.TestCase):
                 self.assertIn("NO PRODUCTION DEPLOYMENT", z.read("metadata/README.md").decode())
                 self.assertIn("metadata/planned-routes.json", z.read("metadata/SHA256SUMS").decode())
 
+    def test_reject_duplicate_planned_path_with_distinct_component_ids(self):
+        components = [(f"svc-{n}", f"Service {n}", f"/service/{n}", "engine")
+                      for n in range(20)]
+        components[1] = ("svc-1", "Service 1", "/service/0", "engine")
+        with self.assertRaisesRegex(ValueError, "unsafe or duplicate planned route"):
+            kit.registry_routes(("COMPONENTS=" + repr(tuple(components))).encode())
+
+    def test_reject_unsafe_route_aliases_and_invalid_registry_metadata(self):
+        components = [(f"svc-{n}", f"Service {n}", f"/service/{n}", "engine")
+                      for n in range(20)]
+        invalid_rows = [
+            ("svc-0", "Service 0", "/service/../admin", "engine"),
+            ("svc-0", "Service 0", "/service/%2e%2e/admin", "engine"),
+            ("svc-0", "Service 0", "/service//admin", "engine"),
+            ("svc-0", "Service 0", "/service?mode=live", "engine"),
+            ("svc-0", "Service 0", "/service#fragment", "engine"),
+            ("svc-0", "Service 0", "/Service", "engine"),
+            ("svc-0", "Service 0", "/service/0/", "engine"),
+            ("svc-0", "Service 0", "/", "engine"),
+            ("svc 0", "Service 0", "/service/0", "engine"),
+            ("svc-0", "Service 0", "/service/0", "unrecognized"),
+            ("svc-0", "Service\\n0", "/service/0", "engine"),
+        ]
+        for row in invalid_rows:
+            with self.subTest(row=row):
+                components[0] = row
+                with self.assertRaisesRegex(ValueError, "unsafe or duplicate planned route"):
+                    kit.registry_routes(("COMPONENTS=" + repr(tuple(components))).encode())
+
     def test_reject_missing_approved_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
