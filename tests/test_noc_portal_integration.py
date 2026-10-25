@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from demo.noc_portal_integration import validate_noc_runtime_snapshot
+from demo.noc_portal_integration import validate_noc_runtime_snapshot, public_noc_snapshot
 def data():
     return {"schema":"aiops-noc-runtime-readmodel-v1",
             "provenance":"RUNTIME_READMODEL","runtime_authenticated":True,
@@ -38,4 +38,35 @@ class PortalNocContractTests(unittest.TestCase):
         for invalid in ("2026-10-20T12:01:00+02:00","not-a-clock",123):
             with self.subTest(invalid=invalid),self.assertRaisesRegex(ValueError,"NOC clock"):
                 validate_noc_runtime_snapshot(data(),now_utc=invalid)
+    def test_public_projection_redacts_private_provider_fields(self):
+        d=data()
+        d["api_token"]="SYNTHETIC-DO-NOT-PUBLISH"
+        d["upstream_headers"]={"Authorization":"SYNTHETIC"}
+        d["steps"][0]["private_note"]="SYNTHETIC-PRIVATE"
+        view=public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        self.assertEqual(view["run_id"],"RUN-001")
+        self.assertEqual(view["steps"],[{"name":"detect","state":"WARN"}])
+        self.assertEqual(set(view),{"schema","provenance","runtime_authenticated",
+                                    "live_remediation_authorized","run_id","incident_id",
+                                    "observed_at","steps"})
+        self.assertNotIn("api_token",view)
+        self.assertNotIn("upstream_headers",view)
+        self.assertNotIn("private_note",view["steps"][0])
+        self.assertEqual(d["steps"][0]["private_note"],"SYNTHETIC-PRIVATE")
+
+    def test_public_projection_does_not_alias_provider_timeline(self):
+        d=data()
+        view=public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        view["steps"][0]["state"]="CRIT"
+        self.assertEqual(d["steps"][0]["state"],"WARN")
+
+    def test_public_projection_rejects_unverified_or_stale_source(self):
+        d=data()
+        d["runtime_authenticated"]=False
+        with self.assertRaises(ValueError):
+            public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        d["runtime_authenticated"]=True
+        with self.assertRaisesRegex(ValueError,"stale or future"):
+            public_noc_snapshot(d,now_utc="2026-10-20T12:10:00Z")
+
 if __name__=="__main__":unittest.main()
