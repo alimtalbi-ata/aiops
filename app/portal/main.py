@@ -487,3 +487,7 @@ app.include_router(star_legacy_replay_router)
 # This registers routes; it creates no listener, service, or background task.
 from portal.portal_demo_public_v21310 import router as public_star_demo_router
 app.include_router(public_star_demo_router)
+
+# Static component plan only; backend health remains UNKNOWN until attested.
+from portal.platform_registry_router import router as platform_registry_router
+app.include_router(platform_registry_router)
