@@ -35,7 +35,7 @@ Chaque composant est `UNKNOWN` par défaut. Seule une observation fraîche (≤ 
 
 ## État de ce commit
 
-**Livré dans le code de la branche :** `GET /api/platform/components` est enregistré une seule fois dans l'application FastAPI existante et expose 20 entrées `UNKNOWN`, `route_mounted=false`, `runtime_authenticated=false`, sans fournisseur de santé ni appel réseau. **Non livré / non attesté :** `/noc`, `/api/noc/state`, les routes graphiques des composants, SSO/authentification runtime, connexions réelles, automatisation E2E et déploiement Debian. Aucun état « OK » n'est inventé.
+**Livré dans le code de la branche :** `GET /api/platform/components` est enregistré une seule fois dans l'application FastAPI existante et expose 20 entrées `UNKNOWN`, `route_mounted=false`, `runtime_authenticated=false`, sans fournisseur de santé ni appel réseau. **Non livré / non attesté :** `/api/noc/state` (adaptateur `demo/noc_portal_integration.py` non inclus dans l'application principale), les routes métier spécifiques des composants, SSO/authentification runtime, connexions réelles, automatisation E2E et déploiement Debian. `GET /noc` est monté mais n'est qu'un inventaire statique local. Aucun état « OK » n'est inventé.
 
 La présence historique de Checkmk Community 2.5 et Thruk au sein de l'ancienne stack est une piste d'intégration ; ses ports et conteneurs doivent être revérifiés sur la machine avant tout rattachement.
 
