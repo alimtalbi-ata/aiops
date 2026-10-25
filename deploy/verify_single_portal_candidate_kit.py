@@ -104,7 +104,7 @@ def verify(archive_path: Path, checkout: Path | None = None) -> dict:
     routes = _json(data["metadata/planned-routes.json"])
     if (routes.get("entrypoint") != "http://10.79.94.202:17777/" or
             routes.get("all_unverified") is not True or
-            routes.get("routes") != registry_routes(data["sources/demo/noc_platform_registry.py"])):
+            routes.get("routes") != registry_routes(data["sources/app/portal/platform_registry.py"])):
         raise ValueError("route attestation or registry mismatch")
     if checkout is not None:
         root = Path(checkout).resolve(strict=True)
