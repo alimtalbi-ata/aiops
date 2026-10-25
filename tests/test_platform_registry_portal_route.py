@@ -1,9 +1,11 @@
 """ASGI integration test for the static portal registry; synthetic/read-only only."""
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -11,7 +13,9 @@ APP_ROOT = pathlib.Path(__file__).resolve().parents[1] / "app"
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from portal.main import app  # noqa: E402
+# Import the real app with a synthetic-only internal token, never a real secret.
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "synthetic-ci-only-token", "AIOPS_ADMIN_TOKEN": ""}):
+    from portal.main import app  # noqa: E402
 
 
 class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
