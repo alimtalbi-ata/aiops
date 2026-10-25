@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 import re
 from typing import Any
+from demo.star_n8n_identity_gate import IDENTIFIER, verify_handoff
 
 VALID_STATES={"OK","WARN","CRIT","UNKNOWN"}
 SCHEMA="aiops-noc-runtime-readmodel-v1"
@@ -55,6 +56,24 @@ def validate_noc_runtime_snapshot(snapshot:dict, *, now_utc:str|None=None, max_a
         raise ValueError("invalid evidence digest")
     if snapshot.get("evidence_runtime_attested", False) is not False:
         raise ValueError("unverified evidence attestation claim")
+    # Reuse the existing 02->03 identity gate. Consistency is NOT runtime proof.
+    if snapshot.get("handoff_runtime_authenticated", False) is not False:
+        raise ValueError("unsupported handoff runtime attestation")
+    correlation_id = snapshot.get("correlation_id")
+    if correlation_id is not None and (not isinstance(correlation_id, str)
+            or IDENTIFIER.fullmatch(correlation_id) is None):
+        raise ValueError("invalid canonical correlation")
+    if "handoff_02_03" in snapshot:
+        if correlation_id is None:
+            raise ValueError("missing correlation for 02->03 handoff")
+        try:
+            handoff = verify_handoff(snapshot["handoff_02_03"])
+        except ValueError:
+            raise ValueError("invalid 02->03 handoff") from None
+        if (handoff["run_id"] != snapshot["run_id"]
+                or handoff["incident_id"] != snapshot["incident_id"]
+                or handoff["correlation_id"] != correlation_id):
+            raise ValueError("02->03 identity contradicts NOC incident")
     steps=snapshot.get("steps")
     if not isinstance(steps,list) or len(steps)>100:
         raise ValueError("invalid incident timeline")
@@ -69,6 +88,8 @@ def public_noc_snapshot(snapshot:dict, *, now_utc:str|None=None, max_age_seconds
     """Project only reviewed NOC fields; never expose provider-private metadata."""
     verified = validate_noc_runtime_snapshot(
         snapshot, now_utc=now_utc, max_age_seconds=max_age_seconds)
+    handoff = (verify_handoff(verified["handoff_02_03"])
+               if "handoff_02_03" in verified else None)
     return {
         "schema": SCHEMA,
         "provenance": "RUNTIME_READMODEL",
@@ -76,6 +97,10 @@ def public_noc_snapshot(snapshot:dict, *, now_utc:str|None=None, max_age_seconds
         "live_remediation_authorized": False,
         "run_id": verified["run_id"],
         "incident_id": verified["incident_id"],
+        "correlation_id": verified.get("correlation_id"),
+        "handoff_status": ("CONSISTENT_UNAUTHENTICATED" if handoff else "ABSENT"),
+        "handoff_identity_sha256": (handoff["identity_sha256"] if handoff else None),
+        "handoff_runtime_authenticated": False,
         "ticket_id": verified.get("ticket_id"),
         "evidence_sha256": verified.get("evidence_sha256"),
         "evidence_status": ("UNVERIFIED_DIGEST" if verified.get("evidence_sha256")
@@ -110,8 +135,18 @@ def render_noc_dashboard(view:dict, registry:dict)->str:
             or view.get("provenance")!="RUNTIME_READMODEL"
             or view.get("runtime_authenticated") is not True
             or view.get("live_remediation_authorized") is not False
-            or view.get("evidence_runtime_attested") is not False):
+            or view.get("evidence_runtime_attested") is not False
+            or view.get("handoff_runtime_authenticated") is not False):
         raise ValueError("unverified NOC dashboard source")
+    handoff_status = view.get("handoff_status")
+    handoff_digest = view.get("handoff_identity_sha256")
+    if (handoff_status not in ("ABSENT", "CONSISTENT_UNAUTHENTICATED")
+            or (handoff_status == "ABSENT" and handoff_digest is not None)
+            or (handoff_status != "ABSENT" and (
+                not isinstance(handoff_digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", handoff_digest) is None
+                or not view.get("correlation_id")))):
+        raise ValueError("unverified 02->03 handoff claim")
     if (not isinstance(registry,dict)
             or registry.get("schema")!="aiops-single-portal-component-registry-v1"
             or registry.get("live_remediation_authorized") is not False
@@ -149,6 +184,10 @@ def render_noc_dashboard(view:dict, registry:dict)->str:
         'authentification cryptographique et routes runtime NON ATTESTÉES. '
         'Aucune remédiation LIVE.</p>'
         '<p>Incident: '+esc(view["incident_id"])+' · Run: '+esc(view["run_id"])+'</p>'
+        '<p>Corrélation: '+esc(view["correlation_id"] or "ABSENT")+'</p>'
+        '<p>Handoff n8n 02→03: '+esc(handoff_status)
+        +' · SHA-256 identité: '+esc(handoff_digest or "ABSENT")
+        +' (cohérence uniquement, exécution non authentifiée)</p>'
         '<p>Ticket: '+esc(view["ticket_id"] or "ABSENT")+'</p>'
         '<p>Evidence SHA-256 (non vérifié): '+esc(view["evidence_sha256"] or "ABSENT")
         +' · '+esc(view["evidence_status"])+'</p>'

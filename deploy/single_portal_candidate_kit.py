@@ -28,12 +28,14 @@ APPROVED = (
     "demo/noc_star_event_binding.py",
     "demo/noc_star_trace_bundle.py",
     "demo/star_capture_identity_guard.py",
+    "demo/star_n8n_identity_gate.py",
     "demo/star_png_integrity.py",
     "demo/star_snapshot_browser.py",
     "docs/architecture/AIOPS-SINGLE-PORTAL-COMPONENT-CONSOLIDATION.md",
     "docs/architecture/AIOPS-SINGLE-PORTAL-RUNTIME-DEMO-INTEGRATION.md",
     "tests/test_noc_browser_workflow_contract.py",
     "tests/test_noc_portal_integration.py",
+    "tests/test_star_n8n_identity_gate.py",
 )
 ROOTS = {"app", "demo", "deploy", "recovery", "integration", "tests", "docs",
          "config", "schemas", "db", "tools", ".github"}

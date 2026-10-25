@@ -5,6 +5,13 @@ from demo.noc_portal_integration import (validate_noc_runtime_snapshot, public_n
 from unittest.mock import patch
 import sys
 import types
+from demo.star_n8n_identity_gate import STAGES
+
+def handoff():
+    identity = {"run_id":"RUN-001","incident_id":"INC-001",
+                "correlation_id":"CORR-001"}
+    return {stage:dict(identity) for stage in STAGES}
+
 def data():
     return {"schema":"aiops-noc-runtime-readmodel-v1",
             "provenance":"RUNTIME_READMODEL","runtime_authenticated":True,
@@ -53,7 +60,9 @@ class PortalNocContractTests(unittest.TestCase):
         self.assertEqual(set(view),{"schema","provenance","runtime_authenticated",
                                     "live_remediation_authorized","run_id","incident_id",
                                     "observed_at","steps","ticket_id","evidence_sha256",
-                                    "evidence_status","evidence_runtime_attested"})
+                                    "evidence_status","evidence_runtime_attested",
+                                    "correlation_id","handoff_status","handoff_identity_sha256",
+                                    "handoff_runtime_authenticated"})
         self.assertNotIn("api_token",view)
         self.assertNotIn("upstream_headers",view)
         self.assertNotIn("private_note",view["steps"][0])
@@ -107,6 +116,58 @@ class PortalNocContractTests(unittest.TestCase):
         d["runtime_authenticated"]=True
         with self.assertRaisesRegex(ValueError,"stale or future"):
             public_noc_snapshot(d,now_utc="2026-10-20T12:10:00Z")
+
+    def test_handoff_absence_is_explicit_and_never_authenticated(self):
+        view=public_noc_snapshot(data(),now_utc="2026-10-20T12:01:00Z")
+        self.assertEqual(view["handoff_status"],"ABSENT")
+        self.assertIsNone(view["correlation_id"])
+        self.assertIsNone(view["handoff_identity_sha256"])
+        self.assertIs(view["handoff_runtime_authenticated"],False)
+
+    def test_handoff_consistency_reuses_canonical_gate_without_exposing_stages(self):
+        d=data();d["correlation_id"]="CORR-001";d["handoff_02_03"]=handoff()
+        view=public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        self.assertEqual(view["handoff_status"],"CONSISTENT_UNAUTHENTICATED")
+        self.assertEqual(view["correlation_id"],"CORR-001")
+        self.assertEqual(len(view["handoff_identity_sha256"]),64)
+        self.assertIs(view["handoff_runtime_authenticated"],False)
+        self.assertNotIn("handoff_02_03",view)
+        page=render_noc_dashboard(
+            view,public_component_registry(now_utc="2026-10-25T12:01:00Z"))
+        self.assertIn("CONSISTENT_UNAUTHENTICATED",page)
+        self.assertIn("exécution non authentifiée",page)
+
+    def test_handoff_02_03_refuses_missing_or_divergent_stages(self):
+        for mutation in ("missing","divergent","shadow"):
+            with self.subTest(mutation=mutation):
+                d=data();d["correlation_id"]="CORR-001";d["handoff_02_03"]=handoff()
+                if mutation=="missing":
+                    del d["handoff_02_03"]["rag_02"]
+                elif mutation=="divergent":
+                    d["handoff_02_03"]["prepare_analyst_03"]["incident_id"]="INC-OTHER"
+                else:
+                    d["handoff_02_03"]["canonical_02"]["runId"]="RUN-FORGED"
+                with self.assertRaisesRegex(ValueError,"invalid 02->03 handoff"):
+                    public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+
+    def test_handoff_must_match_noc_identity_and_correlation(self):
+        for field,value in (("run_id","RUN-OTHER"),("incident_id","INC-OTHER"),
+                            ("correlation_id","CORR-OTHER"),("correlation_id",None)):
+            with self.subTest(field=field,value=value):
+                d=data();d["correlation_id"]="CORR-001";d["handoff_02_03"]=handoff()
+                d[field]=value
+                with self.assertRaises(ValueError):
+                    public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+
+    def test_forged_handoff_runtime_attestation_is_denied(self):
+        d=data();d["handoff_runtime_authenticated"]=True
+        with self.assertRaisesRegex(ValueError,"unsupported handoff"):
+            public_noc_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+        view=public_noc_snapshot(data(),now_utc="2026-10-20T12:01:00Z")
+        view["handoff_runtime_authenticated"]=True
+        with self.assertRaisesRegex(ValueError,"unverified NOC dashboard"):
+            render_noc_dashboard(
+                view,public_component_registry(now_utc="2026-10-25T12:01:00Z"))
 
 
 class PortalComponentBindingTests(unittest.TestCase):

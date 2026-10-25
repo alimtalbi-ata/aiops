@@ -10,6 +10,8 @@ on:
       - 'tests/test_noc_portal_integration.py'
       - 'demo/noc_platform_registry.py'
       - 'demo/noc_portal_integration.py'
+      - 'demo/star_n8n_identity_gate.py'
+      - 'tests/test_star_n8n_identity_gate.py'
       - 'docs/release/**'
       - '.github/workflows/single-portal-candidate-kit.yml'
   workflow_dispatch:
@@ -35,6 +37,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
           python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
           python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
+          python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
         shell: bash
         run: |
