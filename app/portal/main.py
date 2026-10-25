@@ -482,3 +482,8 @@ def policy_story():
 # Opt-in read-only STAR replay; handler stays disabled until explicitly enabled.
 from portal.star_legacy_readonly import router as star_legacy_replay_router
 app.include_router(star_legacy_replay_router)
+
+# Public synthetic-only STAR storyboard on the existing portal app.
+# This registers routes; it creates no listener, service, or background task.
+from portal.portal_demo_public_v21310 import router as public_star_demo_router
+app.include_router(public_star_demo_router)
