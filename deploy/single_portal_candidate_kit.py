@@ -123,7 +123,9 @@ def candidate_readme() -> str:
     return (
         "# AIOps 2.0 — CANDIDATE ONLY / NO PRODUCTION DEPLOYMENT\n\n"
         "GET /api/platform/components returns a static plan only: all 20 service routes "
-        "remain PLANNED, UNKNOWN, unmounted and unauthenticated. The sole target "
+        "remain PLANNED, UNKNOWN, unmounted and unauthenticated. The optional "
+        "portal_get_path_present field is an exact in-process GET-path match only; it "
+        "does not attest service integration, identity, network access, or runtime. The sole target "
         "entrypoint is :17777; this archive starts no server and opens no ports.\n\n"
         "Embedded sources are a reviewed subset. Recover the remaining sources "
         "from the exact Git commit in metadata/source-manifest.json and verify "
