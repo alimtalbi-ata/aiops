@@ -30,6 +30,15 @@ class CandidateKitTests(unittest.TestCase):
             root = Path(tmp) / "repo"
             root.mkdir()
             names = self.fixture(root)
+            required_portal_sources = {
+                "app/portal/main.py",
+                "app/portal/portal_demo_public_v21310.py",
+                "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
+                "tests/test_portal_demo_public_v21310.py",
+            }
+            self.assertTrue(required_portal_sources.issubset(set(kit.APPROVED)))
+            self.assertTrue(kit.safe_path(
+                "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html"))
             with patch.object(kit, "source_paths", return_value=(COMMIT, names)):
                 first = root.parent / "first.zip"
                 second = root.parent / "second.zip"
@@ -43,6 +52,13 @@ class CandidateKitTests(unittest.TestCase):
                 routes = json.loads(z.read("metadata/planned-routes.json"))
                 self.assertEqual(manifest["commit"], COMMIT)
                 self.assertEqual(manifest["embedded_count"], len(kit.APPROVED))
+                self.assertEqual(
+                    z.read("sources/app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html"),
+                    (root / "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html").read_bytes(),
+                )
+                self.assertIn("sources/app/portal/main.py", z.namelist())
+                self.assertIn("sources/app/portal/portal_demo_public_v21310.py", z.namelist())
+                self.assertIn("sources/tests/test_portal_demo_public_v21310.py", z.namelist())
                 self.assertTrue(all(not row["route_mounted"] and
                                     not row["runtime_authenticated"]
                                     for row in routes["routes"]))
