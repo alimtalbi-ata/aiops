@@ -32,12 +32,15 @@ class CandidateKitTests(unittest.TestCase):
             names = self.fixture(root)
             required_portal_sources = {
                 "app/portal/main.py",
+                "app/portal/acme_impact_read_model.py",
                 ".github/workflows/acme-v21315-fixture-validation.yml",
                 "demo/integrations/v21315/README.md",
                 "demo/integrations/v21315/acme-fixtures.json",
                 "demo/integrations/v21315/validate_fixture.py",
                 "docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md",
+                "docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md",
                 "tests/test_acme_fixture_validation.py",
+                "tests/test_portal_acme_impact_read_model.py",
                 "app/portal/platform_registry.py",
                 "app/portal/platform_registry_router.py",
                 "app/portal/portal_demo_public_v21310.py",
@@ -80,6 +83,9 @@ class CandidateKitTests(unittest.TestCase):
                     "demo/integrations/v21315/validate_fixture.py",
                     "docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md",
                     "tests/test_acme_fixture_validation.py",
+                    "app/portal/acme_impact_read_model.py",
+                    "tests/test_portal_acme_impact_read_model.py",
+                    "docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md",
                 }
                 for source_path in cumulative_acme_sources:
                     member = "sources/" + source_path
