@@ -35,15 +35,27 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
     except OSError as exc:
         raise ValueError("capture file cannot be opened safely") from exc
 
-    with os.fdopen(fd, "rb") as stream:
-        before = os.fstat(stream.fileno())
+    try:
+        # Check the descriptor before wrapping it: fdopen may reject a
+        # directory itself, which must become a controlled validation error.
+        before = os.fstat(fd)
         if not stat.S_ISREG(before.st_mode):
             raise ValueError("capture must be a regular file")
         size = before.st_size
         if size < 57 or size > max_bytes:
             raise ValueError("capture size outside limits")
         digest = hashlib.sha256()
+        stream = os.fdopen(fd, "rb")
+        fd = None  # stream now owns the descriptor
+    except Exception:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        raise
 
+    with stream:
         def read_exact(count: int) -> bytes:
             data = stream.read(count)
             if len(data) != count:
