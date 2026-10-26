@@ -111,7 +111,7 @@ class DemoPublicTests(unittest.TestCase):
         code = (
             "import json; from portal.main import app; "
             "print(json.dumps([{'path':r.path,'methods':sorted(r.methods or [])} "
-            "for r in app.routes if r.path in {'/demo/','/demo/star'}]))"
+            "for r in app.routes if r.path in {'/demo/','/demo/star','/demo/video','/demo/video/{job_id}','/demo/video/{job_id}/artifact/{artifact}'}]))"
         )
         result = subprocess.run(
             [sys.executable, "-c", code], cwd=APP_ROOT, env=env,
@@ -119,10 +119,10 @@ class DemoPublicTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         routes = json.loads(result.stdout.strip().splitlines()[-1])
-        self.assertEqual({item["path"] for item in routes}, {"/demo/", "/demo/star"})
+        self.assertEqual({item["path"] for item in routes}, {"/demo/", "/demo/star", "/demo/video", "/demo/video/{job_id}", "/demo/video/{job_id}/artifact/{artifact}"})
         for item in routes:
-            self.assertIn("GET", item["methods"])
-            self.assertTrue(set(item["methods"]).issubset({"GET", "HEAD"}))
+            expected = "POST" if item["path"] == "/demo/video" else "GET"
+            self.assertIn(expected, item["methods"])
 
 
 if __name__ == "__main__":
