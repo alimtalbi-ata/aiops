@@ -87,5 +87,16 @@ class StrictPngIntegrityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.check(b"NOT PNG" * 20)
 
+    def test_refuse_final_symlink_instead_of_hashing_target(self):
+        target = self.path.with_name("other.png")
+        target.write_bytes(png())
+        self.path.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "symlink|safely"):
+            inspect_png(self.path)
+
+    def test_refuse_non_regular_input(self):
+        with self.assertRaisesRegex(ValueError, "regular file"):
+            inspect_png(self.root)
+
 if __name__ == "__main__":
     unittest.main()
