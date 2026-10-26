@@ -38,9 +38,26 @@ if [[ -e "$DEST" && ! -d "$DEST/.git" ]]; then fail "destination exists but is n
 if [[ -d "$DEST/.git" ]]; then
  remote="$(git -C "$DEST" remote get-url origin 2>/dev/null || true)"
  [[ "$remote" == "$REPO_URL" ]] || fail "existing checkout origin mismatch: $remote"
- if [[ -n "$(git -C "$DEST" status --porcelain)" ]]; then
-   git -C "$DEST" status --short >&2
-   fail "existing checkout has local changes; refusing to reset or overwrite them"
+ # Migrate the marker written by earlier installer versions. It is safe to
+ # recognize only the exact untracked filename when its contents equal HEAD.
+ marker="$DEST/INSTALL-COMMIT.txt"
+ external_marker="${DEST}.INSTALL-COMMIT.txt"
+ status="$(git -C "$DEST" status --porcelain)"
+ if [[ -n "$status" ]]; then
+   if [[ "$status" == "?? INSTALL-COMMIT.txt" && -f "$marker" ]] &&
+      [[ "$(cat "$marker")" == "$(git -C "$DEST" rev-parse HEAD)" ]]; then
+     if [[ -e "$external_marker" ]]; then
+       [[ -f "$external_marker" && "$(cat "$external_marker")" == "$(cat "$marker")" ]] ||
+         fail "external install marker exists and differs; preserving both files"
+       rm -- "$marker"
+     else
+       mv -- "$marker" "$external_marker"
+     fi
+     log "Migrated installer-owned commit marker outside Git checkout"
+   else
+     git -C "$DEST" status --short >&2
+     fail "existing checkout has local changes; refusing to reset or overwrite them"
+   fi
  fi
  git -C "$DEST" fetch --depth 1 origin "$BRANCH"
  git -C "$DEST" checkout -B "$BRANCH" FETCH_HEAD
@@ -49,7 +66,7 @@ else
  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$DEST"
 fi
 [[ "$(git -C "$DEST" branch --show-current)" == "$BRANCH" ]] || fail "candidate branch mismatch after checkout"
-git -C "$DEST" rev-parse HEAD | tee "$DEST/INSTALL-COMMIT.txt"
+git -C "$DEST" rev-parse HEAD | tee "${DEST}.INSTALL-COMMIT.txt"
 git -C "$DEST" status --short
 log "CANDIDATE SOURCE READY: $DEST"
 log "Production portal has NOT been changed. Runtime route mounting and E2E qualification remain separate."
