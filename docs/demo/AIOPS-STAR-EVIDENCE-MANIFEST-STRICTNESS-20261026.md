@@ -22,3 +22,7 @@ Regression tests cover duplicate keys at root and nested record level, symlink r
 ## Safety and rollback
 
 The module remains an offline verifier; the change performs no live capture and no external write. Rollback is source-only on the PR branch: revert this commit. Do not run historical F20.13 scripts against Debian or legacy application ports. Production remains blocked until authenticated runtime E2E, nine exact application checkpoints, independent event provenance, backup/restore and explicit release approval are qualified.
+
+## PNG palette conformance (26 October 2026)
+
+The byte-level verifier now also enforces palette constraints that can be established from the PNG chunk stream without decoding pixels: indexed-color images (color type 3) must declare `PLTE` before `IDAT`, and the number of palette entries cannot exceed `2**bit_depth`. Grayscale (type 0) and grayscale+alpha (type 4) images must not contain `PLTE`. The regression suite includes valid and invalid synthetic fixtures for these cases. The verifier still does not decompress image pixels, authenticate a browser session, or attest the application's origin; a passing result means bounded structural integrity only.
