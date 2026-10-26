@@ -55,6 +55,9 @@ class DemoPublicTests(unittest.TestCase):
             mod.start_video({"scenario":"../../etc/passwd"})
         self.assertEqual(ctx.exception.status_code, 422)
         with self.assertRaises(HTTPException) as ctx:
+            mod.start_video({"scenario":[]})
+        self.assertEqual(ctx.exception.status_code, 422)
+        with self.assertRaises(HTTPException) as ctx:
             mod.video_status("../" + "a" * 30)
         self.assertEqual(ctx.exception.status_code, 404)
         with self.assertRaises(HTTPException) as ctx:
@@ -97,6 +100,7 @@ class DemoPublicTests(unittest.TestCase):
                 mod.REPO_ROOT, mod.RUNS_ROOT = old_root, old_runs
                 with mod._jobs_lock:
                     mod._jobs.clear()
+                    mod._recent_starts.clear()
 
     def test_public_router_is_mounted_on_existing_portal_app(self):
         # Import in a child process so the synthetic internal token cannot leak
