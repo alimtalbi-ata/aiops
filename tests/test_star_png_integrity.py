@@ -96,7 +96,7 @@ class StrictPngIntegrityTests(unittest.TestCase):
 
     def test_refuse_non_regular_input(self):
         with self.assertRaisesRegex(ValueError, "regular file"):
-            inspect_png(self.root)
+            inspect_png(self.path.parent)
 
 if __name__ == "__main__":
     unittest.main()
