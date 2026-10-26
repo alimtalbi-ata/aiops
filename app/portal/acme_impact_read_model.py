@@ -53,7 +53,7 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "ticket_id_provenance": "ABSENT_NO_GLPI_WRITE",
         "event_timestamp_utc": None,
         "timestamp_provenance": "ABSENT_NO_RUNTIME_EVENT",
-        "source_artifact": "demo/integrations/v21315/acme-fixtures.json",
+        "source_artifact": "app/portal/acme-fixtures.json",
         "source_sha256": digest,
         "ci_count": report["ci_count"],
         "incident_count": report["incident_count"],
