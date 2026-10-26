@@ -70,3 +70,9 @@ Tests concernés : tests/test_platform_registry_portal_route.py, tests/test_noc_
 - python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
 
 Le changement n'introduit ni appel réseau, ni écriture, ni nouveau port. Le rollback est source-only : revenir au commit parent sur la branche de la PR, relancer les tests offline et régénérer le candidat. Ne pas exécuter d'installateur sur Debian, ne pas redémarrer/recréer les conteneurs V1/containerd et ne pas écrire dans GLPI/n8n/Grafana/DB/CMDB. La production reste NON QUALIFIÉE jusqu'à l'E2E runtime réel, une sauvegarde/restore vérifiée et une approbation humaine explicite.
+
+## Contrat de type strict du read model NOC — 26 octobre 2026
+
+La revue du validateur existant a identifié un cas JSON mal formé : les champs `steps[*].state` ou `items[*].state` peuvent être des tableaux/objets. Tester directement leur appartenance à un `set` Python peut alors lever `TypeError` au lieu d'un rejet de contrat explicite. `demo/noc_portal_integration.py` valide maintenant le type chaîne avant l'appartenance à `VALID_STATES`, à la fois pour les étapes et pour les lignes rendues. Les tests `tests/test_noc_portal_integration.py` couvrent les valeurs listes/objets et exigent une `ValueError` contrôlée ; la route encapsulée continue de répondre sans divulguer d'exception interne.
+
+Ce durcissement ne monte pas le routeur NOC dans `app/portal/main.py`, n'ajoute aucune connexion backend et ne change aucun état de production. `GET /noc` reste l'inventaire statique ; `GET /api/noc/state` reste défini dans l'adaptateur séparé, non monté par le portail examiné. Provenance et authentification runtime restent non attestées tant que le fournisseur réel et son contrôle d'identité ne sont pas raccordés.
