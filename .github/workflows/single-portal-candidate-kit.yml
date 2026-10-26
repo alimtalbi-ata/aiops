@@ -17,6 +17,8 @@ on:
       - 'tests/test_star_snapshot_choreography.py'
       - 'docs/demo/AIOPS-STAR-EVIDENCE-MANIFEST-STRICTNESS-20261026.md'
       - 'app/portal/main.py'
+      - 'app/portal/acme-fixtures.json'
+      - 'app/portal/acme_fixture_contract.py'
       - 'app/portal/acme_impact_read_model.py'
       - 'app/portal/platform_registry.py'
       - 'app/portal/platform_registry_router.py'
