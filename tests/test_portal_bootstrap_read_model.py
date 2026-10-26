@@ -62,6 +62,8 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
                 "source_mode": "BOUNDED_READ_ONLY_UPSTREAM_HTTP",
                 "timeout_seconds": 3,
                 "retry_count": 0,
+                "upstream_provenance": "UNATTESTED_UPSTREAM_READS",
+                "operator_authentication": "NOT_ENFORCED_IN_PORTAL_CODE",
                 "runtime_attested": False,
                 "live_remediation_authorized": False,
             },
