@@ -32,6 +32,8 @@ class CandidateKitTests(unittest.TestCase):
             names = self.fixture(root)
             required_portal_sources = {
                 "app/portal/main.py",
+                "app/portal/acme-fixtures.json",
+                "app/portal/acme_fixture_contract.py",
                 "app/portal/acme_impact_read_model.py",
                 ".github/workflows/acme-v21315-fixture-validation.yml",
                 "demo/integrations/v21315/README.md",
