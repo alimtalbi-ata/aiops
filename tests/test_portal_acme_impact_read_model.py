@@ -49,6 +49,7 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertNotIn("/demo/integrations/", str(impact.FIXTURE_PATH))
         model = impact.build_acme_impact_read_model()
         self.assertEqual(model["source_sha256"], hashlib.sha256(expected.read_bytes()).hexdigest())
+        self.assertEqual(model["source_artifact"], "app/portal/acme-fixtures.json")
         self.assertEqual(model["provenance"], "SIMULATED_TARGET")
         self.assertIs(model["runtime_attested"], False)
         self.assertIs(model["live_remediation_authorized"], False)
