@@ -80,6 +80,8 @@ def home():
     content+=panel("Digital Twin — état courant",pretty(t))
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
+    content+=panel("Demo Center — vidéo complète",
+        '<p>Préparer une vidéo narrative de 72 secondes avec sous-titres, manifeste et preuves d’intégrité. Le parcours est synthétique et n’exécute aucune action sur la production.</p><p><a href="/demo/">Ouvrir le Demo Center vidéo →</a></p>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
 
 @app.get("/runs",response_class=HTMLResponse)
