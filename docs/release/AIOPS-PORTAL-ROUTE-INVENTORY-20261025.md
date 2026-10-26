@@ -15,7 +15,7 @@ Les routes ci-dessous ont été relevées dans app/portal/main.py et les quatre 
 | Méthode et chemin | Comportement présent dans le code | Connexion constatée au niveau source | Limite de qualification |
 |---|---|---|---|
 | GET /health | État local du handler portail | Aucune | Ne prouve pas la connectivité aux backends ni le port hôte. |
-| GET /api/portal/bootstrap | Agrège dashboard, runs et résumé Twin | Lecture Core et Twin via les wrappers HTTP partagés | Pas d'attestation runtime, SSO ou test cible. |
+| GET /api/portal/bootstrap | Agrège dashboard, runs et résumé Twin, avec dégradation partielle explicite | Trois lectures HTTP bornées à 3 s chacune, sans retry ; chaque source est lue indépendamment | En cas d'échec ou de réponse JSON non-objet, la section concernée devient UNKNOWN sans détails d'exception/URL ; `_portal.status` vaut COMPLETE ou DEGRADED. Cela ne prouve ni SSO ni authentification runtime. |
 | GET / | Cockpit avec incidents/runs et résumé Twin | Lecture Core et Twin | Les erreurs sont rendues INCONNU ; runtime cible non vérifié. |
 | GET /runs | Liste des exécutions Core | Lecture Core | Ne monte pas l'API Temporal elle-même. |
 | GET /timeline | Incidents, détails de run, ledger et preuves référencées | Lecture Core | La page Evidence globale reste décrite comme adaptateur manquant. |
@@ -76,3 +76,9 @@ Le changement n'introduit ni appel réseau, ni écriture, ni nouveau port. Le ro
 La revue du validateur existant a identifié un cas JSON mal formé : les champs `steps[*].state` ou `items[*].state` peuvent être des tableaux/objets. Tester directement leur appartenance à un `set` Python peut alors lever `TypeError` au lieu d'un rejet de contrat explicite. `demo/noc_portal_integration.py` valide maintenant le type chaîne avant l'appartenance à `VALID_STATES`, à la fois pour les étapes et pour les lignes rendues. Les tests `tests/test_noc_portal_integration.py` couvrent les valeurs listes/objets et exigent une `ValueError` contrôlée ; la route encapsulée continue de répondre sans divulguer d'exception interne.
 
 Ce durcissement ne monte pas le routeur NOC dans `app/portal/main.py`, n'ajoute aucune connexion backend et ne change aucun état de production. `GET /noc` reste l'inventaire statique ; `GET /api/noc/state` reste défini dans l'adaptateur séparé, non monté par le portail examiné. Provenance et authentification runtime restent non attestées tant que le fournisseur réel et son contrôle d'identité ne sont pas raccordés.
+
+## Contrat de dégradation du bootstrap — 26 octobre 2026
+
+GET /api/portal/bootstrap effectue séparément les lectures Core `/api/dashboard`, Core `/api/runs` et Twin `/api/twin/summary`. Chaque appel utilise `timeout=3` et `retries=0` ; aucun POST n'est appelé. Un échec de transport ou une réponse JSON qui n'est pas un objet est normalisé en `status=UNKNOWN`, avec un code d'erreur stable, sans URL, corps upstream ou texte d'exception. Les deux autres sections conservent leur valeur si une source échoue.
+
+La clé additionnelle `_portal` suit `aiops.portal-bootstrap-readmodel.v1`, indique `COMPLETE` ou `DEGRADED`, les noms des sources indisponibles et les barrières `runtime_attested=false` et `live_remediation_authorized=false`. `COMPLETE` signifie uniquement que les trois endpoints ont renvoyé des objets JSON ; ce n'est pas une preuve indépendante d'authenticité, de fraîcheur métier, de SSO ou de connectivité au runtime cible. La route elle-même n'ajoute pas d'authentification opérateur : cette frontière reste à établir/qualifier en amont ou par un changement distinct, avant toute exposition non contrôlée de données opérationnelles.
