@@ -65,6 +65,7 @@ Le scénario ACME SAN P1 → impact Payments P2, les neuf checkpoints d'écran r
 
 Tests concernés : tests/test_platform_registry_portal_route.py, tests/test_noc_portal_integration.py et suites offline du kit cumulatif. Vérification recommandée après chaque changement :
 - python -m unittest discover -s tests -p 'test_platform_registry_portal_route.py' -v
+- python -m unittest discover -s tests -p 'test_portal_bootstrap_read_model.py' -v
 - python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
 - python -m unittest discover -s tests -p 'test_single_portal_candidate_kit.py' -v
 - python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
