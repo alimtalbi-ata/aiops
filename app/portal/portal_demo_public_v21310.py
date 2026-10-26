@@ -14,7 +14,6 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from pydantic import BaseModel, ConfigDict, field_validator
 
 router = APIRouter()
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -34,18 +33,6 @@ HEADERS = {
 _jobs = {}
 _jobs_lock = threading.Lock()
 MAX_CONCURRENT_JOBS = 1
-
-
-class VideoJobRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    scenario: str = "SAN_FABRIC_P1"
-
-    @field_validator("scenario")
-    @classmethod
-    def allowed_scenario(cls, value):
-        if value not in SCENARIOS:
-            raise ValueError("scenario_not_allowed")
-        return value
 
 
 def _video_enabled():
@@ -164,7 +151,12 @@ def catalog():
 
 
 @router.post("/demo/video")
-def start_video(request: VideoJobRequest):
+def start_video(request: dict):
+    if not isinstance(request, dict) or set(request) - {"scenario"}:
+        raise HTTPException(422, "invalid_video_request")
+    scenario = request.get("scenario", "SAN_FABRIC_P1")
+    if scenario not in SCENARIOS:
+        raise HTTPException(422, "scenario_not_allowed")
     if not _video_enabled():
         raise HTTPException(503, "video_generation_disabled_set_AIOPS_DEMO_VIDEO_ENABLED_true")
     if not (REPO_ROOT / "demo" / "generate_demo_video.py").is_file():
@@ -184,7 +176,7 @@ def start_video(request: VideoJobRequest):
         log = (output / "generator.log").open("xb")
         command = [
             sys.executable, "-m", "demo.generate_demo_video",
-            "--scenario", request.scenario, "--out", str(output),
+            "--scenario", scenario, "--out", str(output),
         ]
         try:
             proc = subprocess.Popen(
@@ -198,7 +190,7 @@ def start_video(request: VideoJobRequest):
             raise HTTPException(503, "video_generator_could_not_start") from exc
         log.close()
         _jobs[job_id] = {
-            "process": proc, "output": output, "scenario": request.scenario,
+            "process": proc, "output": output, "scenario": scenario,
             "status": "running", "created_at": int(time.time()),
         }
         return JSONResponse(_job_snapshot(job_id, _jobs[job_id]), status_code=202, headers=HEADERS)
