@@ -68,6 +68,25 @@ class SnapshotChoreographyTests(unittest.TestCase):
         self.assertTrue(result["metadata_complete"])
         self.assertFalse(result["verified_real_capture"])
 
+    def test_malformed_untrusted_shapes_fail_closed_with_value_errors(self):
+        for state in ([], {}, {"nested": []}):
+            with self.subTest(proof_state=state), self.assertRaisesRegex(
+                ValueError, "invalid proof state"
+            ):
+                validate_capture("detect", self._capture(proof_state=state))
+
+        with self.assertRaisesRegex(ValueError, "unknown cue"):
+            validate_capture([], self._capture())
+
+        for record in ([], None):
+            with self.subTest(record=record), self.assertRaisesRegex(
+                ValueError, "capture record must be an object"
+            ):
+                validate_capture("detect", record)
+
+        with self.assertRaisesRegex(ValueError, "capture record must be an object"):
+            build_timeline({"detect": []})
+
     def test_unknown_cue_refused(self):
         with self.assertRaises(ValueError):
             build_timeline({"undocumented": {}})
