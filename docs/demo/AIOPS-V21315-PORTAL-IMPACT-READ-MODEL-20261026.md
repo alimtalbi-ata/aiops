@@ -65,3 +65,32 @@ des backends, ni les neuf captures applicatives STAR, ni la provenance
 indépendante, ni l'intégration Debian. Les champs `runtime_attested`,
 `production_qualified` et `live_remediation_authorized` restent faux.
 
+## Lecture du fixture sans suivre de lien symbolique (26 octobre 2026, nouveau)
+
+Le read model utilise désormais `_read_fixture_bytes_safely()` au lieu d'une
+séquence pathname `is_symlink()/read_bytes()`, vulnérable à un remplacement
+entre la vérification et l'ouverture. Le helper ouvre le fichier avec
+`O_NOFOLLOW` et `O_CLOEXEC` lorsque disponibles ; si `O_NOFOLLOW` n'existe pas,
+il échoue de façon fermée. `O_NONBLOCK` empêche un FIFO substitué d'attendre
+indéfiniment avant le contrôle `fstat`.
+
+Le descripteur ouvert doit désigner un fichier régulier, inférieur ou égal à
+256 KiB. Les métadonnées du descripteur (device, inode, mode, taille, mtime et
+ctime) sont comparées avant/après lecture et la taille des octets lus doit
+correspondre à celle du fichier stable. Le validateur et le calcul SHA-256
+consomment ensuite la même chaîne d'octets en mémoire : aucune seconde
+résolution du chemin ne peut substituer un autre fichier entre validation et
+hachage. Une lecture remplacée, trop grande, non régulière ou instable produit
+la même erreur HTTP 503 générique.
+
+Tests ajoutés : lien symbolique, fichier surdimensionné, FIFO sans blocage et
+mutation du fichier entre `fstat` initial et final. Les tests utilisent des
+fichiers temporaires synthétiques ; ils ne contactent aucun backend ni ne
+modifient le fixture du dépôt. La limitation de taille constitue un contrat de
+packaging local, pas un mécanisme d'authentification du producteur des données.
+
+Le portage cible est Linux/Debian et l'image Python Linux. Les plateformes sans
+`O_NOFOLLOW` échouent volontairement en mode fermé ; le fallback portable qui
+suivrait les liens n'est pas activé. Le scénario, ses IDs, et sa provenance
+restent synthétiques ; aucun ticket, timestamp runtime ou attestation n'est
+créé.
