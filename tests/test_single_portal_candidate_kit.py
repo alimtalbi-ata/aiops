@@ -43,6 +43,7 @@ class CandidateKitTests(unittest.TestCase):
                 "docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md",
                 "tests/test_acme_fixture_validation.py",
                 "tests/test_portal_acme_impact_read_model.py",
+                "tests/test_portal_bootstrap_read_model.py",
                 "app/portal/platform_registry.py",
                 "app/portal/platform_registry_router.py",
                 "app/portal/portal_demo_public_v21310.py",
@@ -95,6 +96,7 @@ class CandidateKitTests(unittest.TestCase):
                     "tests/test_acme_fixture_validation.py",
                     "app/portal/acme_impact_read_model.py",
                     "tests/test_portal_acme_impact_read_model.py",
+                "tests/test_portal_bootstrap_read_model.py",
                     "docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md",
                 }
                 for source_path in cumulative_acme_sources:
