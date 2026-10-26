@@ -42,7 +42,7 @@ jobs:
           python -m pip install playwright
           python -m playwright install --with-deps chromium
       - name: Test video storyboard contract
-        run: python -m unittest tests.test_demo_video_generator -v
+        run: python -m unittest discover -s tests -p 'test_demo_video_generator.py' -v
       - name: Render full demo video
         env:
           DEMO_SCENARIO: ${ inputs.scenario || 'SAN_FABRIC_P1' }
