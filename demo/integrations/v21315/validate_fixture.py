@@ -191,7 +191,8 @@ def validate_fixture(data: object) -> dict:
         ci_id = _require_text(incident["ci"], ident + ".ci")
         if ci_id not in cis:
             raise ValueError(ident + " references an unknown CI")
-        if incident["severity"] not in SEVERITIES:
+        severity = incident["severity"]
+        if not isinstance(severity, str) or severity not in SEVERITIES:
             raise ValueError(ident + " has invalid severity")
         _require_text(incident["title"], ident + ".title")
         _require_text(incident["observation"], ident + ".observation")
