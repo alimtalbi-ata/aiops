@@ -8,7 +8,6 @@ import sys
 import unittest
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import ValidationError
 from unittest.mock import patch, MagicMock
 
 APP_ROOT = pathlib.Path(__file__).resolve().parents[1] / "app"
@@ -37,14 +36,14 @@ class DemoPublicTests(unittest.TestCase):
             mod.ASSET=old
     def test_expected_router_paths(self):
         routes = {r.path for r in mod.router.routes}
-        self.assertEqual(routes,{"/demo/","/demo/star"})
+        self.assertEqual(routes,{"/demo/","/demo/star","/demo/video","/demo/video/{job_id}","/demo/video/{job_id}/artifact/{artifact}"})
 
 
     def test_video_generation_is_disabled_by_default(self):
         old = os.environ.pop("AIOPS_DEMO_VIDEO_ENABLED", None)
         try:
             with self.assertRaises(HTTPException) as ctx:
-                mod.start_video(mod.VideoJobRequest(scenario="SAN_FABRIC_P1"))
+                mod.start_video({"scenario":"SAN_FABRIC_P1"})
             self.assertEqual(ctx.exception.status_code, 503)
             self.assertIn("video_generation_disabled", ctx.exception.detail)
         finally:
@@ -52,8 +51,9 @@ class DemoPublicTests(unittest.TestCase):
                 os.environ["AIOPS_DEMO_VIDEO_ENABLED"] = old
 
     def test_video_scenario_allowlist_rejects_untrusted_values(self):
-        with self.assertRaises(ValidationError):
-            mod.VideoJobRequest(scenario="../../etc/passwd")
+        with self.assertRaises(HTTPException) as ctx:
+            mod.start_video({"scenario":"../../etc/passwd"})
+        self.assertEqual(ctx.exception.status_code, 422)
         with self.assertRaises(HTTPException) as ctx:
             mod.video_status("../" + "a" * 30)
         self.assertEqual(ctx.exception.status_code, 404)
@@ -77,7 +77,7 @@ class DemoPublicTests(unittest.TestCase):
             try:
                 os.environ["AIOPS_DEMO_VIDEO_ENABLED"] = "true"
                 with patch.object(mod.subprocess, "Popen", return_value=proc) as popen:
-                    response = mod.start_video(mod.VideoJobRequest(scenario="PAYMENTS_P2"))
+                    response = mod.start_video({"scenario":"PAYMENTS_P2"})
                 self.assertEqual(response.status_code, 202)
                 self.assertEqual(__import__("json").loads(response.body)["status"], "running")
                 args, kwargs = popen.call_args
