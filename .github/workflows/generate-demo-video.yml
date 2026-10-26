@@ -20,17 +20,6 @@ on:
       - "tests/test_portal_demo_public_v21310.py"
       - ".github/workflows/generate-demo-video.yml"
       - "docs/demo/AIOPS-DEMO-VIDEO-GENERATOR.md"
-  push:
-    branches:
-      - feat/v21310-star-portal-continuity-20261022
-    paths:
-      - "demo/generate_demo_video.py"
-      - "tests/test_demo_video_generator.py"
-      - "app/portal/portal_demo_public_v21310.py"
-      - "tests/test_portal_demo_public_v21310.py"
-      - ".github/workflows/generate-demo-video.yml"
-      - "docs/demo/AIOPS-DEMO-VIDEO-GENERATOR.md"
-
 permissions:
   contents: read
 
