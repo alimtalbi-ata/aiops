@@ -115,10 +115,12 @@ class DemoPublicTests(unittest.TestCase):
             subtitles.write_text("1\\n00:00:00,000 --> 00:00:01,000\\nFixture\\n", encoding="utf-8")
             digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
             data = {
+                "schema":"aiops-demo-video-manifest-v1",
                 "scenario":"SAN_FABRIC_P1", "provenance":"SIMULATED_TARGET",
                 "runtime_authenticated":False, "dgx_independently_attested":False,
                 "live_execution_qualified":False, "live_action_authorized":False,
-                "scene_count":9, "duration_target_seconds":72, "resolution":"1920x1080",
+                "scene_count":9, "duration_target_seconds":72, "duration_actual_seconds":72.0,
+                "resolution":"1920x1080", "video":video.name, "subtitles":subtitles.name,
                 "video_size_bytes":video.stat().st_size, "video_sha256":digest(video),
                 "subtitles_sha256":digest(subtitles)
             }
