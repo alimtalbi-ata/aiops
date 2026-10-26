@@ -6,6 +6,7 @@ No application endpoints are contacted. The output is explicitly marked SIMULATI
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import subprocess
@@ -81,6 +82,7 @@ def run(cmd: list[str]) -> None:
 
 def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) -> dict:
     ffmpeg = require_command("ffmpeg")
+    ffprobe = require_command("ffprobe")
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
@@ -147,14 +149,51 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
              "-crf", "21", *(["-c:a", "aac", "-shortest"] if audio_args else ["-an"]),
              "-movflags", "+faststart", str(video)])
 
+    # Do not publish a manifest for an empty, truncated, or malformed video.
+    if not video.is_file() or video.stat().st_size == 0:
+        raise RuntimeError("Rendu MP4 absent ou vide.")
+    if not subtitles.is_file() or subtitles.stat().st_size == 0:
+        raise RuntimeError("Sous-titres absents ou vides.")
+    probe = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
+         "-of", "json", str(video)],
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    media = json.loads(probe.stdout)
+    duration = float(media.get("format", {}).get("duration", 0))
+    streams = media.get("streams", [])
+    if not (len(scenes) * DURATION - 1 <= duration <= len(scenes) * DURATION + 1):
+        raise RuntimeError(f"Durée MP4 inattendue : {duration:.3f}s.")
+    video_stream = next((stream for stream in streams if stream.get("codec_type") == "video"), None)
+    if not video_stream or video_stream.get("width") != WIDTH or video_stream.get("height") != HEIGHT:
+        raise RuntimeError("Le MP4 ne contient pas le flux vidéo HD attendu.")
+    has_audio = any(stream.get("codec_type") == "audio" for stream in streams)
+    if narration_status == "espeak_french_scene_aligned" and not has_audio:
+        raise RuntimeError("Narration annoncée mais aucune piste audio n'est présente.")
+    if not has_audio and narration_status != "disabled":
+        raise RuntimeError("État de narration incohérent avec le média produit.")
+
+    def sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
     manifest = {
         "schema": "aiops-demo-video-manifest-v1",
         "scenario": scenario,
         "provenance": "SIMULATED_TARGET",
         "scene_count": len(scenes),
         "duration_target_seconds": len(scenes) * DURATION,
+        "duration_actual_seconds": round(duration, 3),
+        "resolution": f"{WIDTH}x{HEIGHT}",
         "video": video.name,
+        "video_size_bytes": video.stat().st_size,
+        "video_sha256": sha256_file(video),
         "subtitles": subtitles.name,
+        "subtitles_sha256": sha256_file(subtitles),
+        "audio_track_present": has_audio,
         "narration": narration_status,
         "runtime_authenticated": False,
         "dgx_independently_attested": False,
