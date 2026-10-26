@@ -15,6 +15,8 @@ on:
     paths:
       - "demo/generate_demo_video.py"
       - "tests/test_demo_video_generator.py"
+      - "app/portal/portal_demo_public_v21310.py"
+      - "tests/test_portal_demo_public_v21310.py"
       - ".github/workflows/generate-demo-video.yml"
       - "docs/demo/AIOPS-DEMO-VIDEO-GENERATOR.md"
   push:
@@ -48,10 +50,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
           python -m pip install --upgrade pip
-          python -m pip install playwright
+          python -m pip install playwright fastapi
           python -m playwright install --with-deps chromium
       - name: Test video storyboard contract
         run: python -m unittest discover -s tests -p 'test_demo_video_generator.py' -v
+      - name: Test portal video launcher and safety fences
+        run: python -m unittest discover -s tests -p 'test_portal_demo_public_v21310.py' -v
       - name: Render full demo video
         env:
           DEMO_SCENARIO: ${{ inputs.scenario || 'SAN_FABRIC_P1' }}
