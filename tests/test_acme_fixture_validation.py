@@ -10,9 +10,14 @@ import unittest
 from pathlib import Path
 
 from demo.integrations.v21315.validate_fixture import load_fixture, load_fixture_bytes, validate_fixture
+from portal.acme_fixture_contract import (
+    load_fixture as load_packaged_fixture,
+    validate_fixture as validate_packaged_fixture,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = ROOT / "demo" / "integrations" / "v21315" / "acme-fixtures.json"
+PORTAL_FIXTURE_PATH = ROOT / "app" / "portal" / "acme-fixtures.json"
 VALIDATOR_PATH = FIXTURE_PATH.with_name("validate_fixture.py")
 BASE_FIXTURE = load_fixture(FIXTURE_PATH)
 
@@ -20,6 +25,16 @@ BASE_FIXTURE = load_fixture(FIXTURE_PATH)
 class AcmeFixtureValidationTests(unittest.TestCase):
     def fixture(self):
         return copy.deepcopy(BASE_FIXTURE)
+
+    def test_portal_image_contract_matches_historical_demo_fixture(self):
+        demo_bytes = FIXTURE_PATH.read_bytes()
+        portal_bytes = PORTAL_FIXTURE_PATH.read_bytes()
+        self.assertEqual(portal_bytes, demo_bytes)
+        self.assertEqual(load_packaged_fixture(PORTAL_FIXTURE_PATH), BASE_FIXTURE)
+        self.assertEqual(
+            validate_packaged_fixture(load_packaged_fixture(PORTAL_FIXTURE_PATH)),
+            validate_fixture(BASE_FIXTURE),
+        )
 
     def test_san_p1_has_deterministic_transitive_payments_p2_impact(self):
         report = validate_fixture(self.fixture())
