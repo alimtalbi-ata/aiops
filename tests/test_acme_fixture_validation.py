@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from demo.integrations.v21315.validate_fixture import load_fixture, validate_fixture
+from demo.integrations.v21315.validate_fixture import load_fixture, load_fixture_bytes, validate_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = ROOT / "demo" / "integrations" / "v21315" / "acme-fixtures.json"
@@ -90,6 +90,13 @@ class AcmeFixtureValidationTests(unittest.TestCase):
             path.write_text('{"schema":"first","schema":"second"}', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
                 load_fixture(path)
+
+    def test_load_fixture_bytes_binds_parsing_to_exact_utf8_bytes(self):
+        self.assertEqual(load_fixture_bytes(FIXTURE_PATH.read_bytes()), BASE_FIXTURE)
+        with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
+            load_fixture_bytes(b'{"schema":"first","schema":"second"}')
+        with self.assertRaisesRegex(ValueError, "UTF-8"):
+            load_fixture_bytes(b"\\xff")
 
     def test_invalid_impact_fails_closed_under_optimized_python(self):
         data = self.fixture()
