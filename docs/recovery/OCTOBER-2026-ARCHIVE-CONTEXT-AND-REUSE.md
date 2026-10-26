@@ -32,6 +32,20 @@ The October 15 multistack run recorded a Grafana **login** page at `127.0.0.1:30
 6. Run unit tests and isolated Chromium/Temporal stack before integration to :17777.
 7. Keep screenshots, personal data, DB dumps, tokens and browser profiles out of Git.
 
+## Kits F20.13 et export du portail : inspection du 26 octobre
+
+Les ZIP historiques ont été matérialisés dans un espace de travail temporaire, inspectés hors ligne puis rapprochés de la lignée V2.13.1–V2.13.6.1. Le registre HISTORICAL-CODE-REGISTRY-20261023.md conserve les SHA originaux et l'analyse par archive. Aucun ZIP original n'a été ajouté à GitHub.
+
+- F20.13 v0.2 Evidence kit : besoin visé = campagne multi-écrans. Réalité constatée = capture de baseline seulement, pour un contrat annoncé de 13 vues. Les scripts citent les ports 8141/8099/8110. Les entrées/sorties ne prouvent pas les 13 écrans ; ne pas réutiliser la procédure d'exécution telle quelle.
+- F20.13 v0.4.2 / v0.5 Client Demo : story/cues Playwright pour UCP, Grafana, n8n et GLPI. Dépendances historiques navigateur/HTTP sur 8141/3000/5678/8080. Le manifeste v0.5 n'inclut pas les ID d'incident/ticket, timestamp ni hash de PNG. Il autorise aussi un URL de trigger arbitraire ou une commande shell : ces capacités sont interdites pour le portage.
+- Export complet du 15 octobre : décrit des routes, composants, inventaires et sauvegardes historiques. C'est un snapshot daté, non la preuve de l'état du 26 octobre. L'export complet et ses tarballs ne doivent pas rejoindre GitHub ; la revue de confidentialité manuelle reste obligatoire même en l'absence de motifs de tokens connus.
+- V2.13.6.1 : 14 tests Python historiques ont été reproduits dans un répertoire temporaire isolé. Le manifeste primaire a cinq divergences (quatre .pyc obsolètes et README), tandis que le manifeste de release indépendant est concordant pour 31 entrées. Sources de référence, mais pas preuves runtime ; ne promouvoir ni bytecode ni rapports opérateur.
+- V2.13.4 replay : les sources du générateur de replay et du test apparaissent sous forme de copies identiques dans cinq archives. L'assembleur est déjà présent à l'identique dans recovery/legacy_v2134/tools/assemble_hybrid.py. Toute restauration supplémentaire commence donc par comparaison SHA/chemin, puis test d'interface/provenance, pas par recopie du ZIP cumulatif.
+
+### Contrat d'intégration cible
+
+Convertir le plan F20.13 en cues allowlistés dans le portail unique :17777. Chaque cue doit porter le chemin d'écran approuvé, l'identifiant applicatif, run_id, incident_id, ticket_id s'il existe, horodatage de capture, SHA-256 du PNG et provenance/authentification effectivement observées. Absence d'écran/ticket/run, page de login, timeout, événement hors fenêtre ou champ manquant => cue non qualifié, jamais remplacé par un écran HTML local. Aucun trigger live. Les essais utilisent des données synthétiques. L'E2E runtime cible demeure non qualifié.
+
 ## Reconstruction priority
 
 P0 portal V2.13.6 + V2.13.10 reconciliation, camera/replay STAR + Chromium scripts, decision pipeline Analyst/Critic/Policy/HITL. P1 Evidence/AI Ledger + CMDB/cascade correlation + Temporal crash recovery. P2 showcase/media, history consolidator and Windows operator UX.
