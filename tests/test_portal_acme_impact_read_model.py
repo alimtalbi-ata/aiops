@@ -112,6 +112,20 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
                     rejected.json()["detail"],
                     "synthetic_impact_fixture_unavailable_or_invalid",
                 )
+            # Malformed type in an otherwise valid fixture must map to a fail-closed 503,
+            # not leak an uncaught TypeError/HTTP 500 from set membership.
+            invalid["provenance"] = "SIMULATED_TARGET"
+            invalid["incidents"][0]["severity"] = []
+            malformed_path = pathlib.Path(tmp) / "malformed-severity.json"
+            malformed_path.write_text(json.dumps(invalid), encoding="utf-8")
+            with patch.object(impact, "FIXTURE_PATH", malformed_path):
+                malformed = self.client.get("/api/demo/acme-impact")
+                self.assertEqual(malformed.status_code, 503)
+                self.assertEqual(
+                    malformed.json()["detail"],
+                    "synthetic_impact_fixture_unavailable_or_invalid",
+                )
+
             missing_path = pathlib.Path(tmp) / "missing.json"
             with patch.object(impact, "FIXTURE_PATH", missing_path):
                 missing = self.client.get("/api/demo/acme-impact")
