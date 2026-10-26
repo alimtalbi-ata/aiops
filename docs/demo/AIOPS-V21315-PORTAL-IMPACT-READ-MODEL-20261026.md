@@ -34,3 +34,34 @@ Le validateur et le fixture ACME sont déjà inventoriés dans `docs/recovery/HI
 
 ## Qualification, déploiement et rollback
 Ce patch ne contacte aucun service et ne change aucune donnée. Il n'a été soumis qu'à la branche de PR. La restauration/annulation consiste à revert les commits du changement puis relancer les workflows ciblés ; aucune sauvegarde de base, intervention Debian, ouverture de port ou opération sur conteneur n'est nécessaire pour ce changement. **E2E runtime et production restent non qualifiés** jusqu'à une intégration authentifiée distincte, à des tests navigateur sur les vrais écrans autorisés, à des preuves indépendantes et à une approbation humaine de bascule.
+
+## Correctif de packaging pour le portail (26 octobre 2026)
+
+Le Dockerfile du portail construit depuis le contexte `app/` et ne copie que
+`shared/` et `portal/`. Le validateur et le fixture historiques situés sous
+`demo/integrations/v21315/` ne sont donc pas des ressources disponibles dans
+l'image du portail. La lecture du read model devait échouer en mode fermé dans
+cette image, même si les tests exécutés depuis le checkout complet réussissaient.
+
+Le contrat stdlib partagé est désormais installé à
+`app/portal/acme_fixture_contract.py`, avec son fixture synthétique à
+`app/portal/acme-fixtures.json`. Le CLI historique sous
+`demo/integrations/v21315/validate_fixture.py` est conservé comme wrapper
+compatible et importe le contrat commun ; les tests comparent les octets des
+deux fixtures et les rapports de validation. Le read model lit uniquement les
+fichiers voisins de son propre module, donc inclus par le `COPY portal` déjà
+présent. Aucun contexte Docker, port, listener ou service supplémentaire n'est
+nécessaire.
+
+La CI ACME compile les modules et tests concernés, garde les validations CLI
+normale et `python -O`, exécute les tests unitaires, puis construit l'image du
+portail et lance seulement `python -c` dans un conteneur éphémère. Le smoke test
+ne publie aucun port et ne démarre pas Uvicorn ; il vérifie l'impact déterministe
+SAN P1 → Payments P2 ainsi que l'absence de ticket, d'horodatage runtime et
+d'autorisation LIVE.
+
+Cette validation demeure synthétique. Elle ne démontre ni l'authentification
+des backends, ni les neuf captures applicatives STAR, ni la provenance
+indépendante, ni l'intégration Debian. Les champs `runtime_attested`,
+`production_qualified` et `live_remediation_authorized` restent faux.
+
