@@ -32,7 +32,10 @@ HEADERS = {
 }
 _jobs = {}
 _jobs_lock = threading.Lock()
+_recent_starts = []
 MAX_CONCURRENT_JOBS = 1
+MIN_START_INTERVAL_SECONDS = 30
+MAX_STARTS_PER_HOUR = 8
 
 
 def _video_enabled():
@@ -162,13 +165,21 @@ def start_video(request: dict):
     if not (REPO_ROOT / "demo" / "generate_demo_video.py").is_file():
         raise HTTPException(503, "video_generator_unavailable")
     with _jobs_lock:
+        now = time.time()
+        _recent_starts[:] = [stamp for stamp in _recent_starts if now - stamp < 3600]
+        if _recent_starts and now - _recent_starts[-1] < MIN_START_INTERVAL_SECONDS:
+            raise HTTPException(429, "video_generation_rate_limited")
+        if len(_recent_starts) >= MAX_STARTS_PER_HOUR:
+            raise HTTPException(429, "video_generation_hourly_limit")
         active = [j for j in _jobs.values() if j["status"] == "running" and j["process"].poll() is None]
         if len(active) >= MAX_CONCURRENT_JOBS:
             raise HTTPException(409, "video_generation_already_running")
         job_id = uuid.uuid4().hex
         output = RUNS_ROOT / job_id
-        RUNS_ROOT.mkdir(parents=True, exist_ok=True)
         if RUNS_ROOT.is_symlink():
+            raise HTTPException(503, "unsafe_output_directory")
+        RUNS_ROOT.mkdir(parents=True, exist_ok=True)
+        if RUNS_ROOT.resolve() != (REPO_ROOT.resolve() / "dist" / "demo-video-runs"):
             raise HTTPException(503, "unsafe_output_directory")
         output.mkdir(mode=0o750)
         if output.is_symlink() or output.resolve().parent != RUNS_ROOT.resolve():
@@ -189,9 +200,10 @@ def start_video(request: dict):
             log.close()
             raise HTTPException(503, "video_generator_could_not_start") from exc
         log.close()
+        _recent_starts.append(now)
         _jobs[job_id] = {
             "process": proc, "output": output, "scenario": scenario,
-            "status": "running", "created_at": int(time.time()),
+            "status": "running", "created_at": int(now),
         }
         return JSONResponse(_job_snapshot(job_id, _jobs[job_id]), status_code=202, headers=HEADERS)
 
