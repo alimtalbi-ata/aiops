@@ -10,6 +10,7 @@ usage(){ cat <<'EOF'
 Usage: sudo ./install-aiops-candidate.sh [--audit] [--install] [--dest ABSOLUTE_PATH]
 Default --audit is read-only. --install clones/updates isolated candidate source only.
 It does not install dependencies, touch Docker/firewall/systemd, mount routes or restart production.
+Existing checkouts must be clean; local changes are never reset or overwritten.
 EOF
 }
 while (($#)); do case "$1" in
@@ -31,17 +32,23 @@ if command -v docker >/dev/null 2>&1; then docker ps --format 'container={{.Name
 if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null || true; fi
 if [[ "$MODE" == audit ]]; then log "AUDIT COMPLETE: no changes made"; exit 0; fi
 [[ "$DEST" == /* && "$DEST" != "/" && "$DEST" != "/opt" && "$DEST" != "/home" ]] || fail "unsafe destination path: $DEST"
+[[ ! -L "$DEST" ]] || fail "destination must not be a symlink: $DEST"
 command -v git >/dev/null 2>&1 || fail "git required for --install"
 if [[ -e "$DEST" && ! -d "$DEST/.git" ]]; then fail "destination exists but is not a Git checkout; refusing overwrite: $DEST"; fi
 if [[ -d "$DEST/.git" ]]; then
  remote="$(git -C "$DEST" remote get-url origin 2>/dev/null || true)"
  [[ "$remote" == "$REPO_URL" ]] || fail "existing checkout origin mismatch: $remote"
+ if [[ -n "$(git -C "$DEST" status --porcelain)" ]]; then
+   git -C "$DEST" status --short >&2
+   fail "existing checkout has local changes; refusing to reset or overwrite them"
+ fi
  git -C "$DEST" fetch --depth 1 origin "$BRANCH"
  git -C "$DEST" checkout -B "$BRANCH" FETCH_HEAD
 else
  mkdir -p "$(dirname "$DEST")"
  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$DEST"
 fi
+[[ "$(git -C "$DEST" branch --show-current)" == "$BRANCH" ]] || fail "candidate branch mismatch after checkout"
 git -C "$DEST" rev-parse HEAD | tee "$DEST/INSTALL-COMMIT.txt"
 git -C "$DEST" status --short
 log "CANDIDATE SOURCE READY: $DEST"
