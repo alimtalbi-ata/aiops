@@ -158,7 +158,7 @@ class DemoPublicTests(unittest.TestCase):
         routes = json.loads(result.stdout.strip().splitlines()[-1])
         self.assertEqual({item["path"] for item in routes}, {"/demo/", "/demo/star", "/demo/video", "/demo/video/{job_id}", "/demo/video/{job_id}/artifact/{artifact}"})
         for item in routes:
-            expected = "POST" if item["path"] == "/demo/video" else "GET"
+            expected = "post" if item["path"] == "/demo/video" else "get"
             self.assertIn(expected, item["methods"])
 
 
