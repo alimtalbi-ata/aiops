@@ -23,7 +23,7 @@ INCIDENT_FIELDS = {
 }
 SAFE_ACTIONS = {"analyze", "notify_dry_run"}
 SEVERITIES = {"P1", "P2", "P3", "P4"}
-IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\\Z")
+IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z")
 
 SOURCE_INCIDENT_ID = "ACME-DEMO-SAN-001"
 SOURCE_CI_ID = "SAN-FABRIC-A"
