@@ -82,12 +82,19 @@ jobs:
           data = json.loads(p.read_text(encoding="utf-8"))
           assert data["scene_count"] == 9
           assert data["duration_target_seconds"] == 72
+          assert 71 <= data["duration_actual_seconds"] <= 73
+          assert data["resolution"] == "1920x1080"
+          assert data["video_size_bytes"] > 0
+          assert len(data["video_sha256"]) == 64
+          assert len(data["subtitles_sha256"]) == 64
           assert data["provenance"] == "SIMULATED_TARGET"
           assert data["runtime_authenticated"] is False
           assert data["dgx_independently_attested"] is False
           assert data["live_execution_qualified"] is False
           assert data["live_action_authorized"] is False
-          print("PROVENANCE_GUARD_PASS")
+          if data["narration"] == "espeak_french_scene_aligned":
+              assert data["audio_track_present"] is True
+          print("VIDEO_INTEGRITY_AND_PROVENANCE_PASS")
           PY
       - name: Upload generated video, subtitles and manifest
         uses: actions/upload-artifact@v4
