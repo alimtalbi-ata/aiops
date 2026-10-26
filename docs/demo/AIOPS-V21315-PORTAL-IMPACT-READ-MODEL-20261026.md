@@ -11,7 +11,7 @@ Offrir depuis le portail existant une vue exploitable du scénario synthétique 
 - Les deux routes sont montées sur `portal.main:app`. Aucun listener, port, worker ou tâche d'arrière-plan n'est ajouté.
 
 ## Architecture et provenance
-Le contrôleur lit les octets exacts de `demo/integrations/v21315/acme-fixtures.json`, les passe à `load_fixture_bytes()` puis à `validate_fixture()` déjà existants, et calcule SHA-256 sur ces mêmes octets. Il réutilise donc le validateur du DAG plutôt que de recopier sa logique. Un identifiant `SIM-ACME-<16 hex>` est dérivé du digest : `run_id_provenance=DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN`. Ce n'est **pas** un identifiant Core/Temporal.
+Le contrôleur lit les octets exacts de `app/portal/acme-fixtures.json`, appelle `load_fixture_bytes()` et `validate_fixture()` depuis le contrat stdlib `portal.acme_fixture_contract`, puis calcule SHA-256 sur ces mêmes octets. Le validateur historique sous `demo/integrations/v21315/validate_fixture.py` est un wrapper de compatibilité qui réutilise ce contrat commun. Un identifiant `SIM-ACME-<16 hex>` est dérivé du digest : `run_id_provenance=DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN`. Ce n'est **pas** un identifiant Core/Temporal.
 
 - `incident_id` = incident source synthétique SAN P1 ; `impact_incident_id` = incident cible Payments P2.
 - `ticket_id=null`, provenance `ABSENT_NO_GLPI_WRITE` : aucun ticket n'est créé ni prétendu.
@@ -20,7 +20,7 @@ Le contrôleur lit les octets exacts de `demo/integrations/v21315/acme-fixtures.
 - `runtime_evidence_present=false`, `runtime_attested=false`, `production_qualified=false`, `live_remediation_authorized=false`.
 
 ## Dépendances et conditions de réutilisation
-La route ne dépend que de FastAPI déjà utilisé par le portail et du validateur Python standard. Les chemins du fixture et du validateur sont constants, ne viennent pas de la requête HTTP et doivent être des fichiers réguliers non symlink. Si le fixture, le validateur ou le contrat manque/échoue, la route répond 503 avec un message générique ; aucun contenu partiel n'est rendu. La résolution du validateur est différée jusqu'à la requête afin qu'une image ne contenant pas les assets de démonstration puisse démarrer et refuser proprement cette vue.
+La route dépend de FastAPI et du module stdlib `portal.acme_fixture_contract`, embarqués dans le même répertoire `portal/` que l'application, plus le fichier fixture voisin. Le chemin du fixture est fixe, non fourni par la requête. Un fixture absent, symlink ou invalide produit un HTTP 503 générique, sans contenu partiel. Le contrat est importé au démarrage du module : sa présence dans l'image est donc un prérequis de packaging, vérifié par le build d'image et le smoke test CI (sans listener).
 
 ## Tests
 `tests/test_portal_acme_impact_read_model.py` vérifie l'unicité/méthode des routes, le SHA-256 lié aux mêmes octets que ceux validés, la répétabilité des réponses, les champs ticket/temps absents, les limites d'attestation, le refus 503 du fixture invalide/absent, l'encodage HTML, la CSP et le rejet des méthodes mutatrices. Le test du chargeur binaire vérifie également les clés JSON dupliquées et UTF-8 invalide. CI sur données locales uniquement.
