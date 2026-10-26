@@ -19,3 +19,8 @@ Inspecter les fichiers avant tout import; ne jamais exécuter d'automatisation s
 
 ## Garanties
 Pas de second portail utilisateur; UI unique `17777`. Pas de modification Core, Policy, secrets, containers ou bases depuis ces fichiers. Aucun ticket ou incident généré en production par ce commit. 
+
+
+## Contrat du graphe synthétique
+
+Le validateur contrôle désormais le DAG de dépendances et le chemin d'impact transitif SAN P1 → Payments P2, rejette les actions hors allowlist et reste fail-closed sous `python -O`. Voir `docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md` et les tests `tests/test_acme_fixture_validation.py`. Ces contrôles sont hors ligne et ne qualifient pas les connexions runtime.
