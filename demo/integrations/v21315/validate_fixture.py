@@ -60,14 +60,16 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict:
     return result
 
 
-def load_fixture(path: str | Path) -> dict:
-    """Load JSON without accepting duplicate object keys."""
+def load_fixture_bytes(raw: bytes) -> dict:
+    """Parse the exact fixture bytes while rejecting duplicate JSON keys."""
+    if not isinstance(raw, bytes):
+        raise ValueError("fixture content must be bytes")
     try:
-        raw = Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise ValueError("cannot read fixture (" + type(exc).__name__ + ")") from exc
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("fixture is not valid UTF-8") from exc
     try:
-        value = json.loads(raw, object_pairs_hook=_unique_json_object)
+        value = json.loads(text, object_pairs_hook=_unique_json_object)
     except json.JSONDecodeError as exc:
         raise ValueError(
             "invalid fixture JSON at line " + str(exc.lineno)
@@ -77,6 +79,14 @@ def load_fixture(path: str | Path) -> dict:
         raise ValueError("fixture root must be an object")
     return value
 
+
+def load_fixture(path: str | Path) -> dict:
+    """Load fixture bytes once, preserving duplicate-key and UTF-8 checks."""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as exc:
+        raise ValueError("cannot read fixture (" + type(exc).__name__ + ")") from exc
+    return load_fixture_bytes(raw)
 
 def _reject_dependency_cycles(dependencies: dict[str, list[str]]) -> None:
     """Validate the dependency DAG using Kahn's algorithm, deterministically."""
