@@ -138,7 +138,7 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
                      "-ac", "2", "-ar", "44100", str(wav)])
                 wavs.append(wav)
             audio_concat = root / "audio.ffconcat"
-            audio_concat.write_text("ffconcat version 1.0\\n" + "".join(f"file '{p.as_posix()}'\\n" for p in wavs), encoding="utf-8")
+            audio_concat.write_text("ffconcat version 1.0\n" + "".join(f"file '{p.as_posix()}'\n" for p in wavs), encoding="utf-8")
             run([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(audio_concat), "-ac", "2", "-ar", "44100", str(audio_file)])
             audio_args = ["-i", str(audio_file)]
             narration_status = "espeak_french_scene_aligned"
