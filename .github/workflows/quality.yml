@@ -87,10 +87,12 @@ jobs:
         run: bash deploy/init-env.sh
       - name: Validate full Compose model
         run: docker compose --env-file .env config --quiet
-      - name: Build every application image
-        run: docker compose --env-file .env build
-      - name: Build opt-in model evaluation runner
-        run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
+      - name: Docker BuildKit bounded-retry contract tests
+        run: python -m unittest discover -s tests -p "test_ci_docker_build.py" -v
+      - name: Build every application image (bounded transient retry)
+        run: python tools/ci_docker_build.py --env-file .env build
+      - name: Build opt-in model evaluation runner (bounded transient retry)
+        run: python tools/ci_docker_build.py --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
     runs-on: ubuntu-latest
@@ -243,16 +245,18 @@ jobs:
         run: bash deploy/init-env.sh
       - name: Validate test-profile Compose override
         run: docker compose --env-file .env config --quiet
-      - name: Start isolated full Core dependency graph with deterministic provider
-        run: docker compose --env-file .env up -d --build --wait --wait-timeout 180 aiops2-portal aiops2-simulator aiops2-test-llm aiops2-worker
+      - name: Docker BuildKit bounded-retry contract tests
+        run: python -m unittest discover -s tests -p "test_ci_docker_build.py" -v
+      - name: Start isolated full Core dependency graph with deterministic provider (bounded transient retry)
+        run: python tools/ci_docker_build.py --env-file .env up -d --build --wait --wait-timeout 180 aiops2-portal aiops2-simulator aiops2-test-llm aiops2-worker
       - name: Run explicit schema upgrade runner
         run: bash deploy/migrate.sh
       - name: Qualify real Temporal workflow against deterministic synthetic provider
         run: bash tests/runtime-e2e.sh
       - name: Qualify Evidence replay, deduplication and cross-run isolation
         run: bash tests/evidence-e2e.sh
-      - name: Build deterministic model evaluation runner
-        run: docker compose --env-file .env --profile test --profile qualification build aiops2-model-evaluator
+      - name: Build deterministic model evaluation runner (bounded transient retry)
+        run: python tools/ci_docker_build.py --env-file .env --profile test --profile qualification build aiops2-model-evaluator
       - name: Score evidence-grounded Analyst/Critic fixtures and persist evaluation
         run: |
           mkdir -p reports
