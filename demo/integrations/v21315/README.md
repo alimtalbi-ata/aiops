@@ -8,6 +8,8 @@
 
 ## Utilisation immédiate sans risque
 `python3 demo/integrations/v21315/validate_fixture.py` (Python standard).
+
+Depuis le correctif de packaging du 26 octobre, ce CLI est un wrapper de compatibilité qui réutilise `app/portal/acme_fixture_contract.py`. Le portail lit la copie identique du fixture `app/portal/acme-fixtures.json`, nécessaire parce que l'image est construite depuis `app/` et ne copie pas le répertoire racine `demo/`. `tests/test_acme_fixture_validation.py` compare les octets des deux fixtures et les résultats du validateur partagé. La CI construit aussi l'image du portail puis exécute uniquement le read model Python dans un conteneur sans publication de port ni démarrage du serveur ; cela vérifie le packaging, pas les intégrations runtime.
 Inspecter les fichiers avant tout import; ne jamais exécuter d'automatisation sur production sans séparation des flux, credentials et données.
 
 ## Séquence d'implémentation sur Debian (à planifier)
