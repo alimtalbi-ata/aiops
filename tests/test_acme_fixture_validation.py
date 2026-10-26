@@ -32,6 +32,14 @@ class AcmeFixtureValidationTests(unittest.TestCase):
         self.assertEqual(report["provenance"], "SIMULATED_TARGET")
         self.assertFalse(report["live_remediation_authorized"])
 
+    def test_rejects_non_string_severity_values_without_type_error(self):
+        for severity in ([], {}, {"P1": True}, 1, None):
+            with self.subTest(severity=severity):
+                data = self.fixture()
+                data["incidents"][0]["severity"] = severity
+                with self.assertRaisesRegex(ValueError, "has invalid severity"):
+                    validate_fixture(data)
+
     def test_rejects_unknown_ci_dependency(self):
         data = self.fixture()
         data["ci"][0]["depends_on"] = ["CI-DOES-NOT-EXIST"]
