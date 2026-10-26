@@ -100,10 +100,19 @@ jobs:
               assert data["audio_track_present"] is True
           print("VIDEO_INTEGRITY_AND_PROVENANCE_PASS")
           PY
-      - name: Upload generated video, subtitles and manifest
+      - name: Package complete visual evidence kit
+        run: |
+          set -euo pipefail
+          cd dist
+          zip -qr AIOps-Demo-Visual-Evidence-Pack.zip aiops-demo-video
+          unzip -tq AIOps-Demo-Visual-Evidence-Pack.zip
+          sha256sum AIOps-Demo-Visual-Evidence-Pack.zip
+      - name: Upload video, snapshots, architecture and evidence pack
         uses: actions/upload-artifact@v4
         with:
-          name: AIOps-Demo-Video-${{ inputs.scenario || 'SAN_FABRIC_P1' }}
-          path: dist/aiops-demo-video/
+          name: AIOps-Demo-Visual-Evidence-${{ inputs.scenario || 'SAN_FABRIC_P1' }}
+          path: |
+            dist/aiops-demo-video/
+            dist/AIOps-Demo-Visual-Evidence-Pack.zip
           if-no-files-found: error
           retention-days: 30
