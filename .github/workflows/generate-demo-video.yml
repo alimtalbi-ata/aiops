@@ -11,6 +11,12 @@ on:
           - SAN_FABRIC_P1
           - PAYMENTS_P2
         default: SAN_FABRIC_P1
+  pull_request:
+    paths:
+      - "demo/generate_demo_video.py"
+      - "tests/test_demo_video_generator.py"
+      - ".github/workflows/generate-demo-video.yml"
+      - "docs/demo/AIOPS-DEMO-VIDEO-GENERATOR.md"
   push:
     branches:
       - feat/v21310-star-portal-continuity-20261022
@@ -28,8 +34,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout source
+      - name: Checkout exact PR source without persisted credentials
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -47,15 +56,17 @@ jobs:
         env:
           DEMO_SCENARIO: ${{ inputs.scenario || 'SAN_FABRIC_P1' }}
         run: |
+          set -euo pipefail
           python -m demo.generate_demo_video \
             --scenario "$DEMO_SCENARIO" \
             --out dist/aiops-demo-video
-      - name: Verify MP4 and expected duration
+      - name: Verify MP4 decodes, duration and provenance
         run: |
           set -euo pipefail
           test -s dist/aiops-demo-video/AIOps-Demo-Complete.mp4
           test -s dist/aiops-demo-video/AIOps-Demo-Complete.srt
           test -s dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json
+          ffmpeg -v error -i dist/aiops-demo-video/AIOps-Demo-Complete.mp4 -f null -
           duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 dist/aiops-demo-video/AIOps-Demo-Complete.mp4)"
           python - "$duration" <<'PY'
           import sys
@@ -70,6 +81,8 @@ jobs:
           p = Path("dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json")
           data = json.loads(p.read_text(encoding="utf-8"))
           assert data["scene_count"] == 9
+          assert data["duration_target_seconds"] == 72
+          assert data["provenance"] == "SIMULATED_TARGET"
           assert data["runtime_authenticated"] is False
           assert data["dgx_independently_attested"] is False
           assert data["live_execution_qualified"] is False
