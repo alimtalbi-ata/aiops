@@ -25,6 +25,7 @@ APPROVED = (
     "docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md",
     "tests/test_acme_fixture_validation.py",
     "tests/test_portal_acme_impact_read_model.py",
+    "tests/test_portal_bootstrap_read_model.py",
 
     ".github/workflows/star-offline-chromium-real-render.yml",
     ".github/workflows/star-capture-evidence.yml",
