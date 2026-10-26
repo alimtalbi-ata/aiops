@@ -25,6 +25,10 @@ La route ne dépend que de FastAPI déjà utilisé par le portail et du validate
 ## Tests
 `tests/test_portal_acme_impact_read_model.py` vérifie l'unicité/méthode des routes, le SHA-256 lié aux mêmes octets que ceux validés, la répétabilité des réponses, les champs ticket/temps absents, les limites d'attestation, le refus 503 du fixture invalide/absent, l'encodage HTML, la CSP et le rejet des méthodes mutatrices. Le test du chargeur binaire vérifie également les clés JSON dupliquées et UTF-8 invalide. CI sur données locales uniquement.
 
+## Durcissement fail-closed (26 octobre 2026)
+
+Le validateur contrôle désormais explicitement le type de `severity` avant toute appartenance à l'ensemble autorisé. Une valeur JSON de type liste/objet (non hashable), nombre ou `null` est rejetée par une `ValueError` contrôlée au lieu de produire un `TypeError` non géré. La route du portail transforme le fixture mal formé en HTTP 503 générique, sans détails internes ni payload partiel. Les tests unitaires couvrent cinq types invalides ; un test ASGI vérifie le refus HTTP. Cela ne change pas le contrat métier et n'introduit aucun appel runtime.
+
 ## Historique et garde-fous
 Le validateur et le fixture ACME sont déjà inventoriés dans `docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md` et `docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md`. Aucun ZIP original, secret ou extrait tronqué n'est réimporté ou déclaré complet par ce changement.
 
