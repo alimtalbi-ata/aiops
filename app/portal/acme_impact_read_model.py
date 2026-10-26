@@ -8,17 +8,16 @@ from __future__ import annotations
 
 import hashlib
 import html
-import importlib.util
 from pathlib import Path
 from typing import Any
+
+from portal.acme_fixture_contract import load_fixture_bytes, validate_fixture
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
-SOURCE_ROOT = Path(__file__).resolve().parents[2]
-FIXTURE_PATH = SOURCE_ROOT / "demo" / "integrations" / "v21315" / "acme-fixtures.json"
-VALIDATOR_PATH = SOURCE_ROOT / "demo" / "integrations" / "v21315" / "validate_fixture.py"
+FIXTURE_PATH = Path(__file__).resolve().with_name("acme-fixtures.json")
 
 HEADERS = {
     "Cache-Control": "no-store",
@@ -33,28 +32,13 @@ HEADERS = {
 }
 
 
-def _validator_module():
-    """Load the reviewed stdlib validator lazily so missing demo assets cannot stop portal boot."""
-    if VALIDATOR_PATH.is_symlink() or not VALIDATOR_PATH.is_file():
-        raise ValueError("synthetic fixture validator is unavailable")
-    spec = importlib.util.spec_from_file_location(
-        "_aiops_acme_v21315_fixture_validator", VALIDATOR_PATH
-    )
-    if spec is None or spec.loader is None:
-        raise ValueError("synthetic fixture validator cannot be loaded")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def build_acme_impact_read_model() -> dict[str, Any]:
     """Build a deterministic simulation view from the exact validated local bytes."""
     if FIXTURE_PATH.is_symlink() or not FIXTURE_PATH.is_file():
         raise ValueError("synthetic ACME fixture is unavailable")
     raw = FIXTURE_PATH.read_bytes()
-    validator = _validator_module()
-    fixture = validator.load_fixture_bytes(raw)
-    report = validator.validate_fixture(fixture)
+    fixture = load_fixture_bytes(raw)
+    report = validate_fixture(fixture)
     digest = hashlib.sha256(raw).hexdigest()
     return {
         "schema": "aiops.synthetic-impact-read-model.v1",
