@@ -45,7 +45,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_demo_video_generator.py' -v
       - name: Render full demo video
         env:
-          DEMO_SCENARIO: ${ inputs.scenario || 'SAN_FABRIC_P1' }
+          DEMO_SCENARIO: ${{ inputs.scenario || 'SAN_FABRIC_P1' }}
         run: |
           python -m demo.generate_demo_video \
             --scenario "$DEMO_SCENARIO" \
@@ -79,7 +79,7 @@ jobs:
       - name: Upload generated video, subtitles and manifest
         uses: actions/upload-artifact@v4
         with:
-          name: AIOps-Demo-Video-${ inputs.scenario || 'SAN_FABRIC_P1' }
+          name: AIOps-Demo-Video-${{ inputs.scenario || 'SAN_FABRIC_P1' }}
           path: dist/aiops-demo-video/
           if-no-files-found: error
           retention-days: 30
