@@ -1,6 +1,6 @@
 # AIOps 2.0 — Inventaire exact des routes et connexions du portail
 
-Date de revue : 25 octobre 2026. Source : code de la branche de continuité de la PR draft #36. Ce document décrit le code et les adaptateurs présents ; il ne prétend pas mesurer le runtime Debian.
+Date de revue : 26 octobre 2026. Source : code de la branche de continuité de la PR draft #36. Ce document décrit le code et les adaptateurs présents ; il ne prétend pas mesurer le runtime Debian.
 
 ## Contrat de présence de route
 
@@ -10,7 +10,7 @@ Cette présence n'est PAS une attestation que le composant correspondant est bra
 
 ## Routes déclarées par le portail source
 
-Les routes ci-dessous ont été relevées dans app/portal/main.py et les trois routeurs effectivement inclus par ce fichier. La méthode, le handler, les dépendances upstream et les limites sont indiqués pour éviter de confondre une page avec une intégration.
+Les routes ci-dessous ont été relevées dans app/portal/main.py et les quatre routeurs effectivement inclus par ce fichier (STAR legacy replay, storyboard public, registre de plateforme et read model ACME). La méthode, le handler, les dépendances upstream et les limites sont indiqués pour éviter de confondre une page avec une intégration.
 
 | Méthode et chemin | Comportement présent dans le code | Connexion constatée au niveau source | Limite de qualification |
 |---|---|---|---|
@@ -40,8 +40,8 @@ Les routes ci-dessous ont été relevées dans app/portal/main.py et les trois r
 | GET /api/platform/components | Registre de 20 familles et présence des chemins GET exacts | Table ASGI locale uniquement | Aucun health check ou appel de service n'est exécuté. |
 | GET /noc | Tableau statique de convergence et présence des chemins GET exacts | Table ASGI locale uniquement | Ce n'est pas l'écran NOC runtime et il n'interroge pas Checkmk/Thruk. |
 
-| GET /api/demo/acme-impact | Modèle déterministe de l'impact ACME à partir du fixture local validé | Fichier JSON local + validateur du graphe | ID préfixé SIM-ACME dérivé du SHA-256 exact ; ticket et timestamp absents ; aucun backend contacté. |
-| GET /demo/acme-impact | Écran HTML local de la même fixture, avec identifiants, chemin et trous de preuve | Même source locale que l'API JSON | Données de simulation uniquement ; CSP sans scripts, formulaires, liens ou connexions externes. |
+| GET /api/demo/acme-impact | Modèle déterministe de l'impact ACME à partir du fixture local validé | `app/portal/acme-fixtures.json` + `portal.acme_fixture_contract` | ID préfixé SIM-ACME dérivé du SHA-256 des octets validés ; ticket et timestamp absents ; aucun backend contacté. |
+| GET /demo/acme-impact | Écran HTML local de la même fixture, avec identifiants, chemin et trous de preuve | Même fixture embarqué `app/portal/acme-fixtures.json` et contrat stdlib que l'API JSON | Données de simulation uniquement ; CSP sans scripts, formulaires, liens ou connexions externes. |
 
 ## Interfaces upstream codées mais non qualifiées
 
