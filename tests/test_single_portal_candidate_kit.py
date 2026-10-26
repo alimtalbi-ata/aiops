@@ -51,6 +51,14 @@ class CandidateKitTests(unittest.TestCase):
                 "docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md",
                 "docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md",
                 "docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md",
+                ".github/workflows/star-capture-evidence.yml",
+                "demo/star_capture_evidence.py",
+                "demo/star_png_integrity.py",
+                "demo/star_snapshot_choreography.py",
+                "docs/demo/AIOPS-STAR-EVIDENCE-MANIFEST-STRICTNESS-20261026.md",
+                "tests/test_star_capture_evidence.py",
+                "tests/test_star_png_integrity.py",
+                "tests/test_star_snapshot_choreography.py",
             }
             self.assertTrue(required_portal_sources.issubset(set(kit.APPROVED)))
             self.assertTrue(kit.safe_path(
@@ -88,6 +96,20 @@ class CandidateKitTests(unittest.TestCase):
                     "docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md",
                 }
                 for source_path in cumulative_acme_sources:
+                    member = "sources/" + source_path
+                    self.assertIn(member, z.namelist())
+                    self.assertEqual(z.read(member), (root / source_path).read_bytes())
+                cumulative_evidence_sources = {
+                    ".github/workflows/star-capture-evidence.yml",
+                    "demo/star_capture_evidence.py",
+                    "demo/star_png_integrity.py",
+                    "demo/star_snapshot_choreography.py",
+                    "docs/demo/AIOPS-STAR-EVIDENCE-MANIFEST-STRICTNESS-20261026.md",
+                    "tests/test_star_capture_evidence.py",
+                    "tests/test_star_png_integrity.py",
+                    "tests/test_star_snapshot_choreography.py",
+                }
+                for source_path in cumulative_evidence_sources:
                     member = "sources/" + source_path
                     self.assertIn(member, z.namelist())
                     self.assertEqual(z.read(member), (root / source_path).read_bytes())
