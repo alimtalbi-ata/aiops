@@ -31,3 +31,9 @@ Le répertoire de sortie doit être neuf : le générateur refuse d'écraser des
 Le script ne contacte aucun endpoint AIOps, Grafana, n8n, GLPI ou DGX. Il construit une démonstration synthétique complète, et non un enregistrement du runtime actuellement déployé. Les écrans sont des scènes de présentation illustrées, pas des captures des interfaces réelles. Le manifeste maintient explicitement `runtime_authenticated=false`, `dgx_independently_attested=false`, `live_execution_qualified=false` et `live_action_authorized=false`.
 
 La qualification du script est distincte de la qualification E2E du portail. Ne pas déclarer une démonstration runtime qualifiée à partir du seul MP4.
+
+## Génération automatisée GitHub Actions
+
+Le workflow `.github/workflows/generate-demo-video.yml` génère aussi le MP4 et publie les trois fichiers comme artefact téléchargeable. Il se déclenche sur les changements du générateur/tests/documents sur la branche de travail, ou manuellement via **Actions → Build complete AIOps demo video → Run workflow**. Choisir `SAN_FABRIC_P1` ou `PAYMENTS_P2`, puis télécharger l'artefact de l'exécution terminée. Le workflow contrôle que le MP4 dure environ 72 secondes et que le manifeste ne revendique aucune attestation runtime ou action LIVE.
+
+La publication d'un artefact GitHub Actions n'installe pas la vidéo dans le portail Debian. Aucun déploiement n'est réalisé par ce workflow.
