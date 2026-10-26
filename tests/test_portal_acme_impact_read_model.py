@@ -124,8 +124,6 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
                     rejected.json()["detail"],
                     "synthetic_impact_fixture_unavailable_or_invalid",
                 )
-            # Malformed type in an otherwise valid fixture must map to a fail-closed 503,
-            # not leak an uncaught TypeError/HTTP 500 from set membership.
             invalid["provenance"] = "SIMULATED_TARGET"
             invalid["incidents"][0]["severity"] = []
             malformed_path = pathlib.Path(tmp) / "malformed-severity.json"
@@ -146,6 +144,73 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
                     missing.json()["detail"],
                     "synthetic_impact_fixture_unavailable_or_invalid",
                 )
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires POSIX O_NOFOLLOW")
+    def test_symlink_fixture_is_rejected_without_disclosing_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            target = root / "valid.json"
+            target.write_bytes(impact.FIXTURE_PATH.read_bytes())
+            link = root / "fixture.json"
+            link.symlink_to(target)
+            with patch.object(impact, "FIXTURE_PATH", link):
+                response = self.client.get("/api/demo/acme-impact")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(
+                response.json(),
+                {"detail": "synthetic_impact_fixture_unavailable_or_invalid"},
+            )
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires POSIX O_NOFOLLOW")
+    def test_oversized_fixture_is_rejected_before_json_parsing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "oversized.json"
+            path.write_bytes(b" " * (impact.MAX_FIXTURE_BYTES + 1))
+            with patch.object(impact, "FIXTURE_PATH", path):
+                response = self.client.get("/api/demo/acme-impact")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(
+                response.json(),
+                {"detail": "synthetic_impact_fixture_unavailable_or_invalid"},
+            )
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW") and hasattr(os, "mkfifo"), "requires POSIX FIFO support")
+    def test_non_regular_fixture_is_rejected_without_blocking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fifo = pathlib.Path(tmp) / "fixture.json"
+            os.mkfifo(fifo)
+            with patch.object(impact, "FIXTURE_PATH", fifo):
+                response = self.client.get("/api/demo/acme-impact")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(
+                response.json(),
+                {"detail": "synthetic_impact_fixture_unavailable_or_invalid"},
+            )
+
+    @unittest.skipUnless(hasattr(os, "O_NOFOLLOW"), "requires POSIX O_NOFOLLOW")
+    def test_fixture_mutation_during_read_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "fixture.json"
+            path.write_bytes(impact.FIXTURE_PATH.read_bytes())
+            real_fstat = os.fstat
+            calls = 0
+
+            def mutate_after_initial_stat(fd):
+                nonlocal calls
+                result = real_fstat(fd)
+                calls += 1
+                if calls == 1:
+                    path.write_bytes(b"{}")
+                return result
+
+            with patch.object(impact, "FIXTURE_PATH", path):
+                with patch.object(impact.os, "fstat", side_effect=mutate_after_initial_stat):
+                    response = self.client.get("/api/demo/acme-impact")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(
+                response.json(),
+                {"detail": "synthetic_impact_fixture_unavailable_or_invalid"},
+            )
 
     def test_mutating_methods_are_not_exposed(self):
         self.assertEqual(self.client.post("/api/demo/acme-impact").status_code, 405)
