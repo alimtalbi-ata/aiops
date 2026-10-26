@@ -1,0 +1,85 @@
+name: Build complete AIOps demo video
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Synthetic demo scenario
+        required: true
+        type: choice
+        options:
+          - SAN_FABRIC_P1
+          - PAYMENTS_P2
+        default: SAN_FABRIC_P1
+  push:
+    branches:
+      - feat/v21310-star-portal-continuity-20261022
+    paths:
+      - "demo/generate_demo_video.py"
+      - "tests/test_demo_video_generator.py"
+      - ".github/workflows/generate-demo-video.yml"
+      - "docs/demo/AIOPS-DEMO-VIDEO-GENERATOR.md"
+
+permissions:
+  contents: read
+
+jobs:
+  render-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Test video storyboard contract
+        run: python -m unittest tests.test_demo_video_generator -v
+      - name: Render full demo video
+        env:
+          DEMO_SCENARIO: ${ inputs.scenario || 'SAN_FABRIC_P1' }
+        run: |
+          python -m demo.generate_demo_video \
+            --scenario "$DEMO_SCENARIO" \
+            --out dist/aiops-demo-video
+      - name: Verify MP4 and expected duration
+        run: |
+          set -euo pipefail
+          test -s dist/aiops-demo-video/AIOps-Demo-Complete.mp4
+          test -s dist/aiops-demo-video/AIOps-Demo-Complete.srt
+          test -s dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json
+          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 dist/aiops-demo-video/AIOps-Demo-Complete.mp4)"
+          python - "$duration" <<'PY'
+          import sys
+          duration = float(sys.argv[1])
+          if not 70 <= duration <= 75:
+              raise SystemExit(f"Unexpected demo duration: {duration:.3f}s")
+          print(f"VIDEO_DURATION_PASS={duration:.3f}s")
+          PY
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+          assert data["scene_count"] == 9
+          assert data["runtime_authenticated"] is False
+          assert data["dgx_independently_attested"] is False
+          assert data["live_execution_qualified"] is False
+          assert data["live_action_authorized"] is False
+          print("PROVENANCE_GUARD_PASS")
+          PY
+      - name: Upload generated video, subtitles and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIOps-Demo-Video-${ inputs.scenario || 'SAN_FABRIC_P1' }
+          path: dist/aiops-demo-video/
+          if-no-files-found: error
+          retention-days: 30
