@@ -26,6 +26,18 @@ class DemoVideoContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scenes_for("UNSAFE")
 
+    def test_each_scene_has_a_distinct_operational_visual(self):
+        html_pages = [scene_html(scene, i, len(SCENES)) for i, scene in enumerate(SCENES)]
+        for marker in ("LATENCE / PERTE DE CHEMIN", "CORRÉLATION", "TOPOLOGIE DE DÉMONSTRATION",
+                       "HYPOTHÈSE A", "FICHE INCIDENT", "Approbation explicite requise",
+                       "PLAN DRY-RUN", "AVANT · ILLUSTRATIF", "DOSSIER DE PREUVES"):
+            with self.subTest(marker=marker):
+                self.assertTrue(any(marker in page for page in html_pages), marker)
+        for page in html_pages:
+            self.assertIn("Snapshots générés par navigateur", page)
+            self.assertIn("Runtime live : non connecté", page)
+            self.assertIn("Provenance", page)
+
     def test_html_escapes_scene_content(self):
         scene = ("X", "<script>alert(1)</script>", "A & B", "SYSTEM", "STATUS", "PHASE", "Aucune action")
         html = scene_html(scene, 0, 1)
