@@ -1,7 +1,7 @@
 import json
 import unittest
 from pathlib import Path
-from demo.generate_demo_video import SCENES, DURATION, scene_html
+from demo.generate_demo_video import SCENES, DURATION, scene_html, scenes_for
 
 
 class DemoVideoContractTests(unittest.TestCase):
@@ -16,8 +16,15 @@ class DemoVideoContractTests(unittest.TestCase):
             with self.subTest(scene=scene[0]):
                 html = scene_html(scene, i, len(SCENES))
                 self.assertIn("SIMULATION", html)
-                self.assertIn("Aucune", html)
+                self.assertIn(scene[6], html)
                 self.assertIn(f"SCÈNE {i+1:02d}", html)
+
+    def test_payments_scenario_is_distinct_and_fail_closed(self):
+        payments = scenes_for("PAYMENTS_P2")
+        self.assertIn("PAYMENTS", payments[0][1])
+        self.assertIn("SLO", payments[7][1])
+        with self.assertRaises(ValueError):
+            scenes_for("UNSAFE")
 
     def test_html_escapes_scene_content(self):
         scene = ("X", "<script>alert(1)</script>", "A & B", "SYSTEM", "STATUS", "PHASE", "Aucune action")
