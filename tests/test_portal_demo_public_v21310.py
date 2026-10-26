@@ -1,6 +1,7 @@
 """Offline regression tests for the public synthetic-only router."""
 import importlib.util
 import json
+import hashlib
 import os
 import pathlib
 import subprocess
@@ -102,6 +103,39 @@ class DemoPublicTests(unittest.TestCase):
                     mod._jobs.clear()
                     mod._recent_starts.clear()
 
+    def test_completed_job_requires_manifest_and_artifact_hashes(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            video = output / "AIOps-Demo-Complete.mp4"
+            subtitles = output / "AIOps-Demo-Complete.srt"
+            manifest = output / "AIOps-Demo-Complete.manifest.json"
+            video.write_bytes(b"fake-mp4-fixture")
+            subtitles.write_text("1\\n00:00:00,000 --> 00:00:01,000\\nFixture\\n", encoding="utf-8")
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            data = {
+                "scenario":"SAN_FABRIC_P1", "provenance":"SIMULATED_TARGET",
+                "runtime_authenticated":False, "dgx_independently_attested":False,
+                "live_execution_qualified":False, "live_action_authorized":False,
+                "scene_count":9, "duration_target_seconds":72, "resolution":"1920x1080",
+                "video_size_bytes":video.stat().st_size, "video_sha256":digest(video),
+                "subtitles_sha256":digest(subtitles)
+            }
+            manifest.write_text(json.dumps(data), encoding="utf-8")
+            job = {"process":MagicMock(), "output":output, "scenario":"SAN_FABRIC_P1",
+                   "status":"running", "created_at":1}
+            job["process"].poll.return_value = 0
+            result = mod._job_snapshot("a" * 32, job)
+            self.assertEqual(result["status"], "completed")
+            self.assertIn("video", result["artifacts"])
+            subtitles.write_text("tampered", encoding="utf-8")
+            job2 = {"process":MagicMock(), "output":output, "scenario":"SAN_FABRIC_P1",
+                    "status":"running", "created_at":1}
+            job2["process"].poll.return_value = 0
+            result2 = mod._job_snapshot("b" * 32, job2)
+            self.assertEqual(result2["status"], "failed")
+            self.assertEqual(result2["error"], "manifest_or_artifact_integrity_validation_failed")
     def test_public_router_is_mounted_on_existing_portal_app(self):
         # Import in a child process so the synthetic internal token cannot leak
         # into other tests and no runtime service or listener is contacted.
