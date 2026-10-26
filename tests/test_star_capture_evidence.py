@@ -1,8 +1,9 @@
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
-from demo.star_capture_evidence import verify_manifest
+from demo.star_capture_evidence import verify_file, verify_manifest
 
 # Structurally complete SYNTHETIC PNG, not a browser/runtime screenshot.
 import struct
@@ -78,6 +79,44 @@ class CaptureEvidenceTests(unittest.TestCase):
             verify_manifest(self.root, "ACME-TEST-001", {
                 "detect": {**self.record, "proof_state": "simulated", "claim_real": True}
             })
+
+    def test_manifest_reader_rejects_duplicate_keys_at_any_depth(self):
+        path = self.root / "manifest.json"
+        payloads = (
+            '{"run_id":"ACME-TEST-001","run_id":"OTHER-TEST-001","captures":{}}',
+            '{"run_id":"ACME-TEST-001","captures":{"detect":{"cue":"detect","cue":"ticket"}}}',
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                path.write_text(payload, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "duplicate evidence manifest JSON key"):
+                    verify_file(path, self.root)
+
+    def test_manifest_reader_refuses_symlinks_and_oversized_files(self):
+        target = self.root / "target.json"
+        target.write_text('{"run_id":"ACME-TEST-001","captures":{}}', encoding="utf-8")
+        link = self.root / "linked-manifest.json"
+        link.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            verify_file(link, self.root)
+
+        oversized = self.root / "oversized.json"
+        oversized.write_bytes(b" " * 300_001)
+        with self.assertRaisesRegex(ValueError, "too large"):
+            verify_file(oversized, self.root)
+
+    def test_manifest_reader_refuses_invalid_utf8_and_non_object_records(self):
+        path = self.root / "manifest.json"
+        path.write_bytes(bytes([255]))
+        with self.assertRaisesRegex(ValueError, "UTF-8"):
+            verify_file(path, self.root)
+
+        path.write_text(
+            json.dumps({"run_id": "ACME-TEST-001", "captures": {"detect": []}}),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "capture record must be an object"):
+            verify_file(path, self.root)
 
 if __name__ == "__main__":
     unittest.main()
