@@ -40,6 +40,9 @@ Les routes ci-dessous ont été relevées dans app/portal/main.py et les trois r
 | GET /api/platform/components | Registre de 20 familles et présence des chemins GET exacts | Table ASGI locale uniquement | Aucun health check ou appel de service n'est exécuté. |
 | GET /noc | Tableau statique de convergence et présence des chemins GET exacts | Table ASGI locale uniquement | Ce n'est pas l'écran NOC runtime et il n'interroge pas Checkmk/Thruk. |
 
+| GET /api/demo/acme-impact | Modèle déterministe de l'impact ACME à partir du fixture local validé | Fichier JSON local + validateur du graphe | ID préfixé SIM-ACME dérivé du SHA-256 exact ; ticket et timestamp absents ; aucun backend contacté. |
+| GET /demo/acme-impact | Écran HTML local de la même fixture, avec identifiants, chemin et trous de preuve | Même source locale que l'API JSON | Données de simulation uniquement ; CSP sans scripts, formulaires, liens ou connexions externes. |
+
 ## Interfaces upstream codées mais non qualifiées
 
 Le portail configure CORE_URL, TWIN_URL, COPILOT_URL et, dans la page Policy Control, POLICY_URL. Les appels relevés dans le code concernent Core pour dashboard, incidents, runs, ledgers, preuves et exécution de démonstration ; Twin pour résumé, graphe et impact ; Copilot pour la requête conversationnelle ; Policy pour l'état, l'historique et les décisions de simulation.
