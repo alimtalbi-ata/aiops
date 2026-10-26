@@ -19,6 +19,11 @@ The historical/cumulative screenshot collector already checked PNG structure, SH
 
 Regression tests cover duplicate keys at root and nested record level, symlink refusal, bounded size, invalid UTF-8 and non-object capture records. The existing synthetic PNG suite remains byte-level structure/integrity only. A passing digest does not attest the image source, authenticated session, expected application screen, timestamp origin, or business event.
 
+
+## Malformed metadata shape handling (26 October 2026)
+
+`validate_capture` is also called by offline adapters on operator-supplied metadata. It now checks that each capture is a mapping, the cue name is a string, and `proof_state` is a string before dictionary lookup or set membership. JSON arrays/objects in these fields are rejected with a controlled `ValueError` instead of leaking incidental `AttributeError`/`TypeError`. The same guard is exercised through `build_timeline`. This is input-shape validation only; it does not authenticate timestamps, browser sessions, source applications, or runtime execution.
+
 ## Safety and rollback
 
 The module remains an offline verifier; the change performs no live capture and no external write. Rollback is source-only on the PR branch: revert this commit. Do not run historical F20.13 scripts against Debian or legacy application ports. Production remains blocked until authenticated runtime E2E, nine exact application checkpoints, independent event provenance, backup/restore and explicit release approval are qualified.
