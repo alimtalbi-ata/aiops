@@ -1,0 +1,34 @@
+name: ACME V2.13.15 synthetic impact fixture (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/integrations/v21315/**'
+      - 'tests/test_acme_fixture_validation.py'
+      - 'docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md'
+      - '.github/workflows/acme-v21315-fixture-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-synthetic-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact PR source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and validate only local synthetic data
+        run: |
+          set -euo pipefail
+          python -m py_compile demo/integrations/v21315/validate_fixture.py tests/test_acme_fixture_validation.py
+          python demo/integrations/v21315/validate_fixture.py
+          python -O demo/integrations/v21315/validate_fixture.py
+          python -m unittest discover -s tests -p 'test_acme_fixture_validation.py' -v
