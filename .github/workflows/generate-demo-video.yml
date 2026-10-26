@@ -42,7 +42,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg espeak-ng
           python -m pip install --upgrade pip
-          python -m pip install playwright fastapi
+          python -m pip install playwright fastapi requests
           python -m playwright install --with-deps chromium
       - name: Test video storyboard contract
         run: python -m unittest discover -s tests -p 'test_demo_video_generator.py' -v
