@@ -10,8 +10,8 @@ from demo.star_png_integrity import inspect_png
 def chunk(kind, data=b""):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
 
-def png(*, width=1, height=1, color=2, chunks=None):
-    header = struct.pack(">IIBBBBB", width, height, 8, color, 0, 0, 0)
+def png(*, width=1, height=1, depth=8, color=2, chunks=None):
+    header = struct.pack(">IIBBBBB", width, height, depth, color, 0, 0, 0)
     if chunks is None:
         chunks = [chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))]
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + b"".join(chunks) + chunk(b"IEND")
@@ -73,6 +73,35 @@ class StrictPngIntegrityTests(unittest.TestCase):
     def test_reject_duplicate_ihdr(self):
         with self.assertRaises(ValueError):
             self.check(png(chunks=[chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)), chunk(b"IDAT", b"1")]))
+
+    def test_indexed_png_requires_palette_before_idat(self):
+        with self.assertRaisesRegex(ValueError, "requires PLTE"):
+            self.check(png(depth=1, color=3))
+
+    def test_valid_indexed_png_palette_respects_bit_depth(self):
+        sample = png(depth=1, color=3, chunks=[
+            chunk(b"PLTE", b"\\x00\\x00\\x00\\xff\\xff\\xff"),
+            chunk(b"IDAT", zlib.compress(b"\\x00\\x00")),
+        ])
+        self.assertEqual(self.check(sample)[1], len(sample))
+
+    def test_indexed_png_palette_cannot_exceed_bit_depth(self):
+        sample = png(depth=1, color=3, chunks=[
+            chunk(b"PLTE", b"\\x00\\x00\\x00" * 3),
+            chunk(b"IDAT", zlib.compress(b"\\x00\\x00")),
+        ])
+        with self.assertRaisesRegex(ValueError, "exceeds indexed bit depth"):
+            self.check(sample)
+
+    def test_grayscale_png_forbids_palette(self):
+        for color in (0, 4):
+            with self.subTest(color=color):
+                sample = png(color=color, chunks=[
+                    chunk(b"PLTE", b"\\x00\\x00\\x00"),
+                    chunk(b"IDAT", zlib.compress(b"\\x00\\x00\\x00\\x00")),
+                ])
+                with self.assertRaisesRegex(ValueError, "forbidden for grayscale"):
+                    self.check(sample)
 
     def test_reject_invalid_png_size_limit(self):
         self.path.write_bytes(png())
