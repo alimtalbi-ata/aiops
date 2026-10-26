@@ -237,7 +237,7 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
     snapshots.mkdir()
     with tempfile.TemporaryDirectory(prefix="aiops-demo-video-") as tmp:
         root = Path(tmp)
-        frames = snapshots
+        frames = snapshots.resolve()
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT}, device_scale_factor=1)
