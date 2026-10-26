@@ -5,6 +5,7 @@ AIOPS_DEMO_VIDEO_ENABLED=true is explicitly set for the portal process.
 """
 from pathlib import Path
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -53,19 +54,41 @@ def _job_snapshot(job_id, job):
         if code == 0:
             try:
                 data = json.loads(manifest.read_text(encoding="utf-8"))
+                video = job["output"] / ARTIFACTS["video"][0]
+                subtitles = job["output"] / ARTIFACTS["subtitles"][0]
+                def sha256_file(path):
+                    digest = hashlib.sha256()
+                    with path.open("rb") as stream:
+                        while True:
+                            chunk = stream.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            digest.update(chunk)
+                    return digest.hexdigest()
+                files_valid = all(
+                    path.is_file() and not path.is_symlink()
+                    and path.resolve().parent == job["output"].resolve()
+                    and path.stat().st_size > 0
+                    for path in (manifest, video, subtitles)
+                )
                 valid = (
-                    data.get("provenance") == "SIMULATED_TARGET"
+                    files_valid
+                    and data.get("provenance") == "SIMULATED_TARGET"
                     and data.get("runtime_authenticated") is False
                     and data.get("dgx_independently_attested") is False
                     and data.get("live_execution_qualified") is False
                     and data.get("live_action_authorized") is False
                     and data.get("scenario") == job["scenario"]
                     and data.get("scene_count") == 9
-                    and manifest.is_file()
+                    and data.get("duration_target_seconds") == 72
+                    and data.get("resolution") == "1920x1080"
+                    and data.get("video_size_bytes") == video.stat().st_size
+                    and data.get("video_sha256") == sha256_file(video)
+                    and data.get("subtitles_sha256") == sha256_file(subtitles)
                 )
                 if not valid:
                     job["status"] = "failed"
-                    job["error"] = "manifest_validation_failed"
+                    job["error"] = "manifest_or_artifact_integrity_validation_failed"
             except (OSError, ValueError, TypeError):
                 job["status"] = "failed"
                 job["error"] = "manifest_missing_or_invalid"
