@@ -40,5 +40,5 @@ jobs:
       - name: Build portal image and smoke-test packaged ACME contract without listener
         run: |
           set -euo pipefail
-          docker build --file portal/Dockerfile --tag aiops-portal-acme-package-smoke:ci app
+          docker build --file app/portal/Dockerfile --tag aiops-portal-acme-package-smoke:ci app
           docker run --rm --entrypoint python aiops-portal-acme-package-smoke:ci -c 'from portal.acme_impact_read_model import build_acme_impact_read_model; m=build_acme_impact_read_model(); assert m["provenance"] == "SIMULATED_TARGET"; assert m["impact_path"] == ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"]; assert m["ticket_id"] is None and m["event_timestamp_utc"] is None; assert m["runtime_attested"] is False; assert m["live_remediation_authorized"] is False; print("AIOPS_PORTAL_PACKAGED_ACME=PASS")'
