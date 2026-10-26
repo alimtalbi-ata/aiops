@@ -55,6 +55,8 @@ def bootstrap():
             "live_remediation_authorized": False,
         },
     }
+
+
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')
