@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import html
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
 FIXTURE_PATH = Path(__file__).resolve().with_name("acme-fixtures.json")
+MAX_FIXTURE_BYTES = 256 * 1024
 
 HEADERS = {
     "Cache-Control": "no-store",
@@ -32,11 +35,56 @@ HEADERS = {
 }
 
 
+def _read_fixture_bytes_safely(path: Path) -> bytes:
+    """Read one bounded regular file without following a symlink or trusting a pathname twice.
+
+    The digest and schema validation downstream operate on the same byte string
+    returned here. Platforms lacking O_NOFOLLOW fail closed rather than silently
+    weakening the fixture trust boundary.
+    """
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise ValueError("platform cannot safely open the synthetic fixture")
+    flags = os.O_RDONLY | nofollow
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    # Avoid blocking if an unexpected FIFO is substituted for the fixture.
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError("synthetic fixture cannot be opened safely") from exc
+
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError("synthetic fixture must be a regular file")
+        if before.st_size < 0 or before.st_size > MAX_FIXTURE_BYTES:
+            raise ValueError("synthetic fixture exceeds size limit")
+
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_FIXTURE_BYTES + 1)
+
+        after = os.fstat(fd)
+        stable_before = (
+            before.st_dev, before.st_ino, before.st_mode, before.st_size,
+            before.st_mtime_ns, before.st_ctime_ns,
+        )
+        stable_after = (
+            after.st_dev, after.st_ino, after.st_mode, after.st_size,
+            after.st_mtime_ns, after.st_ctime_ns,
+        )
+        if stable_before != stable_after or len(raw) != after.st_size:
+            raise ValueError("synthetic fixture changed during read")
+        if len(raw) > MAX_FIXTURE_BYTES:
+            raise ValueError("synthetic fixture exceeds size limit")
+        return raw
+    finally:
+        os.close(fd)
+
+
 def build_acme_impact_read_model() -> dict[str, Any]:
     """Build a deterministic simulation view from the exact validated local bytes."""
-    if FIXTURE_PATH.is_symlink() or not FIXTURE_PATH.is_file():
-        raise ValueError("synthetic ACME fixture is unavailable")
-    raw = FIXTURE_PATH.read_bytes()
+    raw = _read_fixture_bytes_safely(FIXTURE_PATH)
     fixture = load_fixture_bytes(raw)
     report = validate_fixture(fixture)
     digest = hashlib.sha256(raw).hexdigest()
