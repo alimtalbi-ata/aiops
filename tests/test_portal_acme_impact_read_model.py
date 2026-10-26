@@ -42,6 +42,17 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
                 self.assertEqual(set(routes[0].methods or ()), {"GET"})
                 self.assertEqual(routes[0].name, name)
 
+    def test_fixture_and_validator_are_packaged_inside_portal_directory(self):
+        expected = pathlib.Path(impact.__file__).resolve().with_name("acme-fixtures.json")
+        self.assertEqual(impact.FIXTURE_PATH.resolve(), expected)
+        self.assertTrue(expected.is_file())
+        self.assertNotIn("/demo/integrations/", str(impact.FIXTURE_PATH))
+        model = impact.build_acme_impact_read_model()
+        self.assertEqual(model["source_sha256"], hashlib.sha256(expected.read_bytes()).hexdigest())
+        self.assertEqual(model["provenance"], "SIMULATED_TARGET")
+        self.assertIs(model["runtime_attested"], False)
+        self.assertIs(model["live_remediation_authorized"], False)
+
     def test_json_model_is_deterministic_and_hash_binds_exact_bytes(self):
         raw = impact.FIXTURE_PATH.read_bytes()
         expected_sha = hashlib.sha256(raw).hexdigest()
