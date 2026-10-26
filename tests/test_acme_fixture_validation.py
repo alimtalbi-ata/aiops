@@ -96,7 +96,7 @@ class AcmeFixtureValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
             load_fixture_bytes(b'{"schema":"first","schema":"second"}')
         with self.assertRaisesRegex(ValueError, "UTF-8"):
-            load_fixture_bytes(b"\\xff")
+            load_fixture_bytes(b"\xff")
 
     def test_invalid_impact_fails_closed_under_optimized_python(self):
         data = self.fixture()
