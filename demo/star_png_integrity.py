@@ -71,6 +71,8 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
         idat_ended = False
         seen_plte = False
         seen_iend = False
+        png_depth = None
+        png_color = None
         while offset < size:
             if size - offset < 12:
                 raise ValueError("truncated PNG chunk")
@@ -92,8 +94,19 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
                 raise ValueError("PNG data after IEND")
             if kind == b"IHDR" and seen_ihdr:
                 raise ValueError("duplicate PNG IHDR")
-            if kind == b"PLTE" and (seen_plte or seen_idat or length == 0 or length % 3 or length > 768):
-                raise ValueError("invalid PNG palette")
+            if kind == b"PLTE":
+                if seen_plte or seen_idat or length == 0 or length % 3 or length > 768:
+                    raise ValueError("invalid PNG palette")
+                # PNG forbids PLTE for grayscale and grayscale+alpha. For
+                # indexed color, the palette cannot address more entries than
+                # the IHDR bit depth permits.
+                if png_color in (0, 4):
+                    raise ValueError("PLTE is forbidden for grayscale PNG")
+                if (png_color == 3 and png_depth is not None
+                        and length // 3 > (1 << png_depth)):
+                    raise ValueError("PNG palette exceeds indexed bit depth")
+            if kind == b"IDAT" and png_color == 3 and not seen_plte:
+                raise ValueError("indexed PNG requires PLTE before IDAT")
             if kind == b"IDAT" and (idat_ended or length == 0):
                 raise ValueError("invalid PNG IDAT sequence")
             if kind == b"IEND" and (not seen_idat or length != 0):
@@ -117,6 +130,7 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
                         or width * height > MAX_PIXELS or depth not in _VALID_DEPTHS.get(color, set())
                         or compression != 0 or filtering != 0 or interlace not in (0, 1)):
                     raise ValueError("invalid or excessive PNG dimensions/format")
+                png_depth, png_color = depth, color
                 seen_ihdr = True
             elif kind == b"PLTE":
                 seen_plte = True
