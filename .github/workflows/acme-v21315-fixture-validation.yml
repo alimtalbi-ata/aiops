@@ -1,4 +1,4 @@
-name: ACME V2.13.15 synthetic impact fixture (offline)
+name: ACME V2.13.15 synthetic impact and packaged portal image smoke (isolated)
 
 on:
   pull_request:
