@@ -97,15 +97,19 @@ def _reject_attestation_claims(record: Mapping[str, object]) -> None:
 
 
 def validate_capture(cue_name: str, record: Mapping[str, object]) -> dict[str, object]:
-    """Validate provenance metadata without trusting arbitrary paths or claims."""
-    _reject_attestation_claims(record)
-    if cue_name not in CUE_BY_NAME:
+    """Validate untrusted provenance metadata without leaking incidental type errors."""
+    if not isinstance(record, Mapping):
+        raise ValueError("capture record must be an object")
+    if not isinstance(cue_name, str) or cue_name not in CUE_BY_NAME:
         raise ValueError("unknown cue")
+    _reject_attestation_claims(record)
     cue = CUE_BY_NAME[cue_name]
     if record.get("service") != cue.service or record.get("view") != cue.view:
         raise ValueError("snapshot cue mismatch")
     state = record.get("proof_state", ProofState.MISSING.value)
-    if state not in {s.value for s in ProofState}:
+    # JSON may supply arrays or objects here; reject them before set membership
+    # so malformed untrusted metadata produces a controlled validation error.
+    if not isinstance(state, str) or state not in {s.value for s in ProofState}:
         raise ValueError("invalid proof state")
     if state == ProofState.CAPTURED.value:
         required = ("captured_at", "source_url", "sha256", "run_id", "screenshot_path")
