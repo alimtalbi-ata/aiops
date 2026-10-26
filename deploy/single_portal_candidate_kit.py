@@ -29,6 +29,8 @@ APPROVED = (
     ".github/workflows/star-offline-chromium-real-render.yml",
     ".github/workflows/star-capture-evidence.yml",
     "app/portal/main.py",
+    "app/portal/acme-fixtures.json",
+    "app/portal/acme_fixture_contract.py",
     "app/portal/acme_impact_read_model.py",
     "app/portal/platform_registry.py",
     "app/portal/platform_registry_router.py",
