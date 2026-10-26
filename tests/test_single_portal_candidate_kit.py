@@ -32,6 +32,12 @@ class CandidateKitTests(unittest.TestCase):
             names = self.fixture(root)
             required_portal_sources = {
                 "app/portal/main.py",
+                ".github/workflows/acme-v21315-fixture-validation.yml",
+                "demo/integrations/v21315/README.md",
+                "demo/integrations/v21315/acme-fixtures.json",
+                "demo/integrations/v21315/validate_fixture.py",
+                "docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md",
+                "tests/test_acme_fixture_validation.py",
                 "app/portal/platform_registry.py",
                 "app/portal/platform_registry_router.py",
                 "app/portal/portal_demo_public_v21310.py",
@@ -67,6 +73,18 @@ class CandidateKitTests(unittest.TestCase):
                 self.assertIn("sources/app/portal/portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/tests/test_portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md", z.namelist())
+                cumulative_acme_sources = {
+                    ".github/workflows/acme-v21315-fixture-validation.yml",
+                    "demo/integrations/v21315/README.md",
+                    "demo/integrations/v21315/acme-fixtures.json",
+                    "demo/integrations/v21315/validate_fixture.py",
+                    "docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md",
+                    "tests/test_acme_fixture_validation.py",
+                }
+                for source_path in cumulative_acme_sources:
+                    member = "sources/" + source_path
+                    self.assertIn(member, z.namelist())
+                    self.assertEqual(z.read(member), (root / source_path).read_bytes())
                 self.assertTrue(all(not row["route_mounted"] and
                                     not row["runtime_authenticated"]
                                     for row in routes["routes"]))
