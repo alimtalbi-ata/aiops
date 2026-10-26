@@ -5,6 +5,8 @@ No network, decompression, execution or application mutation.
 """
 from __future__ import annotations
 import hashlib
+import os
+import stat
 import struct
 import zlib
 from pathlib import Path
@@ -21,11 +23,27 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
     """Return (SHA-256, bytes) for a structurally checked PNG, never proof of origin."""
     if not 33 <= max_bytes <= MAX_BYTES:
         raise ValueError("invalid PNG size limit")
-    size = path.stat().st_size
-    if size < 57 or size > max_bytes:
-        raise ValueError("capture size outside limits")
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
+    # Refuse symlinks early and pin every check to one open descriptor.
+    # O_NOFOLLOW closes the check/open race where the platform supports it;
+    # O_NONBLOCK prevents a substituted FIFO from hanging the offline verifier.
+    if path.is_symlink():
+        raise ValueError("capture symlink is forbidden")
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError("capture file cannot be opened safely") from exc
+
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError("capture must be a regular file")
+        size = before.st_size
+        if size < 57 or size > max_bytes:
+            raise ValueError("capture size outside limits")
+        digest = hashlib.sha256()
+
         def read_exact(count: int) -> bytes:
             data = stream.read(count)
             if len(data) != count:
@@ -101,4 +119,14 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
                 break
         if not seen_iend:
             raise ValueError("PNG missing IEND")
+
+        # Detect concurrent replacement, truncation, append or modification.
+        # Parsing and hashing used the same open descriptor throughout.
+        after = os.fstat(stream.fileno())
+        before_state = (before.st_dev, before.st_ino, before.st_size,
+                        before.st_mtime_ns, before.st_ctime_ns)
+        after_state = (after.st_dev, after.st_ino, after.st_size,
+                       after.st_mtime_ns, after.st_ctime_ns)
+        if after_state != before_state:
+            raise ValueError("PNG changed during inspection")
     return digest.hexdigest(), size
