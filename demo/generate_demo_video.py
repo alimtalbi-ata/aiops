@@ -27,6 +27,21 @@ SCENES = [
 WIDTH, HEIGHT = 1920, 1080
 DURATION = 8
 
+def scenes_for(scenario: str) -> list[tuple[str, ...]]:
+    if scenario == "SAN_FABRIC_P1":
+        return list(SCENES)
+    if scenario != "PAYMENTS_P2":
+        raise ValueError(f"Scénario inconnu : {scenario}")
+    replacements = {
+        0: ("01", "DÉGRADATION PAYMENTS", "Une hausse synthétique de latence et d'erreurs Payments est présentée comme incident P2.", "GRAFANA", "ALERTE P2", "Détection", "Événement synthétique — aucun runtime interrogé."),
+        1: ("02", "CORRÉLATION DES SIGNAUX", "La chronologie fictive rapproche latence, erreurs applicatives et événements d'infrastructure.", "N8N", "CORRÉLATION P2", "Corrélation", "Flux illustratif — aucune exécution n8n revendiquée."),
+        2: ("03", "CONTEXTE PAYMENTS", "Le scénario expose les dépendances Payments et les pistes stockage ou applicatives à départager.", "CMDB", "IMPACT À ÉVALUER", "Contexte", "Dépendances de démonstration — non vérifiées en production."),
+        3: ("04", "HYPOTHÈSES & CRITIQUE", "L'analyse compare des hypothèses de cause sans présenter de diagnostic réel ni de réponse DGX attestée.", "DGX / IA", "HYPOTHÈSES P2", "Analyse et critique", "Texte narratif synthétique — aucune attestation DGX."),
+        6: ("07", "TEST DE REMÉDIATION SIMULÉ", "Une action fictive de diagnostic et de remédiation est présentée sans envoyer de commande.", "SIMULATEUR", "DRY-RUN P2", "Remédiation", "Aucune commande ni modification de production."),
+        7: ("08", "COMPARAISON DES SLO", "Les valeurs illustratives avant et après sont comparées sans supposer un retour à la normale.", "OBSERVABILITÉ", "RÉSULTAT SIMULÉ", "Vérification", "Aucune restauration réelle n’est affirmée."),
+    }
+    return [replacements.get(i, scene) for i, scene in enumerate(scenes)]
+
 
 def require_command(name: str) -> str:
     path = shutil.which(name)
@@ -71,6 +86,7 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
     except ImportError as exc:
         raise RuntimeError("Playwright Python absent. Installez-le puis installez Chromium.") from exc
 
+    scenes = scenes_for(scenario)
     output.mkdir(parents=True, exist_ok=True)
     if output.is_symlink():
         raise ValueError("Le répertoire de sortie ne doit pas être un lien symbolique.")
@@ -88,13 +104,13 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT}, device_scale_factor=1)
             for index, scene in enumerate(SCENES):
-                page.set_content(scene_html(scene, index, len(SCENES)), wait_until="load")
+                page.set_content(scene_html(scene, index, len(scenes)), wait_until="load")
                 page.screenshot(path=str(frames / f"{index:03d}.png"), full_page=True, animations="disabled")
             browser.close()
 
         concat = root / "video.ffconcat"
         lines = ["ffconcat version 1.0"]
-        for index in range(len(SCENES)):
+        for index in range(len(scenes)):
             lines += [f"file '{(frames / f'{index:03d}.png').as_posix()}'", f"duration {DURATION}"]
         lines.append(f"file '{(frames / f'{len(SCENES)-1:03d}.png').as_posix()}'")
         concat.write_text("\n".join(lines) + "\n", encoding="utf-8")
