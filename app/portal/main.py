@@ -6,8 +6,55 @@ app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
+BOOTSTRAP_TIMEOUT_SECONDS = 3
+
+def _bootstrap_read(base, path):
+    """Perform one bounded read and normalize failures without leaking upstream details."""
+    try:
+        payload = get_json(base, path, timeout=BOOTSTRAP_TIMEOUT_SECONDS, retries=0)
+    except Exception:
+        return {
+            "status": "UNKNOWN",
+            "source": "UPSTREAM_UNAVAILABLE",
+            "error_code": "READ_FAILED",
+        }, False
+    if not isinstance(payload, dict):
+        return {
+            "status": "UNKNOWN",
+            "source": "UPSTREAM_INVALID_RESPONSE",
+            "error_code": "NON_OBJECT_JSON",
+        }, False
+    return payload, True
+
+
 @app.get('/api/portal/bootstrap')
-def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
+def bootstrap():
+    """Read Core/Twin independently; preserve healthy sections during an outage."""
+    dashboard, dashboard_ok = _bootstrap_read(CORE, '/api/dashboard')
+    runs, runs_ok = _bootstrap_read(CORE, '/api/runs')
+    twin, twin_ok = _bootstrap_read(TWIN, '/api/twin/summary')
+    unavailable = [
+        name for name, ok in (
+            ("dashboard", dashboard_ok),
+            ("runs", runs_ok),
+            ("twin", twin_ok),
+        ) if not ok
+    ]
+    return {
+        "dashboard": dashboard,
+        "runs": runs,
+        "twin": twin,
+        "_portal": {
+            "schema": "aiops.portal-bootstrap-readmodel.v1",
+            "status": "DEGRADED" if unavailable else "COMPLETE",
+            "unavailable_sources": unavailable,
+            "source_mode": "BOUNDED_READ_ONLY_UPSTREAM_HTTP",
+            "timeout_seconds": BOOTSTRAP_TIMEOUT_SECONDS,
+            "retry_count": 0,
+            "runtime_attested": False,
+            "live_remediation_authorized": False,
+        },
+    }
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')
