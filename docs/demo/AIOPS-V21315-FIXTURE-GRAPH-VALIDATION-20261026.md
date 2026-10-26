@@ -6,8 +6,9 @@
 ## Source et réutilisation historique
 
 La validation durcit les fichiers déjà présents, sans recopier ni réécrire le kit d'intégration :
-- fixture : `demo/integrations/v21315/acme-fixtures.json` ;
-- validateur stdlib : `demo/integrations/v21315/validate_fixture.py` ;
+- fixture historique/CLI : `demo/integrations/v21315/acme-fixtures.json` et `demo/integrations/v21315/validate_fixture.py` ;
+- contrat canonique stdlib embarqué dans l'image portail : `app/portal/acme_fixture_contract.py` ;
+- copie de fixture embarquée : `app/portal/acme-fixtures.json` (octets comparés à l'original par les tests) ;
 - contexte d'intégration et limites : `demo/integrations/v21315/README.md` et `docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md`.
 
 Au début de ce changement, le fixture portait le Git blob SHA `ad91678e81c6875a94e699d37645a971615dfb1e`. Il s'agit d'un identifiant d'objet Git, pas du SHA-256 des octets du fichier. Les SHA-256 des archives historiques originales sont consignés dans le registre de récupération ; les originaux ne sont pas réemballés ici.
@@ -29,12 +30,11 @@ Le chemin d'impact calculé est renvoyé en sortie CLI pour rendre la cinématiq
 
 ## Architecture, interfaces et dépendances
 
-Entrée : un document JSON local, par défaut `acme-fixtures.json`.  
-API Python : `load_fixture(path)` et `validate_fixture(data)`.  
-Sortie : résumé déterministe avec nombre de CI/incidents et chemin d'impact, ou code de sortie non nul avec motif en cas de violation.  
-Dépendances : bibliothèque standard Python uniquement ; aucune dépendance réseau ou application.
+Entrée CLI : document JSON local, par défaut `demo/integrations/v21315/acme-fixtures.json`. Le CLI historique réexporte `load_fixture(path)`, `load_fixture_bytes(bytes)` et `validate_fixture(data)` depuis le contrat commun. Le read model du portail lit `app/portal/acme-fixtures.json`, puis appelle ce même contrat et calcule le digest sur les octets exacts validés.  
+Sortie CLI : résumé déterministe avec nombres de CI/incidents et chemin d'impact, ou code de sortie non nul en cas de violation.  
+Dépendances du contrat : bibliothèque standard Python uniquement. Le portail ajoute FastAPI, déjà requis par l'application ; aucun appel réseau n'est exécuté pour ce read model.
 
-Le workflow `.github/workflows/acme-v21315-fixture-validation.yml` compile le validateur, exécute la fixture de référence et les tests unitaires, dont un subprocess Python optimisé qui doit encore rejeter un graphe sans impact.
+Le workflow `.github/workflows/acme-v21315-fixture-validation.yml` compile le wrapper, le contrat et le read model, exécute la fixture de référence et les tests unitaires, dont un subprocess Python optimisé qui doit encore rejeter un graphe sans impact. Il construit ensuite l'image depuis `app/` et lance un smoke test Python du read model dans un conteneur éphémère, avec `--entrypoint python`, sans démarrer Uvicorn ni publier de port.
 
 ## Qualification et limites
 
