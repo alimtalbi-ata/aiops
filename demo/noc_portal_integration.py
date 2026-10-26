@@ -78,7 +78,12 @@ def validate_noc_runtime_snapshot(snapshot:dict, *, now_utc:str|None=None, max_a
     if not isinstance(steps,list) or len(steps)>100:
         raise ValueError("invalid incident timeline")
     for step in steps:
-        if not isinstance(step,dict) or step.get("state") not in VALID_STATES:
+        if not isinstance(step, dict):
+            raise ValueError("invalid timeline step")
+        state = step.get("state")
+        # JSON arrays/objects are unhashable: type-check before set membership so
+        # malformed provider data is a controlled contract rejection, not TypeError.
+        if not isinstance(state, str) or state not in VALID_STATES:
             raise ValueError("invalid timeline step")
         if not isinstance(step.get("name"),str) or not step["name"]:
             raise ValueError("missing step name")
@@ -158,6 +163,7 @@ def render_noc_dashboard(view:dict, registry:dict)->str:
         if (not isinstance(item,dict) or item.get("id")!=ident
                 or item.get("name")!=label or item.get("path")!=path
                 or item.get("category")!=category
+                or not isinstance(item.get("state"), str)
                 or item.get("state") not in VALID_STATES
                 or item.get("available_in_portal") is not False
                 or item.get("requires_route_integration") is not True):
