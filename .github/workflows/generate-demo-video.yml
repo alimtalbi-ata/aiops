@@ -62,6 +62,8 @@ jobs:
           test -s dist/aiops-demo-video/AIOps-Demo-Complete.mp4
           test -s dist/aiops-demo-video/AIOps-Demo-Complete.srt
           test -s dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json
+          test -s dist/aiops-demo-video/AIOps-Architecture-Illustrative.svg
+          test "$(find dist/aiops-demo-video/snapshots -maxdepth 1 -name 'scene-*.png' | wc -l)" -eq 9
           ffmpeg -v error -i dist/aiops-demo-video/AIOps-Demo-Complete.mp4 -f null -
           duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 dist/aiops-demo-video/AIOps-Demo-Complete.mp4)"
           python - "$duration" <<'PY'
@@ -76,7 +78,13 @@ jobs:
           from pathlib import Path
           p = Path("dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json")
           data = json.loads(p.read_text(encoding="utf-8"))
+          assert data["schema"] == "aiops-demo-video-manifest-v2"
           assert data["scene_count"] == 9
+          assert data["snapshot_count"] == 9
+          assert len(data["snapshot_sha256"]) == 9
+          assert all(len(v) == 64 for v in data["snapshot_sha256"].values())
+          assert data["architecture_illustration"] == "AIOps-Architecture-Illustrative.svg"
+          assert len(data["architecture_sha256"]) == 64
           assert data["duration_target_seconds"] == 72
           assert 71 <= data["duration_actual_seconds"] <= 73
           assert data["resolution"] == "1920x1080"
