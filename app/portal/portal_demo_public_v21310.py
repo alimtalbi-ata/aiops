@@ -158,7 +158,7 @@ def start_video(request: dict):
     if not isinstance(request, dict) or set(request) - {"scenario"}:
         raise HTTPException(422, "invalid_video_request")
     scenario = request.get("scenario", "SAN_FABRIC_P1")
-    if scenario not in SCENARIOS:
+    if not isinstance(scenario, str) or scenario not in SCENARIOS:
         raise HTTPException(422, "scenario_not_allowed")
     if not _video_enabled():
         raise HTTPException(503, "video_generation_disabled_set_AIOPS_DEMO_VIDEO_ENABLED_true")
