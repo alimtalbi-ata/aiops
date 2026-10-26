@@ -145,9 +145,10 @@ class DemoPublicTests(unittest.TestCase):
         env.pop("AIOPS_ADMIN_TOKEN", None)
         env["AIOPS_INTERNAL_TOKEN"] = "synthetic-ci-only-token"
         code = (
-            "import json; from portal.main import app; "
-            "print(json.dumps([{'path':r.path,'methods':sorted(r.methods or [])} "
-            "for r in app.routes if r.path in {'/demo/','/demo/star','/demo/video','/demo/video/{job_id}','/demo/video/{job_id}/artifact/{artifact}'}]))"
+            "import json; from portal.main import app; schema=app.openapi(); "
+            "wanted={'/demo/','/demo/star','/demo/video','/demo/video/{job_id}','/demo/video/{job_id}/artifact/{artifact}'}; "
+            "print(json.dumps([{'path':p,'methods':sorted(v.keys())} "
+            "for p,v in schema.get('paths',{}).items() if p in wanted]))"
         )
         result = subprocess.run(
             [sys.executable, "-c", code], cwd=APP_ROOT, env=env,
