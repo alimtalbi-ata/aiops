@@ -78,10 +78,15 @@ def _job_snapshot(job_id, job):
                     and data.get("dgx_independently_attested") is False
                     and data.get("live_execution_qualified") is False
                     and data.get("live_action_authorized") is False
+                    and data.get("schema") == "aiops-demo-video-manifest-v1"
                     and data.get("scenario") == job["scenario"]
                     and data.get("scene_count") == 9
                     and data.get("duration_target_seconds") == 72
+                    and isinstance(data.get("duration_actual_seconds"), (int, float))
+                    and 70 <= data.get("duration_actual_seconds") <= 75
                     and data.get("resolution") == "1920x1080"
+                    and data.get("video") == video.name
+                    and data.get("subtitles") == subtitles.name
                     and data.get("video_size_bytes") == video.stat().st_size
                     and data.get("video_sha256") == sha256_file(video)
                     and data.get("subtitles_sha256") == sha256_file(subtitles)
