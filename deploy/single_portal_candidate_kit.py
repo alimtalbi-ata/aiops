@@ -17,6 +17,13 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 APPROVED = (
+    ".github/workflows/acme-v21315-fixture-validation.yml",
+    "demo/integrations/v21315/README.md",
+    "demo/integrations/v21315/acme-fixtures.json",
+    "demo/integrations/v21315/validate_fixture.py",
+    "docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md",
+    "tests/test_acme_fixture_validation.py",
+
     ".github/workflows/star-offline-chromium-real-render.yml",
     "app/portal/main.py",
     "app/portal/platform_registry.py",
