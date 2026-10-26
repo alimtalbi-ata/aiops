@@ -153,6 +153,33 @@ def acme_impact_page():
         + "</td><td>" + html.escape(str(provenance), quote=True) + "</td></tr>"
         for label, value, provenance in rows
     )
+    path_nodes = "".join(
+        "<g><rect x=\"" + str(25 + i * 230) + "\" y=\"72\" width=\"190\" height=\"76\" rx=\"12\" "
+        "fill=\"" + ("#7f1d1d" if i == 0 else "#17365d" if i < len(model["impact_path"]) - 1 else "#7c2d12") + "\" "
+        "stroke=\"#cbd5e1\" stroke-width=\"2\"/>"
+        "<text x=\"" + str(120 + i * 230) + "\" y=\"101\" text-anchor=\"middle\" "
+        "font-family=\"Arial,sans-serif\" font-size=\"13\" fill=\"#ffffff\">"
+        + html.escape(str(node), quote=True) + "</text>"
+        "<text x=\"" + str(120 + i * 230) + "\" y=\"124\" text-anchor=\"middle\" "
+        "font-family=\"Arial,sans-serif\" font-size=\"10\" fill=\"#e2e8f0\">"
+        + ("SAN P1" if i == 0 else "SERVICE IMPACT" if i == len(model["impact_path"]) - 1 else "DEPENDENCY") + "</text></g>"
+        for i, node in enumerate(model["impact_path"])
+    )
+    arrows = "".join(
+        "<path d=\"M " + str(215 + i * 230) + " 110 h 30\" stroke=\"#64748b\" "
+        "stroke-width=\"3\" fill=\"none\"/><path d=\"M " + str(237 + i * 230) + " 103 l 8 7 -8 7\" "
+        "stroke=\"#64748b\" stroke-width=\"3\" fill=\"none\"/>"
+        for i in range(max(0, len(model["impact_path"]) - 1))
+    )
+    diagram = (
+        "<section aria-label=\"Graphe de dépendances illustratif\">"
+        "<h2>Chemin d'impact calculé</h2>"
+        "<p>Graphe local construit depuis le fixture synthétique ; pas une topologie runtime.</p>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" aria-label=\"Dépendances SAN vers application Payments, simulation\" "
+        "viewBox=\"0 0 980 180\" width=\"100%\" height=\"180\" preserveAspectRatio=\"xMinYMin meet\">"
+        "<rect width=\"980\" height=\"180\" rx=\"14\" fill=\"#f8fafc\"/>"
+        + arrows + path_nodes + "</svg></section>"
+    )
     body = (
         "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -161,6 +188,7 @@ def acme_impact_page():
         "<p><strong>SIMULATION LOCALE UNIQUEMENT.</strong> Aucun incident runtime, "
         "ticket GLPI, capture applicative, appel backend ou événement horodaté n'est créé. "
         "Le run_id affiché est dérivé des octets du fixture, pas d'un run exécuté.</p>"
+        + diagram +
         "<table><caption>Identifiants, provenance et trous de preuve</caption>"
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
