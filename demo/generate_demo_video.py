@@ -40,7 +40,7 @@ def scenes_for(scenario: str) -> list[tuple[str, ...]]:
         6: ("07", "TEST DE REMÉDIATION SIMULÉ", "Une action fictive de diagnostic et de remédiation est présentée sans envoyer de commande.", "SIMULATEUR", "DRY-RUN P2", "Remédiation", "Aucune commande ni modification de production."),
         7: ("08", "COMPARAISON DES SLO", "Les valeurs illustratives avant et après sont comparées sans supposer un retour à la normale.", "OBSERVABILITÉ", "RÉSULTAT SIMULÉ", "Vérification", "Aucune restauration réelle n’est affirmée."),
     }
-    return [replacements.get(i, scene) for i, scene in enumerate(scenes)]
+    return [replacements.get(i, scene) for i, scene in enumerate(SCENES)]
 
 
 def require_command(name: str) -> str:
@@ -103,7 +103,7 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT}, device_scale_factor=1)
-            for index, scene in enumerate(SCENES):
+            for index, scene in enumerate(scenes):
                 page.set_content(scene_html(scene, index, len(scenes)), wait_until="load")
                 page.screenshot(path=str(frames / f"{index:03d}.png"), full_page=True, animations="disabled")
             browser.close()
@@ -112,11 +112,11 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
         lines = ["ffconcat version 1.0"]
         for index in range(len(scenes)):
             lines += [f"file '{(frames / f'{index:03d}.png').as_posix()}'", f"duration {DURATION}"]
-        lines.append(f"file '{(frames / f'{len(SCENES)-1:03d}.png').as_posix()}'")
+        lines.append(f"file '{(frames / f'{len(scenes)-1:03d}.png').as_posix()}'")
         concat.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         srt_lines = []
-        for i, scene in enumerate(SCENES):
+        for i, scene in enumerate(scenes):
             start, end = i * DURATION, (i + 1) * DURATION
             def stamp(seconds: int) -> str:
                 return f"{seconds//3600:02d}:{(seconds%3600)//60:02d}:{seconds%60:02d},000"
@@ -129,7 +129,7 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
         audio_file = root / "narration.wav"
         if voice and espeak:
             wavs = []
-            for i, scene in enumerate(SCENES):
+            for i, scene in enumerate(scenes):
                 raw_wav = root / f"voice-raw-{i:02d}.wav"
                 wav = root / f"voice-{i:02d}.wav"
                 run([espeak, "-v", "fr", "-s", "145", "-w", str(raw_wav), scene[2] + " " + scene[6]])
@@ -151,8 +151,8 @@ def generate(output: Path, scenario: str = "SAN_FABRIC_P1", voice: bool = True) 
         "schema": "aiops-demo-video-manifest-v1",
         "scenario": scenario,
         "provenance": "SIMULATED_TARGET",
-        "scene_count": len(SCENES),
-        "duration_target_seconds": len(SCENES) * DURATION,
+        "scene_count": len(scenes),
+        "duration_target_seconds": len(scenes) * DURATION,
         "video": video.name,
         "subtitles": subtitles.name,
         "narration": narration_status,
