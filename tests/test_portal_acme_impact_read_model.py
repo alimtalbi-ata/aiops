@@ -1,0 +1,130 @@
+"""ASGI tests for the local ACME impact view; no backend, DB or live actions."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import pathlib
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+APP_ROOT = pathlib.Path(__file__).resolve().parents[1] / "app"
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "synthetic-ci-only-token", "AIOPS_ADMIN_TOKEN": ""}):
+    from portal.main import app  # noqa: E402
+from portal import acme_impact_read_model as impact  # noqa: E402
+
+
+class AcmeImpactPortalReadModelTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.close()
+
+    def test_routes_are_mounted_once_as_get_on_existing_portal(self):
+        expected = {
+            "/api/demo/acme-impact": "synthetic_acme_impact_read_model",
+            "/demo/acme-impact": "synthetic_acme_impact_page",
+        }
+        for path, name in expected.items():
+            routes = [r for r in app.routes if getattr(r, "path", None) == path]
+            with self.subTest(path=path):
+                self.assertEqual(len(routes), 1)
+                self.assertEqual(set(routes[0].methods or ()), {"GET"})
+                self.assertEqual(routes[0].name, name)
+
+    def test_json_model_is_deterministic_and_hash_binds_exact_bytes(self):
+        raw = impact.FIXTURE_PATH.read_bytes()
+        expected_sha = hashlib.sha256(raw).hexdigest()
+        first = self.client.get("/api/demo/acme-impact")
+        second = self.client.get("/api/demo/acme-impact")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json(), second.json())
+        model = first.json()
+        self.assertEqual(model["schema"], "aiops.synthetic-impact-read-model.v1")
+        self.assertEqual(model["run_id"], "SIM-ACME-" + expected_sha[:16].upper())
+        self.assertEqual(model["source_sha256"], expected_sha)
+        self.assertEqual(model["incident_id"], "ACME-DEMO-SAN-001")
+        self.assertEqual(model["impact_incident_id"], "ACME-DEMO-PAY-002")
+        self.assertEqual(
+            model["impact_path"],
+            ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"],
+        )
+        self.assertIsNone(model["ticket_id"])
+        self.assertEqual(model["ticket_id_provenance"], "ABSENT_NO_GLPI_WRITE")
+        self.assertIsNone(model["event_timestamp_utc"])
+        self.assertEqual(model["timestamp_provenance"], "ABSENT_NO_RUNTIME_EVENT")
+        self.assertEqual(model["provenance"], "SIMULATED_TARGET")
+        self.assertIs(model["runtime_evidence_present"], False)
+        self.assertIs(model["runtime_attested"], False)
+        self.assertIs(model["production_qualified"], False)
+        self.assertIs(model["live_remediation_authorized"], False)
+        self.assertEqual(first.headers["cache-control"], "no-store")
+        self.assertEqual(first.headers["x-content-type-options"], "nosniff")
+
+    def test_html_snapshot_is_local_and_has_no_links_scripts_or_forms(self):
+        response = self.client.get("/demo/acme-impact")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers["content-type"])
+        self.assertIn("ACME — SAN P1", response.text)
+        self.assertIn("Payments P2", response.text)
+        self.assertIn("ABSENT_NO_GLPI_WRITE", response.text)
+        self.assertIn("ABSENT_NO_RUNTIME_EVENT", response.text)
+        self.assertIn(impact.build_acme_impact_read_model()["source_sha256"], response.text)
+        self.assertNotIn("<script", response.text.lower())
+        self.assertNotIn("<form", response.text.lower())
+        self.assertNotIn("<a ", response.text.lower())
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("connect-src 'none'", response.headers["content-security-policy"])
+
+    def test_html_escapes_values_even_if_a_future_fixture_contains_markup(self):
+        model = impact.build_acme_impact_read_model()
+        model["run_id"] = "<script>alert(1)</script>"
+        model["impact_path"] = ["<img src=x onerror=alert(1)>"]
+        with patch.object(impact, "build_acme_impact_read_model", return_value=model):
+            response = self.client.get("/demo/acme-impact")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("<script", response.text.lower())
+        self.assertNotIn("<img", response.text.lower())
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", response.text)
+        self.assertIn("&lt;img src=x onerror=alert(1)&gt;", response.text)
+
+    def test_invalid_or_missing_fixture_fails_closed_with_no_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            invalid_path = pathlib.Path(tmp) / "invalid.json"
+            invalid = json.loads(impact.FIXTURE_PATH.read_text(encoding="utf-8"))
+            invalid["provenance"] = "OBSERVED_RUNTIME"
+            invalid_path.write_text(json.dumps(invalid), encoding="utf-8")
+            with patch.object(impact, "FIXTURE_PATH", invalid_path):
+                rejected = self.client.get("/api/demo/acme-impact")
+                self.assertEqual(rejected.status_code, 503)
+                self.assertEqual(
+                    rejected.json()["detail"],
+                    "synthetic_impact_fixture_unavailable_or_invalid",
+                )
+            missing_path = pathlib.Path(tmp) / "missing.json"
+            with patch.object(impact, "FIXTURE_PATH", missing_path):
+                missing = self.client.get("/api/demo/acme-impact")
+                self.assertEqual(missing.status_code, 503)
+                self.assertEqual(
+                    missing.json()["detail"],
+                    "synthetic_impact_fixture_unavailable_or_invalid",
+                )
+
+    def test_mutating_methods_are_not_exposed(self):
+        self.assertEqual(self.client.post("/api/demo/acme-impact").status_code, 405)
+        self.assertEqual(self.client.post("/demo/acme-impact").status_code, 405)
+
+
+if __name__ == "__main__":
+    unittest.main()
