@@ -32,6 +32,13 @@ class PortalNocContractTests(unittest.TestCase):
         d=data();d["steps"][0]["state"]="REMEDIATED"
         with self.assertRaisesRegex(ValueError,"invalid timeline step"):
             validate_noc_runtime_snapshot(d,now_utc="2026-10-20T12:01:00Z")
+
+    def test_unhashable_timeline_states_fail_closed(self):
+        for invalid in ([], {}, {"state":"WARN"}):
+            d=data();d["steps"][0]["state"]=invalid
+            with self.subTest(invalid=invalid),self.assertRaisesRegex(
+                    ValueError,"invalid timeline step"):
+                validate_noc_runtime_snapshot(d,now_utc="2026-10-20T12:01:00Z")
     def test_stale_live_snapshot_fails_closed(self):
         with self.assertRaisesRegex(ValueError,"stale or future"):
             validate_noc_runtime_snapshot(data(),now_utc="2026-10-20T12:06:00Z")
@@ -197,6 +204,15 @@ class PortalComponentBindingTests(unittest.TestCase):
             registry["items"][0][field]=value
             with self.subTest(field=field),self.assertRaisesRegex(
                     ValueError,"contradictory or unattested"):
+                render_noc_dashboard(view,registry)
+
+    def test_dashboard_rejects_unhashable_component_state(self):
+        view=public_noc_snapshot(data(),now_utc="2026-10-20T12:01:00Z")
+        for invalid in ([], {}):
+            registry=public_component_registry(now_utc="2026-10-25T12:01:00Z")
+            registry["items"][0]["state"]=invalid
+            with self.subTest(invalid=invalid),self.assertRaisesRegex(
+                    ValueError,"contradictory or unattested component route"):
                 render_noc_dashboard(view,registry)
 
     def test_no_host_provider_keeps_all_routes_unverified(self):
