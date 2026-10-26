@@ -6,7 +6,7 @@
 
 The historical/cumulative screenshot collector already checked PNG structure, SHA-256, run identity and nine STAR cues. Its CLI reader used ordinary `json.loads`, so a JSON object containing duplicate keys could be interpreted with last-key-wins semantics. Its path handling also followed a symlink for the manifest and read the declared size before opening the file.
 
-`demo/star_capture_evidence.py` now reads a bounded byte buffer from a regular file, refuses a final symlink (and uses `O_NOFOLLOW` where supported), verifies UTF-8, and rejects duplicate JSON keys at every nesting level. It validates that the capture map and each capture record are objects before field access, returning controlled `ValueError` failures rather than leaking incidental `AttributeError`/JSON parsing details. The screenshot byte hash is still computed on the actual PNG file, not trusted from its manifest.
+`demo/star_capture_evidence.py` now reads a bounded byte buffer from a regular file, refuses a final symlink (and uses `O_NOFOLLOW` where supported), verifies UTF-8, and rejects duplicate JSON keys at every nesting level. It validates that the capture map and each capture record are objects before field access, returning controlled `ValueError` failures rather than leaking incidental `AttributeError`/JSON parsing details. The screenshot byte hash is still computed on the actual PNG file, not trusted from its manifest. The shared PNG verifier now opens once, refuses final-component symlinks, requires a regular file from `fstat`, and compares descriptor metadata before/after parsing so a concurrent append, truncation or modification fails closed. Validation and digesting use that same open descriptor rather than a pre-open path-size check.
 
 ## Interface and dependencies
 
