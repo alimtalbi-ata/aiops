@@ -31,3 +31,13 @@ The module remains an offline verifier; the change performs no live capture and 
 ## PNG palette conformance (26 October 2026)
 
 The byte-level verifier now also enforces palette constraints that can be established from the PNG chunk stream without decoding pixels: indexed-color images (color type 3) must declare `PLTE` before `IDAT`, and the number of palette entries cannot exceed `2**bit_depth`. Grayscale (type 0) and grayscale+alpha (type 4) images must not contain `PLTE`. The regression suite includes valid and invalid synthetic fixtures for these cases. The verifier still does not decompress image pixels, authenticate a browser session, or attest the application's origin; a passing result means bounded structural integrity only.
+
+
+## Contrat du bridge navigateur : validation de forme et lecture bornée (26 octobre 2026)
+
+
+`demo/star_browser_manifest_gate.py` rejette explicitement les contrats canoniques, types de noms, champs de service/vue/provenance et timestamps mal formés. La liste des fichiers est validée avant la déduplication afin qu'un tableau imbriqué ne provoque pas de `TypeError`. Les références canoniques sont validées même lorsque la liste de captures est vide.
+
+Le lecteur bridge ouvre le répertoire puis le manifeste par descripteurs relatifs, refuse les liens symboliques finaux et les fichiers non réguliers, borne la lecture à 16 KiB et compare les métadonnées avant/après. Les plates-formes ne fournissant pas les primitives de non-suivi requises sont refusées explicitement. Le parseur refuse les clés dupliquées, UTF-8 invalide, imbrication excessive et constantes JSON non standard. Des tests ciblés couvrent ces refus.
+
+Le kit cumulatif embarque dorénavant le module complet de bridge Chromium, son adaptateur de storyboard, le gate de replay lié à un SHA indépendant, les modules de réconciliation/identité, les tests et la documentation. La génération du kit est déclenchée par les changements de ces fichiers et exécute les suites de régression correspondantes. Ce changement n'authentifie pas les captures et ne qualifie pas le portail Debian.

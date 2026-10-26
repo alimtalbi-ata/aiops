@@ -26,3 +26,15 @@ python3 -m unittest discover -s tests -p 'test_star_*.py' -q
 ```
 
 Intégrer le collecteur Chromium candidat et qualifier sa CI sur le SHA exact ; ensuite, captures réelles seulement avec accès autorisé, contrôles des pages/identités/horodatages, SHA256 et anonymisation vérifiée. Les exemples synthétiques ne doivent jamais être présentés comme preuves runtime.
+
+
+## Durcissement de l'ingestion locale (26 octobre 2026)
+
+
+- Le contrat valide les types de l'objet canonique, des références d'événements, de la liste de fichiers et des champs `cue`, `service`, `view`, `provenance` et `captured_at` avant les recherches, comparaisons ou accès aux fichiers. Les entrées de forme invalide déclenchent un `ValueError` contrôlé au lieu d'une exception accidentelle.
+
+- Les manifestes sont lus avec un descripteur de répertoire épinglé et une ouverture relative refusant le lien symbolique final lorsque les primitives POSIX requises existent. Le lecteur borne les octets, exige un fichier régulier, vérifie la cohérence des métadonnées avant/après lecture et rejette UTF-8 invalide, JSON non standard et clés dupliquées.
+
+- Le bridge complet, son storyboard, son gate de replay, ses dépendances, tests et HLD/LLD sont maintenant inclus explicitement dans la liste approuvée du kit cumulatif. Le workflow du kit relance ces tests et vérifie l'archive contre le checkout épinglé.
+
+- Limite inchangée : SHA-256 et cohérence de manifeste ne prouvent ni une session authentifiée, ni l'écran exact réellement visité, ni l'horodatage de l'événement externe. Les neuf checkpoints restent non qualifiés au runtime cible tant que les sources indépendantes et captures autorisées ne sont pas intégrées.

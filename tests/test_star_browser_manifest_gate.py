@@ -271,6 +271,65 @@ class BrowserManifestGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_gate()
 
+    def test_malformed_api_and_manifest_field_shapes_fail_closed(self):
+        with self.assertRaisesRegex(ValueError, "canonical event contract"):
+            verify_browser_manifests(self.root, [], ["detect.json"])
+        with self.assertRaisesRegex(ValueError, "unsafe evidence root"):
+            verify_browser_manifests(str(self.root), EXPECTED, ["detect.json"])
+        with self.assertRaisesRegex(ValueError, "filename list"):
+            verify_browser_manifests(self.root, EXPECTED, [[]])
+        with self.assertRaisesRegex(ValueError, "complete-capture mode"):
+            verify_browser_manifests(self.root, EXPECTED, ["detect.json"], require_complete=1)
+        with self.assertRaisesRegex(ValueError, "canonical event references"):
+            verify_browser_manifests(
+                self.root, {**EXPECTED, "events": {"detect": []}}, ["detect.json"])
+
+        for key, value, message in (
+            ("cue", [], "cue name"),
+            ("service", {}, "capture service"),
+            ("view", [], "application view"),
+            ("provenance", [], "provenance"),
+            ("event_ref", [], "observed event_ref"),
+            ("captured_at", [], "timestamp"),
+        ):
+            with self.subTest(key=key):
+                original = self.item.get(key)
+                self.item[key] = value
+                self.write()
+                with self.assertRaisesRegex(ValueError, message):
+                    self.run_gate()
+                if original is None:
+                    self.item.pop(key, None)
+                else:
+                    self.item[key] = original
+        self.write()
+        self.assertEqual(self.run_gate()["entries"][0]["status"], "simulated")
+
+    def test_manifest_reader_is_bounded_and_refuses_symlinks_nonfiles_and_bad_utf8(self):
+        manifest = self.root / "detect.json"
+        target = self.root / "target.json"
+        target.write_text(json.dumps(self.item), encoding="utf-8")
+        manifest.unlink()
+        manifest.symlink_to(target.name)
+        with self.assertRaisesRegex(ValueError, "safely"):
+            self.run_gate()
+        manifest.unlink()
+        self.write()
+
+        manifest.write_bytes(b"x" * 16_385)
+        with self.assertRaisesRegex(ValueError, "oversized"):
+            self.run_gate()
+        manifest.write_bytes(b"\xff")
+        with self.assertRaisesRegex(ValueError, "UTF-8"):
+            self.run_gate()
+
+        manifest.unlink()
+        manifest.mkdir()
+        with self.assertRaisesRegex(ValueError, "regular file"):
+            self.run_gate()
+        manifest.rmdir()
+        self.write()
+
     def test_cue_order_chronology_rejected_even_when_input_reversed(self):
         other_png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
                      + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00")) + chunk(b"IEND"))

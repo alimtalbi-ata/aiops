@@ -6,6 +6,8 @@ on:
       - 'demo/star_browser_manifest_gate.py'
       - 'demo/star_capture_set_replay_gate.py'
       - 'demo/star_checkpoint_reconciliation.py'
+      - 'demo/star_snapshot_choreography.py'
+      - 'demo/star_portal_storyboard.py'
       - 'demo/star_capture_identity_guard.py'
       - 'demo/star_png_integrity.py'
       - 'demo/star_portal_storyboard.py'
@@ -29,6 +31,8 @@ jobs:
       AIOPS_STAR_NO_RUNTIME: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
