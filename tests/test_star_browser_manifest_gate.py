@@ -280,7 +280,7 @@ class BrowserManifestGateTests(unittest.TestCase):
             verify_browser_manifests(self.root, EXPECTED, [[]])
         with self.assertRaisesRegex(ValueError, "complete-capture mode"):
             verify_browser_manifests(self.root, EXPECTED, ["detect.json"], require_complete=1)
-        with self.assertRaisesRegex(ValueError, "canonical event references"):
+        with self.assertRaisesRegex(ValueError, "invalid or missing expected event_ref"):
             verify_browser_manifests(
                 self.root, {**EXPECTED, "events": {"detect": []}}, ["detect.json"])
 

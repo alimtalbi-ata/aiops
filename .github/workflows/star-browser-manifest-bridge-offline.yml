@@ -10,7 +10,6 @@ on:
       - 'demo/star_portal_storyboard.py'
       - 'demo/star_capture_identity_guard.py'
       - 'demo/star_png_integrity.py'
-      - 'demo/star_portal_storyboard.py'
       - 'tests/test_star_browser_manifest_gate.py'
       - 'tests/test_star_capture_set_replay_gate.py'
       - 'tests/test_star_checkpoint_reconciliation.py'
@@ -31,8 +30,6 @@ jobs:
       AIOPS_STAR_NO_RUNTIME: '1'
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
         with:
           persist-credentials: false
       - uses: actions/setup-python@v5
