@@ -491,3 +491,7 @@ app.include_router(public_star_demo_router)
 # Static component plan only; backend health remains UNKNOWN until attested.
 from portal.platform_registry_router import router as platform_registry_router
 app.include_router(platform_registry_router)
+
+# Local deterministic ACME impact view; no upstream calls or writes.
+from portal.acme_impact_read_model import router as acme_impact_read_model_router
+app.include_router(acme_impact_read_model_router)
