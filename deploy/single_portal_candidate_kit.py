@@ -27,6 +27,7 @@ APPROVED = (
     "tests/test_portal_acme_impact_read_model.py",
 
     ".github/workflows/star-offline-chromium-real-render.yml",
+    ".github/workflows/star-capture-evidence.yml",
     "app/portal/main.py",
     "app/portal/acme_impact_read_model.py",
     "app/portal/platform_registry.py",
@@ -42,10 +43,13 @@ APPROVED = (
     "demo/noc_star_cue_map.py",
     "demo/noc_star_event_binding.py",
     "demo/noc_star_trace_bundle.py",
+    "demo/star_capture_evidence.py",
     "demo/star_capture_identity_guard.py",
     "demo/star_n8n_identity_gate.py",
     "demo/star_png_integrity.py",
     "demo/star_snapshot_browser.py",
+    "demo/star_snapshot_choreography.py",
+    "docs/demo/AIOPS-STAR-EVIDENCE-MANIFEST-STRICTNESS-20261026.md",
     "docs/architecture/AIOPS-SINGLE-PORTAL-COMPONENT-CONSOLIDATION.md",
     "docs/architecture/AIOPS-SINGLE-PORTAL-RUNTIME-DEMO-INTEGRATION.md",
     "docs/release/AIOPS-SINGLE-PORTAL-CANDIDATE-20261025.md",
@@ -57,6 +61,9 @@ APPROVED = (
     "tests/test_portal_demo_public_v21310.py",
     "tests/test_platform_registry_portal_route.py",
     "tests/test_star_n8n_identity_gate.py",
+    "tests/test_star_capture_evidence.py",
+    "tests/test_star_png_integrity.py",
+    "tests/test_star_snapshot_choreography.py",
 )
 ROOTS = {"app", "demo", "deploy", "recovery", "integration", "tests", "docs",
          "config", "schemas", "db", "tools", ".github"}
