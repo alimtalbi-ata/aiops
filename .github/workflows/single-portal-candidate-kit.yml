@@ -5,8 +5,11 @@ on:
       - '.github/workflows/acme-v21315-fixture-validation.yml'
       - 'demo/integrations/v21315/**'
       - 'tests/test_acme_fixture_validation.py'
+      - 'tests/test_portal_acme_impact_read_model.py'
       - 'docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md'
+      - 'docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md'
       - 'app/portal/main.py'
+      - 'app/portal/acme_impact_read_model.py'
       - 'app/portal/platform_registry.py'
       - 'app/portal/platform_registry_router.py'
       - 'app/portal/portal_demo_public_v21310.py'
@@ -52,6 +55,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
           python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
           python -m unittest discover -s tests -p 'test_portal_demo_public_v21310.py' -v
+          python -m unittest discover -s tests -p 'test_portal_acme_impact_read_model.py' -v
           python -m unittest discover -s tests -p 'test_platform_registry_portal_route.py' -v
           python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
