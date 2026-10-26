@@ -80,15 +80,15 @@ class StrictPngIntegrityTests(unittest.TestCase):
 
     def test_valid_indexed_png_palette_respects_bit_depth(self):
         sample = png(depth=1, color=3, chunks=[
-            chunk(b"PLTE", b"\\x00\\x00\\x00\\xff\\xff\\xff"),
-            chunk(b"IDAT", zlib.compress(b"\\x00\\x00")),
+            chunk(b"PLTE", b"\x00\x00\x00\xff\xff\xff"),
+            chunk(b"IDAT", zlib.compress(b"\x00\x00")),
         ])
         self.assertEqual(self.check(sample)[1], len(sample))
 
     def test_indexed_png_palette_cannot_exceed_bit_depth(self):
         sample = png(depth=1, color=3, chunks=[
-            chunk(b"PLTE", b"\\x00\\x00\\x00" * 3),
-            chunk(b"IDAT", zlib.compress(b"\\x00\\x00")),
+            chunk(b"PLTE", b"\x00\x00\x00" * 3),
+            chunk(b"IDAT", zlib.compress(b"\x00\x00")),
         ])
         with self.assertRaisesRegex(ValueError, "exceeds indexed bit depth"):
             self.check(sample)
@@ -97,8 +97,8 @@ class StrictPngIntegrityTests(unittest.TestCase):
         for color in (0, 4):
             with self.subTest(color=color):
                 sample = png(color=color, chunks=[
-                    chunk(b"PLTE", b"\\x00\\x00\\x00"),
-                    chunk(b"IDAT", zlib.compress(b"\\x00\\x00\\x00\\x00")),
+                    chunk(b"PLTE", b"\x00\x00\x00"),
+                    chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00")),
                 ])
                 with self.assertRaisesRegex(ValueError, "forbidden for grayscale"):
                     self.check(sample)
