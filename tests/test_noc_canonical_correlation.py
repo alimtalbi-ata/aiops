@@ -116,7 +116,8 @@ class CorrelationTests(unittest.TestCase):
 
     def test_core_endpoint_rejected_before_network(self):
         for url in ("https://evil.example", "http://user:pass@aiops2-core:810",
-                    "http://aiops2-core:810/other", "http://127.0.0.1:810?x=1"):
+                    "http://aiops2-core:810/other", "http://127.0.0.1:810?x=1",
+                    "http://127.0.0.1:5432"):
             with self.subTest(url=url), patch.dict(os.environ, {"CORE_URL": url}), patch.object(
                     noc_correlation.urllib.request, "build_opener",
                     side_effect=AssertionError("must not connect")):
