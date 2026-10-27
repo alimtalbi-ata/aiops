@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import zipfile
 from pathlib import Path
 
 EXPECTED = {
@@ -23,7 +24,7 @@ EXPECTED = {
 }
 
 
-def audit(root: Path) -> dict:
+def audit(root: Path, archive: Path | None = None) -> dict:
     """Report expected historical members without following symlinks."""
     root = root.resolve()
     members = []
@@ -48,6 +49,39 @@ def audit(root: Path) -> dict:
                 row["status"] = "MATCH" if digest == expected["sha256"] else "HASH_MISMATCH"
         members.append(row)
 
+    archive_report = {"provided": archive is not None, "status": "NOT_PROVIDED", "sha256": None, "members": []}
+    if archive is not None:
+        archive_report["status"] = "INVALID_ARCHIVE"
+        if archive.is_symlink():
+            archive_report["status"] = "REJECTED_SYMLINK"
+        elif archive.is_file():
+            archive_report["sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+            try:
+                with zipfile.ZipFile(archive) as zf:
+                    names = zf.namelist()
+                    duplicates = sorted({name for name in names if names.count(name) > 1})
+                    archive_report["status"] = "CRC_PASS" if zf.testzip() is None and not duplicates else "CRC_OR_DUPLICATE_FAILURE"
+                    archive_report["duplicate_members"] = duplicates
+                    for relative, expected in EXPECTED.items():
+                        matches = [info for info in zf.infolist() if info.filename == relative]
+                        item = {"path": relative, "status": "MISSING", "observed_sha256": None}
+                        if len(matches) > 1:
+                            item["status"] = "DUPLICATE_MEMBER"
+                        elif matches:
+                            info = matches[0]
+                            unix_mode = (info.external_attr >> 16) & 0o170000
+                            if unix_mode == 0o120000:
+                                item["status"] = "REJECTED_SYMLINK"
+                            elif info.is_dir():
+                                item["status"] = "REJECTED_NOT_FILE"
+                            else:
+                                digest = hashlib.sha256(zf.read(info)).hexdigest()
+                                item["observed_sha256"] = digest
+                                item["status"] = "MATCH" if digest == expected["sha256"] else "HASH_MISMATCH"
+                        archive_report["members"].append(item)
+            except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+                archive_report["error_type"] = type(exc).__name__
+
     assembler = root / "tools/assemble_hybrid.py"
     assembler_row = {
         "path": "tools/assemble_hybrid.py",
@@ -70,6 +104,12 @@ def audit(root: Path) -> dict:
         "runtime_qualification": False,
         "recovery_complete": complete,
         "members": members,
+        "archive_audit": archive_report,
+        "archive_recovery_complete": (
+            archive_report.get("status") == "CRC_PASS"
+            and len(archive_report.get("members", [])) == len(EXPECTED)
+            and all(row["status"] == "MATCH" for row in archive_report.get("members", []))
+        ),
         "assembler": assembler_row,
         "decision": "READY_FOR_SEPARATE_REVIEW" if complete else "RECOVERY_INCOMPLETE",
     }
@@ -78,9 +118,10 @@ def audit(root: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--archive", type=Path, help="optional historical ZIP; inspected in-place without extracting or executing it")
     parser.add_argument("--output", type=Path, help="optional new JSON output path; existing files are refused")
     args = parser.parse_args()
-    result = audit(args.root)
+    result = audit(args.root, args.archive)
     payload = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
     if args.output:
         if args.output.exists() or args.output.is_symlink():
