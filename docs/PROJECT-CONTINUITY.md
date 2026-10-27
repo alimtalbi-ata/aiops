@@ -66,3 +66,7 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## 2026-10-27 — Debian install / in-place upgrade kit (draft)
+
+A separate change proposes `deploy/debian-preflight.sh` (read-only), `deploy/upgrade.sh` (read-only `--plan`, explicitly gated `--apply`) and `docs/DEBIAN-INSTALL-UPGRADE-KIT.md`. Existing `deploy/install.sh` is preserved. The upgrade requires an existing `.env`, externally verified backup marker, exact hostname confirmation and approval environment flag; it does not run migrations, remove volumes, retire legacy services or automatically rollback. Source-only change, no Debian runtime tests or actual upgrade. Before merging, validate shell syntax, Compose semantics, rollback, persistent data and failure injection on an isolated clone. See the separate draft PR for exact commit and status.
