@@ -24,12 +24,15 @@ def inspect_png(path: Path, max_bytes: int = MAX_BYTES) -> tuple[str, int]:
     if not 33 <= max_bytes <= MAX_BYTES:
         raise ValueError("invalid PNG size limit")
     # Refuse symlinks early and pin every check to one open descriptor.
-    # O_NOFOLLOW closes the check/open race where the platform supports it;
-    # O_NONBLOCK prevents a substituted FIFO from hanging the offline verifier.
+    # Do not silently weaken the final-component boundary on platforms where
+    # O_NOFOLLOW is unavailable; this integrity gate must fail closed.
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if not isinstance(nofollow, int) or nofollow == 0:
+        raise ValueError("safe capture open unavailable without O_NOFOLLOW")
     if path.is_symlink():
         raise ValueError("capture symlink is forbidden")
     flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
-             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+             | nofollow | getattr(os, "O_NONBLOCK", 0))
     try:
         fd = os.open(path, flags)
     except OSError as exc:
