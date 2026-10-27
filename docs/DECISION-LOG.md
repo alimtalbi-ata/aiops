@@ -103,3 +103,10 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Décision:** Porter depuis PR #36 le validateur de graphe ACME et la vue de simulation en lecture seule, sans fusion massive et sans toucher au jumeau canonique en base.
 - **Sécurité:** Les identifiants `SIM-ACME-*` et `SIM-GLPI-*` proviennent du SHA-256 du fixture, et ne sont jamais des identifiants Core/Temporal/GLPI. `ticket_id=null`, `runtime_attested=false`, `live_remediation_authorized=false`.
 - **Qualification:** Tests unitaires du graphe, des modes interdits, des cycles, du montage portail et des erreurs ; CI GitHub Actions, sans services réels. Une vraie corrélation ITSM nécessitera un adaptateur authentifié et une attestation de ticket.
+
+## ADR-0017 — Read-only operator console without browser token persistence (2026-10-27)
+
+- **Status:** Proposed in PR #51, not production-qualified.
+- **Decision:** Mount an explicit `/operator` console that consumes only the RBAC-protected `/api/portal/operator/snapshot` contract. Tokens are entered per page and kept in JS memory, never browser storage, URL or cookie. Logout fences stale asynchronous responses. All unverified reads remain `READABLE_UNVERIFIED` or `UNKNOWN`; evidence is forbidden to viewer.
+- **Security:** CSP, no-store, anti-framing and safe DOM rendering; no client write/remediation API. The page shell is public and is **not** a replacement for comprehensive portal login, TLS, reverse-proxy authentication, CSRF controls or endpoint-level RBAC.
+- **Qualification:** HTTP contract tests and in-process Node JS behavior tests; not Playwright, real service integration, NIM inference or Debian verification.
