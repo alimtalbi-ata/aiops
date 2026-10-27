@@ -117,6 +117,23 @@ class DemoPublicTests(unittest.TestCase):
                     mod._jobs.clear()
                     mod._recent_starts.clear()
 
+    def test_completed_job_rejects_symlink_manifest_before_reading_target(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root / "outside.json"
+            outside.write_text("{}", encoding="utf-8")
+            output = root / "output"
+            output.mkdir()
+            (output / "AIOps-Demo-Complete.manifest.json").symlink_to(outside)
+            job = {"process": MagicMock(), "output": output, "scenario": "SAN_FABRIC_P1",
+                   "status": "running", "created_at": 1}
+            job["process"].poll.return_value = 0
+            result = mod._job_snapshot("c" * 32, job)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["error"], "manifest_missing_or_invalid")
+
     def test_completed_job_requires_manifest_and_artifact_hashes(self):
         import tempfile
         from pathlib import Path
