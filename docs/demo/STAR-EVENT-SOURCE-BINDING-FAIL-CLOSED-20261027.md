@@ -14,6 +14,8 @@ Chaque checkpoint STAR doit être rapproché d'un événement identifié et du m
 
 ## Vérification et packaging
 
+Le vérificateur du ZIP borne le nombre de membres à la somme exacte des entrées de métadonnées et de la liste de sources approuvées ; l'ajout d'une source ne laisse donc pas un seuil statique obsolète faire échouer la qualification.
+
 Les tests tests/test_star_event_source_binding.py utilisent exclusivement des PNG et événements synthétiques dans des répertoires temporaires. Ils couvrent cohérence SHA, identité, état, heure, service, clés JSON dupliquées, symlinks, fichiers surdimensionnés et absence de primitives système requises. Le workflow .github/workflows/star-event-source-binding-offline.yml exécute la suite hors ligne. La source, le test, le workflow et cette fiche sont embarqués explicitement dans le kit cumulatif ; le test du kit vérifie l'égalité exacte des octets avec le checkout épinglé.
 
 ## Provenance historique et limites

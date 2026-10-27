@@ -40,6 +40,9 @@ class VerifyCandidateTests(unittest.TestCase):
             for n, content in contents.items():
                 z.writestr(n, content)
 
+    def test_member_limit_tracks_exact_metadata_and_approved_source_count(self):
+        self.assertEqual(verifier.MAX_FILES, len(verifier.META) + len(builder.APPROVED))
+
     def test_valid_candidate_and_pinned_checkout(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"; root.mkdir()
