@@ -6,7 +6,8 @@ import pathlib
 import sys
 import unittest
 from unittest.mock import patch
-from threading import Barrier
+from threading import Barrier, Event, Lock
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
 
@@ -131,6 +132,51 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
         self.assertEqual(response.json()["runs"], payloads[(main.CORE, "/api/runs")])
         self.assertEqual(response.json()["twin"], payloads[(main.TWIN, "/api/twin/summary")])
         self.assertEqual(response.json()["_portal"]["status"], "COMPLETE")
+
+    def test_bootstrap_rejects_excess_concurrent_requests_without_pool_growth(self):
+        all_six_reads_started = Event()
+        release_reads = Event()
+        count_lock = Lock()
+        started_count = 0
+
+        def blocking_read(base, path):
+            nonlocal started_count
+            with count_lock:
+                started_count += 1
+                if started_count == 6:
+                    all_six_reads_started.set()
+            if not release_reads.wait(timeout=3):
+                raise RuntimeError("synthetic read barrier timed out")
+            return {"source": "SYNTHETIC", "path": path}, True
+
+        def request_bootstrap():
+            with TestClient(main.app) as client:
+                return client.get(
+                    "/api/portal/bootstrap",
+                    headers={"Authorization": "Bearer synthetic-portal-read-token"},
+                )
+
+        with patch.object(main, "_bootstrap_read", side_effect=blocking_read):
+            with ThreadPoolExecutor(max_workers=2) as requests:
+                first = requests.submit(request_bootstrap)
+                second = requests.submit(request_bootstrap)
+                try:
+                    self.assertTrue(
+                        all_six_reads_started.wait(timeout=2),
+                        "two admitted requests should occupy the fixed six-worker pool",
+                    )
+                    overloaded = request_bootstrap()
+                    self.assertEqual(overloaded.status_code, 503)
+                    self.assertEqual(
+                        overloaded.json()["detail"],
+                        "portal_bootstrap_capacity_exceeded",
+                    )
+                finally:
+                    release_reads.set()
+                self.assertEqual(first.result(timeout=4).status_code, 200)
+                self.assertEqual(second.result(timeout=4).status_code, 200)
+
+        self.assertEqual(started_count, 6)
 
     def test_one_upstream_failure_degrades_only_that_source_and_redacts_exception(self):
         def fake_get_json(base, path, **kwargs):
