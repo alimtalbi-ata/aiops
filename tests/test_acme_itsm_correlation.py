@@ -16,6 +16,10 @@ RUN = "RUN-ACME-001"
 INCIDENT = "INC-ACME-DEMO-SAN-001"
 NOC = {
     "source_payload_authenticated": True,
+    "source_authentication": "HMAC_SHA256_VERIFIED",
+    "runtime_attested": False,
+    "production_qualified": False,
+    "live_remediation_authorized": False,
     "source_payload_sha256": "a" * 64,
     "run_id": RUN,
     "incident_id": INCIDENT,
@@ -54,7 +58,10 @@ class AcmeCorrelationTests(unittest.TestCase):
 
     def test_rejects_unverified_signed_payload_and_bad_digest(self):
         for noc in (None, {**NOC, "source_payload_authenticated": False},
-                    {**NOC, "source_payload_sha256": "not-a-digest"}):
+                    {**NOC, "source_payload_sha256": "not-a-digest"},
+                    {**NOC, "source_authentication": "SELF_ASSERTED"},
+                    {**NOC, "runtime_attested": True},
+                    {**NOC, "live_remediation_authorized": True}):
             with self.subTest(noc=noc):
                 self.assertEqual(project_correlation(SCENARIO, noc, CORE)["state"], "UNKNOWN")
 
