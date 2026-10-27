@@ -149,13 +149,22 @@ def _project_signed_payload(
         raise ValueError("invalid NOC schema")
     if payload.get("provenance") != "RUNTIME_READMODEL":
         raise ValueError("invalid NOC provenance")
+    if payload.get("live_remediation_authorized", False) is not False:
+        raise ValueError("NOC source attempted to authorize remediation")
+    if payload.get("evidence_runtime_attested", False) is not False:
+        raise ValueError("NOC source attempted to attest evidence bytes")
+    if payload.get("production_qualified", False) is not False:
+        raise ValueError("NOC source attempted to claim production qualification")
     run_id = payload.get("run_id")
     incident_id = payload.get("incident_id")
     if not isinstance(run_id, str) or IDENTIFIER.fullmatch(run_id) is None:
         raise ValueError("invalid NOC run identity")
     if not isinstance(incident_id, str) or IDENTIFIER.fullmatch(incident_id) is None:
         raise ValueError("invalid NOC incident identity")
-    if "handoff_02_03" in payload or "handoff_identity_sha256" in payload:
+    if any(key in payload for key in (
+        "handoff_02_03", "handoff_identity_sha256", "handoff_status",
+        "handoff_runtime_authenticated",
+    )):
         # This portal image does not yet embed the canonical 02->03 verifier.
         # Do not accept a provider's self-asserted handoff result.
         raise ValueError("NOC handoff verifier is not integrated")
