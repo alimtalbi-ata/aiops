@@ -81,6 +81,8 @@ Read [the reconstruction execution plan](docs/RECONSTRUCTION-EXECUTION-PLAN.md) 
 
 ## Project continuity and historical reuse
 
+**Candidate code reuse register (27 October 2026):** review [historical AIOps and third-party GitHub candidates](docs/release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md). It records candidates and gates, not claims of integration.
+
 **Current development status (27 October 2026):** see [development status, remaining work and blockers](docs/release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md) before selecting the next task. This report separates source presence, synthetic tests, commit-specific CI evidence and live qualification.
 
 Before resuming work in a new session, read these documents in order:
