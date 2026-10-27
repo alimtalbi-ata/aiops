@@ -294,6 +294,22 @@ class NocRuntimeRouteTests(unittest.TestCase):
             response = self.client.get("/api/noc/runtime-state")
             self.assertEqual(response.status_code, 401)
             self.assertEqual(response.json()["detail"], "invalid_portal_read_token")
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertEqual(response.headers["pragma"], "no-cache")
+
+    def test_route_auth_configuration_failure_is_not_cached_and_never_contacts_upstream(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}), patch.object(
+            noc_runtime, "read_signed_noc_snapshot",
+            side_effect=AssertionError("must not contact upstream"),
+        ):
+            response = self.client.get(
+                "/api/noc/runtime-state",
+                headers={"Authorization": "Bearer " + PORTAL_TOKEN},
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "portal_read_auth_not_configured")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["pragma"], "no-cache")
 
     def test_route_reports_unconfigured_source_without_network_access(self):
         env = {
@@ -313,6 +329,8 @@ class NocRuntimeRouteTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "noc_source_not_configured")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["pragma"], "no-cache")
 
     def test_route_returns_only_verified_projection_and_no_store(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
@@ -338,6 +356,8 @@ class NocRuntimeRouteTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "noc_source_unavailable_or_unverified")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["pragma"], "no-cache")
         self.assertNotIn("PRIVATE-TOKEN", response.text)
 
     @staticmethod
