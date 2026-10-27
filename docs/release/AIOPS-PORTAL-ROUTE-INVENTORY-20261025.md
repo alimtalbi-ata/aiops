@@ -89,3 +89,8 @@ La clé additionnelle `_portal` suit `aiops.portal-bootstrap-readmodel.v1`, indi
 `GET /api/portal/bootstrap` exige maintenant un Bearer token dédié `AIOPS_PORTAL_READ_TOKEN`. Si la variable est absente/vide, la route échoue en `503 portal_read_auth_not_configured`; si le jeton est absent ou invalide, elle échoue en `401 invalid_portal_read_token`. La comparaison utilise `hmac.compare_digest`; le jeton de lecture est distinct des jetons internes/admin. `deploy/init-env.sh` le génère aléatoirement, le garde dans `.env` en mode `0600`, préserve sa valeur sur les relances et le transmet uniquement au conteneur portail. Le préflight le traite comme secret requis. Les tests ASGI couvrent succès, secret non configuré, en-tête absent, jeton incorrect et lecture upstream en mode simulé.
 
 Cette modification protège uniquement l'endpoint bootstrap ; elle ne constitue pas une authentification globale du portail. Les pages HTML, `/api/copilot`, autres APIs et upstreams nécessitent encore une frontière d'authentification/SSO distincte et une qualification de déploiement. Ne pas exposer le portail sans proxy d'identité contrôlé. Aucun secret de test n'est un secret de déploiement.
+
+
+## Isolation du générateur vidéo local
+
+Le lancement opt-in de la vidéo utilise une liste d'autorisation d'environnement pour le processus enfant : PATH, répertoires utilisateur/temporaire, locale et variables explicitement nécessaires au cache Chromium/Playwright et aux polices. Les jetons portail/internal/admin et autres variables d'environnement ne sont pas transmis au rendu synthétique. Ce contrôle réduit l'exposition des secrets ; il ne remplace ni l'authentification globale du portail ni une qualification de runtime.
