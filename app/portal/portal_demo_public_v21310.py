@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import uuid
+import stat
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -53,7 +54,29 @@ def _job_snapshot(job_id, job):
         manifest = job["output"] / ARTIFACTS["manifest"][0]
         if code == 0:
             try:
-                data = json.loads(manifest.read_text(encoding="utf-8"))
+                # Read the manifest without following symlinks and with a strict
+                # byte bound before parsing untrusted generator output.
+                nofollow = getattr(os, "O_NOFOLLOW", None)
+                if nofollow is None:
+                    raise OSError("safe manifest open is unsupported")
+                fd = os.open(manifest, os.O_RDONLY | nofollow)
+                try:
+                    manifest_stat = os.fstat(fd)
+                    if (
+                        not stat.S_ISREG(manifest_stat.st_mode)
+                        or manifest_stat.st_size <= 0
+                        or manifest_stat.st_size > 64 * 1024
+                    ):
+                        raise ValueError("manifest is not a bounded regular file")
+                    with os.fdopen(fd, "rb", closefd=False) as stream:
+                        raw_manifest = stream.read(64 * 1024 + 1)
+                    if len(raw_manifest) > 64 * 1024:
+                        raise ValueError("manifest exceeds size limit")
+                    if os.fstat(fd).st_size != manifest_stat.st_size:
+                        raise ValueError("manifest changed during read")
+                    data = json.loads(raw_manifest.decode("utf-8"))
+                finally:
+                    os.close(fd)
                 video = job["output"] / ARTIFACTS["video"][0]
                 subtitles = job["output"] / ARTIFACTS["subtitles"][0]
                 def sha256_file(path):
