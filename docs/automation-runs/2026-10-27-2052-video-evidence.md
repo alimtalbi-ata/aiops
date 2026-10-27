@@ -21,6 +21,14 @@
 - Aucun Playwright réel, ffmpeg, MP4 ou session authentifiée exécuté pendant ce lot. **NOT_TESTED** pour la capture runtime et le rendu MP4. Aucun accès Debian, aucune action LIVE.
 - Les fixtures PNG de test restent des images synthétiques de test, **pas des preuves runtime**.
 
+## Qualification CI et correctifs complémentaires
+
+- Run https://github.com/alimtalbi-ata/aiops/actions/runs/40573298171 : **FAIL** ; 9/9 tests `test_evidence_video.py` OK après correction PNG, mais les nouveaux tests capture ont révélé une expression régulière CSS trop restrictive.
+- `23b2dbaf81c1ce358b68552da55331b65e01d797` : correction de l'expression régulière pour des sélecteurs sûrs id/classe. Run https://github.com/alimtalbi-ata/aiops/actions/runs/40573370215 : **SUCCESS** confirmé.
+- `2b82fe22949c5377aa00f2c7302629d15d2b0f24` : 2 tests supplémentaires (injection CSS, GET allowlist). Run https://github.com/alimtalbi-ata/aiops/actions/runs/40573394339 : **SUCCESS** confirmé : tests video, capture, audit statique, validation Compose et policy.
+- `6fd47d317ce573551284b52b1c9ffed85b2acaa5` : permissions répertoires 0700 et fichiers 0600; `ed753ef1186c3a00de4bd39f7a972756bcd59a5a` : test négatif permissions; `fdd14d817ce4cc0fcd8a83d69980aea35aed488b` : documentation. **CI de ce dernier renforcement pas encore confirmée** au moment du journal.
+- Tous ces PASS sont des **tests offline de contrats et sécurité**, pas des captures Playwright authentifiées ni un test MP4.
+
 ## Risques, blocages, prochain micro-lot
 
 - Sans URLs approuvées, sessions Playwright privées, masques revus et captures authentifiées : `LIVE_CAPTURE_BLOCKED`; aucun mock ne peut se substituer aux cinq vues.
