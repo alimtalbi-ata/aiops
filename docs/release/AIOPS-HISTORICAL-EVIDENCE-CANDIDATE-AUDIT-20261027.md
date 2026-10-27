@@ -58,3 +58,13 @@
 ## 6. Critère de preuve
 
 Ce document est un audit de code source GitHub, pas une exécution de test. Les références de blob identifient le contenu consulté. Aucun PASS de CI, runtime ou production n'est affirmé ici.
+
+
+## 7. Follow-up implementation started (2026-10-27)
+
+After the source audit, a new pure/read-only module was added on the working branch:
+- `app/shared/evidence_matrix.py`: projects normalized evidence into `aiops.evidence-matrix-read-model.v1`; exposes source, external ID, claim, observed time, freshness/reason, provenance, integrity hint, hypothesis links and contradictions.
+- `tests/test_evidence_matrix.py`: covers fresh, stale, missing timestamp, duplicate IDs, invalid input, contradictory snapshots, synthetic provenance and no-action-authority behavior.
+- `.github/workflows/quality.yml`: invokes the new test file in CI.
+
+**Qualification status: NOT RUN / PENDING.** The source and tests were committed, but this session has not executed Python tests locally and no completed GitHub Actions result for the new commits has yet been verified. The label `HASH_VERIFIED` is only emitted when the canonical identity contract is present and no contract error for that row was found; it still does not mean source authenticity or live attestation.
