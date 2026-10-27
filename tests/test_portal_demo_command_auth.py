@@ -11,7 +11,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
-from portal.main import app
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-only-" + "z" * 48}):
+    from portal.main import app
 from portal.portal_command_auth import require_demo_operator
 
 OPERATOR = "operator-credential-" + "x" * 44
