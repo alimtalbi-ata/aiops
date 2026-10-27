@@ -7,7 +7,7 @@ not authenticate the application, session, business state, or runtime event.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -34,7 +34,7 @@ def _utc_timestamp(value: object) -> bool:
         return False
     # The field is explicitly named *_utc: accept only UTC (Z or +00:00),
     # not merely any timezone-aware local timestamp.
-    return parsed.tzinfo is not None and parsed.utcoffset() == __import__("datetime").timedelta(0)
+    return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
 
 
 def _origin(url: str) -> str:
