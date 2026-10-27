@@ -99,6 +99,38 @@ def permits(item, url, method, navigation, main_frame):
         return False
 
 
+def install_network_fence(context, page, item):
+    """Intercept *context-wide* traffic, including popups, frames and WebSockets.
+
+    A page-level route misses popup requests. WebSockets are not HTTP routes.
+    Unsupported interception must fail closed, not silently allow a channel.
+    """
+    if not callable(getattr(context, "route_web_socket", None)):
+        raise ValueError("WebSocket interception unavailable; capture blocked")
+    blocked = []
+
+    def gate(route):
+        request = route.request
+        try:
+            main = request.frame == page.main_frame
+        except Exception:
+            main = False
+        if permits(item, request.url, request.method,
+                   request.is_navigation_request(), main):
+            route.continue_()
+        else:
+            blocked.append("HTTP request denied")
+            route.abort()
+
+    def block_websocket(route):
+        blocked.append("WebSocket denied")
+        route.close()
+
+    context.route("**/*", gate)
+    context.route_web_socket("**/*", block_websocket)
+    return blocked
+
+
 def capture(plan, output_dir, storage_state_dir, approved=False):
     entries = validate_plan(plan)
     if not approved:
@@ -142,20 +174,7 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
                         viewport={"width": 1440, "height": 900})
                     try:
                         page = context.new_page()
-                        blocked = []
-                        def gate(route):
-                            request = route.request
-                            try:
-                                main = request.frame == page.main_frame
-                            except Exception:
-                                main = False
-                            if permits(item, request.url, request.method,
-                                       request.is_navigation_request(), main):
-                                route.continue_()
-                            else:
-                                blocked.append(request.method + " " + request.url.split("?")[0])
-                                route.abort()
-                        page.route("**/*", gate)
+                        blocked = install_network_fence(context, page, item)
                         response = page.goto(item["url"], wait_until="domcontentloaded", timeout=20000)
                         if response is None or response.status >= 400 or page.url != item["url"] or blocked:
                             raise ValueError("navigation failed or request denied for " + service)
