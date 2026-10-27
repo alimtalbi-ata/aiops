@@ -1,7 +1,6 @@
 """Regression tests for honest, deterministic ACME simulation metadata."""
 from __future__ import annotations
 
-import hashlib
 import pathlib
 import sys
 import unittest
