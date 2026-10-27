@@ -210,3 +210,13 @@ Le candidat ZIP du commit de référence a pour SHA-256 `1e8503990f41a4049e3d530
 - Le bootstrap reste une lecture Core/Twin en lecture seule, avec provenance amont non attestée. Le jeton protège uniquement cette route, pas toutes les pages/API du portail.
 - Les 20 familles de composants restent non qualifiées pour le runtime ; aucun E2E authentifié sur `:17777`, aucune capture applicative réelle ni attestation DGX/GLPI n'est établie.
 - Production = NO-GO jusqu'à l'intégration runtime authentifiée, sauvegarde/rollback vérifiés et approbation explicite. Aucun accès ou changement Debian, nouveau port, écriture backend ou remédiation LIVE.
+
+
+## Cycle update — signed NOC read-model seam (27 October 2026)
+
+The existing portal now mounts GET /api/noc/runtime-state in the same ASGI process. It is an optional, authenticated-by-caller, read-only adapter for a configured upstream read-model endpoint. Upstream data is accepted only when the exact origin is allowlisted and both the response-body SHA-256 and HMAC-SHA256 signature verify. The route refuses redirects, limits reads to 256 KiB and three seconds, rejects duplicate JSON keys and stale timestamps, and redacts upstream failures.
+
+This is a functional integration seam, not a Checkmk/Thruk connector. All upstream variables remain blank by default, so the route returns 503 until a trusted provider and credentials are provisioned. The output explicitly keeps runtime_attested=false, runtime_authenticated=false and live_remediation_authorized=false; screenshot bytes and GLPI ticket identity are not independently attested. Any 02→03 handoff claim is rejected because the canonical verifier is not yet embedded in the portal image.
+
+Tests use only synthetic payloads and credentials. The cumulative candidate-kit allowlist and CI trigger now include the adapter, its tests and the contract document. No new port, service, production access, backend write or LIVE remediation is introduced.
+
