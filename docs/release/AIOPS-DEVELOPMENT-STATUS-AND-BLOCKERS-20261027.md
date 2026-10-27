@@ -176,3 +176,37 @@ Le candidat ZIP du commit de référence a pour SHA-256 `1e8503990f41a4049e3d530
 - Les 20 familles du registre ne sont pas qualifiées pour les connexions runtime ; l'authentification bootstrap ne protège pas globalement toutes les pages/APIs.
 - Aucun E2E authentifié sur `:17777`, aucune sauvegarde/restauration de production vérifiée et aucune approbation de bascule. Production = NO-GO.
 - Prochaine action : attendre et examiner les deux workflows STAR encore en cours, puis poursuivre l'E2E isolé de la cinématique ACME SAN P1 → Payments P2 avec captures exactes par application, identité et provenance fail-closed. Ne jamais convertir une fixture ou un hash local en attestation runtime.
+
+
+## 11. Cycle 27 octobre — deadline globale bootstrap et kit cumulatif complet
+
+**SHA de référence :** `61521a94c274026d9bf1e53d4990ccdb0411d57b` ; PR #36 ouverte en draft. Cette section complète les observations historiques précédentes ; elle ne les remplace pas et ne qualifie pas le runtime Debian.
+
+### Changement fonctionnel livré
+
+- `app/portal/main.py` : les trois lectures indépendantes Core/Twin utilisent maintenant une **deadline commune de 3 secondes** via `concurrent.futures.wait`. Une lecture encore pendante est rendue `UNKNOWN`, source `UPSTREAM_TIMEOUT`, code `READ_DEADLINE_EXCEEDED`; les autres sections restent visibles.
+- Les deux créneaux bootstrap restent réservés jusqu'à la fin réelle des workers retardataires. Cela évite qu'un appelant qui a déjà reçu une réponse de timeout libère immédiatement sa capacité et accumule des tâches derrière un worker bloqué.
+- `tests/test_portal_bootstrap_read_model.py` ajoute `test_shared_deadline_marks_stalled_sources_unknown_and_keeps_capacity_leased`, qui vérifie le timeout, l'état DEGRADED et le refus de surcharge tant que les workers retardataires ne sont pas terminés.
+- `docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md` documente le contrat exact et la portée de cette protection.
+- Rollback source-only : revert des commits `a48df18105de4b175bb538e7fdd44642eba98df4`, `049cc9a984a86a1199166d053f2d32efdcbc7057` et `61521a94c274026d9bf1e53d4990ccdb0411d57b` sur la branche PR, puis relancer les tests isolés. Aucun changement de runtime n'est requis.
+
+### Qualification exacte sur le SHA de référence
+
+- [Kit cumulatif — run 40544034897](https://github.com/alimtalbi-ata/aiops/actions/runs/40544034897) : PASS. Les 14 suites exécutées dans ce job ont toutes réussi, **177 tests** comptés dans les sorties, dont les 7 tests bootstrap et le nouveau cas de deadline partagée. Le ZIP a été construit depuis le SHA épinglé, contrôlé par `unzip -t`, puis comparé au checkout. Le manifeste interne a 81 entrées SHA-256 vérifiées.
+- [AIOps quality gates — run 40544034983](https://github.com/alimtalbi-ata/aiops/actions/runs/40544034983) : PASS, les six jobs terminés avec succès, incluant runtime E2E sur stack CI isolée, contrats Temporal, build/qualité, migrations PostgreSQL, upgrade du runner de migration, répétition DR MariaDB et release kit.
+- [Récupération ZIP historique — run 40544035087](https://github.com/alimtalbi-ata/aiops/actions/runs/40544035087) : PASS du mécanisme de récupération synthétique uniquement.
+- [Plan de checkpoints F20.13 — run 40544035355](https://github.com/alimtalbi-ata/aiops/actions/runs/40544035355) : PASS des tests du générateur de plans hors ligne ; cela ne prouve pas que les écrans réels GLPI/n8n/Grafana ont été capturés.
+- Au relevé du 27 octobre 2026 vers 16:48 UTC : 25/27 workflows terminés avec succès, zéro échec, deux en cours — [Chromium fixture read-only](https://github.com/alimtalbi-ata/aiops/actions/runs/40544037323) et [génération vidéo de démonstration](https://github.com/alimtalbi-ata/aiops/actions/runs/40544035081). Les deux résultats ne sont pas extrapolés.
+
+### Récupération historique — constat limité et reproductible
+
+- L'arbre Git récursif du SHA `61521a9…` contient 733 entrées et **aucun fichier archive** avec extension ZIP/TAR/GZ/7Z. Sous `recovery/legacy_v2134`, seuls `tools/assemble_hybrid.py` et `tools/audit_hybrid_dependencies.py` sont présents.
+- Deux recherches simplifiées dans la Library accessible n'ont retrouvé ni l'archive originale Hybrid Replay V2.13.4, ni l'archive F20.13 Playwright, ni `tools/build_real_replay.py` / `tests/test_replay.py`.
+- Ce résultat signifie « octets non disponibles dans les sources consultées pendant ce cycle », pas « fichier inexistant partout ». Les SHA historiques consignés ne sont pas utilisés pour reconstruire un fichier dont les octets ne sont pas accessibles.
+- Le kit cumulatif est étendu pour embarquer ce rapport de blocages, le registre de réutilisation et l'audit des candidats historiques. Ces documents ne contiennent que des références et décisions de réutilisation ; ils ne déclarent aucun code tiers téléchargé ou qualifié.
+
+### Limites inchangées
+
+- Le bootstrap reste une lecture Core/Twin en lecture seule, avec provenance amont non attestée. Le jeton protège uniquement cette route, pas toutes les pages/API du portail.
+- Les 20 familles de composants restent non qualifiées pour le runtime ; aucun E2E authentifié sur `:17777`, aucune capture applicative réelle ni attestation DGX/GLPI n'est établie.
+- Production = NO-GO jusqu'à l'intégration runtime authentifiée, sauvegarde/rollback vérifiés et approbation explicite. Aucun accès ou changement Debian, nouveau port, écriture backend ou remédiation LIVE.
