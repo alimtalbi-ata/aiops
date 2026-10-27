@@ -111,6 +111,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_star_event_source_binding.py' -v
           python -m unittest discover -s tests -p 'test_star_checkpoint_reconciliation.py' -v
           python -m unittest discover -s tests -p 'test_star_capture_set_replay_gate.py' -v
+          bash tests/test_preflight_secrets.sh
       - name: Build pinned candidate only (no Docker, no runtime)
         shell: bash
         run: |
