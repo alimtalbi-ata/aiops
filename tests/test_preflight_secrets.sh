@@ -8,6 +8,7 @@ AIOPS_DEMO_MODE=0
 POSTGRES_PASSWORD=Newaiops26$
 AIOPS_ADMIN_TOKEN=Newaiops26$
 AIOPS_INTERNAL_TOKEN=Newaiops26$
+AIOPS_PORTAL_READ_TOKEN=Newaiops26$
 GLPI_DB_PASSWORD=Newaiops26$
 GLPI_DB_ROOT_PASSWORD=Newaiops26$
 GRAFANA_ADMIN_PASSWORD=Newaiops26$
@@ -22,6 +23,7 @@ AIOPS_DEMO_MODE=0
 POSTGRES_PASSWORD=postgres_random_01
 AIOPS_ADMIN_TOKEN=shared_internal_random_02
 AIOPS_INTERNAL_TOKEN=shared_internal_random_02
+AIOPS_PORTAL_READ_TOKEN=portal_read_random_07
 GLPI_DB_PASSWORD=glpi_random_03
 GLPI_DB_ROOT_PASSWORD=glpi_root_random_04
 GRAFANA_ADMIN_PASSWORD=grafana_random_05
@@ -49,6 +51,8 @@ bash "$ROOT/deploy/check-secrets.sh" "$TMP/init/.env" >/dev/null
 ADMIN_TOKEN="$(sed -n 's/^AIOPS_ADMIN_TOKEN=//p' "$TMP/init/.env")"
 INTERNAL_TOKEN="$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/init/.env")"
 [[ -n "$ADMIN_TOKEN" && "$ADMIN_TOKEN" == "$INTERNAL_TOKEN" ]]
+PORTAL_READ_TOKEN="$(sed -n 's/^AIOPS_PORTAL_READ_TOKEN=//p' "$TMP/init/.env")"
+[[ -n "$PORTAL_READ_TOKEN" && "$PORTAL_READ_TOKEN" != "$INTERNAL_TOKEN" ]]
 BEFORE="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
 bash "$TMP/init/deploy/init-env.sh" >/dev/null
 AFTER="$(sha256sum "$TMP/init/.env" | cut -d' ' -f1)"
@@ -62,10 +66,12 @@ sed -i 's|^TEMPORAL_IMAGE=.*|TEMPORAL_IMAGE=temporalio/auto-setup:1.32.1|' "$TMP
 sed -i 's|^TEMPORAL_UI_IMAGE=.*|TEMPORAL_UI_IMAGE=temporalio/ui:2.56.0|' "$TMP/upgrade/.env"
 sed -i '/^TEMPORAL_ADMINTOOLS_IMAGE=/d' "$TMP/upgrade/.env"
 BEFORE_TOKEN="$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/upgrade/.env")"
+BEFORE_PORTAL_READ_TOKEN="$(sed -n 's/^AIOPS_PORTAL_READ_TOKEN=//p' "$TMP/upgrade/.env")"
 bash "$TMP/upgrade/deploy/init-env.sh" >/dev/null
 grep -Fxq 'TEMPORAL_IMAGE=temporalio/server:1.31.0' "$TMP/upgrade/.env"
 grep -Fxq 'TEMPORAL_ADMINTOOLS_IMAGE=temporalio/admin-tools:1.31.0' "$TMP/upgrade/.env"
 grep -Fxq 'TEMPORAL_UI_IMAGE=temporalio/ui:2.49.1' "$TMP/upgrade/.env"
 [[ "$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/upgrade/.env")" == "$BEFORE_TOKEN" ]]
+[[ "$(sed -n 's/^AIOPS_PORTAL_READ_TOKEN=//p' "$TMP/upgrade/.env")" == "$BEFORE_PORTAL_READ_TOKEN" ]]
 [[ "$(stat -c '%a' "$TMP/upgrade/.env")" == "600" ]]
 echo 'SECRET_PREFLIGHT_TEST=PASS'
