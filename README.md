@@ -14,7 +14,7 @@ The installer creates a new `.env` with random credentials (or validates an exis
 
 ## External interfaces
 
-- Portal: `7777`
+- Portal: `17777` (default; override with `AIOPS_PORTAL_HOST_PORT`)
 - GLPI: `8080`
 - n8n: `5678`
 - Prometheus: `9090`
