@@ -1,0 +1,36 @@
+name: AIOps autonomous cycle 4 — STAR evidence gates
+
+on:
+  schedule:
+    - cron: '36 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiops-cycle-4-star-evidence
+  cancel-in-progress: false
+
+jobs:
+  star-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate STAR evidence and replay gates
+        run: |
+          python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_event_capture_alignment.py' -v
+          python -m unittest discover -s tests -p 'test_star_event_source_binding.py' -v
+          python -m unittest discover -s tests -p 'test_star_checkpoint_reconciliation.py' -v
+          python -m unittest discover -s tests -p 'test_star_capture_set_replay_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_capture_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_star_png_integrity.py' -v
+          python -m unittest discover -s tests -p 'test_star_snapshot_choreography.py' -v

@@ -1,0 +1,398 @@
+"""Isolated, synthetic ZIP fixtures: no prod services, ports or private data."""
+import hashlib
+import io
+import json
+import os
+import sys
+from unittest.mock import patch
+from pathlib import Path
+import tempfile
+import unittest
+import zipfile
+from recovery.tools.zip_source_recovery import inventory, recover, main
+
+
+class RecoveryTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.archive = self.root / "AIOPS-V2.13.4-SYNTHETIC.zip"
+        self.dest = self.root / "quarantine"
+        self.dest.mkdir()
+
+    def make(self, files):
+        with zipfile.ZipFile(self.archive, "w", zipfile.ZIP_DEFLATED) as z:
+            for path, value in files:
+                z.writestr(path, value)
+
+    def pinned(self, member, *, archive=None, destination=None, archive_pin=None, member_pin=None):
+        source = archive or self.archive
+        with zipfile.ZipFile(source) as z:
+            content = z.read(member)
+        return recover(source, member, destination or self.dest,
+                       expected_archive_sha256=archive_pin or hashlib.sha256(source.read_bytes()).hexdigest(),
+                       expected_member_sha256=member_pin or hashlib.sha256(content).hexdigest())
+
+    def test_inventory_sha_and_version(self):
+        self.make([("tools/replay.py", "print('synthetic')\n")])
+        m = inventory([self.archive])
+        self.assertEqual(m["schema"], "aiops-zip-source-inventory/v1")
+        self.assertEqual(m["members"][0]["version"], "2.13.4")
+        self.assertEqual(m["members"][0]["member_sha256"], hashlib.sha256(b"print('synthetic')\n").hexdigest())
+        self.assertEqual(m["members"][0]["python_syntax"], "parse_pass_not_completeness")
+        self.assertFalse(m["complete_source_attested"])
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_compact_version_naming(self):
+        self.archive = self.root / "AIOps-V21349-SYNTHETIC.zip"
+        self.make([("module.py", "x=1\n")])
+        self.assertEqual(inventory([self.archive])["members"][0]["version"], "2.13.49")
+
+    def test_dedup_and_no_source_claim(self):
+        self.make([("a.py", "x=1\n"), ("b.py", "x=1\n")])
+        m = inventory([self.archive])["members"]
+        self.assertIsNone(m[0]["duplicate_of"])
+        self.assertEqual(m[1]["duplicate_of"]["path"], "a.py")
+        self.assertTrue(all(x["reuse_status"] == "quarantine_review_required" for x in m))
+
+    def test_unsafe_paths_rejected(self):
+        for name in ("../outside.py", "/tmp/outside.py", "a/../b.py", "C:/a.py", "a\\b.py"):
+            with self.subTest(name=name):
+                self.make([(name, "pass\n")])
+                with self.assertRaises(ValueError):
+                    inventory([self.archive])
+
+    def test_windows_reserved_and_noncanonical_paths_rejected(self):
+        """A ZIP valid on Linux must not alias another path on Windows."""
+        for name in ("CON.py", "nested/nul.txt", "LPT9.json", "COM1.py",
+                     "foo. /bar.py", "a?.py", "bad<name.py", "tab\t.py",
+                     "cafe\u0301.py"):
+            with self.subTest(name=name):
+                self.make([(name, "pass\n")])
+                with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
+                    inventory([self.archive])
+                with self.assertRaises(ValueError):
+                    self.pinned(name)
+                self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_duplicate_names_rejected(self):
+        self.make([("A.py", "pass"), ("a.py", "pass")])
+        with self.assertRaises(ValueError):
+            inventory([self.archive])
+
+    def test_private_names_excluded(self):
+        self.make([(".env", "SECRET=redacted"), ("tokens.json", "{}"), ("safe.py", "x=1")])
+        names = [x["member_path"] for x in inventory([self.archive])["members"]]
+        self.assertEqual(names, ["safe.py"])
+
+    def test_sensitive_content_quarantined_not_exported(self):
+        secret = "-----BEGIN PRIVATE KEY-----\nsynthetic\n"
+        self.make([("safe.py", secret)])
+        m = inventory([self.archive])
+        self.assertTrue(m["members"][0]["sensitive_pattern_detected"])
+        self.assertNotIn(secret, str(m))
+        with self.assertRaises(ValueError):
+            self.pinned("safe.py")
+
+    def test_invalid_python_syntax_never_called_complete(self):
+        self.make([("bad.py", "def broken(:\n")])
+        self.assertEqual(inventory([self.archive])["members"][0]["python_syntax"], "parse_failed")
+        with self.assertRaises(SyntaxError):
+            self.pinned("bad.py")
+
+    def test_apply_extracts_one_file_with_no_overwrite(self):
+        self.make([("tools/one.py", "x=42\n"), ("tools/two.py", "y=2\n")])
+        result = self.pinned("tools/one.py")
+        self.assertEqual(result["status"], "QUARANTINED_NOT_QUALIFIED")
+        files = list(self.dest.iterdir())
+        self.assertEqual(len(files), 1)
+        self.assertEqual(files[0].read_text(), "x=42\n")
+        self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
+        with self.assertRaises(FileExistsError):
+            self.pinned("tools/one.py")
+
+    def test_symlink_archive_and_quarantine_rejected(self):
+        self.make([("safe.py", "x=1\n")])
+        link = self.root / "link.zip"
+        link.symlink_to(self.archive)
+        with self.assertRaises(ValueError):
+            inventory([link])
+        target = self.root / "linkdir"
+        target.symlink_to(self.dest, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            self.pinned("safe.py", destination=target)
+
+    def test_oversize_and_high_ratio(self):
+        self.make([("bomb.py", "x" * (2 * 1024 * 1024 + 1))])
+        with self.assertRaises(ValueError):
+            inventory([self.archive])
+        with self.assertRaises(ValueError):
+            self.pinned("bomb.py")
+
+    def test_cumulative_release_nested_zip_is_opaque_and_sha_pinned(self):
+        # Reproduces V2.13.6.1: a cumulative ZIP contains a >2 MiB
+        # architecture ZIP. Never interpret nested bytes as source code.
+        nested = os.urandom(2 * 1024 * 1024 + 1024)
+        self.make([("architecture/diagrams.zip", nested),
+                   ("tools/replay.py", "x=1\n")])
+        result = inventory([self.archive])
+        self.assertEqual(result["member_count"], 1)
+        self.assertEqual(result["opaque_archive_count"], 1)
+        record = result["opaque_archives"][0]
+        self.assertEqual(record["member_sha256"], hashlib.sha256(nested).hexdigest())
+        self.assertEqual(record["status"], "OPAQUE_NESTED_ZIP_NOT_INSPECTED")
+        self.assertFalse(record["import_authorized"])
+        self.assertEqual(result["members"][0]["member_path"], "tools/replay.py")
+        with self.assertRaises(ValueError):
+            self.pinned("architecture/diagrams.zip")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_zip_compression_bomb_is_rejected(self):
+        self.make([("architecture/diagrams.zip", b"0" * (2 * 1024 * 1024 + 1024)),
+                   ("tools/replay.py", "x=1\n")])
+        with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
+            inventory([self.archive])
+        with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
+            self.pinned("tools/replay.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    @staticmethod
+    def inner_zip(members):
+        """Build a ZIP in memory; no external files or runtime dependencies."""
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
+            for name, content in members:
+                z.writestr(name, content)
+        return buffer.getvalue()
+
+    def test_nested_inventory_metadata_only_dedup_and_quarantine(self):
+        inner = self.inner_zip([
+            ("tools/replay.py", "x=1\n"),
+            ("tools/replay_copy.py", "x=1\n"),
+            ("tools/broken.py", "def broken(:\n"),
+            ("tools/sensitive.py", "-----BEGIN PRIVATE KEY-----\nSYNTHETIC\n"),
+            ("tokens.json", '{"token":"synthetic"}'),
+            ("diagrams/image.svg", "<svg>synthetic</svg>"),
+        ])
+        self.make([("bundle/source.zip", inner), ("safe.py", "pass\n")])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["member_count"], 1)
+        self.assertEqual(report["nested_member_count"], 4)
+        self.assertEqual(report["nested_asset_count"], 1)
+        self.assertEqual(report["nested_assets"][0]["member_path"], "diagrams/image.svg")
+        self.assertEqual(report["opaque_archive_count"], 1)
+        self.assertEqual(report["opaque_archives"][0]["status"], "NESTED_METADATA_ONLY_INSPECTED")
+        members = {row["member_path"]: row for row in report["nested_members"]}
+        self.assertEqual(members["tools/replay.py"]["python_syntax"], "parse_pass_not_completeness")
+        self.assertEqual(members["tools/broken.py"]["python_syntax"], "parse_failed")
+        self.assertTrue(members["tools/sensitive.py"]["sensitive_pattern_detected"])
+        self.assertEqual(members["tools/replay_copy.py"]["duplicate_of"]["path"], "tools/replay.py")
+        self.assertEqual(members["tools/replay.py"]["nested_archive_sha256"], hashlib.sha256(inner).hexdigest())
+        self.assertTrue(all(row["import_authorized"] is False for row in members.values()))
+        self.assertNotIn("BEGIN PRIVATE KEY", str(report))
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_path_escape_is_rejected_before_inventory(self):
+        inner = self.inner_zip([("../escape.py", "pass\n")])
+        self.make([("bundle/source.zip", inner)])
+        with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
+            inventory([self.archive], inspect_nested=True)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_compression_bomb_is_rejected(self):
+        inner = self.inner_zip([("bomb.py", "A" * (2 * 1024 * 1024))])
+        self.make([("bundle/source.zip", inner)])
+        with self.assertRaisesRegex(ValueError, "oversized or high-ratio"):
+            inventory([self.archive], inspect_nested=True)
+
+    def test_nested_large_binary_is_opaque_not_source(self):
+        media = os.urandom(2 * 1024 * 1024 + 512)
+        inner = self.inner_zip([("media/photo.png", media), ("tools/replay.py", "pass\n")])
+        self.make([("bundle/source.zip", inner)])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["nested_member_count"], 1)
+        self.assertEqual(report["nested_members"][0]["member_path"], "tools/replay.py")
+        self.assertEqual(report["nested_asset_count"], 1)
+        self.assertEqual(report["nested_assets"][0]["member_sha256"], hashlib.sha256(media).hexdigest())
+        self.assertEqual(report["nested_assets"][0]["status"], "OPAQUE_ASSET_METADATA_ONLY_NOT_PARSED")
+
+    def test_nested_zip_within_zip_never_recurses(self):
+        third = self.inner_zip([("not_to_inspect.py", "pass\n")])
+        inner = self.inner_zip([("third.zip", third), ("tools/one.py", "pass\n")])
+        self.make([("bundle/source.zip", inner)])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["nested_member_count"], 1)
+        self.assertEqual(report["nested_members"][0]["member_path"], "tools/one.py")
+        self.assertNotIn("not_to_inspect.py", str(report))
+        self.assertEqual(report["nested_asset_count"], 1)
+        self.assertEqual(report["nested_assets"][0]["status"], "NESTED_ZIP_NOT_RECURSED")
+
+    def test_nested_architecture_document_hashes_without_parsing(self):
+        files = [("03_HLD_Architecture_Logique.pdf", b"%PDF-1.7 synthetic"),
+                 ("04_LLD_Conception_Detaillee.docx", b"PK synthetic not parsed"),
+                 ("01_Organigramme_AIOps_v2130.png", b"PNG synthetic not rendered")]
+        inner = self.inner_zip(files)
+        self.make([("architecture/diagrams.zip", inner)])
+        report = inventory([self.archive], inspect_nested=True)
+        self.assertEqual(report["nested_member_count"], 0)
+        self.assertEqual(report["nested_asset_count"], 3)
+        self.assertEqual(
+            {row["member_path"]: row["member_sha256"] for row in report["nested_assets"]},
+            {name: hashlib.sha256(data).hexdigest() for name, data in files})
+        self.assertTrue(all(row["import_authorized"] is False for row in report["nested_assets"]))
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nested_member_count_budget_refuses_unbounded_catalogue(self):
+        inner = self.inner_zip([(f"tools/f{i}.py", "pass\n") for i in range(1001)])
+        self.make([("bundle/source.zip", inner)])
+        with self.assertRaisesRegex(ValueError, "inspection budget exceeded"):
+            inventory([self.archive], inspect_nested=True)
+
+    def test_nested_archive_count_budget_refuses_many_inner_zips(self):
+        inner = self.inner_zip([("tools/one.py", "pass\n")])
+        self.make([(f"bundle/part{i}.zip", inner) for i in range(9)])
+        with self.assertRaisesRegex(ValueError, "too many nested ZIPs"):
+            inventory([self.archive], inspect_nested=True)
+
+    def test_nested_cli_inventory_only_and_apply_refused(self):
+        inner = self.inner_zip([("tools/one.py", "pass\n")])
+        self.make([("bundle/source.zip", inner)])
+        report_path = self.root / "nested.json"
+        args = ["zip_source_recovery", str(self.archive), "--inspect-nested", "--output", str(report_path)]
+        with patch.object(sys, "argv", args):
+            main()
+        self.assertEqual(json.loads(report_path.read_text())["nested_member_count"], 1)
+        args = ["zip_source_recovery", str(self.archive), "--inspect-nested", "--apply",
+                "--allow", "bundle/source.zip", "--quarantine", str(self.dest),
+                "--expected-archive-sha256", "0" * 64, "--expected-member-sha256", "0" * 64]
+        with patch.object(sys, "argv", args), self.assertRaises(SystemExit) as caught:
+            main()
+        self.assertEqual(caught.exception.code, 2)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_missing_pins_refused(self):
+        self.make([("safe.py", "x=1\n")])
+        with self.assertRaises(TypeError):
+            recover(self.archive, "safe.py", self.dest)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_archive_changed_after_review_fails_closed(self):
+        self.make([("safe.py", "x=1\n")])
+        original = inventory([self.archive])["members"][0]
+        self.make([("safe.py", "x=2\n")])
+        with self.assertRaisesRegex(ValueError, "archive SHA-256"):
+            self.pinned("safe.py", archive_pin=original["archive_sha256"],
+                        member_pin=original["member_sha256"])
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_wrong_member_pin_fails_closed(self):
+        self.make([("safe.py", "x=1\n")])
+        with self.assertRaisesRegex(ValueError, "member bytes"):
+            self.pinned("safe.py", member_pin="0" * 64)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_extraction_rejects_unrelated_unsafe_archive_member(self):
+        self.make([("safe.py", "x=1\n"), ("../outside.py", "x=2\n")])
+        with self.assertRaisesRegex(ValueError, "unsafe ZIP member path"):
+            self.pinned("safe.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_extraction_rejects_duplicate_casefold_names(self):
+        self.make([("safe.py", "x=1\n"), ("SAFE.py", "x=2\n")])
+        with self.assertRaisesRegex(ValueError, "duplicate ZIP member path"):
+            self.pinned("safe.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_extraction_rejects_oversized_unrelated_member(self):
+        self.make([("safe.py", "x=1\n"), ("huge.py", "x" * (2 * 1024 * 1024 + 1))])
+        with self.assertRaisesRegex(ValueError, "oversized"):
+            self.pinned("safe.py")
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_cli_requires_both_reviewed_pins(self):
+        self.make([("safe.py", "x=1\n")])
+        args = ["zip_source_recovery", str(self.archive), "--apply", "--allow", "safe.py",
+                "--quarantine", str(self.dest)]
+        with patch.object(sys, "argv", args), self.assertRaises(SystemExit) as caught:
+            main()
+        self.assertEqual(caught.exception.code, 2)
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_cli_pinned_quarantine(self):
+        self.make([("safe.py", "x=1\n")])
+        row = inventory([self.archive])["members"][0]
+        args = ["zip_source_recovery", str(self.archive), "--apply", "--allow", "safe.py",
+                "--quarantine", str(self.dest), "--expected-archive-sha256", row["archive_sha256"],
+                "--expected-member-sha256", row["member_sha256"]]
+        with patch.object(sys, "argv", args):
+            main()
+        self.assertEqual(len(list(self.dest.iterdir())), 1)
+
+    def test_inventory_uses_same_descriptor_after_path_replacement(self):
+        """A rename between SHA calculation and ZIP parsing cannot rebind bytes."""
+        self.make([("safe.py", "x=1\n")])
+        original_hash = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        real_zipfile = zipfile.ZipFile
+        moved = self.root / "reviewed-original.zip"
+        replaced = []
+
+        def swap_then_parse(source, *args, **kwargs):
+            if not replaced:
+                self.archive.rename(moved)
+                with real_zipfile(self.archive, "w") as replacement:
+                    replacement.writestr("safe.py", "x=999\n")
+                replaced.append(True)
+            return real_zipfile(source, *args, **kwargs)
+
+        with patch("recovery.tools.zip_source_recovery.zipfile.ZipFile", side_effect=swap_then_parse):
+            report = inventory([self.archive])
+        self.assertTrue(replaced)
+        self.assertEqual(report["members"][0]["archive_sha256"], original_hash)
+        self.assertEqual(report["members"][0]["member_sha256"], hashlib.sha256(b"x=1\n").hexdigest())
+        self.assertNotEqual(hashlib.sha256(self.archive.read_bytes()).hexdigest(), original_hash)
+
+    def test_recover_pinned_descriptor_survives_path_replacement(self):
+        """Selected bytes and whole-ZIP validation stay on the hashed descriptor."""
+        self.make([("safe.py", "x=1\n")])
+        archive_pin = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        member_pin = hashlib.sha256(b"x=1\n").hexdigest()
+        real_zipfile = zipfile.ZipFile
+        moved = self.root / "reviewed-original.zip"
+        replaced = []
+
+        def swap_then_parse(source, *args, **kwargs):
+            if not replaced:
+                self.archive.rename(moved)
+                with real_zipfile(self.archive, "w") as replacement:
+                    replacement.writestr("safe.py", "x=999\n")
+                replaced.append(True)
+            return real_zipfile(source, *args, **kwargs)
+
+        with patch("recovery.tools.zip_source_recovery.zipfile.ZipFile", side_effect=swap_then_parse):
+            result = recover(self.archive, "safe.py", self.dest,
+                             expected_archive_sha256=archive_pin,
+                             expected_member_sha256=member_pin)
+        self.assertEqual(result["status"], "QUARANTINED_NOT_QUALIFIED")
+        self.assertEqual(next(self.dest.iterdir()).read_bytes(), b"x=1\n")
+        self.assertNotEqual(hashlib.sha256(self.archive.read_bytes()).hexdigest(), archive_pin)
+
+    def test_symlink_swap_at_open_refused(self):
+        """O_NOFOLLOW protects even if is_symlink preflight was bypassed."""
+        self.make([("safe.py", "x=1\n")])
+        original = self.root / "reviewed-original.zip"
+        self.archive.rename(original)
+        self.archive.symlink_to(original)
+        with patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "is_file", return_value=True):
+            with self.assertRaises(OSError):
+                inventory([self.archive])
+        self.assertEqual(list(self.dest.iterdir()), [])
+
+    def test_nonzip_fails(self):
+        self.archive.write_text("not a zip")
+        with self.assertRaises(zipfile.BadZipFile):
+            inventory([self.archive])
+
+
+if __name__ == "__main__":
+    unittest.main()

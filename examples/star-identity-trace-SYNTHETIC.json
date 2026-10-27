@@ -1,0 +1,57 @@
+{
+  "schema": "STAR_IDENTITY_TRACE_V1",
+  "provenance": "SIMULATED_TARGET",
+  "events": [
+    {
+      "stage": "webhook_02",
+      "identity": {
+        "run_id": "RUN-ACME-0001",
+        "incident_id": "INC-ACME-0001",
+        "correlation_id": "CORR-ACME-0001"
+      },
+      "execution_id": "N8N-02-100",
+      "observed_at": "2026-10-23T01:00:00+02:00"
+    },
+    {
+      "stage": "rag_output_02",
+      "identity": {
+        "run_id": "RUN-ACME-0001",
+        "incident_id": "INC-ACME-0001",
+        "correlation_id": "CORR-ACME-0001"
+      },
+      "execution_id": "N8N-02-100",
+      "observed_at": "2026-10-23T01:01:00+02:00"
+    },
+    {
+      "stage": "canonical_identity_02",
+      "identity": {
+        "run_id": "RUN-ACME-0001",
+        "incident_id": "INC-ACME-0001",
+        "correlation_id": "CORR-ACME-0001"
+      },
+      "execution_id": "N8N-02-100",
+      "observed_at": "2026-10-23T01:02:00+02:00"
+    },
+    {
+      "stage": "call_analyst_02",
+      "identity": {
+        "run_id": "RUN-ACME-0001",
+        "incident_id": "INC-ACME-0001",
+        "correlation_id": "CORR-ACME-0001"
+      },
+      "execution_id": "N8N-02-100",
+      "observed_at": "2026-10-23T01:03:00+02:00"
+    },
+    {
+      "stage": "prepare_analyst_payload_03",
+      "identity": {
+        "run_id": "RUN-ACME-0001",
+        "incident_id": "INC-ACME-0001",
+        "correlation_id": "CORR-ACME-0001"
+      },
+      "execution_id": "N8N-03-200",
+      "observed_at": "2026-10-23T01:04:00+02:00",
+      "parent_execution_id": "N8N-02-100"
+    }
+  ]
+}

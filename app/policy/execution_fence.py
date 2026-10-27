@@ -6,7 +6,7 @@ It does not interrupt work already executing; real effects remain disabled.
 """
 import sqlite3
 from datetime import datetime,timezone
-from policy import autonomy_store as store
+from . import autonomy_store as store
 
 def _audit(db,operation_id,revision,operation_class,reason):
     db.execute("CREATE TABLE IF NOT EXISTS admission_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL, revision INTEGER, operation_class TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL)")

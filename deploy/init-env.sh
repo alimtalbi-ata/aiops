@@ -14,7 +14,7 @@ if [[ -f .env ]]; then
     sed -i 's|^TEMPORAL_UI_IMAGE=temporalio/ui:2.56.0$|TEMPORAL_UI_IMAGE=temporalio/ui:2.49.1|' .env
     migrated=1
   fi
-  # Add new non-secret defaults without overwriting any operator-configured values.
+  # Add new template keys without overwriting operator-configured values.
   while IFS= read -r line; do
     case "$line" in
       *=*)
@@ -26,6 +26,13 @@ if [[ -f .env ]]; then
         ;;
     esac
   done < config/.env.example
+  # The dedicated portal read token is a secret, not a non-secret default.
+  # Generate it when migrating an old/blank environment; preserve non-empty values.
+  if grep -Fxq 'AIOPS_PORTAL_READ_TOKEN=' .env; then
+    command -v openssl >/dev/null 2>&1 || { echo 'FAIL|openssl_missing_for_portal_read_token'; exit 1; }
+    sed -i "s|^AIOPS_PORTAL_READ_TOKEN=.*|AIOPS_PORTAL_READ_TOKEN=$(openssl rand -hex 32)|" .env
+    migrated=1
+  fi
   chmod 600 .env
   if [[ "$migrated" == 1 ]]; then echo 'ENV_EXISTING_UPDATED=1'; else echo 'ENV_EXISTS=UNCHANGED'; fi
   exit 0
@@ -45,6 +52,7 @@ set_value() {
 INTERNAL_TOKEN="$(openssl rand -hex 32)"
 set_value AIOPS_ADMIN_TOKEN "$INTERNAL_TOKEN"
 set_value AIOPS_INTERNAL_TOKEN "$INTERNAL_TOKEN"
+set_value AIOPS_PORTAL_READ_TOKEN "$(openssl rand -hex 32)"
 set_value POSTGRES_PASSWORD "$(openssl rand -hex 32)"
 set_value GLPI_DB_PASSWORD "$(openssl rand -hex 32)"
 set_value GLPI_DB_ROOT_PASSWORD "$(openssl rand -hex 32)"

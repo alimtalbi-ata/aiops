@@ -190,3 +190,63 @@ Every material change must update this record and the relevant architecture/deci
 - **Pending gate:** RC1.4 full CI and cumulative artifact qualification. Do not describe RC1.4 as qualified until the `release-kit` job succeeds on the exact commit; keep RC1.3 as the last verified release candidate until then.
 - **Next priority:** run the isolated reconstruction from a fresh directory on the Debian host only after a qualified kit is available; check real inference service connectivity, Analyst/Critic grounding/abstention and policies, then advance read-only CMDB/RAG acquisition. Keep simulated evidence distinct from real evidence; do not enable LIVE remediation without independent end-to-end qualification.
 
+
+## 2026-10-24 — NOC/Checkmk/Thruk and multi-vendor RAG archaeology
+
+Historical Oct 16/19 container inventories recovered from Library establish that **Checkmk Community 2.5** and **Thruk** were already present in `/home/aiops/aiops-v1/stack/noc` (Compose project `aiops_noc`), with historic ports Checkmk 8119 and Thruk 8120. Do not redeploy duplicate NOC services; first verify whether the historical configuration and data volumes still exist. Historic HTTP reachability is not proof of functional data correctness.
+
+The reference recovery document is `docs/architecture/AIOPS-NOC-STACK-HISTORICAL-RECOVERY-20261024.md`. Reconstruct the NOC with host/service state, acknowledgements, downtime, impact topology, multi-client scope, and a Demo Director synchronizing Checkmk/Thruk with Grafana, n8n and GLPI. The RAG plan `docs/architecture/AIOPS-RAG-OPS-CORPUS-AND-TRACE-CONTRACT-20261024.md` defines operations runbooks, SNMP/MIB/traps, vendor logs/traces, document provenance and evaluation. Synthetic diagnostic examples live in `demo/rag_ops_fixture_catalog.json` (not authoritative vendor specifications).
+
+Prioritize recovery of original Compose, Thruk config, Checkmk state, RAG index, existing runbooks/observability dashboards from /home/aiops **read-only**, then reuse before rewriting. Continue isolated PR tests; never change Debian services or expose secret material without explicit authorization.
+
+
+## Development status and blocker register — 2026-10-27
+
+The current branch now has a consolidated status register: [AIOps development status, remaining work and blockers](release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md). It distinguishes source presence, synthetic/isolated tests, commit-specific CI evidence and live runtime qualification. Read it before choosing the next work package.
+
+Key current blockers recorded: current PR-head CI is pending/unqualified; the latest connector query returned multiple PR workflow runs in `queued` state for commit `3aa3a95006d834cf3b8e92ba063ebb0dd43776c6`, without completed results in that response, so no PASS/FAIL is inferred. The portal source does not mount the separate NOC integration route; GLPI/CMDB, n8n, Grafana/Prometheus/Alertmanager, Checkmk/Thruk, Temporal API, real DGX Analyst/Critic and RAG are not proven as live portal integrations; the ACME SAN P1 → Payments P2 scenario lacks an authentic E2E evidence set; global portal SSO/authentication is not qualified; deployed Git/image/config provenance and Debian runtime remain unverified. The four staggered CI workflows are in PR #36 and are not on a default branch, so their scheduled cadence is not active yet. No production changes, live remediation or automatic merge are authorized.
+
+Status discipline: never mark a test PASS without a run tied to the exact commit; update this continuity record and the blocker register together after material work. Preserve synthetic/live provenance and report unknowns explicitly.
+
+
+## Update — candidate-code reuse register (2026-10-27)
+
+Added [AIOps candidate code reuse register](release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md) on branch `feat/v21310-star-portal-continuity-20261022`. It separates historical v1/V145/V8 leads from upstream GitHub projects and records intended role, priority, licensing/security review, integration guards and exit criteria. It is a candidate register only: no external project is claimed to have been cloned, built, integrated or runtime-qualified as part of this documentation change.
+
+Immediate review order:
+1. Recover and hash exact historical source revisions, especially V145 evidence acquisition/fusion/matrix and functional read model, plus the historical schema reconciliation utility.
+2. Compare candidates with current Core/Run/Evidence/Decision contracts and existing adapters.
+3. Select one read-only candidate at a time; verify license/tag/SBOM and test with synthetic data in isolation.
+4. Record accept/adapt/replace/reject in `docs/DECISION-LOG.md`; preserve Temporal as the sole durable workflow engine and Core as the sole canonical Run-state owner.
+5. No production changes, live remediations or PR merge are authorized by this register.
+
+
+## Update — historical evidence audit and matrix read model (2026-10-27)
+
+- Source audit: `docs/release/AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md`.
+- Historical V145 paths were not found in the checked GitHub branch trees; retrieval from host/archive/export is still required before claiming source recovery.
+- Current source review confirmed `app/shared/evidence_identity.py`, `app/shared/evidence_contract.py`, `app/evidence/main.py`, and the synthetic-only `app/portal/acme_impact_read_model.py`.
+- Added `app/shared/evidence_matrix.py` plus `tests/test_evidence_matrix.py`; the quality workflow now invokes the new tests.
+- **NOT QUALIFIED YET:** wait for the workflow triggered by the branch push and inspect the exact SHA/job logs. No local test execution, server access, backend writes, or live actions were performed.
+
+
+## Update — bounded bootstrap and NOC archive deduplication (2026-10-27)
+
+Snapshot of the verified candidate at commit `94036198818e0a50a3cbc77aa586d76a7bd4ad08`, PR #36 (still draft):
+
+- `GET /api/portal/bootstrap` now uses a shared six-worker pool for the three bounded, retry-free upstream reads and admits at most two concurrent bootstrap requests. Excess requests fail closed with HTTP 503 `portal_bootstrap_capacity_exceeded`. The ASGI regression `test_bootstrap_rejects_excess_concurrent_requests_without_pool_growth` passed in the candidate-kit run.
+- The Library archive `AioOps-NOC-Offline-Browser-Evidence.zip` was materialized in an isolated workspace, CRC checked and hashed. It contains only static HTML/JSON plus three offline-rendered PNGs; no Python module or live-service adapter. Its synthetic event/capture binding duplicates the already tested `demo/noc_star_event_binding.py`; no archive bytes or images were promoted.
+- Candidate ZIP built from the exact commit: SHA-256 `1e8503990f41a4049e3d530de8f473d04869c50308b9604207808cd183d6c81f`; 82 members, 78 embedded sources, 638 source inventory entries, 20 routes explicitly unverified. ZIP CRC and all 81 internal SHA256SUMS entries passed independent verification. `production_qualified=false`, `runtime_e2e_qualified=false`.
+- Candidate-kit CI: [run 40535354678](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354678), PASS; its 14 offline suites passed, including the bootstrap concurrency regression. General quality gates: [run 40535354734](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354734), all six jobs PASS (quality/build, runtime E2E on CI fixtures, database migrations, MariaDB DR, migration upgrade, release kit). Historical ZIP source-recovery audit: [run 40535354677](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354677), PASS.
+- At the last poll, 25/27 workflows were complete and successful; STAR F20.13 checkpoint-plan builder and Chromium read-only fixture qualification were still in progress. No failures were observed. These are isolated CI results, not a qualification of Debian `:17777`.
+
+Still blocked: original complete F20.13 campaign files and the private V2.13.4/V2.13.6.1 ZIP bytes are not available in the current Library listing. The historical recovery registry is evidence of prior inspection, not a substitute for original bytes in this run. The portal's 20 component families remain unqualified for runtime connection; no production host, backend, database or live remediation was touched.
+
+
+### Cycle 17 — evidence-matrix input validation (27 October 2026)
+
+The evidence-matrix read model now fails closed on malformed collection shapes. A non-list evidence input is reported as `BLOCKED_FOR_REVIEW`, not an ambiguous empty `UNKNOWN`. Invalid hypothesis collections and non-object hypothesis entries are surfaced in `input_errors`; they no longer trigger `len(non_list)` errors or get silently counted as accepted review inputs. Integrity error classification uses exact positions and exact duplicate IDs, preventing a short ID such as `E1` from being falsely marked invalid because it is a substring of `duplicate_evidence_id:E10`.
+
+Regression tests were added to `tests/test_evidence_matrix.py`. The existing `quality.yml` workflow already executes this test file, so no duplicate workflow was introduced. Code commit: `e06681e8a7171a2fc8181e9648f88f2232f7f67f`; test commit: `b312923f71ddeacd9dde9a8d930f7236518ae528`; release-status record: `a63fcf5d6b467d4f39f604e7716381d814e4a2d5`. CI on the final documentation HEAD must be checked before claiming qualification.
+
+The matrix remains a read-only review projection with `action_authorized=false`. No live source, application, backend, or runtime evidence was added. Production remains NO-GO.

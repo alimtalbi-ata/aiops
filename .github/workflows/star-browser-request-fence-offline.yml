@@ -1,0 +1,30 @@
+name: STAR browser request fence (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/star_browser_request_fence.py'
+      - 'tests/test_star_browser_request_fence.py'
+      - '.github/workflows/star-browser-request-fence-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pure-offline-fence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile offline fence
+        run: python -m py_compile demo/star_browser_request_fence.py
+      - name: Qualify exact-URL request contract (no browser, no network)
+        run: python -m unittest discover -s tests -p 'test_star_browser_request_fence.py' -v

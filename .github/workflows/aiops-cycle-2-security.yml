@@ -1,0 +1,36 @@
+name: AIOps autonomous cycle 2 — security and secret lifecycle
+
+on:
+  schedule:
+    - cron: '12 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiops-cycle-2-security
+  cancel-in-progress: false
+
+jobs:
+  security-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify preflight secret lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/test_preflight_secrets.sh
+      - name: Verify secret scan contract and shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deploy/init-env.sh
+          bash -n deploy/check-secrets.sh
+          grep -Fq 'AIOPS_PORTAL_READ_TOKEN' deploy/check-secrets.sh
+          grep -Fq 'AIOPS_PORTAL_READ_TOKEN' deploy/init-env.sh
+          grep -Fq 'AIOPS_PORTAL_READ_TOKEN' compose.yml

@@ -1,0 +1,118 @@
+name: Build complete AIOps demo video
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Synthetic demo scenario
+        required: true
+        type: choice
+        options:
+          - SAN_FABRIC_P1
+          - PAYMENTS_P2
+        default: SAN_FABRIC_P1
+  pull_request:
+    paths:
+      - "demo/generate_demo_video.py"
+      - "tests/test_demo_video_generator.py"
+      - "app/portal/portal_demo_public_v21310.py"
+      - "app/portal/main.py"
+      - "tests/test_portal_demo_public_v21310.py"
+      - ".github/workflows/generate-demo-video.yml"
+      - "docs/demo/AIOPS-DEMO-VIDEO-GENERATOR.md"
+permissions:
+  contents: read
+
+jobs:
+  render-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install rendering dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+          python -m pip install --upgrade pip
+          python -m pip install playwright fastapi requests
+          python -m playwright install --with-deps chromium
+      - name: Test video storyboard contract
+        run: python -m unittest discover -s tests -p 'test_demo_video_generator.py' -v
+      - name: Test portal video launcher and safety fences
+        run: python -m unittest discover -s tests -p 'test_portal_demo_public_v21310.py' -v
+      - name: Render full demo video
+        env:
+          DEMO_SCENARIO: ${{ inputs.scenario || 'SAN_FABRIC_P1' }}
+        run: |
+          set -euo pipefail
+          python -m demo.generate_demo_video \
+            --scenario "$DEMO_SCENARIO" \
+            --out dist/aiops-demo-video
+      - name: Verify MP4 decodes, duration and provenance
+        run: |
+          set -euo pipefail
+          test -s dist/aiops-demo-video/AIOps-Demo-Complete.mp4
+          test -s dist/aiops-demo-video/AIOps-Demo-Complete.srt
+          test -s dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json
+          test -s dist/aiops-demo-video/AIOps-Architecture-Illustrative.svg
+          test "$(find dist/aiops-demo-video/snapshots -maxdepth 1 -name 'scene-*.png' | wc -l)" -eq 9
+          ffmpeg -v error -i dist/aiops-demo-video/AIOps-Demo-Complete.mp4 -f null -
+          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 dist/aiops-demo-video/AIOps-Demo-Complete.mp4)"
+          python - "$duration" <<'PY'
+          import sys
+          duration = float(sys.argv[1])
+          if not 70 <= duration <= 75:
+              raise SystemExit(f"Unexpected demo duration: {duration:.3f}s")
+          print(f"VIDEO_DURATION_PASS={duration:.3f}s")
+          PY
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("dist/aiops-demo-video/AIOps-Demo-Complete.manifest.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+          assert data["schema"] == "aiops-demo-video-manifest-v2"
+          assert data["scene_count"] == 9
+          assert data["snapshot_count"] == 9
+          assert len(data["snapshot_sha256"]) == 9
+          assert all(len(v) == 64 for v in data["snapshot_sha256"].values())
+          assert data["architecture_illustration"] == "AIOps-Architecture-Illustrative.svg"
+          assert len(data["architecture_sha256"]) == 64
+          assert data["duration_target_seconds"] == 72
+          assert 71 <= data["duration_actual_seconds"] <= 73
+          assert data["resolution"] == "1920x1080"
+          assert data["video_size_bytes"] > 0
+          assert len(data["video_sha256"]) == 64
+          assert len(data["subtitles_sha256"]) == 64
+          assert data["provenance"] == "SIMULATED_TARGET"
+          assert data["runtime_authenticated"] is False
+          assert data["dgx_independently_attested"] is False
+          assert data["live_execution_qualified"] is False
+          assert data["live_action_authorized"] is False
+          if data["narration"] == "espeak_french_scene_aligned":
+              assert data["audio_track_present"] is True
+          print("VIDEO_INTEGRITY_AND_PROVENANCE_PASS")
+          PY
+      - name: Package complete visual evidence kit
+        run: |
+          set -euo pipefail
+          cd dist
+          zip -qr AIOps-Demo-Visual-Evidence-Pack.zip aiops-demo-video
+          unzip -tq AIOps-Demo-Visual-Evidence-Pack.zip
+          sha256sum AIOps-Demo-Visual-Evidence-Pack.zip
+      - name: Upload video, snapshots, architecture and evidence pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIOps-Demo-Visual-Evidence-${{ inputs.scenario || 'SAN_FABRIC_P1' }}
+          path: |
+            dist/aiops-demo-video/
+            dist/AIOps-Demo-Visual-Evidence-Pack.zip
+          if-no-files-found: error
+          retention-days: 30

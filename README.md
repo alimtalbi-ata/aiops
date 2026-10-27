@@ -81,6 +81,10 @@ Read [the reconstruction execution plan](docs/RECONSTRUCTION-EXECUTION-PLAN.md) 
 
 ## Project continuity and historical reuse
 
+**Candidate code reuse register (27 October 2026):** review [historical AIOps and third-party GitHub candidates](docs/release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md). It records candidates and gates, not claims of integration.
+
+**Current development status (27 October 2026):** see [development status, remaining work and blockers](docs/release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md) before selecting the next task. This report separates source presence, synthetic tests, commit-specific CI evidence and live qualification.
+
 Before resuming work in a new session, read these documents in order:
 
 1. [Project continuity record](docs/PROJECT-CONTINUITY.md)
@@ -109,3 +113,8 @@ The repository is the source of truth. Do not preserve code for its own sake: re
 The new migration `009_ai_decision_ledger.sql` defines explicit analysis, critique, policy-decision, proposal, approval, effect, verification, reconciliation, learning and model-evaluation records. Synthetic cases cannot be gold-set eligible. Applied migrations are checksum-pinned; edits to an applied migration fail closed. The migration runner verifies a legacy schema signature before adopting migrations 000–008 as a baseline and refuses to guess when the schema is incomplete.
 
 **Qualification honesty:** a successful static or SQL test does not prove that the full stack or model inference works. CI must separately report compilation/unit tests, full image builds, disposable PostgreSQL migration execution and synthetic runtime E2E. LIVE execution remains disabled until real evidence adapters, policy/HITL and effect verification are qualified.
+
+
+## Historical candidate audit
+
+The initial source findings and first matrix-read-model increment are documented in [the historical Evidence/Read Model candidate audit](docs/release/AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md). The matrix implementation and tests are on the current development branch, but remain unqualified until CI completes on the exact commit.

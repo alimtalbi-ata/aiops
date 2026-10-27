@@ -1,0 +1,65 @@
+name: AIOps simulated NOC RAG corpus qualification
+on:
+  pull_request:
+    paths:
+      - 'demo/rag_ops_fixture_catalog.json'
+      - 'demo/validate_rag_ops_fixtures.py'
+      - 'tests/test_rag_ops_fixtures.py'
+      - 'demo/noc_synthetic_snapshot.py'
+      - 'tests/test_noc_synthetic_snapshot.py'
+      - 'demo/noc_wallboard.py'
+      - 'tests/test_noc_wallboard.py'
+      - 'demo/noc_topology.py'
+      - 'tests/test_noc_topology.py'
+      - 'demo/noc_drilldown.py'
+      - 'tests/test_noc_drilldown.py'
+      - 'demo/noc_checkmk_export.py'
+      - 'tests/test_noc_checkmk_export.py'
+      - 'demo/noc_livestatus_import.py'
+      - 'tests/test_noc_livestatus_import.py'
+      - 'demo/noc_livestatus_loopback.py'
+      - 'tests/test_noc_livestatus_loopback.py'
+      - 'demo/noc_livestatus_services.py'
+      - 'tests/test_noc_livestatus_services.py'
+      - 'demo/noc_checkmk_consolidation.py'
+      - 'tests/test_noc_checkmk_consolidation.py'
+      - 'demo/noc_checkmk_offline_wallboard.py'
+      - 'tests/test_noc_checkmk_offline_wallboard.py'
+      - 'demo/noc_unified_offline.py'
+      - 'tests/test_noc_unified_offline.py'
+      - 'demo/noc_portal_integration.py'
+      - 'tests/test_noc_portal_integration.py'
+      - 'demo/noc_platform_registry.py'
+      - 'tests/test_noc_platform_registry.py'
+      - '.github/workflows/aiops-rag-ops-fixtures.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-synthetic-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate provenance and RAG synthetic fixtures
+        run: |
+          python -m demo.validate_rag_ops_fixtures
+          python -m unittest discover -s tests -p 'test_rag_ops_fixtures.py' -v
+          python -m unittest discover -s tests -p 'test_noc_synthetic_snapshot.py' -v
+          python -m unittest discover -s tests -p 'test_noc_wallboard.py' -v
+          python -m unittest discover -s tests -p 'test_noc_topology.py' -v
+          python -m unittest discover -s tests -p 'test_noc_drilldown.py' -v
+          python -m unittest discover -s tests -p 'test_noc_checkmk_export.py' -v
+          python -m unittest discover -s tests -p 'test_noc_livestatus_import.py' -v
+          python -m unittest discover -s tests -p 'test_noc_livestatus_loopback.py' -v
+          python -m unittest discover -s tests -p 'test_noc_livestatus_services.py' -v
+          python -m unittest discover -s tests -p 'test_noc_checkmk_consolidation.py' -v
+          python -m unittest discover -s tests -p 'test_noc_checkmk_offline_wallboard.py' -v
+          python -m unittest discover -s tests -p 'test_noc_unified_offline.py' -v
+          python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
+          python -m unittest discover -s tests -p 'test_noc_platform_registry.py' -v

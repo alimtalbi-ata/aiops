@@ -1,4 +1,6 @@
 import os,json,html,uuid,hmac,re
+from concurrent.futures import ThreadPoolExecutor, wait
+from threading import BoundedSemaphore, Lock
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -6,8 +8,141 @@ app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
+BOOTSTRAP_TIMEOUT_SECONDS = 3
+# A request submits exactly three independent reads. Share a fixed worker pool
+# and reject excess concurrent requests instead of creating an unbounded pool
+# for every inbound HTTP request.
+BOOTSTRAP_MAX_CONCURRENT_REQUESTS = 2
+_BOOTSTRAP_POOL = ThreadPoolExecutor(
+    max_workers=BOOTSTRAP_MAX_CONCURRENT_REQUESTS * 3,
+    thread_name_prefix="portal-bootstrap-read",
+)
+_BOOTSTRAP_SLOTS = BoundedSemaphore(BOOTSTRAP_MAX_CONCURRENT_REQUESTS)
+
+def _bootstrap_read(base, path):
+    """Perform one bounded read and normalize failures without leaking upstream details."""
+    try:
+        payload = get_json(base, path, timeout=BOOTSTRAP_TIMEOUT_SECONDS, retries=0)
+    except Exception:
+        return {
+            "status": "UNKNOWN",
+            "source": "UPSTREAM_UNAVAILABLE",
+            "error_code": "READ_FAILED",
+        }, False
+    if not isinstance(payload, dict):
+        return {
+            "status": "UNKNOWN",
+            "source": "UPSTREAM_INVALID_RESPONSE",
+            "error_code": "NON_OBJECT_JSON",
+        }, False
+    return payload, True
+
+
+PORTAL_READ_TOKEN_ENV = "AIOPS_PORTAL_READ_TOKEN"
+
+
+def _require_portal_read_auth(authorization: str | None) -> None:
+    """Fail closed unless a dedicated read-only operator Bearer token is configured."""
+    expected = os.getenv(PORTAL_READ_TOKEN_ENV, "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="portal_read_auth_not_configured")
+    scheme, separator, supplied = (authorization or "").partition(" ")
+    if (
+        not separator
+        or scheme.lower() != "bearer"
+        or not supplied
+        or not hmac.compare_digest(supplied, expected)
+    ):
+        raise HTTPException(status_code=401, detail="invalid_portal_read_token")
+
+
 @app.get('/api/portal/bootstrap')
-def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
+def bootstrap(authorization: str | None = Header(default=None)):
+    """Authenticated, bounded read of Core/Twin; preserve healthy sections during outage."""
+    _require_portal_read_auth(authorization)
+    if not _BOOTSTRAP_SLOTS.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="portal_bootstrap_capacity_exceeded")
+    # If a worker exceeds the shared deadline, keep this admission slot leased
+    # until all outstanding workers actually finish. This prevents timed-out
+    # callers from continuously queuing work behind stuck threads.
+    slot_release_deferred = False
+    try:
+        dashboard_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, CORE, '/api/dashboard')
+        runs_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, CORE, '/api/runs')
+        twin_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, TWIN, '/api/twin/summary')
+        futures = {
+            "dashboard": dashboard_future,
+            "runs": runs_future,
+            "twin": twin_future,
+        }
+        done, pending = wait(tuple(futures.values()), timeout=BOOTSTRAP_TIMEOUT_SECONDS)
+        if pending:
+            slot_release_deferred = True
+            for future in pending:
+                future.cancel()
+            pending_lock = Lock()
+            remaining = len(pending)
+
+            def release_slot_after_pending_read(_future):
+                nonlocal remaining
+                with pending_lock:
+                    remaining -= 1
+                    if remaining == 0:
+                        _BOOTSTRAP_SLOTS.release()
+
+            for future in pending:
+                future.add_done_callback(release_slot_after_pending_read)
+
+        results = {}
+        for name, future in futures.items():
+            if future in pending:
+                results[name] = ({
+                    "status": "UNKNOWN",
+                    "source": "UPSTREAM_TIMEOUT",
+                    "error_code": "READ_DEADLINE_EXCEEDED",
+                }, False)
+                continue
+            try:
+                results[name] = future.result()
+            except Exception:
+                results[name] = ({
+                    "status": "UNKNOWN",
+                    "source": "UPSTREAM_UNAVAILABLE",
+                    "error_code": "READ_FAILED",
+                }, False)
+
+        dashboard, dashboard_ok = results["dashboard"]
+        runs, runs_ok = results["runs"]
+        twin, twin_ok = results["twin"]
+        unavailable = [
+            name for name, ok in (
+                ("dashboard", dashboard_ok),
+                ("runs", runs_ok),
+                ("twin", twin_ok),
+            ) if not ok
+        ]
+        return {
+            "dashboard": dashboard,
+            "runs": runs,
+            "twin": twin,
+            "_portal": {
+                "schema": "aiops.portal-bootstrap-readmodel.v1",
+                "status": "DEGRADED" if unavailable else "COMPLETE",
+                "unavailable_sources": unavailable,
+                "source_mode": "BOUNDED_READ_ONLY_UPSTREAM_HTTP",
+                "timeout_seconds": BOOTSTRAP_TIMEOUT_SECONDS,
+                "retry_count": 0,
+                "upstream_provenance": "UNATTESTED_UPSTREAM_READS",
+                "operator_authentication": "ENFORCED_DEDICATED_BEARER_TOKEN",
+                "runtime_attested": False,
+                "live_remediation_authorized": False,
+            },
+        }
+    finally:
+        if not slot_release_deferred:
+            _BOOTSTRAP_SLOTS.release()
+
+
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')
@@ -80,6 +215,10 @@ def home():
     content+=panel("Digital Twin — état courant",pretty(t))
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
+    content+=panel("Demo Center — parcours visuel et impact",
+        '<p>Parcours narratif de 72 secondes, captures illustratives, manifeste et contrôles d’intégrité. Les écrans de la vidéo sont synthétiques et ne constituent pas des captures du runtime Debian.</p>'
+        '<p><a href="/demo/">Ouvrir le Demo Center vidéo →</a></p>'
+        '<p><a href="/demo/acme-impact">Explorer le graphe d’impact SAN P1 → Payments P2 →</a></p>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
 
 @app.get("/runs",response_class=HTMLResponse)
@@ -478,3 +617,25 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+# Opt-in read-only STAR replay; handler stays disabled until explicitly enabled.
+from portal.star_legacy_readonly import router as star_legacy_replay_router
+app.include_router(star_legacy_replay_router)
+
+# Public synthetic-only STAR storyboard on the existing portal app.
+# This registers routes; it creates no listener, service, or background task.
+from portal.portal_demo_public_v21310 import router as public_star_demo_router
+app.include_router(public_star_demo_router)
+
+# Static component plan only; backend health remains UNKNOWN until attested.
+from portal.platform_registry_router import router as platform_registry_router
+app.include_router(platform_registry_router)
+
+# Local deterministic ACME impact view; no upstream calls or writes.
+from portal.acme_impact_read_model import router as acme_impact_read_model_router
+app.include_router(acme_impact_read_model_router)
+
+# Optional signed NOC read-model bridge on this same ASGI application.
+# It remains unavailable (503) until an allowlisted, HMAC-signing provider is configured.
+from portal.noc_runtime import router as noc_runtime_router
+app.include_router(noc_runtime_router)

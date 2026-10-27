@@ -1,0 +1,40 @@
+name: V2.13.4 historical dependency audit (read-only)
+on:
+  pull_request:
+    paths:
+      - 'recovery/legacy_v2134/**'
+      - 'tests/test_legacy_v2134_dependency_audit.py'
+      - '.github/workflows/legacy-v2134-dependency-audit.yml'
+      - 'docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run isolated dependency audit tests
+        run: python -m unittest discover -s tests -p 'test_legacy_v2134_dependency_audit.py' -v
+      - name: Audit repository recovery tree without executing historical code
+        shell: bash
+        run: |
+          set +e
+          python recovery/legacy_v2134/tools/audit_hybrid_dependencies.py --root recovery/legacy_v2134 > "$RUNNER_TEMP/v2134-recovery-audit.json"
+          code=$?
+          set -e
+          python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d,indent=2)); assert d['source_execution_performed'] is False; assert d['runtime_qualification'] is False" "$RUNNER_TEMP/v2134-recovery-audit.json"
+          if [ "$code" -eq 2 ]; then
+            echo "Expected recovery gap recorded; missing historical sources are not fabricated."
+          elif [ "$code" -ne 0 ]; then
+            exit "$code"
+          fi

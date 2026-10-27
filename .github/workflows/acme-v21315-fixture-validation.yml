@@ -1,0 +1,44 @@
+name: ACME V2.13.15 synthetic impact and packaged portal image smoke (isolated)
+
+on:
+  pull_request:
+    paths:
+      - 'demo/integrations/v21315/**'
+      - 'tests/test_acme_fixture_validation.py'
+      - 'app/portal/acme-fixtures.json'
+      - 'app/portal/acme_fixture_contract.py'
+      - 'app/portal/acme_impact_read_model.py'
+      - 'app/portal/Dockerfile'
+      - 'tests/test_portal_acme_impact_read_model.py'
+      - 'docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md'
+      - '.github/workflows/acme-v21315-fixture-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-synthetic-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact PR source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and validate only local synthetic data
+        run: |
+          set -euo pipefail
+          python -m py_compile demo/integrations/v21315/validate_fixture.py app/portal/acme_fixture_contract.py app/portal/acme_impact_read_model.py tests/test_acme_fixture_validation.py tests/test_portal_acme_impact_read_model.py
+          python demo/integrations/v21315/validate_fixture.py
+          python -O demo/integrations/v21315/validate_fixture.py
+          python -m unittest discover -s tests -p 'test_acme_fixture_validation.py' -v
+      - name: Build portal image and smoke-test packaged ACME contract without listener
+        run: |
+          set -euo pipefail
+          docker build --file app/portal/Dockerfile --tag aiops-portal-acme-package-smoke:ci app
+          docker run --rm --entrypoint python aiops-portal-acme-package-smoke:ci -c 'from portal.acme_impact_read_model import build_acme_impact_read_model; m=build_acme_impact_read_model(); assert m["provenance"] == "SIMULATED_TARGET"; assert m["impact_path"] == ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"]; assert m["ticket_id"] is None and m["event_timestamp_utc"] is None; assert m["runtime_attested"] is False; assert m["live_remediation_authorized"] is False; print("AIOPS_PORTAL_PACKAGED_ACME=PASS")'

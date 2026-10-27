@@ -1,0 +1,136 @@
+name: Single-portal cumulative candidate kit (offline)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/acme-v21315-fixture-validation.yml'
+      - 'demo/integrations/v21315/**'
+      - 'tests/test_acme_fixture_validation.py'
+      - 'tests/test_portal_acme_impact_read_model.py'
+      - 'tests/test_portal_bootstrap_read_model.py'
+      - 'tests/test_portal_host_port_contract.py'
+      - 'docs/demo/AIOPS-V21315-FIXTURE-GRAPH-VALIDATION-20261026.md'
+      - 'docs/demo/AIOPS-V21315-PORTAL-IMPACT-READ-MODEL-20261026.md'
+      - '.github/workflows/star-capture-evidence.yml'
+      - 'demo/star_capture_evidence.py'
+      - 'demo/star_png_integrity.py'
+      - 'demo/star_snapshot_choreography.py'
+      - 'tests/test_star_capture_evidence.py'
+      - 'tests/test_star_png_integrity.py'
+      - 'tests/test_star_snapshot_choreography.py'
+      - 'docs/demo/AIOPS-STAR-EVIDENCE-MANIFEST-STRICTNESS-20261026.md'
+      - 'app/portal/main.py'
+      - 'app/portal/noc_runtime.py'
+      - 'app/portal/ui_theme.py'
+      - 'app/portal/acme-fixtures.json'
+      - 'app/portal/acme_fixture_contract.py'
+      - 'app/portal/acme_impact_read_model.py'
+      - 'app/portal/platform_registry.py'
+      - 'app/portal/platform_registry_router.py'
+      - 'app/portal/portal_demo_public_v21310.py'
+      - 'app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html'
+      - 'tests/test_portal_demo_public_v21310.py'
+      - 'tests/test_platform_registry_portal_route.py'
+      - 'tests/test_portal_noc_runtime_adapter.py'
+      - 'deploy/single_portal_candidate_kit.py'
+      - 'tests/test_single_portal_candidate_kit.py'
+      - 'tests/test_verify_single_portal_candidate_kit.py'
+      - 'deploy/verify_single_portal_candidate_kit.py'
+      - 'deploy/init-env.sh'
+      - 'deploy/check-secrets.sh'
+      - 'compose.yml'
+      - 'config/.env.example'
+      - 'config/.env.demo.example'
+      - 'tests/test_preflight_secrets.sh'
+      - 'docs/SECURITY.md'
+      - 'tests/test_noc_browser_workflow_contract.py'
+      - 'tests/test_noc_portal_integration.py'
+      - 'demo/noc_platform_registry.py'
+      - 'demo/noc_portal_integration.py'
+      - 'demo/star_n8n_identity_gate.py'
+      - 'tests/test_star_n8n_identity_gate.py'
+      - 'docs/release/**'
+      - 'docs/architecture/AIOPS-NOC-UPSTREAM-READMODEL-CONTRACT-20261027.md'
+      - '.github/workflows/star-browser-manifest-bridge-offline.yml'
+      - '.github/workflows/star-event-capture-alignment-offline.yml'
+      - '.github/workflows/star-event-source-binding-offline.yml'
+      - 'demo/star_browser_manifest_gate.py'
+      - 'demo/star_event_capture_alignment.py'
+      - 'demo/star_event_source_binding.py'
+      - 'demo/star_checkpoint_reconciliation.py'
+      - 'demo/star_capture_set_replay_gate.py'
+      - 'demo/star_portal_storyboard.py'
+      - 'tests/test_star_browser_manifest_gate.py'
+      - 'tests/test_star_event_capture_alignment.py'
+      - 'tests/test_star_event_source_binding.py'
+      - 'tests/test_star_checkpoint_reconciliation.py'
+      - 'tests/test_star_capture_set_replay_gate.py'
+      - 'docs/demo/STAR-BROWSER-MANIFEST-BRIDGE-HLD-LLD-V21336.md'
+      - 'docs/demo/STAR-CHECKPOINT-RECONCILIATION-V21358.md'
+      - 'docs/demo/STAR-PINNED-CAPTURE-REPLAY-V21360.md'
+      - 'docs/demo/STAR-EVENT-SOURCE-BINDING-FAIL-CLOSED-20261027.md'
+      - '.github/workflows/star-evidence-manifest.yml'
+      - 'demo/star_evidence_manifest.py'
+      - 'tests/test_star_evidence_manifest.py'
+      - 'docs/demo/STAR-OFFLINE-EVIDENCE-MANIFEST-20261027.md'
+      - 'docs/recovery/**'
+      - '.github/workflows/single-portal-candidate-kit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install minimal dependencies for existing portal import test
+        run: python -m pip install --disable-pip-version-check 'fastapi==0.116.1' 'requests==2.32.4' 'httpx==0.28.1'
+      - name: Test offline packaging and CI admission contracts
+        run: |
+          python -m unittest discover -s tests -p 'test_single_portal_candidate_kit.py' -v
+          python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
+          python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
+          python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
+          python -m unittest discover -s tests -p 'test_portal_noc_runtime_adapter.py' -v
+          python -m unittest discover -s tests -p 'test_portal_demo_public_v21310.py' -v
+          python -m unittest discover -s tests -p 'test_portal_acme_impact_read_model.py' -v
+          python -m unittest discover -s tests -p 'test_portal_bootstrap_read_model.py' -v
+          python -m unittest discover -s tests -p 'test_portal_host_port_contract.py' -v
+          python -m unittest discover -s tests -p 'test_platform_registry_portal_route.py' -v
+          python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_event_capture_alignment.py' -v
+          python -m unittest discover -s tests -p 'test_star_event_source_binding.py' -v
+          python -m unittest discover -s tests -p 'test_star_checkpoint_reconciliation.py' -v
+          python -m unittest discover -s tests -p 'test_star_capture_set_replay_gate.py' -v
+          bash tests/test_preflight_secrets.sh
+      - name: Build pinned candidate only (no Docker, no runtime)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m deploy.single_portal_candidate_kit \
+            --root . \
+            --commit "$(git rev-parse HEAD)" \
+            --output "$RUNNER_TEMP/AIOps-Single-Portal-CANDIDATE.zip"
+          unzip -tqq "$RUNNER_TEMP/AIOps-Single-Portal-CANDIDATE.zip"
+          python -m deploy.verify_single_portal_candidate_kit \
+            --archive "$RUNNER_TEMP/AIOps-Single-Portal-CANDIDATE.zip" \
+            --checkout .
+          (cd "$RUNNER_TEMP" && sha256sum AIOps-Single-Portal-CANDIDATE.zip > AIOps-Single-Portal-CANDIDATE.zip.sha256)
+      - name: Upload offline candidate and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops-single-portal-candidate-only
+          path: |
+            ${{ runner.temp }}/AIOps-Single-Portal-CANDIDATE.zip
+            ${{ runner.temp }}/AIOps-Single-Portal-CANDIDATE.zip.sha256
+          if-no-files-found: error
+          retention-days: 7

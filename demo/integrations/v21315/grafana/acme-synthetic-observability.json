@@ -1,0 +1,90 @@
+{
+  "id": null,
+  "uid": "acme-demov21315",
+  "title": "ACME · AIOps DEMO — Synthetic context",
+  "tags": [
+    "aiops",
+    "demo",
+    "SIMULATED_TARGET"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 40,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Provenance obligatoire",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### SIMULATED_TARGET — environnement de démonstration\\nCe tableau de bord **ne prouve pas** de métriques SAN ou applicatives réelles. Aucune remédiation LIVE. Les CIs ACME sont des fixtures à importer séparément."
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Disponibilité de collecte Prometheus (réelle, non SAN)",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up",
+          "legendFormat": "{{job}} / {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "text",
+      "title": "Scénario de démonstration",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "1. ACME Payments ralenti (scénario)\\n2. Fabric A dégradé (illustration) ; Fabric B disponible dans la fiction\\n3. Analyst propose ; Critic questionne\\n4. Policy refuse toute action intrusive sans preuve et autorisation\\n5. Revue humaine fictive, pas d'exécution."
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}

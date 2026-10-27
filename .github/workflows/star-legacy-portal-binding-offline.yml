@@ -1,0 +1,35 @@
+name: STAR legacy replay portal binding (offline)
+on:
+  pull_request:
+    paths:
+      - 'demo/star_legacy_portal_binding.py'
+      - 'demo/star_legacy_replay_adapter.py'
+      - 'demo/star_portal_transport.py'
+      - 'demo/star_portal_storyboard.py'
+      - 'demo/star_scene_scripts.py'
+      - 'tests/test_star_legacy_portal_binding.py'
+      - 'docs/recovery/LEGACY-V2134-PORTAL-BINDING-V21347.md'
+      - '.github/workflows/star-legacy-portal-binding-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay-storyboard-binding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      AIOPS_STAR_NO_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile replay/portal contracts
+        run: python -m py_compile demo/star_legacy_portal_binding.py tests/test_star_legacy_portal_binding.py
+      - name: Run offline synthetic unit and integration tests
+        run: |
+          python -m unittest discover -s tests -p 'test_star_legacy_portal_binding.py' -v
+          python -m unittest discover -s tests -p 'test_star_legacy_replay_adapter.py' -v
+          python -m unittest discover -s tests -p 'test_star_portal_transport.py' -v

@@ -1,0 +1,82 @@
+{
+  "name": "ACME DEMO — Incident dry-run (NO external writes)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acme-demo-incident-dryrun-v21315",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Synthetic incident webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        240
+      ],
+      "webhookId": "acme-demo-v21315"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$json.body??$json; if(x.provenance!=='SIMULATED_TARGET'||x.live_remediation!==false||!String(x.id||'').startsWith('ACME-DEMO-')){throw new Error('Demo gate denied: synthetic provenance required')};return [{json:{processed:true,mode:'DRY_RUN',provenance:'SIMULATED_TARGET',incident_id:x.id,decision:'HITL_REQUIRED',remediation_executed:false,glpi_written:false,notification_sent:false}}];"
+      },
+      "id": "guard",
+      "name": "Strict simulated-only gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        490,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "response",
+      "name": "Respond dry-run",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        730,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "Synthetic incident webhook": {
+      "main": [
+        [
+          {
+            "node": "Strict simulated-only gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strict simulated-only gate": {
+      "main": [
+        [
+          {
+            "node": "Respond dry-run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
