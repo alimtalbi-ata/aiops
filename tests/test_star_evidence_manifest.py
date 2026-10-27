@@ -94,6 +94,23 @@ class StarEvidenceManifestTests(unittest.TestCase):
         self.assertEqual(result["captures"][0]["status"], "REJECTED")
         self.assertFalse(result["complete_byte_set"])
 
+    def test_non_utc_offset_is_rejected_for_utc_field(self):
+        self.entries[0]["captured_at_utc"] = "2026-10-27T11:00:00+01:00"
+        self.write_manifest()
+        self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
+
+    def test_symlink_manifest_is_rejected(self):
+        alias = self.root / "manifest-link.json"
+        alias.symlink_to(self.manifest)
+        with self.assertRaises(ValueError):
+            audit_manifest(alias, self.root, self.allowed)
+
+    def test_symlink_evidence_root_is_rejected(self):
+        alias = self.root / "evidence-link"
+        alias.symlink_to(self.evidence, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            audit_manifest(self.manifest, alias, self.allowed)
+
     def test_unapproved_origin_is_rejected(self):
         self.entries[0]["source_url"] = "https://evil.example/login"
         self.write_manifest()
