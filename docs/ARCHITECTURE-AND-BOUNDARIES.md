@@ -105,3 +105,7 @@ Presence is not proof of readiness. The reported orchestrator directory had no f
 - Do not publish internal ports by default.
 - Validate bind addresses, authentication, authorization, CORS and secrets handling before exposing an API.
 - Use separate demo credentials/data and guard synthetic mutations by explicit mode and token.
+
+### Explicit simulator-to-Core API path (proposed 2026-10-27)
+
+The simulator stays on `aiops2-execution` only. The Core API also joins `aiops2-execution` to expose its authenticated HTTP interface to the simulator. The Core retains its control/data networks; the simulator does **not** join them or gain direct PostgreSQL access. Docker network membership alone does not grant API authorization. CI checks the rendered Compose network graph; isolated runtime connectivity and authorization tests are still required. This change does not authorize LIVE remediation or production deployment.
