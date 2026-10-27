@@ -111,3 +111,10 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
+
+
+## ADR-0018 — Validate signed NOC identity before bounded Core reads (2026-10-27)
+
+- **Status:** Proposed in draft PR #56; CI qualification pending.
+- **Decision:** Require valid HMAC-projected schema, provenance, SHA-256, exact ACME incident/Run identifiers and safe flags before any Core GET; reuse the existing strict internal no-redirect/no-proxy reader. Never promote a NOC ticket claim to a GLPI-verified ticket.
+- **Boundary:** Keep portal outside the GLPI integration network; a future GLPI read-only adapter needs isolated service credentials and genuine CI integration, not a portal network expansion.
