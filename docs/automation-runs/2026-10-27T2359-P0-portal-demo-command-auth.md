@@ -10,3 +10,10 @@
 - **Executed tests at journal creation:** NOT_TESTED. GitHub Actions PR trigger requested by PR creation; run result pending. Local clone was blocked by unavailable DNS (`github.com`); no false PASS.
 - **Risks:** existing public bootstrap/Copilot/home routes remain unprotected; PR #51 changes the same `main.py` and Compose and may need a targeted rebase before merge. Operator token must be injected from secrets; absent token disables the DEMO command intentionally. No browser/runtime capture attested.
 - **Next micro-lot:** inspect GitHub quality job, correct failures, rebase against PR #51 as needed, then enforce RBAC on remaining legacy reads and Copilot; validate real ephemeral Core/Temporal integration separately.
+
+## CI results confirmed after first run
+
+- First run [40598872077](https://github.com/alimtalbi-ata/aiops/actions/runs/40598872077): **FAILURE** in the new HTTP tests. Root cause: importing `portal.main` requires an internal token at import time via `shared.http`; the CI job correctly had no production secret.
+- Fix commit `0c7978f24e679e3e5e3606b602df79143e889ba3`: inject an isolated, synthetic unit-test internal token during module import, with no real backend calls.
+- Re-run [40598932248](https://github.com/alimtalbi-ata/aiops/actions/runs/40598932248) for fix commit: **SUCCESS** (confirmed GitHub Actions conclusion). New DEMO authorization tests, pre-existing policy/read-model/NOC tests, static audit and Docker Compose config validation all passed. This is **in-process and static CI**, not a live service integration.
+- The journal-only follow-up commit will trigger a further PR check; its result must be verified separately before merge.
