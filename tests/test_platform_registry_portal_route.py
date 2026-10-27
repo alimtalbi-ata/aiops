@@ -25,6 +25,31 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
         self.assertEqual(len(routes), 1)
         self.assertEqual(set(routes[0].methods or ()), {"GET"})
 
+    def test_signed_noc_route_is_mounted_on_same_portal_and_disabled_by_default(self):
+        routes = [route for route in app.routes
+                  if getattr(route, "path", None) == "/api/noc/runtime-state"]
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(set(routes[0].methods or ()), {"GET"})
+        env = {
+            "AIOPS_PORTAL_READ_TOKEN": "synthetic-portal-read-token",
+            "AIOPS_NOC_READ_MODEL_URL": "",
+            "AIOPS_NOC_READ_MODEL_TOKEN": "",
+            "AIOPS_NOC_READ_MODEL_HMAC_KEY": "",
+            "AIOPS_NOC_ALLOWED_ORIGINS": "",
+        }
+        from portal import noc_runtime
+        with patch.dict(os.environ, env), patch.object(
+            noc_runtime.urllib.request, "build_opener",
+            side_effect=AssertionError("unconfigured NOC route must not open network"),
+        ):
+            response = self.client.get(
+                "/api/noc/runtime-state",
+                headers={"Authorization": "Bearer synthetic-portal-read-token"},
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "noc_source_not_configured")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
     def test_registry_route_returns_unknown_plan_with_no_runtime_claims(self):
         with TestClient(app) as client:
             response = client.get("/api/platform/components")
