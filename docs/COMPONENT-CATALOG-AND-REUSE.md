@@ -73,3 +73,28 @@ Record the following before integration:
 6. End-to-end replay with audit trace and deterministic expected outcomes.
 7. HITL/ITSM integration and recovery testing.
 8. Live remediation only after independent policy, fencing, approval, rollback and reconciliation qualification.
+
+## 2026-10-27 target extension — NOC, human control and knowledge
+
+These rows represent *target roles*, not installed, deployed or qualified services. Reuse current app/service code before adding new containers.
+
+| Component / candidate | Intended role | Reuse/build decision | Qualification gate |
+|---|---|---|---|
+| Checkmk | Host/service monitoring, alert state, discovery | Candidate integration; avoid duplicate Prometheus collection | Edition/version, REST/Livestatus, auth, topology mapping, read-only spike |
+| Thruk | Operator NOC view and multisite aggregation | Candidate UI with compatible monitoring backend | Backend compatibility, ack/downtime ownership, auth/RBAC |
+| OpenTelemetry Collector | Telemetry ingest/routing | Optional addition if absent; reuse existing metrics first | Data contracts, cardinality, retention, secret redaction |
+| ACME Enterprise Twin | CI/service dependency graph, business flows and incident ground truth | Extend existing twin/simulator | Deterministic seeds, isolation, CMDB reconciliation, impact assertions |
+| AI Investigator + Critic | Evidence-backed competing hypotheses and recommendations | Extend existing Intelligence/Core/Worker; review V145 candidates | Citation validity, missing evidence, hallucination/contradiction tests |
+| NOC Copilot | Read-only enterprise-grounded chat | Extend Portal + Core/RAG rather than parallel authority | Per-user ACL, citations, abstention, injection and exfiltration tests |
+| Knowledge Hub / RAG | Vendor/internal docs, runbooks, postmortems, incident memory | Reuse RAG if present; PostgreSQL full-text + pgvector is candidate | Ingestion rights, source versions, retrieval quality, ACL, deletion |
+| HITL Decision Center | Human approval, rejection, revision, expiry | Extend Portal/Core/Policy/Temporal/GLPI | Identity, role, immutable action approval, race/expiry, audit |
+| Remediation Lab | Allowlisted Ansible, scripts, CLI, REST recipe catalog | Extend guarded Worker/Temporal, sandbox executors | No arbitrary commands, typed params, dry-run, idempotency, postchecks |
+| Evidence Studio | Replayable incident timeline and proof package | Extend existing Portal/Evidence rather than separate writer | Exact source links, failed-run visibility, synthetic label, replay |
+
+### Reuse-before-build investigation order
+1. Inspect all relevant current and historical branches, existing RAG/Copilot/Intelligence/Simulator/Evidence/Portal contracts and V145 candidates.
+2. Map authority for each object: incident, Run, CI, approval, document, recipe and evidence. No parallel writers.
+3. Validate Checkmk↔Thruk adapter/compatibility in isolation before pinning versions or Compose dependencies.
+4. Add small versioned contracts and deterministic fixtures for one ACME ERP incident, one document corpus and one sandbox recipe.
+5. Test unauthorized chatbot queries, absent documentation, refused/expired HITL, duplicate approvals, stale CMDB, failed postcheck and rollback.
+6. Qualify only with actual tests and exact artifacts; update this catalog with verified source paths, SHA, adapter owners and observed results.
