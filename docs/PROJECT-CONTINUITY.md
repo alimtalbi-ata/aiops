@@ -66,3 +66,7 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## 2026-10-27 — P0 evidence video packaging (PR #43, in progress)
+
+A separate `demo/evidence_video_bundle.py` now packages **only pre-existing, hash-verified operator captures** into one MP4, SRT and SHA-256 receipt. It reuses the existing PR #43 capture/verification code and selected PR #36 STAR manifest/video validation principles; it does **not** reuse synthetic STAR scenes as live evidence. Bundle requires consistent incident/run/ticket/session labels across all five captures, private outputs and ffmpeg decode verification. Offline local test: 12 tests executed including real ffmpeg render/decode from synthetic **test fixtures** (not application captures). GitHub Actions confirmation pending; no authenticated screenshots, no Debian access and no production qualification. See `docs/demo/EVIDENCE-MP4-SRT-BUNDLE-CONTRACT.md` and `docs/automation-runs/2026-10-27-2144-video-evidence.md`.
