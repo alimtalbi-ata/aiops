@@ -51,10 +51,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     path = " -> ".join(report["impact_path"])
+    blast_radius = ",".join(report["affected_ci_ids"])
     print(
         "AIOPS_DEMO_FIXTURES=PASS",
         report["ci_count"], "CIs", report["incident_count"], "incidents",
         "impact_path=" + path,
+        "affected_cis=" + blast_radius,
         "provenance=SIMULATED_TARGET",
         "live_remediation=false",
     )
