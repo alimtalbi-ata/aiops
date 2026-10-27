@@ -103,6 +103,20 @@ class NocDemoRagTests(unittest.TestCase):
             noc_demo_rag.validate_catalog({"schema": noc_demo_rag.CATALOG_SCHEMA,
                 "provenance": "SYNTHETIC_SIMULATION_ONLY", "scenarios": altered})
 
+    def test_portal_route_and_visible_demo_control(self):
+        from portal import main as portal_main
+        self.assertIn("/api/noc/demo-rag", [route.path for route in portal_main.app.routes])
+        snapshot = {"dashboard": {}, "runs": {"items": []}, "twin": {}, "states": {}}
+        with patch.object(portal_main, "read_portal_snapshot", return_value=snapshot), \
+             patch.object(portal_main, "build_navigation", return_value={}), \
+             patch.object(portal_main, "render_navigation_html", return_value=""):
+            page = portal_main.home()
+        self.assertIn("Lire fiches RAG DEMO", page)
+        self.assertIn("synthétiques", page)
+        self.assertIn("encodeURIComponent(asset)", page)
+        self.assertIn("el.value=''", page)
+        self.assertIn("out.textContent", page)
+
     def test_rejects_invalid_digest_even_if_rows_valid(self):
         rows, _ = noc_demo_rag.load_catalog()
         with self.assertRaises(ValueError):
