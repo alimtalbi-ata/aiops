@@ -80,6 +80,9 @@ class DemoPublicTests(unittest.TestCase):
             proc.poll.return_value = None
             try:
                 os.environ["AIOPS_DEMO_VIDEO_ENABLED"] = "true"
+                os.environ["AIOPS_INTERNAL_TOKEN"] = "must-not-reach-renderer"
+                os.environ["AIOPS_ADMIN_TOKEN"] = "must-not-reach-renderer-either"
+                os.environ["AIOPS_PORTAL_READ_TOKEN"] = "must-not-reach-renderer-either"
                 with patch.object(mod.subprocess, "Popen", return_value=proc) as popen:
                     response = mod.start_video({"scenario":"PAYMENTS_P2"})
                 self.assertEqual(response.status_code, 202)
@@ -90,6 +93,12 @@ class DemoPublicTests(unittest.TestCase):
                 self.assertEqual(kwargs["cwd"], str(root))
                 self.assertEqual(kwargs["stdin"], mod.subprocess.DEVNULL)
                 self.assertTrue(kwargs["start_new_session"])
+                self.assertEqual(kwargs["env"].get("PYTHONUNBUFFERED"), "1")
+                self.assertEqual(kwargs["env"].get("PATH"), os.environ.get("PATH"))
+                for secret_name in (
+                    "AIOPS_INTERNAL_TOKEN", "AIOPS_ADMIN_TOKEN", "AIOPS_PORTAL_READ_TOKEN"
+                ):
+                    self.assertNotIn(secret_name, kwargs["env"])
                 output = Path(args[0][-1])
                 self.assertEqual(output.parent, mod.RUNS_ROOT)
                 self.assertEqual(len(output.name), 32)
