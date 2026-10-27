@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-BASE=${BASE_URL:-http://127.0.0.1:7777}
+BASE=${BASE_URL:-http://127.0.0.1:${AIOPS_PORTAL_HOST_PORT:-17777}}
 curl -fsS "$BASE/health" >/dev/null
 curl -fsS "$BASE/api/portal/bootstrap" >/tmp/aiops-bootstrap.json
 curl -fsS -X POST "$BASE/api/demo" >/tmp/aiops-demo.json

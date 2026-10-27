@@ -6,7 +6,7 @@ import pathlib,ast
 for p in pathlib.Path('app').rglob('*.py'): ast.parse(p.read_text(),filename=str(p))
 PY
 for f in app/*/Dockerfile; do test -f "$f" || { echo "FAIL|dockerfile|$f"; exit 1; }; done
-grep -q '7777:777' compose.yml
+grep -Fq 'AIOPS_PORTAL_HOST_PORT:-17777}:777' compose.yml
 grep -q '8080:80' compose.yml
 grep -q '5678:5678' compose.yml
 grep -q '9090:9090' compose.yml
