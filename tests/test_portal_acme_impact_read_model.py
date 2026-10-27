@@ -100,6 +100,8 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response.headers["content-type"])
         self.assertIn("ACME — SAN P1", response.text)
+        self.assertIn("background:#0b1220", response.text)
+        self.assertIn("style-src", response.headers["content-security-policy"])
         self.assertIn("Payments P2", response.text)
         self.assertIn("<svg ", response.text)
         self.assertIn('aria-label="Dépendances SAN vers application Payments, simulation"', response.text)
