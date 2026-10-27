@@ -6,6 +6,7 @@ import pathlib
 import sys
 import unittest
 from unittest.mock import patch
+from threading import Barrier
 
 from fastapi.testclient import TestClient
 
@@ -101,6 +102,35 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
                 for _, _, kwargs in calls
             )
         )
+
+    def test_independent_sources_are_read_concurrently(self):
+        barrier = Barrier(3)
+        payloads = {
+            (main.CORE, "/api/dashboard"): {"open_incidents": 1},
+            (main.CORE, "/api/runs"): {"items": []},
+            (main.TWIN, "/api/twin/summary"): {"nodes": 4},
+        }
+
+        def concurrent_get(base, path, **kwargs):
+            self.assertEqual(kwargs, {"timeout": 3, "retries": 0})
+            # A sequential implementation times out here; three concurrent
+            # submissions release the barrier without waiting for prior reads.
+            barrier.wait(timeout=2.5)
+            return payloads[(base, path)]
+
+        with patch.object(main, "get_json", side_effect=concurrent_get), patch.object(
+            main, "post_json", side_effect=AssertionError("bootstrap must be read-only")
+        ):
+            response = self.client.get(
+                "/api/portal/bootstrap",
+                headers={"Authorization": "Bearer synthetic-portal-read-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["dashboard"], payloads[(main.CORE, "/api/dashboard")])
+        self.assertEqual(response.json()["runs"], payloads[(main.CORE, "/api/runs")])
+        self.assertEqual(response.json()["twin"], payloads[(main.TWIN, "/api/twin/summary")])
+        self.assertEqual(response.json()["_portal"]["status"], "COMPLETE")
 
     def test_one_upstream_failure_degrades_only_that_source_and_redacts_exception(self):
         def fake_get_json(base, path, **kwargs):
