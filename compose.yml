@@ -29,7 +29,8 @@ services:
       ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["810"]
-    networks: [aiops2-control, aiops2-data]
+    # Explicit authenticated Core API ingress for the isolated simulator.
+    networks: [aiops2-control, aiops2-data, aiops2-execution]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:810/health')"], interval: 5s, timeout: 3s, retries: 20}
 

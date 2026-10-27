@@ -33,3 +33,5 @@ jobs:
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
         run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+      - name: Check simulator-to-Core network reachability contract
+        run: docker compose --env-file .env config --format json | python3 tests/check_compose_networks.py
