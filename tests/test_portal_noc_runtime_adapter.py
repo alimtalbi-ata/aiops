@@ -121,6 +121,14 @@ class NocSignedPayloadTests(unittest.TestCase):
             with self.subTest(observed=observed), self.assertRaises(ValueError):
                 self.project(raw=raw, now=clock)
 
+    def test_source_cannot_promote_live_remediation_evidence_or_production(self):
+        for field in ("live_remediation_authorized", "evidence_runtime_attested",
+                      "production_qualified"):
+            payload = fixture_payload()
+            payload[field] = True
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.project(payload=payload)
+
     def test_malformed_states_and_unverified_handoff_claims_fail_closed(self):
         for mutate in (
             lambda p: p.update({"steps": [{"name": "x", "state": []}]}),
@@ -147,6 +155,41 @@ class NocSignedPayloadTests(unittest.TestCase):
         self.assertEqual(view["event_timestamp_provenance"], "ABSENT")
 
 
+class FakeResponse:
+    def __init__(self, body, headers, url):
+        self._body = body
+        self.headers = headers
+        self._url = url
+        self.status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def getcode(self):
+        return self.status
+
+    def geturl(self):
+        return self._url
+
+    def read(self, limit=-1):
+        return self._body[:limit]
+
+
+class FakeOpener:
+    def __init__(self, response):
+        self.response = response
+        self.request = None
+        self.timeout = None
+
+    def open(self, request, timeout):
+        self.request = request
+        self.timeout = timeout
+        return self.response
+
+
 class NocRuntimeRouteTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -157,6 +200,52 @@ class NocRuntimeRouteTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.client.close()
+
+    def test_upstream_request_is_allowlisted_get_and_verifies_exact_signed_bytes(self):
+        body, signed_headers = signed_response()
+        headers = {
+            **signed_headers,
+            "Content-Type": "application/json; charset=utf-8",
+            "Content-Length": str(len(body)),
+        }
+        response = FakeResponse(body, headers, URL)
+        opener = FakeOpener(response)
+        env = {
+            "AIOPS_NOC_READ_MODEL_URL": URL,
+            "AIOPS_NOC_READ_MODEL_TOKEN": TOKEN,
+            "AIOPS_NOC_READ_MODEL_HMAC_KEY": HMAC_KEY,
+            "AIOPS_NOC_ALLOWED_ORIGINS": ORIGIN,
+        }
+        with patch.dict(os.environ, env), patch.object(
+            noc_runtime.urllib.request, "build_opener", return_value=opener
+        ):
+            view = noc_runtime.read_signed_noc_snapshot()
+        self.assertEqual(opener.request.get_method(), "GET")
+        self.assertEqual(opener.request.get_header("Authorization"), "Bearer " + TOKEN)
+        self.assertEqual(opener.timeout, noc_runtime.TIMEOUT_SECONDS)
+        self.assertEqual(view["source_origin"], ORIGIN)
+        self.assertEqual(view["source_authentication"], "HMAC_SHA256_VERIFIED")
+        self.assertIs(view["runtime_attested"], False)
+
+    def test_disallowed_origin_is_rejected_before_network_access(self):
+        env = {
+            "AIOPS_NOC_READ_MODEL_URL": "https://other.example.test/api/read-model",
+            "AIOPS_NOC_READ_MODEL_TOKEN": TOKEN,
+            "AIOPS_NOC_READ_MODEL_HMAC_KEY": HMAC_KEY,
+            "AIOPS_NOC_ALLOWED_ORIGINS": ORIGIN,
+        }
+        with patch.dict(os.environ, env), patch.object(
+            noc_runtime.urllib.request, "build_opener",
+            side_effect=AssertionError("disallowed origin must not open network"),
+        ):
+            with self.assertRaisesRegex(ValueError, "not allowlisted"):
+                noc_runtime.read_signed_noc_snapshot()
+
+    def test_redirect_handler_never_follows_upstream_redirects(self):
+        handler = noc_runtime._NoRedirect()
+        self.assertIsNone(
+            handler.redirect_request(None, None, 302, "Found", {}, URL + "/elsewhere")
+        )
 
     def test_route_requires_portal_read_auth_before_any_upstream_call(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
