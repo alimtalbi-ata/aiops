@@ -86,3 +86,22 @@ Les contrôles réalisés sont CRC, chemins dupliqués, SHA-256, chemins dangere
 
 ## Suivi
 Cette première passe n'est **pas exhaustive** sur toutes les fenêtres de conversations du 1er au 23 octobre : il reste à indexer les autres journaux, archives et historiques exportés, en s'appuyant sur le consolidateur Windows V2.0. Faire évoluer ce registre à chaque nouvelle découverte, avec commit et PR avant fusion.
+
+## Contrôle automatisé des dépendances V2.13.4 (27 octobre 2026)
+
+Un audit local en lecture seule est disponible dans
+`recovery/legacy_v2134/tools/audit_hybrid_dependencies.py`. Il compare les
+membres attendus à leurs empreintes SHA-256 historiques et refuse les liens
+symboliques. Il ne fait aucun import ni aucune exécution des modules historiques.
+Le test dédié couvre l'absence, le hash divergent, le rejet de lien symbolique
+et la distinction entre intégrité source et qualification runtime.
+
+À la création de cet audit, `tools/assemble_hybrid.py` est présent dans
+`recovery/legacy_v2134`, mais `tools/build_real_replay.py` et
+`tests/test_replay.py` n'y sont pas présents. Les SHA-256 historiques attendus
+restent respectivement
+`f71a568f4229402a6f6b5238552efbdd18fa41320c8c285afedc386812bbb97d` et
+`e1fadcf8c20ab19ba1e696aa11237f42ec300a64ce9745b496023648eaaef8aa`.
+L'audit doit donc retourner `RECOVERY_INCOMPLETE` tant que les octets originaux
+ne sont pas retrouvés et vérifiés. Un hash correct n'est qu'un feu vert pour une
+revue séparée, jamais une qualification runtime ou une autorisation d'exécution.
