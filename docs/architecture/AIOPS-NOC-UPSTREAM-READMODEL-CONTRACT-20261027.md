@@ -7,7 +7,7 @@ Date: 27 October 2026. This contract adds an optional **read-only API adapter** 
 - **GET /api/noc/runtime-state** is mounted by **app/portal/main.py** in the existing portal ASGI application.
 - The caller must provide **Authorization: Bearer <AIOPS_PORTAL_READ_TOKEN>**. A missing configured portal token returns 503; a missing/invalid caller token returns 401 before any upstream access.
 - The optional upstream must be configured with **AIOPS_NOC_READ_MODEL_URL**, **AIOPS_NOC_READ_MODEL_TOKEN**, **AIOPS_NOC_READ_MODEL_HMAC_KEY** and **AIOPS_NOC_ALLOWED_ORIGINS**. The URL origin must exactly match an explicitly allowlisted origin, including scheme and port.
-- The upstream request is GET-only, has a three-second timeout, follows no redirects, accepts only application/json, and reads at most 256 KiB. The Bearer token is sent only to that allowlisted origin.
+- The upstream request is GET-only, has a three-second timeout, follows no redirects, disables ambient HTTP_PROXY/HTTPS_PROXY settings, accepts only application/json, reads at most 256 KiB and requires the received byte count to match Content-Length when provided. The Bearer token is sent only to that allowlisted origin.
 - The response must include **X-AIOps-Read-Model-SHA256** and **X-AIOps-Read-Model-Signature**. The SHA-256 covers the exact response bytes; the HMAC-SHA256 uses the separately provisioned key and covers those same bytes. Duplicate JSON keys, non-standard JSON constants, invalid UTF-8, mismatched digest/signature, malformed schema, stale/future timestamps, invalid states and unverified 02→03 claims are rejected.
 
 ## Source payload
