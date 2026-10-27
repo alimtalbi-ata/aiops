@@ -96,3 +96,10 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-0016 — Portage ACME synthetic impact sans autorité GLPI (2026-10-27)
+
+- **Statut:** Proposition en PR #50 ; non qualifiée LIVE.
+- **Décision:** Porter depuis PR #36 le validateur de graphe ACME et la vue de simulation en lecture seule, sans fusion massive et sans toucher au jumeau canonique en base.
+- **Sécurité:** Les identifiants `SIM-ACME-*` et `SIM-GLPI-*` proviennent du SHA-256 du fixture, et ne sont jamais des identifiants Core/Temporal/GLPI. `ticket_id=null`, `runtime_attested=false`, `live_remediation_authorized=false`.
+- **Qualification:** Tests unitaires du graphe, des modes interdits, des cycles, du montage portail et des erreurs ; CI GitHub Actions, sans services réels. Une vraie corrélation ITSM nécessitera un adaptateur authentifié et une attestation de ticket.

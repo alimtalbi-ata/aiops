@@ -81,3 +81,7 @@ Every material change must update this record and the relevant architecture/deci
 ## 2026-10-27 — NOC authenticated read-model seam (draft PR)
 
 A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-verified read-only NOC snapshots, operator Bearer auth and an explicitly UNKNOWN portal NOC panel. The source and tests are not runtime qualification. Full configuration, trust and multi-tenant limitations are documented in `docs/architecture/NOC-SIGNED-READMODEL-BRIDGE-20261027.md`. Next: real Checkmk/Thruk upstream provider and correlation to canonical Core Run/Incident, then evidence-grounded Analyst/Critic via NIM/Ollama adapter PR #44. No Debian or LIVE access performed.
+
+## 2026-10-27 — P1 ACME SAN → Payments synthetic impact (draft PR #50)
+
+A targeted port of PR #36's fixture, dependency DAG validator and read-only impact view adds `GET /api/demo/acme-impact` and `GET /demo/acme-impact` to the canonical portal, with a visible navigation link. Source SAN P1 incident `ACME-DEMO-SAN-001` and Payments P2 impact `ACME-DEMO-PAY-002` are stable synthetic fixture IDs; derived run and ticket labels are not Core/Temporal or GLPI IDs. No real GLPI ticket or runtime capture is claimed. Tests are wired into existing quality workflow; verify latest PR #50 check conclusion before merging. Next: authenticated correlation of real Core Run/Incident/GLPI IDs, preserving mode and evidence provenance. See `docs/demo/ACME-SAN-PAYMENTS-IMPACT-20261027.md`.
