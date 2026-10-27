@@ -134,6 +134,20 @@ class DemoPublicTests(unittest.TestCase):
             self.assertEqual(result["status"], "failed")
             self.assertEqual(result["error"], "manifest_missing_or_invalid")
 
+    def test_completed_job_rejects_non_object_manifest_root(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            manifest = output / "AIOps-Demo-Complete.manifest.json"
+            manifest.write_text("[]", encoding="utf-8")
+            job = {"process": MagicMock(), "output": output, "scenario": "SAN_FABRIC_P1",
+                   "status": "running", "created_at": 1}
+            job["process"].poll.return_value = 0
+            result = mod._job_snapshot("e" * 32, job)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["error"], "manifest_missing_or_invalid")
+
     def test_completed_job_requires_manifest_and_artifact_hashes(self):
         import tempfile
         from pathlib import Path
