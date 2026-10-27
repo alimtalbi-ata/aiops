@@ -27,9 +27,28 @@ def _bootstrap_read(base, path):
     return payload, True
 
 
+PORTAL_READ_TOKEN_ENV = "AIOPS_PORTAL_READ_TOKEN"
+
+
+def _require_portal_read_auth(authorization: str | None) -> None:
+    """Fail closed unless a dedicated read-only operator Bearer token is configured."""
+    expected = os.getenv(PORTAL_READ_TOKEN_ENV, "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="portal_read_auth_not_configured")
+    scheme, separator, supplied = (authorization or "").partition(" ")
+    if (
+        not separator
+        or scheme.lower() != "bearer"
+        or not supplied
+        or not hmac.compare_digest(supplied, expected)
+    ):
+        raise HTTPException(status_code=401, detail="invalid_portal_read_token")
+
+
 @app.get('/api/portal/bootstrap')
-def bootstrap():
-    """Read Core/Twin independently; preserve healthy sections during an outage."""
+def bootstrap(authorization: str | None = Header(default=None)):
+    """Authenticated, bounded read of Core/Twin; preserve healthy sections during outage."""
+    _require_portal_read_auth(authorization)
     dashboard, dashboard_ok = _bootstrap_read(CORE, '/api/dashboard')
     runs, runs_ok = _bootstrap_read(CORE, '/api/runs')
     twin, twin_ok = _bootstrap_read(TWIN, '/api/twin/summary')
@@ -52,7 +71,7 @@ def bootstrap():
             "timeout_seconds": BOOTSTRAP_TIMEOUT_SECONDS,
             "retry_count": 0,
             "upstream_provenance": "UNATTESTED_UPSTREAM_READS",
-            "operator_authentication": "NOT_ENFORCED_IN_PORTAL_CODE",
+            "operator_authentication": "ENFORCED_DEDICATED_BEARER_TOKEN",
             "runtime_attested": False,
             "live_remediation_authorized": False,
         },
