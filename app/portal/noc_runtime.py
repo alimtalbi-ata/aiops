@@ -248,7 +248,9 @@ def read_signed_noc_snapshot() -> dict:
         },
         method="GET",
     )
-    opener = urllib.request.build_opener(_NoRedirect())
+    # Do not inherit ambient HTTP_PROXY/HTTPS_PROXY settings: credentials must
+    # never be sent through an unreviewed proxy configured outside this contract.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
     with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
         if response.geturl() != url:
             raise ValueError("NOC redirect refused")
@@ -263,6 +265,8 @@ def read_signed_noc_snapshot() -> dict:
             if not length.isdigit() or int(length) > MAX_RESPONSE_BYTES:
                 raise ValueError("NOC upstream body too large")
         raw = response.read(MAX_RESPONSE_BYTES + 1)
+        if length is not None and len(raw) != int(length):
+            raise ValueError("NOC upstream body length mismatch")
     return _project_signed_payload(
         raw,
         digest_header=headers.get("X-AIOps-Read-Model-SHA256"),
