@@ -103,3 +103,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Décision:** Porter depuis PR #36 le validateur de graphe ACME et la vue de simulation en lecture seule, sans fusion massive et sans toucher au jumeau canonique en base.
 - **Sécurité:** Les identifiants `SIM-ACME-*` et `SIM-GLPI-*` proviennent du SHA-256 du fixture, et ne sont jamais des identifiants Core/Temporal/GLPI. `ticket_id=null`, `runtime_attested=false`, `live_remediation_authorized=false`.
 - **Qualification:** Tests unitaires du graphe, des modes interdits, des cycles, du montage portail et des erreurs ; CI GitHub Actions, sans services réels. Une vraie corrélation ITSM nécessitera un adaptateur authentifié et une attestation de ticket.
+
+
+## ADR-0018 — NOC signed identity is a prerequisite to bounded Core reads (2026-10-27)
+
+- **Status:** Proposed in draft PR #53; pending CI verification.
+- **Decision:** Validate NOC signed projection, exact scenario incident and safe identifiers before requesting the canonical Core Run. Reuse the strict no-proxy, no-redirect, allowlisted internal Core reader instead of a generic configurable HTTP client.
+- **Reason:** Avoid SSRF or unnecessary Core access on malformed upstream claims; prevent synthetic ticket assertions from becoming GLPI evidence.
+- **Boundary:** Portal stays outside the GLPI integration network; ticket verification requires a separately qualified read-only service, not a broader portal network attachment. LIVE remains fail-closed.
