@@ -81,3 +81,8 @@ Every material change must update this record and the relevant architecture/deci
 ## 2026-10-27 — NOC authenticated read-model seam (draft PR)
 
 A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-verified read-only NOC snapshots, operator Bearer auth and an explicitly UNKNOWN portal NOC panel. The source and tests are not runtime qualification. Full configuration, trust and multi-tenant limitations are documented in `docs/architecture/NOC-SIGNED-READMODEL-BRIDGE-20261027.md`. Next: real Checkmk/Thruk upstream provider and correlation to canonical Core Run/Incident, then evidence-grounded Analyst/Critic via NIM/Ollama adapter PR #44. No Debian or LIVE access performed.
+
+
+## 2026-10-27 — HITL sandbox one-use approval lab (PR #49)
+
+Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/alimtalbi-ata/aiops/pull/49). Proposals bind incident/run/allowlisted recipe/target/parameter hash/mode; approvals require distinct human actor role, expire and are consumed once atomically. No shell or remediation executor is present. Returned postchecks and rollback are `NOT_EXECUTED`, never `PASS`. Local unit suite: 16 tests passed; GitHub Actions and runtime integration are separate gates. **NOT integrated** into authenticated Core/Temporal/Portal or Golden Demo; no LIVE qualification. See [HITL sandbox contract](architecture/HITL-SANDBOX-CONTRACT-20261027.md). Next micro-lot: authenticated Core facade and truthful Golden Demo states, then real isolated integration tests.
