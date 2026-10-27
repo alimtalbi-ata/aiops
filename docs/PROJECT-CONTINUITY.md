@@ -85,3 +85,9 @@ A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-ve
 ## 2026-10-27 — P1 ACME SAN → Payments synthetic impact (draft PR #50)
 
 A targeted port of PR #36's fixture, dependency DAG validator and read-only impact view adds `GET /api/demo/acme-impact` and `GET /demo/acme-impact` to the canonical portal, with a visible navigation link. Source SAN P1 incident `ACME-DEMO-SAN-001` and Payments P2 impact `ACME-DEMO-PAY-002` are stable synthetic fixture IDs; derived run and ticket labels are not Core/Temporal or GLPI IDs. No real GLPI ticket or runtime capture is claimed. Tests are wired into existing quality workflow; verify latest PR #50 check conclusion before merging. Next: authenticated correlation of real Core Run/Incident/GLPI IDs, preserving mode and evidence provenance. See `docs/demo/ACME-SAN-PAYMENTS-IMPACT-20261027.md`.
+
+## 2026-10-27 — NOC signed payload to canonical Run read-only correlation (candidate)
+
+The P0 NOC track adds `app/portal/noc_correlation.py` and a guarded portal drilldown in a dedicated draft PR. It reuses the PR #36 / merged PR #47 signed NOC read-model contract without importing synthetic RAG fixtures into the runtime. Exact Run/Incident identity is compared with the independently fetched Core Run; mismatches are UNKNOWN. A matching identity is explicitly MATCHED_UNATTESTED and does not establish live monitoring, Grafana or RAG quality. DEMO/REPLAY/STORY remain synthetic; LIVE is unqualified. No DB writes or remediation.
+
+**Known blockers:** no verified real Checkmk/Thruk or Grafana integration, no per-tenant Core/portal read ACL, no runtime attestation or actual model grounding. The inspected Core GET endpoint is unauthenticated; do not expose it publicly. See `docs/architecture/NOC-CANONICAL-RUN-CORRELATION-20261027.md` and the corresponding dated automation run log for tested scope and limitations.
