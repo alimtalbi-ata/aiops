@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
