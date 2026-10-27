@@ -32,7 +32,9 @@ def _utc_timestamp(value: object) -> bool:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return False
-    return parsed.tzinfo is not None and parsed.utcoffset() is not None
+    # The field is explicitly named *_utc: accept only UTC (Z or +00:00),
+    # not merely any timezone-aware local timestamp.
+    return parsed.tzinfo is not None and parsed.utcoffset() == __import__("datetime").timedelta(0)
 
 
 def _origin(url: str) -> str:
@@ -86,6 +88,7 @@ def _verify_png(path: Path) -> dict[str, int]:
     chunk_index = 0
     dimensions: tuple[int, int] | None = None
     saw_iend = False
+    saw_idat = False
     while offset < len(raw):
         if len(raw) - offset < 12:
             raise ValueError("truncated PNG chunk")
@@ -112,27 +115,33 @@ def _verify_png(path: Path) -> dict[str, int]:
             dimensions = (width, height)
         elif chunk_type == b"IHDR":
             raise ValueError("duplicate PNG IHDR")
+        if chunk_type == b"IDAT":
+            if saw_iend:
+                raise ValueError("PNG IDAT appears after IEND")
+            saw_idat = True
         if chunk_type == b"IEND":
-            if length != 0:
-                raise ValueError("invalid PNG IEND")
+            if length != 0 or not saw_idat:
+                raise ValueError("invalid PNG IEND or missing IDAT")
             saw_iend = True
             offset = end
             break
         offset = end
         chunk_index += 1
-    if not saw_iend or offset != len(raw) or dimensions is None:
+    if not saw_iend or not saw_idat or offset != len(raw) or dimensions is None:
         raise ValueError("incomplete PNG or trailing bytes")
     return {"width": dimensions[0], "height": dimensions[1], "size_bytes": len(raw)}
 
 
 def audit_manifest(manifest_path: Path, evidence_root: Path, allowed_origins: set[str]) -> dict[str, Any]:
     """Audit a JSON evidence manifest without network, browser, or write side effects."""
-    manifest_path = manifest_path.resolve(strict=True)
-    evidence_root = evidence_root.resolve(strict=True)
+    # Check the caller-supplied paths before resolving: checking only the
+    # resolved paths would hide that the original path itself was a symlink.
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ValueError("manifest must be a regular non-symlink file")
     if evidence_root.is_symlink() or not evidence_root.is_dir():
         raise ValueError("evidence root must be a regular directory")
+    manifest_path = manifest_path.resolve(strict=True)
+    evidence_root = evidence_root.resolve(strict=True)
     if not allowed_origins:
         raise ValueError("at least one explicit --allowed-origin is required")
     normalized_origins = {_origin(value) for value in allowed_origins}
