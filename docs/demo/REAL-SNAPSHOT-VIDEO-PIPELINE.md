@@ -39,8 +39,12 @@ Prérequis : Python 3 et ffmpeg avec libx264. Par défaut chaque capture dure si
 
 ## Limitations et qualification
 
-- Ce chemin valide uniquement les octets PNG (en-tête et hash), pas l'intégrité complète des chunks PNG, ni la preuve de session réelle. Pour une admission STAR plus stricte, réutiliser/porter le validateur `demo/star_evidence_manifest.py` de la PR #36 et ses tests.
+- Ce chemin valide l'en-tête PNG, la structure des chunks, leurs CRC, la présence de IEND et le hash SHA-256, mais ne décode pas les pixels et ne prouve pas la session réelle. Pour une admission STAR plus stricte, réutiliser/porter le validateur `demo/star_evidence_manifest.py` de la PR #36 et ses tests.
 - Pas de génération réelle de screenshots depuis 10.79.94.202 à ce stade, aucun accès serveur vérifié.
 - Pas de preuve de lien causal entre Grafana, Thruk, n8n et GLPI sans IDs de run/incident/ticket et timestamps recoupés.
 - Aucun accès aux systèmes ni déploiement sur le portail. MP4 non produit tant que les captures n'ont pas été fournies.
 - Avant publication : tester la vidéo localement, vérifier la confidentialité et ajouter les métadonnées d'exécution, attestation de session, identifiants corrélés et contrôle d'accès.
+
+## Renforcement du contrôle (incrément 2026-10-27)
+
+Contrôle strict des chunks PNG (longueur/CRC/IHDR/IDAT/IEND), refus des timestamps UTC mal formés et des URL intégrant des identifiants, refus d'écraser une sortie symlink. Tests négatifs ajoutés. Les fichiers de tests sont des fixtures structurelles et ne constituent pas des captures d'application ni un test du décodage vidéo. Exécution CI et ffmpeg à confirmer avant toute publication.
