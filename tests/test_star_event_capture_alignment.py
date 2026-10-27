@@ -129,6 +129,15 @@ class EventCaptureAlignmentTests(unittest.TestCase):
     def test_unchanged_manifest_bytes_pass_time_alignment(self):
         self.assertEqual(self.verify()["entries"][0]["lag_seconds"], 30)
 
+    def test_alignment_reuses_bounded_descriptor_reader_not_path_read_bytes(self):
+        # The bridge and time-alignment stage must not reopen an untrusted
+        # manifest with an unbounded pathname read after its integrity check.
+        with patch.object(Path, "read_bytes",
+                         side_effect=AssertionError("unsafe manifest pathname read")):
+            report = self.verify()
+        self.assertEqual(report["alignment"], "CONSISTENT_UNAUTHENTICATED")
+        self.assertFalse(report["runtime_authenticated"])
+
     def test_rejects_tampered_png(self):
         (self.root / "detect.png").write_bytes(b"not a png")
         with self.assertRaises(ValueError):
