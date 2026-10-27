@@ -62,7 +62,23 @@ PY
 }
 trap write_report EXIT
 curl --retry 10 --retry-connrefused --retry-delay 2 --retry-max-time 30 -fsS "$BASE/health" >/dev/null || { FAILURE="portal_health_unavailable"; exit 1; }
-curl --retry 5 --retry-connrefused --retry-delay 2 --retry-max-time 20 -fsS "$BASE/api/portal/bootstrap" >/dev/null || { FAILURE="portal_bootstrap_unavailable"; exit 1; }
+# Bootstrap is intentionally protected by a dedicated read token. Read it only
+# inside the isolated portal container; never print it or place it in host argv.
+docker compose --env-file .env exec -T aiops2-portal python -c '
+import os,urllib.request,sys
+token=os.environ.get("AIOPS_PORTAL_READ_TOKEN","")
+if not token:
+    print("portal_bootstrap_auth_not_configured",file=sys.stderr)
+    raise SystemExit(1)
+req=urllib.request.Request("http://127.0.0.1:777/api/portal/bootstrap",headers={"Authorization":"Bearer "+token})
+try:
+    with urllib.request.urlopen(req,timeout=10) as response:
+        if response.status != 200:
+            raise RuntimeError("unexpected_bootstrap_status")
+except Exception as exc:
+    print("portal_bootstrap_request_failed:"+type(exc).__name__,file=sys.stderr)
+    raise
+' || { FAILURE="portal_bootstrap_unavailable_or_unauthorized"; exit 1; }
 docker compose --env-file .env exec -T aiops2-worker python -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:815/health", timeout=3)' || { FAILURE="temporal_worker_unavailable"; exit 1; }
 # Token stays inside the isolated portal container; the test profile explicitly opts into DEMO.
 docker compose --env-file .env exec -T aiops2-portal python -c '
