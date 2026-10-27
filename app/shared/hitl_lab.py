@@ -207,11 +207,11 @@ def read_status(path, *, proposal_id, now=None):
         with sqlite3.connect(uri, uri=True, timeout=5) as db:
             db.execute("PRAGMA query_only=ON")
             row = db.execute("""SELECT incident_id,run_id,recipe_id,target_id,
-                params_hash,binding_hash,mode,created_at,expires_at
+                params_hash,binding_hash,mode,created_at,expires_at,proposer_id
                 FROM proposals WHERE proposal_id=?""", (proposal_id,)).fetchone()
             if row is None:
                 raise HITLRejected("proposal not found")
-            incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, mode, created, expires = row
+            incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, mode, created, expires, proposer_id = row
             if mode not in MODES or recipe_id not in RECIPES or at < created or expires <= created:
                 raise HITLRejected("invalid proposal state")
             if (not isinstance(params_hash, str) or len(params_hash) != 64
@@ -228,13 +228,13 @@ def read_status(path, *, proposal_id, now=None):
             if not isinstance(binding_hash, str) or not hmac.compare_digest(binding_hash, expected_binding):
                 raise HITLRejected("stored proposal binding mismatch")
             approval = db.execute(
-                "SELECT approved_at FROM approvals WHERE proposal_id=?", (proposal_id,)
+                "SELECT approver_id,approved_at FROM approvals WHERE proposal_id=?", (proposal_id,)
             ).fetchone()
             receipt = db.execute(
                 "SELECT receipt_id,consumed_at FROM dry_runs WHERE proposal_id=?", (proposal_id,)
             ).fetchone()
             audit = db.execute(
-                "SELECT action,recorded_at FROM audit WHERE proposal_id=? ORDER BY seq",
+                "SELECT action,actor_id,recorded_at FROM audit WHERE proposal_id=? ORDER BY seq",
                 (proposal_id,),
             ).fetchall()
             expected = ["PROPOSED"]
@@ -244,12 +244,17 @@ def read_status(path, *, proposal_id, now=None):
                 expected.append("DRY_RUN_PLAN_ISSUED")
             if receipt and not approval or [a[0] for a in audit] != expected:
                 raise HITLRejected("inconsistent HITL audit")
-            if approval and not created <= approval[0] < expires:
+            if approval and (approval[0] == proposer_id or not created <= approval[1] < expires):
                 raise HITLRejected("invalid approval timestamp")
-            if receipt and not approval[0] <= receipt[1] < expires:
+            if receipt and not approval[1] <= receipt[1] < expires:
                 raise HITLRejected("invalid receipt timestamp")
-            if [a[1] for a in audit] != [created] + (
-                [approval[0]] if approval else []
+            expected_actors = [proposer_id] + ([approval[0]] if approval else []) + (
+                ["sandbox-lab"] if receipt else []
+            )
+            if [a[1] for a in audit] != expected_actors:
+                raise HITLRejected("inconsistent HITL audit actors")
+            if [a[2] for a in audit] != [created] + (
+                [approval[1]] if approval else []
             ) + ([receipt[1]] if receipt else []):
                 raise HITLRejected("inconsistent HITL audit timestamps")
             state = ("DRY_RUN_PLANNED" if receipt else
