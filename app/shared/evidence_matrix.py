@@ -34,7 +34,29 @@ def build_evidence_matrix(
     else:
         input_errors = []
 
+    if hypotheses is None:
+        hypothesis_items: list[Any] = []
+    elif not isinstance(hypotheses, list):
+        hypothesis_items = []
+        input_errors.append("hypotheses_collection_not_a_list")
+    else:
+        hypothesis_items = hypotheses
+        input_errors.extend(
+            f"hypothesis_not_an_object:{index}"
+            for index, hypothesis in enumerate(hypothesis_items)
+            if not isinstance(hypothesis, dict)
+        )
+
     contract_errors = validate_evidence(evidence)
+    invalid_positions: set[int] = set()
+    duplicate_ids: set[str] = set()
+    for error in contract_errors:
+        if error.startswith("duplicate_evidence_id:"):
+            duplicate_ids.add(error.split(":", 1)[1])
+            continue
+        _, separator, suffix = error.rpartition(":")
+        if separator and suffix.isdigit():
+            invalid_positions.add(int(suffix))
     object_positions = [
         (position, item) for position, item in enumerate(evidence)
         if isinstance(item, dict)
@@ -49,7 +71,7 @@ def build_evidence_matrix(
     }
 
     hypothesis_refs: dict[str, list[dict[str, str]]] = {}
-    for index, hypothesis in enumerate(hypotheses or []):
+    for index, hypothesis in enumerate(hypothesis_items):
         if not isinstance(hypothesis, dict):
             continue
         label = str(hypothesis.get("hypothesis_id") or hypothesis.get("title") or f"H{index + 1}")
@@ -88,11 +110,7 @@ def build_evidence_matrix(
         if not isinstance(provenance, dict):
             provenance = {}
         integrity = "UNVERIFIED"
-        if any(
-            error.endswith(f":{position}") or
-            (item.get("evidence_id") and str(item.get("evidence_id")) in error)
-            for error in contract_errors
-        ):
+        if position in invalid_positions or item.get("evidence_id") in duplicate_ids:
             integrity = "INVALID"
         elif provenance.get("identity_contract") == "canonical-envelope-v1":
             integrity = "HASH_VERIFIED"
@@ -118,10 +136,10 @@ def build_evidence_matrix(
         })
 
     tensions = contradictory_snapshots(valid_items)
-    if not rows:
-        status = "UNKNOWN"
-    elif input_errors or contract_errors:
+    if input_errors or contract_errors:
         status = "BLOCKED_FOR_REVIEW"
+    elif not rows:
+        status = "UNKNOWN"
     elif any(row["freshness"] in ("STALE", "FUTURE") for row in rows) or tensions:
         status = "DEGRADED_REVIEW"
     elif any(row["freshness"] == "UNKNOWN" for row in rows):
@@ -138,7 +156,7 @@ def build_evidence_matrix(
         "contract_errors": contract_errors,
         "freshness_summary": freshness,
         "evidence_count": len(rows),
-        "hypothesis_count": len(hypotheses or []),
+        "hypothesis_count": len(hypothesis_items),
         "contradictions": tensions,
         "items": rows,
     }
