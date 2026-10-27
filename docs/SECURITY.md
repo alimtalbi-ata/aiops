@@ -4,7 +4,7 @@
 
 `deploy/install.sh` creates a new `.env` with cryptographically random values using OpenSSL, sets file permissions to `0600`, and uses the same generated internal token for `AIOPS_ADMIN_TOKEN` and `AIOPS_INTERNAL_TOKEN` because current service authentication expects them to match. It also generates a separate `AIOPS_PORTAL_READ_TOKEN` used only to authorize `GET /api/portal/bootstrap`; the token is never printed or reused as the internal/admin token.
 
-If `.env` already exists, the generator does not rotate or overwrite it. Preflight rejects missing/default demo secrets unless the operator explicitly sets `AIOPS_DEMO_MODE=1`. Fix an existing environment deliberately; do not rotate a database password without coordinating the database's stored credentials and a rollback plan.
+If `.env` already exists, the generator does not rotate or overwrite it. Preflight rejects missing/default demo secrets unless the operator explicitly sets `AIOPS_DEMO_MODE=1`. Fix an existing environment deliberately; do not rotate a database password without coordinating the database's stored credentials and a rollback plan. The preflight failure message is deliberately plain text (no shell command substitution) so the diagnostic itself cannot execute a command.
 
 ## Demo mode
 
