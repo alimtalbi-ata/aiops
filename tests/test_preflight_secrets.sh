@@ -3,6 +3,12 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# Diagnostics in the preflight must be inert shell text; backticks in echo strings
+# execute command substitutions and can turn an error path into code execution.
+if grep -n '\`' "$ROOT/deploy/check-secrets.sh"; then
+  echo 'FAIL|secret_preflight_contains_backtick_command_substitution'
+  exit 1
+fi
 cat > "$TMP/default.env" <<'EOF'
 AIOPS_DEMO_MODE=0
 POSTGRES_PASSWORD=Newaiops26$
