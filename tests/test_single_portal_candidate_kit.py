@@ -55,6 +55,8 @@ class CandidateKitTests(unittest.TestCase):
                 "tests/test_portal_host_port_contract.py",
                 "app/portal/platform_registry.py",
                 "app/portal/platform_registry_router.py",
+                "app/portal/noc_runtime.py",
+                "tests/test_portal_noc_runtime_adapter.py",
                 "app/portal/portal_demo_public_v21310.py",
                 "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
                 "tests/test_portal_demo_public_v21310.py",
@@ -107,6 +109,8 @@ class CandidateKitTests(unittest.TestCase):
                     (root / "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html").read_bytes(),
                 )
                 self.assertIn("sources/app/portal/main.py", z.namelist())
+                self.assertIn("sources/app/portal/noc_runtime.py", z.namelist())
+                self.assertIn("sources/tests/test_portal_noc_runtime_adapter.py", z.namelist())
                 self.assertIn("sources/app/portal/ui_theme.py", z.namelist())
                 self.assertEqual(
                     z.read("sources/app/portal/ui_theme.py"),
