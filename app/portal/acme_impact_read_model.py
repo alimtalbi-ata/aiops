@@ -1,8 +1,9 @@
 """Read-only, synthetic ACME SAN P1 -> Payments P2 view on the existing portal.
 
 No upstream service is contacted. Run IDs are deterministic labels derived from
-the exact local fixture bytes, not backend execution IDs. Missing ticket/timestamp
-fields are explicit and never synthesized.
+the exact local fixture bytes, not backend execution IDs. Real ticket/timestamp
+fields stay absent; separate synthetic ticket/checkpoint labels are explicitly
+marked as simulation and must never be treated as runtime evidence.
 """
 from __future__ import annotations
 
