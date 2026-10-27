@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
 import pathlib
@@ -126,7 +127,7 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertIn('class="p2">Payments P2</strong>', response.text)
         self.assertIn("Éléments de configuration", response.text)
         self.assertIn("Incidents du scénario", response.text)
-        self.assertIn("Périmètre d'impact calculé", response.text)
+        self.assertIn("Périmètre d'impact calculé", html.unescape(response.text))
         self.assertIn("Inventaire d’impact détaillé", response.text)
         self.assertIn('class="ci-grid"', response.text)
         self.assertIn('class="ci-card"', response.text)
