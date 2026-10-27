@@ -140,3 +140,7 @@ Temporal, DGX et RAG restent à raccorder et à qualifier séparément.
 ## Régression CI HTML — 27 octobre 2026
 
 Le workflow du kit cumulatif a mis en évidence un test qui recherchait directement le libellé « Périmètre d'impact calculé » dans le HTML sérialisé. Le rendu échappe correctement l'apostrophe en entité HTML (&#x27;), donc la chaîne brute ne contient pas littéralement l'apostrophe attendue. Le test utilise maintenant html.unescape(response.text) pour vérifier le texte rendu sans affaiblir l'encodage HTML ni modifier le comportement de la page. Le premier échec CI observé est corrigé dans le test ; le nouveau SHA doit encore repasser les workflows avant qu'un succès soit déclaré.
+
+## Prévisualisation Analyst / Critic / Policy — 27 octobre 2026
+
+Le modèle JSON et la page ACME présentent désormais une recommandation déterministe fondée sur le scénario local : Analyst émet une hypothèse et des contrôles à effectuer ; Critic impose HOLD_FOR_HUMAN_REVIEW en l'absence de télémétrie runtime et de preuve indépendante ; Policy refuse toute action LIVE. Une checklist de remédiation est proposée sans exécution ni écriture backend. Le champ provider est DETERMINISTIC_RULES_NOT_LLM : ce contenu n'est ni une inférence DGX/Qwen ni un résultat RAG. Les champs live_execution et backend_writes restent false. Les tests ASGI vérifient le contrat JSON, les décisions et le rendu HTML. Les routes existantes sont conservées ; aucun service ou port n'est ajouté.
