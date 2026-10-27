@@ -73,3 +73,13 @@ Record the following before integration:
 6. End-to-end replay with audit trace and deterministic expected outcomes.
 7. HITL/ITSM integration and recovery testing.
 8. Live remediation only after independent policy, fencing, approval, rollback and reconciliation qualification.
+
+## P0 Remediation Lab scaffold (2026-10-27; PR #42)
+
+| Source | Implemented | Not implemented / gate |
+|---|---|---|
+| `app/shared/remediation_lab.py` | Pure typed validation, proposal digest, redaction, fixture decision checks, UTC no-effect receipt | No authenticated service, Core persistence, Temporal integration, actual executor, single-use ledger |
+| `config/remediation/recipes.v1.json` | Eight versioned metadata examples: Bash, Python, Ansible, Linux/network/DB CLI, Checkmk/GLPI APIs | No runnable scripts, playbooks, credentials, vendor API adapters or actual rollback |
+| `tests/test_remediation_lab.py` | Ten local unit tests on mirrored sources, negative LIVE/approval/parameter cases | GitHub CI, container integration, race/fencing, runtime and LIVE qualification unrun |
+
+Reuse existing Policy/Temporal/Worker/Core and V145 candidates only after contract review; avoid parallel Run writers. [Detailed contract](REMEDIATION-LAB-CONTRACT.md).

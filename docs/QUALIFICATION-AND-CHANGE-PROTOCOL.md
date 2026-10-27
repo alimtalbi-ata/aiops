@@ -44,3 +44,7 @@ Always list failed, skipped and not-run tests. Expected output is not evidence o
 - [ ] Cumulative ZIP includes required source/scripts/docs/evidence, without secrets or runtime databases.
 - [ ] Commit and PR verified on GitHub.
 - [ ] Next steps, unresolved risks and current runtime snapshot recorded in `docs/PROJECT-CONTINUITY.md`.
+
+## P0 Remediation Lab qualification gate (2026-10-27; PR #42)
+
+The new metadata catalog and pure simulator are **source-only**. Locally, a mirrored copy of the proposed Python source passed 10 unit tests, `python -m compileall -q app tests` and `python -m json.tool config/remediation/recipes.v1.json`; this does not establish GitHub CI or runtime qualification. Every simulated receipt must say `effect_applied=false`, `postchecks=NOT_RUN`, and redact `vault://` references. Negative tests must deny unknown recipes/versions, target mismatch, command-injection-shaped identifiers, plaintext secrets, rejected/expired/modified approvals, missing fencing and all LIVE modes. Before integration require trusted identity, durable single-use approval ledger, real CMDB/precondition freshness, isolated executor, idempotent effect receipts, bounded timeouts, rollback and verified technical/business postchecks. Existing LIVE block stays in force. See [REMEDIATION-LAB-CONTRACT.md](REMEDIATION-LAB-CONTRACT.md).
