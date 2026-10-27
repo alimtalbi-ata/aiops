@@ -30,10 +30,18 @@
 3. Qualifier un véritable fournisseur Checkmk/Thruk et Grafana dans une CI à conteneurs réels, puis lier les preuves observées aux Run/Incident. NIM/Mistral 192B n'est remplacé que par Ollama 4B/8B en CI.
 4. Brancher le retrieval RAG sur des documents authentifiés avec ACL pré/post-recherche ; ne jamais promouvoir les fixtures synthétiques en preuve observée.
 
-**Aucun déploiement Debian, aucune commande LIVE, aucune capture runtime et aucune fusion de PR #54.**
+**Aucun déploiement Debian, aucune commande LIVE ni aucune capture runtime.**
 
 
 ## Qualification GitHub Actions après correction
 
 - **[Run 40594230069](https://github.com/alimtalbi-ata/aiops/actions/runs/40594230069)** sur HEAD `3ee20fbee3c87a81f4aadeeffcc88567360a7a40` : **completed / success** confirmé via GitHub, job `policy-and-static`. Tous les steps ont réussi : compilation, policy, registry, Core/Twin read models, NOC signé, NOC→Core correlation, **12 tests RAG DEMO**, impact ACME, secrets, audit statique et `docker compose config`. Cette réussite valide des tests de contrat/statique, **pas** l'intégration réelle Checkmk/Thruk/Grafana ni le déploiement Debian.
 - L'ajout de cette note crée un commit de documentation ultérieur ; vérifier le workflow du SHA final avant toute fusion. Aucune modification fonctionnelle supplémentaire.
+
+
+## État final après contrôle du SHA de tête
+
+- **[GitHub Actions run 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546)** sur le HEAD final de PR #54 `b5e67b3baa12bae2261b0fcd95c2a7c7e15e8596` : **completed/success**, job `policy-and-static`, tous les steps confirmés verts, dont les **12 tests RAG DEMO**, tests NOC/Core, audit, secrets et validation Compose.
+- PR #54 : HEAD et base relus, `mergeable=true`, aucun conflit détecté, passage en ready-for-review puis **squash merge confirmé** par GitHub au SHA **`b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`** sur `main`. [PR #54](https://github.com/alimtalbi-ata/aiops/pull/54).
+- **Limites inchangées :** tests de contrat et statiques, aucun service Checkmk/Thruk/Grafana/NIM réellement qualifié, aucun ACL multitenant ni diagnostic IA observé, aucune preuve LIVE.
+- Cette note est portée par une PR documentaire distincte, sans changement de code ni effet runtime.
