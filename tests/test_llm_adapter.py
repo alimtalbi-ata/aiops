@@ -38,9 +38,24 @@ class LLMAdapterTests(unittest.TestCase):
     def test_reject_malformed_response(self):
         with self.assertRaises(LLMUnavailable):
             infer(MESSAGES, CI_ENV, lambda _: b'{"choices":[]}')
+    def test_nim_requires_key(self):
+        with self.assertRaises(LLMUnavailable):
+            configuration({"AIOPS_LLM_PROVIDER": "nim", "AIOPS_LLM_BASE_URL": "https://nim.example.invalid",
+                           "AIOPS_LLM_MODEL": "mistral-192b"})
+
+    def test_nim_authorization_header(self):
+        env = {"AIOPS_LLM_PROVIDER": "nim", "AIOPS_LLM_BASE_URL": "https://nim.example.invalid",
+               "AIOPS_LLM_MODEL": "mistral-192b", "AIOPS_LLM_API_KEY": "test-token"}
+        def transport(req):
+            self.assertEqual(req.get_header("Authorization"), "Bearer test-token")
+            return json.dumps({"choices":[{"message":{"content":"OK"}}]}).encode()
+        result = infer(MESSAGES, env, transport)
+        self.assertEqual(result["provenance"], "NIM_UNQUALIFIED")
+        self.assertFalse(result["production_qualified"])
+
     def test_ngx_not_attested(self):
-        cfg = configuration({"AIOPS_LLM_PROVIDER": "ngx", "AIOPS_LLM_BASE_URL": "https://ngx.example.invalid", "AIOPS_LLM_MODEL": "mistral-192b"})
-        self.assertEqual(cfg["provenance"], "NGX_UNQUALIFIED")
+        cfg = configuration({"AIOPS_LLM_PROVIDER": "ngx", "AIOPS_LLM_BASE_URL": "https://ngx.example.invalid", "AIOPS_LLM_MODEL": "mistral-192b", "AIOPS_LLM_API_KEY": "test-token"})
+        self.assertEqual(cfg["provenance"], "NIM_UNQUALIFIED")
         self.assertFalse(cfg["qualified"])
 
 if __name__ == "__main__":
