@@ -96,3 +96,12 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-P0-20261027-REM — Ship a no-effect catalog before any executor
+
+- **Date:** 2026-10-27
+- **Status:** Proposed in draft PR #42; not merged, not runtime-qualified.
+- **Decision:** Introduce a typed, versioned recipe metadata catalog and pure, no-effect HITL simulation first. Never run arbitrary LLM commands; do not add shell, network or API execution in this increment. LIVE is unconditionally denied, regardless of fixture approval.
+- **Rationale:** Establish strict action/CI/parameter binding, secret redaction, negative tests and clear audit semantics without weakening existing PC11K5 fencing or the Worker LIVE block.
+- **Caveat:** Fixture `authenticated=True` is not a trusted identity assertion. Idempotency hash is not a persistent single-use receipt; precondition booleans are not real CMDB checks. Do not promote to LIVE without independent identity, durable ledger, sandbox isolation, verified postchecks and security review.
+- **Reference:** [PR #42](https://github.com/alimtalbi-ata/aiops/pull/42), [Remediation Lab contract](REMEDIATION-LAB-CONTRACT.md).
