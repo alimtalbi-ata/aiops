@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -77,6 +78,16 @@ class AcmeImpactTests(unittest.TestCase):
         self.assertIn("SIMULATION LOCALE UNIQUEMENT", page.text)
         self.assertIn("SAN-FABRIC-A", page.text)
         self.assertIn("APP-PAY-01", page.text)
+
+    def test_canonical_portal_mounts_acme_routes(self):
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
+            from portal.main import app as canonical_app
+        paths = {route.path for route in canonical_app.routes}
+        self.assertIn("/api/demo/acme-impact", paths)
+        self.assertIn("/demo/acme-impact", paths)
+        page = TestClient(canonical_app).get("/demo/acme-impact")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("SIMULATION LOCALE UNIQUEMENT", page.text)
 
     def test_invalid_fixture_returns_503_not_healthy_demo(self):
         app = FastAPI()
