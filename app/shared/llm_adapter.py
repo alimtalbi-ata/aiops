@@ -1,4 +1,4 @@
-"""Fail-closed OpenAI-compatible chat adapter for NGX and CI Ollama.
+"""Fail-closed OpenAI-compatible chat adapter for NVIDIA NIM and CI Ollama.
 
 No arbitrary tools, shell execution or production action capability.
 """
@@ -13,7 +13,7 @@ class LLMUnavailable(RuntimeError):
 def configuration(env=None):
     env = os.environ if env is None else env
     provider = env.get("AIOPS_LLM_PROVIDER", "disabled").lower()
-    if provider not in ("disabled", "ngx", "ollama_ci"):
+    if provider not in ("disabled", "nim", "ngx", "ollama_ci"):
         raise LLMUnavailable("unsupported LLM provider")
     if provider == "disabled":
         return {"provider": provider, "qualified": False}
@@ -28,8 +28,12 @@ def configuration(env=None):
     model = env.get("AIOPS_LLM_MODEL", "")
     if not model or len(model) > 128 or any(x in model for x in "\n\r"):
         raise LLMUnavailable("explicit model required")
+    api_key = env.get("AIOPS_LLM_API_KEY", "")
+    if provider in ("nim", "ngx") and not api_key:
+        raise LLMUnavailable("NIM API key required")
     return {"provider": provider, "base_url": url, "model": model,
-            "qualified": False, "provenance": "CI_SIMULATED_LLM" if provider == "ollama_ci" else "NGX_UNQUALIFIED"}
+            "qualified": False, "provenance": "CI_SIMULATED_LLM" if provider == "ollama_ci" else "NIM_UNQUALIFIED",
+            "api_key": api_key if provider in ("nim", "ngx") else ""}
 
 def infer(messages, env=None, transport=None):
     cfg = configuration(env)
@@ -44,8 +48,11 @@ def infer(messages, env=None, transport=None):
             raise LLMUnavailable("invalid message content")
     payload = json.dumps({"model": cfg["model"], "messages": messages, "stream": False,
                           "temperature": 0, "max_tokens": 512}).encode()
+    headers = {"Content-Type": "application/json"}
+    if cfg["api_key"]:
+        headers["Authorization"] = "Bearer " + cfg["api_key"]
     req = Request(cfg["base_url"] + "/v1/chat/completions", data=payload,
-                  headers={"Content-Type": "application/json"}, method="POST")
+                  headers=headers, method="POST")
     try:
         if transport is None:
             with urlopen(req, timeout=25) as response:
