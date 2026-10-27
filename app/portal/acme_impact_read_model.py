@@ -30,7 +30,7 @@ HEADERS = {
     "X-Frame-Options": "DENY",
     "Cross-Origin-Resource-Policy": "same-origin",
     "Content-Security-Policy": (
-        "default-src 'none'; connect-src 'none'; img-src 'none'; style-src 'none'; "
+        "default-src 'none'; connect-src 'none'; img-src 'none'; style-src 'unsafe-inline'; "
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     ),
 }
@@ -192,6 +192,7 @@ def acme_impact_page():
         "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
         "<title>ACME — impact SAN P1 vers Payments P2 (simulation)</title>"
+        "<style>body{margin:0;background:#0b1220;color:#eef5ff;font:15px/1.55 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:clamp(16px,4vw,44px)}h1{font-size:clamp(2rem,4vw,3.2rem)}table{width:100%;border-collapse:collapse;background:#121e31;border-radius:12px;overflow:hidden}th,td{text-align:left;padding:12px;border-bottom:1px solid #2a3b55;overflow-wrap:anywhere}th{color:#65d9ee}td:nth-child(3){color:#a8b8ce;font-size:.85rem}svg{max-width:100%;height:auto}caption{text-align:left;padding:12px;color:#65d9ee;font-weight:700}@media(max-width:600px){main{padding:14px}th,td{padding:7px;font-size:.78rem}}</style>"
         "</head><body><main><h1>ACME — SAN P1 → Payments P2</h1>"
         "<p><strong>SIMULATION LOCALE UNIQUEMENT.</strong> Aucun incident runtime, "
         "ticket GLPI, capture applicative, appel backend ou événement horodaté n'est créé. "
