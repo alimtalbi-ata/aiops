@@ -1,6 +1,6 @@
 import os,json,html,uuid,hmac,re
-from concurrent.futures import ThreadPoolExecutor
-from threading import BoundedSemaphore
+from concurrent.futures import ThreadPoolExecutor, wait
+from threading import BoundedSemaphore, Lock
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -62,16 +62,58 @@ def bootstrap(authorization: str | None = Header(default=None)):
     _require_portal_read_auth(authorization)
     if not _BOOTSTRAP_SLOTS.acquire(blocking=False):
         raise HTTPException(status_code=503, detail="portal_bootstrap_capacity_exceeded")
+    # If a worker exceeds the shared deadline, keep this admission slot leased
+    # until all outstanding workers actually finish. This prevents timed-out
+    # callers from continuously queuing work behind stuck threads.
+    slot_release_deferred = False
     try:
-        # These independent GETs share one latency window. Keep each request
-        # bounded and retry-free; one slow source must not add its timeout after
-        # the others. The shared pool caps worker growth across inbound requests.
         dashboard_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, CORE, '/api/dashboard')
         runs_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, CORE, '/api/runs')
         twin_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, TWIN, '/api/twin/summary')
-        dashboard, dashboard_ok = dashboard_future.result()
-        runs, runs_ok = runs_future.result()
-        twin, twin_ok = twin_future.result()
+        futures = {
+            "dashboard": dashboard_future,
+            "runs": runs_future,
+            "twin": twin_future,
+        }
+        done, pending = wait(tuple(futures.values()), timeout=BOOTSTRAP_TIMEOUT_SECONDS)
+        if pending:
+            slot_release_deferred = True
+            for future in pending:
+                future.cancel()
+            pending_lock = Lock()
+            remaining = len(pending)
+
+            def release_slot_after_pending_read(_future):
+                nonlocal remaining
+                with pending_lock:
+                    remaining -= 1
+                    if remaining == 0:
+                        _BOOTSTRAP_SLOTS.release()
+
+            for future in pending:
+                future.add_done_callback(release_slot_after_pending_read)
+
+        results = {}
+        for name, future in futures.items():
+            if future in pending:
+                results[name] = ({
+                    "status": "UNKNOWN",
+                    "source": "UPSTREAM_TIMEOUT",
+                    "error_code": "READ_DEADLINE_EXCEEDED",
+                }, False)
+                continue
+            try:
+                results[name] = future.result()
+            except Exception:
+                results[name] = ({
+                    "status": "UNKNOWN",
+                    "source": "UPSTREAM_UNAVAILABLE",
+                    "error_code": "READ_FAILED",
+                }, False)
+
+        dashboard, dashboard_ok = results["dashboard"]
+        runs, runs_ok = results["runs"]
+        twin, twin_ok = results["twin"]
         unavailable = [
             name for name, ok in (
                 ("dashboard", dashboard_ok),
@@ -97,7 +139,8 @@ def bootstrap(authorization: str | None = Header(default=None)):
             },
         }
     finally:
-        _BOOTSTRAP_SLOTS.release()
+        if not slot_release_deferred:
+            _BOOTSTRAP_SLOTS.release()
 
 
 @app.post('/api/copilot')
