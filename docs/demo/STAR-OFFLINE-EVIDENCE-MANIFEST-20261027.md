@@ -24,7 +24,7 @@ Le manifeste a `schema_version: 1`, `provenance: OPERATOR_SUPPLIED_SCREENSHOTS_U
 
 ## Signification du résultat
 
-- `BYTES_VERIFIED_UNATTESTED` : les CRC sont cohérents, le flux zlib des pixels se décompresse vers la taille de scanline attendue, les codes de filtre sont valides, les dimensions restent bornées et le SHA-256 correspond au manifeste. Le vérificateur accepte un sous-ensemble explicite de PNG non entrelacés ; il ne reconstitue ni n'affiche les pixels.
+- `BYTES_VERIFIED_UNATTESTED` : les CRC sont cohérents, le flux zlib des pixels se décompresse vers la taille de scanline attendue, les codes de filtre sont valides, les dimensions restent bornées et le SHA-256 correspond au manifeste. Le fichier est lu en un instantané borné, puis ces mêmes octets servent à la fois au contrôle PNG et au hash (pas de seconde lecture divergente). Le vérificateur accepte un sous-ensemble explicite de PNG non entrelacés ; il ne reconstitue ni n'affiche les pixels.
 - `MISSING` ou `REJECTED` : preuve absente ou non vérifiée ; aucune réussite implicite.
 - `complete_byte_set=true` signifie seulement que les neuf fichiers et métadonnées satisfont ce contrôle local.
 
