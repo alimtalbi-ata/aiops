@@ -7,12 +7,45 @@ import os
 from pathlib import Path
 import shutil
 import struct
+import zlib
+from datetime import datetime, timezone
+from urllib.parse import urlsplit
 import subprocess
 import sys
 import tempfile
 
 SERVICES = ("portal", "thruk", "grafana", "n8n", "glpi")
 PNG = bytes.fromhex("89504e470d0a1a0a")
+
+def valid_png(data):
+    """Check PNG chunk bounds, CRC and terminal IEND, without decoding pixels."""
+    if not data.startswith(PNG):
+        return False
+    offset = len(PNG)
+    seen_ihdr = False
+    seen_idat = False
+    while offset + 12 <= len(data):
+        length = int.from_bytes(data[offset:offset + 4], "big")
+        kind = data[offset + 4:offset + 8]
+        end = offset + 12 + length
+        if length > 20 * 1024 * 1024 or end > len(data):
+            return False
+        payload = data[offset + 8:offset + 8 + length]
+        checksum = int.from_bytes(data[offset + 8 + length:end], "big")
+        if zlib.crc32(kind + payload) & 0xffffffff != checksum:
+            return False
+        if not seen_ihdr:
+            if kind != b"IHDR" or length != 13:
+                return False
+            seen_ihdr = True
+        elif kind == b"IHDR":
+            return False
+        if kind == b"IDAT":
+            seen_idat = True
+        if kind == b"IEND":
+            return length == 0 and seen_idat and end == len(data)
+        offset = end
+    return False
 
 def verify(root, manifest):
     if root.is_symlink() or not root.is_dir():
@@ -49,13 +82,24 @@ def verify(root, manifest):
         if not (200 <= width <= 10000 and 200 <= height <= 10000 and width * height <= 40000000):
             raise ValueError("unsafe PNG dimensions")
         data = actual.read_bytes()
+        if not valid_png(data):
+            raise ValueError('invalid PNG chunks or CRC')
         digest = hashlib.sha256(data).hexdigest()
         if entry.get("sha256") != digest:
             raise ValueError("screenshot checksum mismatch")
-        if not isinstance(entry.get("captured_at_utc"), str) or not entry["captured_at_utc"].endswith("Z"):
-            raise ValueError("capture UTC timestamp required")
-        if not isinstance(entry.get("source_url"), str) or not entry["source_url"].startswith(("http://", "https://")):
+        try:
+            stamp = entry["captured_at_utc"]
+            dt = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            if not stamp.endswith("Z") or dt.tzinfo != timezone.utc:
+                raise ValueError()
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise ValueError("valid UTC timestamp required")
+        url = entry.get("source_url")
+        if not isinstance(url, str):
             raise ValueError("source URL required")
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("safe HTTP(S) source URL required")
         result.append({"service": service, "file": rel, "sha256": digest,
                        "source_url": entry["source_url"], "captured_at_utc": entry["captured_at_utc"],
                        "status": "BYTES_HASH_VERIFIED_NOT_RUNTIME_ATTESTED"})
@@ -67,7 +111,7 @@ def render(root, captures, output, seconds):
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("ffmpeg required")
-    if output.exists():
+    if output.exists() or output.is_symlink():
         raise ValueError("refusing to overwrite video")
     with tempfile.TemporaryDirectory(prefix="aiops-evidence-video-") as td:
         clips = []
