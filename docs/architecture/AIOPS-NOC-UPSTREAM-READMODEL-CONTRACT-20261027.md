@@ -24,7 +24,7 @@ Configure the upstream token and HMAC key out-of-band on both sides. Use HTTPS f
 
 ## Qualification
 
-tests/test_portal_noc_runtime_adapter.py uses synthetic JSON and a synthetic key. It checks HMAC/digest integrity, bounded projection, timestamp and schema rejection, identity fail-closed behavior, caller auth, missing configuration, non-cacheable success/error responses and error redaction. The candidate-kit workflow runs these tests and embeds the adapter and tests in the cumulative ZIP.
+Regression invariant: even when a signed provider payload sets `runtime_authenticated=true`, the public projection must retain `runtime_authenticated=false`; this is a portal-side non-attestation guarantee, not a claim that the provider or runtime was independently authenticated. tests/test_portal_noc_runtime_adapter.py uses synthetic JSON and a synthetic key. It checks HMAC/digest integrity, bounded projection, timestamp and schema rejection, identity fail-closed behavior, caller auth, missing configuration, non-cacheable success/error responses and error redaction. The candidate-kit workflow runs these tests and embeds the adapter and tests in the cumulative ZIP.
 
 This is an integration seam, not proof that Checkmk/Thruk is connected. Until a trusted provider is configured and independently qualified, there is no upstream runtime data. Even with a signed payload, the route does not attest exact application screenshots, a real GLPI ticket, a browser capture time, or production readiness. No writes, additional ports, production changes or LIVE remediation are permitted by this route.
 
