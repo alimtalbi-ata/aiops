@@ -95,6 +95,14 @@ class StarEvidenceManifestTests(unittest.TestCase):
         self.assertEqual(result["captures"][0]["status"], "REJECTED")
         self.assertFalse(result["complete_byte_set"])
 
+    def test_duplicate_json_object_keys_are_rejected(self):
+        self.manifest.write_text(
+            '{"schema_version":1,"schema_version":1,"provenance":"OPERATOR_SUPPLIED_SCREENSHOTS_UNATTESTED","captures":[]}',
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
+            self.audit()
+
     def test_non_utc_offset_is_rejected_for_utc_field(self):
         self.entries[0]["captured_at_utc"] = "2026-10-27T11:00:00+01:00"
         self.write_manifest()
