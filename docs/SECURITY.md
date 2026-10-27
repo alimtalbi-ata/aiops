@@ -17,3 +17,10 @@ The secure `config/.env.example` intentionally leaves secret values blank; the i
 - Never print credentials in diagnostics, commit them outside the documented demo template, or copy them into logs/screenshots.
 - The n8n sample workflow may contain a demo token for local demonstration; production imports must replace it with an n8n credential.
 - Secret rotation must account for PostgreSQL, GLPI, Grafana, n8n and internal service consumers; do not rotate a live credential without a coordinated plan.
+
+
+## Optional signed NOC source
+
+The NOC read-model bridge is disabled unless all four settings are explicitly provided: endpoint URL, upstream Bearer token, HMAC-SHA256 key and exact allowed origin(s). The upstream token and HMAC key are separate credentials, provisioned out-of-band; the installer never generates or prints them. The preflight permits the bridge to remain entirely unset, but rejects partial configuration, short credentials and endpoint origins that do not exactly match the allowlist. Keep any configured values in the mode-0600 .env or a supported secret manager; never place them in Git, the candidate ZIP, logs or screenshots.
+
+The portal sends the upstream token only to the allowlisted origin, disables ambient proxy configuration, follows no redirects, and accepts a response only after its exact bytes pass both SHA-256 and HMAC verification. This authenticates the signed payload, not the truth of a ticket, timestamp or application screenshot. Runtime attestation and LIVE remediation remain false.
