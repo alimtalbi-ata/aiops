@@ -1,0 +1,81 @@
+{
+  "schema": "aiops.acme.demo.v1",
+  "provenance": "SIMULATED_TARGET",
+  "organization": "ACME-DEMO",
+  "ci": [
+    {
+      "id": "APP-PAY-01",
+      "kind": "Application",
+      "name": "ACME Payments",
+      "depends_on": [
+        "VM-PAY-01"
+      ]
+    },
+    {
+      "id": "VM-PAY-01",
+      "kind": "VirtualMachine",
+      "name": "pay-api-01",
+      "depends_on": [
+        "HOST-ESX-01",
+        "VOL-PAY-01"
+      ]
+    },
+    {
+      "id": "HOST-ESX-01",
+      "kind": "Host",
+      "name": "esx-acme-01",
+      "depends_on": [
+        "SAN-FABRIC-A",
+        "SAN-FABRIC-B"
+      ]
+    },
+    {
+      "id": "VOL-PAY-01",
+      "kind": "StorageVolume",
+      "name": "payments-prod-vol",
+      "depends_on": [
+        "SAN-FABRIC-A",
+        "SAN-FABRIC-B"
+      ]
+    },
+    {
+      "id": "SAN-FABRIC-A",
+      "kind": "NetworkDevice",
+      "name": "brocade-fc-a01",
+      "depends_on": []
+    },
+    {
+      "id": "SAN-FABRIC-B",
+      "kind": "NetworkDevice",
+      "name": "brocade-fc-b01",
+      "depends_on": []
+    }
+  ],
+  "incidents": [
+    {
+      "id": "ACME-DEMO-SAN-001",
+      "ci": "SAN-FABRIC-A",
+      "severity": "P1",
+      "title": "Dégradation fictive d'un fabric SAN",
+      "status": "simulated",
+      "observation": "Perte illustrative d'un chemin, sans télémétrie réelle",
+      "allowed_actions": [
+        "analyze",
+        "notify_dry_run"
+      ],
+      "live_remediation": false
+    },
+    {
+      "id": "ACME-DEMO-PAY-002",
+      "ci": "APP-PAY-01",
+      "severity": "P2",
+      "title": "Latence fictive du paiement",
+      "status": "simulated",
+      "observation": "Conséquence pédagogique d'une dégradation SAN",
+      "allowed_actions": [
+        "analyze"
+      ],
+      "live_remediation": false
+    }
+  ]
+}
