@@ -634,3 +634,8 @@ app.include_router(platform_registry_router)
 # Local deterministic ACME impact view; no upstream calls or writes.
 from portal.acme_impact_read_model import router as acme_impact_read_model_router
 app.include_router(acme_impact_read_model_router)
+
+# Optional signed NOC read-model bridge on this same ASGI application.
+# It remains unavailable (503) until an allowlisted, HMAC-signing provider is configured.
+from portal.noc_runtime import router as noc_runtime_router
+app.include_router(noc_runtime_router)
