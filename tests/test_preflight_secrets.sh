@@ -5,7 +5,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 # Diagnostics in the preflight must be inert shell text; backticks in echo strings
 # execute command substitutions and can turn an error path into code execution.
-if grep -n '\`' "$ROOT/deploy/check-secrets.sh"; then
+if grep -nF '`' "$ROOT/deploy/check-secrets.sh"; then
   echo 'FAIL|secret_preflight_contains_backtick_command_substitution'
   exit 1
 fi
