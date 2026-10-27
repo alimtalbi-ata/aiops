@@ -17,3 +17,9 @@ Tests unitaires hors ligne `tests/test_acme_itsm_correlation.py` : corrélation 
 ## Suite
 
 Ajouter un vrai adaptateur GLPI en lecture seule avec authentification et identifiant de ticket confirmé côté GLPI, preuve de fraîcheur, correspondance des IDs et isolation des tenants. Ajouter un test d'intégration avec un vrai GLPI éphémère en CI, puis une vue opérateur authentifiée. Aucun ticket réel n'est revendiqué.
+
+## Durcissement 23:37 — lecteur Core existant, anti-SSRF et refus anticipé
+
+La route réutilise désormais `portal.noc_correlation._read_core_run` au lieu du client HTTP générique : origine interne Core strictement allowlistée, port 810, lecture GET uniquement, refus des redirections/proxies, JSON strict borné à 32 KiB. Elle n'initie **aucune requête Core** si le schéma/provenance HMAC NOC, le SHA-256, les flags de sécurité, le Run ID ou l'Incident ID du scénario ne correspondent pas. Un `CORE_URL` non autorisé et toute erreur Core donnent `UNKNOWN` sans promotion du ticket revendiqué.
+
+Les tests supplémentaires couvrent le refus de sept projections NOC incorrectes avant lecture Core, l'origine Core malveillante sans trafic réseau, et une panne Core. Ce sont des tests de contrat avec substitutions en mémoire : ils ne prouvent pas l'intégration réelle Core/GLPI. L'isolation réseau Compose reste inchangée : le portail n'a pas accès directement au réseau `aiops2-integration` hébergeant GLPI. Ne pas élargir ce réseau sans concevoir une frontière d'adaptateur dédiée.
