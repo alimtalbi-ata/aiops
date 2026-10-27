@@ -198,3 +198,12 @@ Historical Oct 16/19 container inventories recovered from Library establish that
 The reference recovery document is `docs/architecture/AIOPS-NOC-STACK-HISTORICAL-RECOVERY-20261024.md`. Reconstruct the NOC with host/service state, acknowledgements, downtime, impact topology, multi-client scope, and a Demo Director synchronizing Checkmk/Thruk with Grafana, n8n and GLPI. The RAG plan `docs/architecture/AIOPS-RAG-OPS-CORPUS-AND-TRACE-CONTRACT-20261024.md` defines operations runbooks, SNMP/MIB/traps, vendor logs/traces, document provenance and evaluation. Synthetic diagnostic examples live in `demo/rag_ops_fixture_catalog.json` (not authoritative vendor specifications).
 
 Prioritize recovery of original Compose, Thruk config, Checkmk state, RAG index, existing runbooks/observability dashboards from /home/aiops **read-only**, then reuse before rewriting. Continue isolated PR tests; never change Debian services or expose secret material without explicit authorization.
+
+
+## Development status and blocker register — 2026-10-27
+
+The current branch now has a consolidated status register: [AIOps development status, remaining work and blockers](release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md). It distinguishes source presence, synthetic/isolated tests, commit-specific CI evidence and live runtime qualification. Read it before choosing the next work package.
+
+Key current blockers recorded: current PR-head CI status is unconfirmed by the available connector; the portal source does not mount the separate NOC integration route; GLPI/CMDB, n8n, Grafana/Prometheus/Alertmanager, Checkmk/Thruk, Temporal API, real DGX Analyst/Critic and RAG are not proven as live portal integrations; the ACME SAN P1 → Payments P2 scenario lacks an authentic E2E evidence set; global portal SSO/authentication is not qualified; deployed Git/image/config provenance and Debian runtime remain unverified. The four staggered CI workflows are in PR #36 and are not on a default branch, so their scheduled cadence is not active yet. No production changes, live remediation or automatic merge are authorized.
+
+Status discipline: never mark a test PASS without a run tied to the exact commit; update this continuity record and the blocker register together after material work. Preserve synthetic/live provenance and report unknowns explicitly.
