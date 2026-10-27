@@ -80,7 +80,7 @@ Ce durcissement ne monte pas le routeur NOC dans `app/portal/main.py`, n'ajoute 
 
 ## Contrat de dégradation du bootstrap — 26 octobre 2026
 
-GET /api/portal/bootstrap effectue séparément les lectures Core `/api/dashboard`, Core `/api/runs` et Twin `/api/twin/summary`. Chaque appel utilise `timeout=3` et `retries=0` ; aucun POST n'est appelé. Un échec de transport ou une réponse JSON qui n'est pas un objet est normalisé en `status=UNKNOWN`, avec un code d'erreur stable, sans URL, corps upstream ou texte d'exception. Les deux autres sections conservent leur valeur si une source échoue.
+GET /api/portal/bootstrap soumet en parallèle les trois lectures indépendantes Core `/api/dashboard`, Core `/api/runs` et Twin `/api/twin/summary` (trois workers au maximum). Chaque appel utilise `timeout=3` et `retries=0` ; leurs délais HTTP ne s'additionnent donc pas comme dans une séquence de trois requêtes. Une source lente ou invalide est normalisée séparément en `UNKNOWN`, sans supprimer les deux autres sections. Aucun POST n'est appelé. Un échec de transport ou une réponse JSON qui n'est pas un objet est normalisé en `status=UNKNOWN`, avec un code d'erreur stable, sans URL, corps upstream ou texte d'exception. Les deux autres sections conservent leur valeur si une source échoue.
 
 La clé additionnelle `_portal` suit `aiops.portal-bootstrap-readmodel.v1`, indique `COMPLETE` ou `DEGRADED`, les noms des sources indisponibles et les barrières `runtime_attested=false` et `live_remediation_authorized=false`. `COMPLETE` signifie uniquement que les trois endpoints ont renvoyé des objets JSON ; ce n'est pas une preuve indépendante d'authenticité, de fraîcheur métier, de SSO ou de connectivité au runtime cible.
 
