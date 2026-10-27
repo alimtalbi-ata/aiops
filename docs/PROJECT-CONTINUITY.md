@@ -66,3 +66,29 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## Continuity update — 2026-10-27: ACME NOC, grounded AI, HITL, RAG and remediation lab
+
+**Scope:** architecture and delivery direction only. This entry does not certify deployed functionality, integration compatibility or passing tests. Preserve all earlier operational snapshots and decisions.
+
+### Product objective
+Deliver an enterprise-grade, repeatable ACME incident journey: simulated business activity and topology → Checkmk/monitoring alerts and Thruk NOC presentation (subject to backend compatibility) → canonical Core incident → evidence-backed AI investigation and internal-only chatbot → authenticated human review → deterministic Policy gate → Temporal/Worker controlled simulated remediation → technical and business postchecks → GLPI ticket and append-only evidence report.
+
+### Architectural reading order and source of truth
+Read this file, `docs/ARCHITECTURE-AND-BOUNDARIES.md`, `docs/DECISION-LOG.md`, `docs/COMPONENT-CATALOG-AND-REUSE.md`, and `docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md` before any substantial change. The architecture describes *target* responsibilities; repository source, tests and actual runtime evidence establish implementation status. Existing README and PC11K5 safety constraints remain binding.
+
+### Priorities and next development queue
+- **P0 functional baseline:** qualify Portal/Core/Temporal/Worker/Policy/GLPI event-to-run path and real synthetic E2E, no fabricated PASS or successful LIVE effects.
+- **P0 investigator and scoped chatbot:** read-only retrieval of authorized ACME incident/CMDB/topology/telemetry/evidence; exact source citations, ACL/RBAC, freshness, missing-evidence abstention and prompt-injection resistance.
+- **P0 human-controlled remediation:** authenticated and attributable approve/reject/request-changes decisions; policy validation of the exact immutable action, target, parameters and expiration; fail closed on changed/stale approvals.
+- **P1 ACME enterprise twin:** realistic sites, services, dependency graph, user journeys, incident seeds, repeatable telemetry and known ground truth isolated from model inference.
+- **P1 NOC:** assess Checkmk and Thruk/Livestatus version compatibility, adapters and licensing before introducing deployment changes; keep one canonical incident authority in Core.
+- **P1 Remediation Lab:** catalog versioned Ansible, shell/Python, CLI and API recipes; run in isolated sandbox by default, record redacted inputs, pre/post checks and effect evidence; never execute LLM-generated arbitrary commands.
+- **P1 Knowledge Hub:** ingest licensed/allowed official vendor docs plus internal architecture, implementation, operations, runbooks and postmortems, with provenance, version, ACL, update/retention rules; consider PostgreSQL full-text + pgvector only after sizing.
+- **P1 Golden Demo:** show NOC alarm → investigation → cited knowledge → HITL decision → simulated action → technical and business verification → Evidence Studio and replay.
+
+### Concrete acceptance evidence required
+At minimum: a deterministic seeded incident with a stable CMDB CI and impacted business service; a documented runbook citation; a refused HITL request that produces zero effects; a valid approval for an exact action and target; a simulated execution record with real sandbox outputs (never fake LIVE success); a negative postcheck that cannot close the incident; an ACL-denied chatbot query; a no-evidence chatbot abstention; and an E2E test that exits nonzero on missing Portal visibility.
+
+### Current status and handover
+Architecture/documentation only in this change; no service deployed, no integration validated, no tests executed. Existing draft PR #37 addresses synthetic E2E run visibility separately and must not be assumed merged. Next engineer should inventory current branches and adapters, implement a narrow vertical slice behind feature flags, run deterministic tests, record actual results, and open a separate draft PR. No direct merge or production mutation.
