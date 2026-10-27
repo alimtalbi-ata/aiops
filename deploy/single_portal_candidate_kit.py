@@ -90,6 +90,7 @@ APPROVED = (
     "tests/test_noc_portal_integration.py",
     "tests/test_portal_demo_public_v21310.py",
     "tests/test_platform_registry_portal_route.py",
+    "tests/test_portal_noc_runtime_adapter.py",
     "tests/test_acme_impact_simulation_metadata.py",
     "tests/test_star_n8n_identity_gate.py",
     "tests/test_star_capture_evidence.py",
