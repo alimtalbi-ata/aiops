@@ -125,6 +125,19 @@ def safe_path(name: str) -> bool:
             and p.suffix.lower() in EXTENSIONS and not p.name.startswith(".env")
             and not any(part.startswith(".env.") for part in p.parts))
 
+def source_paths(root: Path) -> tuple[str, list[str]]:
+    """Pin inventory to a clean Git checkout; never infer provenance from filenames."""
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("unverified Git commit")
+    for args in (["git", "diff", "--quiet"], ["git", "diff", "--cached", "--quiet"]):
+        if subprocess.run(args, cwd=root, check=False).returncode:
+            raise ValueError("tracked source is dirty; refuse ambiguous provenance")
+    raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
+    paths = sorted(p.decode("utf-8") for p in raw.split(b"\0") if p)
+    return commit, paths
+
 def registry_routes(source: bytes) -> list[dict]:
     module = ast.parse(source.decode("utf-8"))
     assignments = [node for node in module.body if isinstance(node, ast.Assign)
