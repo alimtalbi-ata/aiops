@@ -27,6 +27,8 @@ jobs:
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
+      - name: NGX and CI Ollama adapter contract tests
+        run: python -m unittest discover -s tests -p 'test_llm_adapter.py' -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
