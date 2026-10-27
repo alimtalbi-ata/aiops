@@ -1,4 +1,5 @@
 import os,json,html,uuid,hmac,re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -49,9 +50,15 @@ def _require_portal_read_auth(authorization: str | None) -> None:
 def bootstrap(authorization: str | None = Header(default=None)):
     """Authenticated, bounded read of Core/Twin; preserve healthy sections during outage."""
     _require_portal_read_auth(authorization)
-    dashboard, dashboard_ok = _bootstrap_read(CORE, '/api/dashboard')
-    runs, runs_ok = _bootstrap_read(CORE, '/api/runs')
-    twin, twin_ok = _bootstrap_read(TWIN, '/api/twin/summary')
+    # These independent GETs share one latency window. Keep each request bounded
+    # and retry-free; one slow source must not add its timeout after the others.
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="portal-bootstrap-read") as pool:
+        dashboard_future = pool.submit(_bootstrap_read, CORE, '/api/dashboard')
+        runs_future = pool.submit(_bootstrap_read, CORE, '/api/runs')
+        twin_future = pool.submit(_bootstrap_read, TWIN, '/api/twin/summary')
+        dashboard, dashboard_ok = dashboard_future.result()
+        runs, runs_ok = runs_future.result()
+        twin, twin_ok = twin_future.result()
     unavailable = [
         name for name, ok in (
             ("dashboard", dashboard_ok),
