@@ -1,5 +1,6 @@
 import os,json,html,uuid,hmac,re
 from concurrent.futures import ThreadPoolExecutor
+from threading import BoundedSemaphore
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -8,6 +9,15 @@ CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_U
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
 BOOTSTRAP_TIMEOUT_SECONDS = 3
+# A request submits exactly three independent reads. Share a fixed worker pool
+# and reject excess concurrent requests instead of creating an unbounded pool
+# for every inbound HTTP request.
+BOOTSTRAP_MAX_CONCURRENT_REQUESTS = 2
+_BOOTSTRAP_POOL = ThreadPoolExecutor(
+    max_workers=BOOTSTRAP_MAX_CONCURRENT_REQUESTS * 3,
+    thread_name_prefix="portal-bootstrap-read",
+)
+_BOOTSTRAP_SLOTS = BoundedSemaphore(BOOTSTRAP_MAX_CONCURRENT_REQUESTS)
 
 def _bootstrap_read(base, path):
     """Perform one bounded read and normalize failures without leaking upstream details."""
@@ -50,39 +60,44 @@ def _require_portal_read_auth(authorization: str | None) -> None:
 def bootstrap(authorization: str | None = Header(default=None)):
     """Authenticated, bounded read of Core/Twin; preserve healthy sections during outage."""
     _require_portal_read_auth(authorization)
-    # These independent GETs share one latency window. Keep each request bounded
-    # and retry-free; one slow source must not add its timeout after the others.
-    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="portal-bootstrap-read") as pool:
-        dashboard_future = pool.submit(_bootstrap_read, CORE, '/api/dashboard')
-        runs_future = pool.submit(_bootstrap_read, CORE, '/api/runs')
-        twin_future = pool.submit(_bootstrap_read, TWIN, '/api/twin/summary')
+    if not _BOOTSTRAP_SLOTS.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="portal_bootstrap_capacity_exceeded")
+    try:
+        # These independent GETs share one latency window. Keep each request
+        # bounded and retry-free; one slow source must not add its timeout after
+        # the others. The shared pool caps worker growth across inbound requests.
+        dashboard_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, CORE, '/api/dashboard')
+        runs_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, CORE, '/api/runs')
+        twin_future = _BOOTSTRAP_POOL.submit(_bootstrap_read, TWIN, '/api/twin/summary')
         dashboard, dashboard_ok = dashboard_future.result()
         runs, runs_ok = runs_future.result()
         twin, twin_ok = twin_future.result()
-    unavailable = [
-        name for name, ok in (
-            ("dashboard", dashboard_ok),
-            ("runs", runs_ok),
-            ("twin", twin_ok),
-        ) if not ok
-    ]
-    return {
-        "dashboard": dashboard,
-        "runs": runs,
-        "twin": twin,
-        "_portal": {
-            "schema": "aiops.portal-bootstrap-readmodel.v1",
-            "status": "DEGRADED" if unavailable else "COMPLETE",
-            "unavailable_sources": unavailable,
-            "source_mode": "BOUNDED_READ_ONLY_UPSTREAM_HTTP",
-            "timeout_seconds": BOOTSTRAP_TIMEOUT_SECONDS,
-            "retry_count": 0,
-            "upstream_provenance": "UNATTESTED_UPSTREAM_READS",
-            "operator_authentication": "ENFORCED_DEDICATED_BEARER_TOKEN",
-            "runtime_attested": False,
-            "live_remediation_authorized": False,
-        },
-    }
+        unavailable = [
+            name for name, ok in (
+                ("dashboard", dashboard_ok),
+                ("runs", runs_ok),
+                ("twin", twin_ok),
+            ) if not ok
+        ]
+        return {
+            "dashboard": dashboard,
+            "runs": runs,
+            "twin": twin,
+            "_portal": {
+                "schema": "aiops.portal-bootstrap-readmodel.v1",
+                "status": "DEGRADED" if unavailable else "COMPLETE",
+                "unavailable_sources": unavailable,
+                "source_mode": "BOUNDED_READ_ONLY_UPSTREAM_HTTP",
+                "timeout_seconds": BOOTSTRAP_TIMEOUT_SECONDS,
+                "retry_count": 0,
+                "upstream_provenance": "UNATTESTED_UPSTREAM_READS",
+                "operator_authentication": "ENFORCED_DEDICATED_BEARER_TOKEN",
+                "runtime_attested": False,
+                "live_remediation_authorized": False,
+            },
+        }
+    finally:
+        _BOOTSTRAP_SLOTS.release()
 
 
 @app.post('/api/copilot')
