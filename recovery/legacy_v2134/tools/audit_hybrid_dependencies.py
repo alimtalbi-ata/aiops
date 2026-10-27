@@ -7,6 +7,7 @@ never creates, repairs, or overwrites files.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
 import zipfile
@@ -59,7 +60,8 @@ def audit(root: Path, archive: Path | None = None) -> dict:
             try:
                 with zipfile.ZipFile(archive) as zf:
                     names = zf.namelist()
-                    duplicates = sorted({name for name in names if names.count(name) > 1})
+                    name_counts = Counter(names)
+                    duplicates = sorted(name for name, count in name_counts.items() if count > 1)
                     archive_report["status"] = "CRC_PASS" if zf.testzip() is None and not duplicates else "CRC_OR_DUPLICATE_FAILURE"
                     archive_report["duplicate_members"] = duplicates
                     for relative, expected in EXPECTED.items():
