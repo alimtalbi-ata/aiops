@@ -44,3 +44,31 @@ Always list failed, skipped and not-run tests. Expected output is not evidence o
 - [ ] Cumulative ZIP includes required source/scripts/docs/evidence, without secrets or runtime databases.
 - [ ] Commit and PR verified on GitHub.
 - [ ] Next steps, unresolved risks and current runtime snapshot recorded in `docs/PROJECT-CONTINUITY.md`.
+
+## Additional gates — ACME NOC / HITL / RAG / Remediation Lab (2026-10-27)
+
+### Design and implementation
+- Document source version, exact API contract, canonical state owner, target CI, security scope and rollback before enabling a new adapter.
+- Checkmk/Thruk: prove actual edition/version/backend compatibility, REST/Livestatus semantics, read-only monitoring path, permissions, deduplication and downtime/ack mapping; do not assume they are installed.
+- RAG: ingest only licensed/authorized content; record provenance and doc version; validate ACL before retrieval and before citation; test deletion/reindexing, poisoning, stale/conflicting documents and abstention. Never treat vendor docs as evidence of live ACME state.
+- Chatbot: restrict to read-only user-authorized ACME sources; test no-evidence questions, cross-role/tenant access, malicious retrieved instructions, hidden secrets and hallucination refusal.
+- HITL: require authenticated actor, role, distinct approver where necessary, exact recipe/target/parameters/version, expiry, reason and immutable audit. Reject, revision, replay and expiry must not trigger effects.
+- Remediation: versioned allowlisted recipes, typed parameter validation, sandbox by default, explicit mode/credentials boundary, preconditions, dry-run, bounded timeout, idempotency, compensation/rollback, technical and business postchecks.
+- Demo: record seed, expected ground truth (not fed to investigator), CMDB snapshot, event correlation IDs, source citations, approval receipt, execution mode and postcheck results. Missing visibility, invalid citations or failed postchecks must fail tests.
+
+### Mandatory negative test matrix
+| Test | Expected result |
+|---|---|
+| Missing or stale CMDB/document evidence | UNKNOWN / abstain / no unsafe action |
+| Unauthorized NOC chatbot user | No data disclosure, logged denial |
+| Prompt injection inside retrieved document | Ignored as instructions; policy unchanged |
+| HITL reject / expired / changed proposal | No remediation effect |
+| Duplicate approval or Temporal retry | At most one authorized effect; reconcile |
+| Sandbox action attempts LIVE network/credential access | Blocked |
+| Remediation timeout / partial effect | Explicit state, reconciliation, compensation where possible |
+| Failed technical or business postcheck | No false RESOLVED or successful evidence |
+| Thruk backend incompatibility | Report limitation, no invented NOC integration |
+| Golden Demo Portal run ID absent | Nonzero E2E failure |
+
+### Evidence requirements
+Every PR should state: files changed; source inspections performed; exact tests invoked and their exit codes; tests not run; CI URLs if available; security impact; rollback and deployment prerequisites. Documentation-only changes require link/format review but do not imply runtime qualification. Never merge automatically or perform production remediation.

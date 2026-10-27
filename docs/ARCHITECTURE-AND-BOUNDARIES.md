@@ -105,3 +105,65 @@ Presence is not proof of readiness. The reported orchestrator directory had no f
 - Do not publish internal ports by default.
 - Validate bind addresses, authentication, authorization, CORS and secrets handling before exposing an API.
 - Use separate demo credentials/data and guard synthetic mutations by explicit mode and token.
+
+## 8. ACME 2.0 selected target architecture (2026-10-27)
+
+This is a **logical target**, not a deployment inventory or proof of integration.
+
+```text
+ACME ENTERPRISE TWIN (sites, users, ERP/CRM/e-commerce, DB, network, CMDB graph)
+  | synthetic business traffic + seeded fault injection + ground-truth oracle
+  +--> Checkmk [infrastructure checks] --> compatible Livestatus backend? --> Thruk [NOC UI]
+  +--> OpenTelemetry Collector [candidate] --> Prometheus / Alertmanager --> Grafana
+  +--> GLPI [ITSM tickets / CI references]
+             \                 |                    /
+              \--- read-only versioned adapters ----/
+                                |
+                      CORE canonical Incident/Run
+                                |
+             Evidence + provenance + CMDB impact graph
+                                |
+          +---------------------+--------------------+
+          |                                          |
+  ACME Knowledge Hub / RAG                   AI Investigator / Critic
+  vendor + internal docs, ACLs                hypotheses, alternatives,
+  versions, citations                        uncertainty and cited evidence
+          |                                          |
+          +--------------- scoped NOC Copilot -------+
+                      (read-only; no actions)
+                                |
+                   POLICY deterministic safety gate
+                                |
+             HITL approval service (authenticated actor)
+       approve / reject / request changes / expiry / audit
+                                |
+               Temporal workflows + guarded Workers
+                                |
+           versioned Remediation Lab recipe allowlist
+         sandbox SIMULATION/REPLAY first; LIVE blocked
+         until independently authorized and qualified
+                                |
+          technical postchecks + business SLO verification
+                                |
+            GLPI reconciliation + append-only Evidence
+                                |
+               Portal / NOC / Evidence Studio
+```
+
+### Authority and boundaries
+- **Core** is authoritative for canonical incident/run state and lifecycle. Checkmk, Thruk, Alertmanager and GLPI supply external facts/views; none can silently become a second Run writer.
+- **Checkmk** is the candidate infrastructure monitoring engine; **Thruk** is a NOC UI requiring a compatible Nagios/Icinga/Livestatus backend. Direct Checkmk↔Thruk interoperability, editions, versions, permissions and API semantics **must be proven in a compatibility spike**, not assumed.
+- **OpenTelemetry/Prometheus/Grafana** collect and visualize telemetry, not incident truth or remediation authority. The Collector is a candidate, not asserted installed.
+- **CMDB/GLPI** links must carry CI ID, source, sync time and freshness. Twin dependencies and impact propagation are hypotheses until validated against CMDB/business evidence.
+- **Copilot** may retrieve only enterprise-authorized incident, CMDB, telemetry, runbook and evidence data; external documentation is general product guidance, **never proof of ACME's current state**. Every factual claim needs a traceable, permission-checked citation; otherwise abstain. Retrieved text is untrusted and cannot issue commands or override policy.
+- **Knowledge Hub** ingestion separates vendor/official reference docs, internal architecture and deployment docs, operating procedures, approved remediation recipes, incidents and postmortems. Store URI, owner, license/permission, product/version, effective/review dates, ACL, content hash, chunk location, index version, retention and deletion/tombstone state. Search combines metadata filters, keyword/full-text and optionally embeddings. Filter ACLs before retrieval and again before rendering/citing; test stale, contradictory, poisoned and inaccessible documents.
+- **HITL** records authenticated actor, role, separation of duties, target CI, action catalog ID and immutable version/hash, parameters, risk, evidence snapshot, policy version, decision, rationale, timestamps, expiry and single-use/idempotency receipt. Reject, clarification and amended plans return to analysis; a changed plan invalidates prior approval. No LLM self-approval.
+- **Remediation Lab** is a typed, signed/versioned catalog of allowlisted Ansible playbooks, scripts, CLI and API calls, with target scopes, preconditions, secret references (never values), dry-run/sandbox contract, timeouts, compensating action, postchecks and expected effects. Execution is only through Policy + Temporal/Worker. No free-form command execution from chatbot/LLM. Keep demo outputs explicitly synthetic; a postcheck failure leaves the Run unresolved or escalated.
+- **Execution modes:** DEMO/REPLAY/SIMULATION fenced from LIVE; no shared writable production credentials or networks. LIVE remains blocked until adapter, identity, fencing, approval, effects, reconciliation and rollback paths pass independent qualification.
+- **Evidence:** preserve source IDs, timestamps, raw/reference hashes, actor decisions, workflow history, effect receipts, technical and business verification, redaction and retention. Display UNKNOWN where evidence is absent.
+
+### Illustrative bounded vertical slice
+Seeded ERP service outage → Checkmk service CRIT and OTel error-rate increase → Core correlation to GLPI CI → RAG cites internal ERP runbook and matching vendor procedure → AI proposes a cataloged Ansible `systemd_service: state=started` action targeting a synthetic ERP host → NOC operator may reject, ask for clarification or approve → Policy validates immutable recipe/CI/version → Temporal runs a sandbox executor → postchecks verify service health *and* order flow → Evidence Studio renders an auditable replay. Example is a design/test fixture, not a deployed or successfully executed incident.
+
+### Proposed interfaces (version before implementation)
+`MonitoringEvent`, `CMDBSnapshot`, `KnowledgeCitation`, `InvestigationHypothesis`, `RemediationProposal`, `HumanDecision`, `ExecutionReceipt`, `VerificationResult`, `EvidenceManifest`. Include correlation/run IDs, actor/tenant ACL, schema version, source/provenance, timestamps and explicit simulation flag. Enforce ownership, fencing and optimistic concurrency at write boundaries.
