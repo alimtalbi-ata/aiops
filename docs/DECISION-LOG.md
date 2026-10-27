@@ -107,7 +107,7 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 
 ## ADR-0017 — Synthetic RAG references are never runtime evidence (2026-10-27)
 
-- **Status:** Proposed in draft PR #54; not qualified for live RAG.
+- **Status:** Accepted for synthetic-only reference use; merged via PR #54 at `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`, [CI 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546) green. Not qualified for live RAG.
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
