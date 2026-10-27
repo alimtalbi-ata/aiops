@@ -33,6 +33,28 @@ Le validateur contrôle désormais explicitement le type de `severity` avant tou
 ## Historique et garde-fous
 Le validateur et le fixture ACME sont déjà inventoriés dans `docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md` et `docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md`. Aucun ZIP original, secret ou extrait tronqué n'est réimporté ou déclaré complet par ce changement.
 
+## Inventaire d'impact détaillé (évolution de la branche)
+
+Le contrat de validation renvoie maintenant `affected_cis` en plus de
+`affected_ci_ids`. Chaque élément expose `id`, `kind`, `name`,
+`depends_on` et `impact_role`. Les rôles sont calculés à partir des
+identifiants du scénario : `INCIDENT_SOURCE`, `BUSINESS_SERVICE_TARGET`
+ou `TRANSITIVE_DEPENDENCY`. L'ordre des CI et des dépendances est trié pour
+rendre le résultat reproductible.
+
+Le read model JSON transmet cette collection et l'écran HTML présente une
+carte par CI affectée, avec son nom, son type, son rôle et ses dépendances
+déclarées. Cela rend le rayon d'impact plus directement exploitable pour le
+diagnostic et la présentation. Le fabric B reste hors du rayon de l'incident
+sur le fabric A, mais apparaît comme dépendance redondante sur les fiches hôte
+et volume : cette distinction ne prétend pas démontrer l'état réel des chemins.
+
+Les tests ajoutés vérifient les métadonnées du volume, les dépendances de la
+VM, les rôles de chaque CI, l'affichage des cartes et l'exclusion du fabric B
+du rayon calculé. La qualification reste à confirmer par les workflows GitHub ;
+les modifications de code et la présence des tests ne valent pas preuve de
+passage CI.
+
 ## Qualification, déploiement et rollback
 Ce patch ne contacte aucun service et ne change aucune donnée. Il n'a été soumis qu'à la branche de PR. La restauration/annulation consiste à revert les commits du changement puis relancer les workflows ciblés ; aucune sauvegarde de base, intervention Debian, ouverture de port ou opération sur conteneur n'est nécessaire pour ce changement. **E2E runtime et production restent non qualifiés** jusqu'à une intégration authentifiée distincte, à des tests navigateur sur les vrais écrans autorisés, à des preuves indépendantes et à une approbation humaine de bascule.
 
