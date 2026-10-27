@@ -14,7 +14,7 @@ Date: 27 October 2026. This contract adds an optional **read-only API adapter** 
 
 The JSON root must use schema **aiops.noc-runtime-readmodel.v1** and provenance **RUNTIME_READMODEL**. It must carry a stable run_id, incident_id, a canonical UTC observed_at timestamp ending in Z, and one to 100 timeline steps whose states are OK, WARN, CRIT or UNKNOWN. Ticket ID, event timestamp, correlation ID and evidence digest are optional and remain absent when not supplied.
 
-The public projection contains only reviewed fields. It reports **source_payload_authenticated=true** and **source_authentication=HMAC_SHA256_VERIFIED** after signature verification, but keeps **runtime_attested=false**, **runtime_authenticated=false** and **live_remediation_authorized=false**. A ticket is a signed upstream claim, not an independently verified GLPI record. An evidence hash is a reported digest, not proof that the screenshot bytes were fetched and checked. The current portal image does not embed the canonical n8n 02→03 verifier; any payload attempting to include handoff details is rejected rather than accepted on a provider assertion.
+The public projection contains only reviewed fields. Success and error responses both carry `Cache-Control: no-store` and `Pragma: no-cache`, including missing/invalid caller authentication and upstream failures. It reports **source_payload_authenticated=true** and **source_authentication=HMAC_SHA256_VERIFIED** after signature verification, but keeps **runtime_attested=false**, **runtime_authenticated=false** and **live_remediation_authorized=false**. A ticket is a signed upstream claim, not an independently verified GLPI record. An evidence hash is a reported digest, not proof that the screenshot bytes were fetched and checked. The current portal image does not embed the canonical n8n 02→03 verifier; any payload attempting to include handoff details is rejected rather than accepted on a provider assertion.
 
 ## Configuration and deployment
 
@@ -24,7 +24,7 @@ Configure the upstream token and HMAC key out-of-band on both sides. Use HTTPS f
 
 ## Qualification
 
-tests/test_portal_noc_runtime_adapter.py uses synthetic JSON and a synthetic key. It checks HMAC/digest integrity, bounded projection, timestamp and schema rejection, identity fail-closed behavior, caller auth, missing configuration and error redaction. The candidate-kit workflow runs these tests and embeds the adapter and tests in the cumulative ZIP.
+tests/test_portal_noc_runtime_adapter.py uses synthetic JSON and a synthetic key. It checks HMAC/digest integrity, bounded projection, timestamp and schema rejection, identity fail-closed behavior, caller auth, missing configuration, non-cacheable success/error responses and error redaction. The candidate-kit workflow runs these tests and embeds the adapter and tests in the cumulative ZIP.
 
 This is an integration seam, not proof that Checkmk/Thruk is connected. Until a trusted provider is configured and independently qualified, there is no upstream runtime data. Even with a signed payload, the route does not attest exact application screenshots, a real GLPI ticket, a browser capture time, or production readiness. No writes, additional ports, production changes or LIVE remediation are permitted by this route.
 
