@@ -67,6 +67,10 @@ else
     echo 'FAIL|noc_upstream_token_too_short'
     failures=1
   fi
+  if [[ ! "$noc_token" =~ ^[A-Za-z0-9._~+/-]+=*$ ]]; then
+    echo 'FAIL|noc_upstream_token_format_invalid'
+    failures=1
+  fi
   if [[ ${#noc_hmac} -lt 32 ]]; then
     echo 'FAIL|noc_hmac_key_too_short'
     failures=1
