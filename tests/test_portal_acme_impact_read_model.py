@@ -83,6 +83,10 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
             model["impact_path"],
             ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"],
         )
+        self.assertEqual(
+            model["affected_ci_ids"],
+            ["APP-PAY-01", "HOST-ESX-01", "SAN-FABRIC-A", "VM-PAY-01", "VOL-PAY-01"],
+        )
         self.assertIsNone(model["ticket_id"])
         self.assertEqual(model["ticket_id_provenance"], "ABSENT_NO_GLPI_WRITE")
         self.assertIsNone(model["event_timestamp_utc"])
@@ -108,6 +112,9 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertIn('class="p2">Payments P2</strong>', response.text)
         self.assertIn("Éléments de configuration", response.text)
         self.assertIn("Incidents du scénario", response.text)
+        self.assertIn("Périmètre d'impact calculé", response.text)
+        self.assertIn("TRANSITIVE_DEPENDENCY_BLAST_RADIUS", response.text)
+        self.assertIn("VOL-PAY-01", response.text)
         self.assertIn("<svg ", response.text)
         self.assertIn('aria-label="Dépendances SAN vers application Payments, simulation"', response.text)
         self.assertIn("SAN-FABRIC-A", response.text)
