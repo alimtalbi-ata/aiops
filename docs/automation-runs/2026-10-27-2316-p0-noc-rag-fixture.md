@@ -31,3 +31,9 @@
 4. Brancher le retrieval RAG sur des documents authentifiés avec ACL pré/post-recherche ; ne jamais promouvoir les fixtures synthétiques en preuve observée.
 
 **Aucun déploiement Debian, aucune commande LIVE, aucune capture runtime et aucune fusion de PR #54.**
+
+
+## Qualification GitHub Actions après correction
+
+- **[Run 40594230069](https://github.com/alimtalbi-ata/aiops/actions/runs/40594230069)** sur HEAD `3ee20fbee3c87a81f4aadeeffcc88567360a7a40` : **completed / success** confirmé via GitHub, job `policy-and-static`. Tous les steps ont réussi : compilation, policy, registry, Core/Twin read models, NOC signé, NOC→Core correlation, **12 tests RAG DEMO**, impact ACME, secrets, audit statique et `docker compose config`. Cette réussite valide des tests de contrat/statique, **pas** l'intégration réelle Checkmk/Thruk/Grafana ni le déploiement Debian.
+- L'ajout de cette note crée un commit de documentation ultérieur ; vérifier le workflow du SHA final avant toute fusion. Aucune modification fonctionnelle supplémentaire.
