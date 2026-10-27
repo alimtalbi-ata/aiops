@@ -218,14 +218,39 @@ class NocRuntimeRouteTests(unittest.TestCase):
         }
         with patch.dict(os.environ, env), patch.object(
             noc_runtime.urllib.request, "build_opener", return_value=opener
-        ):
+        ) as builder:
             view = noc_runtime.read_signed_noc_snapshot()
+        builder.assert_called_once()
+        proxy_handler, redirect_handler = builder.call_args.args
+        self.assertIsInstance(proxy_handler, noc_runtime.urllib.request.ProxyHandler)
+        self.assertEqual(proxy_handler.proxies, {})
+        self.assertIsInstance(redirect_handler, noc_runtime._NoRedirect)
         self.assertEqual(opener.request.get_method(), "GET")
         self.assertEqual(opener.request.get_header("Authorization"), "Bearer " + TOKEN)
         self.assertEqual(opener.timeout, noc_runtime.TIMEOUT_SECONDS)
         self.assertEqual(view["source_origin"], ORIGIN)
         self.assertEqual(view["source_authentication"], "HMAC_SHA256_VERIFIED")
         self.assertIs(view["runtime_attested"], False)
+
+    def test_declared_response_length_must_match_signed_body(self):
+        body, signed_headers = signed_response()
+        headers = {
+            **signed_headers,
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body) + 1),
+        }
+        opener = FakeOpener(FakeResponse(body, headers, URL))
+        env = {
+            "AIOPS_NOC_READ_MODEL_URL": URL,
+            "AIOPS_NOC_READ_MODEL_TOKEN": TOKEN,
+            "AIOPS_NOC_READ_MODEL_HMAC_KEY": HMAC_KEY,
+            "AIOPS_NOC_ALLOWED_ORIGINS": ORIGIN,
+        }
+        with patch.dict(os.environ, env), patch.object(
+            noc_runtime.urllib.request, "build_opener", return_value=opener
+        ):
+            with self.assertRaisesRegex(ValueError, "body length mismatch"):
+                noc_runtime.read_signed_noc_snapshot()
 
     def test_disallowed_origin_is_rejected_before_network_access(self):
         env = {
