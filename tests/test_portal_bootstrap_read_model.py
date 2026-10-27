@@ -42,6 +42,10 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "portal_read_auth_not_configured")
 
+        response = self.client.get("/api/portal/bootstrap")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "invalid_portal_read_token")
+
         response = self.client.get(
             "/api/portal/bootstrap",
             headers={"Authorization": "Bearer wrong-synthetic-token"},
