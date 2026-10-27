@@ -101,6 +101,11 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "ticket_id_provenance": "ABSENT_NO_GLPI_WRITE",
         "event_timestamp_utc": None,
         "timestamp_provenance": "ABSENT_NO_RUNTIME_EVENT",
+        # Stable scenario metadata is deliberately separate from real GLPI/runtime fields.
+        "simulation_ticket_id": "SIM-GLPI-" + digest[:12].upper(),
+        "simulation_ticket_provenance": "SYNTHETIC_LABEL_NOT_A_GLPI_TICKET",
+        "simulation_checkpoint_timestamp_utc": "2026-10-25T09:00:00Z",
+        "simulation_timestamp_provenance": "FIXED_SCENARIO_CLOCK_NOT_RUNTIME_EVENT",
         "source_artifact": "app/portal/acme-fixtures.json",
         "source_sha256": digest,
         "ci_count": report["ci_count"],
@@ -140,8 +145,10 @@ def acme_impact_page():
         ("Run ID (simulation)", model["run_id"], model["run_id_provenance"]),
         ("Incident source SAN P1", model["incident_id"], model["provenance"]),
         ("Incident d'impact Payments P2", model["impact_incident_id"], model["provenance"]),
-        ("Ticket GLPI", "ABSENT", model["ticket_id_provenance"]),
-        ("Horodatage d'événement", "ABSENT", model["timestamp_provenance"]),
+        ("Ticket GLPI réel", "ABSENT", model["ticket_id_provenance"]),
+        ("Horodatage runtime réel", "ABSENT", model["timestamp_provenance"]),
+        ("Ticket de scénario (fictif)", model["simulation_ticket_id"], model["simulation_ticket_provenance"]),
+        ("Horodatage de checkpoint (fictif)", model["simulation_checkpoint_timestamp_utc"], model["simulation_timestamp_provenance"]),
         ("Chemin d'impact calculé", path, "LOCAL_SYNTHETIC_DEPENDENCY_GRAPH"),
         ("SHA-256 de la source", model["source_sha256"], "EXACT_FIXTURE_BYTES"),
         ("Source", model["source_artifact"], model["evidence_source"]),
@@ -193,8 +200,8 @@ def acme_impact_page():
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
         "<tbody>" + table_rows + "</tbody></table>"
-        "<p>Remédiation LIVE autorisée : NON. Horodatage et ticket non disponibles "
-        "tant qu'aucune intégration runtime authentifiée n'a été qualifiée.</p>"
+        "<p>Remédiation LIVE autorisée : NON. Les identifiants et l'horloge de scénario sont "
+        "déterministes et fictifs ; aucun ticket GLPI ni événement runtime n'existe.</p>"
         "</main></body></html>"
     )
     return HTMLResponse(content=body, headers=HEADERS)
