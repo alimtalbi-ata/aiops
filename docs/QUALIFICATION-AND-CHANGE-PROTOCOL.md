@@ -44,3 +44,7 @@ Always list failed, skipped and not-run tests. Expected output is not evidence o
 - [ ] Cumulative ZIP includes required source/scripts/docs/evidence, without secrets or runtime databases.
 - [ ] Commit and PR verified on GitHub.
 - [ ] Next steps, unresolved risks and current runtime snapshot recorded in `docs/PROJECT-CONTINUITY.md`.
+
+### 2026-10-27 Copilot slice test gates
+
+Required before merge: compile Python, execute `PYTHONPATH=app python -m unittest discover -s tests -p 'test_copilot_grounding.py' -v` and `test_copilot_knowledge.py`, verify Portal auth dependency PR #16 and all GitHub CI statuses. Negative tests must cover no gateway credentials, unsupported/prompt-injected questions, missing/invalid Core fields, wrong-run or non-synthetic evidence, LIVE run evidence, missing ACL/tenant, stale docs, link-only vendor body rejection, upstream failure and absence of invented confidence. Do not claim full RAG, per-user authorization, live integration or E2E from these unit tests. Rollback is to revert the stacked PR; no runtime mutation or secret changes in this slice.
