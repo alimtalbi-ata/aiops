@@ -29,6 +29,8 @@ Préparer un JSON de la forme :
 
 Le tableau doit comporter **exactement cinq entrées**, avec les services `portal`, `thruk`, `grafana`, `n8n`, `glpi`, chacun avec son URL et origine **réellement revues**. L'exemple est volontairement incomplet et non exécutable comme capture. Les URL et sélecteurs ne doivent pas être devinés. `proof_text` doit être égal au run_id, incident_id ou ticket_id déclaré; le DOM doit l'afficher. L'URL de capture n'accepte pas de query/fragment, notamment pour éviter de journaliser un token; les vues qui nécessitent un query sécurisé restent BLOCKED jusqu'à adaptation revue.
 
+Les dossiers de sortie et de sessions doivent être en mode `0700`, et les fichiers de session en `0600`; le script refuse les permissions plus larges et écrit les PNG/manifeste en `0600`.
+
 Créer cinq fichiers de session Playwright (générés lors d'une connexion légitime) dans un répertoire privé distinct : `portal.json`, `thruk.json`, `grafana.json`, `n8n.json`, `glpi.json`. Ils contiennent potentiellement des cookies et secrets : **ne jamais les committer ni les publier comme artefacts CI**. Un stockage d'état présent n'est pas une attestation de session active.
 
 ## Utilisation
