@@ -99,3 +99,5 @@ Le lancement opt-in de la vidéo utilise une liste d'autorisation d'environnemen
 ## Lecture du manifeste de vidéo
 
 Le processus de statut ouvre le manifeste de sortie avec `O_NOFOLLOW`, exige un fichier régulier non vide, limite sa taille à 64 Kio et vérifie que la taille ne change pas pendant la lecture. Une plate-forme qui ne fournit pas `O_NOFOLLOW` échoue en mode fermé. Un test couvre le manifeste symbolique pointant vers un fichier externe. Ce contrôle concerne la lecture du manifeste et ne constitue pas une qualification complète contre toutes les courses de fichiers du répertoire de sortie.
+
+Le parseur du manifeste rejette également les clés JSON dupliquées. Les champs ambigus ne peuvent ainsi pas être interprétés différemment par plusieurs consommateurs JSON ; le test vérifie le refus d'un champ `scenario` dupliqué.
