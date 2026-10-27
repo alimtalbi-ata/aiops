@@ -5,7 +5,8 @@ Core GET returns a canonical Run record but does not attest the NOC or GLPI sour
 """
 from __future__ import annotations
 
-import os
+from portal import noc_runtime
+from portal.noc_correlation import _read_core_run
 
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
@@ -17,6 +18,39 @@ from portal.noc_runtime import (
 
 router = APIRouter()
 SCHEMA = "aiops.acme.itsm-correlation.v1"
+
+
+
+def _trusted_noc_identity(scenario: object, noc: object) -> tuple[str, str] | None:
+    """Validate signed projection *before* any Core read, without trusting ticket claims."""
+    if (
+        not isinstance(scenario, dict)
+        or not isinstance(scenario.get("incident_id"), str)
+        or not isinstance(noc, dict)
+        or noc.get("schema") != noc_runtime.OUTPUT_SCHEMA
+        or noc.get("provenance") != "AUTHENTICATED_SOURCE_PAYLOAD_NOT_RUNTIME_ATTESTATION"
+        or noc.get("source_payload_authenticated") is not True
+        or noc.get("source_authentication") != "HMAC_SHA256_VERIFIED"
+        or noc.get("runtime_attested") is not False
+        or noc.get("production_qualified") is not False
+        or noc.get("live_remediation_authorized") is not False
+    ):
+        return None
+    digest = noc.get("source_payload_sha256")
+    run_id = noc.get("run_id")
+    incident_id = noc.get("incident_id")
+    expected = "INC-" + scenario["incident_id"]
+    if (
+        not isinstance(digest, str)
+        or noc_runtime.SHA256.fullmatch(digest) is None
+        or not isinstance(run_id, str)
+        or IDENTIFIER.fullmatch(run_id) is None
+        or not isinstance(incident_id, str)
+        or IDENTIFIER.fullmatch(incident_id) is None
+        or incident_id != expected
+    ):
+        return None
+    return run_id, expected
 
 
 def project_correlation(scenario: dict, noc: object = None, core: object = None) -> dict:
@@ -40,18 +74,10 @@ def project_correlation(scenario: dict, noc: object = None, core: object = None)
         "production_qualified": False,
         "live_remediation_authorized": False,
     }
-    if (
-        not isinstance(noc, dict)
-        or noc.get("source_payload_authenticated") is not True
-        or noc.get("source_authentication") != "HMAC_SHA256_VERIFIED"
-        or noc.get("runtime_attested") is not False
-        or noc.get("production_qualified") is not False
-        or noc.get("live_remediation_authorized") is not False
-    ):
+    identity = _trusted_noc_identity(scenario, noc)
+    if identity is None:
         return result
-    digest = noc.get("source_payload_sha256")
-    if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
-        return result
+    digest = noc["source_payload_sha256"]
     result["noc_payload_authenticated"] = True
     result["noc_payload_sha256"] = digest
     run_id = noc.get("run_id")
@@ -104,15 +130,13 @@ def acme_correlation(authorization: str | None = Header(default=None)):
     except (OSError, ValueError, KeyError, TypeError):
         noc = None
     core = None
-    if isinstance(noc, dict) and noc.get("source_payload_authenticated") is True:
-        run_id = noc.get("run_id")
-        if isinstance(run_id, str) and IDENTIFIER.fullmatch(run_id):
-            try:
-                # Import only after auth and signed source checks. Core is an
-                # internal configured service, never a URL supplied by the caller.
-                from shared.http import get_json
-                core = get_json(os.getenv("CORE_URL", "http://aiops2-core:810"),
-                                "/api/runs/" + run_id, timeout=3)
-            except Exception:  # Upstream failure is UNKNOWN, never a successful correlation.
-                core = None
+    identity = _trusted_noc_identity(scenario, noc)
+    if identity is not None:
+        try:
+            # Reuse the already reviewed Core reader: fixed internal origin,
+            # no redirects/proxies, bounded strict JSON, GET only.
+            core = {"run": _read_core_run(identity[0])}
+        except Exception:
+            # Unavailable or unapproved Core is UNKNOWN; never silently fall back.
+            core = None
     return JSONResponse(project_correlation(scenario, noc, core), headers=HEADERS)
