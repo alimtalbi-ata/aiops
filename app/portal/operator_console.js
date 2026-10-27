@@ -2,6 +2,7 @@
 (() => {
   // Bearer token lives in this closure only: never URL, cookie or web storage.
   let bearer = null;
+  let generation = 0;
   const names = ["incidents", "runs", "evidence"];
   const fields = {
     incidents: ["incident_id", "severity", "state", "title", "synthetic"],
@@ -17,6 +18,7 @@
     $("role-state").textContent = "Rôle : UNKNOWN";
   }
   function clear() {
+    generation += 1;
     bearer = null;
     $("token").value = "";
     reset();
@@ -49,6 +51,7 @@
     }
   }
   async function refresh() {
+    const requestedGeneration = generation;
     reset();
     if (!bearer) return;
     $("auth-state").textContent = "Lecture en cours…";
@@ -60,6 +63,7 @@
         cache: "no-store",
         redirect: "error"
       });
+      if (requestedGeneration !== generation) return;
       if (!response.ok) {
         if (response.status === 401 || response.status === 403 || response.status === 503) {
           clear();
@@ -67,6 +71,7 @@
         throw new Error("API unavailable");
       }
       const snapshot = await response.json();
+      if (requestedGeneration !== generation) return;
       if (!snapshot || snapshot.schema !== "aiops.portal.operator-read.v1"
           || snapshot.runtime_authenticated !== false
           || snapshot.live_remediation_authorized !== false
@@ -79,6 +84,7 @@
       $("role-state").textContent = "Rôle : " + snapshot.role;
       $("auth-state").textContent = "API lue — aucune attestation LIVE";
     } catch (_) {
+      if (requestedGeneration !== generation) return;
       reset();
       $("auth-state").textContent = "UNKNOWN — accès ou réponse API indisponible";
     }
@@ -92,6 +98,7 @@
       $("auth-state").textContent = "UNKNOWN — jeton invalide";
       return;
     }
+    generation += 1;
     bearer = value;
     void refresh();
   });
