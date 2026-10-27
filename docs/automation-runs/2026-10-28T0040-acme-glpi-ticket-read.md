@@ -19,7 +19,7 @@
 ## Tests and evidence
 
 - GitHub Actions **executed** on SHA `e21e35994bd172c7e92d3a513a1d75e39d56b564`: https://github.com/alimtalbi-ata/aiops/actions/runs/40603991468 — **SUCCESS**; job `policy-and-static` including GLPI contract step, compileall, ACME impact, NOC, policy, static audit, Compose config all green.
-- The two later mode-fence tests and latest HEAD changes were **NOT YET VERIFIED by a completed CI run** at journal creation. No local test execution (GitHub connector files not locally mounted). Do not attribute earlier PASS to the latest HEAD.
+- GitHub Actions **executed** on mode-fence test SHA `21034c074fb1da07624253dc107f2dc36b73898c`: https://github.com/alimtalbi-ata/aiops/actions/runs/40604035673 — **SUCCESS**, including the GLPI test step. Docs-only SHA `5a40ca9fea9dd6b5a254f44ddd15547dc69c7839` also passed: https://github.com/alimtalbi-ata/aiops/actions/runs/40604050727. Later journal/continuity HEAD was not yet confirmed complete at the time of this update. No local test execution (GitHub connector files not locally mounted).
 - GLPI+MariaDB real ephemeral service: **NOT_TESTED**. NIM/Ollama: not exercised by this lot. Actual NOC/Core/GLPI E2E, Debian, LIVE, ticket provenance and screenshots: **NOT_TESTED**.
 
 ## Risks / blockers / next micro-lot
