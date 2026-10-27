@@ -22,9 +22,10 @@ class EvidenceVideoTests(unittest.TestCase):
             def chunk(kind, payload):
                 return (struct.pack(">I", len(payload)) + kind + payload +
                         struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff))
-            ihdr = struct.pack(">II", 1920, 1080) + b"\\x08\\x02\\x00\\x00\\x00"
+            ihdr = struct.pack(">II", 320, 200) + bytes((8, 2, 0, 0, 0))
+            scanlines = (bytes((0,)) + bytes(320 * 3)) * 200
             data = (module.PNG + chunk(b"IHDR", ihdr) +
-                    chunk(b"IDAT", b"synthetic-fixture") + chunk(b"IEND", b""))
+                    chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
             (self.root / (service + ".png")).write_bytes(data)
             self.entries.append({"service": service, "file": service + ".png",
                                  "sha256": hashlib.sha256(data).hexdigest(),
