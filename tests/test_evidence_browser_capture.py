@@ -108,6 +108,18 @@ class BrowserCaptureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.validate_plan(p)
 
+    def test_world_readable_capture_dir_denied(self):
+        p = plan()
+        with tempfile.TemporaryDirectory() as td:
+            os.chmod(td, 0o755)
+            try:
+                with patch.dict(os.environ, {"CI": "false", "AIOPS_STAR_NO_RUNTIME": "0",
+                                             "AIOPS_CAPTURE_OPERATOR_APPROVED": "YES"}):
+                    with self.assertRaisesRegex(ValueError, "permissions"):
+                        module.capture(p, td, td, approved=True)
+            finally:
+                os.chmod(td, 0o700)
+
     def test_missing_session_state_fails_before_browser(self):
         p = plan()
         with tempfile.TemporaryDirectory() as td:
