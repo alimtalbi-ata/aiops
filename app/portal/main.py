@@ -24,7 +24,7 @@ if not OPERATOR_TOKEN:
 
 class CopilotQuestion(BaseModel):
     question:str=Field(min_length=1,max_length=512)
-    run_id:str|None=Field(default=None,pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]{2,99}
+    run_id:str|None=Field(default=None,pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]{2,99}$')
 
 def require_operator(authorization:str|None=Header(default=None)):
     scheme,sep,credential=(authorization or '').partition(' ')
