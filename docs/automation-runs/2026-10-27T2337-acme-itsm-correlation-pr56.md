@@ -9,3 +9,7 @@
 - **Sécurité** : mode DEMO seul; validation HMAC-projetée avant lecture Core; URL Core strictement interne et GET borné; refus proxy/redirection; `UNKNOWN` pour toute absence de preuve; `ticket_id=null`, aucune autorisation LIVE, aucune mutation backend. Le jeton opérateur n'est pas un RBAC multi-tenant.
 - **Risques/blocages** : API GLPI 11 et credentials non qualifiés; GLPI isolé sur réseau Compose `aiops2-integration` non joignable directement par le portail; aucune capture LIVE, aucune action Debian; PR #53 reste ouverte mais obsolète/conflictuelle, la fusion n'est pas demandée dans ce lot.
 - **Prochain micro-lot** : contrôler le run GitHub Actions de la PR #56 et corriger les erreurs; qualifier un adaptateur GLPI en lecture seule sur service éphémère CI réel, vérifier identité/entité/fraîcheur des tickets avant de remplir `ticket_id`; ajouter un drilldown authentifié sans élargir la surface réseau du portail.
+
+## CI confirmé après rédaction initiale
+
+GitHub Actions [40596642057](https://github.com/alimtalbi-ata/aiops/actions/runs/40596642057) a terminé **completed/success** sur le SHA de code `dc9b81680ed223780d2a23f516352b92bab63925`. Le job `policy-and-static` est réussi; l'API des jobs confirme notamment `ACME NOC Core ITSM correlation contract tests = success`, tests NOC/ACME existants, audit statique, secrets et `docker compose config = success`. Cela qualifie des tests unitaires/contractuels et de configuration, **pas** une intégration réelle NOC/Core/GLPI ni la dernière modification documentaire de cette branche.
