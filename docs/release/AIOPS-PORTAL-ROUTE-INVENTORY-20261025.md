@@ -15,7 +15,7 @@ Les routes ci-dessous ont été relevées dans app/portal/main.py et les quatre 
 | Méthode et chemin | Comportement présent dans le code | Connexion constatée au niveau source | Limite de qualification |
 |---|---|---|---|
 | GET /health | État local du handler portail | Aucune | Ne prouve pas la connectivité aux backends ni le port hôte. |
-| GET /api/portal/bootstrap | Agrège dashboard, runs et résumé Twin, avec dégradation partielle explicite | Trois lectures HTTP bornées à 3 s chacune, sans retry ; chaque source est lue indépendamment | En cas d'échec ou de réponse JSON non-objet, la section concernée devient UNKNOWN sans détails d'exception/URL ; `_portal.status` vaut COMPLETE ou DEGRADED. Cela ne prouve ni SSO ni authentification runtime. |
+| GET /api/portal/bootstrap | Agrège dashboard, runs et résumé Twin, avec dégradation partielle explicite | Trois lectures HTTP soumises en parallèle, deadline globale de 3 s, sans retry ; pool partagé de six workers et deux requêtes admises simultanément | Une source en retard devient `UNKNOWN` (`UPSTREAM_TIMEOUT` / `READ_DEADLINE_EXCEEDED`) ; le créneau de capacité reste réservé jusqu'à la fin des workers retardataires pour empêcher l'accumulation de tâches. Les autres sources restent disponibles. `_portal.status` vaut COMPLETE ou DEGRADED. Cela ne prouve ni SSO global ni authentification runtime des upstreams. |
 | GET / | Cockpit avec incidents/runs et résumé Twin | Lecture Core et Twin | Les erreurs sont rendues INCONNU ; runtime cible non vérifié. |
 | GET /runs | Liste des exécutions Core | Lecture Core | Ne monte pas l'API Temporal elle-même. |
 | GET /timeline | Incidents, détails de run, ledger et preuves référencées | Lecture Core | La page Evidence globale reste décrite comme adaptateur manquant. |
