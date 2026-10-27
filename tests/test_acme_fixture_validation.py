@@ -49,6 +49,16 @@ class AcmeFixtureValidationTests(unittest.TestCase):
             ["APP-PAY-01", "HOST-ESX-01", "SAN-FABRIC-A", "VM-PAY-01", "VOL-PAY-01"],
         )
         self.assertNotIn("SAN-FABRIC-B", report["affected_ci_ids"])
+        self.assertEqual(
+            next(ci for ci in report["affected_cis"] if ci["id"] == "VOL-PAY-01"),
+            {
+                "id": "VOL-PAY-01",
+                "kind": "StorageVolume",
+                "name": "payments-prod-vol",
+                "depends_on": ["SAN-FABRIC-A", "SAN-FABRIC-B"],
+                "impact_role": "TRANSITIVE_DEPENDENCY",
+            },
+        )
         self.assertEqual(report["provenance"], "SIMULATED_TARGET")
         self.assertFalse(report["live_remediation_authorized"])
 
