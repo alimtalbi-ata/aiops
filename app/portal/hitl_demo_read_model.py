@@ -104,6 +104,20 @@ def validate_story(data):
             raise ValueError("missing HITL binding")
         if i and any(step[k] != steps[0][k] for k in binding_keys):
             raise ValueError("HITL binding changed during story")
+        # Recompute the canonical proposal binding instead of trusting a
+        # self-consistent but forged story_sha256 and binding_hash.
+        binding = {k: step[k] for k in (
+            "incident_id", "run_id", "recipe_id", "target_id", "params_hash", "mode"
+        )}
+        params_digest = step["params_hash"]
+        if (len(params_digest) != 64 or any(ch not in "0123456789abcdef" for ch in params_digest)):
+            raise ValueError("invalid HITL parameter digest")
+        canonical_binding = json.dumps(
+            binding, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+        expected_binding = hashlib.sha256(canonical_binding).hexdigest()
+        if step["binding_hash"] != expected_binding:
+            raise ValueError("HITL binding digest mismatch")
         if step["receipt_id"] is not None and i < 2:
             raise ValueError("premature receipt")
         if i == 2 and (not isinstance(step["receipt_id"], str) or not step["receipt_id"]):
