@@ -116,6 +116,30 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "affected_cis": report["affected_cis"],
         "provenance": "SIMULATED_TARGET",
         "evidence_source": "LOCAL_SYNTHETIC_FIXTURE",
+        "checkpoint_evidence": [
+            {
+                "cue": cue,
+                "service": service,
+                "view": view,
+                "required_state": required_state,
+                "status": "MISSING",
+                "screenshot_sha256": None,
+                "event_timestamp_utc": None,
+                "runtime_authenticated": False,
+                "source": "CHECKPOINT_CONTRACT_ONLY_NO_CAPTURE",
+            }
+            for cue, service, view, required_state in (
+                ("detect", "grafana", "alert_dashboard", "firing"),
+                ("correlate", "n8n", "ingress_execution", "completed"),
+                ("enrich", "n8n", "context_execution", "completed"),
+                ("analyze", "n8n", "analyst_critic_execution", "completed"),
+                ("ticket", "glpi", "incident_ticket", "open"),
+                ("approve", "glpi", "hitl_decision", "approved_simulation_only"),
+                ("simulate", "n8n", "simulation_execution", "completed"),
+                ("verify", "grafana", "recovery_dashboard", "recovered"),
+                ("close", "glpi", "incident_followups", "closed"),
+            )
+        ],
         "decision_preview": {
             "provider": "DETERMINISTIC_RULES_NOT_LLM",
             "analyst": {
@@ -197,6 +221,14 @@ def acme_impact_page():
         + '</small></article>'
         for ci in model["affected_cis"]
     )
+    checkpoint_cards = "".join(
+        '<article class="ci-card"><div class="ci-top"><strong>'
+        + html.escape(str(item["cue"]).upper(), quote=True) + '</strong><span>MISSING</span></div>'
+        + '<h3>' + html.escape(str(item["service"]).upper() + " · " + str(item["view"]), quote=True) + '</h3>'
+        + '<p>État attendu : ' + html.escape(str(item["required_state"]), quote=True) + '</p>'
+        + '<small>Capture : ABSENTE · SHA-256 : ABSENT · Horodatage runtime : ABSENT · Authentification : NON ATTESTÉE</small></article>'
+        for item in model["checkpoint_evidence"]
+    )
     decision = model["decision_preview"]
     decision_steps = "".join(
         "<li>" + html.escape(str(step), quote=True) + "</li>"
@@ -266,6 +298,9 @@ def acme_impact_page():
         + '<p><strong>Policy :</strong> ' + html.escape(decision["policy"]["decision"], quote=True) + ' — ' + html.escape(decision["policy"]["reason"], quote=True) + '</p>'
         + '<h3>Plan de remédiation proposé (sans exécution)</h3><ol>' + decision_steps + '</ol>'
         + '<p><strong>Exécution LIVE :</strong> NON · <strong>Écritures backend :</strong> NON</p></section>'
+        + '<section aria-label="Neuf checkpoints applicatifs attendus"><h2>STAR — checkpoints applicatifs et preuves manquantes</h2>'
+        + '<p>Les noms de vues et états sont le contrat attendu, pas des captures observées. Les URL runtime exactes, les identifiants applicatifs et les SHA-256 de captures ne sont pas disponibles dans ce scénario.</p>'
+        + '<div class="ci-grid">' + checkpoint_cards + '</div></section>'
         + "<table><caption>Identifiants, provenance et trous de preuve</caption>"
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
