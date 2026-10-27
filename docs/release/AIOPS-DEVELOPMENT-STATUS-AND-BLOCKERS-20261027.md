@@ -116,6 +116,16 @@ Les captures d'écran sont classées comme :
 - Les cycles CI doivent rester isolés, avec permissions minimales et artefacts non sensibles.
 - Les horaires GitHub sont en UTC et soumis aux délais de file d'attente.
 
+## 9. Registre des codes candidats réutilisables
+
+Le catalogue dédié [AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md](AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md) référence :
+- les candidats historiques v1/V145 (acquisition/fusion/matrice/enrichissement de preuves, décision intelligence, functional bridge/read model/cockpit, schémas et workflows) ;
+- les lignes historiques V8 et les références de commits/PR à reconstituer ;
+- les dépôts open source amont candidats (OpenTelemetry, Temporal/SDK, LangGraph, Haystack, GLPI/Agent, n8n, Prometheus, Alertmanager, Grafana, Qdrant, AWX) ;
+- la priorité, la raison, les garde-fous, les contrôles de licence et les critères de sortie.
+
+**État : registre de candidats seulement.** Aucun code tiers n'est déclaré téléchargé, intégré ou qualifié sur la seule base de cette liste. Chaque candidat doit être relié à un tag/commit exact, à sa licence, à des tests exécutés et à une décision ADR avant intégration.
+
 ## 8. Mise à jour obligatoire
 
 À chaque cycle significatif, mettre à jour ce document et `docs/PROJECT-CONTINUITY.md` avec :
