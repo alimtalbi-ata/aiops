@@ -12,6 +12,6 @@ Depuis le portail unique, panneau NOC : saisir le jeton de lecture `AIOPS_PORTAL
 
 ## Tests et qualification
 
-`python -m unittest discover -s tests -p test_noc_demo_rag.py -v` — 11 tests de contrat/erreurs, dont auth refusée, source absente, données fausses ou mal formées, identité d'asset, citations exactes et rejet de prétention LIVE. Réutilisation de `.github/workflows/quality.yml` pour CI. **Ce ne sont pas des tests d'intégration Checkmk/Thruk, Grafana, Core ou NIM** ; ces composants restent `NOT_TESTED` dans ce lot. Aucune capture Debian, preuve LIVE ou qualification de qualité 192B n'est revendiquée.
+`python -m unittest discover -s tests -p test_noc_demo_rag.py -v` — 12 tests de contrat/erreurs et montage portail, dont auth refusée, source absente, données fausses ou mal formées, identité d'asset, citations exactes et rejet de prétention LIVE. Réutilisation de `.github/workflows/quality.yml` pour CI. **Ce ne sont pas des tests d'intégration Checkmk/Thruk, Grafana, Core ou NIM** ; ces composants restent `NOT_TESTED` dans ce lot. Aucune capture Debian, preuve LIVE ou qualification de qualité 192B n'est revendiquée.
 
 Prochain micro-lot : fournisseur Checkmk/Thruk réellement exécuté dans des conteneurs CI isolés ; projection signée avec identités d'asset, tenant et Incident/Run ; jointure Core tenant-scoped ; observabilité Grafana réelle et retrieval ACL filtré. NIM/Ollama seulement après contrat et grounding.
