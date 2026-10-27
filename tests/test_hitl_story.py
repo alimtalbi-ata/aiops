@@ -156,6 +156,44 @@ class HITLStoryTests(unittest.TestCase):
             with self.assertRaisesRegex(HITLRejected, "stored proposal binding mismatch"):
                 read_status(path, proposal_id=p["proposal_id"], now=now)
 
+    def test_readonly_rejects_forged_audit_actor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "lab.sqlite")
+            initialize(path)
+            now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+            binding = dict(incident_id="INC-1", run_id="RUN-1",
+                           recipe_id="acme.demo.restart-service.v1",
+                           target_id="VM-1", params={"service": "api"},
+                           mode="DEMO")
+            p = propose(path, proposer_id="alice", now=now, **binding)
+            approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                    approver_role="approver", now=now)
+            with sqlite3.connect(path) as db:
+                db.execute("DROP TRIGGER audit_immutable_update")
+                db.execute("UPDATE audit SET actor_id='mallory' WHERE proposal_id=? AND action='APPROVED_SANDBOX_ONLY'",
+                           (p["proposal_id"],))
+            with self.assertRaisesRegex(HITLRejected, "audit actors"):
+                read_status(path, proposal_id=p["proposal_id"], now=now)
+
+    def test_readonly_rejects_forged_approver_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "lab.sqlite")
+            initialize(path)
+            now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+            binding = dict(incident_id="INC-1", run_id="RUN-1",
+                           recipe_id="acme.demo.restart-service.v1",
+                           target_id="VM-1", params={"service": "api"},
+                           mode="DEMO")
+            p = propose(path, proposer_id="alice", now=now, **binding)
+            approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                    approver_role="approver", now=now)
+            with sqlite3.connect(path) as db:
+                db.execute("DROP TRIGGER approvals_immutable_update")
+                db.execute("UPDATE approvals SET approver_id='alice' WHERE proposal_id=?",
+                           (p["proposal_id"],))
+            with self.assertRaisesRegex(HITLRejected, "approval timestamp"):
+                read_status(path, proposal_id=p["proposal_id"], now=now)
+
     def test_readonly_audit_inconsistency_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "lab.sqlite")
