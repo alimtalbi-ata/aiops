@@ -138,6 +138,24 @@ class HITLStoryTests(unittest.TestCase):
             with self.assertRaises(HITLRejected):
                 read_status(path, proposal_id="bad id")
 
+    def test_readonly_corrupted_binding_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "lab.sqlite")
+            initialize(path)
+            now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+            p = propose(path, incident_id="INC-1", run_id="RUN-1",
+                        recipe_id="acme.demo.restart-service.v1",
+                        target_id="VM-1", params={"service": "api"},
+                        proposer_id="alice", now=now)
+            # Simulate a corrupted/untrusted local SQLite file, not a supported
+            # mutation path. Triggers protect normal writes, not hostile file owners.
+            with sqlite3.connect(path) as db:
+                db.execute("DROP TRIGGER proposals_immutable_update")
+                db.execute("UPDATE proposals SET target_id=? WHERE proposal_id=?",
+                           ("VM-FORGED", p["proposal_id"]))
+            with self.assertRaisesRegex(HITLRejected, "stored proposal binding mismatch"):
+                read_status(path, proposal_id=p["proposal_id"], now=now)
+
     def test_readonly_audit_inconsistency_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "lab.sqlite")
