@@ -258,15 +258,15 @@ def acme_impact_page():
         '<section aria-label="Inventaire des CI affectées"><h2>Inventaire d’impact détaillé</h2>'
         '<p>Chaque carte est issue du graphe de dépendances du scénario ; les dépendances affichées sont déclaratives et synthétiques.</p>'
         '<div class="ci-grid">' + ci_cards + '</div></section>'
-        '<section aria-label="Décision et remédiation en simulation"><h2>Analyst · Critic · Policy — prévisualisation</h2>'
-        '<p><strong>Fournisseur :</strong> ' + html.escape(decision["provider"], quote=True) + '</p>'
-        '<p><strong>Analyst :</strong> ' + html.escape(decision["analyst"]["status"], quote=True) + ' — ' + html.escape(decision["analyst"]["summary"], quote=True) + '</p>'
-        '<ul>' + decision_checks + '</ul>'
-        '<p><strong>Critic :</strong> ' + html.escape(decision["critic"]["decision"], quote=True) + ' — ' + html.escape(decision["critic"]["reason"], quote=True) + '</p>'
-        '<p><strong>Policy :</strong> ' + html.escape(decision["policy"]["decision"], quote=True) + ' — ' + html.escape(decision["policy"]["reason"], quote=True) + '</p>'
-        '<h3>Plan de remédiation proposé (sans exécution)</h3><ol>' + decision_steps + '</ol>'
-        '<p><strong>Exécution LIVE :</strong> NON · <strong>Écritures backend :</strong> NON</p></section>'
-        "<table><caption>Identifiants, provenance et trous de preuve</caption>"
+        + '<section aria-label="Décision et remédiation en simulation"><h2>Analyst · Critic · Policy — prévisualisation</h2>'
+        + '<p><strong>Fournisseur :</strong> ' + html.escape(decision["provider"], quote=True) + '</p>'
+        + '<p><strong>Analyst :</strong> ' + html.escape(decision["analyst"]["status"], quote=True) + ' — ' + html.escape(decision["analyst"]["summary"], quote=True) + '</p>'
+        + '<ul>' + decision_checks + '</ul>'
+        + '<p><strong>Critic :</strong> ' + html.escape(decision["critic"]["decision"], quote=True) + ' — ' + html.escape(decision["critic"]["reason"], quote=True) + '</p>'
+        + '<p><strong>Policy :</strong> ' + html.escape(decision["policy"]["decision"], quote=True) + ' — ' + html.escape(decision["policy"]["reason"], quote=True) + '</p>'
+        + '<h3>Plan de remédiation proposé (sans exécution)</h3><ol>' + decision_steps + '</ol>'
+        + '<p><strong>Exécution LIVE :</strong> NON · <strong>Écritures backend :</strong> NON</p></section>'
+        + "<table><caption>Identifiants, provenance et trous de preuve</caption>"
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
         "<tbody>" + table_rows + "</tbody></table>"
