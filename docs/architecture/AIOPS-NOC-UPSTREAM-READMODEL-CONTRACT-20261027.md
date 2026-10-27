@@ -31,3 +31,8 @@ This is an integration seam, not proof that Checkmk/Thruk is connected. Until a 
 ## Rollback
 
 Source-only rollback: revert the commit that mounts portal.noc_runtime.router, remove app/portal/noc_runtime.py and its tests from the branch, then regenerate and verify the cumulative candidate. Do not run deployment commands on the production host to roll back this source change.
+
+
+## Preflight behavior
+
+deploy/check-secrets.sh treats the bridge as an optional all-or-none feature. If all four settings are blank it emits a warning that the endpoint will return 503 and continues. If any setting is present, it requires all four, a token of at least 16 characters, an HMAC key of at least 32 characters, and an endpoint origin exactly present in the comma-separated allowlist. It never prints the values and never calls the upstream. tests/test_preflight_secrets.sh exercises disabled, partial, valid, origin-mismatch and short-HMAC cases with synthetic values.
