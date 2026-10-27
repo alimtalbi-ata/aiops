@@ -63,6 +63,10 @@ on:
       - 'docs/demo/STAR-CHECKPOINT-RECONCILIATION-V21358.md'
       - 'docs/demo/STAR-PINNED-CAPTURE-REPLAY-V21360.md'
       - 'docs/demo/STAR-EVENT-SOURCE-BINDING-FAIL-CLOSED-20261027.md'
+      - '.github/workflows/star-evidence-manifest.yml'
+      - 'demo/star_evidence_manifest.py'
+      - 'tests/test_star_evidence_manifest.py'
+      - 'docs/demo/STAR-OFFLINE-EVIDENCE-MANIFEST-20261027.md'
       - 'docs/recovery/**'
       - '.github/workflows/single-portal-candidate-kit.yml'
   workflow_dispatch:
