@@ -40,7 +40,14 @@ def project_correlation(scenario: dict, noc: object = None, core: object = None)
         "production_qualified": False,
         "live_remediation_authorized": False,
     }
-    if not isinstance(noc, dict) or noc.get("source_payload_authenticated") is not True:
+    if (
+        not isinstance(noc, dict)
+        or noc.get("source_payload_authenticated") is not True
+        or noc.get("source_authentication") != "HMAC_SHA256_VERIFIED"
+        or noc.get("runtime_attested") is not False
+        or noc.get("production_qualified") is not False
+        or noc.get("live_remediation_authorized") is not False
+    ):
         return result
     digest = noc.get("source_payload_sha256")
     if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
@@ -106,6 +113,6 @@ def acme_correlation(authorization: str | None = Header(default=None)):
                 from shared.http import get_json
                 core = get_json(os.getenv("CORE_URL", "http://aiops2-core:810"),
                                 "/api/runs/" + run_id, timeout=3)
-            except (OSError, ValueError, RuntimeError, ImportError, Exception):
+            except Exception:  # Upstream failure is UNKNOWN, never a successful correlation.
                 core = None
     return JSONResponse(project_correlation(scenario, noc, core), headers=HEADERS)
