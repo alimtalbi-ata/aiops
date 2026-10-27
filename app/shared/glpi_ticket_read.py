@@ -134,13 +134,16 @@ def _project(raw: bytes, *, requested_id: int, expected_entity: int,
 
 
 def read_ticket(ticket_id: object, *, env: dict | None = None,
-                transport=None, now: datetime | None = None) -> dict:
+                transport=None, now: datetime | None = None,
+                mode: str = "DEMO") -> dict:
     """GET a single numeric ticket through an explicit, bounded GLPI API origin.
 
     transport(request, timeout=...) is injectable for offline unit tests only.
     Production transport disables proxies and redirects. No API initSession or
     ticket writes; the session token must already be provisioned securely.
     """
+    if mode not in ("DEMO", "SIMULATION"):
+        raise GLPIUnverified("GLPI LIVE read not qualified")
     number = _integer(ticket_id)  # validate untrusted identity BEFORE network
     base, app_token, session_token, entity = _configuration(env)
     url = base + "/Ticket/" + str(number)
