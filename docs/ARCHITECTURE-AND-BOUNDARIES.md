@@ -105,3 +105,7 @@ Presence is not proof of readiness. The reported orchestrator directory had no f
 - Do not publish internal ports by default.
 - Validate bind addresses, authentication, authorization, CORS and secrets handling before exposing an API.
 - Use separate demo credentials/data and guard synthetic mutations by explicit mode and token.
+
+## P0 Remediation Lab source-only seam (2026-10-27; PR #42)
+
+`app/shared/remediation_lab.py` is an **offline pure simulator**, not a new authoritative service or executor. `config/remediation/recipes.v1.json` holds a versioned allowlist of eight typed recipe **descriptions**. Inputs bind proposal ID, exact recipe ID/version, CMDB target, typed parameters, mode and requester into a SHA-256 digest; decision fixtures bind that digest, approver, expiry and separation of duties. Outputs are redacted timestamped simulation receipts with `effect_applied=false` and `postchecks=NOT_RUN`. LIVE remains unconditionally BLOCKED. No API route, network call, subprocess, external script, real authentication, persistent receipt or verified effect is introduced. Integration target remains Portal → Core authenticated decisions → Policy + Temporal/Worker → isolated sandbox executor → postchecks → Evidence. See [REMEDIATION-LAB-CONTRACT.md](REMEDIATION-LAB-CONTRACT.md).
