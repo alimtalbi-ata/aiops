@@ -86,3 +86,13 @@ A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-ve
 ## 2026-10-27 — HITL sandbox one-use approval lab (PR #49)
 
 Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/alimtalbi-ata/aiops/pull/49). Proposals bind incident/run/allowlisted recipe/target/parameter hash/mode; approvals require distinct human actor role, expire and are consumed once atomically. No shell or remediation executor is present. Returned postchecks and rollback are `NOT_EXECUTED`, never `PASS`. Local unit suite: 16 tests passed; GitHub Actions and runtime integration are separate gates. **NOT integrated** into authenticated Core/Temporal/Portal or Golden Demo; no LIVE qualification. See [HITL sandbox contract](architecture/HITL-SANDBOX-CONTRACT-20261027.md). Next micro-lot: authenticated Core facade and truthful Golden Demo states, then real isolated integration tests.
+
+
+## 2026-10-27 22:25 — HITL Golden Demo en lecture seule (PR #49, second incrément)
+
+- Extension du laboratoire HITL SQLite par `read_status` : lecture seule, audit cohérent, expiration et reçu mono-usage, projection expurgée sans token.
+- `demo/hitl_golden_demo.py` produit trois états observés de la bibliothèque sandbox et un digest d'intégrité locale, sans appeler Core/Temporal, sans remédiation et sans fausse attestation.
+- `app/portal/hitl_demo_read_model.py` apporte `/demo/hitl` et `/api/demo/hitl` au portail unique. Si aucun artefact n'est configuré : `NOT_CONFIGURED`. Sinon, lecture bornée et stricte d'un JSON de simulation monté en lecture seule, sans jeton et sans écriture backend.
+- Tests négatifs `tests/test_hitl_story.py` ajoutés au workflow existant `quality.yml`; qualification CI à relever dans le journal du lot. La démonstration de la bibliothèque ne constitue **pas** une approbation authentifiée Core ni une remédiation réelle.
+- Réutilisation ciblée : principe de réservation `SIMULATION_ONLY` de PR #36 `app/policy/execution_fence.py` et posture CSP du portail synthétique, sans dépendance au store d'autonomie ni fusion massive.
+- Prochain lot : liaison à Core et à une identité RBAC authentifiée, écriture Evidence et projection du Run canonique, puis sandbox réellement isolée avec postchecks vérifiés. LIVE reste bloqué.
