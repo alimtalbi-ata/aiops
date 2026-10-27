@@ -190,3 +190,73 @@ def dry_run(path, *, proposal_id, approval_token, incident_id, run_id, recipe_id
             "effect_executed": False, "execution_allowed": False,
             "postchecks": {name: "NOT_EXECUTED" for name in recipe["postchecks"]},
             "rollback": {"plan": recipe["rollback"], "status": "NOT_EXECUTED"}}
+
+
+def read_status(path, *, proposal_id, now=None):
+    """Read-only, redacted status for a sandbox proposal.
+
+    This is not an authorization decision or an attested runtime proof.
+    The caller must enforce authentication/tenant isolation before exposing it.
+    """
+    from urllib.parse import quote
+
+    _identity(proposal_id)
+    at = _now(now)
+    uri = "file:" + quote(str(path), safe="/") + "?mode=ro"
+    try:
+        with sqlite3.connect(uri, uri=True, timeout=5) as db:
+            db.execute("PRAGMA query_only=ON")
+            row = db.execute("""SELECT incident_id,run_id,recipe_id,target_id,
+                params_hash,binding_hash,mode,created_at,expires_at
+                FROM proposals WHERE proposal_id=?""", (proposal_id,)).fetchone()
+            if row is None:
+                raise HITLRejected("proposal not found")
+            incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, mode, created, expires = row
+            if mode not in MODES or recipe_id not in RECIPES or at < created or expires <= created:
+                raise HITLRejected("invalid proposal state")
+            approval = db.execute(
+                "SELECT approved_at FROM approvals WHERE proposal_id=?", (proposal_id,)
+            ).fetchone()
+            receipt = db.execute(
+                "SELECT receipt_id,consumed_at FROM dry_runs WHERE proposal_id=?", (proposal_id,)
+            ).fetchone()
+            audit = db.execute(
+                "SELECT action,recorded_at FROM audit WHERE proposal_id=? ORDER BY seq",
+                (proposal_id,),
+            ).fetchall()
+            expected = ["PROPOSED"]
+            if approval:
+                expected.append("APPROVED_SANDBOX_ONLY")
+            if receipt:
+                expected.append("DRY_RUN_PLAN_ISSUED")
+            if receipt and not approval or [a[0] for a in audit] != expected:
+                raise HITLRejected("inconsistent HITL audit")
+            if approval and not created <= approval[0] < expires:
+                raise HITLRejected("invalid approval timestamp")
+            if receipt and not approval[0] <= receipt[1] < expires:
+                raise HITLRejected("invalid receipt timestamp")
+            if [a[1] for a in audit] != [created] + (
+                [approval[0]] if approval else []
+            ) + ([receipt[1]] if receipt else []):
+                raise HITLRejected("inconsistent HITL audit timestamps")
+            state = ("DRY_RUN_PLANNED" if receipt else
+                     "EXPIRED" if at >= expires else
+                     "APPROVED_FOR_DRY_RUN_ONLY" if approval else
+                     "AWAITING_HUMAN_APPROVAL")
+            return {
+                "schema": "aiops.hitl.sandbox-status.v1",
+                "proposal_id": proposal_id, "incident_id": incident_id,
+                "run_id": run_id, "recipe_id": recipe_id, "target_id": target_id,
+                "params_hash": params_hash, "binding_hash": binding_hash,
+                "mode": mode, "expires_at": expires, "state": state,
+                "receipt_id": receipt[0] if receipt else None,
+                "audit_actions": expected,
+                "source": "LOCAL_SANDBOX_SQLITE_NOT_CORE",
+                "synthetic": True, "runtime_authenticated": False,
+                "production_qualified": False, "execution_allowed": False,
+                "effect_executed": False,
+                "postchecks": {name: "NOT_EXECUTED" for name in RECIPES[recipe_id]["postchecks"]},
+                "rollback": {"plan": RECIPES[recipe_id]["rollback"], "status": "NOT_EXECUTED"},
+            }
+    except sqlite3.Error as exc:
+        raise HITLRejected("HITL read store unavailable or inconsistent") from exc
