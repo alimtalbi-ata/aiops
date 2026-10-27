@@ -81,6 +81,21 @@ class BrowserCaptureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.validate_plan(p)
 
+    def test_selector_injection_denied(self):
+        p = plan()
+        p["captures"][0]["redact_selectors"] = ["button:has-text('Delete')"]
+        with self.assertRaises(ValueError):
+            module.validate_plan(p)
+
+    def test_get_allowlist_exact_only(self):
+        p = plan()
+        item = p["captures"][0]
+        item["approved_get_urls"] = ["https://example.invalid/app.css"]
+        module.validate_plan(p)
+        self.assertTrue(module.permits(item, "https://example.invalid/app.css", "GET", False, False))
+        self.assertFalse(module.permits(item, "https://example.invalid/app.css?token=secret", "GET", False, False))
+        self.assertFalse(module.permits(item, "https://example.invalid/app.css", "POST", False, False))
+
     def test_missing_mask_denied(self):
         p = plan()
         p["captures"][0]["redact_selectors"] = []
