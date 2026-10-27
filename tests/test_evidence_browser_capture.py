@@ -128,5 +128,64 @@ class BrowserCaptureTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "session state"):
                     module.capture(p, td, td, approved=True)
 
+    def test_context_fence_denies_popup_and_unapproved_requests(self):
+        item = plan()["captures"][0]
+        item["approved_get_urls"] = ["https://example.invalid/app.css"]
+
+        class Request:
+            def __init__(self, url, method="GET", navigation=False, frame=None):
+                self.url, self.method, self.navigation, self.frame = url, method, navigation, frame
+            def is_navigation_request(self):
+                return self.navigation
+
+        class Route:
+            def __init__(self, request):
+                self.request = request
+                self.result = None
+            def continue_(self):
+                self.result = "continued"
+            def abort(self):
+                self.result = "aborted"
+
+        class Context:
+            def route(self, pattern, handler):
+                self.http = handler
+            def route_web_socket(self, pattern, handler):
+                self.ws = handler
+
+        class Page:
+            main_frame = object()
+
+        context, page = Context(), Page()
+        blocked = module.install_network_fence(context, page, item)
+        requests = [
+            (Request(item["url"], navigation=True, frame=page.main_frame), "continued"),
+            (Request(item["url"], navigation=True, frame=object()), "aborted"),
+            (Request("https://example.invalid/app.css"), "continued"),
+            (Request("https://example.invalid/secret"), "aborted"),
+            (Request("https://evil.invalid/collect", method="POST"), "aborted"),
+        ]
+        for request, expected in requests:
+            with self.subTest(url=request.url, expected=expected):
+                route = Route(request)
+                context.http(route)
+                self.assertEqual(route.result, expected)
+        self.assertEqual(len(blocked), 3)
+        class Socket:
+            closed = False
+            def close(self):
+                self.closed = True
+        socket = Socket()
+        context.ws(socket)
+        self.assertTrue(socket.closed)
+        self.assertEqual(len(blocked), 4)
+
+    def test_missing_websocket_fence_blocks_capture(self):
+        class Context:
+            def route(self, pattern, handler):
+                raise AssertionError("HTTP route must not install before WS capability check")
+        with self.assertRaisesRegex(ValueError, "WebSocket interception unavailable"):
+            module.install_network_fence(Context(), object(), plan()["captures"][0])
+
 if __name__ == "__main__":
     unittest.main()
