@@ -239,5 +239,68 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
         self.assertIs(result["_portal"]["live_remediation_authorized"], False)
 
 
+    def test_shared_deadline_marks_stalled_sources_unknown_and_keeps_capacity_leased(self):
+        release_reads = Event()
+        two_reads_started = Event()
+        two_reads_finished = Event()
+        state_lock = Lock()
+        started = 0
+        finished = 0
+
+        def synthetic_read(base, path):
+            nonlocal started, finished
+            if path == "/api/dashboard":
+                with state_lock:
+                    started += 1
+                    if started == 2:
+                        two_reads_started.set()
+                try:
+                    release_reads.wait(timeout=2)
+                    return {"source": "SYNTHETIC", "dashboard": True}, True
+                finally:
+                    with state_lock:
+                        finished += 1
+                        if finished == 2:
+                            two_reads_finished.set()
+            return {"source": "SYNTHETIC", "path": path}, True
+
+        headers = {"Authorization": "Bearer synthetic-portal-read-token"}
+        with patch.object(main, "_bootstrap_read", side_effect=synthetic_read), patch.object(
+            main, "BOOTSTRAP_TIMEOUT_SECONDS", 0.05
+        ):
+            first = self.client.get("/api/portal/bootstrap", headers=headers)
+            second = self.client.get("/api/portal/bootstrap", headers=headers)
+            self.assertTrue(two_reads_started.wait(timeout=1))
+            for response in (first, second):
+                self.assertEqual(response.status_code, 200)
+                result = response.json()
+                self.assertEqual(
+                    result["dashboard"],
+                    {
+                        "status": "UNKNOWN",
+                        "source": "UPSTREAM_TIMEOUT",
+                        "error_code": "READ_DEADLINE_EXCEEDED",
+                    },
+                )
+                self.assertEqual(result["_portal"]["status"], "DEGRADED")
+                self.assertEqual(result["_portal"]["unavailable_sources"], ["dashboard"])
+
+            overloaded = self.client.get("/api/portal/bootstrap", headers=headers)
+            self.assertEqual(overloaded.status_code, 503)
+            self.assertEqual(
+                overloaded.json()["detail"],
+                "portal_bootstrap_capacity_exceeded",
+            )
+            release_reads.set()
+            self.assertTrue(two_reads_finished.wait(timeout=1))
+
+            # Both timed-out requests retain their slots until the worker
+            # callbacks finish; acquire the released slots to avoid a race in
+            # the test teardown, then return them to the shared semaphore.
+            self.assertTrue(main._BOOTSTRAP_SLOTS.acquire(timeout=1))
+            self.assertTrue(main._BOOTSTRAP_SLOTS.acquire(timeout=1))
+            main._BOOTSTRAP_SLOTS.release()
+            main._BOOTSTRAP_SLOTS.release()
+
 if __name__ == "__main__":
     unittest.main()
