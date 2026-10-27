@@ -6,7 +6,7 @@ from portal.portal_integrations import build_navigation, render_navigation_html
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
-def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
+def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
 @app.get('/api/portal/bootstrap')
 def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
 @app.get('/api/portal/components')
