@@ -85,3 +85,10 @@ A targeted port from PR #36 adds `app/portal/noc_runtime.py` with signed/HMAC-ve
 ## 2026-10-27 — P1 ACME SAN → Payments synthetic impact (draft PR #50)
 
 A targeted port of PR #36's fixture, dependency DAG validator and read-only impact view adds `GET /api/demo/acme-impact` and `GET /demo/acme-impact` to the canonical portal, with a visible navigation link. Source SAN P1 incident `ACME-DEMO-SAN-001` and Payments P2 impact `ACME-DEMO-PAY-002` are stable synthetic fixture IDs; derived run and ticket labels are not Core/Temporal or GLPI IDs. No real GLPI ticket or runtime capture is claimed. Tests are wired into existing quality workflow; verify latest PR #50 check conclusion before merging. Next: authenticated correlation of real Core Run/Incident/GLPI IDs, preserving mode and evidence provenance. See `docs/demo/ACME-SAN-PAYMENTS-IMPACT-20261027.md`.
+
+## 2026-10-27 23:00 CET — P0 operator console on PR #51
+
+- Reused the scoped RBAC operator API from PR #51 and the existing canonical portal rather than copying PR #36 wholesale. Added a read-only `/operator` console and `/operator/console.js` asset, linked from the homepage.
+- The browser keeps the Bearer token in memory only, discards stale asynchronous responses after logout, renders only whitelisted fields as text, and preserves `UNKNOWN`/`FORBIDDEN_BY_ROLE` and `READABLE_UNVERIFIED` provenance. No LIVE authorization, session authentication, or real upstream attestation.
+- HTTP/static regression tests and executable Node JS behavior tests are added to the existing `quality.yml`; see `tests/test_portal_operator_console.py` and `tests/test_portal_operator_console.mjs`. Refer to the run journal for observed CI status.
+- Next: lock down all legacy public dashboard, demo and Copilot endpoints with coherent session/RBAC/CSRF design, then qualify real ephemeral Core/Evidence services and browser behavior. No Debian access or deployment.

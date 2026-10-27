@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "psycopg[binary]==3.2.9"
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
@@ -35,6 +35,18 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
       - name: ACME SAN to Payments synthetic impact contract tests
         run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
+      - name: Core canonical incident read model contract tests
+        run: python -m unittest discover -s tests -p "test_core_incident_read.py" -v
+      - name: Portal operator RBAC and redaction contract tests
+        run: python -m unittest discover -s tests -p "test_portal_operator_read.py" -v
+      - name: Portal operator console HTTP and browser credential safety tests
+        run: python -m unittest discover -s tests -p "test_portal_operator_console.py" -v
+      - name: Set up Node for operator console behavior tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Operator console JS behavior and negative tests
+        run: node --test tests/test_portal_operator_console.mjs
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit

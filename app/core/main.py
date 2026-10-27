@@ -4,7 +4,9 @@ from pydantic import BaseModel,Field
 from shared.db import db
 from shared.ids import new
 from shared.domain import transition,STAGES
+from core.incident_read import router as incident_read_router
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
+app.include_router(incident_read_router)
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or ADMIN_TOKEN must be configured')
