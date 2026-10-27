@@ -66,3 +66,9 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## P0 source finding — 2026-10-27: isolated simulator cannot reach Core
+
+**Evidence level: source inspection only.** On `main`, `aiops2-simulator` is attached only to `aiops2-execution`, while `aiops2-core` is attached to `aiops2-control` and `aiops2-data`. The simulator's configured `CORE_URL=http://aiops2-core:810` therefore has no shared Compose network path. The proposed fix attaches only the authenticated Core API service to `aiops2-execution`, keeping the simulator off `aiops2-data`, `aiops2-control` and public networks. A rendered-Compose network contract is added to CI. This is not proof of DNS resolution, HTTP connectivity or runtime qualification; an isolated Docker integration test remains required.
+
+**Other open P0 risks:** the imported n8n workflow contains a static Authorization header that is inconsistent with randomly generated runtime secrets; its credential handling must be corrected before enabling the integration. `tests/runtime-e2e.sh` also requires verification against the current schema and its dependency on the demo response file, especially before integrating PR #37. LIVE remediation remains intentionally blocked and unqualified. No production changes were made.
