@@ -87,6 +87,20 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
             model["affected_ci_ids"],
             ["APP-PAY-01", "HOST-ESX-01", "SAN-FABRIC-A", "VM-PAY-01", "VOL-PAY-01"],
         )
+        self.assertEqual(
+            {ci["id"]: ci["impact_role"] for ci in model["affected_cis"]},
+            {
+                "APP-PAY-01": "BUSINESS_SERVICE_TARGET",
+                "HOST-ESX-01": "TRANSITIVE_DEPENDENCY",
+                "SAN-FABRIC-A": "INCIDENT_SOURCE",
+                "VM-PAY-01": "TRANSITIVE_DEPENDENCY",
+                "VOL-PAY-01": "TRANSITIVE_DEPENDENCY",
+            },
+        )
+        self.assertEqual(
+            next(ci for ci in model["affected_cis"] if ci["id"] == "VM-PAY-01")["depends_on"],
+            ["HOST-ESX-01", "VOL-PAY-01"],
+        )
         self.assertIsNone(model["ticket_id"])
         self.assertEqual(model["ticket_id_provenance"], "ABSENT_NO_GLPI_WRITE")
         self.assertIsNone(model["event_timestamp_utc"])
@@ -113,6 +127,11 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertIn("Éléments de configuration", response.text)
         self.assertIn("Incidents du scénario", response.text)
         self.assertIn("Périmètre d'impact calculé", response.text)
+        self.assertIn("Inventaire d’impact détaillé", response.text)
+        self.assertIn('class="ci-grid"', response.text)
+        self.assertIn('class="ci-card"', response.text)
+        self.assertIn("payments-prod-vol", response.text)
+        self.assertIn("TRANSITIVE DEPENDENCY", response.text)
         self.assertIn("TRANSITIVE_DEPENDENCY_BLAST_RADIUS", response.text)
         self.assertIn("VOL-PAY-01", response.text)
         self.assertIn("<svg ", response.text)
