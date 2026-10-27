@@ -1,0 +1,57 @@
+name: Ollama LLM adapter qualification (CI only)
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Ollama small model (4B default; 8B optional)
+        type: choice
+        options:
+          - qwen3:4b
+          - qwen3:8b
+        default: qwen3:4b
+permissions:
+  contents: read
+jobs:
+  ollama-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Contract tests without external model
+        run: python -m unittest discover -s tests -p 'test_llm_adapter.py' -v
+      - name: Install Ollama on ephemeral runner
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start Ollama and pull bounded model
+        env:
+          MODEL: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+          ollama serve > /tmp/ollama-ci.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull "$MODEL"
+      - name: Run actual local model inference through adapter
+        env:
+          CI: "true"
+          AIOPS_LLM_PROVIDER: ollama_ci
+          AIOPS_LLM_BASE_URL: http://127.0.0.1:11434
+          AIOPS_LLM_MODEL: ${{ inputs.model }}
+        run: |
+          python - <<'PY'
+          from app.shared.llm_adapter import infer
+          result = infer([{"role":"system","content":"You are a CI contract probe. Answer briefly."},
+                          {"role":"user","content":"Reply with the word READY."}])
+          assert result["text"].strip()
+          assert result["provenance"] == "CI_SIMULATED_LLM"
+          assert result["production_qualified"] is False
+          assert result["may_execute_actions"] is False
+          print("OLLAMA_CONTRACT_PASS (CI simulated model, not Mistral 192B qualification)")
+          PY
