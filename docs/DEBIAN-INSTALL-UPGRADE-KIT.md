@@ -42,3 +42,12 @@ No existing `.env`, missing Debian/Docker/Compose prerequisites, failed existing
 ## Source review and qualification statement
 
 This PR adds a conservative preflight and opt-in upgrade wrapper. **Not tested** on the target Debian server; no Docker runtime or database migration test was executed. A successful preflight is not proof of upgrade safety. `tests/qualification.sh` currently checks container presence and a subset of HTTP endpoints; it is not a complete application/DB/business qualification.
+
+## Confirmed target endpoint and single-portal constraint (user supplied 2026-10-27)
+
+- Target Debian host: `10.79.94.202` (private network address); authoritative user-facing entry point: `http://10.79.94.202:17777/`.
+- All AIOps functions must be reachable **through this portal** (NOC, incident/run, investigator, authorized knowledge, ACME twin, HITL, remediation lab, evidence, observability and admin). This is a navigation/API gateway requirement, **not** a mandate to publish all backend ports or co-locate services.
+- **Port mismatch to resolve before upgrade:** reviewed `main` Compose publishes `7777:777`, while the reported existing host uses `17777`. The current host routing, reverse proxy, containers, listener ownership and firewall have **not** been inspected. Do not change a published port, add a competing listener or cut over without a read-only inventory and explicit plan.
+- Target design: preserve the existing `17777` entry point, route component views through a single authenticated portal/reverse-proxy layer, keep Core/Temporal/DB/GLPI/n8n internal unless expressly justified, enforce SSO/RBAC and per-feature authorization, and show explicit unknown/unavailable states instead of synthetic runtime claims.
+- Required acceptance: `GET /` serves the single shell; route inventory proves mounted paths; NOC and incident drilldowns show authorized real data only; protected APIs reject unauthenticated requests; synthetic/demo data is labeled; no extra exposed production listener; existing bookmarks remain functional; authenticated E2E on a staging clone and rollback pass.
+- **No claim** that `10.79.94.202:17777` was reached or inspected; it is user-reported information. Never include private host credentials in this repository.
