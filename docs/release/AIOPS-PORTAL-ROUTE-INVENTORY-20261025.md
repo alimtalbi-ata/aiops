@@ -103,3 +103,11 @@ Le processus de statut ouvre le manifeste de sortie avec `O_NOFOLLOW`, exige un 
 Le parseur du manifeste rejette également les clés JSON dupliquées. Les champs ambigus ne peuvent ainsi pas être interprétés différemment par plusieurs consommateurs JSON ; le test vérifie le refus d'un champ `scenario` dupliqué.
 
 Le manifeste doit avoir un objet JSON comme racine. Les tableaux, scalaires et autres formes JSON valides mais non conformes sont refusés proprement avec le statut de job `failed`, sans exception de type qui remonterait au handler HTTP.
+
+
+### Barrière de capacité du bootstrap — 27 octobre 2026
+
+Le bootstrap utilise désormais un pool partagé de six workers pour ses trois lectures indépendantes et admet au plus deux requêtes bootstrap simultanées. Une requête supplémentaire échoue immédiatement en HTTP 503 `portal_bootstrap_capacity_exceeded`, au lieu de créer un nouveau pool de threads par requête. Les lectures restent des GET avec `timeout=3` et `retries=0`; la réponse conserve le statut de provenance `UNATTESTED_UPSTREAM_READS`.
+
+Cette limite borne le nombre de workers et la concurrence active, mais ne constitue pas un rate limiter global ni une garantie de disponibilité du runtime. Elle ne change ni le périmètre d'authentification (le bootstrap uniquement), ni les connexions backend. Le test ASGI occupe les six workers avec deux requêtes synthétiques, vérifie que la troisième est refusée, puis libère les lectures ; aucun endpoint upstream réel n'est appelé.
+
