@@ -113,6 +113,7 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "incident_count": report["incident_count"],
         "impact_path": report["impact_path"],
         "affected_ci_ids": report["affected_ci_ids"],
+        "affected_cis": report["affected_cis"],
         "provenance": "SIMULATED_TARGET",
         "evidence_source": "LOCAL_SYNTHETIC_FIXTURE",
         "runtime_evidence_present": False,
@@ -157,6 +158,17 @@ def acme_impact_page():
         ("Source", model["source_artifact"], model["evidence_source"]),
         ("Qualification runtime", "NON", "runtime_attested=false"),
     ]
+    ci_cards = "".join(
+        '<article class="ci-card"><div class="ci-top"><strong>'
+        + html.escape(str(ci["id"]), quote=True) + '</strong><span>'
+        + html.escape(str(ci["impact_role"]).replace("_", " "), quote=True)
+        + '</span></div><h3>' + html.escape(str(ci["name"]), quote=True)
+        + '</h3><p>' + html.escape(str(ci["kind"]), quote=True)
+        + '</p><small>Dépend de : '
+        + html.escape(", ".join(ci["depends_on"]) if ci["depends_on"] else "Aucune dépendance")
+        + '</small></article>'
+        for ci in model["affected_cis"]
+    )
     table_rows = "".join(
         "<tr><th scope=\"row\">" + html.escape(str(label), quote=True)
         + "</th><td>" + html.escape(str(value), quote=True)
@@ -194,7 +206,7 @@ def acme_impact_page():
         "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
         "<title>ACME — impact SAN P1 vers Payments P2 (simulation)</title>"
-        "<style>body{margin:0;background:#0b1220;color:#eef5ff;font:15px/1.55 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:clamp(16px,4vw,44px)}h1{font-size:clamp(2rem,4vw,3.2rem)}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:24px 0}.kpi{background:#121e31;border:1px solid #2a3b55;border-radius:14px;padding:16px}.kpi span{display:block;color:#a8b8ce;font-size:.82rem}.kpi strong{display:block;font-size:1.25rem;margin-top:4px}.kpi .p1{color:#ff6878}.kpi .p2{color:#ffc66d}table{width:100%;border-collapse:collapse;background:#121e31;border-radius:12px;overflow:hidden}th,td{text-align:left;padding:12px;border-bottom:1px solid #2a3b55;overflow-wrap:anywhere}th{color:#65d9ee}td:nth-child(3){color:#a8b8ce;font-size:.85rem}svg{max-width:100%;height:auto}caption{text-align:left;padding:12px;color:#65d9ee;font-weight:700}@media(max-width:600px){main{padding:14px}th,td{padding:7px;font-size:.78rem}}</style>"
+        "<style>body{margin:0;background:#0b1220;color:#eef5ff;font:15px/1.55 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:clamp(16px,4vw,44px)}h1{font-size:clamp(2rem,4vw,3.2rem)}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:24px 0}.kpi{background:#121e31;border:1px solid #2a3b55;border-radius:14px;padding:16px}.kpi span{display:block;color:#a8b8ce;font-size:.82rem}.kpi strong{display:block;font-size:1.25rem;margin-top:4px}.kpi .p1{color:#ff6878}.kpi .p2{color:#ffc66d}.ci-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}.ci-card{background:#121e31;border:1px solid #2a3b55;border-radius:12px;padding:14px;min-width:0}.ci-top{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.ci-top strong{color:#65d9ee}.ci-top span{font-size:.7rem;color:#ffc66d}.ci-card h3{font-size:1rem;margin:10px 0 2px;overflow-wrap:anywhere}.ci-card p{color:#a8b8ce;margin:0 0 10px}.ci-card small{color:#a8b8ce;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#121e31;border-radius:12px;overflow:hidden}th,td{text-align:left;padding:12px;border-bottom:1px solid #2a3b55;overflow-wrap:anywhere}th{color:#65d9ee}td:nth-child(3){color:#a8b8ce;font-size:.85rem}svg{max-width:100%;height:auto}caption{text-align:left;padding:12px;color:#65d9ee;font-weight:700}@media(max-width:600px){main{padding:14px}th,td{padding:7px;font-size:.78rem}}</style>"
         "</head><body><main><h1>ACME — SAN P1 → Payments P2</h1>"
         "<p><strong>SIMULATION LOCALE UNIQUEMENT.</strong> Aucun incident runtime, "
         "ticket GLPI, capture applicative, appel backend ou événement horodaté n'est créé. "
@@ -206,6 +218,9 @@ def acme_impact_page():
         '<article class="kpi"><span>Éléments de configuration</span><strong>' + str(model["ci_count"]) + '</strong><span>Dans le fixture local</span></article>'
         '<article class="kpi"><span>Incidents du scénario</span><strong>' + str(model["incident_count"]) + '</strong><span>Jeu de données local</span></article>'
         '</section>'
+        '<section aria-label="Inventaire des CI affectées"><h2>Inventaire d’impact détaillé</h2>'
+        '<p>Chaque carte est issue du graphe de dépendances du scénario ; les dépendances affichées sont déclaratives et synthétiques.</p>'
+        '<div class="ci-grid">' + ci_cards + '</div></section>'
         "<table><caption>Identifiants, provenance et trous de preuve</caption>"
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
