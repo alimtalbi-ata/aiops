@@ -92,3 +92,7 @@ At minimum: a deterministic seeded incident with a stable CMDB CI and impacted b
 
 ### Current status and handover
 Architecture/documentation only in this change; no service deployed, no integration validated, no tests executed. Existing draft PR #37 addresses synthetic E2E run visibility separately and must not be assumed merged. Next engineer should inventory current branches and adapters, implement a narrow vertical slice behind feature flags, run deterministic tests, record actual results, and open a separate draft PR. No direct merge or production mutation.
+
+## Source-grounded implementation plan — 2026-10-27
+
+See [DEVELOPMENT-ROADMAP-2026-10-27.md](DEVELOPMENT-ROADMAP-2026-10-27.md) for the reviewed main-source inventory, gaps, five delivery gates, seven bounded PR candidates, selective PR #36 reuse, acceptance criteria and known blockers. This is a source-level plan, not a runtime audit. Start with synthetic E2E fail-closed visibility and Core/Temporal qualification; do not claim Copilot ACL-grounded RAG, realistic HITL, Checkmk/Thruk interoperability or LIVE remediation before corresponding tests. The per-schedule logging template is in [automation-runs/README.md](automation-runs/README.md). Both files are proposed in draft PR #39; merge is not assumed.
