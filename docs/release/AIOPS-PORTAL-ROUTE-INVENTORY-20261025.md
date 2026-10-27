@@ -137,3 +137,16 @@ Cette limite borne le nombre de workers et la concurrence active, mais ne consti
 **Comparaison et décision de déduplication :** le contrat de liaison événement↔capture est déjà implémenté par `demo/noc_star_event_binding.py` (`aiops-noc-synthetic-star-hash-link-v1`) et couvert par `tests/test_noc_star_event_binding.py` : neuf cues ordonnés, identités synthétiques cohérentes, SHA-256 canonique des événements et des associations capture↔événement, rejet des sources forgées, reproductibilité et `runtime_authenticated=false`. Le JSON archivé est une fixture de sortie, pas un module manquant ; **aucun code n'est importé**. `demo/noc_synthetic_snapshot.py` traite un autre contrat (états synthétiques hôtes/services) et n'est pas remplacé par cet export. Ne pas importer les PNG dans la qualification de captures applicatives, ne pas promouvoir `runtime_authenticated`, ne pas créer de ticket/horodatage fictif et ne pas embarquer l'archive originale dans le kit. Le contrôle hors ligne de cet inventaire a vérifié la structure ZIP, les 10 tailles/hashes et les champs JSON/HTML textuels ; l'absence de correspondance dans un balayage de texte n'est pas une analyse visuelle exhaustive des images.
 
 **Tests de réutilisation à exiger avant migration de données :** comparaison de SHA-256 de chaque membre, validation stricte du manifeste, liaison image↔hash, rejet de `run_id`/cues manquants ou dupliqués, assertion de zéro preuve runtime, puis rendu Chromium local sans réseau. Aucun test de ce ZIP ne qualifie le runtime cible `:17777`.
+
+
+### Qualification cryptographique locale de l'archive NOC — 27 octobre 2026
+
+Sur les octets originaux matérialisés en workspace isolé, le contrôle complémentaire suivant a été exécuté après l'inventaire :
+
+- ZIP/CRC : PASS ; SHA-256 archive recalculé = `a8534adaa8fe238ea5173148d2f2fb133cf6917d5f88c185136ea305c0a2c14e`.
+- Les trois PNG ont été vérifiés contre les trois entrées de `evidence-index.json` et les trois entrées de `manifest.json` : taille et SHA-256 identiques.
+- Les neuf événements de `star-events.json` ont été re-hachés à partir de leur JSON canonique et correspondent aux neuf `event_sha256` du binding.
+- Les trois associations capture↔événements ont été recalculées selon la sérialisation canonique et correspondent aux trois `binding_sha256`.
+- L'ordre des neuf cues correspond au cue map ; `runtime_proof_count=0`, `runtime_authenticated=false`, `live_remediation_authorized=false`. Résultat du contrôle local : PASS, zéro incohérence interne.
+
+Ce PASS établit uniquement l'intégrité et la cohérence internes de cette archive synthétique. Il ne prouve ni la provenance d'une application réelle, ni un timestamp métier, ni un ticket GLPI, ni une observation Checkmk/n8n/Grafana. Les images restent exclues du kit et des captures de qualification runtime.
