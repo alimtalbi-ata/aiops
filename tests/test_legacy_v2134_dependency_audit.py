@@ -2,6 +2,7 @@
 import hashlib
 import json
 import tempfile
+import zipfile
 import unittest
 from pathlib import Path
 
@@ -59,6 +60,46 @@ class LegacyHybridDependencyAuditTests(unittest.TestCase):
         self.assertEqual(result["members"][0]["status"], "REJECTED_SYMLINK")
         self.assertFalse(result["recovery_complete"])
 
+
+    def test_archive_is_inspected_without_extraction_and_exact_hashes_are_required(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "historical.zip"
+            fixture_bytes = {
+                "tools/build_real_replay.py": b"original builder fixture",
+                "tests/test_replay.py": b"original test fixture",
+            }
+            expected = {
+                relative: {"sha256": hashlib.sha256(data).hexdigest(), "role": "fixture"}
+                for relative, data in fixture_bytes.items()
+            }
+            with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for relative, data in fixture_bytes.items():
+                    zf.writestr(relative, data)
+            with patch.dict("recovery.legacy_v2134.tools.audit_hybrid_dependencies.EXPECTED", expected, clear=True):
+                result = audit(root / "empty-tree", archive)
+        self.assertEqual(result["archive_audit"]["status"], "CRC_PASS")
+        self.assertTrue(result["archive_recovery_complete"])
+        self.assertFalse(result["source_execution_performed"])
+        self.assertFalse((root / "empty-tree").exists())
+
+    def test_archive_with_duplicate_expected_member_is_not_accepted(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "duplicate.zip"
+            expected = {
+                "tools/build_real_replay.py": {"sha256": hashlib.sha256(b"source").hexdigest(), "role": "fixture"},
+            }
+            with zipfile.ZipFile(archive, "w") as zf:
+                zf.writestr("tools/build_real_replay.py", b"source")
+                zf.writestr("tools/build_real_replay.py", b"source")
+            with patch.dict("recovery.legacy_v2134.tools.audit_hybrid_dependencies.EXPECTED", expected, clear=True):
+                result = audit(root / "empty-tree", archive)
+        self.assertEqual(result["archive_audit"]["status"], "CRC_OR_DUPLICATE_FAILURE")
+        self.assertFalse(result["archive_recovery_complete"])
+        self.assertEqual(result["archive_audit"]["members"][0]["status"], "DUPLICATE_MEMBER")
 
 if __name__ == "__main__":
     unittest.main()
