@@ -33,6 +33,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_read_models.py" -v
       - name: Signed NOC read-model security and regression tests
         run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
+      - name: ACME SAN to Payments synthetic impact contract tests
+        run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
