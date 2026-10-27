@@ -34,34 +34,76 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def _read_manifest_bytes(path: Path) -> bytes:
-    """Read one bounded regular file without following a final symlink."""
+    """Read bounded manifest bytes from one stable, no-follow descriptor.
+
+    On platforms without a working O_NOFOLLOW primitive, fail closed rather
+    than silently falling back to a pathname check susceptible to a swap race.
+    """
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if not isinstance(nofollow, int) or nofollow == 0:
+        raise ValueError("safe manifest descriptor reads unavailable")
+    fd = None
     try:
         if path.is_symlink():
             raise ValueError("manifest symlink refused")
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        flags = (os.O_RDONLY | nofollow
+                 | getattr(os, "O_CLOEXEC", 0)
+                 | getattr(os, "O_NONBLOCK", 0))
         fd = os.open(path, flags)
-        with os.fdopen(fd, "rb") as stream:
-            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                raise ValueError("evidence manifest must be a regular file")
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError("evidence manifest must be a regular file")
+        if before.st_size < 0 or before.st_size > MAX_MANIFEST_BYTES:
+            raise ValueError("manifest too large")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
             raw = stream.read(MAX_MANIFEST_BYTES + 1)
+        after = os.fstat(fd)
+        before_state = (before.st_dev, before.st_ino, before.st_mode, before.st_size,
+                        before.st_mtime_ns, before.st_ctime_ns)
+        after_state = (after.st_dev, after.st_ino, after.st_mode, after.st_size,
+                       after.st_mtime_ns, after.st_ctime_ns)
+        if before_state != after_state or len(raw) != after.st_size:
+            raise ValueError("manifest changed during read")
+        if len(raw) > MAX_MANIFEST_BYTES:
+            raise ValueError("manifest too large")
+        return raw
     except ValueError:
         raise
     except OSError as exc:
         raise ValueError("cannot read evidence manifest (" + type(exc).__name__ + ")") from exc
-    if len(raw) > MAX_MANIFEST_BYTES:
-        raise ValueError("manifest too large")
-    return raw
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def _contained_file(evidence_root: Path, relative_path: str) -> Path:
-    # Evidence path format validated separately; resolve again against symlinks.
-    if not relative_path.startswith("evidence/"):
+    """Resolve a capture only after rejecting symlinks in every path component."""
+    if (not isinstance(relative_path, str) or not relative_path.startswith("evidence/")
+            or "\\" in relative_path or "\x00" in relative_path):
         raise ValueError("evidence path required")
-    base = evidence_root.resolve(strict=True)
-    target = (base / relative_path).resolve(strict=True)
-    if not target.is_relative_to(base) or not target.is_file():
-        raise ValueError("capture escaped evidence root or not a file")
-    return target
+    parts = relative_path.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError("invalid evidence-relative path")
+    try:
+        base = evidence_root.resolve(strict=True)
+        candidate = base.joinpath(*parts)
+        current = base
+        for part in parts:
+            current = current / part
+            if stat.S_ISLNK(current.lstat().st_mode):
+                raise ValueError("capture symlink is forbidden")
+        target = candidate.resolve(strict=True)
+        if (target != candidate or not target.is_relative_to(base)
+                or not stat.S_ISREG(target.stat().st_mode)):
+            raise ValueError("capture escaped evidence root or is not a regular file")
+        return target
+    except ValueError:
+        raise
+    except OSError:
+        raise ValueError("capture path cannot be opened safely") from None
 
 def verify_manifest(
     evidence_root: Path,
