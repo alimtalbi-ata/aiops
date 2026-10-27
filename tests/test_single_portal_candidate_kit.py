@@ -77,6 +77,10 @@ class CandidateKitTests(unittest.TestCase):
                 "tests/test_star_capture_evidence.py",
                 "tests/test_star_png_integrity.py",
                 "tests/test_star_snapshot_choreography.py",
+                ".github/workflows/star-evidence-manifest.yml",
+                "demo/star_evidence_manifest.py",
+                "tests/test_star_evidence_manifest.py",
+                "docs/demo/STAR-OFFLINE-EVIDENCE-MANIFEST-20261027.md",
             }
             self.assertTrue(required_portal_sources.issubset(set(kit.APPROVED)))
             self.assertTrue(kit.safe_path(
@@ -153,6 +157,16 @@ class CandidateKitTests(unittest.TestCase):
                     "docs/demo/STAR-EVENT-SOURCE-BINDING-FAIL-CLOSED-20261027.md",
                 }
                 for source_path in cumulative_source_binding_sources:
+                    member = "sources/" + source_path
+                    self.assertIn(member, z.namelist())
+                    self.assertEqual(z.read(member), (root / source_path).read_bytes())
+                cumulative_manifest_sources = {
+                    ".github/workflows/star-evidence-manifest.yml",
+                    "demo/star_evidence_manifest.py",
+                    "tests/test_star_evidence_manifest.py",
+                    "docs/demo/STAR-OFFLINE-EVIDENCE-MANIFEST-20261027.md",
+                }
+                for source_path in cumulative_manifest_sources:
                     member = "sources/" + source_path
                     self.assertIn(member, z.namelist())
                     self.assertEqual(z.read(member), (root / source_path).read_bytes())
