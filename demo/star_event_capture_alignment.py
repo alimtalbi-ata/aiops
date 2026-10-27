@@ -14,7 +14,10 @@ import hashlib
 import json
 import re
 
-from demo.star_browser_manifest_gate import verify_browser_manifests
+from demo.star_browser_manifest_gate import (
+    _read_manifest_bytes as _read_browser_manifest_bytes,
+    verify_browser_manifests,
+)
 from demo.star_capture_identity_guard import verify_snapshot_identity
 from demo.star_snapshot_choreography import CUE_BY_NAME
 
@@ -48,18 +51,16 @@ def _timestamp(value: object) -> datetime:
 
 
 def _read_manifest(root: Path, name: str) -> tuple[dict[str, object], str]:
-    # File name and symlink constraints are also enforced by the bridge.
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.json", name):
-        raise ValueError("unsafe manifest filename")
-    path = root / name
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > 16384:
-        raise ValueError("unsafe manifest file")
-    # Decode, hash and parse one immutable byte buffer: the bridge must have
-    # verified exactly these bytes before their timestamps can be trusted.
-    raw = path.read_bytes()
-    if len(raw) > 16_384:
-        raise ValueError("unsafe manifest file")
-    item = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+    # Reuse the bridge's descriptor-relative, bounded, O_NOFOLLOW reader.
+    # A second unbounded Path.read_bytes() here would reintroduce a TOCTOU
+    # gap after verify_browser_manifests had checked the original bytes.
+    raw = _read_browser_manifest_bytes(root, name)
+    try:
+        item = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_object)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid manifest object") from exc
+    except RecursionError as exc:
+        raise ValueError("manifest nesting is excessive") from exc
     if not isinstance(item, dict):
         raise ValueError("invalid manifest object")
     return item, hashlib.sha256(raw).hexdigest()
