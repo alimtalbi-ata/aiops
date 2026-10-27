@@ -24,7 +24,7 @@ Le manifeste a `schema_version: 1`, `provenance: OPERATOR_SUPPLIED_SCREENSHOTS_U
 
 ## Signification du résultat
 
-- `BYTES_VERIFIED_UNATTESTED` : l'image est un PNG de dimensions bornées, les CRC des chunks contrôlés sont cohérents et son SHA-256 correspond au manifeste.
+- `BYTES_VERIFIED_UNATTESTED` : les CRC sont cohérents, le flux zlib des pixels se décompresse vers la taille de scanline attendue, les codes de filtre sont valides, les dimensions restent bornées et le SHA-256 correspond au manifeste. Le vérificateur accepte un sous-ensemble explicite de PNG non entrelacés ; il ne reconstitue ni n'affiche les pixels.
 - `MISSING` ou `REJECTED` : preuve absente ou non vérifiée ; aucune réussite implicite.
 - `complete_byte_set=true` signifie seulement que les neuf fichiers et métadonnées satisfont ce contrôle local.
 
@@ -32,4 +32,4 @@ Le vérificateur force à `false` les attestations d'identité applicative, d'é
 
 ## Tests
 
-`tests/test_star_evidence_manifest.py` construit neuf images PNG synthétiques et teste l'intégrité octet, la couverture des cues, le hash incorrect, les origines refusées, la traversée de chemin, les liens symboliques, les CRC corrompus, les doublons et l'impossibilité de promouvoir des champs d'attestation fournis par l'opérateur. Ce sont des tests unitaires isolés, pas une capture Chromium ni une validation des applications réelles.
+`tests/test_star_evidence_manifest.py` construit neuf images PNG synthétiques et teste l'intégrité octet, la couverture des cues, le hash incorrect, les origines refusées, la traversée de chemin, les liens symboliques, les CRC corrompus, les flux zlib invalides malgré un CRC/hash cohérent, les filtres de scanline invalides, les doublons et l'impossibilité de promouvoir des champs d'attestation fournis par l'opérateur. Ce sont des tests unitaires isolés, pas une capture Chromium ni une validation des applications réelles.
