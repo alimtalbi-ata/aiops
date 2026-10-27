@@ -16,6 +16,7 @@ Les routes ci-dessous ont été relevées dans app/portal/main.py et les quatre 
 |---|---|---|---|
 | GET /health | État local du handler portail | Aucune | Ne prouve pas la connectivité aux backends ni le port hôte. |
 | GET /api/portal/bootstrap | Agrège dashboard, runs et résumé Twin, avec dégradation partielle explicite | Trois lectures HTTP soumises en parallèle, deadline globale de 3 s, sans retry ; pool partagé de six workers et deux requêtes admises simultanément | Une source en retard devient `UNKNOWN` (`UPSTREAM_TIMEOUT` / `READ_DEADLINE_EXCEEDED`) ; le créneau de capacité reste réservé jusqu'à la fin des workers retardataires pour empêcher l'accumulation de tâches. Les autres sources restent disponibles. `_portal.status` vaut COMPLETE ou DEGRADED. Cela ne prouve ni SSO global ni authentification runtime des upstreams. |
+| GET /api/noc/runtime-state | Authenticated, read-only projection from an optional HMAC-signed NOC read-model endpoint | Bearer caller token + exact allowlisted origin + SHA-256/HMAC-SHA256 verification; GET only, no redirects, 3 s timeout, 256 KiB bound | Disabled by default (503); signed source payload is authenticated but not runtime-attested; ticket/evidence remain upstream claims; 02→03 handoff claims are rejected until the canonical verifier is embedded. |
 | GET / | Cockpit avec incidents/runs et résumé Twin | Lecture Core et Twin | Les erreurs sont rendues INCONNU ; runtime cible non vérifié. |
 | GET /runs | Liste des exécutions Core | Lecture Core | Ne monte pas l'API Temporal elle-même. |
 | GET /timeline | Incidents, détails de run, ledger et preuves référencées | Lecture Core | La page Evidence globale reste décrite comme adaptateur manquant. |
@@ -150,3 +151,14 @@ Sur les octets originaux matérialisés en workspace isolé, le contrôle compl�
 - L'ordre des neuf cues correspond au cue map ; `runtime_proof_count=0`, `runtime_authenticated=false`, `live_remediation_authorized=false`. Résultat du contrôle local : PASS, zéro incohérence interne.
 
 Ce PASS établit uniquement l'intégrité et la cohérence internes de cette archive synthétique. Il ne prouve ni la provenance d'une application réelle, ni un timestamp métier, ni un ticket GLPI, ni une observation Checkmk/n8n/Grafana. Les images restent exclues du kit et des captures de qualification runtime.
+
+
+## Optional signed NOC read-model bridge — 27 October 2026
+
+GET /api/noc/runtime-state is now mounted in the same portal ASGI process. It does not replace the static GET /noc convergence inventory and does not directly query Checkmk/Thruk. It is a fail-closed adapter for an explicitly configured upstream read-model service.
+
+The adapter requires the portal read Bearer token at the caller boundary. Upstream access is disabled unless URL, upstream Bearer token, HMAC key and exact allowed origin are all configured. It performs only one GET, refuses redirects, enforces a 3-second timeout and 256 KiB body limit, rejects duplicate JSON keys, and verifies both the body SHA-256 header and HMAC-SHA256 signature before projecting reviewed fields. Invalid, stale, unauthenticated-by-signature or malformed responses become a generic 503 without leaking credentials or upstream exception text.
+
+The returned envelope states source_payload_authenticated=true and source_authentication=HMAC_SHA256_VERIFIED while deliberately retaining runtime_attested=false, runtime_authenticated=false and live_remediation_authorized=false. Ticket and timestamp fields are source-signed claims, not independently verified GLPI records or event evidence. Evidence digests are not verified against screenshot bytes. Payloads containing 02→03 handoff details are rejected until the canonical verifier is included in the portal image; this adapter does not promote a provider's identity assertion.
+
+The route is an integration seam only. No upstream is configured by default, no Checkmk/Thruk connectivity has been tested, no other component has become connected, and no new port or backend write path was added. Tests use synthetic payloads/keys only.
