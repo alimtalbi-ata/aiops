@@ -41,6 +41,6 @@ fi
 echo "APPROVED_APPLY=1|backup_marker=$BACKUP_DIR/BACKUP-VERIFIED"
 echo "NOTICE=No automatic database migrations or legacy retirement are performed by this script."
 docker compose --env-file .env build
-docker compose --env-file .env up -d --no-build --remove-orphans=false
+docker compose --env-file .env up -d --no-build
 bash tests/qualification.sh
 echo "UPGRADE=QUALIFICATION_PASSED|synthetic_e2e_not_run|rollback_manual"
