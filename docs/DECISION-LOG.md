@@ -96,3 +96,45 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-0013 — Enterprise NOC and monitoring boundaries
+
+- **Date:** 2026-10-27
+- **Status:** Target accepted; integration unqualified.
+- **Decision:** Evaluate Checkmk for active infrastructure supervision and Thruk for the multisite NOC console, alongside OpenTelemetry/Prometheus/Grafana for telemetry. Keep Core as the canonical incident/run authority.
+- **Constraints:** Thruk requires a compatible backend; validate Livestatus/edition/version, auth, CI mapping, ack/downtime behavior and alert deduplication in a read-only spike before deployment. No second authoritative incident lifecycle.
+
+## ADR-0014 — Human-in-the-loop is an auditable decision workflow
+
+- **Date:** 2026-10-27
+- **Status:** Target accepted; implementation unqualified.
+- **Decision:** Human review must support approve, reject, request clarification and revised proposals, with authenticated role/identity, rationale, immutable action hash, CI scope, expiry, separation of duties, single-use receipt and audit trail. Any changed action invalidates approval.
+- **Safety:** Policy is independent of the model. No LIVE mutation without independently validated authorization, fencing and postchecks.
+
+## ADR-0015 — Enterprise-grounded, read-only NOC chatbot
+
+- **Date:** 2026-10-27
+- **Status:** Target accepted; implementation unqualified.
+- **Decision:** Answers about ACME must be grounded in user-authorized internal CMDB, incidents, telemetry, topology, operations and evidence. Vendor documentation can explain technology, but not assert ACME facts. Cite precise sources and timestamps; abstain if missing, inaccessible or stale.
+- **Security:** Source ACL filtering, prompt-injection isolation, no direct execution rights, no secret leakage, negative permission tests.
+
+## ADR-0016 — Provenance-aware RAG Knowledge Hub
+
+- **Date:** 2026-10-27
+- **Status:** Target accepted; storage choice conditional.
+- **Decision:** Curate official vendor/editor documentation where licensing permits, plus internal architecture, implementation, exploitation, approved runbooks, postmortems and incident records. Track source, license, owner, product/version, hash, ACL, freshness, citations, retention and deletion. Hybrid full-text + vector retrieval is preferred; PostgreSQL + pgvector is a candidate, not a deployed decision.
+- **Qualification:** ACL isolation, relevance benchmark, document update/deletion, poisoned instructions, stale and contradictory sources, citations and abstention.
+
+## ADR-0017 — Controlled, realistic Remediation Lab
+
+- **Date:** 2026-10-27
+- **Status:** Target accepted; implementation unqualified.
+- **Decision:** Versioned, allowlisted, typed remediation recipes for Ansible, Bash/Python, CLI and REST APIs, bound to CMDB targets, preconditions, dry-run, HITL, Policy, Temporal, rollback and postchecks. Sandbox by default; never execute arbitrary model-produced commands.
+- **Qualification:** deterministic effects, deny/expiry/change tests, idempotency, timeout, rollback, negative verification, no LIVE effect in DEMO.
+
+## ADR-0018 — ACME twin and Golden Demo are reproducible evidence, not LIVE proof
+
+- **Date:** 2026-10-27
+- **Status:** Target accepted; implementation unqualified.
+- **Decision:** Build realistic business services, topology and fault seeds with separated simulation ground truth, operator-facing NOC/Portal timeline, cited diagnosis, HITL decision, guarded execution and evidence-backed recovery.
+- **Rule:** Explicitly label synthetic outputs and never infer success from a launched run or a rendered dashboard. Require deterministic E2E assertions and negative cases.
