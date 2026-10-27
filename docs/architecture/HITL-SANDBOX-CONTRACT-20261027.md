@@ -26,3 +26,14 @@ Avant tout branchement, intégrer derrière Core avec actor ID issu d'une identi
 ### Réutilisation PR #36
 
 `app/policy/execution_fence.py` sur PR #36 est un mécanisme de réservation revision-fenced `SIMULATION_ONLY` utilisant un `autonomy_store` distinct et non disponible sur main. Il ne fournit pas l'approbation HITL immuable demandée. Le principe de réservation sans effet et le refus explicite de qualification LIVE sont conservés; pas de portage direct du fichier sans sa dépendance ni double autorité.
+
+
+## Golden Demo — projection vérifiable et lecture seule (incrément 22:25)
+
+- `read_status(path, proposal_id, now)` lit la base SQLite en `mode=ro` + `query_only`, sans créer le fichier ni exposer jeton, hash de jeton ou identités d'approbateur. Le résultat est expurgé avec `source=LOCAL_SANDBOX_SQLITE_NOT_CORE`, `execution_allowed=false`, `effect_executed=false`, postchecks/rollback `NOT_EXECUTED`. Les séquences d'audit incohérentes sont rejetées. Un accord expiré est `EXPIRED`; une planification déjà émise reste `DRY_RUN_PLANNED`, jamais une remédiation réussie.
+- `python -m demo.hitl_golden_demo --output /tmp/aiops-hitl-story.json` exécute réellement `propose → approve → dry_run` sur une base temporaire SQLite, puis exporte les **trois états observés** et le reçu. Le jeton reste uniquement en mémoire et n'est pas exporté. Le SHA-256 est une somme d'intégrité locale, **pas** une attestation d'authenticité, ni une preuve d'intégration Core/Temporal.
+- Le portail unique dispose de `/demo/hitl` et `/api/demo/hitl`, lecture seule. Sans configuration : `NOT_CONFIGURED`. Pour afficher l'artefact, configurer `AIOPS_HITL_DEMO_ARTIFACT` vers un fichier JSON généré par le script et monté en lecture seule dans le conteneur portail. Le routeur refuse les liens symboliques, fichiers instables, charges trop grandes, champs supplémentaires, états incohérents, mode LIVE, fausses preuves et altération du digest. **Aucun jeton, POST d'approbation ou action de remédiation n'est exposé par le portail.**
+- Les libellés `INC-SIM-*` et `RUN-SIM-*` ne sont **pas** des IDs canoniques Core. L'artefact est une démonstration de la bibliothèque HITL en laboratoire, **pas** une intégration du Run réel. Il ne faut pas le présenter comme une capture LIVE ni une approbation GLPI.
+- Test local/CI : `python -m unittest discover -s tests -p 'test_hitl_story.py' -v`; tests négatifs d'altération, de jeton, d'expiration, de binding, de symlink, de fichier malformé et de preuve LIVE falsifiée. Les résultats CI doivent être relevés après exécution.
+
+**Limites :** aucun RBAC authentifié Core, aucune écriture Evidence, aucune attestation de provenance, aucun postcheck exécuté et aucun rollback réalisé. Prochaine étape : relier les statuts au Run canonique via Core après qualification de l'identité et du stockage transactionnel; ne pas monter SQLite dans le portail comme autorité.
