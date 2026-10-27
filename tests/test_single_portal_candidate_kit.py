@@ -60,6 +60,9 @@ class CandidateKitTests(unittest.TestCase):
                 "tests/test_platform_registry_portal_route.py",
                 "docs/release/AIOPS-SINGLE-PORTAL-CANDIDATE-20261025.md",
                 "docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md",
+                "docs/release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md",
+                "docs/release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md",
+                "docs/release/AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md",
                 "docs/recovery/HISTORICAL-CODE-REGISTRY-20261023.md",
                 "docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md",
                 ".github/workflows/star-capture-evidence.yml",
@@ -111,6 +114,14 @@ class CandidateKitTests(unittest.TestCase):
                 self.assertIn("sources/app/portal/portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/tests/test_portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md", z.namelist())
+                for release_doc in (
+                    "docs/release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md",
+                    "docs/release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md",
+                    "docs/release/AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md",
+                ):
+                    member = "sources/" + release_doc
+                    self.assertIn(member, z.namelist())
+                    self.assertEqual(z.read(member), (root / release_doc).read_bytes())
                 cumulative_acme_sources = {
                     ".github/workflows/acme-v21315-fixture-validation.yml",
                     "demo/integrations/v21315/README.md",
