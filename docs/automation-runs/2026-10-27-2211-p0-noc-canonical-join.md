@@ -9,3 +9,10 @@
 - **Sécurité :** aucune commande de mutation Core, aucun effet LIVE, aucun accès au Debian, au NIM ou aux interfaces Checkmk/Thruk/Grafana/GLPI. L'authentification est vérifiée avant tout appel amont; le Core est consulté par GET interne sans proxy/redirect, réponse bornée; mismatch = UNKNOWN; provenance synthétique ou LIVE non attestée.
 - **Risques / blocages :** absence de source NOC signée réelle; Core GET lu sans RBAC tenant dans la baseline; **isolation ACL multi-tenant NOT_IMPLEMENTED**, observabilité Grafana et RAG **NOT_TESTED**. Aucune capture LIVE authentifiée.
 - **Prochain micro-lot :** attendre/diagnostiquer quality.yml sur PR #52, corriger échecs; ajouter véritable Core tenant-scoped read authorization avant d'exposer à plusieurs tenants; puis tester un adaptateur Checkmk/Thruk réel en CI éphémère et lier Grafana/RAG sourcé. Ne pas fusionner avant contrôles verts.
+
+## Complément de sécurité après ouverture de PR #52
+
+- Journal initial commité : `25056a05d92fb5e96c4feebf1726f849d8ac6323`.
+- Durcissement Core port 810 et test de pivot SSRF : `96fd46ca7347c9c13143c218f85aa23004b77740`, `31c93e06a56a9755cf908a0a8f5060364f32a993`.
+- **Retest exécuté localement :** `python -m compileall -q app/portal/noc_correlation.py tests/test_noc_canonical_correlation.py` OK ; `python -m unittest discover -s tests -p test_noc_canonical_correlation.py -v` **13/13 OK**, même limitation de shim d'import NOC local non commité.
+- GitHub Actions : seconde interrogation après PR/synchronisation, workflow runs et combined statuses toujours vides pour le SHA interrogé ; **CI NOT_TESTED**, aucune fusion.
