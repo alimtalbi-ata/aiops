@@ -109,9 +109,9 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Safety:** DEMO remains synthetic. This does not enable LIVE remediation or modify the canonical policy gate, worker guard or PC11K5 fencing invariant.
 - **Qualification:** New unit tests and CI steps are committed, but results are pending. No runtime deployment or production qualification is claimed.
 
-## ADR-0013 — Grounded Copilot read-only safety slice (2026-10-27)
+## ADR-0019 — Grounded Copilot read-only safety slice (2026-10-27)
 
-- **Status:** Proposed on stacked draft PR; not deployed or qualified. This local number may conflict with ADR-0013 in pending PR #39; reconcile ADR numbering before merging both.
+- **Status:** Proposed on stacked draft PR; not deployed or qualified. Number reserved after ADR-0013 through ADR-0018 proposed in draft PR #39; reconcile final numbering when integrating the PRs.
 - **Decision:** Replace question-independent Copilot summaries and arbitrary confidence with deterministic supported intents, exact source citations and abstention. Require internal gateway authentication and an operator-authenticated Portal (draft PR #16); deny LIVE run evidence until user-level ACL qualification. Stage vendor/internal documents only with rights, product/version, tenant ACL and provenance, using lexical retrieval as a testable foundation rather than claiming a complete RAG.
 - **Rationale:** Avoid public leakage, unsupported claims, cross-run evidence contamination and misleading confidence. Internal token is not user RBAC.
 - **Open:** Integrate PR #39 ADRs, persistent hybrid index, identity/tenant claims and actual runtime tests before promotion.
