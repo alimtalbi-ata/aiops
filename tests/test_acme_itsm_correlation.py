@@ -15,6 +15,8 @@ SCENARIO = build_acme_impact_read_model()
 RUN = "RUN-ACME-001"
 INCIDENT = "INC-ACME-DEMO-SAN-001"
 NOC = {
+    "schema": "aiops.noc-runtime-envelope.v1",
+    "provenance": "AUTHENTICATED_SOURCE_PAYLOAD_NOT_RUNTIME_ATTESTATION",
     "source_payload_authenticated": True,
     "source_authentication": "HMAC_SHA256_VERIFIED",
     "runtime_attested": False,
@@ -104,12 +106,60 @@ class AcmeCorrelationTests(unittest.TestCase):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "test-read-token",
                                       "AIOPS_INTERNAL_TOKEN": "unit-test-internal"}):
             with patch("portal.acme_itsm_correlation.read_signed_noc_snapshot", return_value=NOC):
-                with patch("shared.http.get_json", return_value=CORE) as get:
+                with patch("portal.acme_itsm_correlation._read_core_run", return_value=CORE["run"]) as get:
                     response = TestClient(app).get("/api/portal/acme-correlation",
                         headers={"Authorization": "Bearer test-read-token"})
                     self.assertEqual(get.call_count, 1)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["state"], "CORRELATED_UNVERIFIED")
+        self.assertIsNone(response.json()["ticket_id"])
+
+    def test_unsigned_or_wrong_identity_never_contacts_core(self):
+        app = FastAPI()
+        app.include_router(router)
+        for bad in (
+            {**NOC, "schema": "unknown"},
+            {**NOC, "provenance": "SELF_ASSERTED"},
+            {**NOC, "source_payload_sha256": "bad"},
+            {**NOC, "incident_id": "INC-OTHER"},
+            {**NOC, "source_authentication": "NOT_VERIFIED"},
+            {**NOC, "runtime_attested": True},
+            {**NOC, "run_id": "../bad"},
+        ):
+            with self.subTest(bad=bad):
+                with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "test-read-token"}):
+                    with patch("portal.acme_itsm_correlation.read_signed_noc_snapshot", return_value=bad):
+                        with patch("portal.acme_itsm_correlation._read_core_run") as get:
+                            response = TestClient(app).get("/api/portal/acme-correlation",
+                                headers={"Authorization": "Bearer test-read-token"})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["state"], "UNKNOWN")
+                self.assertIsNone(response.json()["ticket_id"])
+                get.assert_not_called()
+
+    def test_unapproved_core_endpoint_fails_closed_without_network(self):
+        app = FastAPI()
+        app.include_router(router)
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "test-read-token",
+                                      "CORE_URL": "http://attacker.example:810"}):
+            with patch("portal.acme_itsm_correlation.read_signed_noc_snapshot", return_value=NOC):
+                with patch("urllib.request.build_opener") as network:
+                    response = TestClient(app).get("/api/portal/acme-correlation",
+                        headers={"Authorization": "Bearer test-read-token"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
+        self.assertIsNone(response.json()["ticket_id"])
+        network.assert_not_called()
+
+    def test_core_unavailable_does_not_promote_glpi_ticket(self):
+        app = FastAPI()
+        app.include_router(router)
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "test-read-token"}):
+            with patch("portal.acme_itsm_correlation.read_signed_noc_snapshot", return_value=NOC):
+                with patch("portal.acme_itsm_correlation._read_core_run", side_effect=OSError("offline")):
+                    response = TestClient(app).get("/api/portal/acme-correlation",
+                        headers={"Authorization": "Bearer test-read-token"})
+        self.assertEqual(response.json()["state"], "UNKNOWN")
         self.assertIsNone(response.json()["ticket_id"])
 
     def test_portal_mount(self):
