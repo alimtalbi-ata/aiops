@@ -40,11 +40,14 @@ on:
       - 'tests/test_star_n8n_identity_gate.py'
       - 'docs/release/**'
       - '.github/workflows/star-browser-manifest-bridge-offline.yml'
+      - '.github/workflows/star-event-capture-alignment-offline.yml'
       - 'demo/star_browser_manifest_gate.py'
+      - 'demo/star_event_capture_alignment.py'
       - 'demo/star_checkpoint_reconciliation.py'
       - 'demo/star_capture_set_replay_gate.py'
       - 'demo/star_portal_storyboard.py'
       - 'tests/test_star_browser_manifest_gate.py'
+      - 'tests/test_star_event_capture_alignment.py'
       - 'tests/test_star_checkpoint_reconciliation.py'
       - 'tests/test_star_capture_set_replay_gate.py'
       - 'docs/demo/STAR-BROWSER-MANIFEST-BRIDGE-HLD-LLD-V21336.md'
@@ -83,6 +86,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_platform_registry_portal_route.py' -v
           python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
           python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
+          python -m unittest discover -s tests -p 'test_star_event_capture_alignment.py' -v
           python -m unittest discover -s tests -p 'test_star_checkpoint_reconciliation.py' -v
           python -m unittest discover -s tests -p 'test_star_capture_set_replay_gate.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
