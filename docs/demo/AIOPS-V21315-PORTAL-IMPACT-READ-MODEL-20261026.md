@@ -14,8 +14,9 @@ Offrir depuis le portail existant une vue exploitable du scénario synthétique 
 Le contrôleur lit les octets exacts de `app/portal/acme-fixtures.json`, appelle `load_fixture_bytes()` et `validate_fixture()` depuis le contrat stdlib `portal.acme_fixture_contract`, puis calcule SHA-256 sur ces mêmes octets. Le validateur historique sous `demo/integrations/v21315/validate_fixture.py` est un wrapper de compatibilité qui réutilise ce contrat commun. Un identifiant `SIM-ACME-<16 hex>` est dérivé du digest : `run_id_provenance=DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN`. Ce n'est **pas** un identifiant Core/Temporal.
 
 - `incident_id` = incident source synthétique SAN P1 ; `impact_incident_id` = incident cible Payments P2.
-- `ticket_id=null`, provenance `ABSENT_NO_GLPI_WRITE` : aucun ticket n'est créé ni prétendu.
-- `event_timestamp_utc=null`, provenance `ABSENT_NO_RUNTIME_EVENT` : aucun temps d'événement n'est inventé.
+- `ticket_id=null`, provenance `ABSENT_NO_GLPI_WRITE` : aucun ticket GLPI réel n'est créé ni prétendu.
+- `event_timestamp_utc=null`, provenance `ABSENT_NO_RUNTIME_EVENT` : aucun événement runtime n'est daté.
+- L'écran peut aussi montrer un `simulation_ticket_id` déterministe préfixé `SIM-GLPI-` et le checkpoint fixe `2026-10-25T09:00:00Z`; leurs provenances `SYNTHETIC_LABEL_NOT_A_GLPI_TICKET` et `FIXED_SCENARIO_CLOCK_NOT_RUNTIME_EVENT` interdisent de les confondre avec GLPI ou un événement réel.
 - `source_sha256` atteste l'identité des octets du fixture uniquement ; il n'atteste ni une capture, ni GLPI, ni n8n, ni Grafana, ni un runtime.
 - `runtime_evidence_present=false`, `runtime_attested=false`, `production_qualified=false`, `live_remediation_authorized=false`.
 
