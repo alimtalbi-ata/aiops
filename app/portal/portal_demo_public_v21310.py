@@ -84,6 +84,8 @@ def _job_snapshot(job_id, job):
                     if os.fstat(fd).st_size != manifest_stat.st_size:
                         raise ValueError("manifest changed during read")
                     data = json.loads(raw_manifest.decode("utf-8"), object_pairs_hook=_reject_duplicate_manifest_keys)
+                    if not isinstance(data, dict):
+                        raise ValueError("manifest root must be a JSON object")
                 finally:
                     os.close(fd)
                 video = job["output"] / ARTIFACTS["video"][0]
