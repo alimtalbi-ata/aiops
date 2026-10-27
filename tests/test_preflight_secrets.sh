@@ -74,4 +74,14 @@ grep -Fxq 'TEMPORAL_UI_IMAGE=temporalio/ui:2.49.1' "$TMP/upgrade/.env"
 [[ "$(sed -n 's/^AIOPS_INTERNAL_TOKEN=//p' "$TMP/upgrade/.env")" == "$BEFORE_TOKEN" ]]
 [[ "$(sed -n 's/^AIOPS_PORTAL_READ_TOKEN=//p' "$TMP/upgrade/.env")" == "$BEFORE_PORTAL_READ_TOKEN" ]]
 [[ "$(stat -c '%a' "$TMP/upgrade/.env")" == "600" ]]
+# Legacy .env without the new portal read credential must migrate fail-closed.
+mkdir -p "$TMP/legacy/config" "$TMP/legacy/deploy"
+cp "$ROOT/config/.env.example" "$TMP/legacy/config/.env.example"
+cp "$ROOT/deploy/init-env.sh" "$TMP/legacy/deploy/init-env.sh"
+cp "$TMP/init/.env" "$TMP/legacy/.env"
+sed -i '/^AIOPS_PORTAL_READ_TOKEN=/d' "$TMP/legacy/.env"
+bash "$TMP/legacy/deploy/init-env.sh" >/dev/null
+LEGACY_PORTAL_READ_TOKEN="$(sed -n 's/^AIOPS_PORTAL_READ_TOKEN=//p' "$TMP/legacy/.env")"
+[[ -n "$LEGACY_PORTAL_READ_TOKEN" && "$LEGACY_PORTAL_READ_TOKEN" != "$INTERNAL_TOKEN" ]]
+[[ "$(stat -c '%a' "$TMP/legacy/.env")" == "600" ]]
 echo 'SECRET_PREFLIGHT_TEST=PASS'
