@@ -84,7 +84,7 @@ def render(root, captures, output, seconds):
                             "-y", str(clip)], check=True)
             clips.append(clip)
         concat = Path(td) / "concat.txt"
-        concat.write_text("".join("file '" + str(p) + "'\\n" for p in clips))
+        concat.write_text("".join("file '" + str(p) + "'\n" for p in clips))
         subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
                         "-f", "concat", "-safe", "0", "-i", str(concat),
                         "-c", "copy", "-movflags", "+faststart", str(output)], check=True)
