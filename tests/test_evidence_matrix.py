@@ -91,6 +91,34 @@ class EvidenceMatrixTests(unittest.TestCase):
         self.assertFalse(result["action_authorized"])
         self.assertEqual(result["evidence_count"], 0)
 
+    def test_non_list_evidence_is_blocked_not_misreported_as_empty(self):
+        result = build_evidence_matrix({"evidence_id": "E1"}, now=NOW)
+        self.assertEqual(result["status"], "BLOCKED_FOR_REVIEW")
+        self.assertIn("evidence_collection_not_a_list", result["input_errors"])
+        self.assertEqual(result["evidence_count"], 0)
+        self.assertFalse(result["action_authorized"])
+
+    def test_non_list_hypotheses_are_reported_without_raising(self):
+        result = build_evidence_matrix([item()], hypotheses={"hypothesis_id": "H1"}, now=NOW)
+        self.assertEqual(result["status"], "BLOCKED_FOR_REVIEW")
+        self.assertIn("hypotheses_collection_not_a_list", result["input_errors"])
+        self.assertEqual(result["hypothesis_count"], 0)
+
+    def test_non_object_hypothesis_blocks_review_and_is_counted(self):
+        result = build_evidence_matrix([item()], hypotheses=[None], now=NOW)
+        self.assertEqual(result["status"], "BLOCKED_FOR_REVIEW")
+        self.assertIn("hypothesis_not_an_object:0", result["input_errors"])
+        self.assertEqual(result["hypothesis_count"], 1)
+
+    def test_duplicate_id_prefix_does_not_invalidate_unrelated_evidence(self):
+        result = build_evidence_matrix(
+            [item("E1"), item("E10"), item("E10")], now=NOW
+        )
+        self.assertEqual(result["status"], "BLOCKED_FOR_REVIEW")
+        self.assertEqual(result["items"][0]["integrity"], "UNVERIFIED")
+        self.assertEqual(result["items"][1]["integrity"], "INVALID")
+        self.assertEqual(result["items"][2]["integrity"], "INVALID")
+
 
 if __name__ == "__main__":
     unittest.main()
