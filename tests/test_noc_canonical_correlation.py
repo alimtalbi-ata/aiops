@@ -1,4 +1,5 @@
 """Offline contract tests only: no actual Checkmk/Thruk/Core or Grafana in this suite."""
+import json
 import os
 import pathlib
 import sys
@@ -127,6 +128,43 @@ class CorrelationTests(unittest.TestCase):
                           side_effect=AssertionError("must not connect")):
             with self.assertRaises(ValueError):
                 noc_correlation._read_core_run("../etc/passwd")
+
+
+    def test_core_read_is_get_only_and_bounded(self):
+        import json
+        class Response:
+            headers = {"Content-Type": "application/json"}
+            def __init__(self, url, body): self.url, self.body = url, body
+            def geturl(self): return self.url
+            def getcode(self): return 200
+            def read(self, n): return self.body[:n]
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+        class Opener:
+            def open(self, req, timeout):
+                self_req = req
+                assert self_req.get_method() == "GET"
+                assert timeout == 3
+                assert self_req.full_url.endswith("/api/runs/RUN-ACME-001")
+                return Response(req.full_url, json.dumps({"run": core_run()}).encode())
+        with patch.dict(os.environ, {"CORE_URL": "http://aiops2-core:810"}), patch.object(
+                noc_correlation.urllib.request, "build_opener", return_value=Opener()):
+            self.assertEqual(noc_correlation._read_core_run("RUN-ACME-001")["mode"], "DEMO")
+
+    def test_core_duplicate_json_keys_fail_closed(self):
+        class Response:
+            headers = {"Content-Type": "application/json"}
+            def geturl(self): return "http://aiops2-core:810/api/runs/RUN-ACME-001"
+            def getcode(self): return 200
+            def read(self, n): return b'{"run":{},"run":{}}'
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+        class Opener:
+            def open(self, req, timeout): return Response()
+        with patch.dict(os.environ, {"CORE_URL": "http://aiops2-core:810"}), patch.object(
+                noc_correlation.urllib.request, "build_opener", return_value=Opener()):
+            with self.assertRaises(ValueError):
+                noc_correlation._read_core_run("RUN-ACME-001")
 
 
 if __name__ == "__main__":
