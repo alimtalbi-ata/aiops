@@ -47,6 +47,55 @@ def valid_png(data):
         offset = end
     return False
 
+def decoded_png_scanlines(data):
+    """Bounded PNG pixel-stream check; not visual inspection or runtime attestation.
+
+    Only non-interlaced RGB/RGBA 8-bit PNG is accepted: the formats used for
+    Playwright screenshots. Reject compressed bombs, hidden text and malformed
+    zlib streams before FFmpeg receives any evidence.
+    """
+    if not valid_png(data):
+        return False
+    width = height = channels = None
+    offset = len(PNG)
+    idats = []
+    idat_finished = False
+    while offset + 12 <= len(data):
+        length = int.from_bytes(data[offset:offset + 4], "big")
+        kind = data[offset + 4:offset + 8]
+        payload = data[offset + 8:offset + 8 + length]
+        offset += 12 + length
+        if kind in (b"tEXt", b"zTXt", b"iTXt", b"eXIf"):
+            return False
+        if kind[0] & 32 == 0 and kind not in (b"IHDR", b"PLTE", b"IDAT", b"IEND"):
+            return False
+        if kind == b"IHDR":
+            width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", payload)
+            if depth != 8 or color not in (2, 6) or compression or filtering or interlace:
+                return False
+            channels = 3 if color == 2 else 4
+        elif kind == b"IDAT":
+            if idat_finished:
+                return False
+            idats.append(payload)
+        elif idats:
+            idat_finished = True
+    if not idats or width is None:
+        return False
+    stride = width * channels + 1
+    expected = stride * height
+    if expected > 32 * 1024 * 1024:
+        return False
+    try:
+        decoder = zlib.decompressobj()
+        raw = decoder.decompress(b"".join(idats), expected + 1)
+        if (len(raw) != expected or not decoder.eof or decoder.unconsumed_tail
+                or decoder.unused_data or decoder.flush()):
+            return False
+    except zlib.error:
+        return False
+    return all(raw[row * stride] <= 4 for row in range(height))
+
 def verify(root, manifest):
     if root.is_symlink() or not root.is_dir():
         raise ValueError("evidence root must be a real directory")
@@ -82,8 +131,8 @@ def verify(root, manifest):
         if not (200 <= width <= 10000 and 200 <= height <= 10000 and width * height <= 40000000):
             raise ValueError("unsafe PNG dimensions")
         data = actual.read_bytes()
-        if not valid_png(data):
-            raise ValueError('invalid PNG chunks or CRC')
+        if not decoded_png_scanlines(data):
+            raise ValueError('invalid PNG chunks, pixels, metadata or CRC')
         digest = hashlib.sha256(data).hexdigest()
         if entry.get("sha256") != digest:
             raise ValueError("screenshot checksum mismatch")
