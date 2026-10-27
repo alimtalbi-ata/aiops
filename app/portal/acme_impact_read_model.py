@@ -116,6 +116,34 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "affected_cis": report["affected_cis"],
         "provenance": "SIMULATED_TARGET",
         "evidence_source": "LOCAL_SYNTHETIC_FIXTURE",
+        "decision_preview": {
+            "provider": "DETERMINISTIC_RULES_NOT_LLM",
+            "analyst": {
+                "status": "HYPOTHESIS_ONLY",
+                "summary": "Le SAN P1 peut expliquer l'impact Payments P2 via le chemin de dépendances calculé.",
+                "next_checks": [
+                    "Vérifier l'état de la fabric SAN et les chemins redondants",
+                    "Confirmer le mapping du volume vers la VM et l'application",
+                    "Comparer les observations runtime avant toute conclusion",
+                ],
+            },
+            "critic": {
+                "decision": "HOLD_FOR_HUMAN_REVIEW",
+                "reason": "Aucune télémétrie runtime ni preuve indépendante n'est présente dans ce scénario.",
+            },
+            "policy": {
+                "decision": "DENY_LIVE_ACTION",
+                "reason": "La qualification runtime et l'autorisation LIVE sont absentes.",
+            },
+            "remediation_preview": [
+                "Préparer une checklist de diagnostic SAN en lecture seule",
+                "Vérifier le chemin redondant SAN-FABRIC-B sans supposer qu'il est sain",
+                "Préparer un brouillon de ticket hors GLPI, sans écriture backend",
+                "Demander une revue humaine avant toute action opérationnelle",
+            ],
+            "live_execution": False,
+            "backend_writes": False,
+        },
         "runtime_evidence_present": False,
         "runtime_attested": False,
         "production_qualified": False,
@@ -169,6 +197,15 @@ def acme_impact_page():
         + '</small></article>'
         for ci in model["affected_cis"]
     )
+    decision = model["decision_preview"]
+    decision_steps = "".join(
+        "<li>" + html.escape(str(step), quote=True) + "</li>"
+        for step in decision["remediation_preview"]
+    )
+    decision_checks = "".join(
+        "<li>" + html.escape(str(step), quote=True) + "</li>"
+        for step in decision["analyst"]["next_checks"]
+    )
     table_rows = "".join(
         "<tr><th scope=\"row\">" + html.escape(str(label), quote=True)
         + "</th><td>" + html.escape(str(value), quote=True)
@@ -221,6 +258,14 @@ def acme_impact_page():
         '<section aria-label="Inventaire des CI affectées"><h2>Inventaire d’impact détaillé</h2>'
         '<p>Chaque carte est issue du graphe de dépendances du scénario ; les dépendances affichées sont déclaratives et synthétiques.</p>'
         '<div class="ci-grid">' + ci_cards + '</div></section>'
+        '<section aria-label="Décision et remédiation en simulation"><h2>Analyst · Critic · Policy — prévisualisation</h2>'
+        '<p><strong>Fournisseur :</strong> ' + html.escape(decision["provider"], quote=True) + '</p>'
+        '<p><strong>Analyst :</strong> ' + html.escape(decision["analyst"]["status"], quote=True) + ' — ' + html.escape(decision["analyst"]["summary"], quote=True) + '</p>'
+        '<ul>' + decision_checks + '</ul>'
+        '<p><strong>Critic :</strong> ' + html.escape(decision["critic"]["decision"], quote=True) + ' — ' + html.escape(decision["critic"]["reason"], quote=True) + '</p>'
+        '<p><strong>Policy :</strong> ' + html.escape(decision["policy"]["decision"], quote=True) + ' — ' + html.escape(decision["policy"]["reason"], quote=True) + '</p>'
+        '<h3>Plan de remédiation proposé (sans exécution)</h3><ol>' + decision_steps + '</ol>'
+        '<p><strong>Exécution LIVE :</strong> NON · <strong>Écritures backend :</strong> NON</p></section>'
         "<table><caption>Identifiants, provenance et trous de preuve</caption>"
         "<thead><tr><th scope=\"col\">Champ</th><th scope=\"col\">Valeur</th>"
         "<th scope=\"col\">Origine / qualification</th></tr></thead>"
