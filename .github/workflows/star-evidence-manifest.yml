@@ -1,0 +1,29 @@
+name: STAR screenshot evidence manifest (offline)
+on:
+  pull_request:
+    paths:
+      - 'demo/star_evidence_manifest.py'
+      - 'tests/test_star_evidence_manifest.py'
+      - '.github/workflows/star-evidence-manifest.yml'
+      - 'demo/star_snapshot_choreography.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-evidence-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run isolated STAR screenshot manifest tests
+        run: python -m unittest discover -s tests -p 'test_star_evidence_manifest.py' -v
+      - name: Compile verifier without executing captures
+        run: python -m py_compile demo/star_evidence_manifest.py demo/star_snapshot_choreography.py
