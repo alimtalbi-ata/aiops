@@ -61,6 +61,63 @@ class EvidenceVideoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.verify(self.root, self.manifest())
 
+    def _replace_png(self, service, *, raw=None, idat_suffix=b"", extra_chunk=None, interlace=None):
+        path = self.root / (service + ".png")
+        data = path.read_bytes()
+        def chunk(kind, payload):
+            return (struct.pack(">I", len(payload)) + kind + payload +
+                    struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff))
+        ihdr = data[16:29]
+        if interlace is not None:
+            ihdr = ihdr[:-1] + bytes((interlace,))
+        if raw is None:
+            raw = (bytes((0,)) + bytes(320 * 3)) * 200
+        replacement = (module.PNG + chunk(b"IHDR", ihdr) +
+                       (chunk(*extra_chunk) if extra_chunk else b"") +
+                       chunk(b"IDAT", zlib.compress(raw) + idat_suffix) +
+                       chunk(b"IEND", b""))
+        path.write_bytes(replacement)
+        self.entries[module.SERVICES.index(service)]["sha256"] = hashlib.sha256(replacement).hexdigest()
+
+    def test_corrupt_zlib_with_valid_chunk_crc_rejected(self):
+        self._replace_png("portal", raw=b"not a valid image")
+        with self.assertRaisesRegex(ValueError, "pixels"):
+            module.verify(self.root, self.manifest())
+
+    def test_invalid_png_filter_with_valid_crc_rejected(self):
+        self._replace_png("portal", raw=(bytes((5,)) + bytes(320 * 3)) * 200)
+        with self.assertRaisesRegex(ValueError, "pixels"):
+            module.verify(self.root, self.manifest())
+
+    def test_extra_compressed_bytes_rejected(self):
+        self._replace_png("portal", idat_suffix=b"trailing-compressed-data")
+        with self.assertRaisesRegex(ValueError, "pixels"):
+            module.verify(self.root, self.manifest())
+
+    def test_png_text_metadata_rejected(self):
+        self._replace_png("portal", extra_chunk=(b"tEXt", b"Authorization\\x00Bearer-secret"))
+        with self.assertRaisesRegex(ValueError, "metadata"):
+            module.verify(self.root, self.manifest())
+
+    def test_interlaced_png_rejected(self):
+        self._replace_png("portal", interlace=1)
+        with self.assertRaisesRegex(ValueError, "pixels"):
+            module.verify(self.root, self.manifest())
+
+    def test_rgba_png_accepted(self):
+        self._replace_png("portal", raw=(bytes((0,)) + bytes(320 * 4)) * 200)
+        # The image format must also declare RGBA, not just have RGBA-sized scanlines.
+        path = self.root / "portal.png"
+        data = path.read_bytes()
+        def chunk(kind, payload):
+            return (struct.pack(">I", len(payload)) + kind + payload +
+                    struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff))
+        rgba = module.PNG + chunk(b"IHDR", struct.pack(">II", 320, 200) + bytes((8, 6, 0, 0, 0)))
+        rgba += data[33:]
+        path.write_bytes(rgba)
+        self.entries[0]["sha256"] = hashlib.sha256(rgba).hexdigest()
+        self.assertEqual(len(module.verify(self.root, self.manifest())), 5)
+
     def test_bad_timestamp_rejected(self):
         self.entries[0]["captured_at_utc"] = "yesterdayZ"
         with self.assertRaises(ValueError):
