@@ -228,12 +228,29 @@ def validate_fixture(data: object) -> dict:
             "Payments P2 has no transitive dependency path to the SAN P1 source"
         )
 
+    # Calculate the blast radius by traversing consumers from the source CI.
+    # The dependency graph is directed consumer -> dependency, so reverse it here.
+    consumers: dict[str, list[str]] = {node: [] for node in dependencies}
+    for consumer, refs in dependencies.items():
+        for dependency in refs:
+            consumers[dependency].append(consumer)
+    affected = {SOURCE_CI_ID}
+    pending = deque([SOURCE_CI_ID])
+    while pending:
+        dependency = pending.popleft()
+        for consumer in sorted(consumers[dependency]):
+            if consumer not in affected:
+                affected.add(consumer)
+                pending.append(consumer)
+    affected_ci_ids = sorted(affected)
+
     return {
         "ci_count": len(cis),
         "incident_count": len(incidents),
         "source_incident_id": SOURCE_INCIDENT_ID,
         "target_incident_id": TARGET_INCIDENT_ID,
         "impact_path": impact_path,
+        "affected_ci_ids": affected_ci_ids,
         "provenance": "SIMULATED_TARGET",
         "live_remediation_authorized": False,
     }
