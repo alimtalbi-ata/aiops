@@ -26,7 +26,7 @@ def _read_core_run(run_id: str) -> dict:
     if (parsed.scheme != "http" or parsed.hostname not in
             ("aiops2-core", "localhost", "127.0.0.1") or
             parsed.username is not None or parsed.password is not None or
-            parsed.path or parsed.query or parsed.fragment):
+            parsed.path or parsed.query or parsed.fragment or parsed.port != 810):
         raise ValueError("unapproved Core endpoint")
     url = base + "/api/runs/" + run_id
     request = urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET")
