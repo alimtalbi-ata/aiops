@@ -105,3 +105,14 @@ restent respectivement
 L'audit doit donc retourner `RECOVERY_INCOMPLETE` tant que les octets originaux
 ne sont pas retrouvés et vérifiés. Un hash correct n'est qu'un feu vert pour une
 revue séparée, jamais une qualification runtime ou une autorisation d'exécution.
+
+### Audit ZIP sans extraction — extension du 27 octobre 2026
+
+Le script accepte désormais `--archive chemin/vers/archive.zip`. Il calcule
+l'empreinte de l'archive, vérifie le CRC, refuse les noms de membres dupliqués
+et compare les SHA-256 des deux dépendances attendues directement depuis le ZIP,
+sans extraire de fichiers ni exécuter leur contenu. Les membres absents, les
+doublons et les octets différents restent bloquants. Le résultat sépare
+`archive_recovery_complete` de la présence des sources dans l'arborescence :
+l'un ne signifie pas que les fichiers ont été restaurés dans le dépôt, ni que le
+replay est qualifié. Les tests utilisent une archive synthétique isolée.
