@@ -25,6 +25,14 @@ class CandidateKitTests(unittest.TestCase):
                 file.write_text("# synthetic source fixture\n", encoding="utf-8")
         return names
 
+    def test_only_explicit_root_level_sources_are_admitted(self):
+        self.assertTrue(kit.safe_path("compose.yml"))
+        self.assertFalse(kit.safe_path("unreviewed.yaml"))
+        self.assertFalse(kit.safe_path("./compose.yml"))
+        self.assertFalse(kit.safe_path("../compose.yml"))
+        self.assertFalse(kit.safe_path("/compose.yml"))
+        self.assertFalse(kit.safe_path("config/.env.demo.example"))
+
     def test_deterministic_cumulative_candidate_and_route_denial(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
