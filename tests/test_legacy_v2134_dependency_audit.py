@@ -101,5 +101,39 @@ class LegacyHybridDependencyAuditTests(unittest.TestCase):
         self.assertFalse(result["archive_recovery_complete"])
         self.assertEqual(result["archive_audit"]["members"][0]["status"], "DUPLICATE_MEMBER")
 
+
+    def test_archive_symlink_member_is_rejected(self):
+        from unittest.mock import patch
+        import stat
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "symlink.zip"
+            expected = {
+                "tools/build_real_replay.py": {
+                    "sha256": hashlib.sha256(b"target").hexdigest(),
+                    "role": "fixture",
+                },
+            }
+            info = zipfile.ZipInfo("tools/build_real_replay.py")
+            info.create_system = 3
+            info.external_attr = (stat.S_IFLNK | 0o777) << 16
+            with zipfile.ZipFile(archive, "w") as zf:
+                zf.writestr(info, b"target")
+            with patch.dict("recovery.legacy_v2134.tools.audit_hybrid_dependencies.EXPECTED", expected, clear=True):
+                result = audit(root / "empty-tree", archive)
+        self.assertEqual(result["archive_audit"]["status"], "CRC_PASS")
+        self.assertEqual(result["archive_audit"]["members"][0]["status"], "REJECTED_SYMLINK")
+        self.assertFalse(result["archive_recovery_complete"])
+
+    def test_malformed_archive_is_reported_without_extraction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "broken.zip"
+            archive.write_bytes(b"this is not a zip archive")
+            result = audit(root / "empty-tree", archive)
+        self.assertEqual(result["archive_audit"]["status"], "INVALID_ARCHIVE")
+        self.assertFalse(result["archive_recovery_complete"])
+        self.assertFalse(result["source_execution_performed"])
+
 if __name__ == "__main__":
     unittest.main()
