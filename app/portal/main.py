@@ -6,9 +6,11 @@ from portal.portal_integrations import build_navigation, render_navigation_html
 from portal.portal_read_models import read_portal_snapshot
 from portal.noc_runtime import router as noc_runtime_router
 from portal.acme_impact_read_model import router as acme_impact_router
+from portal.acme_itsm_correlation import router as acme_correlation_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 app.include_router(noc_runtime_router)
 app.include_router(acme_impact_router)
+app.include_router(acme_correlation_router)
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
