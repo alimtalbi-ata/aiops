@@ -2,6 +2,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from demo.star_capture_evidence import verify_file, verify_manifest
 
@@ -49,6 +50,14 @@ class CaptureEvidenceTests(unittest.TestCase):
     def test_run_mismatch_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "cross-run"):
             verify_manifest(self.root, "OTHER-001", {"detect": self.record})
+
+    def test_capture_symlink_is_rejected_even_when_target_is_inside_root(self):
+        alias = self.root / "evidence" / "alias.png"
+        alias.symlink_to(self.root / "evidence" / "alert.png")
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            verify_manifest(self.root, "ACME-TEST-001", {
+                "detect": {**self.record, "screenshot_path": "evidence/alias.png"}
+            })
 
     def test_traversal_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -104,6 +113,13 @@ class CaptureEvidenceTests(unittest.TestCase):
         oversized.write_bytes(b" " * 300_001)
         with self.assertRaisesRegex(ValueError, "too large"):
             verify_file(oversized, self.root)
+
+    def test_manifest_reader_fails_closed_without_nofollow_primitive(self):
+        path = self.root / "manifest.json"
+        path.write_text('{"run_id":"ACME-TEST-001","captures":{}}', encoding="utf-8")
+        with patch("demo.star_capture_evidence.os.O_NOFOLLOW", None, create=True):
+            with self.assertRaisesRegex(ValueError, "descriptor reads unavailable"):
+                verify_file(path, self.root)
 
     def test_manifest_reader_refuses_invalid_utf8_and_non_object_records(self):
         path = self.root / "manifest.json"
