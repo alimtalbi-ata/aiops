@@ -38,7 +38,7 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
 
     def test_bootstrap_fails_closed_without_or_with_invalid_read_token(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}):
-            response = self.client.get("/api/portal/bootstrap")
+            response = self.client.get("/api/portal/bootstrap", headers={"Authorization": "Bearer synthetic-portal-read-token"})
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "portal_read_auth_not_configured")
 
@@ -111,7 +111,7 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
         with patch.object(main, "get_json", side_effect=fake_get_json), patch.object(
             main, "post_json", side_effect=AssertionError("bootstrap must be read-only")
         ):
-            response = self.client.get("/api/portal/bootstrap")
+            response = self.client.get("/api/portal/bootstrap", headers={"Authorization": "Bearer synthetic-portal-read-token"})
 
         self.assertEqual(response.status_code, 200)
         result = response.json()
@@ -141,7 +141,7 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
             return payloads[path]
 
         with patch.object(main, "get_json", side_effect=fake_get_json):
-            response = self.client.get("/api/portal/bootstrap")
+            response = self.client.get("/api/portal/bootstrap", headers={"Authorization": "Bearer synthetic-portal-read-token"})
 
         self.assertEqual(response.status_code, 200)
         result = response.json()
