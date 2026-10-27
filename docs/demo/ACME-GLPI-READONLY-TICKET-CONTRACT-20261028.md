@@ -8,7 +8,7 @@ The existing SAN → ESXi → VM → Payments scenario from PR #50 is determinis
 
 Required environment variables: `AIOPS_GLPI_API_BASE_URL` (exact `https://<host>/apirest.php`), `AIOPS_GLPI_APP_TOKEN`, `AIOPS_GLPI_SESSION_TOKEN`, `AIOPS_GLPI_ENTITY_ID`. For ephemeral CI only, `CI=true` permits `http://aiops2-glpi/apirest.php`. Never commit actual tokens. Provisioned session expiry must be handled by a future dedicated bridge, not by the public Portal.
 
-The returned `OBSERVED_UNCORRELATED` confirms only that the authenticated GLPI API responded with a matching ticket ID and entity. It **does not** establish linkage to the canonical Incident or Run, prove ticket freshness (GLPI `date_mod` lacks a qualified timezone), authenticate a browser capture or permit LIVE remediation. `correlation_state=UNKNOWN`, `runtime_attested=false`, `production_qualified=false` remain explicit.
+The caller must specify or accept `mode=DEMO` (default) or `mode=SIMULATION`; `LIVE` and all other modes are refused before network access. This is not a LIVE GLPI qualification.\n\nThe returned `OBSERVED_UNCORRELATED` confirms only that the authenticated GLPI API responded with a matching ticket ID and entity. It **does not** establish linkage to the canonical Incident or Run, prove ticket freshness (GLPI `date_mod` lacks a qualified timezone), authenticate a browser capture or permit LIVE remediation. `correlation_state=UNKNOWN`, `runtime_attested=false`, `production_qualified=false` remain explicit.
 
 The Portal in `compose.yml` is on `aiops2-control` and `aiops2-public`; GLPI is on `aiops2-integration`. **Do not connect the Portal directly to GLPI**. A future authenticated read-only bridge must be placed on the integration network, return a bounded and independently verifiable correlation receipt to the Core/Portal through a narrowly defined control boundary, and enforce RBAC, tenant isolation, freshness and ID cross-references. No Compose network changes are included here.
 
@@ -18,7 +18,7 @@ Reviewed PR #36 `demo/noc_topology.py` (head `f353497f`): deterministic syntheti
 
 ## Validation boundary
 
-`tests/test_glpi_ticket_read.py` covers 14 offline tests, including entity mismatch, forged ID, synthetic ticket label, redirects, HTTP restrictions, missing credentials, duplicate keys, body limits, malformed JSON, secret redaction and negative LIVE authority. The existing `.github/workflows/quality.yml` runs these tests. **These are offline contract tests with controlled HTTP responses, not a real GLPI integration test**.
+`tests/test_glpi_ticket_read.py` covers 16 offline tests, including entity mismatch, forged ID, synthetic ticket label, redirects, HTTP restrictions, missing credentials, duplicate keys, body limits, malformed JSON, secret redaction and negative LIVE authority. The existing `.github/workflows/quality.yml` runs these tests. **These are offline contract tests with controlled HTTP responses, not a real GLPI integration test**.
 
 A genuine GLPI integration test needs a fully initialized ephemeral `glpi/glpi` + MariaDB service, REST API enabled, a provisioned test session token, test tenant and ticket. Until that environment is available, integration status is **NOT_TESTED**; do not substitute fake GLPI responses and label them integration PASS.
 
