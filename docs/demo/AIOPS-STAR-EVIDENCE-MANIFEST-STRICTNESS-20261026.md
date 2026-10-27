@@ -41,3 +41,17 @@ The byte-level verifier now also enforces palette constraints that can be establ
 Le lecteur bridge ouvre le répertoire puis le manifeste par descripteurs relatifs, refuse les liens symboliques finaux et les fichiers non réguliers, borne la lecture à 16 KiB et compare les métadonnées avant/après. Les plates-formes ne fournissant pas les primitives de non-suivi requises sont refusées explicitement. Le parseur refuse les clés dupliquées, UTF-8 invalide, imbrication excessive et constantes JSON non standard. Des tests ciblés couvrent ces refus.
 
 Le kit cumulatif embarque dorénavant le module complet de bridge Chromium, son adaptateur de storyboard, le gate de replay lié à un SHA indépendant, les modules de réconciliation/identité, les tests et la documentation. La génération du kit est déclenchée par les changements de ces fichiers et exécute les suites de régression correspondantes. Ce changement n'authentifie pas les captures et ne qualifie pas le portail Debian.
+
+
+## Descriptor-bound reads and fail-closed no-follow handling (27 October 2026)
+
+A second-stage reader in `demo/star_event_capture_alignment.py` duplicated the browser bridge's manifest checks and then reopened a pathname using `Path.read_bytes()`. That left a race between checking the manifest and consuming the bytes for timestamp alignment. It now reuses `_read_manifest_bytes` from `demo/star_browser_manifest_gate.py`, which pins the evidence root and file through directory-relative descriptors, applies the 16 KiB limit before allocation, requires a regular file, rejects symlinks with `O_NOFOLLOW`, and compares descriptor metadata and byte count before/after the read. The existing digest comparison still binds the second read to the bytes verified by the bridge.
+
+The independent STAR evidence collector now fails closed if `O_NOFOLLOW` is unavailable rather than silently substituting zero flags. Its capture-path resolver rejects symlink components before resolution, and manifest reads compare device/inode/mode/size/mtime/ctime and the exact byte count on one descriptor. The shared PNG verifier likewise refuses to run when no-follow opens are unavailable. These changes preserve the synthetic/offline boundary; they do not authenticate browser sessions or screenshots and do not authorize HITL or LIVE actions.
+
+Regression coverage added:
+- `tests/test_star_event_capture_alignment.py`: the time-alignment path must not call an unbounded `Path.read_bytes()` for an untrusted manifest.
+- `tests/test_star_capture_evidence.py`: reject an in-root screenshot symlink alias and fail closed without `O_NOFOLLOW`.
+- `tests/test_star_png_integrity.py`: fail closed if `O_NOFOLLOW` is unavailable.
+
+The tests use synthetic temporary files only. Rollback is source-only on the PR branch: revert these source/test/documentation commits and rerun the offline STAR suites. Production remains blocked until authenticated runtime E2E and explicit release approval are completed.
