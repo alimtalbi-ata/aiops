@@ -243,6 +243,20 @@ def validate_fixture(data: object) -> dict:
                 affected.add(consumer)
                 pending.append(consumer)
     affected_ci_ids = sorted(affected)
+    affected_cis = [
+        {
+            "id": ident,
+            "kind": cis[ident]["kind"],
+            "name": cis[ident]["name"],
+            "depends_on": sorted(dependencies[ident]),
+            "impact_role": (
+                "INCIDENT_SOURCE" if ident == SOURCE_CI_ID
+                else "BUSINESS_SERVICE_TARGET" if ident == TARGET_CI_ID
+                else "TRANSITIVE_DEPENDENCY"
+            ),
+        }
+        for ident in affected_ci_ids
+    ]
 
     return {
         "ci_count": len(cis),
@@ -251,6 +265,7 @@ def validate_fixture(data: object) -> dict:
         "target_incident_id": TARGET_INCIDENT_ID,
         "impact_path": impact_path,
         "affected_ci_ids": affected_ci_ids,
+        "affected_cis": affected_cis,
         "provenance": "SIMULATED_TARGET",
         "live_remediation_authorized": False,
     }
