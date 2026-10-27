@@ -214,6 +214,19 @@ def read_status(path, *, proposal_id, now=None):
             incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, mode, created, expires = row
             if mode not in MODES or recipe_id not in RECIPES or at < created or expires <= created:
                 raise HITLRejected("invalid proposal state")
+            if (not isinstance(params_hash, str) or len(params_hash) != 64
+                or any(c not in "0123456789abcdef" for c in params_hash)):
+                raise HITLRejected("invalid stored parameter digest")
+            stored_binding = {
+                "incident_id": incident_id, "run_id": run_id, "recipe_id": recipe_id,
+                "target_id": target_id, "params_hash": params_hash, "mode": mode,
+            }
+            canonical_binding = json.dumps(
+                stored_binding, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode()
+            expected_binding = hashlib.sha256(canonical_binding).hexdigest()
+            if not isinstance(binding_hash, str) or not hmac.compare_digest(binding_hash, expected_binding):
+                raise HITLRejected("stored proposal binding mismatch")
             approval = db.execute(
                 "SELECT approved_at FROM approvals WHERE proposal_id=?", (proposal_id,)
             ).fetchone()
