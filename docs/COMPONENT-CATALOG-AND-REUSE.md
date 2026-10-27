@@ -73,3 +73,8 @@ Record the following before integration:
 6. End-to-end replay with audit trace and deterministic expected outcomes.
 7. HITL/ITSM integration and recovery testing.
 8. Live remediation only after independent policy, fencing, approval, rollback and reconciliation qualification.
+
+
+## Extended candidate register (2026-10-27)
+
+The initial inventory above is extended by [the historical and upstream candidate-code reuse register](docs/release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md). That register covers historical AIOps v1/V145/V8 leads and external upstream projects, with priority, integration rationale, licensing/security gates and acceptance criteria. Its candidates remain **NOT AUDITED / NOT INTEGRATED** until an exact revision, diff, license, contract, tests and decision are recorded.
