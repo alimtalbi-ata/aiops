@@ -84,7 +84,9 @@ class NocSignedPayloadTests(unittest.TestCase):
         self.assertEqual(view["evidence_status"], "DIGEST_REPORTED_NOT_BYTES_VERIFIED")
         self.assertEqual(view["handoff_status"], "ABSENT")
         self.assertNotIn("private_note", view["steps"][0])
-        self.assertNotIn("runtime_authenticated", view)
+        # The field is deliberately projected as false: a signed provider claim
+        # must never be promoted into runtime authentication attestation.
+        self.assertIs(view["runtime_authenticated"], False)
 
     def test_digest_and_signature_must_both_match(self):
         for headers in (
