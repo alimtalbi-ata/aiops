@@ -16,7 +16,7 @@ def png(width=320, height=200):
         return (struct.pack(">I", len(payload)) + kind + payload +
                 struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff))
     ihdr = struct.pack(">II", width, height) + bytes((8, 2, 0, 0, 0))
-    scanlines = (b"\\0" + bytes(width * 3)) * height
+    scanlines = (bytes((0,)) + bytes(width * 3)) * height
     return (bytes.fromhex("89504e470d0a1a0a") + chunk(b"IHDR", ihdr) +
             chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
 
