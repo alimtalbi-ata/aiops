@@ -328,14 +328,11 @@ class NocRuntimeRouteTests(unittest.TestCase):
 
     @staticmethod
     def _safe_view():
+        body, headers = signed_response()
         return noc_runtime._project_signed_payload(
-            *(
-                lambda pair: (
-                    pair[0],
-                    pair[1]["X-AIOps-Read-Model-SHA256"],
-                    pair[1]["X-AIOps-Read-Model-Signature"],
-                )
-            )(signed_response()),
+            body,
+            digest_header=headers["X-AIOps-Read-Model-SHA256"],
+            signature_header=headers["X-AIOps-Read-Model-Signature"],
             hmac_key=HMAC_KEY.encode(),
             source_origin=ORIGIN,
             now=NOW,
