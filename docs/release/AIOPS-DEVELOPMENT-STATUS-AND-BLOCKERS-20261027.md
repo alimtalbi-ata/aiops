@@ -220,3 +220,6 @@ This is a functional integration seam, not a Checkmk/Thruk connector. All upstre
 
 Tests use only synthetic payloads and credentials. The cumulative candidate-kit allowlist and CI trigger now include the adapter, its tests and the contract document. No new port, service, production access, backend write or LIVE remediation is introduced.
 
+
+
+NOC source preflight: optional configuration is now all-or-none. An unset source remains disabled and the endpoint returns 503; a partially configured source, short token/HMAC key, or endpoint-origin mismatch is rejected before any upstream request. The tests use disposable synthetic .env files only.
