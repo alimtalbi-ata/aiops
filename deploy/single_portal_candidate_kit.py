@@ -95,6 +95,10 @@ APPROVED = (
 )
 ROOTS = {"app", "demo", "deploy", "recovery", "integration", "tests", "docs",
          "config", "schemas", "db", "tools", ".github"}
+# Explicit allow-list for the only approved repository-root source in the kit.
+# Do not widen this to arbitrary root files: .env, archives, reports and local state
+# must remain outside the cumulative candidate's source inventory.
+ROOT_FILES = {"compose.yml"}
 EXTENSIONS = {".py", ".sh", ".md", ".yml", ".yaml", ".toml", ".sql", ".json", ".html"}
 EXCLUDED_PARTS = {".git", "backups", "secrets", "sessions", "exports", "captures",
                   "screenshots", "credentials", "__pycache__", "node_modules",
@@ -114,25 +118,12 @@ def sha256(data: bytes) -> str:
 
 def safe_path(name: str) -> bool:
     p = PurePosixPath(name)
+    rooted_source = (len(p.parts) >= 2 and p.parts[0] in ROOTS) or name in ROOT_FILES
     return (not p.is_absolute() and ".." not in p.parts and "\\" not in name
-            and len(p.parts) >= 2 and p.parts[0] in ROOTS
+            and rooted_source
             and not (set(p.parts) & EXCLUDED_PARTS)
             and p.suffix.lower() in EXTENSIONS and not p.name.startswith(".env")
             and not any(part.startswith(".env.") for part in p.parts))
-
-
-def source_paths(root: Path) -> tuple[str, list[str]]:
-    commit = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise ValueError("unverified Git commit")
-    for args in (["git", "diff", "--quiet"], ["git", "diff", "--cached", "--quiet"]):
-        if subprocess.run(args, cwd=root, check=False).returncode:
-            raise ValueError("tracked source is dirty; refuse ambiguous provenance")
-    raw = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
-    paths = sorted(p.decode("utf-8") for p in raw.split(b"\0") if p)
-    return commit, paths
-
 
 def registry_routes(source: bytes) -> list[dict]:
     module = ast.parse(source.decode("utf-8"))
