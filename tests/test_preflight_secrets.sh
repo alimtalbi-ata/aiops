@@ -61,6 +61,11 @@ if bash "$ROOT/deploy/check-secrets.sh" "$TMP/noc-short-hmac.env" >/dev/null 2>&
   echo 'FAIL|short_noc_hmac_key_accepted'
   exit 1
 fi
+sed 's|^AIOPS_NOC_READ_MODEL_TOKEN=.*|AIOPS_NOC_READ_MODEL_TOKEN=token with spaces|' "$TMP/noc-secure.env" > "$TMP/noc-invalid-token.env"
+if bash "$ROOT/deploy/check-secrets.sh" "$TMP/noc-invalid-token.env" >/dev/null 2>&1; then
+  echo 'FAIL|invalid_noc_token_format_accepted'
+  exit 1
+fi
 sed 's/^AIOPS_INTERNAL_TOKEN=.*/AIOPS_INTERNAL_TOKEN=different_token/' "$TMP/secure.env" > "$TMP/mismatch.env"
 if bash "$ROOT/deploy/check-secrets.sh" "$TMP/mismatch.env" >/dev/null 2>&1; then
   echo 'FAIL|mismatched_internal_tokens_accepted'
