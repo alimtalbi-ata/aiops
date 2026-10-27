@@ -42,6 +42,16 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
                 self.assertEqual(set(routes[0].methods or ()), {"GET"})
                 self.assertEqual(routes[0].name, name)
 
+    def test_existing_portal_navigation_exposes_noc_plan_and_acme_simulation(self):
+        paths = [path for path, _label in NAV]
+        self.assertEqual(paths.count("/noc"), 1)
+        self.assertEqual(paths.count("/demo/acme-impact"), 1)
+        page = shell("/", "Cockpit", "Synthetic test", "<p>fixture</p>")
+        self.assertIn('href="/noc"', page)
+        self.assertIn('href="/demo/acme-impact"', page)
+        self.assertIn("NOC (plan)", page)
+        self.assertIn("Impact ACME (SIM)", page)
+
     def test_fixture_and_validator_are_packaged_inside_portal_directory(self):
         expected = pathlib.Path(impact.__file__).resolve().with_name("acme-fixtures.json")
         self.assertEqual(impact.FIXTURE_PATH.resolve(), expected)

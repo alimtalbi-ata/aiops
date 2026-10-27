@@ -31,6 +31,7 @@ APPROVED = (
     ".github/workflows/star-capture-evidence.yml",
     ".github/workflows/star-browser-manifest-bridge-offline.yml",
     "app/portal/main.py",
+    "app/portal/ui_theme.py",
     "app/portal/acme-fixtures.json",
     "app/portal/acme_fixture_contract.py",
     "app/portal/acme_impact_read_model.py",

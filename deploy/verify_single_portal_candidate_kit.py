@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from deploy.single_portal_candidate_kit import APPROVED, SENSITIVE, safe_path, sha256, source_paths, registry_routes, candidate_readme
 
-MAX_FILES = 64
+MAX_FILES = 68
 MAX_MEMBER = 4_000_000
 MAX_TOTAL = 12_000_000
 HEX = re.compile(r"[0-9a-f]{64}\Z")

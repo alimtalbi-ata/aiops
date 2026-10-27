@@ -94,3 +94,22 @@ Le portage cible est Linux/Debian et l'image Python Linux. Les plateformes sans
 suivrait les liens n'est pas activé. Le scénario, ses IDs, et sa provenance
 restent synthétiques ; aucun ticket, timestamp runtime ou attestation n'est
 créé.
+
+## Navigation du portail — 27 octobre 2026
+
+Le shell partagé `app/portal/ui_theme.py` expose maintenant deux vues déjà montées
+sur la même application FastAPI : `/noc` (inventaire statique des routes, pas un
+NOC connecté) et `/demo/acme-impact` (impact ACME synthétique, strictement local).
+Les liens ne lancent pas de workflow, ne contactent aucun backend et n'ajoutent
+aucun listener ni port.
+
+Le kit cumulatif embarque désormais `app/portal/ui_theme.py` avec le test qui
+vérifie la présence unique des deux liens dans le shell. Le plafond de membres
+du vérificateur est ajusté de 64 à 68 pour accepter le nouveau fichier embarqué
+sans relâcher les contrôles de liste exacte, doublons, empreintes ou statut
+`production_qualified=false`.
+
+Cette amélioration corrige la découvrabilité dans l'interface commune ; elle ne
+transforme ni `/noc` ni les connecteurs projetés en intégrations runtime.
+Les connexions directes à GLPI/CMDB, n8n, Grafana, Prometheus, Checkmk/Thruk,
+Temporal, DGX et RAG restent à raccorder et à qualifier séparément.

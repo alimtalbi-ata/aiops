@@ -84,6 +84,11 @@ class CandidateKitTests(unittest.TestCase):
                     (root / "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html").read_bytes(),
                 )
                 self.assertIn("sources/app/portal/main.py", z.namelist())
+                self.assertIn("sources/app/portal/ui_theme.py", z.namelist())
+                self.assertEqual(
+                    z.read("sources/app/portal/ui_theme.py"),
+                    (root / "app/portal/ui_theme.py").read_bytes(),
+                )
                 self.assertIn("sources/app/portal/portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/tests/test_portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md", z.namelist())

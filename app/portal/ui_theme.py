@@ -51,6 +51,8 @@ NAV = [
     ("/copilot", "Copilot"),
     ("/qualification", "Qualification"),
     ("/demo-studio", "Demo Studio"),
+    ("/noc", "NOC (plan)"),
+    ("/demo/acme-impact", "Impact ACME (SIM)"),
 ]
 
 def esc(value):
