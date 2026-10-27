@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 SERVICES = ("portal", "thruk", "grafana", "n8n", "glpi")
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,127}$")
-SELECTOR = re.compile(r"^[#.[A-Za-z][A-Za-z0-9_ #.\\[\\]='\"\\-:>]*$")
+SELECTOR = re.compile(r"^(?:[#.][A-Za-z][A-Za-z0-9_-]*)(?: [#.][A-Za-z][A-Za-z0-9_-]*)*$")
 PNG = bytes.fromhex("89504e470d0a1a0a")
 
 
