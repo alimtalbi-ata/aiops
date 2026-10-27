@@ -36,6 +36,8 @@ jobs:
           python -m unittest discover -s tests -p "test_evidence_video_bundle.py" -v
       - name: Playwright capture safety contract (offline, no browser)
         run: python -m unittest discover -s tests -p "test_evidence_browser_capture.py" -v
+      - name: Capture publication rollback and collision safety (offline)
+        run: python -m unittest discover -s tests -p "test_evidence_publish.py" -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
