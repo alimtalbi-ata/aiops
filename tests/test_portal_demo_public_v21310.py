@@ -162,6 +162,22 @@ class DemoPublicTests(unittest.TestCase):
             result = mod._job_snapshot("a" * 32, job)
             self.assertEqual(result["status"], "completed")
             self.assertIn("video", result["artifacts"])
+            # Duplicate JSON keys must not let an ambiguous manifest choose
+            # different values in different parsers.
+            duplicate_manifest = json.dumps(data).replace(
+                '"scenario": "SAN_FABRIC_P1"',
+                '"scenario": "PAYMENTS_P2", "scenario": "SAN_FABRIC_P1"',
+                1,
+            )
+            manifest.write_text(duplicate_manifest, encoding="utf-8")
+            job_duplicate = {"process":MagicMock(), "output":output, "scenario":"SAN_FABRIC_P1",
+                             "status":"running", "created_at":1}
+            job_duplicate["process"].poll.return_value = 0
+            result_duplicate = mod._job_snapshot("d" * 32, job_duplicate)
+            self.assertEqual(result_duplicate["status"], "failed")
+            self.assertEqual(result_duplicate["error"], "manifest_missing_or_invalid")
+            # Restore a valid manifest so the artifact tamper check remains independent.
+            manifest.write_text(json.dumps(data), encoding="utf-8")
             subtitles.write_text("tampered", encoding="utf-8")
             job2 = {"process":MagicMock(), "output":output, "scenario":"SAN_FABRIC_P1",
                     "status":"running", "created_at":1}
