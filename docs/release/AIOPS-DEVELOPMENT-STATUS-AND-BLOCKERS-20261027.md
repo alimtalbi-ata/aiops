@@ -12,7 +12,7 @@ AIOps 2.0 possède une base de reconstruction structurée : Core et contrats de 
 
 **La plateforme complète n'est pas qualifiée de bout en bout sur le système cible.** Le principal écart est la différence entre des composants ou adaptateurs présents dans le dépôt, des tests synthétiques réussis à un commit précis, et des connexions métier/authentifiées réellement observées sur Debian. La matrice des routes du portail confirme que plusieurs familles produit ne sont pas raccordées par le portail source actuellement examiné.
 
-**État CI de cette branche : NON CONFIRMÉ au moment de cette revue.** La consultation du connecteur GitHub n'a retourné aucun run associé aux derniers commits consultés. Cela ne signifie pas nécessairement qu'aucun workflow n'a tourné ; cela signifie que nous ne disposons pas ici d'une preuve de statut pour ce HEAD. Aucun PASS récent n'est inventé.
+**État CI de cette branche : EN ATTENTE / NON QUALIFIÉ au moment de cette revue.** La consultation la plus récente a retourné plusieurs runs de workflows PR en état `queued` pour le commit `3aa3a95006d834cf3b8e92ba063ebb0dd43776c6` (dont kit cumulatif, tests STAR, replay historique et NOC/RAG synthétique). Aucun de ces runs n'était indiqué comme terminé dans cette réponse. Ils ne prouvent donc ni PASS ni FAIL ; il faut récupérer leurs résultats et logs avant de conclure.
 
 ## 2. Légende des états
 
