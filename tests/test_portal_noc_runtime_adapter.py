@@ -252,6 +252,20 @@ class NocRuntimeRouteTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "body length mismatch"):
                 noc_runtime.read_signed_noc_snapshot()
 
+    def test_malformed_upstream_token_is_rejected_before_network_access(self):
+        env = {
+            "AIOPS_NOC_READ_MODEL_URL": URL,
+            "AIOPS_NOC_READ_MODEL_TOKEN": "token with spaces and newline",
+            "AIOPS_NOC_READ_MODEL_HMAC_KEY": HMAC_KEY,
+            "AIOPS_NOC_ALLOWED_ORIGINS": ORIGIN,
+        }
+        with patch.dict(os.environ, env), patch.object(
+            noc_runtime.urllib.request, "build_opener",
+            side_effect=AssertionError("invalid token must not open network"),
+        ):
+            with self.assertRaisesRegex(ValueError, "credentials"):
+                noc_runtime.read_signed_noc_snapshot()
+
     def test_disallowed_origin_is_rejected_before_network_access(self):
         env = {
             "AIOPS_NOC_READ_MODEL_URL": "https://other.example.test/api/read-model",
