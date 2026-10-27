@@ -2,7 +2,13 @@
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-BASE="${BASE_URL:-http://127.0.0.1:7777}"
+PORTAL_HOST_PORT="${AIOPS_PORTAL_HOST_PORT:-}"
+if [[ -z "$PORTAL_HOST_PORT" && -f .env ]]; then
+  PORTAL_HOST_PORT="$(sed -n 's/^AIOPS_PORTAL_HOST_PORT=//p' .env | head -n 1)"
+fi
+PORTAL_HOST_PORT="${PORTAL_HOST_PORT:-17777}"
+[[ "$PORTAL_HOST_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "invalid_portal_host_port" >&2; exit 2; }
+BASE="${BASE_URL:-http://127.0.0.1:$PORTAL_HOST_PORT}"
 mkdir -p reports
 RUN_ID=""
 RESULT="FAIL"

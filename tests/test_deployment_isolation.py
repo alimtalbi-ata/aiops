@@ -70,6 +70,9 @@ class IsolatedDeploymentPlanTests(unittest.TestCase):
         # Candidate binds stay loopback-only by default; this is not a public
         # listener configuration and does not assert target-runtime reachability.
         self.assertIn("AIOPS_BIND_IP=127.0.0.1", env_example)
+        runtime_e2e = (ROOT / "tests" / "runtime-e2e.sh").read_text(encoding="utf-8")
+        self.assertIn('BASE="${BASE_URL:-http://127.0.0.1:$PORTAL_HOST_PORT}"', runtime_e2e)
+        self.assertNotIn("http://127.0.0.1:7777", runtime_e2e)
 
     def test_default_production_identity_rejected(self):
         env = env_fixture()
