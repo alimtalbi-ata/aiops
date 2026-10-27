@@ -207,3 +207,15 @@ The current branch now has a consolidated status register: [AIOps development st
 Key current blockers recorded: current PR-head CI is pending/unqualified; the latest connector query returned multiple PR workflow runs in `queued` state for commit `3aa3a95006d834cf3b8e92ba063ebb0dd43776c6`, without completed results in that response, so no PASS/FAIL is inferred. The portal source does not mount the separate NOC integration route; GLPI/CMDB, n8n, Grafana/Prometheus/Alertmanager, Checkmk/Thruk, Temporal API, real DGX Analyst/Critic and RAG are not proven as live portal integrations; the ACME SAN P1 → Payments P2 scenario lacks an authentic E2E evidence set; global portal SSO/authentication is not qualified; deployed Git/image/config provenance and Debian runtime remain unverified. The four staggered CI workflows are in PR #36 and are not on a default branch, so their scheduled cadence is not active yet. No production changes, live remediation or automatic merge are authorized.
 
 Status discipline: never mark a test PASS without a run tied to the exact commit; update this continuity record and the blocker register together after material work. Preserve synthetic/live provenance and report unknowns explicitly.
+
+
+## Update — candidate-code reuse register (2026-10-27)
+
+Added [AIOps candidate code reuse register](release/AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md) on branch `feat/v21310-star-portal-continuity-20261022`. It separates historical v1/V145/V8 leads from upstream GitHub projects and records intended role, priority, licensing/security review, integration guards and exit criteria. It is a candidate register only: no external project is claimed to have been cloned, built, integrated or runtime-qualified as part of this documentation change.
+
+Immediate review order:
+1. Recover and hash exact historical source revisions, especially V145 evidence acquisition/fusion/matrix and functional read model, plus the historical schema reconciliation utility.
+2. Compare candidates with current Core/Run/Evidence/Decision contracts and existing adapters.
+3. Select one read-only candidate at a time; verify license/tag/SBOM and test with synthetic data in isolation.
+4. Record accept/adapt/replace/reject in `docs/DECISION-LOG.md`; preserve Temporal as the sole durable workflow engine and Core as the sole canonical Run-state owner.
+5. No production changes, live remediations or PR merge are authorized by this register.
