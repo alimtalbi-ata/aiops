@@ -36,6 +36,31 @@ GRAFANA_ADMIN_PASSWORD=grafana_random_05
 N8N_ENCRYPTION_KEY=n8n_random_06
 EOF
 bash "$ROOT/deploy/check-secrets.sh" "$TMP/secure.env" >/dev/null
+# Optional signed NOC bridge must be all-or-none and use a matching explicit origin.
+cp "$TMP/secure.env" "$TMP/noc-partial.env"
+printf '%s\n' 'AIOPS_NOC_READ_MODEL_URL=https://noc.example.test/api/read-model' >> "$TMP/noc-partial.env"
+if bash "$ROOT/deploy/check-secrets.sh" "$TMP/noc-partial.env" >/dev/null 2>&1; then
+  echo 'FAIL|partial_noc_source_configuration_accepted'
+  exit 1
+fi
+cp "$TMP/secure.env" "$TMP/noc-secure.env"
+cat >> "$TMP/noc-secure.env" <<'EOF'
+AIOPS_NOC_READ_MODEL_URL=https://noc.example.test/api/read-model
+AIOPS_NOC_READ_MODEL_TOKEN=upstream_token_random_1234567890
+AIOPS_NOC_READ_MODEL_HMAC_KEY=hmac_key_random_012345678901234567890123456789
+AIOPS_NOC_ALLOWED_ORIGINS=https://noc.example.test
+EOF
+bash "$ROOT/deploy/check-secrets.sh" "$TMP/noc-secure.env" >/dev/null
+sed 's|^AIOPS_NOC_ALLOWED_ORIGINS=.*|AIOPS_NOC_ALLOWED_ORIGINS=https://other.example.test|' "$TMP/noc-secure.env" > "$TMP/noc-origin-mismatch.env"
+if bash "$ROOT/deploy/check-secrets.sh" "$TMP/noc-origin-mismatch.env" >/dev/null 2>&1; then
+  echo 'FAIL|noc_origin_mismatch_accepted'
+  exit 1
+fi
+sed 's|^AIOPS_NOC_READ_MODEL_HMAC_KEY=.*|AIOPS_NOC_READ_MODEL_HMAC_KEY=short|' "$TMP/noc-secure.env" > "$TMP/noc-short-hmac.env"
+if bash "$ROOT/deploy/check-secrets.sh" "$TMP/noc-short-hmac.env" >/dev/null 2>&1; then
+  echo 'FAIL|short_noc_hmac_key_accepted'
+  exit 1
+fi
 sed 's/^AIOPS_INTERNAL_TOKEN=.*/AIOPS_INTERNAL_TOKEN=different_token/' "$TMP/secure.env" > "$TMP/mismatch.env"
 if bash "$ROOT/deploy/check-secrets.sh" "$TMP/mismatch.env" >/dev/null 2>&1; then
   echo 'FAIL|mismatched_internal_tokens_accepted'
