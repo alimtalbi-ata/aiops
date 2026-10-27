@@ -3,7 +3,7 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 docker compose --env-file .env config >/dev/null
 for s in aiops2-postgres aiops2-core aiops2-twin aiops2-evidence aiops2-policy aiops2-copilot aiops2-worker aiops2-simulator aiops2-portal aiops2-temporal aiops2-temporal-postgres aiops2-glpi-db aiops2-glpi aiops2-n8n aiops2-prometheus aiops2-grafana aiops2-alertmanager; do docker inspect "$s" >/dev/null 2>&1 || { echo "FAIL|MISSING|$s"; exit 1; }; done
-curl -fsS http://127.0.0.1:7777/health >/dev/null
+curl -fsS http://127.0.0.1:${AIOPS_PORTAL_HOST_PORT:-17777}/health >/dev/null
 curl -fsS http://127.0.0.1:8080 >/dev/null
 curl -fsS http://127.0.0.1:9090/-/ready >/dev/null
 curl -fsS http://127.0.0.1:3000/api/health >/dev/null
