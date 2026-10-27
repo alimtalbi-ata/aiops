@@ -24,6 +24,16 @@ MAX_SCREENSHOT_BYTES = 20 * 1024 * 1024
 MAX_PNG_DIMENSION = 30_000
 MAX_PNG_PIXELS = 100_000_000
 MAX_PNG_DECODED_BYTES = 128 * 1024 * 1024
+
+
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous JSON objects instead of silently taking the last key."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        result[key] = value
+    return result
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -221,7 +231,10 @@ def audit_manifest(manifest_path: Path, evidence_root: Path, allowed_origins: se
     if not allowed_origins:
         raise ValueError("at least one explicit --allowed-origin is required")
     normalized_origins = {_origin(value) for value in allowed_origins}
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload = json.loads(
+        manifest_path.read_text(encoding="utf-8"),
+        object_pairs_hook=_reject_duplicate_json_keys,
+    )
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ValueError("unsupported manifest schema")
     if payload.get("provenance") != "OPERATOR_SUPPLIED_SCREENSHOTS_UNATTESTED":
