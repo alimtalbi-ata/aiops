@@ -21,6 +21,83 @@ PNG = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2,
 EXPECTED = {"run_id": "RUN-ACME-001", "correlation_id": "CORR-ACME-001", "events": {"detect": "DASH-7"}}
 
 
+
+
+def _build_v2_capture_set(root):
+    """Build a complete nine-cue synthetic v2 set in a temporary directory."""
+    from datetime import datetime, timedelta, timezone
+    from demo.star_snapshot_choreography import CUES
+
+    run_id = "RUN-ACME-V2-001"
+    correlation_id = "CORR-ACME-V2-001"
+    incident_id = "INC-ACME-SAN-P1"
+    route_by_service = {
+        "grafana": "{origin}/d/{dashboard_uid}/{slug_redacted}",
+        "n8n": "{origin}/{workflow_route_redacted}/executions/{event_ref}",
+        "glpi": "{origin}/front/ticket.form.php?{id_redacted}",
+    }
+    checkpoints = {}
+    filenames = []
+    origin_time = datetime(2026, 10, 27, 8, 0, 0, tzinfo=timezone.utc)
+    capture_time = datetime(2026, 10, 27, 8, 0, 10, tzinfo=timezone.utc)
+    for index, cue in enumerate(CUES):
+        event_ref = "EVENT-" + str(index + 100)
+        ticket_id = "GLPI-12345" if cue.cue in {
+            "ticket", "approve", "simulate", "verify", "close"
+        } else None
+        event_timestamp = (
+            None if cue.cue == "enrich"
+            else (origin_time + timedelta(seconds=index)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+        checkpoints[cue.cue] = {
+            "event_ref": event_ref,
+            "ticket_id": ticket_id,
+            "event_timestamp_utc": event_timestamp,
+        }
+        png_bytes = (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(bytes([0, index, 0, 0])))
+            + chunk(b"IEND")
+        )
+        (root / (cue.cue + ".png")).write_bytes(png_bytes)
+        stamp = (capture_time + timedelta(seconds=index)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        manifest = {
+            "schema": "star-browser-evidence/v2",
+            "cue": cue.cue, "service": cue.service, "view": cue.view,
+            "run_id": run_id, "correlation_id": correlation_id, "event_ref": event_ref,
+            "incident_id": incident_id, "ticket_id": ticket_id,
+            "event_timestamp_utc": event_timestamp,
+            "expected_state": cue.required_state, "observed_state": cue.required_state,
+            "captured_at": stamp,
+            "sha256": hashlib.sha256(png_bytes).hexdigest(),
+            "screenshot_file": cue.cue + ".png",
+            "provenance": "ISOLATED_TEST_FIXTURE",
+            "capture_transport": "LOCAL_HTML_FIXTURE_NO_HTTP",
+            "anonymization": "SELECTOR_MASKS_UNREVIEWED",
+            "qualification": "CAPTURED_UNREVIEWED_NOT_BUSINESS_PROOF",
+            "source_url_redacted": route_by_service[cue.service],
+            "event_time_alignment": (
+                "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"
+                if event_timestamp is None
+                else "MATCHED_TO_DECLARED_EVENT_TIMESTAMP_NOT_AUTHENTICATED"
+            ),
+            "runtime_page_authenticated": False,
+            "business_outcome_verified": False,
+            "human_approval_authenticated": False,
+        }
+        (root / (cue.cue + ".json")).write_text(
+            json.dumps(manifest, sort_keys=True), encoding="utf-8"
+        )
+        filenames.append(cue.cue + ".json")
+    expected = {
+        "schema": "star-canonical-checkpoint-context/v1",
+        "run_id": run_id, "correlation_id": correlation_id,
+        "incident_id": incident_id, "checkpoints": checkpoints,
+    }
+    return expected, filenames
+
+
 class BrowserManifestGateTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -343,6 +420,85 @@ class BrowserManifestGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "chronology"):
             verify_browser_manifests(self.root, {**EXPECTED, "events": {"detect": "DASH-7", "verify": "DASH-8"}},
                                      ["verify.json", "detect.json"])
+
+
+
+    def test_v2_context_binds_run_incident_ticket_event_time_and_png(self):
+        expected, names = _build_v2_capture_set(self.root)
+        report = verify_browser_manifests(self.root, expected, names, require_complete=True)
+        self.assertEqual(report["schema"], "star-capture-evidence-v1")
+        self.assertEqual(report["context_schema"], "star-canonical-checkpoint-context/v1")
+        self.assertEqual(report["run_id"], expected["run_id"])
+        self.assertEqual(report["incident_id"], expected["incident_id"])
+        self.assertEqual(report["checkpoint_context_count"], 9)
+        self.assertEqual(report["event_timestamps_present"], 8)
+        self.assertEqual(report["event_timestamps_absent"], 1)
+        self.assertIs(report["runtime_attested"], False)
+        self.assertIs(report["runtime_authenticated"], False)
+        self.assertEqual(len(report["entries"]), 9)
+        by_cue = {entry["cue"]: entry for entry in report["entries"]}
+        self.assertIsNone(by_cue["detect"]["ticket_id"])
+        self.assertEqual(by_cue["ticket"]["ticket_id"], "GLPI-12345")
+        self.assertIsNone(by_cue["enrich"]["event_timestamp_utc"])
+        self.assertFalse(by_cue["enrich"]["event_timestamp_present"])
+        self.assertRegex(report["capture_set_sha256"], r"^[a-f0-9]{64}$")
+
+    def test_v2_context_rejects_missing_or_contradictory_incident_ticket_and_time(self):
+        mutations = (
+            ("ticket", "incident_id", "INC-OTHER-001", "incident_id"),
+            ("ticket", "ticket_id", "GLPI-99999", "ticket_id"),
+            ("ticket", "event_timestamp_utc", "2026-10-27T08:01:00Z", "timestamp"),
+        )
+        for cue, field, value, message in mutations:
+            with self.subTest(field=field):
+                expected, names = _build_v2_capture_set(self.root)
+                path = self.root / (cue + ".json")
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+                manifest[field] = value
+                path.write_text(json.dumps(manifest), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    verify_browser_manifests(self.root, expected, names, require_complete=True)
+        expected, names = _build_v2_capture_set(self.root)
+        path = self.root / "enrich.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        del manifest["event_timestamp_utc"]
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "missing checkpoint context"):
+            verify_browser_manifests(self.root, expected, names, require_complete=True)
+
+    def test_v2_ticket_cannot_be_fabricated_before_ticket_checkpoint(self):
+        expected, names = _build_v2_capture_set(self.root)
+        path = self.root / "detect.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest["ticket_id"] = "GLPI-12345"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "ticket_id mismatch"):
+            verify_browser_manifests(self.root, expected, names, require_complete=True)
+
+    def test_v2_context_must_use_canonical_utc_timestamp_and_valid_ticket_id(self):
+        expected, names = _build_v2_capture_set(self.root)
+        expected["checkpoints"]["detect"]["event_timestamp_utc"] = "2026-10-27T10:00:10+02:00"
+        with self.assertRaisesRegex(ValueError, "canonical event timestamp"):
+            verify_browser_manifests(self.root, expected, names, require_complete=True)
+        expected, names = _build_v2_capture_set(self.root)
+        expected["checkpoints"]["ticket"]["ticket_id"] = "../GLPI-12345"
+        with self.assertRaisesRegex(ValueError, "invalid checkpoint ticket_id"):
+            verify_browser_manifests(self.root, expected, names, require_complete=True)
+
+    def test_v2_capture_set_digest_changes_when_declared_event_time_changes(self):
+        expected, names = _build_v2_capture_set(self.root)
+        first = verify_browser_manifests(
+            self.root, expected, names, require_complete=True
+        )["capture_set_sha256"]
+        path = self.root / "detect.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest["event_timestamp_utc"] = "2026-10-27T08:00:05Z"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        expected["checkpoints"]["detect"]["event_timestamp_utc"] = "2026-10-27T08:00:05Z"
+        second = verify_browser_manifests(
+            self.root, expected, names, require_complete=True
+        )["capture_set_sha256"]
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":

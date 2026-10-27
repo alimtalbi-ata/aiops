@@ -11,7 +11,7 @@ import os
 import re
 import stat
 from collections.abc import Mapping as MappingABC
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -28,7 +28,8 @@ _ALLOWED_FIELDS = frozenset({
     "schema", "cue", "service", "view", "run_id", "correlation_id", "event_ref",
     "expected_state", "observed_state", "captured_at", "sha256", "screenshot_file",
     "provenance", "capture_transport", "anonymization", "qualification",
-    "source_url_redacted", "event_time_alignment", "runtime_page_authenticated",
+    "source_url_redacted", "event_time_alignment", "incident_id", "ticket_id",
+    "event_timestamp_utc", "runtime_page_authenticated",
     "business_outcome_verified", "human_approval_authenticated",
 })
 _REDACTED_ROUTE_BY_SERVICE = {
@@ -37,7 +38,39 @@ _REDACTED_ROUTE_BY_SERVICE = {
     "grafana": "{origin}/d/{dashboard_uid}/{slug_redacted}",
 }
 _TIME_UNVERIFIED = "UNVERIFIED_REQUIRES_EXTERNAL_EVENT_TIMESTAMP"
+_TIME_MATCHED_DECLARED = "MATCHED_TO_DECLARED_EVENT_TIMESTAMP_NOT_AUTHENTICATED"
+_CONTEXT_SCHEMA = "star-canonical-checkpoint-context/v1"
+_CONTEXT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,127}$")
+_TICKET_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+_TICKET_CREATED_CUES = frozenset({"ticket", "approve", "simulate", "verify", "close"})
 MAX_MANIFEST_BYTES = 16_384
+
+
+def _context_ticket_id(value: object) -> str | None:
+    """Validate a ticket ID when present; None explicitly means absent."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _TICKET_ID.fullmatch(value):
+        raise ValueError("invalid checkpoint ticket_id")
+    return value
+
+
+def _canonical_event_timestamp(value: object) -> str | None:
+    """Accept only a canonical UTC timestamp with trailing Z, or explicit absence."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.endswith("Z") or len(value) > 40:
+        raise ValueError("invalid canonical event timestamp")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except (ValueError, OverflowError) as exc:
+        raise ValueError("invalid canonical event timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+        raise ValueError("event timestamp must be UTC")
+    normalized = parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    if value != normalized:
+        raise ValueError("event timestamp is not canonical UTC")
+    return normalized
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -140,13 +173,42 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         raise ValueError("invalid complete-capture mode")
     if not isinstance(root, Path):
         raise ValueError("unsafe evidence root")
-    if not isinstance(expected, MappingABC) or set(expected) != {
-        "run_id", "correlation_id", "events"
-    }:
+    if not isinstance(expected, MappingABC):
         raise ValueError("invalid canonical event contract")
-    run_id, correlation_id, refs = (
-        expected.get("run_id"), expected.get("correlation_id"), expected.get("events")
-    )
+    context_mode = False
+    incident_id = None
+    expected_context = None
+    if set(expected) == {"run_id", "correlation_id", "events"}:
+        run_id, correlation_id, refs = (
+            expected.get("run_id"), expected.get("correlation_id"), expected.get("events")
+        )
+    elif set(expected) == {"schema", "run_id", "correlation_id", "incident_id", "checkpoints"}:
+        if expected.get("schema") != _CONTEXT_SCHEMA:
+            raise ValueError("invalid canonical checkpoint context schema")
+        run_id = expected.get("run_id")
+        correlation_id = expected.get("correlation_id")
+        incident_id = expected.get("incident_id")
+        if not isinstance(incident_id, str) or not _CONTEXT_ID.fullmatch(incident_id):
+            raise ValueError("invalid canonical incident_id")
+        raw_context = expected.get("checkpoints")
+        if (not isinstance(raw_context, MappingABC) or not raw_context
+                or any(not isinstance(key, str) or key not in CUE_BY_NAME for key in raw_context)):
+            raise ValueError("canonical checkpoint context missing or unknown")
+        expected_context = {}
+        for cue_name, context in raw_context.items():
+            if (not isinstance(context, MappingABC)
+                    or set(context) != {"event_ref", "ticket_id", "event_timestamp_utc"}):
+                raise ValueError("invalid checkpoint context fields")
+            expected_context[cue_name] = {
+                "event_ref": context["event_ref"],
+                "ticket_id": _context_ticket_id(context["ticket_id"]),
+                "event_timestamp_utc": _canonical_event_timestamp(context["event_timestamp_utc"]),
+            }
+        refs = {cue_name: context["event_ref"]
+                for cue_name, context in expected_context.items()}
+        context_mode = True
+    else:
+        raise ValueError("invalid canonical event contract")
     if (not isinstance(refs, MappingABC) or not refs
             or any(not isinstance(key, str) for key in refs)
             or set(refs) - set(CUE_BY_NAME)):
@@ -185,8 +247,19 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
             raise ValueError("invalid capture manifest JSON") from exc
         except RecursionError as exc:
             raise ValueError("capture manifest nesting is excessive") from exc
-        if not isinstance(item, dict) or item.get("schema") != "star-browser-evidence/v1":
+        expected_manifest_schema = (
+            "star-browser-evidence/v2" if context_mode else "star-browser-evidence/v1"
+        )
+        if not isinstance(item, dict) or item.get("schema") != expected_manifest_schema:
             raise ValueError("invalid Chromium manifest schema")
+        if context_mode and any(
+            key not in item for key in ("incident_id", "ticket_id", "event_timestamp_utc")
+        ):
+            raise ValueError("missing checkpoint context fields")
+        if not context_mode and any(
+            key in item for key in ("incident_id", "ticket_id", "event_timestamp_utc")
+        ):
+            raise ValueError("checkpoint context fields require v2 manifest")
         if set(item) - _ALLOWED_FIELDS:
             raise ValueError("unexpected capture metadata fields")
         service = item.get("service")
@@ -196,7 +269,7 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         # A valid route from another service is still the WRONG application page.
         if item.get("source_url_redacted") != _REDACTED_ROUTE_BY_SERVICE[service]:
             raise ValueError("missing, unsafe or cross-service capture route")
-        if item.get("event_time_alignment") != _TIME_UNVERIFIED:
+        if not context_mode and item.get("event_time_alignment") != _TIME_UNVERIFIED:
             raise ValueError("missing or falsely attested event time alignment")
         if any(item.get(k) not in (None, False) for k in _FORBIDDEN):
             raise ValueError("untrusted browser manifest claims authority")
@@ -209,6 +282,26 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
         view = item.get("view")
         if not isinstance(view, str) or service != cue.service or view != cue.view:
             raise ValueError("wrong application view")
+        checkpoint_context = None
+        if context_mode:
+            checkpoint_context = expected_context[cue_name]
+            if item.get("incident_id") != incident_id:
+                raise ValueError("checkpoint incident_id mismatch")
+            observed_ticket_id = _context_ticket_id(item["ticket_id"])
+            if observed_ticket_id != checkpoint_context["ticket_id"]:
+                raise ValueError("checkpoint ticket_id mismatch")
+            if cue_name in _TICKET_CREATED_CUES and observed_ticket_id is None:
+                raise ValueError("ticket_id required from ticket checkpoint onward")
+            if cue_name not in _TICKET_CREATED_CUES and observed_ticket_id is not None:
+                raise ValueError("ticket_id must remain absent before ticket checkpoint")
+            observed_event_timestamp = _canonical_event_timestamp(item["event_timestamp_utc"])
+            if observed_event_timestamp != checkpoint_context["event_timestamp_utc"]:
+                raise ValueError("checkpoint event timestamp mismatch")
+            expected_alignment = (
+                _TIME_UNVERIFIED if observed_event_timestamp is None else _TIME_MATCHED_DECLARED
+            )
+            if item.get("event_time_alignment") != expected_alignment:
+                raise ValueError("event timestamp provenance/alignment mismatch")
         verify_snapshot_identity(
             {"run_id": run_id, "correlation_id": correlation_id, "event_ref": refs[cue_name]},
             {"run_id": item.get("run_id"), "correlation_id": item.get("correlation_id"),
@@ -256,6 +349,13 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
             "view": cue.view, "sha256": actual, "bytes": size,
             "captured_at": captured.isoformat(),
         }
+        if context_mode:
+            entries[cue_name].update({
+                "incident_id": incident_id,
+                "ticket_id": checkpoint_context["ticket_id"],
+                "event_timestamp_utc": checkpoint_context["event_timestamp_utc"],
+                "event_timestamp_present": checkpoint_context["event_timestamp_utc"] is not None,
+            })
         if include_manifest_digests:
             # Additional read-consistency marker; does not change replay pins.
             entries[cue_name]["manifest_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
@@ -267,14 +367,27 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
     if require_complete:
         # Only after PNG-byte verification, independent identity checks and full
         # nine-cue coverage. This digest is replay consistency, not authentication.
-        reconcile_checkpoints(expected, validated_captures)
-        binding = {
-            "schema": "star-capture-set-binding/v1",
-            "run_id": run_id, "correlation_id": correlation_id,
-            "events": {cue.cue: refs[cue.cue] for cue in CUES},
-            "entries": [{k: v for k, v in entry.items() if k != "manifest_sha256"}
-                        for entry in ordered],
-        }
+        reconcile_checkpoints(
+            {"run_id": run_id, "correlation_id": correlation_id, "events": refs},
+            validated_captures,
+        )
+        if context_mode:
+            binding = {
+                "schema": "star-capture-set-binding/v2",
+                "run_id": run_id, "correlation_id": correlation_id,
+                "incident_id": incident_id,
+                "checkpoints": {cue.cue: expected_context[cue.cue] for cue in CUES},
+                "entries": [{k: v for k, v in entry.items() if k != "manifest_sha256"}
+                            for entry in ordered],
+            }
+        else:
+            binding = {
+                "schema": "star-capture-set-binding/v1",
+                "run_id": run_id, "correlation_id": correlation_id,
+                "events": {cue.cue: refs[cue.cue] for cue in CUES},
+                "entries": [{k: v for k, v in entry.items() if k != "manifest_sha256"}
+                            for entry in ordered],
+            }
         canonical = json.dumps(binding, sort_keys=True, ensure_ascii=True,
                                separators=(",", ":"), allow_nan=False).encode("utf-8")
         capture_set_sha256 = hashlib.sha256(canonical).hexdigest()
@@ -286,5 +399,20 @@ def verify_browser_manifests(root: Path, expected: Mapping[str, object],
     }
     if require_complete:
         report["capture_set_sha256"] = capture_set_sha256
+    if context_mode:
+        report.update({
+            "context_schema": _CONTEXT_SCHEMA,
+            "incident_id": incident_id,
+            "checkpoint_context_count": len(expected_context),
+            "event_timestamps_present": sum(
+                1 for context in expected_context.values()
+                if context["event_timestamp_utc"] is not None
+            ),
+            "event_timestamps_absent": sum(
+                1 for context in expected_context.values()
+                if context["event_timestamp_utc"] is None
+            ),
+            "runtime_attested": False,
+        })
     return report
 
