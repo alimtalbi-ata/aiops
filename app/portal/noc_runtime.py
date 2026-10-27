@@ -31,6 +31,7 @@ VALID_STATES = {"OK", "WARN", "CRIT", "UNKNOWN"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z")
 TICKET_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+BEARER_TOKEN = re.compile(r"[A-Za-z0-9._~+/-]+=*\Z")
 UTC_TIMESTAMP = re.compile(
     r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z\Z"
 )
@@ -102,8 +103,14 @@ def _configuration() -> tuple[str, str, bytes, str]:
         allowed.add(allowed_origin)
     if not allowed or origin not in allowed:
         raise ValueError("NOC origin is not allowlisted")
-    if len(token) < 16 or len(hmac_key.encode("utf-8")) < 32:
-        raise ValueError("NOC credentials do not meet minimum length")
+    if (
+        len(token) < 16
+        or BEARER_TOKEN.fullmatch(token) is None
+        or len(hmac_key.encode("utf-8")) < 32
+        or "\r" in hmac_key
+        or "\n" in hmac_key
+    ):
+        raise ValueError("NOC credentials do not meet minimum length or format")
     return url, token, hmac_key.encode("utf-8"), origin
 
 
