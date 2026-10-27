@@ -110,9 +110,11 @@ revue séparée, jamais une qualification runtime ou une autorisation d'exécuti
 
 Le script accepte désormais `--archive chemin/vers/archive.zip`. Il calcule
 l'empreinte de l'archive, vérifie le CRC, refuse les noms de membres dupliqués
-et compare les SHA-256 des deux dépendances attendues directement depuis le ZIP,
-sans extraire de fichiers ni exécuter leur contenu. Les membres absents, les
+via un comptage linéaire, rejette les entrées symboliques et compare les SHA-256
+des dépendances attendues directement depuis le ZIP, sans extraire de fichiers ni
+exécuter leur contenu. Les membres absents, les
 doublons et les octets différents restent bloquants. Le résultat sépare
 `archive_recovery_complete` de la présence des sources dans l'arborescence :
 l'un ne signifie pas que les fichiers ont été restaurés dans le dépôt, ni que le
-replay est qualifié. Les tests utilisent une archive synthétique isolée.
+replay est qualifié. Les tests utilisent des archives synthétiques isolées et
+couvrent les doublons, les entrées symboliques et les ZIP malformés.
