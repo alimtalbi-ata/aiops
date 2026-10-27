@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "SCN-GOLDEN-PAYMENT-P1",
+  "mode": "DEMO",
+  "synthetic": true,
+  "title": "Dégradation du paiement après erreurs FC SAN",
+  "service": "ACME-SVC-PAYMENTS",
+  "seed": 20261018,
+  "stages": [
+    {
+      "id": "NORMALIZE",
+      "label": "Normalisation de l'alerte"
+    },
+    {
+      "id": "CORRELATE",
+      "label": "Corrélation incident / service"
+    },
+    {
+      "id": "CMDB",
+      "label": "Contexte de dépendances CMDB"
+    },
+    {
+      "id": "OBSERVE",
+      "label": "Observation SAN synthétique"
+    },
+    {
+      "id": "RAG",
+      "label": "Connaissances et citations"
+    },
+    {
+      "id": "DGX_ANALYST",
+      "label": "Hypothèse de diagnostic IA"
+    },
+    {
+      "id": "DGX_CRITIC",
+      "label": "Critique et validation des preuves"
+    },
+    {
+      "id": "POLICY",
+      "label": "Contrôle de politique"
+    },
+    {
+      "id": "HITL",
+      "label": "Approbation humaine (non implémentée dans la démo actuelle)"
+    },
+    {
+      "id": "REMEDIATE",
+      "label": "Remédiation (non exécutée dans la démo actuelle)"
+    },
+    {
+      "id": "VERIFY",
+      "label": "Post-vérifications"
+    },
+    {
+      "id": "RECONCILE",
+      "label": "Réconciliation ITSM"
+    },
+    {
+      "id": "LEARN",
+      "label": "Capitalisation"
+    }
+  ],
+  "limitations": [
+    "Les étapes synthétiques du worker ne prouvent pas une approbation HITL réelle.",
+    "La remédiation DEMO est un événement simulé, sans commande exécutée.",
+    "Les sources RAG et analyses IA ne sont pas qualifiées comme données réelles.",
+    "Le parcours ne prouve ni un ticket GLPI réel ni une intégration Checkmk/Thruk réelle."
+  ]
+}
