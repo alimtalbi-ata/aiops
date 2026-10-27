@@ -1,0 +1,103 @@
+{
+  "schema": "aiops-rag-ops-synthetic-fixtures-v1",
+  "provenance": "SYNTHETIC_SIMULATION_ONLY",
+  "scenarios": [
+    {
+      "doc_id": "SYN-FOS-FC-CRC-001",
+      "vendor": "Brocade/Broadcom",
+      "product": "Fabric OS",
+      "kind": "EVENT_CATALOG",
+      "signal_type": "SYSLOG",
+      "event_key": "DEMO_FC_PORT_CRC_SPIKE",
+      "sample": "DEMO ONLY: brocade-fc01 port 8/16 crc errors rising",
+      "asset": "brocade-fc01",
+      "service": "ACME Payments",
+      "runbook": [
+        "inspect simulated CRC delta",
+        "correlate alternate FC path and datastore response",
+        "escalate P1 only if simulated business-impact criteria met"
+      ],
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "doc_id": "SYN-MDS-ISL-001",
+      "vendor": "Cisco",
+      "product": "MDS NX-OS",
+      "kind": "SNMP_MIB",
+      "signal_type": "SNMP_TRAP",
+      "event_key": "DEMO_VSAN_ISL_DOWN",
+      "sample": "DEMO ONLY: mds-fc02 VSAN transit degraded (no official OID)",
+      "asset": "mds-fc02",
+      "service": "ACME Payments",
+      "runbook": [
+        "correlate synthetic VSAN links",
+        "inspect redundant fabric simulated state"
+      ],
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "doc_id": "SYN-PMAX-SRDF-001",
+      "vendor": "Dell EMC",
+      "product": "PowerMax",
+      "kind": "EVENT_CATALOG",
+      "signal_type": "SYSLOG",
+      "event_key": "DEMO_SRDF_REPLICATION_LAG",
+      "sample": "DEMO ONLY: powermax-01 SRDF replication delay 180 minutes",
+      "asset": "powermax-01",
+      "service": "ACME Payments",
+      "runbook": [
+        "compare synthetic RPO objective",
+        "verify peer connectivity"
+      ],
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "doc_id": "SYN-PURE-LATENCY-001",
+      "vendor": "Pure Storage",
+      "product": "FlashArray",
+      "kind": "RUNBOOK",
+      "signal_type": "METRIC",
+      "event_key": "DEMO_ARRAY_LATENCY_P95",
+      "sample": "DEMO ONLY: flasharray-01 p95 latency 80ms",
+      "asset": "flasharray-01",
+      "service": "ACME Payments",
+      "runbook": [
+        "inspect workload simulation",
+        "cross-correlate host and network latencies"
+      ],
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "doc_id": "SYN-VMW-APD-001",
+      "vendor": "VMware",
+      "product": "ESXi",
+      "kind": "EVENT_CATALOG",
+      "signal_type": "LOG",
+      "event_key": "DEMO_ESXI_APD",
+      "sample": "DEMO ONLY: esx-acme-01 synthetic datastore path unavailable",
+      "asset": "esx-acme-01",
+      "service": "ACME Payments",
+      "runbook": [
+        "check simulated datastore path state",
+        "review synthetic multipath failover"
+      ],
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "doc_id": "SYN-RHEL-MPATH-001",
+      "vendor": "Red Hat",
+      "product": "RHEL multipath",
+      "kind": "RUNBOOK",
+      "signal_type": "LOG",
+      "event_key": "DEMO_DM_MULTIPATH_PATH_FAIL",
+      "sample": "DEMO ONLY: host pay-api-01 synthetic dm-multipath path failure",
+      "asset": "pay-api-01",
+      "service": "ACME Payments",
+      "runbook": [
+        "review simulated multipath -ll",
+        "compare FC route and datastore impact"
+      ],
+      "source_type": "SYNTHETIC"
+    }
+  ]
+}

@@ -73,3 +73,11 @@ Record the following before integration:
 6. End-to-end replay with audit trace and deterministic expected outcomes.
 7. HITL/ITSM integration and recovery testing.
 8. Live remediation only after independent policy, fencing, approval, rollback and reconciliation qualification.
+
+
+## 2026-10-27 — PR #36 NOC synthetic RAG catalog targeted reuse (PR #54)
+
+- **Source:** PR #36 `demo/rag_ops_fixture_catalog.json` (blob `56b8a58faf9c2140d212686ef14313576904f0b5`), six synthetic cases. **Disposition:** adapt behind a strictly synthetic read-only portal adapter, not a runtime RAG source.
+- **Destination:** `app/portal/fixtures/noc_rag_synthetic.json`, `app/portal/noc_demo_rag.py`, portal NOC panel. Reuses PR #36's strict catalog-validation idea and exact-asset selection; adds operator token, bounded JSON, duplicate-key rejection and SHA-256 citations.
+- **Limits:** no real Checkmk/Thruk, Grafana, Core correlation for this fixture, model inference, vendor-authenticated documentation or tenant ACL; all unqualified. Only synthetic fixture content is returned, and `live_remediation_authorized=false`.
+- **Qualification:** offline unit/API tests under existing `quality.yml`; actual CI result must be checked on PR #54. Do not use this module as evidence of a live service incident.

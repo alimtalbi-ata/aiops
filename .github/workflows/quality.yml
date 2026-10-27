@@ -35,6 +35,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
       - name: Signed NOC to canonical Run correlation security and regression tests
         run: python -m unittest discover -s tests -p "test_noc_canonical_correlation.py" -v
+      - name: Synthetic NOC RAG citation security and regression tests
+        run: python -m unittest discover -s tests -p "test_noc_demo_rag.py" -v
       - name: ACME SAN to Payments synthetic impact contract tests
         run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
       - name: Secret preflight unit tests
