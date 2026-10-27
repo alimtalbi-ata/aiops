@@ -41,6 +41,7 @@ APPROVED = (
     "app/portal/acme_impact_read_model.py",
     "app/portal/platform_registry.py",
     "app/portal/platform_registry_router.py",
+    "app/portal/noc_runtime.py",
     "app/portal/portal_demo_public_v21310.py",
     "app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html",
     "deploy/single_portal_candidate_kit.py",
