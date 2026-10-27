@@ -54,6 +54,27 @@ class HITLStoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_story(rehash(bad))
 
+    def test_forged_binding_digest_rejected_even_with_rehashed_story(self):
+        bad = copy.deepcopy(self.story)
+        for step in bad["steps"]:
+            step["binding_hash"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "binding digest mismatch"):
+            validate_story(rehash(bad))
+
+    def test_forged_parameter_hash_rejected_even_with_rehashed_story(self):
+        bad = copy.deepcopy(self.story)
+        for step in bad["steps"]:
+            step["params_hash"] = "a" * 64
+        with self.assertRaisesRegex(ValueError, "binding digest mismatch"):
+            validate_story(rehash(bad))
+
+    def test_invalid_parameter_hash_encoding_rejected(self):
+        bad = copy.deepcopy(self.story)
+        for step in bad["steps"]:
+            step["params_hash"] = "not-a-sha256"
+        with self.assertRaisesRegex(ValueError, "invalid HITL parameter digest"):
+            validate_story(rehash(bad))
+
     def test_false_live_proof_rejected_even_with_rehashed_digest(self):
         for field in ("runtime_authenticated", "production_qualified",
                       "live_remediation_authorized", "effect_executed"):
