@@ -241,3 +241,12 @@ Snapshot of the verified candidate at commit `94036198818e0a50a3cbc77aa586d76a7b
 - At the last poll, 25/27 workflows were complete and successful; STAR F20.13 checkpoint-plan builder and Chromium read-only fixture qualification were still in progress. No failures were observed. These are isolated CI results, not a qualification of Debian `:17777`.
 
 Still blocked: original complete F20.13 campaign files and the private V2.13.4/V2.13.6.1 ZIP bytes are not available in the current Library listing. The historical recovery registry is evidence of prior inspection, not a substitute for original bytes in this run. The portal's 20 component families remain unqualified for runtime connection; no production host, backend, database or live remediation was touched.
+
+
+### Cycle 17 — evidence-matrix input validation (27 October 2026)
+
+The evidence-matrix read model now fails closed on malformed collection shapes. A non-list evidence input is reported as `BLOCKED_FOR_REVIEW`, not an ambiguous empty `UNKNOWN`. Invalid hypothesis collections and non-object hypothesis entries are surfaced in `input_errors`; they no longer trigger `len(non_list)` errors or get silently counted as accepted review inputs. Integrity error classification uses exact positions and exact duplicate IDs, preventing a short ID such as `E1` from being falsely marked invalid because it is a substring of `duplicate_evidence_id:E10`.
+
+Regression tests were added to `tests/test_evidence_matrix.py`. The existing `quality.yml` workflow already executes this test file, so no duplicate workflow was introduced. Code commit: `e06681e8a7171a2fc8181e9648f88f2232f7f67f`; test commit: `b312923f71ddeacd9dde9a8d930f7236518ae528`; release-status record: `a63fcf5d6b467d4f39f604e7716381d814e4a2d5`. CI on the final documentation HEAD must be checked before claiming qualification.
+
+The matrix remains a read-only review projection with `action_authorized=false`. No live source, application, backend, or runtime evidence was added. Production remains NO-GO.
