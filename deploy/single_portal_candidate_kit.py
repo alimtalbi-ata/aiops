@@ -26,6 +26,7 @@ APPROVED = (
     "tests/test_acme_fixture_validation.py",
     "tests/test_portal_acme_impact_read_model.py",
     "tests/test_portal_bootstrap_read_model.py",
+    "tests/test_portal_host_port_contract.py",
 
     ".github/workflows/star-offline-chromium-real-render.yml",
     ".github/workflows/star-capture-evidence.yml",

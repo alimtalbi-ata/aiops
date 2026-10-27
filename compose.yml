@@ -157,7 +157,7 @@ services:
       TWIN_URL: http://aiops2-twin:811
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       AIOPS_PORTAL_READ_TOKEN: ${AIOPS_PORTAL_READ_TOKEN:?AIOPS_PORTAL_READ_TOKEN_required}
-    ports: ["${AIOPS_BIND_IP:-127.0.0.1}:${AIOPS_PORTAL_HOST_PORT:-7777}:777"]
+    ports: ["${AIOPS_BIND_IP:-127.0.0.1}:${AIOPS_PORTAL_HOST_PORT:-17777}:777"]
     networks: [aiops2-public, aiops2-control]
     depends_on:
       aiops2-core: {condition: service_healthy}

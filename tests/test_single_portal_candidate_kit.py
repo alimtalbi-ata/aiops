@@ -52,6 +52,7 @@ class CandidateKitTests(unittest.TestCase):
                 "tests/test_acme_fixture_validation.py",
                 "tests/test_portal_acme_impact_read_model.py",
                 "tests/test_portal_bootstrap_read_model.py",
+                "tests/test_portal_host_port_contract.py",
                 "app/portal/platform_registry.py",
                 "app/portal/platform_registry_router.py",
                 "app/portal/portal_demo_public_v21310.py",
@@ -113,6 +114,7 @@ class CandidateKitTests(unittest.TestCase):
                 )
                 self.assertIn("sources/app/portal/portal_demo_public_v21310.py", z.namelist())
                 self.assertIn("sources/tests/test_portal_demo_public_v21310.py", z.namelist())
+                self.assertIn("sources/tests/test_portal_host_port_contract.py", z.namelist())
                 self.assertIn("sources/docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md", z.namelist())
                 for release_doc in (
                     "docs/release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md",

@@ -57,7 +57,7 @@ En particulier, demo/noc_portal_integration.py définit un adaptateur séparé p
 
 ## Port unique, runtime cible et limites de sécurité
 
-Le seul point d'entrée demandé est http://10.79.94.202:17777/. Le registre ne change aucune liaison. Le Compose suivi par Git contient historiquement un binding par défaut sur 127.0.0.1:7777 et plusieurs ports de backends : c'est une configuration source, pas la preuve de ce qui tourne sur Debian. Aucun profil Compose, binding, pare-feu, service, conteneur ou port n'a été modifié par cette qualification.
+Le seul point d'entrée demandé est http://10.79.94.202:17777/. Le Compose candidat et `config/.env.example` utilisent désormais 17777 comme port hôte par défaut du portail, en conservant le bind loopback `127.0.0.1` par défaut ; les bindings backend existants restent loopback-only. Cela aligne le numéro de port sans ouvrir de listener réseau public. L'URL sur l'adresse LAN n'est pas prouvée accessible par cette configuration : elle dépend du listener/proxy déjà autorisé sur la cible et doit être qualifiée séparément. Aucun profil Compose, binding, pare-feu, service ou conteneur Debian n'a été modifié.
 
 Le scénario ACME SAN P1 → impact Payments P2, les neuf checkpoints d'écran réel, les identifiants run_id/incident_id/ticket_id, les timestamps, les SHA-256 de captures, l'authentification effective, la provenance, le replay déterministe et le passage n8n 02→03 exigent une recette E2E distincte sur un environnement d'intégration isolé. Aucune capture de fixture HTML ne doit être présentée comme une capture GLPI/n8n/Grafana réelle.
 
