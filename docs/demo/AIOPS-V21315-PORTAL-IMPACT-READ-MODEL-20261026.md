@@ -136,3 +136,7 @@ Cette amélioration corrige la découvrabilité dans l'interface commune ; elle 
 transforme ni `/noc` ni les connecteurs projetés en intégrations runtime.
 Les connexions directes à GLPI/CMDB, n8n, Grafana, Prometheus, Checkmk/Thruk,
 Temporal, DGX et RAG restent à raccorder et à qualifier séparément.
+
+## Régression CI HTML — 27 octobre 2026
+
+Le workflow du kit cumulatif a mis en évidence un test qui recherchait directement le libellé « Périmètre d'impact calculé » dans le HTML sérialisé. Le rendu échappe correctement l'apostrophe en entité HTML (&#x27;), donc la chaîne brute ne contient pas littéralement l'apostrophe attendue. Le test utilise maintenant html.unescape(response.text) pour vérifier le texte rendu sans affaiblir l'encodage HTML ni modifier le comportement de la page. Le premier échec CI observé est corrigé dans le test ; le nouveau SHA doit encore repasser les workflows avant qu'un succès soit déclaré.
