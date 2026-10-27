@@ -40,8 +40,8 @@ Les routes ci-dessous ont été relevées dans app/portal/main.py et les quatre 
 | GET /api/platform/components | Registre de 20 familles et présence des chemins GET exacts | Table ASGI locale uniquement | Aucun health check ou appel de service n'est exécuté. |
 | GET /noc | Tableau statique de convergence et présence des chemins GET exacts | Table ASGI locale uniquement | Ce n'est pas l'écran NOC runtime et il n'interroge pas Checkmk/Thruk. |
 
-| GET /api/demo/acme-impact | Modèle déterministe de l'impact ACME à partir du fixture local validé | `app/portal/acme-fixtures.json` + `portal.acme_fixture_contract` | ID préfixé SIM-ACME dérivé du SHA-256 des octets validés ; ticket et timestamp absents ; aucun backend contacté. |
-| GET /demo/acme-impact | Écran HTML local de la même fixture, avec identifiants, chemin et trous de preuve | Même fixture embarqué `app/portal/acme-fixtures.json` et contrat stdlib que l'API JSON | Données de simulation uniquement ; CSP sans scripts, formulaires, liens ou connexions externes. |
+| GET /api/demo/acme-impact | Modèle déterministe de l'impact ACME à partir du fixture local validé | `app/portal/acme-fixtures.json` + `portal.acme_fixture_contract` | Run ID dérivé du SHA-256 ; ticket GLPI réel et horodatage runtime restent absents ; ticket SIM-GLPI et checkpoint fixe sont explicitement fictifs ; aucun backend contacté. |
+| GET /demo/acme-impact | Écran HTML local de la même fixture, avec identifiants, chemin et trous de preuve | Même fixture embarqué `app/portal/acme-fixtures.json` et contrat stdlib que l'API JSON | Affiche séparément les champs réels ABSENT et le ticket/horloge de scénario synthétiques ; CSP sans scripts, formulaires, liens ou connexions externes. |
 
 ## Interfaces upstream codées mais non qualifiées
 
