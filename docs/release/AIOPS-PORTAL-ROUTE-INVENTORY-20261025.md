@@ -111,3 +111,29 @@ Le bootstrap utilise désormais un pool partagé de six workers pour ses trois l
 
 Cette limite borne le nombre de workers et la concurrence active, mais ne constitue pas un rate limiter global ni une garantie de disponibilité du runtime. Elle ne change ni le périmètre d'authentification (le bootstrap uniquement), ni les connexions backend. Le test ASGI occupe les six workers avec deux requêtes synthétiques, vérifie que la troisième est refusée, puis libère les lectures ; aucun endpoint upstream réel n'est appelé.
 
+
+
+### AioOps-NOC-Offline-Browser-Evidence.zip — inventaire membre par membre (27 octobre 2026)
+
+**Original Library ZIP :** 294 261 octets ; SHA-256 `a8534adaa8fe238ea5173148d2f2fb133cf6917d5f88c185136ea305c0a2c14e` ; `ZipFile.testzip()` = `None` (CRC PASS), 10 membres non-répertoire. Les octets ont été matérialisés en workspace isolé pour inspection ; ni l'archive ni les PNG bruts ne sont copiés dans le dépôt ou le kit.
+
+| Chemin original | Octets | SHA-256 |
+|---|---:|---|
+| `checkmk-export.png` | 51 619 | `0f1b622d133f381d0db601d40a3eca1890a34cb98361e8d5aaca178fc4d77c91` |
+| `evidence-index.json` | 1 274 | `a6f952f90e5920a0f532c7ce5ade33354e1f606d62e6dce73aa721f29205d3f0` |
+| `evidence-center.html` | 1 497 | `1319f57887bcd21cb720f0163da754886f6626134df11063d41c12d27ed9b2e2` |
+| `manifest.json` | 938 | `17c01a26cf1e6c5fbedc7daec61d3ea31fc275b1996c90840b1c54d54725f499` |
+| `star-cue-map.json` | 1 419 | `3b20fbe94d2e6f99da69838bd021d7f7d76c90a3ca5a099c6d066ad8f7a0d200` |
+| `star-event-binding.json` | 5 184 | `4a5a7286bce45d3be23a6b32795882213a74bda339c9cb245c7fc843628623f7` |
+| `star-events.json` | 2 520 | `6d7b7e4f609961c53998271219b562abc37794ff9f92999f95038b567a237928` |
+| `star-trace.html` | 2 931 | `db771acb39fae24fb7df050272fb3f12fc9448aa028b8aa6f17ac4d8c6f5ed15` |
+| `synthetic.png` | 95 487 | `61c8290e52edd4338d5f319c7ad3e89ec31e54c96df1390438047f36267f59bc` |
+| `unified.png` | 150 565 | `3930128c41629a154f44b54fdccc8471426e5fd087d8e0362a4456c595cae201` |
+
+**Contexte et contrat :** centre de preuves NOC hors ligne ; neuf cues STAR (`detect` à `close`), `RUN-ACME-OFFLINE-STAR`, `INC-ACME-SAN-LOSS`, neuf identifiants d'événement synthétiques et empreintes. Le ticket, l'horodatage runtime et les liens métier authentifiés sont absents. Le manifeste déclare trois `OFFLINE_TEST`, zéro `OBSERVATION`, zéro `RUNTIME_EVIDENCE`, `runtime_authenticated=false` et `live_remediation_authorized=false`. Les trois PNG sont des rendus locaux hors ligne ; leurs associations aux cues sont `ILLUSTRATIVE_ONLY`, pas des écrans Checkmk/GLPI/n8n/Grafana attestés.
+
+**Architecture / interfaces / dépendances :** trois vues HTML statiques, JSON locaux (index, manifeste, cue map, event binding, événements) et trois images. Aucun module Python, adaptateur HTTP, endpoint, Playwright campaign ou dépendance à un service live n'est présent dans cette archive. L'interface est un ensemble de fichiers statiques locaux ; elle ne remplace pas les contrats actuels `star-portal-transport-v1`, `star-event-source-binding` ou le gate Chromium moderne.
+
+**Réemploi autorisé :** métadonnées de fixtures et valeurs synthétiques uniquement, après comparaison de schéma avec `demo/noc_synthetic_snapshot.py`, `demo/noc_star_event_binding.py` et les tests existants. Ne pas importer les PNG dans la qualification de captures applicatives, ne pas promouvoir `runtime_authenticated`, ne pas créer de ticket/horodatage fictif et ne pas embarquer l'archive originale dans le kit. Le contrôle hors ligne de cet inventaire a vérifié la structure ZIP, les 10 tailles/hashes et les champs JSON/HTML textuels ; l'absence de correspondance dans un balayage de texte n'est pas une analyse visuelle exhaustive des images.
+
+**Tests de réutilisation à exiger avant migration de données :** comparaison de SHA-256 de chaque membre, validation stricte du manifeste, liaison image↔hash, rejet de `run_id`/cues manquants ou dupliqués, assertion de zéro preuve runtime, puis rendu Chromium local sans réseau. Aucun test de ce ZIP ne qualifie le runtime cible `:17777`.
