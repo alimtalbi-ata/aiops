@@ -116,6 +116,18 @@ Les captures d'écran sont classées comme :
 - Les cycles CI doivent rester isolés, avec permissions minimales et artefacts non sensibles.
 - Les horaires GitHub sont en UTC et soumis aux délais de file d'attente.
 
+
+## 9. Candidate audit — new source review and implementation (27 October 2026)
+
+The initial audit is recorded in [AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md](AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md). The named V145 source paths were not found in the checked GitHub branch trees; this does not prove absence from server/archives/other refs. Current source already includes evidence identity, freshness/quality guards, append-only ingestion contracts and an explicitly synthetic ACME read model.
+
+A first generic read-only matrix has now been added:
+- `app/shared/evidence_matrix.py`
+- `tests/test_evidence_matrix.py`
+- `.github/workflows/quality.yml` runs the new test file.
+
+**State: code added, qualification pending.** Do not report PASS until CI logs for the exact resulting SHA are checked. No backend, server or production was accessed.
+
 ## 9. Registre des codes candidats réutilisables
 
 Le catalogue dédié [AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md](AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md) référence :
