@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import stat
 import struct
+import zlib
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -22,6 +23,7 @@ from demo.star_snapshot_choreography import CUES
 MAX_SCREENSHOT_BYTES = 20 * 1024 * 1024
 MAX_PNG_DIMENSION = 30_000
 MAX_PNG_PIXELS = 100_000_000
+MAX_PNG_DECODED_BYTES = 128 * 1024 * 1024
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -80,15 +82,21 @@ def _safe_file(root: Path, relative: object) -> Path:
 
 
 def _verify_png(path: Path) -> dict[str, int]:
-    """Check PNG chunk framing/CRC and bounded dimensions; never decode pixels."""
+    """Verify PNG framing, CRCs and bounded zlib scanlines without rendering pixels."""
     raw = path.read_bytes()
     if not raw.startswith(PNG_SIGNATURE):
         raise ValueError("not a PNG image")
     offset = len(PNG_SIGNATURE)
     chunk_index = 0
     dimensions: tuple[int, int] | None = None
+    bit_depth: int | None = None
+    color_type: int | None = None
     saw_iend = False
     saw_idat = False
+    idat_ended = False
+    saw_plte = False
+    compressed_parts: list[bytes] = []
+    allowed_depths = {0: {1, 2, 4, 8, 16}, 2: {8, 16}, 3: {1, 2, 4, 8}, 4: {8, 16}, 6: {8, 16}}
     while offset < len(raw):
         if len(raw) - offset < 12:
             raise ValueError("truncated PNG chunk")
@@ -99,26 +107,48 @@ def _verify_png(path: Path) -> dict[str, int]:
             raise ValueError("PNG chunk exceeds file bounds")
         data = raw[offset + 8:offset + 8 + length]
         expected_crc = struct.unpack(">I", raw[offset + 8 + length:end])[0]
-        actual_crc = __import__("zlib").crc32(chunk_type + data) & 0xFFFFFFFF
-        if expected_crc != actual_crc:
+        if zlib.crc32(chunk_type + data) & 0xFFFFFFFF != expected_crc:
             raise ValueError("PNG chunk CRC mismatch")
+
         if chunk_index == 0:
             if chunk_type != b"IHDR" or length != 13:
                 raise ValueError("PNG must start with a valid IHDR")
-            width, height = struct.unpack(">II", data[:8])
+            width, height, bit_depth, color_type, compression, filtering, interlace = struct.unpack(">IIBBBBB", data)
             if (
                 width < 1 or height < 1
                 or width > MAX_PNG_DIMENSION or height > MAX_PNG_DIMENSION
                 or width * height > MAX_PNG_PIXELS
             ):
                 raise ValueError("PNG dimensions outside permitted bounds")
+            if color_type not in allowed_depths or bit_depth not in allowed_depths[color_type]:
+                raise ValueError("unsupported PNG color type or bit depth")
+            if compression != 0 or filtering != 0 or interlace != 0:
+                raise ValueError("only standard non-interlaced PNG images are accepted")
             dimensions = (width, height)
         elif chunk_type == b"IHDR":
             raise ValueError("duplicate PNG IHDR")
+
+        if chunk_type == b"PLTE":
+            if saw_plte or saw_idat or color_type in {0, 4} or length == 0 or length % 3 or length > 768:
+                raise ValueError("invalid PNG palette")
+            if color_type == 3 and length // 3 > 2 ** bit_depth:
+                raise ValueError("PNG palette exceeds indexed bit depth")
+            saw_plte = True
+
         if chunk_type == b"IDAT":
-            if saw_iend:
-                raise ValueError("PNG IDAT appears after IEND")
+            if idat_ended:
+                raise ValueError("PNG IDAT chunks must be consecutive")
+            if color_type == 3 and not saw_plte:
+                raise ValueError("indexed PNG is missing its palette")
             saw_idat = True
+            compressed_parts.append(data)
+        elif saw_idat:
+            idat_ended = True
+
+        # Unknown critical chunks are not safe to silently skip.
+        if chunk_type not in {b"IHDR", b"PLTE", b"IDAT", b"IEND"} and chunk_type[0] & 0x20 == 0:
+            raise ValueError("unsupported critical PNG chunk")
+
         if chunk_type == b"IEND":
             if length != 0 or not saw_idat:
                 raise ValueError("invalid PNG IEND or missing IDAT")
@@ -127,8 +157,35 @@ def _verify_png(path: Path) -> dict[str, int]:
             break
         offset = end
         chunk_index += 1
-    if not saw_iend or not saw_idat or offset != len(raw) or dimensions is None:
+
+    if not saw_iend or not saw_idat or offset != len(raw) or dimensions is None or bit_depth is None or color_type is None:
         raise ValueError("incomplete PNG or trailing bytes")
+
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color_type]
+    row_bytes = (dimensions[0] * channels * bit_depth + 7) // 8
+    expected_decoded_bytes = (row_bytes + 1) * dimensions[1]
+    if expected_decoded_bytes > MAX_PNG_DECODED_BYTES:
+        raise ValueError("decoded PNG data exceeds verification limit")
+
+    decoder = zlib.decompressobj()
+    try:
+        decoded = decoder.decompress(b"".join(compressed_parts), expected_decoded_bytes + 1)
+        if len(decoded) > expected_decoded_bytes or decoder.unconsumed_tail:
+            raise ValueError("PNG decompressed data exceeds expected scanline size")
+        if not decoder.eof:
+            raise ValueError("truncated PNG compressed image data")
+        if decoder.unused_data:
+            raise ValueError("trailing data in PNG compressed image stream")
+        decoded += decoder.flush()
+    except zlib.error as exc:
+        raise ValueError("invalid PNG compressed image data") from exc
+
+    if len(decoded) != expected_decoded_bytes:
+        raise ValueError("PNG decompressed data does not match declared dimensions")
+    stride = row_bytes + 1
+    if any(decoded[row * stride] > 4 for row in range(dimensions[1])):
+        raise ValueError("invalid PNG scanline filter")
+
     return {"width": dimensions[0], "height": dimensions[1], "size_bytes": len(raw)}
 
 
