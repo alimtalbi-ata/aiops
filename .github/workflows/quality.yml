@@ -29,6 +29,11 @@ jobs:
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Evidence-backed demo video validation (offline, fail-closed)
         run: python -m unittest discover -s tests -p "test_evidence_video.py" -v
+      - name: Evidence video bundle MP4/SRT/receipt (real offline ffmpeg)
+        run: |
+          command -v ffmpeg
+          command -v ffprobe
+          python -m unittest discover -s tests -p "test_evidence_video_bundle.py" -v
       - name: Playwright capture safety contract (offline, no browser)
         run: python -m unittest discover -s tests -p "test_evidence_browser_capture.py" -v
       - name: Secret preflight unit tests
