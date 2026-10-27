@@ -58,8 +58,12 @@ Préparer le navigateur sur le poste opérateur : `python3 -m pip install playwr
 
 ## Limites et sécurité
 
-- Navigation exacte GET seulement, sous-requêtes GET autorisées **uniquement si listées par URL exacte**; POST, redirections non attendues et requêtes cross-origin bloquées. Les applications complexes peuvent échouer à charger : déclarer BLOCKED et examiner les requêtes nécessaires, ne pas désactiver le filtre. GET n'est pas intrinsèquement sans effet.
+- Navigation exacte GET seulement, interception au niveau **contexte navigateur** (y compris popups et iframes), refus de toutes les WebSockets et échec fermé si Playwright ne sait pas intercepter les WebSockets. Sous-requêtes GET autorisées **uniquement si listées par URL exacte**; POST, redirections non attendues et requêtes cross-origin bloquées. Les applications complexes peuvent échouer à charger : déclarer BLOCKED et examiner les requêtes nécessaires, ne pas désactiver le filtre. GET n'est pas intrinsèquement sans effet.
 - Le script vérifie la présence du texte de corrélation et d'au moins un sélecteur de masquage par application; les masques ne garantissent **pas** l'absence d'autres secrets à l'écran. Revue humaine des cinq PNG indispensable avant toute publication.
 - Chaque PNG est lié à SHA-256, URL source, horodatage UTC, run/incident/ticket et libellé de session **déclaratif**. Le manifeste reste `OPERATOR_SUPPLIED_UNATTESTED` avec `runtime_authenticated=false` et `production_qualified=false`. Les métadonnées ne prouvent ni l'authentification, ni la causalité, ni l'absence de manipulation.
 - Les captures sont enregistrées dans un dossier privé existant et ne remplacent jamais des fichiers. Aucun appel au serveur Debian, aucun déploiement ni action de remédiation.
 - Les tests `tests/test_evidence_browser_capture.py` sont **purement offline**, sans Chromium. Ils valident le contrat et les refus; ils ne qualifient pas les cinq interfaces réelles. L'exécution réelle Playwright/MP4 reste NOT_TESTED tant qu'un opérateur autorisé n'a pas fourni de session et de pages.
+
+## Limite de qualification réseau
+
+Le garde-fou intercepte les requêtes HTTP(S) du contexte Playwright et ferme les WebSockets. Les tests offline utilisent des objets de test pour valider la logique de routage; ils ne prouvent pas l'absence de tous les canaux réseau navigateur, notamment hors contexte Playwright ou via extensions. L'usage réel reste soumis à revue des sessions, des pages et des URL autorisées. Une application qui exige WebSocket doit être déclarée BLOCKED : ne pas désactiver ce garde-fou pour obtenir une capture.
