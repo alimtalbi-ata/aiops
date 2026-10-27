@@ -68,7 +68,11 @@ class DemoPublicTests(unittest.TestCase):
     def test_enabled_video_job_uses_fixed_command_and_unique_output(self):
         import tempfile
         from pathlib import Path
-        old_enabled = os.environ.get("AIOPS_DEMO_VIDEO_ENABLED")
+        tracked_env = (
+            "AIOPS_DEMO_VIDEO_ENABLED", "AIOPS_INTERNAL_TOKEN",
+            "AIOPS_ADMIN_TOKEN", "AIOPS_PORTAL_READ_TOKEN",
+        )
+        old_env = {key: os.environ.get(key) for key in tracked_env}
         old_root, old_runs = mod.REPO_ROOT, mod.RUNS_ROOT
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
@@ -103,10 +107,11 @@ class DemoPublicTests(unittest.TestCase):
                 self.assertEqual(output.parent, mod.RUNS_ROOT)
                 self.assertEqual(len(output.name), 32)
             finally:
-                if old_enabled is None:
-                    os.environ.pop("AIOPS_DEMO_VIDEO_ENABLED", None)
-                else:
-                    os.environ["AIOPS_DEMO_VIDEO_ENABLED"] = old_enabled
+                for key, value in old_env.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
                 mod.REPO_ROOT, mod.RUNS_ROOT = old_root, old_runs
                 with mod._jobs_lock:
                     mod._jobs.clear()
