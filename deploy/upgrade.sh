@@ -30,9 +30,16 @@ echo "RUNNING_SERVICES_END"
 echo "UPGRADE_DIFF_BEGIN"
 docker compose --env-file .env config --services
 echo "UPGRADE_DIFF_END"
+echo "PORTAL_PORT_AUDIT_BEGIN"
+if python3 deploy/portal-port-audit.py; then PORTAL_PORT_MATCH=1; else PORTAL_PORT_MATCH=0; fi
+echo "PORTAL_PORT_AUDIT_END"
 if [[ "$MODE" == plan ]]; then
   echo "PLAN_ONLY=PASS|no_mutations"
   exit 0
+fi
+if [[ "$PORTAL_PORT_MATCH" != 1 && "${AIOPS_EXTERNAL_PORTAL_VERIFIED:-0}" != 1 ]]; then
+  echo "FAIL|portal_17777_not_in_compose|verify_external_proxy_and_set_AIOPS_EXTERNAL_PORTAL_VERIFIED_1"
+  exit 1
 fi
 [[ "$BACKUP_DIR" == /* && -d "$BACKUP_DIR" ]] || { echo "FAIL|absolute_existing_backup_directory_required"; exit 1; }
 [[ -f "$BACKUP_DIR/BACKUP-VERIFIED" ]] || { echo "FAIL|backup_verification_marker_missing"; exit 1; }
