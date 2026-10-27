@@ -77,6 +77,18 @@ class GLPITicketReadTests(unittest.TestCase):
         self.assertNotIn("private title", str(result))
         self.assertNotIn("private content", str(result))
 
+    def test_live_mode_rejected_before_any_network(self):
+        for mode in ("LIVE", "live", "", None):
+            with self.subTest(mode=mode), self.assertRaises(GLPIUnverified):
+                read_ticket(123, env=ENV, mode=mode,
+                            transport=lambda *_a, **_k: self.fail("LIVE network used"))
+
+    def test_simulation_mode_still_unqualified(self):
+        result = read_ticket(123, env=ENV, mode="SIMULATION",
+                             transport=transport_for())
+        self.assertEqual(result["correlation_state"], "UNKNOWN")
+        self.assertFalse(result["production_qualified"])
+
     def test_invalid_ids_fail_before_transport(self):
         for value in ("SIM-GLPI-123", "123/../../users", "0", "-1", "12.3", True,
                       0, -1, 2147483648, None, "１２３"):
