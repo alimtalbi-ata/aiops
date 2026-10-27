@@ -126,6 +126,23 @@ class AcmeFixtureValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "UTF-8"):
             load_fixture_bytes(b"\xff")
 
+    def test_cli_reports_exact_blast_radius(self):
+        completed = subprocess.run(
+            [sys.executable, str(VALIDATOR_PATH), str(FIXTURE_PATH)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("AIOPS_DEMO_FIXTURES=PASS", completed.stdout)
+        self.assertIn(
+            "affected_cis=APP-PAY-01,HOST-ESX-01,SAN-FABRIC-A,VM-PAY-01,VOL-PAY-01",
+            completed.stdout,
+        )
+        self.assertNotIn("SAN-FABRIC-B", completed.stdout)
+
     def test_invalid_impact_fails_closed_under_optimized_python(self):
         data = self.fixture()
         for item in data["ci"]:
