@@ -297,22 +297,38 @@ def _require_portal_read_auth(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="invalid_portal_read_token")
 
 
-@router.get("/api/noc/runtime-state", name="authenticated_noc_runtime_read_model")
-def noc_runtime_state(authorization: str | None = Header(default=None)):
-    """Return a signed, bounded NOC projection through the existing portal only."""
-    _require_portal_read_auth(authorization)
-    try:
-        payload = read_signed_noc_snapshot()
-    except NocSourceNotConfigured:
-        raise HTTPException(status_code=503, detail="noc_source_not_configured") from None
-    except Exception:
-        # Do not leak URLs, upstream bodies, credentials, or parser exceptions.
-        raise HTTPException(status_code=503, detail="noc_source_unavailable_or_unverified") from None
+def _noc_json_response(content: dict, *, status_code: int = 200) -> JSONResponse:
+    """Apply non-cacheable security headers to success and every error path."""
     return JSONResponse(
-        content=payload,
+        content=content,
+        status_code=status_code,
         headers={
             "Cache-Control": "no-store",
+            "Pragma": "no-cache",
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
         },
     )
+
+
+@router.get("/api/noc/runtime-state", name="authenticated_noc_runtime_read_model")
+def noc_runtime_state(authorization: str | None = Header(default=None)):
+    """Return a signed, bounded NOC projection through the existing portal only."""
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        # Authentication/configuration failures must not be cached by browsers
+        # or intermediary proxies, and must not reach the upstream.
+        return _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
+    try:
+        payload = read_signed_noc_snapshot()
+    except NocSourceNotConfigured:
+        return _noc_json_response(
+            {"detail": "noc_source_not_configured"}, status_code=503
+        )
+    except Exception:
+        # Do not leak URLs, upstream bodies, credentials, or parser exceptions.
+        return _noc_json_response(
+            {"detail": "noc_source_unavailable_or_unverified"}, status_code=503
+        )
+    return _noc_json_response(payload)
