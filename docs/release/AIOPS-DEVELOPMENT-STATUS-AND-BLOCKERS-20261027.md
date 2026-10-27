@@ -149,3 +149,30 @@ Le catalogue dédié [AIOPS-CANDIDATE-CODE-REUSE-REGISTER-20261027.md](AIOPS-CAN
 - preuve runtime distincte de la preuve synthétique.
 
 Ne jamais remplacer les limites de ce document par une affirmation de succès sans nouvelle preuve.
+
+
+## 10. Cycle 27 octobre — bootstrap borné et déduplication du patrimoine NOC
+
+**État de référence de ce rapport : commit source `94036198818e0a50a3cbc77aa586d76a7bd4ad08`, PR #36 ouverte en draft.** Les résultats ci-dessous sont horodatés par les exécutions GitHub Actions ; ils ne qualifient pas le runtime Debian.
+
+### Changement fonctionnel
+- `app/portal/main.py` : pool partagé fixe de six workers pour les trois GET indépendants du bootstrap, au plus deux requêtes bootstrap simultanées ; une troisième est refusée rapidement par HTTP 503 `portal_bootstrap_capacity_exceeded`.
+- `tests/test_portal_bootstrap_read_model.py` : test de saturation synthétique occupant les six workers, vérifiant le refus de surcharge puis la libération propre.
+- Rollback source-only : revenir au commit parent de la modification de `app/portal/main.py` sur la branche de PR et relancer les suites offline. Aucun changement de déploiement ou de backend.
+
+### Qualification exacte
+- [Single-portal candidate kit — run 40535354678](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354678) : PASS. Les 14 suites exécutées dans le job ont passé ; 176 tests comptés dans les sorties des suites, dont `test_bootstrap_rejects_excess_concurrent_requests_without_pool_growth`. Génération ZIP, `unzip -t`, comparaison au checkout épinglé et 81 sommes internes PASS.
+- [AIOps quality gates — run 40535354734](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354734) : PASS, six jobs terminés avec succès, dont runtime E2E sur stack CI isolée, build/qualité incluant les contrats Temporal, migrations PostgreSQL, upgrade du runner de migration, répétition DR MariaDB et release kit.
+- [Historical ZIP source recovery — run 40535354677](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354677) : PASS, qualification du mécanisme de récupération synthétique uniquement.
+- [F20.13 checkpoint plan builder — run 40535354842](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354842) : encore en cours au dernier relevé. [STAR Chromium read-only fixture qualification — run 40535354727](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354727) : encore en cours. À ce relevé, 25/27 workflows étaient terminés avec succès, zéro échec observé et deux en cours.
+
+### Récupération / déduplication
+L'archive Library `AioOps-NOC-Offline-Browser-Evidence.zip` a été matérialisée dans un workspace isolé, CRC vérifié, puis chaque membre a été haché. Elle contient dix membres : trois PNG de rendus locaux hors ligne, des HTML et JSON ; aucun module Python ni adaptateur de service live. Les liaisons événement/capture sont déjà produites par `demo/noc_star_event_binding.py` et couvertes par `tests/test_noc_star_event_binding.py`. Décision : conserver l'inventaire/hash comme référence documentaire, ne pas réimporter le code ou les images et ne pas les promouvoir en preuve applicative. L'inventaire membre par membre figure dans `docs/release/AIOPS-PORTAL-ROUTE-INVENTORY-20261025.md`.
+
+Le candidat ZIP du commit de référence a pour SHA-256 `1e8503990f41a4049e3d530de8f473d04869c50308b9604207808cd183d6c81f`, 82 membres, 78 sources embarquées, 638 entrées de source inventoriées et 20 routes non qualifiées. Ce kit est un sous-ensemble épinglé et **non déployable**, pas un installateur complet. Il n'intègre ni captures applicatives authentifiées ni secrets.
+
+### Blocages inchangés
+- Les octets originaux des archives privées Hybrid Replay V2.13.4/V2.13.6.1 et les fichiers complets `demo-multistack-capture.py` / `playwright-evidence-campaign-full.py` ne sont pas accessibles dans la Library de ce cycle. Les hashes historiques consignés ne remplacent pas les octets sources.
+- Les 20 familles du registre ne sont pas qualifiées pour les connexions runtime ; l'authentification bootstrap ne protège pas globalement toutes les pages/APIs.
+- Aucun E2E authentifié sur `:17777`, aucune sauvegarde/restauration de production vérifiée et aucune approbation de bascule. Production = NO-GO.
+- Prochaine action : attendre et examiner les deux workflows STAR encore en cours, puis poursuivre l'E2E isolé de la cinématique ACME SAN P1 → Payments P2 avec captures exactes par application, identité et provenance fail-closed. Ne jamais convertir une fixture ou un hash local en attestation runtime.
