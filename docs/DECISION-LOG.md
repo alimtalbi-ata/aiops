@@ -111,3 +111,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
+
+## ADR — 2026-10-28 — GLPI read-only observations do not prove Incident/Run correlation
+
+- **Status:** Proposed, pending real GLPI integration qualification.
+- **Decision:** Observe GLPI tickets only through a bounded GET adapter with explicit entity isolation and pre-provisioned API session; no public Portal → GLPI network path.
+- **Provenance:** A ticket ID confirmed by the GLPI API is an observed ticket, not a verified mapping to a canonical Core Incident/Run. Keep `correlation_state=UNKNOWN` and LIVE authorization false until independently checked references and freshness are available.
+- **Security:** No ambient proxy, no redirects, no write verbs, no secrets in response, HTTPS outside isolated CI.
+- **Implementation:** `app/shared/glpi_ticket_read.py` and `tests/test_glpi_ticket_read.py`; CI contract tests do not qualify the real GLPI service.
