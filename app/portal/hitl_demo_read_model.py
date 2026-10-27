@@ -13,7 +13,18 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-from portal.acme_impact_read_model import HEADERS
+# Same read-only, no-store and restrictive browser posture as the synthetic
+# ACME impact page from PR #36, without importing a module absent on this branch.
+HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": (
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+        "form-action 'none'; frame-ancestors 'none'"
+    ),
+}
 
 router = APIRouter()
 MAX_BYTES = 128 * 1024
