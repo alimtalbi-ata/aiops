@@ -96,3 +96,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-20261027-VIDEO — Separate synthetic storyboard from operator evidence bundle
+
+- **Date:** 2026-10-27
+- **Status:** Accepted for PR #43 draft implementation; qualification pending.
+- **Decision:** Keep PR #36's `SIMULATED_TARGET` video storyboard separate from the five-application operator capture pipeline. The latter produces MP4/SRT/receipt only from existing captures with validated hashes, shared incident/run/ticket/session identifiers, and explicit `OPERATOR_SUPPLIED_UNATTESTED` provenance.
+- **Controls:** No automatic runtime access in CI; private 0600 output; reject overwrite, inconsistent IDs, duplicate manifest keys and unsafe URL query/fragment; ffprobe and full ffmpeg decode before publishing. No attestation of runtime or identity by hashing alone.
+- **Consequence:** Technical offline render qualification can pass independently while authentic screenshots and end-to-end Evidence Studio remain BLOCKED/NOT_TESTED.
