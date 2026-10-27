@@ -98,3 +98,22 @@ These rows represent *target roles*, not installed, deployed or qualified servic
 4. Add small versioned contracts and deterministic fixtures for one ACME ERP incident, one document corpus and one sandbox recipe.
 5. Test unauthorized chatbot queries, absent documentation, refused/expired HITL, duplicate approvals, stale CMDB, failed postcheck and rollback.
 6. Qualify only with actual tests and exact artifacts; update this catalog with verified source paths, SHA, adapter owners and observed results.
+
+## 2026-10-27 — PR #36 reuse assessment (source review, not runtime qualification)
+
+Source: [draft PR #36](https://github.com/alimtalbi-ata/aiops/pull/36), *AIOps V2.13.10 — continuité du portail unique et STAR fictif*. This is a large divergent candidate branch, not a drop-in deployable upgrade. Its PR narrative describes synthetic/offline tests and expressly states that authenticated real-runtime NOC integration and Debian production qualification are outstanding. Do not merge or cherry-pick the entire branch blindly; compare exact files against current main and port narrow contracts with tests.
+
+| PR #36 candidate source | Reuse potential | Required guard before promotion |
+|---|---|---|
+| `demo/noc_checkmk_export.py`, `demo/noc_livestatus_import.py`, `demo/noc_livestatus_loopback.py`, `demo/noc_checkmk_consolidation.py` | NOC Checkmk/Livestatus normalization and synthetic fixtures | Confirm actual Checkmk/Thruk versions, schema and backend compatibility; read-only adapter tests; no fabricated LIVE data |
+| `demo/noc_wallboard.py`, `demo/noc_topology.py`, `demo/noc_drilldown.py`, `demo/noc_unified_offline.py` | NOC view, topology, drilldown and offline replay | Port to Portal/Core read-only APIs; authenticated CI/incident IDs and freshness; never infer runtime availability from fixture |
+| `demo/rag_ops_fixture_catalog.json`, `demo/validate_rag_ops_fixtures.py` | Seed synthetic operations corpus and validate document provenance | Extend with real authorized docs, ACL, versions, licensing, citation granularity, retrieval benchmarks and deletion |
+| `app/portal/acme-fixtures.json`, `app/portal/acme_fixture_contract.py`, `app/portal/acme_impact_read_model.py` | ACME business dependency and impact demonstration | Preserve `SIMULATED_TARGET` and null real ticket/time semantics; compare with canonical CMDB and twin contracts |
+| `app/portal/platform_registry.py`, `app/portal/platform_registry_router.py`, `app/portal/noc_runtime.py` | Component inventory and possible NOC read-model seam | Exact GET route presence is not backend availability or authenticated runtime attestation; preserve false/unknown flags |
+| `tests/test_portal_bootstrap_read_model.py`, `tests/test_preflight_secrets.sh` and portal bootstrap token changes | Read-only Portal auth and secret lifecycle test patterns | Assess compatibility with main's token and identity contracts; bootstrap token is not full SSO/RBAC |
+| `demo/noc_evidence_center.py`, `demo/star_capture_evidence.py`, related STAR gates | Evidence replay and deterministic demo acceptance checks | Confirm cryptographic provenance, fixture separation, CI results on selected SHA; never treat synthetic captures as live proof |
+| Candidate kit generator and `tests/test_single_portal_candidate_kit.py` | Reproducible source packaging and manifests | Verify pinned source hashes and dependencies; a ZIP passing offline tests is not a production release |
+
+**Recommended extraction sequence:** (1) RAG fixture validation and ACME impact schema; (2) NOC Checkmk/Livestatus import contracts and offline wallboard; (3) Portal read-only authentication and registry; (4) evidence replay gates; (5) controlled HITL/remediation extensions built against canonical Core/Temporal/Policy, not inferred from the PR. Each extraction requires file-level source comparison, focused tests and a separate draft PR.
+
+**Problems identified:** huge divergent PR, unqualified backend compatibility, static/fixture versus live evidence ambiguity, incomplete Portal authentication, and potential conflicts with current main and existing PRs. These are reasons for staged reuse, not for discarding the work.
