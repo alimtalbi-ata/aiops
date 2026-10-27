@@ -73,3 +73,14 @@ Record the following before integration:
 6. End-to-end replay with audit trace and deterministic expected outcomes.
 7. HITL/ITSM integration and recovery testing.
 8. Live remediation only after independent policy, fencing, approval, rollback and reconciliation qualification.
+
+### 2026-10-27 Copilot / RAG slice qualification
+
+| Path | Current proposal | Explicit limitation |
+|---|---|---|
+| `app/copilot/main.py` | Reuse existing service; enforce internal gateway token; query-specific read-only Core/Twin/Evidence retrieval | Depends on operator-authenticated Portal PR #16; no per-user ACL; no LIVE evidence |
+| `app/copilot/grounding.py` | Deterministic question allowlist, source-schema validation, exact synthetic run evidence IDs and UNKNOWN | Only four question forms, no free-form diagnosis |
+| `app/copilot/knowledge.py` | License/rights, product/version, ACL/tenant, source URI, UTC review date, hash, bounded chunks, lexical retrieval | In-memory only; no persisted index, embeddings, connectors or real corpus |
+| `tests/test_copilot_grounding.py`, `tests/test_copilot_knowledge.py` | Adversarial unit cases and CI job | CI results required; no E2E/production qualification |
+
+Do not duplicate the broader Copilot/Intelligence implementation proposed in open PR #21; compare contracts before integration.
