@@ -17,6 +17,8 @@ import tempfile
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
+from demo.evidence_publish import publish_capture_set
+
 SERVICES = ("portal", "thruk", "grafana", "n8n", "glpi")
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,127}$")
 SELECTOR = re.compile(r"^(?:[#.][A-Za-z][A-Za-z0-9_-]*)(?: [#.][A-Za-z][A-Za-z0-9_-]*)*$")
@@ -191,10 +193,8 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
         manifest_path = staging / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         manifest_path.chmod(0o600)
-        # The manifest is published last, so it never advertises incomplete output.
-        for service in SERVICES:
-            os.link(staging / (service + ".png"), output_dir / (service + ".png"))
-        os.link(staging / "manifest.json", output_dir / "manifest.json")
+        # Manifest is published last; rollback any partial links on failure.
+        publish_capture_set(staging, output_dir, SERVICES)
     return {"status": "CAPTURED_UNREVIEWED", "captures_performed": len(captures),
             "runtime_authenticated": False, "production_qualified": False}
 
