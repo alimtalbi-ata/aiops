@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -110,6 +111,9 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
         raise ValueError("existing private output directory required")
     if storage_state_dir.is_symlink() or not storage_state_dir.is_dir():
         raise ValueError("private session state directory required")
+    for directory in (output_dir, storage_state_dir):
+        if stat.S_IMODE(directory.stat().st_mode) & 0o077:
+            raise ValueError("private directory permissions required (chmod 700)")
     if any((output_dir / (s + ".png")).exists() or (output_dir / (s + ".png")).is_symlink() for s in SERVICES):
         raise ValueError("refusing to overwrite captures")
     if (output_dir / "manifest.json").exists() or (output_dir / "manifest.json").is_symlink():
@@ -118,6 +122,8 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
         state = storage_state_dir / (service + ".json")
         if not state.is_file() or state.is_symlink():
             raise ValueError("missing or symlinked private browser session state")
+        if stat.S_IMODE(state.stat().st_mode) & 0o077:
+            raise ValueError("session state must be owner-only (chmod 600)")
     # Playwright is optional and imported only after authorization and validation.
     from playwright.sync_api import sync_playwright
     captures = []
@@ -161,7 +167,9 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
                                                 animations="disabled", timeout=15000)
                         if blocked or not image.startswith(PNG) or len(image) > 20 * 1024 * 1024:
                             raise ValueError("blocked request or invalid screenshot for " + service)
-                        (staging / (service + ".png")).write_bytes(image)
+                        image_path = staging / (service + ".png")
+                        image_path.write_bytes(image)
+                        image_path.chmod(0o600)
                         captures.append({
                             "service": service, "file": service + ".png",
                             "sha256": hashlib.sha256(image).hexdigest(),
@@ -180,7 +188,9 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
         manifest = {"schema_version": 1, "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
                     "runtime_authenticated": False, "production_qualified": False,
                     "captures": captures}
-        (staging / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        manifest_path = staging / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        manifest_path.chmod(0o600)
         # The manifest is published last, so it never advertises incomplete output.
         for service in SERVICES:
             os.link(staging / (service + ".png"), output_dir / (service + ".png"))
