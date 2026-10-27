@@ -104,7 +104,10 @@ class NocDemoRagTests(unittest.TestCase):
                 "provenance": "SYNTHETIC_SIMULATION_ONLY", "scenarios": altered})
 
     def test_portal_route_and_visible_demo_control(self):
-        from portal import main as portal_main
+        # shared.http intentionally fails import without an internal token.
+        # Provide a test-only synthetic value; no real credentials or HTTP calls.
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": TOKEN}):
+            from portal import main as portal_main
         self.assertIn("/api/noc/demo-rag", [route.path for route in portal_main.app.routes])
         snapshot = {"dashboard": {}, "runs": {"items": []}, "twin": {}, "states": {}}
         with patch.object(portal_main, "read_portal_snapshot", return_value=snapshot), \
