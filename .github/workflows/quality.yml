@@ -56,6 +56,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_freshness.py" -v
       - name: Evidence integrity and model grounding tests
         run: python -m unittest discover -s tests -p "test_evidence_contract.py" -v
+      - name: Evidence matrix read-model contract tests
+        run: python -m unittest discover -s tests -p "test_evidence_matrix.py" -v
       - name: Evidence identity and replay contract tests
         run: |
           python -m unittest discover -s tests -p "test_evidence_identity.py" -v
