@@ -94,3 +94,8 @@ Cette modification protège uniquement l'endpoint bootstrap ; elle ne constitue 
 ## Isolation du générateur vidéo local
 
 Le lancement opt-in de la vidéo utilise une liste d'autorisation d'environnement pour le processus enfant : PATH, répertoires utilisateur/temporaire, locale et variables explicitement nécessaires au cache Chromium/Playwright et aux polices. Les jetons portail/internal/admin et autres variables d'environnement ne sont pas transmis au rendu synthétique. Ce contrôle réduit l'exposition des secrets ; il ne remplace ni l'authentification globale du portail ni une qualification de runtime.
+
+
+## Lecture du manifeste de vidéo
+
+Le processus de statut ouvre le manifeste de sortie avec `O_NOFOLLOW`, exige un fichier régulier non vide, limite sa taille à 64 Kio et vérifie que la taille ne change pas pendant la lecture. Une plate-forme qui ne fournit pas `O_NOFOLLOW` échoue en mode fermé. Un test couvre le manifeste symbolique pointant vers un fichier externe. Ce contrôle concerne la lecture du manifeste et ne constitue pas une qualification complète contre toutes les courses de fichiers du répertoire de sortie.
