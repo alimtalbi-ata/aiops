@@ -81,6 +81,8 @@ Read [the reconstruction execution plan](docs/RECONSTRUCTION-EXECUTION-PLAN.md) 
 
 ## Project continuity and historical reuse
 
+**Current development status (27 October 2026):** see [development status, remaining work and blockers](docs/release/AIOPS-DEVELOPMENT-STATUS-AND-BLOCKERS-20261027.md) before selecting the next task. This report separates source presence, synthetic tests, commit-specific CI evidence and live qualification.
+
 Before resuming work in a new session, read these documents in order:
 
 1. [Project continuity record](docs/PROJECT-CONTINUITY.md)
