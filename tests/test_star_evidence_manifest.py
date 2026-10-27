@@ -108,6 +108,18 @@ class StarEvidenceManifestTests(unittest.TestCase):
         self.write_manifest()
         self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
 
+    def test_unknown_negative_zero_offset_is_not_mistaken_for_utc(self):
+        self.entries[0]["captured_at_utc"] = "2026-10-27T10:00:00-00:00"
+        self.write_manifest()
+        self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
+
+    def test_utc_timestamp_requires_iso_t_separator_and_no_surrounding_space(self):
+        for value in ("2026-10-27 10:00:00Z", " 2026-10-27T10:00:00Z"):
+            with self.subTest(value=value):
+                self.entries[0]["captured_at_utc"] = value
+                self.write_manifest()
+                self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
+
     def test_symlink_manifest_is_rejected(self):
         alias = self.root / "manifest-link.json"
         alias.symlink_to(self.manifest)
