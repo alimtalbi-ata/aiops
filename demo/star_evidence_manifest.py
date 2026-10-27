@@ -81,9 +81,28 @@ def _safe_file(root: Path, relative: object) -> Path:
     return resolved
 
 
-def _verify_png(path: Path) -> dict[str, int]:
+def _read_stable_screenshot(path: Path) -> bytes:
+    """Read one bounded, regular-file snapshot for both parsing and hashing."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    with os.fdopen(descriptor, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size <= 0 or before.st_size > MAX_SCREENSHOT_BYTES:
+            raise ValueError("screenshot must be a bounded regular file")
+        data = stream.read(MAX_SCREENSHOT_BYTES + 1)
+        after = os.fstat(stream.fileno())
+    if len(data) > MAX_SCREENSHOT_BYTES:
+        raise ValueError("screenshot size exceeds permitted bounds")
+    identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+    identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+    if identity_before != identity_after or len(data) != after.st_size:
+        raise ValueError("screenshot changed while being read")
+    return data
+
+
+def _verify_png(raw: bytes) -> dict[str, int]:
     """Verify PNG framing, CRCs and bounded zlib scanlines without rendering pixels."""
-    raw = path.read_bytes()
+
     if not raw.startswith(PNG_SIGNATURE):
         raise ValueError("not a PNG image")
     offset = len(PNG_SIGNATURE)
@@ -262,8 +281,9 @@ def audit_manifest(manifest_path: Path, evidence_root: Path, allowed_origins: se
             if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
                 raise ValueError("invalid screenshot SHA-256")
             screenshot = _safe_file(evidence_root, entry["screenshot_path"])
-            image_info = _verify_png(screenshot)
-            observed = hashlib.sha256(screenshot.read_bytes()).hexdigest()
+            screenshot_bytes = _read_stable_screenshot(screenshot)
+            image_info = _verify_png(screenshot_bytes)
+            observed = hashlib.sha256(screenshot_bytes).hexdigest()
             if observed != digest:
                 raise ValueError("screenshot SHA-256 mismatch")
             result.update(
