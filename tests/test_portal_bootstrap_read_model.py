@@ -25,11 +25,29 @@ with patch.dict(
 class PortalBootstrapReadModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.auth_env = patch.dict(
+            os.environ, {"AIOPS_PORTAL_READ_TOKEN": "synthetic-portal-read-token"}
+        )
+        cls.auth_env.start()
         cls.client = TestClient(main.app)
 
     @classmethod
     def tearDownClass(cls):
         cls.client.close()
+        cls.auth_env.stop()
+
+    def test_bootstrap_fails_closed_without_or_with_invalid_read_token(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}):
+            response = self.client.get("/api/portal/bootstrap")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "portal_read_auth_not_configured")
+
+        response = self.client.get(
+            "/api/portal/bootstrap",
+            headers={"Authorization": "Bearer wrong-synthetic-token"},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "invalid_portal_read_token")
 
     def test_all_sources_are_read_independently_with_bounded_no_retry_calls(self):
         payloads = {
@@ -46,7 +64,7 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
         with patch.object(main, "get_json", side_effect=fake_get_json), patch.object(
             main, "post_json", side_effect=AssertionError("bootstrap must be read-only")
         ):
-            response = self.client.get("/api/portal/bootstrap")
+            response = self.client.get("/api/portal/bootstrap", headers={"Authorization": "Bearer synthetic-portal-read-token"})
 
         self.assertEqual(response.status_code, 200)
         result = response.json()
@@ -63,7 +81,7 @@ class PortalBootstrapReadModelTests(unittest.TestCase):
                 "timeout_seconds": 3,
                 "retry_count": 0,
                 "upstream_provenance": "UNATTESTED_UPSTREAM_READS",
-                "operator_authentication": "NOT_ENFORCED_IN_PORTAL_CODE",
+                "operator_authentication": "ENFORCED_DEDICATED_BEARER_TOKEN",
                 "runtime_attested": False,
                 "live_remediation_authorized": False,
             },
