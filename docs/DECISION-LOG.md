@@ -96,3 +96,12 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Reason:** A standard or direct Compose deployment must not silently start with a public development credential.
 - **Consequence:** All services using the shared HTTP client must receive the same internal token through configuration. The installer generates it once and assigns it consistently to the current admin/internal aliases.
 - **Qualification:** CI passes Python compileall, policy and secret-preflight tests, static audit, and Compose configuration validation. Full container build and synthetic E2E remain outstanding.
+
+## ADR-0013 — Explicit authenticated simulator → Core API network path
+
+- **Date:** 2026-10-27
+- **Status:** Proposed; awaiting PR review and isolated runtime qualification
+- **Decision:** Attach `aiops2-core` to `aiops2-execution` in addition to its existing control/data networks, so the simulator can call its authenticated Core API without being connected directly to PostgreSQL, control, integration or public networks.
+- **Reason:** On `main`, simulator and Core have no common Docker network, despite `CORE_URL` pointing to Core. This prevents the simulator's documented API proxy, scenario registration and launch paths from working through that hostname.
+- **Risk and control:** Core becomes reachable from execution-network peers. Preserve token validation on mutating Core APIs and keep the simulator confined to execution. Validate the rendered Compose graph in CI and test real DNS/HTTP connectivity in an isolated stack before promotion.
+- **Rollback:** Remove `aiops2-execution` from the Core service network list and revert the corresponding contract test and documentation. Do not restart a production stack as part of this change.
