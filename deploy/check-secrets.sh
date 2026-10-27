@@ -46,7 +46,7 @@ check_secret GRAFANA_ADMIN_PASSWORD 'Newaiops26$'
 check_secret N8N_ENCRYPTION_KEY 'Newaiops26$-N8N'
 
 if [[ "$failures" -ne 0 ]]; then
-  echo 'ACTION|run deploy/init-env.sh only for a new installation, or replace every listed value in .env; existing .env files are never rotated automatically'
+  echo 'ACTION|use deploy/init-env.sh for a new installation only, or replace every listed value in .env; existing .env files are never rotated automatically'
   exit 1
 fi
 
