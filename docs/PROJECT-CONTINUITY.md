@@ -66,3 +66,7 @@ A focused GitHub source audit is recorded in [SOURCE-AUDIT-2026-10-19.md](SOURCE
 ## Update rule
 
 Every material change must update this record and the relevant architecture/decision/component/test documents in the same branch/PR. Add a dated entry to `docs/DECISION-LOG.md`; include commit/PR links after they exist. At session end, record exact next steps and unresolved risks here.
+
+## 2026-10-27 P0 Remediation Lab handover (draft PR #42)
+
+A bounded source-only prototype has been proposed in [PR #42](https://github.com/alimtalbi-ata/aiops/pull/42), based on main SHA `92108b3bd87a15e0b312a689c0324f2c8e572e55`. It adds `app/shared/remediation_lab.py`, `config/remediation/recipes.v1.json`, ten unit tests and [REMEDIATION-LAB-CONTRACT.md](REMEDIATION-LAB-CONTRACT.md). The eight recipe entries are metadata examples only, and the evaluator generates no-effect, redacted, timestamped simulation records. LIVE is always blocked. The `authenticated` field is a test fixture, not real identity. No integration with Core/Temporal/Policy/Portal, no executable scripts/playbooks, no persistent approval ledger and no runtime deployment. Local mirrored-source tests: 10/10 passed; CI and integration not run. Next: real authenticated HITL identity, Core decision persistence and single-use receipts, real CMDB/fencing checks, isolated executor, technical/business postchecks and failure-injection tests. Preserve worker LIVE block and existing production state. See per-run journal under `docs/automation-runs/`.
