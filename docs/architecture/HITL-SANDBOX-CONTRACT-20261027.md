@@ -37,3 +37,9 @@ Avant tout branchement, intégrer derrière Core avec actor ID issu d'une identi
 - Test local/CI : `python -m unittest discover -s tests -p 'test_hitl_story.py' -v`; tests négatifs d'altération, de jeton, d'expiration, de binding, de symlink, de fichier malformé et de preuve LIVE falsifiée. Les résultats CI doivent être relevés après exécution.
 
 **Limites :** aucun RBAC authentifié Core, aucune écriture Evidence, aucune attestation de provenance, aucun postcheck exécuté et aucun rollback réalisé. Prochaine étape : relier les statuts au Run canonique via Core après qualification de l'identité et du stockage transactionnel; ne pas monter SQLite dans le portail comme autorité.
+
+## Durcissement de la cohérence des bindings (23:19)
+
+Le lecteur SQLite `read_status` recalcule maintenant le SHA-256 canonique de `incident_id/run_id/recipe_id/target_id/params_hash/mode` et rejette une ligne dont le binding stocké ne correspond pas, même si un opérateur du fichier a contourné les triggers SQLite. Le validateur du récit côté portail recalcule le même binding pour chaque état et refuse un `binding_hash` ou `params_hash` falsifié, **même si l'auteur de l'artefact a recalculé `story_sha256`**. Des tests négatifs sont ajoutés.
+
+Cette vérification garantit seulement la cohérence des champs, **pas** leur authenticité : SHA-256 sans secret, fichier SQLite local et JSON non signés. L'intégration Core/Evidence avec provenance authentifiée reste obligatoire. La PR #49 diverge de `main`; ses nouveaux tests ne doivent pas être annoncés comme PASS avant exécution sur le HEAD concerné.
