@@ -1,0 +1,50 @@
+name: AIOps autonomous cycle 3 — candidate kit
+
+on:
+  schedule:
+    - cron: '24 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiops-cycle-3-candidate-kit
+  cancel-in-progress: false
+
+jobs:
+  candidate-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated portal test dependencies
+        run: python -m pip install --disable-pip-version-check 'fastapi==0.116.1' 'requests==2.32.4' 'httpx==0.28.1'
+      - name: Run candidate packaging and verification regressions
+        run: |
+          python -m unittest discover -s tests -p 'test_single_portal_candidate_kit.py' -v
+          python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
+          python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
+          python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
+      - name: Build and verify an isolated, pinned candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aiops-cycle-3"
+          python -m deploy.single_portal_candidate_kit --root . --commit "$(git rev-parse HEAD)" --output "$RUNNER_TEMP/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip"
+          unzip -tqq "$RUNNER_TEMP/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip"
+          python -m deploy.verify_single_portal_candidate_kit --archive "$RUNNER_TEMP/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip" --checkout .
+          sha256sum "$RUNNER_TEMP/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip" > "$RUNNER_TEMP/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aiops-cycle-3-candidate-kit
+          path: |
+            ${{ runner.temp }}/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip
+            ${{ runner.temp }}/aiops-cycle-3/AIOps-Single-Portal-CANDIDATE.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
