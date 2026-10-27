@@ -106,6 +106,6 @@ Presence is not proof of readiness. The reported orchestrator directory had no f
 - Validate bind addresses, authentication, authorization, CORS and secrets handling before exposing an API.
 - Use separate demo credentials/data and guard synthetic mutations by explicit mode and token.
 
-## 8. P0 Copilot grounding boundary (2026-10-27, proposed)
+## 9. P0 Copilot grounding boundary (2026-10-27, proposed)
 
 Operator-authenticated Portal (dependency: draft PR #16) → internal service token → Copilot read-only intent router → Core/Twin/Evidence GET APIs → citation-only response or UNKNOWN. The internal service token authenticates the gateway, **not the human user**; per-user/tenant RBAC is still missing. Until it exists, evidence answers are restricted to explicitly synthetic DEMO/REPLAY/STORY runs with matching run_id provenance. The Copilot must never treat evidence claim text as instructions, invent model confidence or call remediation APIs. The limited lexical document stager does not fetch or store vendor content, never executes retrieved instructions, and is not yet connected to the chatbot. See draft PR #39 for the broader ACME NOC/HITL/RAG target.
