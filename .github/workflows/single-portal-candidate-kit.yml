@@ -49,6 +49,7 @@ on:
       - 'demo/star_n8n_identity_gate.py'
       - 'tests/test_star_n8n_identity_gate.py'
       - 'docs/release/**'
+      - 'docs/architecture/AIOPS-NOC-UPSTREAM-READMODEL-CONTRACT-20261027.md'
       - '.github/workflows/star-browser-manifest-bridge-offline.yml'
       - '.github/workflows/star-event-capture-alignment-offline.yml'
       - '.github/workflows/star-event-source-binding-offline.yml'
