@@ -10,13 +10,13 @@ Cette présence n'est PAS une attestation que le composant correspondant est bra
 
 ## Routes déclarées par le portail source
 
-Les routes ci-dessous ont été relevées dans app/portal/main.py et les quatre routeurs effectivement inclus par ce fichier (STAR legacy replay, storyboard public, registre de plateforme et read model ACME). La méthode, le handler, les dépendances upstream et les limites sont indiqués pour éviter de confondre une page avec une intégration.
+Les routes ci-dessous ont été relevées dans app/portal/main.py et les cinq routeurs effectivement inclus par ce fichier (STAR legacy replay, storyboard public, registre de plateforme, read model ACME et pont NOC amont signé facultatif). La méthode, le handler, les dépendances upstream et les limites sont indiqués pour éviter de confondre une page avec une intégration.
 
 | Méthode et chemin | Comportement présent dans le code | Connexion constatée au niveau source | Limite de qualification |
 |---|---|---|---|
 | GET /health | État local du handler portail | Aucune | Ne prouve pas la connectivité aux backends ni le port hôte. |
 | GET /api/portal/bootstrap | Agrège dashboard, runs et résumé Twin, avec dégradation partielle explicite | Trois lectures HTTP soumises en parallèle, deadline globale de 3 s, sans retry ; pool partagé de six workers et deux requêtes admises simultanément | Une source en retard devient `UNKNOWN` (`UPSTREAM_TIMEOUT` / `READ_DEADLINE_EXCEEDED`) ; le créneau de capacité reste réservé jusqu'à la fin des workers retardataires pour empêcher l'accumulation de tâches. Les autres sources restent disponibles. `_portal.status` vaut COMPLETE ou DEGRADED. Cela ne prouve ni SSO global ni authentification runtime des upstreams. |
-| GET /api/noc/runtime-state | Authenticated, read-only projection from an optional HMAC-signed NOC read-model endpoint | Bearer caller token + exact allowlisted origin + SHA-256/HMAC-SHA256 verification; GET only, no redirects, 3 s timeout, 256 KiB bound | Disabled by default (503); signed source payload is authenticated but not runtime-attested; ticket/evidence remain upstream claims; 02→03 handoff claims are rejected until the canonical verifier is embedded. |
+| GET /api/noc/runtime-state | Projection en lecture seule d’un read model NOC amont signé, facultatif | Bearer portail + origine exactement autorisée + vérification SHA-256/HMAC-SHA256 ; GET seul, sans redirection/proxy ambiant, délai 3 s, corps borné à 256 Kio | Désactivé par défaut (503) ; le payload source signé n’atteste pas le runtime ; ticket/preuve restent des déclarations amont ; les claims de handoff 02→03 sont rejetés tant que le vérificateur canonique n’est pas intégré. |
 | GET / | Cockpit avec incidents/runs et résumé Twin | Lecture Core et Twin | Les erreurs sont rendues INCONNU ; runtime cible non vérifié. |
 | GET /runs | Liste des exécutions Core | Lecture Core | Ne monte pas l'API Temporal elle-même. |
 | GET /timeline | Incidents, détails de run, ledger et preuves référencées | Lecture Core | La page Evidence globale reste décrite comme adaptateur manquant. |
