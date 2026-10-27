@@ -146,6 +146,23 @@ class StarEvidenceManifestTests(unittest.TestCase):
         self.assertFalse(result["complete_byte_set"])
         self.assertEqual(result["captures"][0]["status"], "REJECTED_DUPLICATE_CUE")
 
+    def test_png_without_idat_is_rejected_even_with_matching_hash(self):
+        path = self.root / self.entries[0]["screenshot_path"]
+        raw = path.read_bytes()
+        rebuilt = bytearray(raw[:8])
+        offset = 8
+        while offset < len(raw):
+            length = struct.unpack(">I", raw[offset:offset + 4])[0]
+            end = offset + 12 + length
+            chunk_type = raw[offset + 4:offset + 8]
+            if chunk_type != b"IDAT":
+                rebuilt.extend(raw[offset:end])
+            offset = end
+        path.write_bytes(rebuilt)
+        self.entries[0]["screenshot_sha256"] = hashlib.sha256(rebuilt).hexdigest()
+        self.write_manifest()
+        self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
+
     def test_metadata_cannot_promote_runtime_attestation(self):
         self.entries[0]["runtime_authenticated"] = True
         self.entries[0]["human_approval_authenticated"] = True
