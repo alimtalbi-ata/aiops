@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest.mock import patch
 from demo.star_png_integrity import inspect_png
 
 def chunk(kind, data=b""):
@@ -122,6 +123,12 @@ class StrictPngIntegrityTests(unittest.TestCase):
         self.path.symlink_to(target)
         with self.assertRaisesRegex(ValueError, "symlink|safely"):
             inspect_png(self.path)
+
+    def test_fail_closed_when_nofollow_primitive_is_unavailable(self):
+        self.path.write_bytes(png())
+        with patch("demo.star_png_integrity.os.O_NOFOLLOW", None, create=True):
+            with self.assertRaisesRegex(ValueError, "without O_NOFOLLOW"):
+                inspect_png(self.path)
 
     def test_refuse_non_regular_input(self):
         with self.assertRaisesRegex(ValueError, "regular file"):
