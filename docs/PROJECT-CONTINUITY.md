@@ -219,3 +219,12 @@ Immediate review order:
 3. Select one read-only candidate at a time; verify license/tag/SBOM and test with synthetic data in isolation.
 4. Record accept/adapt/replace/reject in `docs/DECISION-LOG.md`; preserve Temporal as the sole durable workflow engine and Core as the sole canonical Run-state owner.
 5. No production changes, live remediations or PR merge are authorized by this register.
+
+
+## Update — historical evidence audit and matrix read model (2026-10-27)
+
+- Source audit: `docs/release/AIOPS-HISTORICAL-EVIDENCE-CANDIDATE-AUDIT-20261027.md`.
+- Historical V145 paths were not found in the checked GitHub branch trees; retrieval from host/archive/export is still required before claiming source recovery.
+- Current source review confirmed `app/shared/evidence_identity.py`, `app/shared/evidence_contract.py`, `app/evidence/main.py`, and the synthetic-only `app/portal/acme_impact_read_model.py`.
+- Added `app/shared/evidence_matrix.py` plus `tests/test_evidence_matrix.py`; the quality workflow now invokes the new tests.
+- **NOT QUALIFIED YET:** wait for the workflow triggered by the branch push and inspect the exact SHA/job logs. No local test execution, server access, backend writes, or live actions were performed.
