@@ -19,6 +19,7 @@ if str(APP_ROOT) not in sys.path:
 with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "synthetic-ci-only-token", "AIOPS_ADMIN_TOKEN": ""}):
     from portal.main import app  # noqa: E402
 from portal import acme_impact_read_model as impact  # noqa: E402
+from portal.ui_theme import NAV, shell  # noqa: E402
 
 
 class AcmeImpactPortalReadModelTests(unittest.TestCase):
