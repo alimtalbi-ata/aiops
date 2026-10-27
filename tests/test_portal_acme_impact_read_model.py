@@ -21,6 +21,7 @@ with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "synthetic-ci-only-token", 
     from portal.main import app  # noqa: E402
 from portal import acme_impact_read_model as impact  # noqa: E402
 from portal.ui_theme import NAV, shell  # noqa: E402
+from demo.star_snapshot_choreography import CUES  # noqa: E402
 
 
 class AcmeImpactPortalReadModelTests(unittest.TestCase):
@@ -119,6 +120,18 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertEqual(len(decision["remediation_preview"]), 4)
         self.assertIs(decision["live_execution"], False)
         self.assertIs(decision["backend_writes"], False)
+        checkpoints = model["checkpoint_evidence"]
+        self.assertEqual(len(checkpoints), 9)
+        self.assertEqual(
+            [(item["cue"], item["service"], item["view"], item["required_state"]) for item in checkpoints],
+            [(cue.cue, cue.service, cue.view, cue.required_state) for cue in CUES],
+        )
+        for checkpoint in checkpoints:
+            self.assertEqual(checkpoint["status"], "MISSING")
+            self.assertIsNone(checkpoint["screenshot_sha256"])
+            self.assertIsNone(checkpoint["event_timestamp_utc"])
+            self.assertIs(checkpoint["runtime_authenticated"], False)
+            self.assertEqual(checkpoint["source"], "CHECKPOINT_CONTRACT_ONLY_NO_CAPTURE")
         self.assertEqual(first.headers["cache-control"], "no-store")
         self.assertEqual(first.headers["x-content-type-options"], "nosniff")
 
@@ -148,6 +161,12 @@ class AcmeImpactPortalReadModelTests(unittest.TestCase):
         self.assertIn("DENY_LIVE_ACTION", response.text)
         self.assertIn("Plan de remédiation proposé (sans exécution)", response.text)
         self.assertIn("Écritures backend :</strong> NON", response.text)
+        self.assertIn("STAR — checkpoints applicatifs et preuves manquantes", response.text)
+        self.assertIn("GRAFANA · ALERT_DASHBOARD", response.text)
+        self.assertIn("N8N · ANALYST_CRITIC_EXECUTION", response.text)
+        self.assertIn("GLPI · INCIDENT_TICKET", response.text)
+        self.assertIn("Capture : ABSENTE · SHA-256 : ABSENT", response.text)
+        self.assertIn("URL runtime exactes", response.text)
         self.assertIn("VOL-PAY-01", response.text)
         self.assertIn("<svg ", response.text)
         self.assertIn('aria-label="Dépendances SAN vers application Payments, simulation"', response.text)
