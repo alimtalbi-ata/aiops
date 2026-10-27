@@ -46,6 +46,10 @@ Les ZIP historiques ont été matérialisés dans un espace de travail temporair
 
 Convertir le plan F20.13 en cues allowlistés dans le portail unique :17777. Chaque cue doit porter le chemin d'écran approuvé, l'identifiant applicatif, run_id, incident_id, ticket_id s'il existe, horodatage de capture, SHA-256 du PNG et provenance/authentification effectivement observées. Absence d'écran/ticket/run, page de login, timeout, événement hors fenêtre ou champ manquant => cue non qualifié, jamais remplacé par un écran HTML local. Aucun trigger live. Les essais utilisent des données synthétiques. L'E2E runtime cible demeure non qualifié.
 
+### Migration incrémentale — 27 octobre 2026 : liaison des événements STAR
+
+La source actuelle demo/star_event_source_binding.py apporte une validation défensive des octets d'événement pour les checkpoints : identité canonique, horodatage comparé, SHA-256 exact, refus des symlinks et lecture par descripteurs. Sa source, sa suite de tests, son workflow offline et sa fiche technique sont intégrés au kit cumulatif épinglé ; le test du kit vérifie les octets embarqués contre le checkout. Cette migration est un successeur sûr et limité, pas la restauration intégrale de F20.13 ni une authentification des backends. Les sources historiques complètes et l'E2E runtime restent à qualifier.
+
 ## Reconstruction priority
 
 P0 portal V2.13.6 + V2.13.10 reconciliation, camera/replay STAR + Chromium scripts, decision pipeline Analyst/Critic/Policy/HITL. P1 Evidence/AI Ledger + CMDB/cascade correlation + Temporal crash recovery. P2 showcase/media, history consolidator and Windows operator UX.

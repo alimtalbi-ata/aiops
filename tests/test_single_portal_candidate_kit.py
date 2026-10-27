@@ -56,8 +56,12 @@ class CandidateKitTests(unittest.TestCase):
                 "docs/recovery/OCTOBER-2026-ARCHIVE-CONTEXT-AND-REUSE.md",
                 ".github/workflows/star-capture-evidence.yml",
                 ".github/workflows/star-event-capture-alignment-offline.yml",
+                ".github/workflows/star-event-source-binding-offline.yml",
                 "demo/star_event_capture_alignment.py",
+                "demo/star_event_source_binding.py",
                 "tests/test_star_event_capture_alignment.py",
+                "tests/test_star_event_source_binding.py",
+                "docs/demo/STAR-EVENT-SOURCE-BINDING-FAIL-CLOSED-20261027.md",
                 "demo/star_capture_evidence.py",
                 "demo/star_png_integrity.py",
                 "demo/star_snapshot_choreography.py",
@@ -131,6 +135,16 @@ class CandidateKitTests(unittest.TestCase):
                     "tests/test_star_event_capture_alignment.py",
                 }
                 for source_path in cumulative_time_alignment_sources:
+                    member = "sources/" + source_path
+                    self.assertIn(member, z.namelist())
+                    self.assertEqual(z.read(member), (root / source_path).read_bytes())
+                cumulative_source_binding_sources = {
+                    ".github/workflows/star-event-source-binding-offline.yml",
+                    "demo/star_event_source_binding.py",
+                    "tests/test_star_event_source_binding.py",
+                    "docs/demo/STAR-EVENT-SOURCE-BINDING-FAIL-CLOSED-20261027.md",
+                }
+                for source_path in cumulative_source_binding_sources:
                     member = "sources/" + source_path
                     self.assertIn(member, z.namelist())
                     self.assertEqual(z.read(member), (root / source_path).read_bytes())

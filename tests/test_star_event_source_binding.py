@@ -6,7 +6,9 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest.mock import patch
 
+from demo import star_event_source_binding as event_source_binding
 from demo.star_event_source_binding import verify_event_source_binding
 
 
@@ -57,6 +59,28 @@ class SourceBindingTests(unittest.TestCase):
             "source_kind": "ISOLATED_FIXTURE_EVENT", "source_sha256": "",
         }
         self.write_event()
+
+    def test_fail_closed_when_nofollow_primitive_is_unavailable(self):
+        with patch.object(event_source_binding.os, "O_NOFOLLOW", None, create=True):
+            with self.assertRaisesRegex(ValueError, "without O_NOFOLLOW"):
+                event_source_binding._read_source_bytes(self.root, "detect.json")
+
+    def test_fail_closed_when_directory_primitive_is_unavailable(self):
+        with patch.object(event_source_binding.os, "O_DIRECTORY", 0, create=True):
+            with self.assertRaisesRegex(ValueError, "without O_DIRECTORY"):
+                event_source_binding._read_source_bytes(self.root, "detect.json")
+
+    def test_fail_closed_when_dir_fd_open_support_is_unavailable(self):
+        with patch.object(event_source_binding.os, "supports_dir_fd", set(), create=True):
+            with self.assertRaisesRegex(ValueError, "directory-relative open"):
+                event_source_binding._read_source_bytes(self.root, "detect.json")
+
+    def test_reject_root_symlink(self):
+        with tempfile.TemporaryDirectory() as parent:
+            alias = Path(parent) / "evidence"
+            alias.symlink_to(self.root, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                event_source_binding._read_source_bytes(alias, "detect.json")
 
     def write_event(self):
         data = json.dumps(self.event, sort_keys=True).encode()
@@ -123,7 +147,7 @@ class SourceBindingTests(unittest.TestCase):
         path = self.root / "events" / "detect.json"
         path.unlink()
         path.symlink_to(self.root / "detect.json")
-        with self.assertRaises(OSError):
+        with self.assertRaisesRegex(ValueError, "symlink"):
             self.check()
 
     def test_rejects_events_directory_symlink(self):

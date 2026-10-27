@@ -35,35 +35,78 @@ def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def _read_source_bytes(root: Path, filename: str) -> bytes:
-    """Open only a regular file in a real events/ directory, without symlinks."""
+    """Read one bounded event file through pinned directory descriptors.
+
+    Require no-follow directory-relative primitives rather than silently
+    weakening the trust boundary on platforms that do not provide them.
+    """
     if not isinstance(filename, str) or not _NAME.fullmatch(filename):
         raise ValueError("unsafe event-source filename")
-    if not root.is_dir() or root.is_symlink():
-        raise ValueError("unsafe evidence root")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    dirflags = flags | getattr(os, "O_DIRECTORY", 0)
-    directory = root / "events"
-    if directory.is_symlink():
-        raise ValueError("event-source directory symlink forbidden")
-    dir_fd = os.open(directory, dirflags)
-    try:
-        if not stat.S_ISDIR(os.fstat(dir_fd).st_mode):
-            raise ValueError("event-source directory is not a directory")
-        fd = os.open(filename, flags | getattr(os, "O_NONBLOCK", 0), dir_fd=dir_fd)
-        try:
-            st = os.fstat(fd)
-            if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= _LIMIT:
-                raise ValueError("unsafe or oversized event-source file")
-            with os.fdopen(fd, "rb", closefd=False) as stream:
-                data = stream.read(_LIMIT + 1)
-            if len(data) != st.st_size or len(data) > _LIMIT:
-                raise ValueError("event-source changed during read")
-            return data
-        finally:
-            os.close(fd)
-    finally:
-        os.close(dir_fd)
 
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if not isinstance(nofollow, int) or nofollow == 0:
+        raise ValueError("safe event-source open unavailable without O_NOFOLLOW")
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if not isinstance(directory_flag, int) or directory_flag == 0:
+        raise ValueError("safe directory open unavailable without O_DIRECTORY")
+    dir_fd_support = getattr(os, "supports_dir_fd", None)
+    if dir_fd_support is None or os.open not in dir_fd_support:
+        raise ValueError("safe directory-relative open support unavailable")
+
+    extra_flags = 0
+    for name in ("O_CLOEXEC", "O_NONBLOCK", "O_BINARY"):
+        value = getattr(os, name, 0)
+        if isinstance(value, int):
+            extra_flags |= value
+    file_flags = os.O_RDONLY | nofollow | extra_flags
+    directory_flags = file_flags | directory_flag
+
+    root_fd = None
+    events_fd = None
+    file_fd = None
+    try:
+        # Once opened, all child lookups are anchored to these descriptors.
+        # O_NOFOLLOW rejects root/events/file symlink final components.
+        root_fd = os.open(root, directory_flags)
+        if not stat.S_ISDIR(os.fstat(root_fd).st_mode):
+            raise ValueError("evidence root must be a directory")
+
+        events_fd = os.open("events", directory_flags, dir_fd=root_fd)
+        if not stat.S_ISDIR(os.fstat(events_fd).st_mode):
+            raise ValueError("event-source directory must be a directory")
+
+        file_fd = os.open(filename, file_flags, dir_fd=events_fd)
+        before = os.fstat(file_fd)
+        if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= _LIMIT:
+            raise ValueError("unsafe or oversized event-source file")
+
+        with os.fdopen(file_fd, "rb", closefd=False) as stream:
+            data = stream.read(_LIMIT + 1)
+
+        after = os.fstat(file_fd)
+        before_state = (
+            before.st_dev, before.st_ino, before.st_mode, before.st_size,
+            before.st_mtime_ns, before.st_ctime_ns,
+        )
+        after_state = (
+            after.st_dev, after.st_ino, after.st_mode, after.st_size,
+            after.st_mtime_ns, after.st_ctime_ns,
+        )
+        if (before_state != after_state or len(data) != after.st_size
+                or len(data) > _LIMIT):
+            raise ValueError("event-source changed during read")
+        return data
+    except ValueError:
+        raise
+    except OSError as exc:
+        raise ValueError("event-source path or symlink cannot be opened safely") from exc
+    finally:
+        for descriptor in (file_fd, events_fd, root_fd):
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
 
 def verify_event_source_binding(
     root: Path,

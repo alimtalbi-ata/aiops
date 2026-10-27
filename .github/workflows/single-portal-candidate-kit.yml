@@ -41,18 +41,22 @@ on:
       - 'docs/release/**'
       - '.github/workflows/star-browser-manifest-bridge-offline.yml'
       - '.github/workflows/star-event-capture-alignment-offline.yml'
+      - '.github/workflows/star-event-source-binding-offline.yml'
       - 'demo/star_browser_manifest_gate.py'
       - 'demo/star_event_capture_alignment.py'
+      - 'demo/star_event_source_binding.py'
       - 'demo/star_checkpoint_reconciliation.py'
       - 'demo/star_capture_set_replay_gate.py'
       - 'demo/star_portal_storyboard.py'
       - 'tests/test_star_browser_manifest_gate.py'
       - 'tests/test_star_event_capture_alignment.py'
+      - 'tests/test_star_event_source_binding.py'
       - 'tests/test_star_checkpoint_reconciliation.py'
       - 'tests/test_star_capture_set_replay_gate.py'
       - 'docs/demo/STAR-BROWSER-MANIFEST-BRIDGE-HLD-LLD-V21336.md'
       - 'docs/demo/STAR-CHECKPOINT-RECONCILIATION-V21358.md'
       - 'docs/demo/STAR-PINNED-CAPTURE-REPLAY-V21360.md'
+      - 'docs/demo/STAR-EVENT-SOURCE-BINDING-FAIL-CLOSED-20261027.md'
       - 'docs/recovery/**'
       - '.github/workflows/single-portal-candidate-kit.yml'
   workflow_dispatch:
@@ -87,6 +91,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_star_n8n_identity_gate.py' -v
           python -m unittest discover -s tests -p 'test_star_browser_manifest_gate.py' -v
           python -m unittest discover -s tests -p 'test_star_event_capture_alignment.py' -v
+          python -m unittest discover -s tests -p 'test_star_event_source_binding.py' -v
           python -m unittest discover -s tests -p 'test_star_checkpoint_reconciliation.py' -v
           python -m unittest discover -s tests -p 'test_star_capture_set_replay_gate.py' -v
       - name: Build pinned candidate only (no Docker, no runtime)
