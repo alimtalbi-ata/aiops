@@ -40,6 +40,15 @@ MIN_START_INTERVAL_SECONDS = 30
 MAX_STARTS_PER_HOUR = 8
 
 
+def _reject_duplicate_manifest_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate manifest JSON key")
+        result[key] = value
+    return result
+
+
 def _video_enabled():
     return os.getenv("AIOPS_DEMO_VIDEO_ENABLED", "").lower() == "true"
 
@@ -74,7 +83,7 @@ def _job_snapshot(job_id, job):
                         raise ValueError("manifest exceeds size limit")
                     if os.fstat(fd).st_size != manifest_stat.st_size:
                         raise ValueError("manifest changed during read")
-                    data = json.loads(raw_manifest.decode("utf-8"))
+                    data = json.loads(raw_manifest.decode("utf-8"), object_pairs_hook=_reject_duplicate_manifest_keys)
                 finally:
                     os.close(fd)
                 video = job["output"] / ARTIFACTS["video"][0]
