@@ -19,6 +19,7 @@ on:
       - 'tests/test_star_snapshot_choreography.py'
       - 'docs/demo/AIOPS-STAR-EVIDENCE-MANIFEST-STRICTNESS-20261026.md'
       - 'app/portal/main.py'
+      - 'app/portal/noc_runtime.py'
       - 'app/portal/ui_theme.py'
       - 'app/portal/acme-fixtures.json'
       - 'app/portal/acme_fixture_contract.py'
@@ -29,6 +30,7 @@ on:
       - 'app/portal/public_demo_assets/AIOPS-EXECUTIVE-THEATER-PUBLIC.html'
       - 'tests/test_portal_demo_public_v21310.py'
       - 'tests/test_platform_registry_portal_route.py'
+      - 'tests/test_portal_noc_runtime_adapter.py'
       - 'deploy/single_portal_candidate_kit.py'
       - 'tests/test_single_portal_candidate_kit.py'
       - 'tests/test_verify_single_portal_candidate_kit.py'
@@ -36,6 +38,7 @@ on:
       - 'deploy/init-env.sh'
       - 'deploy/check-secrets.sh'
       - 'compose.yml'
+      - 'config/.env.example'
       - 'config/.env.demo.example'
       - 'tests/test_preflight_secrets.sh'
       - 'docs/SECURITY.md'
@@ -95,6 +98,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_verify_single_portal_candidate_kit.py' -v
           python -m unittest discover -s tests -p 'test_noc_browser_workflow_contract.py' -v
           python -m unittest discover -s tests -p 'test_noc_portal_integration.py' -v
+          python -m unittest discover -s tests -p 'test_portal_noc_runtime_adapter.py' -v
           python -m unittest discover -s tests -p 'test_portal_demo_public_v21310.py' -v
           python -m unittest discover -s tests -p 'test_portal_acme_impact_read_model.py' -v
           python -m unittest discover -s tests -p 'test_portal_bootstrap_read_model.py' -v
