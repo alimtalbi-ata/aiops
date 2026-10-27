@@ -44,6 +44,11 @@ class AcmeFixtureValidationTests(unittest.TestCase):
             report["impact_path"],
             ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"],
         )
+        self.assertEqual(
+            report["affected_ci_ids"],
+            ["APP-PAY-01", "HOST-ESX-01", "SAN-FABRIC-A", "VM-PAY-01", "VOL-PAY-01"],
+        )
+        self.assertNotIn("SAN-FABRIC-B", report["affected_ci_ids"])
         self.assertEqual(report["provenance"], "SIMULATED_TARGET")
         self.assertFalse(report["live_remediation_authorized"])
 
