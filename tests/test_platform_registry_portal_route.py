@@ -42,10 +42,11 @@ class StaticPlatformRegistryPortalRouteTests(unittest.TestCase):
             noc_runtime.urllib.request, "build_opener",
             side_effect=AssertionError("unconfigured NOC route must not open network"),
         ):
-            response = self.client.get(
-                "/api/noc/runtime-state",
-                headers={"Authorization": "Bearer synthetic-portal-read-token"},
-            )
+            with TestClient(app) as client:
+                response = client.get(
+                    "/api/noc/runtime-state",
+                    headers={"Authorization": "Bearer synthetic-portal-read-token"},
+                )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "noc_source_not_configured")
         self.assertEqual(response.headers["cache-control"], "no-store")
