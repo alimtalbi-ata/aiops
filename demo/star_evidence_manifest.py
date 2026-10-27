@@ -38,14 +38,18 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def _utc_timestamp(value: object) -> bool:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or value != value.strip():
+        return False
+    # Require an explicit, unambiguous UTC designator. ISO 8601's -00:00
+    # means an unknown local offset in some producers; do not treat it as UTC.
+    if not (value.endswith("Z") or value.endswith("+00:00")):
+        return False
+    if len(value) < 20 or value[10] != "T":
         return False
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
     except ValueError:
         return False
-    # The field is explicitly named *_utc: accept only UTC (Z or +00:00),
-    # not merely any timezone-aware local timestamp.
     return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
 
 
