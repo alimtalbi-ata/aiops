@@ -13,14 +13,15 @@ from demo.star_evidence_manifest import audit_manifest
 from demo.star_snapshot_choreography import CUES
 
 
-def png_bytes(width: int = 2, height: int = 2) -> bytes:
+def png_bytes(width: int = 2, height: int = 2, idat_override: bytes | None = None) -> bytes:
     def chunk(kind: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
 
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     scanline = b"\x00" + b"\x10\x20\x30" * width
     raw = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
-    raw += chunk(b"IDAT", zlib.compress(scanline * height))
+    compressed = zlib.compress(scanline * height) if idat_override is None else idat_override
+    raw += chunk(b"IDAT", compressed)
     raw += chunk(b"IEND", b"")
     return raw
 
@@ -145,6 +146,23 @@ class StarEvidenceManifestTests(unittest.TestCase):
         result = self.audit()
         self.assertFalse(result["complete_byte_set"])
         self.assertEqual(result["captures"][0]["status"], "REJECTED_DUPLICATE_CUE")
+
+    def test_invalid_zlib_stream_is_rejected_even_with_valid_chunk_crc_and_hash(self):
+        path = self.root / self.entries[0]["screenshot_path"]
+        raw = png_bytes(idat_override=b"not-a-zlib-stream")
+        path.write_bytes(raw)
+        self.entries[0]["screenshot_sha256"] = hashlib.sha256(raw).hexdigest()
+        self.write_manifest()
+        self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
+
+    def test_invalid_scanline_filter_is_rejected_even_with_matching_hash(self):
+        path = self.root / self.entries[0]["screenshot_path"]
+        bad_scanlines = (b"\x05" + b"\x10\x20\x30" * 2) * 2
+        raw = png_bytes(idat_override=zlib.compress(bad_scanlines))
+        path.write_bytes(raw)
+        self.entries[0]["screenshot_sha256"] = hashlib.sha256(raw).hexdigest()
+        self.write_manifest()
+        self.assertEqual(self.audit()["captures"][0]["status"], "REJECTED")
 
     def test_png_without_idat_is_rejected_even_with_matching_hash(self):
         path = self.root / self.entries[0]["screenshot_path"]
