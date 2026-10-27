@@ -20,7 +20,7 @@ L'exemple utilise des domaines réservés à la documentation : remplacez-les pa
 
 ## Contrat du manifeste
 
-Le manifeste a `schema_version: 1`, `provenance: OPERATOR_SUPPLIED_SCREENSHOTS_UNATTESTED` et une liste `captures`. Chaque entrée décrit un cue de `demo/star_snapshot_choreography.py` avec `cue`, `service`, `view`, `source_url`, `captured_at_utc`, `run_id`, `incident_id`, `screenshot_path` et `screenshot_sha256`. `ticket_id` est facultatif. Les neuf cues attendus sont contrôlés ; les absences, doublons, origines non allowlistées, chemins dangereux, PNG malformés et sommes divergentes ne passent pas.
+Le manifeste a `schema_version: 1`, `provenance: OPERATOR_SUPPLIED_SCREENSHOTS_UNATTESTED` et une liste `captures`. Chaque entrée décrit un cue de `demo/star_snapshot_choreography.py` avec `cue`, `service`, `view`, `source_url`, `captured_at_utc`, `run_id`, `incident_id`, `screenshot_path` et `screenshot_sha256`. `ticket_id` est facultatif. Les neuf cues attendus sont contrôlés ; les clés JSON dupliquées (ambiguïté d'interprétation), les absences, doublons, origines non allowlistées, chemins dangereux, PNG malformés et sommes divergentes ne passent pas. Le champ `captured_at_utc` doit représenter UTC (suffixe `Z` ou décalage nul), pas simplement un horodatage avec n'importe quel fuseau.
 
 ## Signification du résultat
 
@@ -32,4 +32,4 @@ Le vérificateur force à `false` les attestations d'identité applicative, d'é
 
 ## Tests
 
-`tests/test_star_evidence_manifest.py` construit neuf images PNG synthétiques et teste l'intégrité octet, la couverture des cues, le hash incorrect, les origines refusées, la traversée de chemin, les liens symboliques, les CRC corrompus, les flux zlib invalides malgré un CRC/hash cohérent, les filtres de scanline invalides, les doublons et l'impossibilité de promouvoir des champs d'attestation fournis par l'opérateur. Ce sont des tests unitaires isolés, pas une capture Chromium ni une validation des applications réelles.
+`tests/test_star_evidence_manifest.py` construit neuf images PNG synthétiques et teste l'intégrité octet, la couverture des cues, le hash incorrect, les clés JSON dupliquées, les décalages horaires non UTC, les origines refusées, la traversée de chemin, les liens symboliques, les CRC corrompus, les flux zlib invalides malgré un CRC/hash cohérent, les filtres de scanline invalides, les doublons et l'impossibilité de promouvoir des champs d'attestation fournis par l'opérateur. Ce sont des tests unitaires isolés, pas une capture Chromium ni une validation des applications réelles.
