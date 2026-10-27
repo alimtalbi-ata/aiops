@@ -33,3 +33,7 @@ Le vérificateur force à `false` les attestations d'identité applicative, d'é
 ## Tests
 
 `tests/test_star_evidence_manifest.py` construit neuf images PNG synthétiques et teste l'intégrité octet, la couverture des cues, le hash incorrect, les clés JSON dupliquées, les décalages horaires non UTC, les origines refusées, la traversée de chemin, les liens symboliques, les CRC corrompus, les flux zlib invalides malgré un CRC/hash cohérent, les filtres de scanline invalides, les doublons et l'impossibilité de promouvoir des champs d'attestation fournis par l'opérateur. Ce sont des tests unitaires isolés, pas une capture Chromium ni une validation des applications réelles.
+
+## Format d'horodatage UTC strict
+
+Le champ `captured_at_utc` exige désormais un horodatage ISO avec séparateur `T` et désignateur UTC explicite `Z` ou `+00:00`. Les offsets locaux (y compris `-00:00`, qui peut signifier « offset inconnu »), les espaces autour de la valeur et un séparateur date/heure par espace sont refusés. Cette validation porte uniquement sur la syntaxe du manifeste ; elle ne prouve pas l'heure réelle de capture ni l'identité de la source.
