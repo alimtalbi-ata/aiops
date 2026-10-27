@@ -228,3 +228,16 @@ Immediate review order:
 - Current source review confirmed `app/shared/evidence_identity.py`, `app/shared/evidence_contract.py`, `app/evidence/main.py`, and the synthetic-only `app/portal/acme_impact_read_model.py`.
 - Added `app/shared/evidence_matrix.py` plus `tests/test_evidence_matrix.py`; the quality workflow now invokes the new tests.
 - **NOT QUALIFIED YET:** wait for the workflow triggered by the branch push and inspect the exact SHA/job logs. No local test execution, server access, backend writes, or live actions were performed.
+
+
+## Update — bounded bootstrap and NOC archive deduplication (2026-10-27)
+
+Snapshot of the verified candidate at commit `94036198818e0a50a3cbc77aa586d76a7bd4ad08`, PR #36 (still draft):
+
+- `GET /api/portal/bootstrap` now uses a shared six-worker pool for the three bounded, retry-free upstream reads and admits at most two concurrent bootstrap requests. Excess requests fail closed with HTTP 503 `portal_bootstrap_capacity_exceeded`. The ASGI regression `test_bootstrap_rejects_excess_concurrent_requests_without_pool_growth` passed in the candidate-kit run.
+- The Library archive `AioOps-NOC-Offline-Browser-Evidence.zip` was materialized in an isolated workspace, CRC checked and hashed. It contains only static HTML/JSON plus three offline-rendered PNGs; no Python module or live-service adapter. Its synthetic event/capture binding duplicates the already tested `demo/noc_star_event_binding.py`; no archive bytes or images were promoted.
+- Candidate ZIP built from the exact commit: SHA-256 `1e8503990f41a4049e3d530de8f473d04869c50308b9604207808cd183d6c81f`; 82 members, 78 embedded sources, 638 source inventory entries, 20 routes explicitly unverified. ZIP CRC and all 81 internal SHA256SUMS entries passed independent verification. `production_qualified=false`, `runtime_e2e_qualified=false`.
+- Candidate-kit CI: [run 40535354678](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354678), PASS; its 14 offline suites passed, including the bootstrap concurrency regression. General quality gates: [run 40535354734](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354734), all six jobs PASS (quality/build, runtime E2E on CI fixtures, database migrations, MariaDB DR, migration upgrade, release kit). Historical ZIP source-recovery audit: [run 40535354677](https://github.com/alimtalbi-ata/aiops/actions/runs/40535354677), PASS.
+- At the last poll, 25/27 workflows were complete and successful; STAR F20.13 checkpoint-plan builder and Chromium read-only fixture qualification were still in progress. No failures were observed. These are isolated CI results, not a qualification of Debian `:17777`.
+
+Still blocked: original complete F20.13 campaign files and the private V2.13.4/V2.13.6.1 ZIP bytes are not available in the current Library listing. The historical recovery registry is evidence of prior inspection, not a substitute for original bytes in this run. The portal's 20 component families remain unqualified for runtime connection; no production host, backend, database or live remediation was touched.
