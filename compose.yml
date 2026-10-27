@@ -130,7 +130,8 @@ services:
       AIOPS_PORTAL_LINK_GRAFANA: ${AIOPS_PORTAL_LINK_GRAFANA:-}
       AIOPS_PORTAL_LINK_GLPI: ${AIOPS_PORTAL_LINK_GLPI:-}
       AIOPS_PORTAL_ALLOW_HTTP_LINKS: ${AIOPS_PORTAL_ALLOW_HTTP_LINKS:-false}
-    ports: ["7777:777"]
+      AIOPS_PORTAL_HOST_PORT: ${AIOPS_PORTAL_HOST_PORT:-17777}
+    ports: ["${AIOPS_PORTAL_HOST_PORT:-17777}:777"]
     networks: [aiops2-public, aiops2-control]
     depends_on:
       aiops2-core: {condition: service_healthy}
