@@ -222,7 +222,18 @@ def start_video(request: dict):
                 command, cwd=str(REPO_ROOT), stdin=subprocess.DEVNULL,
                 stdout=log, stderr=subprocess.STDOUT, close_fds=True,
                 start_new_session=True,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                # The renderer needs process/runtime basics, not portal credentials.
+                # Do not pass internal/admin/read tokens or unrelated service secrets
+                # to a child process that renders synthetic, offline-only assets.
+                env={
+                    key: os.environ[key]
+                    for key in (
+                        "PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LC_ALL",
+                        "LC_CTYPE", "PLAYWRIGHT_BROWSERS_PATH", "XDG_CACHE_HOME",
+                        "FONTCONFIG_PATH",
+                    )
+                    if key in os.environ
+                } | {"PYTHONUNBUFFERED": "1"},
             )
         except OSError as exc:
             log.close()
