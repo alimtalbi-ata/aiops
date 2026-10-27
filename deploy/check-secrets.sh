@@ -47,7 +47,7 @@ check_secret N8N_ENCRYPTION_KEY 'Newaiops26$-N8N'
 
 # The optional signed NOC connector is either fully disabled or fully configured.
 # Never generate an upstream token/HMAC key here: those must be provisioned out of band.
-noc_keys=("${noc_keys[@]}")
+noc_keys=(AIOPS_NOC_READ_MODEL_URL AIOPS_NOC_READ_MODEL_TOKEN AIOPS_NOC_READ_MODEL_HMAC_KEY AIOPS_NOC_ALLOWED_ORIGINS)
 noc_configured=0
 for key in "${noc_keys[@]}"; do
   [[ -n "$(env_value "$key")" ]] && noc_configured=1
