@@ -13,3 +13,16 @@
 - **Risques :** le staging privé n'empêche pas un processus de même UID d'y accéder ; aucune attestation d'identité de session, RBAC ou inspection humaine de confidentialité des pixels ; la PR #43 doit être portée/rebasée de manière ciblée. Le contrôle `fstat` ne remplace pas la vérification SHA-256 des copies, effectuée avant rendu.
 - **Blocages :** pas de sessions opérateur autorisées ni de preuves LIVE, pas de qualification navigateur ou stack réelle ; aucun accès Debian/portail et aucune commande LIVE.
 - **Prochain micro-lot :** relever le résultat GitHub Actions, corriger les éventuelles régressions, puis préparer un manifeste Evidence Studio navigable et une revue opérateur indépendante des cinq captures avant toute promotion. Ne pas fusionner la PR empilée avant stabilisation de #43.
+
+## Qualification CI — première tentative et correction
+
+- [Run 40623115867](https://github.com/alimtalbi-ata/aiops/actions/runs/40623115867) : **FAILURE**.
+  Les 7 tests policy et 15 tests PNG ont passé, mais le job s'est arrêté
+  avant la suite bundle car `command -v ffmpeg` ou `command -v ffprobe`
+  a retourné 1 sur le runner (aucun binaire affiché dans le log).
+  Les tests bundle, snapshot, Playwright, publication et contrôles ultérieurs
+  n'ont **pas** été exécutés dans cette tentative.
+- Correction `24e0ea1` : installation explicite des dépendances FFmpeg/ffprobe
+  par `apt-get` dans `quality.yml`, sans workflow parallèle.
+- Nouvelle CI sur le HEAD corrigé : en attente de vérification ; ne pas
+  marquer PASS avant la conclusion de l'exécution.
