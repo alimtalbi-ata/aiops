@@ -64,32 +64,52 @@ def _project(rid, detail, ledger):
         raise ValueError("ledger identity mismatch")
     if len(json.dumps(ledger, ensure_ascii=False, default=str).encode("utf-8")) > 131072:
         raise ValueError("ledger too large")
+    # Only internally linked Core records may be presented as a sourced claim.
+    # This is referential consistency, NOT evidence existence or tenant ACL proof.
     analyses = []
+    analysis_evidence = {}
     for item in _records(ledger.get("analyses")):
+        analysis_id = _identifier(item.get("analysis_id"))
+        if analysis_id in analysis_evidence:
+            raise ValueError("duplicate analysis identity")
+        evidence_ids = _evidence_ids(item.get("evidence_ids"))
+        analysis_evidence[analysis_id] = set(evidence_ids)
         analyses.append({
-            "analysis_id": _identifier(item.get("analysis_id")),
+            "analysis_id": analysis_id,
             "model": _short(item.get("model"), 160),
             "status": _short(item.get("status"), 32),
-            "evidence_ids": _evidence_ids(item.get("evidence_ids")),
+            "evidence_ids": evidence_ids,
         })
     critiques = []
+    critique_ids = set()
     for item in _records(ledger.get("critiques")):
         output = item.get("output")
         if not isinstance(output, dict) or not isinstance(item.get("validated"), bool):
             raise ValueError("invalid critique")
+        critique_id = _identifier(item.get("critique_id"))
+        analysis_id = _identifier(item.get("analysis_id"))
+        if critique_id in critique_ids or analysis_id not in analysis_evidence:
+            raise ValueError("unlinked critique")
+        critique_ids.add(critique_id)
+        evidence_ids = _evidence_ids(item.get("evidence_ids"))
+        linked_ids = set(evidence_ids) & analysis_evidence[analysis_id]
         checks = []
         for check in _records(output.get("claim_checks")):
             if not isinstance(check.get("supported"), bool):
                 raise ValueError("invalid claim support")
+            supporting_ids = _evidence_ids(check.get("supporting_evidence_ids"))
+            if (not set(supporting_ids).issubset(linked_ids)
+                    or (check["supported"] and not supporting_ids)):
+                raise ValueError("unlinked supporting evidence")
             checks.append({"claim": _short(check.get("claim")),
                            "supported": check["supported"],
-                           "supporting_evidence_ids": _evidence_ids(check.get("supporting_evidence_ids"))})
+                           "supporting_evidence_ids": supporting_ids})
         critiques.append({
-            "critique_id": _identifier(item.get("critique_id")),
-            "analysis_id": _identifier(item.get("analysis_id")),
+            "critique_id": critique_id,
+            "analysis_id": analysis_id,
             "model": _short(item.get("model"), 160),
             "validated": item["validated"],
-            "evidence_ids": _evidence_ids(item.get("evidence_ids")),
+            "evidence_ids": evidence_ids,
             "claim_checks": checks,
         })
     decisions = []
