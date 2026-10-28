@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from portal.acme_fixture_contract import load_fixture_bytes, validate_fixture
+from portal.acme_declared_topology import build_declared_topology
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -89,6 +90,10 @@ def build_acme_impact_read_model() -> dict[str, Any]:
     fixture = load_fixture_bytes(raw)
     report = validate_fixture(fixture)
     digest = hashlib.sha256(raw).hexdigest()
+    topology = build_declared_topology(fixture)
+    topology["source_sha256"] = digest
+    topology["simulation_run_id"] = "SIM-ACME-" + digest[:16].upper()
+    topology["simulation_run_id_provenance"] = "DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN"
     return {
         "schema": "aiops.synthetic-impact-read-model.v1",
         "entrypoint": "http://10.79.94.202:17777/",
@@ -112,6 +117,7 @@ def build_acme_impact_read_model() -> dict[str, Any]:
         "ci_count": report["ci_count"],
         "incident_count": report["incident_count"],
         "impact_path": report["impact_path"],
+        "topology": topology,
         "affected_ci_ids": report["affected_ci_ids"],
         "affected_cis": report["affected_cis"],
         "provenance": "SIMULATED_TARGET",
@@ -191,9 +197,15 @@ def acme_impact_json():
     return JSONResponse(content=_load_or_503(), headers=HEADERS)
 
 
+@router.get("/api/demo/acme-topology", name="synthetic_acme_declared_topology")
+def acme_topology_json():
+    """Full dependency graph, not an observed CMDB or verified failover path."""
+    return JSONResponse(content=_load_or_503()["topology"], headers=HEADERS)
+
+
 @router.get("/demo/acme-impact", response_class=HTMLResponse, name="synthetic_acme_impact_page")
 def acme_impact_page():
-    """Serve a local HTML snapshot; no scripts, forms, links or upstream calls."""
+    """Serve a local HTML snapshot; no scripts, forms, external links or upstream calls."""
     model = _load_or_503()
     path = " → ".join(str(part) for part in model["impact_path"])
     rows = [
@@ -228,6 +240,23 @@ def acme_impact_page():
         + '<p>État attendu : ' + html.escape(str(item["required_state"]), quote=True) + '</p>'
         + '<small>Capture : ABSENTE · SHA-256 : ABSENT · Horodatage runtime : ABSENT · Authentification : NON ATTESTÉE</small></article>'
         for item in model["checkpoint_evidence"]
+    )
+    topology = model["topology"]
+    topology_cards = "".join(
+        '<article class="ci-card"><div class="ci-top"><strong>'
+        + html.escape(str(node["id"]), quote=True)
+        + '</strong><span>RUNTIME UNKNOWN</span></div><h3>'
+        + html.escape(str(node["name"]), quote=True)
+        + '</h3><p>'
+        + html.escape(str(node["kind"]), quote=True)
+        + '</p><small>Impact SAN déclaré : '
+        + ("OUI" if node["affected_by_source"] else "NON")
+        + '</small></article>'
+        for node in topology["nodes"]
+    )
+    alternate_path = (
+        " → ".join(topology["alternate_declared_path"])
+        if topology["alternate_declared_path"] else "UNKNOWN"
     )
     decision = model["decision_preview"]
     decision_steps = "".join(
@@ -281,6 +310,15 @@ def acme_impact_page():
         "ticket GLPI, capture applicative, appel backend ou événement horodaté n'est créé. "
         "Le run_id affiché est dérivé des octets du fixture, pas d'un run exécuté.</p>"
         + diagram +
+        '<section aria-label="Topologie ACME déclarative complète"><h2>Topologie déclarative — tous les CI</h2>'
+        '<p>Arêtes de dépendance issues du fixture local uniquement. État runtime de chaque CI : UNKNOWN. '
+        'La présence de Fabric B ne prouve ni sa santé, ni une bascule fonctionnelle.</p>'
+        '<p><strong>Chemin alternatif déclaré :</strong> '
+        + html.escape(alternate_path, quote=True)
+        + ' · <strong>Failover vérifié :</strong> NON · <strong>CMDB vérifiée :</strong> NON</p>'
+        '<p>Graphe JSON : <a href="/api/demo/acme-topology">contrat de topologie synthétique</a> '
+        '(sans données runtime ni ticket GLPI).</p>'
+        '<div class="ci-grid">' + topology_cards + '</div></section>'
         '<section class="kpis" aria-label="Indicateurs du scénario">'
         '<article class="kpi"><span>Incident source</span><strong class="p1">SAN P1</strong><span>Dégradation de fabric simulée</span></article>'
         '<article class="kpi"><span>Service impacté</span><strong class="p2">Payments P2</strong><span>Impact métier simulé</span></article>'
