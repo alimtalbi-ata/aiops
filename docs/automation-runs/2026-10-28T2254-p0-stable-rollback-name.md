@@ -16,7 +16,7 @@
 - Contrat : aucune modification d'API ni de mode DEMO/LIVE. Invariant ajouté : nom de sauvegarde Docker valide et distinct par exécution de shell.
 
 ## Validation et limites
-- CI GitHub Actions existante sur SHA code `8fb6bac34a8170a25431bc2441d10b7bdebda5e5` : [run PR #40775656541](https://github.com/alimtalbi-ata/aiops/actions/runs/40775656541) et [run push #40775648869](https://github.com/alimtalbi-ata/aiops/actions/runs/40775648869). **En cours au moment de la première rédaction** : ne pas considérer PASS avant contrôle final des jobs et logs.
+- CI GitHub Actions existante sur SHA code `8fb6bac34a8170a25431bc2441d10b7bdebda5e5` : [run PR #40775656541](https://github.com/alimtalbi-ata/aiops/actions/runs/40775656541) et [run push #40775648869](https://github.com/alimtalbi-ata/aiops/actions/runs/40775648869). **Contrôlée sur ce SHA** : les deux runs sont `completed/success`, 5/5 jobs qualité `SUCCESS` par run, et les 6 checks complémentaires `SUCCESS` (16 checks au total). Logs du job `quality-build-package` [#123124164976](https://github.com/alimtalbi-ata/aiops/actions/runs/40775656541/job/123124164976) consultés : **5/5 tests poller** et **4/4 tests de nom Docker** exécutés, `OK` ; aucune exécution Docker du déployeur. Qualification strictement hors ligne.
 - Test local de la suite complète : **NOT_TESTED** (environnement de travail sans accès GitHub réseau direct) ; validation attendue des tests par CI réelle.
 - Test Docker rename/start/rollback, panne pendant switch, préservation des fichiers locaux, `applied.sha`, smoke Debian : **NOT_TESTED**.
 - E2E ACME Core→Temporal→Analyst/Critic→Policy→Evidence→Portal, IDs corrélés, tenant RBAC, impact Payments et captures authentifiées : **NOT_TESTED / NO_GO**.
