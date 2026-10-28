@@ -1,0 +1,29 @@
+# P0 HITL — convergence Policy deny-only — 2026-10-28 10:30 Europe/Paris
+
+## Lecture préalable / SHA de départ
+- `main` HEAD au départ et avant création de branche: `bb4665ab0eb41b43df43ea893e28ac86ef640863`.
+- Revues: PR ouvertes #36/#37/#39/#41/#43, #49, #72, #76, #106 ; continuité, architecture, décisions, stratégie de tests et `.github/workflows/quality.yml`.
+- PR #36 `app/policy/execution_fence.py` : réserve des admissions simulation-only, jamais permission LIVE ; dépend de `autonomy_store` absent de main. Réutilisation du principe seulement, sans merge massif.
+- La PR #76 était `dirty` / conflictuelle avec `main` après les commits récents. Ne pas fusionner à l'aveugle ; convergence ciblée sur nouvelle branche depuis main.
+
+## Fichiers et commits
+- Branche `fix/policy-hitl-deny-main-convergence-20261028-1030`, draft [PR #118](https://github.com/alimtalbi-ata/aiops/pull/118).
+- `app/policy/main.py`: [`9a19c52fea118ece5cd757a197ac6f9494226684`](https://github.com/alimtalbi-ata/aiops/commit/9a19c52fea118ece5cd757a197ac6f9494226684), portage ciblé du verrou de PR #76 ; LIVE EXECUTE/RESOLVE/REMEDIATE/CANCEL refusés malgré `human_approved=true`.
+- `tests/test_policy_safety.py`: [`96dbd1892653b0d394fcaf1e65acd758f410c40b`](https://github.com/alimtalbi-ata/aiops/commit/96dbd1892653b0d394fcaf1e65acd758f410c40b), 14 tests (11 tests Policy de #76 + 3 nouveaux tests HTTP FastAPI en processus), refus d'un booléen d'approbation forgé, modes/commandes invalides, préservation SIMULATE.
+- `docs/DECISION-LOG.md`: `818b487d4ed9c3628b1bb99c092929dfa67693fc`, ADR-0018.
+- `docs/PROJECT-CONTINUITY.md`: `3e2f88aa485d3ed2934e2fe077d880bb528602a5`, reprise de contexte.
+- Ce journal : commit documentaire à consulter sur la PR ; aucun commit vide, aucun écrasement de branche existante.
+- PR #76 a reçu en amont les trois tests HTTP via `e5b7cba894d5b6140703322df97f47b0dd7caaf1` et le journal `fb1a9285d321b6adfdfd237cca7952756a363b0f`. Elle est supersédée fonctionnellement par #118 mais pas supprimée avant vérification.
+
+## Tests réellement exécutés / statut
+- Ancien HEAD #76 `840eff93`: [GitHub Actions #40615101519](https://github.com/alimtalbi-ata/aiops/actions/runs/40615101519) `completed/success` sur 11 tests Policy, **ne couvre pas** les trois nouveaux tests HTTP.
+- HEAD de #76 après ajout documentaire `fb1a9285`: [GitHub Actions #40664342116](https://github.com/alimtalbi-ata/aiops/actions/runs/40664342116) initialement `queued`, résultat à vérifier.
+- Nouveau HEAD #118: `quality.yml` doit exécuter `test_policy_safety.py` et les autres étapes existantes ; **PENDING/NOT_TESTED** tant que les jobs du HEAD final ne sont pas confirmés. Aucun PASS extrapolé.
+- HTTP Policy = test de route en processus, **pas** intégration à un service Docker. Core/Temporal/RBAC/Evidence, HITL SQLite sandbox en service, Ollama 4B, NGX 192B, E2E, Debian et LIVE: **NOT_TESTED/BLOCKED**. Aucune simulation silencieuse de service autre que l'endpoint LLM n'a été introduite.
+
+## Risques / rollback / prochain micro-lot
+- Le contrat Policy ne porte encore ni identité Core/RBAC ni jeton HITL lié au Run canonique ; ce correctif est un **refus déterministe**, pas un mécanisme d'approbation LIVE.
+- Le Worker a déjà un refus LIVE séparé, mais son contrat de mode/Policy reste à converger depuis #72. Pas de garantie E2E à ce stade.
+- Ne fusionner #118 que si `main` et HEAD sont revérifiés, absence de conflits et checks de sécurité/CI réellement verts. Ne jamais réactiver `human_approved` comme autorisation autonome lors d'un rollback.
+- Prochain micro-lot: fusionner la protection si sûre, fermer #76 comme supersédée après vérification ; puis relier HITL sandbox à Core Run/RBAC authentifiés et Evidence append-only, tests de rejeu/concurrence sur services éphémères.
+- Aucun accès au serveur Debian 10.79.94.202 ni au portail privé, aucune commande LIVE, aucun déploiement, aucun secret production, aucune capture LIVE.
