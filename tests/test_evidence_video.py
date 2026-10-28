@@ -146,6 +146,22 @@ class EvidenceVideoTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             module.verify(self.root, self.manifest())
 
+    def test_ordered_fifteen_minute_capture_session_accepted(self):
+        stamps = ("19:00:00", "19:03:45", "19:07:30", "19:11:15", "19:15:00")
+        for entry, clock in zip(self.entries, stamps):
+            entry["captured_at_utc"] = "2026-10-27T" + clock + "Z"
+        self.assertEqual(len(module.verify(self.root, self.manifest())), 5)
+
+    def test_capture_timestamp_reversal_rejected(self):
+        self.entries[2]["captured_at_utc"] = "2026-10-27T18:59:59Z"
+        with self.assertRaisesRegex(ValueError, "nondecreasing"):
+            module.verify(self.root, self.manifest())
+
+    def test_capture_spread_beyond_fifteen_minutes_rejected(self):
+        self.entries[-1]["captured_at_utc"] = "2026-10-27T19:15:01Z"
+        with self.assertRaisesRegex(ValueError, "15-minute"):
+            module.verify(self.root, self.manifest())
+
     def test_url_credentials_rejected(self):
         self.entries[0]["source_url"] = "https://admin:password@example.invalid/"
         with self.assertRaises(ValueError):
