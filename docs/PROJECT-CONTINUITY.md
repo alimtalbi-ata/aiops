@@ -120,3 +120,10 @@ A small port from draft PR #74 replaces anonymous Core/Twin fetches with an UNKN
 ### P0 Core/Twin promotion — 2026-10-28 10:09 Europe/Paris
 
 [PR #114](https://github.com/alimtalbi-ata/aiops/pull/114) merged at `cea1ed7b54ed34cf4b036b6d5f20bf968c9dac09` after green [push CI 40661742307](https://github.com/alimtalbi-ata/aiops/actions/runs/40661742307), [PR CI 40661749480](https://github.com/alimtalbi-ata/aiops/actions/runs/40661749480), and [post-merge CI 40661890151](https://github.com/alimtalbi-ata/aiops/actions/runs/40661890151). Core/Twin bootstrap now requires the shared viewer token and anonymous home is UNKNOWN-only. Tests are in-process plus synthetic DOM; only Grafana is tested as a real ephemeral container. DEMO/Copilot remain unsecured in main, no LIVE qualification. See the 10:04 automation journal.
+
+## 2026-10-28 10:30 Europe/Paris — Policy LIVE HITL convergence (draft PR #118)
+
+- `main` starting SHA `bb4665ab0eb41b43df43ea893e28ac86ef640863` still allowed LIVE mutating Policy `PASS/ALLOW` with a caller-controlled `human_approved=true`. The earlier draft #76 is now conflicted with main. PR [#118](https://github.com/alimtalbi-ata/aiops/pull/118) ports only the two Policy code/test files from #76 to current main; no mass merge of #36 or #49.
+- Four LIVE effect commands are denied independently of the boolean. Added HTTP in-process negative tests for forged approvals, invalid modes/commands and synthetic SIMULATE behavior; the existing quality workflow is reused. Verify the exact latest GitHub Actions run before merging; no container integration or LIVE proof is claimed.
+- Remaining P0: Core-owned authenticated actor/RBAC, immutable incident/Run/recipe/target/params binding, expiring single-use approval consumption, append-only Evidence, Temporal resume and sandbox-only postchecks/rollback. Stack #49→#106 remains draft and must be reconciled selectively.
+- No Debian/NGX access, deploy, production secret or LIVE command. See `docs/automation-runs/20261028-1030-hitl-policy-convergence.md`.

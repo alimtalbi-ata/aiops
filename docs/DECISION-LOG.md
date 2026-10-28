@@ -119,3 +119,12 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse the merged NOC viewer token guard for the Core/Twin bootstrap and serve an anonymous UNKNOWN-only portal shell. The browser may fetch read models only after explicit one-shot Bearer entry, without cookies or persistent storage.
 - **Reason:** The existing public portal route contacted Core/Twin and exposed incident/run metadata without authorization. Shared auth avoids competing contracts.
 - **Limits:** Shared token does not establish tenant ACL, SSO, real upstream integration or LIVE attestation. DEMO/Copilot writes remain separate unmerged security work.
+
+## ADR-0018 — A caller-provided HITL boolean cannot authorize LIVE effects (2026-10-28)
+
+- **Status:** Proposed in draft [PR #118](https://github.com/alimtalbi-ata/aiops/pull/118); no LIVE qualification.
+- **Decision:** Policy must reject LIVE `EXECUTE`, `RESOLVE`, `REMEDIATE` and `CANCEL` even with `human_approved=true`. This field does not prove authenticated approver identity, distinct proposer, expiration, single-use consumption or immutable incident/Run/recipe/target/parameter binding.
+- **Reuse:** Selectively port the deny-only fence from draft #76 onto current `main`. PR #36's simulation-only `execution_fence.py` demonstrates that reservation is not permission; its missing `autonomy_store` is not bulk-imported.
+- **Preserve:** LIVE P1 escalation, missing-evidence UNKNOWN, DEMO/REPLAY/STORY SIMULATE, and non-mutating LIVE OBSERVE/ENRICH decisions. No command executor is enabled.
+- **Qualification:** Existing `quality.yml` runs Policy unit tests and in-process FastAPI request tests. Core/RBAC/Temporal/Evidence, real container E2E and LIVE remain NOT_TESTED; HTTP in-process is not integration with a real service.
+- **Rollback:** Never restore the unsafe boolean bypass; replace this fence only with a reviewed Core-owned, authenticated, expiring, one-use HITL proof validated atomically at the effect boundary.

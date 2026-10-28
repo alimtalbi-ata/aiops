@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field
 
 app = FastAPI(title="ACME Policy Engine", version="2.1.0")
 
+# Mutating LIVE commands require an independently verified, bound HITL receipt.
+# The current boolean human_approved is not such a receipt.
+LIVE_EFFECT_COMMANDS = frozenset({"EXECUTE", "RESOLVE", "REMEDIATE", "CANCEL"})
+
 
 class Decision(BaseModel):
     mode: Literal["LIVE", "DEMO", "REPLAY", "STORY"]
@@ -53,8 +57,12 @@ def evaluate(x: Decision) -> dict:
         reason = "action preconditions have not been verified"
     elif not x.fencing_verified:
         reason = "ownership/fencing has not been verified"
-    elif x.command in ("EXECUTE", "RESOLVE", "REMEDIATE") and not x.human_approved:
+    elif x.command in LIVE_EFFECT_COMMANDS and not x.human_approved:
         reason = "explicit human approval is required for a live effect"
+    elif x.command in LIVE_EFFECT_COMMANDS:
+        # Fail closed: no authenticated, expiring, one-use approval binding is
+        # validated here. A caller-controlled boolean must never permit effects.
+        reason = "LIVE effect requires authenticated one-use HITL binding to incident/run/recipe/target/params"
     elif not x.redundancy_ok:
         reason = "redundancy/safety checks failed"
     elif x.confidence < 0.90:
