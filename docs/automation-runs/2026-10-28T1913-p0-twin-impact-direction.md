@@ -18,3 +18,10 @@
 - Exact CI URL above, three jobs and key steps individually verified `success`. Follow-up test correction avoids asserting only against a hard-coded expected set; checks actual HTTP response for absence of sibling SAN-B and unrelated host/portal.
 - Coordination comment on [PR #133](https://github.com/alimtalbi-ata/aiops/pull/133) explains contract change and forbids conflating fixture paths with runtime edges.
 - No production tokens, no host access, no deployment, no LIVE commands.
+
+## Final code HEAD qualification — 2026-10-28 19:22 CET
+
+- Follow-up code/test commit: `6a3ad7985e5815e7a053ec99d74f595f343430f3`, parent `8de9199b00d6efdb124cb18e332a6aab01c3816e`. Test assertions now inspect the **actual** HTTP `affected` array for the absence of SAN-B, RHEL host and portal rather than only the expected constant.
+- [GitHub Actions quality #40743842736](https://github.com/alimtalbi-ata/aiops/actions/runs/40743842736) on **exact code HEAD `6a3ad7985e5815e7a053ec99d74f595f343430f3`**: `completed/success`, all 3 jobs SUCCESS. Verified Twin container build/start/HTTP integration and teardown, real PostgreSQL seed, Core/PostgreSQL integration, Grafana real HTTP, Chromium synthetic portal E2E, static audit, Compose validation. No false runtime or tenant proof.
+- PR [#142](https://github.com/alimtalbi-ata/aiops/pull/142) `mergeable=true` against unchanged main `793a5a03` as observed, **draft/unmerged**. Coordination comments on PR #133 and Demo Studio PR #143.
+- This addendum is documentation-only; its own GitHub Actions result must be checked on its commit SHA. No Debian access or deployment.
