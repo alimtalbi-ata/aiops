@@ -72,7 +72,7 @@ def _ordered_events(events):
     if events is None:
         return [], "INCONNU — événements Core indisponibles", False
     if not events:
-        return [], "INCONNU — aucun événement Core", True
+        return [], "INCONNU — aucun événement Core ; fraîcheur non vérifiable", False
     if any(not isinstance(e, dict) or type(e.get("sequence")) is not int
            or e["sequence"] < 1 for e in events):
         return events, "INCONNU — séquence Core absente ou invalide ; ordre non vérifié", False
@@ -80,6 +80,8 @@ def _ordered_events(events):
     sequences = [e["sequence"] for e in ordered]
     if len(set(sequences)) != len(sequences):
         return events, "INCONNU — séquences Core dupliquées ; ordre non vérifié", False
+    if sequences[0] != 1:
+        return ordered, "INCONNU — chronologie Core sans première séquence ; événements potentiellement manquants", False
     if any(b != a + 1 for a, b in zip(sequences, sequences[1:])):
         return ordered, "INCONNU — lacune de séquence Core ; événements potentiellement manquants", False
     clocks = []
@@ -180,14 +182,15 @@ def render_demo_v2(detail, ledger, gates, now=None):
         ]))
     # A stale RUNNING warning needs a verifiable timestamp. Missing/malformed
     # events must not be interpreted as proof that no progress occurred.
-    last_activity = last_event if events and sequence_ok else (start_clock if events == [] else None)
+    # An old start timestamp without a complete event timeline cannot prove inactivity.
+    last_activity = last_event if events and sequence_ok else None
     if (status == "RUNNING" and start_clock is not None
             and last_activity is not None
             and (clock - last_activity).total_seconds() >= 1800):
         body += panel("Attention — statut RUNNING ancien à requalifier",
             "<p>Plus de 30 minutes depuis le dernier horodatage Core vérifiable. "
             "Cela ne prouve ni un blocage, ni une absence d'activité LIVE.</p>")
-    elif status == "RUNNING" and events and (last_event is None or not sequence_ok):
+    elif status == "RUNNING" and (events is None or not sequence_ok or last_event is None):
         body += panel("Fraîcheur RUNNING — INCONNU",
             "<p>Les séquences ou horodatages Core ne permettent pas de qualifier "
             "la fraîcheur. Aucune activité LIVE n'est attestée.</p>")
