@@ -96,3 +96,11 @@ Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/
 - Tests négatifs `tests/test_hitl_story.py` ajoutés au workflow existant `quality.yml`; qualification CI à relever dans le journal du lot. La démonstration de la bibliothèque ne constitue **pas** une approbation authentifiée Core ni une remédiation réelle.
 - Réutilisation ciblée : principe de réservation `SIMULATION_ONLY` de PR #36 `app/policy/execution_fence.py` et posture CSP du portail synthétique, sans dépendance au store d'autonomie ni fusion massive.
 - Prochain lot : liaison à Core et à une identité RBAC authentifiée, écriture Evidence et projection du Run canonique, puis sandbox réellement isolée avec postchecks vérifiés. LIVE reste bloqué.
+
+
+## 2026-10-28 03:20 Europe/Paris — HITL persisted binding hardening (stacked PR #79)
+
+- Branch `fix/hitl-sandbox-stored-binding-20261028-0320` extends **only** draft PR #49, not `main`. Its `dry_run` now compares every stored incident/run/recipe/target/params-hash/mode field to the requested binding, checks the stored proposal TTL, and verifies the stored hash and one-use approval token before recording a receipt.
+- Negative tests cover partially tampered SQLite proposals and extended expiry; a concurrent two-consumer test asserts one sandbox receipt. Tests are wired via the existing `quality.yml` HITL unit test step; confirm exact-head Actions status in the automation log.
+- This is a local SQLite **sandbox integrity guard**, not proof against a malicious DB owner, a signed approval, authenticated RBAC, or permission for LIVE remediation. Core/Temporal/GLPI integration and real container E2E remain NOT_TESTED.
+- Rebase/port this narrow patch after #49 is reconciled with main; never merge the entire divergent #36 candidate.
