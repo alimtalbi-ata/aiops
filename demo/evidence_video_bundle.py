@@ -105,8 +105,12 @@ def validate_source_manifest(manifest: dict) -> None:
     if not isinstance(entries, list) or len(entries) != len(SERVICES):
         raise ValueError("exactly five source captures required")
     for entry in entries:
-        if (not isinstance(entry, dict) or
-                SOURCE_CAPTURE_REQUIRED - set(entry) or
+        if not isinstance(entry, dict):
+            raise ValueError("unknown or missing source capture metadata")
+        for field in ("run_id", "incident_id", "ticket_id", "session_label"):
+            if field not in entry:
+                raise ValueError("missing or unsafe correlation field: " + field)
+        if (SOURCE_CAPTURE_REQUIRED - set(entry) or
                 set(entry) - (SOURCE_CAPTURE_REQUIRED | SOURCE_CAPTURE_OPTIONAL)):
             raise ValueError("unknown or missing source capture metadata")
         if (entry.get("capture_method", "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED")
