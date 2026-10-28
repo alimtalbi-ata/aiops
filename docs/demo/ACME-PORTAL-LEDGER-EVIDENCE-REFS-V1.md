@@ -33,3 +33,7 @@ The result is HTTP 503 `UNKNOWN`, `no-store`, without exposing IDs,
 tokens or private ledger content. The existing viewer-authenticated endpoint
 and `aiops.demo-ledger-read.v1` response schema are unchanged.
 This is **not** a source/clock attestation or proof of observed metrics.
+
+## Per-Analysis citation fence — 2026-10-29
+
+For each Critique, `evidence_ids` must be a subset of the `evidence_ids` of its **own** referenced Analysis, not merely of the Run-wide union. Even if no `claim_checks` entry claims `supported=true`, a Critique borrowing an Evidence ID from another Analysis fails closed with HTTP 503 `UNKNOWN` and `no-store`. A multi-Analysis ledger with correctly linked Evidence remains readable. This tightens the existing `aiops.demo-ledger-read.v1` contract without changing the response schema or the Core resolver contract. It does **not** establish tenant ACL, source truth or Policy SIMULATE attestation.
