@@ -248,7 +248,7 @@ class BundleAuditTests(unittest.TestCase):
                 self.write_source()
                 self.rebind_manifest_hash()
                 self.write_receipt()
-                with self.assertRaisesRegex(ValueError, "source manifest correlation|source manifest captures"):
+                with self.assertRaisesRegex(ValueError, "inconsistent correlation field|source manifest correlation|source manifest captures"):
                     self.run_audit()
         self.source = original
         self.write_source()
