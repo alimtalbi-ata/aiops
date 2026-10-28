@@ -28,3 +28,11 @@
 
 - Lot 5/5 Recette : consommer la PR #155 **seulement après** convergence ciblée #144/#147, CI finale verte et contrôle des contrats. Assembler les sondes read-only Core/Twin/Copilot/Portal/Evidence dans un protocole isolé du poller ; vérifier sur serveur autorisé les mêmes IDs et les réponses tenant/RBAC, sans remédiation.
 - OWNER Policy/HITL/Temporal : poursuivre le raccordement authentifié HITL au Run canonique et tester Temporal sandbox/postchecks sur vrais services éphémères ; ne pas convertir `RESOLVED` en preuve LIVE.
+
+## Qualification GitHub constatée après création de la PR (21:39 Europe/Paris)
+
+- Échec intermédiaire réel : [quality push #40764709256](https://github.com/alimtalbi-ata/aiops/actions/runs/40764709256), commit `5c1a3c6164c71128ec1638291d4626050075d88f` : job Core/PostgreSQL **failure** ; deux tests de JSON falsifié révélaient un `TypeError` (list non hashable). Corrigé dans `d980292faaca5fab416b261420510951678fe6bf`, sans contourner le test.
+- [quality pull_request #40764752419](https://github.com/alimtalbi-ata/aiops/actions/runs/40764752419), commit correctif `d980292faaca5fab416b261420510951678fe6bf` : **completed/success** ; trois jobs verts. Logs du job Core/PostgreSQL lus : **11/11 tests** du fichier `test_core_demo_policy_real_integration.py` OK, dont trois nouveaux tests de sonde.
+- [quality pull_request #40764852936](https://github.com/alimtalbi-ata/aiops/actions/runs/40764852936), HEAD documentaire `b43c0e6224d1275d8d7d46edffec637cd7a4764e` : **completed/success** ; trois jobs `policy-and-static`, `core-postgres-noc-real-integration`, `grafana-real-integration` **success**. PR #155 `mergeable=true`, `mergeable_state=clean`, **draft**, non fusionnée.
+- `main` revérifié `ec05c89e92a6611922dccbe3690ce1476e3aec92` ; `deploy/aiops2-stable` inchangé `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`.
+- Handoff publié aux PR #153 (Recette/cron) et #144 (Core). La présente mise à jour documentaire crée un nouveau SHA ; sa propre CI reste **PENDING** jusqu'à vérification explicite, sans extrapoler le résultat précédent. Aucune qualification Debian, HITL/Temporal ou LIVE.
