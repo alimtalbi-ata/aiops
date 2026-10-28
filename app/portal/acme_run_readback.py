@@ -18,7 +18,7 @@ from shared.domain import STATUSES
 
 router = APIRouter()
 SCHEMA = "aiops.acme-golden-run-readback.v1"
-SHA256 = re.compile(r"[0-9a-f]{64}\\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def _unverified(reason: str) -> dict[str, Any]:
@@ -67,7 +67,8 @@ def project_acme_run(requested_run_id: str, run: dict, fixture: dict) -> dict[st
         or run.get("mode") != "DEMO"
         or type(run.get("version")) is not int
         or run["version"] < 1
-        or run.get("status") not in STATUSES
+        or not isinstance(run.get("status"), str)
+        or run["status"] not in STATUSES
     ):
         return _unverified("CORE_IDENTITY_MODE_OR_STATE_MISMATCH")
 
