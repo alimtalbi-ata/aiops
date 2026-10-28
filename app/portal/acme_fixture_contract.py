@@ -29,6 +29,16 @@ TARGET_INCIDENT_ID = "ACME-DEMO-PAY-002"
 TARGET_CI_ID = "APP-PAY-01"
 
 
+CANONICAL_DUAL_FABRIC_TOPOLOGY = {
+    # Declarative dependencies only: these edges do not attest failover health.
+    "SAN-FABRIC-A": ("NetworkDevice", ()),
+    "SAN-FABRIC-B": ("NetworkDevice", ()),
+    "HOST-ESX-01": ("Host", ("SAN-FABRIC-A", "SAN-FABRIC-B")),
+    "VOL-PAY-01": ("StorageVolume", ("SAN-FABRIC-A", "SAN-FABRIC-B")),
+    "VM-PAY-01": ("VirtualMachine", ("HOST-ESX-01", "VOL-PAY-01")),
+    "APP-PAY-01": ("Application", ("VM-PAY-01",)),
+}
+
 def _require_fields(value: object, expected: set[str], label: str) -> dict:
     if not isinstance(value, dict):
         raise ValueError(label + " must be an object")
@@ -172,6 +182,16 @@ def validate_fixture(data: object) -> dict:
         raise ValueError("unknown CI dependency: " + ", ".join(unknown))
     _reject_dependency_cycles(dependencies)
 
+    # A generic SAN-to-Payments path is insufficient: an altered fixture could
+    # bypass the host, VM, or the declared redundant fabric while still passing
+    # the transitive reachability check. Fence the six canonical CI contracts.
+    for ci_id, (kind, required_refs) in CANONICAL_DUAL_FABRIC_TOPOLOGY.items():
+        ci = cis.get(ci_id)
+        if (ci is None or ci["kind"] != kind
+                or set(dependencies[ci_id]) != set(required_refs)):
+            raise ValueError("canonical ACME dual-fabric topology mismatch: " + ci_id)
+
+
     raw_incidents = fixture["incidents"]
     if not isinstance(raw_incidents, list) or len(raw_incidents) < 2:
         raise ValueError("fixture must contain at least two incidents")
@@ -273,6 +293,7 @@ def validate_fixture(data: object) -> dict:
 __all__ = (
     "TOP_LEVEL_FIELDS", "CI_FIELDS", "INCIDENT_FIELDS", "SAFE_ACTIONS",
     "SEVERITIES", "IDENTIFIER", "SOURCE_INCIDENT_ID", "SOURCE_CI_ID",
-    "TARGET_INCIDENT_ID", "TARGET_CI_ID", "load_fixture_bytes", "load_fixture",
+    "TARGET_INCIDENT_ID", "TARGET_CI_ID", "CANONICAL_DUAL_FABRIC_TOPOLOGY",
+    "load_fixture_bytes", "load_fixture",
     "validate_fixture",
 )
