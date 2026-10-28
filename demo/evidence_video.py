@@ -117,6 +117,10 @@ def verify(root, manifest):
         path = Path(rel)
         if path.is_absolute() or ".." in path.parts or len(path.parts) != 1:
             raise ValueError("unsafe screenshot path")
+        # A receipt must not relabel one application's PNG as another view.
+        # This is a structural identity gate, not proof of screenshot origin.
+        if rel != service + ".png":
+            raise ValueError("service screenshot filename mismatch")
         actual = root / path
         if actual.is_symlink() or not actual.is_file():
             raise ValueError("missing screenshot or symlink")
@@ -146,9 +150,18 @@ def verify(root, manifest):
         url = entry.get("source_url")
         if not isinstance(url, str):
             raise ValueError("source URL required")
-        parsed = urlsplit(url)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
-            raise ValueError("safe HTTP(S) source URL required")
+        try:
+            parsed = urlsplit(url)
+            hostname, port = parsed.hostname, parsed.port
+        except ValueError as exc:
+            raise ValueError("source URL may expose secrets or be unsafe") from exc
+        if (parsed.scheme not in ("http", "https") or not hostname or
+                parsed.username is not None or parsed.password is not None or
+                "?" in url or "#" in url or "\\" in url or
+                any(c.isspace() for c in url) or
+                parsed.netloc != parsed.netloc.lower() or hostname.endswith(".") or port == 0 or
+                ".." in parsed.path.split("/")):
+            raise ValueError("source URL may expose secrets or be unsafe")
         result.append({"service": service, "file": rel, "sha256": digest,
                        "source_url": entry["source_url"], "captured_at_utc": entry["captured_at_utc"],
                        "status": "BYTES_HASH_VERIFIED_NOT_RUNTIME_ATTESTED"})
