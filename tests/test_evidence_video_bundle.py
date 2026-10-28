@@ -110,12 +110,13 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         real_pin = bundle.pin_captures
 
         def mutate_then_pin(root, stage, captures):
-            (root / "portal.png").write_bytes(b"tampered after initial verify")
+            # Still a valid PNG: only the manifest hash can reject the swap.
+            (root / "portal.png").write_bytes(png(width=321))
             return real_pin(root, stage, captures)
 
         with patch.object(bundle, "pin_captures", side_effect=mutate_then_pin):
             with patch.object(bundle, "render") as render:
-                with self.assertRaisesRegex(ValueError, "checksum mismatch|invalid PNG"):
+                with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                     bundle.build_bundle(self.evidence, self.manifest, self.output)
                 render.assert_not_called()
         self.assertEqual(list(self.output.iterdir()), [])
