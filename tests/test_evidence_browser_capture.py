@@ -92,9 +92,32 @@ class BrowserCaptureTests(unittest.TestCase):
         item = p["captures"][0]
         item["approved_get_urls"] = ["https://example.invalid/app.css"]
         module.validate_plan(p)
-        self.assertTrue(module.permits(item, "https://example.invalid/app.css", "GET", False, False))
+        self.assertTrue(module.permits(item, "https://example.invalid/app.css", "GET", False, False, "stylesheet"))
         self.assertFalse(module.permits(item, "https://example.invalid/app.css?token=secret", "GET", False, False))
         self.assertFalse(module.permits(item, "https://example.invalid/app.css", "POST", False, False))
+
+    def test_pr36_passive_subresource_types_only(self):
+        item = plan()["captures"][0]
+        item["approved_get_urls"] = ["https://example.invalid/app.css"]
+        for resource_type in ("stylesheet", "script", "font", "image", "xhr", "fetch"):
+            with self.subTest(resource_type=resource_type):
+                self.assertTrue(module.permits(
+                    item, item["approved_get_urls"][0], "GET", False, False, resource_type))
+        for resource_type in ("", "document", "eventsource", "websocket", "manifest", "other"):
+            with self.subTest(resource_type=resource_type):
+                self.assertFalse(module.permits(
+                    item, item["approved_get_urls"][0], "GET", False, False, resource_type))
+        self.assertFalse(module.permits(
+            item, item["approved_get_urls"][0], "POST", False, False, "fetch"))
+        self.assertFalse(module.permits(
+            item, item["approved_get_urls"][0], "GET", True, False, "document"))
+
+    def test_credential_bearing_approved_get_url_rejected(self):
+        p = plan()
+        p["captures"][0]["approved_get_urls"] = [
+            "https://example.invalid/app.css?token=secret"]
+        with self.assertRaisesRegex(ValueError, "GET resource"):
+            module.validate_plan(p)
 
     def test_missing_mask_denied(self):
         p = plan()
@@ -133,8 +156,9 @@ class BrowserCaptureTests(unittest.TestCase):
         item["approved_get_urls"] = ["https://example.invalid/app.css"]
 
         class Request:
-            def __init__(self, url, method="GET", navigation=False, frame=None):
+            def __init__(self, url, method="GET", navigation=False, frame=None, resource_type="document"):
                 self.url, self.method, self.navigation, self.frame = url, method, navigation, frame
+                self.resource_type = resource_type
             def is_navigation_request(self):
                 return self.navigation
 
@@ -161,7 +185,9 @@ class BrowserCaptureTests(unittest.TestCase):
         requests = [
             (Request(item["url"], navigation=True, frame=page.main_frame), "continued"),
             (Request(item["url"], navigation=True, frame=object()), "aborted"),
-            (Request("https://example.invalid/app.css"), "continued"),
+            (Request("https://example.invalid/app.css", resource_type="stylesheet"), "continued"),
+            (Request("https://example.invalid/app.css", resource_type="document"), "aborted"),
+            (Request("https://example.invalid/app.css", resource_type="eventsource"), "aborted"),
             (Request("https://example.invalid/secret"), "aborted"),
             (Request("https://evil.invalid/collect", method="POST"), "aborted"),
         ]
@@ -170,7 +196,7 @@ class BrowserCaptureTests(unittest.TestCase):
                 route = Route(request)
                 context.http(route)
                 self.assertEqual(route.result, expected)
-        self.assertEqual(len(blocked), 3)
+        self.assertEqual(len(blocked), 5)
         class Socket:
             closed = False
             def close(self):
@@ -178,7 +204,7 @@ class BrowserCaptureTests(unittest.TestCase):
         socket = Socket()
         context.ws(socket)
         self.assertTrue(socket.closed)
-        self.assertEqual(len(blocked), 4)
+        self.assertEqual(len(blocked), 6)
 
     def test_visual_proof_and_masks_are_inside_capture(self):
         item = plan()["captures"][0]
