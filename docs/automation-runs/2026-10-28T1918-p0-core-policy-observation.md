@@ -26,3 +26,10 @@
 ## Prochain micro-lot
 
 Qualifier un lecteur portail sous identité viewer et ACL tenant réelles, puis joindre **explicitement** les IDs du scénario #133/#137 aux Runs Core observés ; afficher `MISSING`, `SIMULATE` et `RUNNING_NO_TERMINAL_PROOF` sans transformer les états synthétiques en preuves LIVE. Ensuite tester HITL/Temporal/postchecks sur services CI éphémères.
+
+## Qualification GitHub Actions constatée — 2026-10-28 19:19 Europe/Paris
+
+- Sur le HEAD `9be57b97ee0b0fed68543d68e35bbb510b553093`, [quality #40743852951](https://github.com/alimtalbi-ata/aiops/actions/runs/40743852951) est **completed/success**. Trois jobs réellement verts : `core-postgres-noc-real-integration`, `grafana-real-integration`, `policy-and-static`.
+- Les étapes `Real Core PostgreSQL DEMO Policy gate observation and refusals` et `Real Core PostgreSQL NOC read security and regression` sont **success** : HTTP Core et PostgreSQL 16 éphémères réels, pas de mock. Les étapes Policy safety, Explore/Story HTTP, Node DOM, Chromium CI synthétique, audit statique et Compose sont également **success** dans le job de qualité.
+- Ce résultat n'atteste pas les 7 Runs Debian, l'exécution Policy HTTP/Temporal/HITL, une capture LIVE ni l'ACL tenant. La capture Chromium CI concerne uniquement le portail synthétique existant, pas le nouvel endpoint Core/Policy.
+- Vérification GitHub après CI : `main` encore `793a5a03688dcb7c1a689d07e31bea770da4bd4f`, PR #144 `mergeable=true`, `mergeable_state=clean`. Le présent amendement documentaire crée un nouveau SHA : **CI de ce nouveau HEAD à re-vérifier avant fusion**.
