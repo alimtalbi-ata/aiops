@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
@@ -58,10 +60,40 @@ def validate_catalog(data: object) -> list[dict]:
     return rows
 
 
+def _read_catalog_bytes(path: Path) -> bytes:
+    """Bound and hash the exact same regular-file bytes; reject symlinks and races.
+
+    Targeted reuse of the no-follow/fstat pattern in the existing ACME fixture
+    read model. Never treat the resulting digest as an external attestation.
+    """
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise ValueError("safe fixture open is unavailable")
+    flags = os.O_RDONLY | nofollow | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)  # A substituted FIFO must not block.
+    fd = os.open(path, flags)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= MAX_CATALOG_BYTES:
+            raise ValueError("invalid synthetic catalog file")
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_CATALOG_BYTES + 1)
+        after = os.fstat(fd)
+        identity = lambda st: (
+            st.st_dev, st.st_ino, st.st_mode, st.st_size,
+            st.st_mtime_ns, st.st_ctime_ns,
+        )
+        if identity(before) != identity(after) or len(raw) != after.st_size:
+            raise ValueError("synthetic catalog changed while reading")
+        if not raw or len(raw) > MAX_CATALOG_BYTES:
+            raise ValueError("invalid catalog bytes")
+        return raw
+    finally:
+        os.close(fd)
+
+
 def load_catalog() -> tuple[list[dict], str]:
-    raw = FIXTURE_PATH.read_bytes()
-    if not raw or len(raw) > MAX_CATALOG_BYTES:
-        raise ValueError("invalid catalog bytes")
+    raw = _read_catalog_bytes(FIXTURE_PATH)
     data = json.loads(raw.decode("utf-8"),
                       object_pairs_hook=noc_runtime._reject_duplicate_keys,
                       parse_constant=noc_runtime._reject_json_constant)
