@@ -20,10 +20,15 @@ SCENARIO_ID = "SCN-GOLDEN-PAYMENT-P1"  # Existing seeded Core scenario, not fixt
 def require_demo_auth(authorization: str | None) -> None:
     """Dedicated DEMO write credential; never accept the internal Core token."""
     configured = os.getenv("AIOPS_PORTAL_DEMO_TOKEN", "")
-    internal = os.getenv("AIOPS_INTERNAL_TOKEN", "")
+    privileged = (
+        os.getenv("AIOPS_INTERNAL_TOKEN", ""),
+        os.getenv("AIOPS_ADMIN_TOKEN", ""),
+        os.getenv("ADMIN_TOKEN", ""),
+    )
     if (not isinstance(configured, str) or len(configured) < 32 or
             not configured.isascii() or any(c.isspace() for c in configured) or
-            (internal and hmac.compare_digest(configured, internal))):
+            any(token and hmac.compare_digest(configured, token)
+                for token in privileged)):
         raise HTTPException(503, "demo_write_access_not_configured")
     supplied = (authorization or "").removeprefix("Bearer ")
     if (not authorization or not authorization.startswith("Bearer ") or
