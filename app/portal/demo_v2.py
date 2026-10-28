@@ -1,5 +1,7 @@
 """Read-only, source-backed Demo Studio V2 investigation view."""
 from datetime import datetime, timezone
+import re
+from urllib.parse import quote
 from portal.ui_theme import panel, table, esc
 
 
@@ -22,7 +24,45 @@ def _source(value):
     return "DISPONIBLE — données reçues (non attestées)"
 
 
-def render_demo_v2(detail, ledger, gates):
+def _run_navigation(run):
+    """Only Core-safe IDs may become links; never interpolate untrusted HTML."""
+    rid = run.get("run_id")
+    if not isinstance(rid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", rid):
+        return panel("Navigation du run", "<p>INCONNU — identifiant Core absent ou invalide ; lien indisponible.</p>")
+    url = "/timeline?run_id=" + quote(rid, safe="")
+    return panel("Navigation du run",
+        '<p><a href="' + url + '">Ouvrir la timeline Core de ce run</a> · '
+        '<a href="/runs">Tous les runs Core</a></p>'
+        '<p>Lecture seule. La timeline affiche les événements enregistrés, sans prouver un effet LIVE.</p>')
+
+
+def _event_clock(events, clock):
+    """Most recent valid Core event timestamp, not a heartbeat or live attestation."""
+    valid = []
+    invalid = False
+    for event in events:
+        if not isinstance(event, dict):
+            invalid = True
+            continue
+        raw = event.get("occurred_at")
+        try:
+            if not isinstance(raw, str):
+                raise ValueError("missing timestamp")
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if parsed.tzinfo is None or parsed > clock:
+                raise ValueError("unverifiable timestamp")
+            valid.append(parsed)
+        except (ValueError, OverflowError, TypeError):
+            invalid = True
+    if invalid:
+        return None, "INCONNU — horodatage Core manquant, futur ou invalide"
+    if not valid:
+        return None, "INCONNU — aucun événement horodaté"
+    last = max(valid)
+    return last, last.astimezone(timezone.utc).isoformat()
+
+
+def render_demo_v2(detail, ledger, gates, now=None):
     """No fabricated evidence, impact, remediation or LLM decisions."""
     detail = detail if isinstance(detail, dict) else {}
     run = detail.get("run") if isinstance(detail.get("run"), dict) else detail
@@ -30,13 +70,21 @@ def render_demo_v2(detail, ledger, gates):
     if not isinstance(events, list):
         events = None
     status = str(run.get("status") or "INCONNU")
+    clock = now if now is not None else datetime.now(timezone.utc)
+    if clock.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
     started = run.get("started_at") or run.get("created_at")
     age_label = "INCONNU"
+    start_clock = None
     if isinstance(started, str):
         try:
             dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
             if dt.tzinfo is not None:
-                age = (datetime.now(timezone.utc) - dt).total_seconds()
+                age = (clock - dt).total_seconds()
+                if age < 0:
+                    age_label = "INCONNU — horodatage Core futur"
+                else:
+                    start_clock = dt
                 if age >= 86400:
                     age_label = f"Ancien ({int(age // 86400)} jours) — état à requalifier"
                 elif age >= 3600:
@@ -64,6 +112,7 @@ def render_demo_v2(detail, ledger, gates):
             e.get("status", "INCONNU"),
             e.get("decision") or "—",
         ))
+    last_event, last_event_label = _event_clock(events, clock) if events is not None else (None, "INCONNU — événements Core indisponibles")
     gate_items = gates.get("items") if isinstance(gates, dict) else None
     decisions = []
     if isinstance(gate_items, list):
@@ -83,16 +132,27 @@ def render_demo_v2(detail, ledger, gates):
             ("Mode", run.get("mode", "INCONNU")),
             ("État Core", status),
             ("Fraîcheur du run", age_label),
+            ("Dernier événement Core (UTC)", last_event_label),
             ("Événements Core", len(events) if events is not None else "INCONNU"),
             ("Identifiants de preuves référencés", len(evidence_ids) if events is not None else "INCONNU"),
             ("Observations synthétiques", "OUI — au moins un événement" if synthetic else "NON CONFIRMÉ"),
             ("Registre Analyst/Critic", _source(ledger)),
             ("Décisions Policy", _source(gates)),
         ]))
-    if status == "RUNNING" and age_label.startswith("Ancien"):
-        body += panel("Attention — exécution potentiellement bloquée",
-            "<p>Core indique RUNNING, mais le démarrage est ancien. "
-            "Aucune progression récente n'est démontrée par cette seule donnée.</p>")
+    # A stale RUNNING warning needs a verifiable timestamp. Missing/malformed
+    # events must not be interpreted as proof that no progress occurred.
+    last_activity = last_event if events else start_clock
+    if (status == "RUNNING" and start_clock is not None
+            and last_activity is not None
+            and (clock - last_activity).total_seconds() >= 1800):
+        body += panel("Attention — statut RUNNING ancien à requalifier",
+            "<p>Plus de 30 minutes depuis le dernier horodatage Core vérifiable. "
+            "Cela ne prouve ni un blocage, ni une absence d'activité LIVE.</p>")
+    elif status == "RUNNING" and events is not None and last_event is None and events:
+        body += panel("Fraîcheur RUNNING — INCONNU",
+            "<p>Les horodatages des événements Core ne permettent pas de qualifier "
+            "la fraîcheur. Aucune activité LIVE n'est attestée.</p>")
+    body += _run_navigation(run)
     body += panel("Chronologie canonique — Core",
         table(["#", "Date UTC", "Étape", "Événement", "État", "Décision"], rows)
         if events is not None else "<p>INCONNU — événements Core indisponibles.</p>")

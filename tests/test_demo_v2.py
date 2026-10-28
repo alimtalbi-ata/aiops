@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
 from portal.demo_v2 import render_demo_v2
 
@@ -28,6 +29,40 @@ class DemoV2Tests(unittest.TestCase):
                                "events": [{"stage": payload}]}, {}, {})
         self.assertNotIn(payload, page)
         self.assertIn("&lt;img", page)
+
+    def test_timeline_link_only_for_valid_core_id(self):
+        page = render_demo_v2({"run": {"run_id": "RUN_ACME-42", "mode": "DEMO"}, "events": []}, {}, {})
+        self.assertIn('href="/timeline?run_id=RUN_ACME-42"', page)
+        self.assertIn('href="/runs"', page)
+
+    def test_malicious_or_missing_run_id_never_links(self):
+        for rid in ('<img src=x onerror=alert(1)>', '../other', 'RUN/1', 'x' * 129, None):
+            with self.subTest(rid=rid):
+                page = render_demo_v2({"run": {"run_id": rid}, "events": []}, {}, {})
+                self.assertNotIn('href="/timeline?run_id=', page)
+                self.assertIn("lien indisponible", page)
+                self.assertNotIn('<img src=x', page)
+
+    def test_running_freshness_uses_last_core_event_not_start_only(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        run = {"run_id": "RUN-1", "status": "RUNNING", "started_at": "2026-10-21T12:00:00Z"}
+        fresh = render_demo_v2({"run": run, "events": [
+            {"occurred_at": "2026-10-28T19:55:00Z"}]}, {}, {}, now=now)
+        self.assertNotIn("statut RUNNING ancien à requalifier", fresh)
+        stale = render_demo_v2({"run": run, "events": [
+            {"occurred_at": "2026-10-28T18:00:00Z"}]}, {}, {}, now=now)
+        self.assertIn("statut RUNNING ancien à requalifier", stale)
+        self.assertIn("ne prouve ni un blocage", stale)
+
+    def test_invalid_or_future_event_time_fails_closed(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        run = {"status": "RUNNING", "started_at": "2026-10-21T12:00:00Z"}
+        for event in ({"occurred_at": "2026-10-29T00:00:00Z"},
+                      {"occurred_at": "invalid"}, {"stage": "RUN"}):
+            with self.subTest(event=event):
+                page = render_demo_v2({"run": run, "events": [event]}, {}, {}, now=now)
+                self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+                self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
     def test_old_running_marked_for_requalification(self):
         page = render_demo_v2(
