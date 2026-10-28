@@ -11,3 +11,12 @@
 - NOT_TESTED: Debian Twin runtime, authenticated CMDB verification, tenant A/B, Core/GLPI/Temporal cross-service ACME E2E, real Payments degradation, SAN failover, real browser screenshots/video. No deployment.
 - Risk: stacked PR depends on #142; its auth contract and SQL direction must be reconciled before merge. A shortest-hop path is not exhaustive topology or proof of causal impact. Contract consumers should display `SIMULATED / TOPOLOGY_ONLY` and never claim a SAN→host link.
 - Next micro-lot: expose source-linked path display in Explore/Story with tenant-scoped server authorization, after #142 and canonical #133 convergence. Do not infer any absent edge.
+
+
+## Qualification GitHub Actions — 2026-10-28 21:xx CET
+
+- Draft PR: [#148](https://github.com/alimtalbi-ata/aiops/pull/148), base #142, no merge/deploy. Coordination sent to PRs #142 and #133.
+- Code/tests/contract/journal SHA `53a6ae0c5676af4e6ba8c49da226100ccdaffd16` (before this CI-report addendum).
+- Existing [quality.yml run #40760642865](https://github.com/alimtalbi-ata/aiops/actions/runs/40760642865): **completed/success**, verified via GitHub Actions job/step results. All three jobs SUCCESS: `policy-and-static`, `core-postgres-noc-real-integration`, `grafana-real-integration`. The **real Twin Docker HTTP + ephemeral PostgreSQL** step `Real Twin SAN to Payments reverse-dependency security and regression` was **success**, including new DB-backed edge tests. Chromium isolated synthetic portal, static audit, Core/PostgreSQL and Grafana jobs were also success, but do **not** validate an ACME runtime outage.
+- Local execution: NOT_TESTED (code edited through GitHub connector). The new documentation-only commit will require a new CI check on its exact HEAD; do not infer success from the preceding run.
+- Remaining blockers: tenant-scoped RBAC, authenticated runtime/CMDB provenance, actual SAN→host relation, Debian deployment, real Payments impact and authenticated E2E remain NOT_TESTED. PR stays draft; no merge.
