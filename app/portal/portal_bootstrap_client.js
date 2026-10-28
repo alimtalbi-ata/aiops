@@ -25,9 +25,37 @@
     if ($("portal-states")) $("portal-states").textContent = "UNKNOWN";
     if ($("portal-read-result")) $("portal-read-result").textContent = "UNKNOWN — accès non authentifié";
   }
+  // Reject forged or contradictory envelopes before touching any UI element.
+  // The server's READABLE_UNVERIFIED is never proof of runtime attestation.
+  function validEnvelope(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data) ||
+        data.schema !== "aiops.portal.readmodels.v1" ||
+        data.provenance !== "UNATTESTED_UPSTREAM_API_READ" ||
+        data.runtime_authenticated !== false ||
+        data.live_remediation_authorized !== false) return false;
+    const states = data.states;
+    if (!states || typeof states !== "object" || Array.isArray(states)) return false;
+    for (const key of ["dashboard", "runs", "twin"]) {
+      if (!["UNKNOWN", "READABLE_UNVERIFIED"].includes(states[key])) return false;
+      if (states[key] === "UNKNOWN" && data[key] !== null) return false;
+      if (states[key] === "READABLE_UNVERIFIED" &&
+          (!data[key] || typeof data[key] !== "object" || Array.isArray(data[key]))) return false;
+    }
+    if (states.dashboard === "READABLE_UNVERIFIED" &&
+        !metricKeys.every((key) => Number.isSafeInteger(data.dashboard[key]) &&
+                                    data.dashboard[key] >= 0)) return false;
+    if (states.runs === "READABLE_UNVERIFIED" &&
+        (!Array.isArray(data.runs.items) || data.runs.items.length > 100 ||
+         !data.runs.items.every((run) => run && typeof run === "object" &&
+           !Array.isArray(run) && typeof run.run_id === "string" && run.run_id.length > 0))) return false;
+    if (states.twin === "READABLE_UNVERIFIED" &&
+        !["nodes", "edges"].every((key) => Number.isSafeInteger(data.twin[key]) &&
+                                         data.twin[key] >= 0)) return false;
+    return true;
+  }
   function show(data) {
-    const states = data && data.states;
-    if (!states || typeof states !== "object") return;
+    if (!validEnvelope(data)) return false;
+    const states = data.states;
     for (const [index, key] of metricKeys.entries()) {
       const node = document.querySelector('[data-metric="' + key + '"]');
       const value = data.dashboard && data.dashboard[key];
@@ -65,9 +93,8 @@
       }, null, 2);
     }
     if ($("portal-states")) $("portal-states").textContent =
-      ["dashboard", "runs", "twin"].map((key) =>
-        key + ": " + (["UNKNOWN", "READABLE_UNVERIFIED"].includes(states[key]) ?
-          states[key] : "UNKNOWN")).join(" | ");
+      ["dashboard", "runs", "twin"].map((key) => key + ": " + states[key]).join(" | ");
+    return true;
   }
   async function load() {
     const input = $("portal-read-token");
@@ -90,9 +117,15 @@
       }
       const data = await response.json();
       if (current !== generation) return;
-      show(data);
+      if (!show(data)) {
+        if ($("portal-read-result")) $("portal-read-result").textContent =
+          "UNKNOWN — contrat de lecture invalide";
+        return;
+      }
       if ($("portal-read-result")) $("portal-read-result").textContent =
-        "READABLE_UNVERIFIED — aucune attestation LIVE";
+        Object.values(data.states).includes("READABLE_UNVERIFIED") ?
+          "READABLE_UNVERIFIED — aucune attestation LIVE" :
+          "UNKNOWN — aucune source lisible";
     } catch (_) {
       if (current === generation && $("portal-read-result"))
         $("portal-read-result").textContent = "UNKNOWN — service indisponible";
