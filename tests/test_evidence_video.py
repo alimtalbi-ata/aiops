@@ -52,6 +52,29 @@ class EvidenceVideoTests(unittest.TestCase):
         self.entries[1]["service"] = "portal"
         with self.assertRaises(ValueError):
             module.verify(self.root, self.manifest())
+    def test_service_file_alias_rejected_even_with_valid_hash(self):
+        # The technical fixtures intentionally have identical bytes. A receipt
+        # may not reuse thruk.png to claim it is a portal screenshot.
+        self.entries[0]["file"] = "thruk.png"
+        with self.assertRaisesRegex(ValueError, "filename mismatch"):
+            module.verify(self.root, self.manifest())
+
+    def test_secret_bearing_or_noncanonical_source_urls_rejected(self):
+        for url in (
+            "https://example.invalid/portal?token=secret",
+            "https://example.invalid/portal#access-token",
+            "https://example.invalid/a/../portal",
+            "https://example.invalid/portal\\\\secret",
+            "https://example.invalid/portal path",
+            "https://EXAMPLE.invalid/portal",
+            "https://example.invalid.:443/portal",
+            "https://example.invalid:99999/portal",
+        ):
+            with self.subTest(url=url):
+                self.entries[0]["source_url"] = url
+                with self.assertRaisesRegex(ValueError, "expose secrets"):
+                    module.verify(self.root, self.manifest())
+
     def test_invalid_crc_rejected(self):
         path = self.root / "portal.png"
         data = bytearray(path.read_bytes())
