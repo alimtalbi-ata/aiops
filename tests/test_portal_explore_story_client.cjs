@@ -47,6 +47,20 @@ function envelope(action, mode, cursor, overrides = {}) {
     {cue: "correlate", service: "n8n", view: "ingress_execution", status: "MISSING"},
     {cue: "ticket", service: "glpi", view: "incident_ticket", status: "MISSING"}
   ];
+  const cue = timeline[cursor].cue;
+  const states = {detect:"NOT_REACHED", correlate:"NOT_REACHED", ticket:"NOT_REACHED"};
+  const hitl_story = {
+    schema:"aiops.acme-hitl-story.v1", provenance:"SIMULATED_TARGET", mode:"DEMO",
+    run_id:"SIM-ACME-TEST", incident_id:"ACME-DEMO-SAN-001",
+    impact_incident_id:"ACME-DEMO-PAY-002", cue, story_state:states[cue],
+    policy_command:"OBSERVE", policy_live_effect:"DENY_LIVE_ACTION",
+    policy_source:"DETERMINISTIC_PREVIEW_NOT_POLICY_HTTP", policy_runtime_checked:false,
+    binding_status:"MISSING", recipe_id:null, target_id:null, params_hash:null,
+    approval_id:null, human_decision:"NOT_AUTHENTICATED", temporal_workflow:"NOT_EXECUTED",
+    dry_run_receipt:null, postchecks:"NOT_EXECUTED",
+    rollback:"DOCUMENTED_ONLY_NOT_EXECUTED", recovery:"NOT_VERIFIED",
+    live_effect_authorized:false
+  };
   return {
     schema: "aiops.acme-explore-story.v1", mode, action, cursor,
     playing: mode === "story" && action !== "pause" && cursor < timeline.length - 1,
@@ -55,7 +69,7 @@ function envelope(action, mode, cursor, overrides = {}) {
       impact_incident_id: "ACME-DEMO-PAY-002",
       impact_path: ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"],
       ticket_id: null, event_timestamp_utc: null},
-    timeline, step: timeline[cursor], runtime_attested: false,
+    timeline, step: timeline[cursor], hitl_story, runtime_attested: false,
     production_qualified: false, live_remediation_authorized: false,
     ...overrides
   };
@@ -190,4 +204,26 @@ test("valid Story auto-advance, pause and replay follow server cursor contract",
   await h.get("replay").click();
   assert.match(h.get("story-status").textContent, /1\/3/);
   assert.equal(typeof h.timer(), "function");
+});
+
+
+test("HITL story rejects forged approval, temporal success and mismatched Run", async () => {
+  for (const mutation of [
+    h => { h.human_decision = "APPROVED"; },
+    h => { h.temporal_workflow = "COMPLETED"; },
+    h => { h.run_id = "RUN-OTHER"; },
+    h => { h.policy_runtime_checked = true; },
+    h => { h.dry_run_receipt = "fake"; },
+  ]) {
+    const h = harness(async (_, opts) => {
+      const p = JSON.parse(opts.body);
+      const data = envelope(p.action, p.mode, p.cursor);
+      mutation(data.hitl_story);
+      return {ok: true, json: async () => data};
+    });
+    h.get("story-token").value = "viewer";
+    await h.get("start").click();
+    assert.match(h.get("story-status").textContent, /UNKNOWN/);
+    assert.equal(h.get("timeline").children.length, 1);
+  }
 });
