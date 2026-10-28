@@ -239,6 +239,55 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                 with self.assertRaises(ProbeError):
                     decode_core_json(payload)
 
+    def test_readonly_probe_rejects_non_utf8_and_conflicting_http_headers(self):
+        # Real Core/PostgreSQL positive; malformed bytes and header fixtures are
+        # parser-only negatives, not simulated application integration.
+        from email.message import Message
+        from scripts.probe_demo_policy_readonly import (
+            ProbeError, decode_core_json, validate_core_headers,
+        )
+        response = self.read("RESOLVED")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(decode_core_json(response.content), response.json())
+        for name, payload in (
+            ("utf8_bom", b"\\xef\\xbb\\xbf" + response.content),
+            ("utf16_le", response.text.encode("utf-16-le")),
+            ("utf16_be", response.text.encode("utf-16-be")),
+            ("utf32_le", response.text.encode("utf-32-le")),
+            ("invalid_utf8", b'{"run_id":"\\xff"}'),
+        ):
+            with self.subTest(encoding=name):
+                with self.assertRaises(ProbeError):
+                    decode_core_json(payload)
+
+        def headers():
+            h = Message()
+            h["Cache-Control"] = "private, no-store"
+            h["Content-Type"] = "application/json; charset=UTF-8"
+            return h
+
+        validate_core_headers(headers())
+        for name in (
+            "duplicate_cache", "duplicate_media", "gzip", "utf16_charset",
+            "missing_no_store", "wrong_media",
+        ):
+            with self.subTest(headers=name):
+                h = headers()
+                if name == "duplicate_cache":
+                    h["Cache-Control"] = "public"
+                elif name == "duplicate_media":
+                    h["Content-Type"] = "text/plain"
+                elif name == "gzip":
+                    h["Content-Encoding"] = "gzip"
+                elif name == "utf16_charset":
+                    h.replace_header("Content-Type", "application/json; charset=utf-16")
+                elif name == "missing_no_store":
+                    h.replace_header("Cache-Control", "public, max-age=3600")
+                elif name == "wrong_media":
+                    h.replace_header("Content-Type", "text/html")
+                with self.assertRaises(ProbeError):
+                    validate_core_headers(h)
+
     def test_readonly_probe_contract_rejects_forged_attestations_and_addresses(self):
         from scripts.probe_demo_policy_readonly import (
             ProbeError, loopback_url, validate_observation,
