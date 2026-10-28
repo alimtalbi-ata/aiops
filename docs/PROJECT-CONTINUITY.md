@@ -116,3 +116,22 @@ sessions, vérification visuelle, attestation LIVE ou qualification du MP4.
 Aucun accès Debian, déploiement, merge ou action LIVE. Consulter le journal
 `docs/automation-runs/2026-10-28-0544-video-evidence.md` pour les SHA,
 les résultats CI effectifs et les limites.
+
+
+## 2026-10-28 06:44 Europe/Paris — Evidence Studio, liaison service/fichier
+
+Branche dédiée empilée sur la PR #91 (puis #86/#81/#43), sans modifier les
+branches des autres chantiers. Le vérificateur PNG partagé refuse les noms de
+fichiers ne correspondant pas au service déclaré et les URL sources pouvant
+contenir secrets, fragments, traversées ou origines non canoniques. Cela ferme
+un contournement de l'auditeur : un reçu réécrit avec hash cohérent pouvait
+réétiqueter une image ou injecter une URL sensible. Les tests négatifs
+sont ajoutés aux suites Evidence Studio déjà référencées par `quality.yml`.
+
+Qualification exacte, commit/PR/CI et blocages sont consignés dans
+`docs/automation-runs/2026-10-28-0644-video-evidence.md`.
+Aucune capture réelle, session authentifiée, revue visuelle ou déploiement
+n'est impliqué. Prochain micro-lot : lier le reçu à un manifeste de capture
+d'origine conservé, puis concevoir une revue de confidentialité opérateur
+distincte de l'attestation runtime. Les conflits de la PR #43 avec main
+restent bloquants pour la chaîne empilée.
