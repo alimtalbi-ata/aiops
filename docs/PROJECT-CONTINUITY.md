@@ -135,3 +135,17 @@ n'est impliqué. Prochain micro-lot : lier le reçu à un manifeste de capture
 d'origine conservé, puis concevoir une revue de confidentialité opérateur
 distincte de l'attestation runtime. Les conflits de la PR #43 avec main
 restent bloquants pour la chaîne empilée.
+
+
+## P0 Evidence Studio — 2026-10-28 07:44 Europe/Paris (PR empilée)
+
+Le reçu MP4/SRT/captures référence désormais les octets du manifeste de capture
+d'origine via `source_manifest_sha256`. L'auditeur hors ligne exige explicitement
+le manifeste original, recalcule son SHA-256 et vérifie la cohérence des cinq
+captures, IDs et provenance non attestée. Les anciens reçus sans empreinte
+sont rejetés (fail-closed). La branche dédiée part du HEAD de la PR #97,
+elle-même empilée sur #91/#86/#81/#43 ; aucun portage massif de #36, fusion
+ou déploiement. Les résultats de tests et limites sont à consigner dans
+`docs/automation-runs/2026-10-28-0744-video-evidence.md`.
+La chaîne reste strictement `OPERATOR_SUPPLIED_UNATTESTED` : un SHA-256
+ne constitue pas une attestation d'identité ni une revue de confidentialité.
