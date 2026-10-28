@@ -6,9 +6,10 @@ The portal never reads the HITL SQLite database or writes canonical Core state.
 import hashlib
 import html
 import json
+import math
 import os
 import stat
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -75,8 +76,8 @@ def validate_story(data):
         or data["simulation_only"] is not True):
         raise ValueError("HITL story is not explicitly sandbox-only")
     stamp = datetime.fromisoformat(data["generated_at_utc"])
-    if stamp.tzinfo is None:
-        raise ValueError("timezone required")
+    if stamp.tzinfo is None or stamp.utcoffset() != timedelta(0):
+        raise ValueError("UTC timestamp required")
     steps = data["steps"]
     if not isinstance(steps, list) or len(steps) != 3:
         raise ValueError("invalid HITL state sequence")
@@ -104,6 +105,17 @@ def validate_story(data):
             raise ValueError("missing HITL binding")
         if i and any(step[k] != steps[0][k] for k in binding_keys):
             raise ValueError("HITL binding changed during story")
+        # The three views represent one proposal at one synthetic instant.
+        # A rehashed artifact must not invent an expired or extended approval.
+        expires = step["expires_at"]
+        if (type(expires) not in (int, float) or not math.isfinite(expires)
+            or not 0 < expires - stamp.timestamp() <= 3600
+            or (i > 0 and expires != steps[0]["expires_at"])):
+            raise ValueError("invalid HITL story expiration")
+        proposal_id = step["proposal_id"]
+        if (len(proposal_id) != 32
+            or any(ch not in "0123456789abcdef" for ch in proposal_id)):
+            raise ValueError("invalid HITL proposal identifier")
         # Recompute the canonical proposal binding instead of trusting a
         # self-consistent but forged story_sha256 and binding_hash.
         binding = {k: step[k] for k in (
@@ -120,8 +132,10 @@ def validate_story(data):
             raise ValueError("HITL binding digest mismatch")
         if step["receipt_id"] is not None and i < 2:
             raise ValueError("premature receipt")
-        if i == 2 and (not isinstance(step["receipt_id"], str) or not step["receipt_id"]):
-            raise ValueError("missing dry-run receipt")
+        if i == 2 and (not isinstance(step["receipt_id"], str)
+                       or len(step["receipt_id"]) != 32
+                       or any(ch not in "0123456789abcdef" for ch in step["receipt_id"])):
+            raise ValueError("invalid dry-run receipt identifier")
         if step["audit_actions"] != [
             "PROPOSED",
             *(["APPROVED_SANDBOX_ONLY"] if i >= 1 else []),

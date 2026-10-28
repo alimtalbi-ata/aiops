@@ -143,3 +143,9 @@ Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/
 - Stacked draft on #100, no `main` or LIVE mutation. `app/shared/hitl_lab.py` read-only projection rejects malformed persisted approval token SHA-256 digests and sandbox receipt IDs instead of displaying an apparently approved/planned state.
 - Two negative/regression tests in `tests/test_hitl_story.py` use real temporary SQLite stores, including consumed and unconsumed approvals; existing `quality.yml` is reused. [PR #106](https://github.com/alimtalbi-ata/aiops/pull/106), journal `docs/automation-runs/20261028-0822-hitl.md`.
 - Source-only safety improvement, not cryptographic DB attestation or authenticated Core/RBAC/Temporal/Evidence integration. GitHub Actions results must be verified on the final HEAD before any merge; no Debian deployment or LIVE proof.
+
+
+## 2026-10-28 09:27 CET — Golden Demo HITL artifact timeline validation (PR #106)
+
+- Incremental hardening of the existing draft stack: validate UTC generation time, bounded and identical expiry across the three sandbox story states, and strict lowercase hex proposal/receipt identifiers even when the story digest is recomputed. Add negative regression tests in `tests/test_hitl_story.py`; reuse `quality.yml` rather than introducing CI. This is not cryptographic artifact authentication, Core RBAC or runtime qualification.
+- Execution log: `docs/automation-runs/20261028-0927-hitl.md`. GitHub Actions verification pending at commit time; no LIVE effect or Debian access.

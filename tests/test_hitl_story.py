@@ -109,6 +109,40 @@ class HITLStoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_story(rehash(bad))
 
+    def test_rehashed_story_rejects_malformed_sandbox_identifiers(self):
+        for kind, value in (("receipt", "not-a-receipt"),
+                            ("receipt", "G" * 32),
+                            ("proposal", "NOT-A-HEX-ID")):
+            with self.subTest(kind=kind, value=value):
+                bad = copy.deepcopy(self.story)
+                if kind == "proposal":
+                    for step in bad["steps"]:
+                        step["proposal_id"] = value
+                else:
+                    bad["steps"][2]["receipt_id"] = value
+                with self.assertRaisesRegex(ValueError, "identifier"):
+                    validate_story(rehash(bad))
+
+    def test_rehashed_story_rejects_expired_extended_or_inconsistent_ttl(self):
+        generated = datetime.fromisoformat(self.story["generated_at_utc"]).timestamp()
+        for expiry in ("not-a-clock", True, generated - 1, generated + 3601):
+            with self.subTest(expiry=expiry):
+                bad = copy.deepcopy(self.story)
+                for step in bad["steps"]:
+                    step["expires_at"] = expiry
+                with self.assertRaisesRegex(ValueError, "expiration"):
+                    validate_story(rehash(bad))
+        bad = copy.deepcopy(self.story)
+        bad["steps"][1]["expires_at"] += 1
+        with self.assertRaisesRegex(ValueError, "expiration"):
+            validate_story(rehash(bad))
+
+    def test_rehashed_story_rejects_non_utc_generation_clock(self):
+        bad = copy.deepcopy(self.story)
+        bad["generated_at_utc"] = "2026-10-27T22:25:00+01:00"
+        with self.assertRaisesRegex(ValueError, "UTC timestamp"):
+            validate_story(rehash(bad))
+
     def test_readonly_projection_expiry_and_redaction(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "lab.sqlite")
