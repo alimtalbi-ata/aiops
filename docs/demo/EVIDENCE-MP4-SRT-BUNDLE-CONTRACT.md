@@ -100,3 +100,22 @@ analyse de la bande vidéo ni une attestation de session. L'auditeur ne décode
 toujours pas le MP4 et n'établit ni la réalité des cinq vues ni leur
 confidentialité visuelle. Les PNG techniques de CI ne sont pas des captures
 opérateur authentifiées.
+
+
+## Incrément 2026-10-28 — liaison service/fichier et URL sans secrets (PR draft)
+
+Le vérificateur partagé `demo.evidence_video.verify` exige désormais le nom
+canonique `<service>.png` pour chaque service : un reçu ne peut pas déclarer
+`thruk.png` comme preuve du portail, même si les octets et le SHA-256
+correspondent. Les URL sources déclarées refusent query string, fragment,
+identifiants, espaces, anti-slash, chemins `..`, ports invalides et origines
+non canoniques. Ce contrôle s'applique à la validation, au montage et à
+l'auditeur indépendant, y compris lorsque le reçu a été réécrit.
+
+Les tests négatifs sont `test_evidence_video.py` et
+`test_evidence_bundle_audit.py`, exécutés via `quality.yml`.
+**Ce contrôle est structurel** : un opérateur malveillant peut encore fournir
+une image visuellement falsifiée ou recopier les mêmes pixels sous plusieurs
+noms. Les URL et identifiants restent déclaratifs, sans attestation de session,
+revue visuelle des masques, ni qualification LIVE. Les fixtures de CI ne sont
+pas des captures authentifiées.
