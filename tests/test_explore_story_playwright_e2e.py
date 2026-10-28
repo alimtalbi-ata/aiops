@@ -228,6 +228,12 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                                 capture_output=True, text=True, timeout=20)
         self.assertEqual(denied.returncode, 2)
         self.assertEqual(json.loads(denied.stdout)["reason"], "missing_viewer_token")
+        env["AIOPS_PORTAL_READ_TOKEN"] = VIEWER + "\\nsecret"
+        invalid = subprocess.run(command, cwd=ROOT, env=env,
+                                 capture_output=True, text=True, timeout=20)
+        self.assertEqual(invalid.returncode, 2)
+        self.assertEqual(json.loads(invalid.stdout)["reason"], "invalid_viewer_token")
+        self.assertNotIn("secret", invalid.stdout + invalid.stderr)
 
     def test_05_readonly_recipe_rejects_falsified_provenance_and_ids(self):
         """Negative contract tests use actual ephemeral portal response documents."""
@@ -276,7 +282,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         with self.assertRaises(QualificationError):
             validate_pair(impact, right)
         for url in ("http://10.79.94.202:7777", "https://127.0.0.1:7777",
-                    "http://localhost:7777", "http://127.0.0.1:7777/api/demo"):
+                    "http://localhost:7777", "http://127.0.0.1:7777/api/demo",
+                    "http://127.0.0.1:secret"):
             with self.subTest(url=url), self.assertRaises(QualificationError):
                 loopback_base(url)
 
