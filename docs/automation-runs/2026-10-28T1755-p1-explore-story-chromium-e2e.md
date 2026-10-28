@@ -40,3 +40,11 @@
 4. **P1 — Présentation :** le débordement du SHA constaté sur PNG initial est corrigé en source ; attendre l'assertion navigateur du HEAD final et inspecter son nouvel artefact.
 
 Prochain micro-lot : vérifier les checks du dernier commit, inspecter le nouveau PNG ; ensuite ajouter un E2E navigateur reliant le contrat canonique #133 et la timeline #128 **après intégration contrôlée** de ces PR. Pas de storyboard vidéo avant E2E opérationnel.
+
+## Synchronisation concurrente — 2026-10-28 17:58 CET
+
+- Pendant le préflight de fusion, `main` a avancé à `5527d5fd16e09972d94ae9d9b1474ec043cc3fa9` via le durcissement client Explore/Story (PR #138). La fusion de #136 a été **interrompue**, malgré six checks verts sur l'ancien HEAD, car la base avait changé.
+- Re-portage ciblé des **quatre seuls fichiers du micro-lot** sur le tree du nouveau `main` ; héritage exact des nouveaux `app/portal/acme_explore_story_client.js` et tests DOM de #138, sans merge massif. Commit atomique `2313e11b661177251c66f9fb0483e9eaa3747dd6` parent `5527d5f`. Mise à jour de **notre branche uniquement** par force-with-lease avec SHA attendu `806b70d`, confirmée par GitHub.
+- [CI code précédent #40730609699](https://github.com/alimtalbi-ata/aiops/actions/runs/40730609699) : **SUCCESS** (trois jobs, dont Chromium et assertion CSS). Artefact corrigé #12833863681 inspecté : SHA-256 `383d20d0a9f36d408543f7ccb16e0a774506d545c29f48ec167db0688873bb71` confirmé, hash visuellement contenu dans sa carte.
+- [CI HEAD précédent avec journal #40730680178](https://github.com/alimtalbi-ata/aiops/actions/runs/40730680178) et [PR #40730689103](https://github.com/alimtalbi-ata/aiops/actions/runs/40730689103) : **SUCCESS** six checks sur `806b70d`, mais ne suffisent pas à qualifier le portage sur le nouveau client #138.
+- **CI du HEAD re-porté et du présent addendum : NOT_VERIFIED jusqu'au résultat GitHub Actions sur le SHA final**. Ne pas fusionner sans nouveau préflight exact main/head, checks, sécurité et absence de conflits.
