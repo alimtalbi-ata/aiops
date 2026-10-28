@@ -104,3 +104,17 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Keep PR #36's `SIMULATED_TARGET` video storyboard separate from the five-application operator capture pipeline. The latter produces MP4/SRT/receipt only from existing captures with validated hashes, shared incident/run/ticket/session identifiers, and explicit `OPERATOR_SUPPLIED_UNATTESTED` provenance.
 - **Controls:** No automatic runtime access in CI; private 0600 output; reject overwrite, inconsistent IDs, duplicate manifest keys and unsafe URL query/fragment; ffprobe and full ffmpeg decode before publishing. No attestation of runtime or identity by hashing alone.
 - **Consequence:** Technical offline render qualification can pass independently while authentic screenshots and end-to-end Evidence Studio remain BLOCKED/NOT_TESTED.
+
+## ADR-0018 — Snapshot privé des preuves avant encodage (2026-10-28)
+
+- **Statut :** proposé dans la PR draft #81 (empilée sur #43), pas de qualification LIVE.
+- **Décision :** vérifier le manifeste source, copier les PNG vers un staging privé
+  avec `O_NOFOLLOW`, contrôles de fichiers réguliers et stabilité `fstat`, puis
+  revérifier les hashes sur les copies avant de les donner à FFmpeg.
+- **Motif :** éviter qu'un changement de fichier source entre `verify` et
+  `render` fasse encoder des octets différents de ceux annoncés dans le reçu.
+- **Limites :** le hash n'atteste pas l'identité opérateur, l'application ni les
+  pixels sensibles ; un processus du même compte Unix reste dans la frontière
+  de confiance. Ne jamais promouvoir en LIVE à partir de ces seuls tests.
+- **Qualification :** 7 tests snapshot isolés locaux exécutés ; CI du dépôt
+  et décodage MP4 intégré en attente de confirmation.
