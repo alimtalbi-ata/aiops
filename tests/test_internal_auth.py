@@ -41,7 +41,10 @@ class BoundaryAuthTests(unittest.TestCase):
         with patch.object(POLICY,'INTERNAL_TOKEN','test-only-internal-token'):
             with self.assertRaises(HTTPException) as exc:
                 POLICY.check(values,authorization='Bearer wrong')
-            valid=POLICY.check(values,authorization='Bearer test-only-internal-token')
+            with patch.object(POLICY.autonomy_store,'status',return_value={
+                'mode':'NORMAL','revision':0,'source':'unit-test','healthy':True
+            }):
+                valid=POLICY.check(values,authorization='Bearer test-only-internal-token')
         self.assertEqual(exc.exception.status_code,401)
         self.assertEqual(valid['decision'],'SIMULATE')
 
