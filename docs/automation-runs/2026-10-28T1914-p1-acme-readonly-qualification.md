@@ -38,3 +38,8 @@
 3. **P1** : contrats #133/#139 et #128 non intégrés à `main` ; réconcilier par mapping explicite et tests, pas par fusion massive.
 4. Prochain micro-lot : faire consommer la projection canonique #133 par la recette après intégration vérifiée, et exiger un reçu Evidence indépendant lié aux mêmes IDs, sans assumer `evidence_ids` fictifs.
 5. Aucune requête à Debian, aucun déploiement, aucun secret, aucun effet LIVE ; aucun merge.
+
+## Clôture de qualification GitHub (19:19 Europe/Paris)
+- HEAD code + journal `4ca09a2b445888ae4a77d106b6606c7ba191742f` : [quality PR #40743738491](https://github.com/alimtalbi-ata/aiops/actions/runs/40743738491) et [quality push #40743727713](https://github.com/alimtalbi-ata/aiops/actions/runs/40743727713) : **completed/success**, trois jobs chacun. Logs du job `policy-and-static` vérifiés : **5 tests Playwright/portail** exécutés, dont la recette agrégée et les mutations négatives ; `Ran 5 tests in 3.325s`, `OK`. Tests Core/PostgreSQL et Grafana sur services éphémères : jobs SUCCESS, **sans** qualification du parcours ACME inter-services.
+- Échec intermédiaire [#40743651602](https://github.com/alimtalbi-ata/aiops/actions/runs/40743651602) : assertion `invalid_viewer_token` non satisfaite, car le test passait un backslash littéral plutôt qu'un saut de ligne. Corrigé dans `ae65dc0` et revérifié sur HEAD final ; ne pas masquer cet échec.
+- La présente clôture documentaire crée un nouveau commit : ses propres checks devront être vérifiés sur le SHA mis à jour avant fusion. Le code testé et les contrats ne changent pas.
