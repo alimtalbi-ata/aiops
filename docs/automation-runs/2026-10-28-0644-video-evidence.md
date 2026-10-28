@@ -29,3 +29,10 @@
 - #43 reste conflictuelle avec main, donc la chaîne de PR empilées ne doit pas être fusionnée sans stabilisation et checks réellement verts sur les candidats exacts.
 - Rollback : fermer la PR #97 ou revert ces cinq commits, sans impact runtime.
 - Prochain micro-lot : vérifier le workflow `quality.yml` sur le HEAD du journal, corriger tout échec; lier le reçu au manifeste d'origine conservé, puis ajouter une revue opérateur de confidentialité distincte de l'attestation LIVE.
+
+## Addendum de qualification — 2026-10-28 06:48 Europe/Paris
+
+- HEAD code + docs `ec70546442d5189eca2a5406905ee33ca90fbfb8` : [GitHub Actions run #40639974028](https://github.com/alimtalbi-ata/aiops/actions/runs/40639974028) **completed/success**. Job `policy-and-static` : tous les steps configurés terminés/success, dont FFmpeg réel sur fixtures, tests de capture, audit, publication, static-audit et Compose config.
+- Logs authentifiés du job `122655598502` : `test_secret_bearing_or_noncanonical_source_urls_rejected ... ok`, `test_service_file_alias_rejected_even_with_valid_hash ... ok`, `test_rehashed_receipt_cannot_relabel_or_leak_source ... ok`. Les suites unittest annoncent respectivement 7, 17, 14, 21, 7, 14 et 7 tests : **87 tests exécutés**, sans échec dans ce job.
+- HEAD du journal initial `751a4488fd4aa95195aa0bdcc66f428dbb87f7d1` : [run #40640011819](https://github.com/alimtalbi-ata/aiops/actions/runs/40640011819) encore **in_progress** lors de la vérification. Le commit de cet addendum nécessite lui-même une qualification séparée.
+- Il s'agit de tests unitaires/offline et de validation de configuration, **pas** d'intégration avec les services réels ni de preuve LIVE. Aucun conteneur d'intégration applicatif n'a été qualifié; pas de LLM/NGX testé.
