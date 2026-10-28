@@ -57,7 +57,6 @@ def _records(value):
 
 def _qualified_refs(rid, refs, expected_ids):
     """Only Core-linked, synthetic references qualify; never assert source truth."""
-    reject_unqualified_tenant_scope(refs)
     if (not isinstance(refs, dict)
             or set(refs) != {"schema", "run_id", "classification",
                              "tenant_acl_qualified", "runtime_attested",
@@ -69,6 +68,7 @@ def _qualified_refs(rid, refs, expected_ids):
             or refs["event_link_verified"] is not True):
         raise ValueError("unqualified evidence resolver")
     items = refs["items"]
+    reject_unqualified_tenant_scope(items)
     if (not isinstance(items, list) or not 1 <= len(items) <= 80
             or not expected_ids or len(items) != len(expected_ids)):
         raise ValueError("missing evidence references")
