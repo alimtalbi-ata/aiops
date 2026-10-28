@@ -25,4 +25,8 @@ Les observations rapportées le 28/10/2026 (7 runs DEMO : 5 BLOCKED, 1 RESOLVED,
 
 Le lot HITL/Temporal pourra consommer cette projection comme **observation**, jamais comme autorisation. Le reçu HITL expirant, le workflow Temporal, les postchecks et le rollback restent à raccorder et tester sur de vrais services CI. Ne pas assimiler la décision Policy `SIMULATE` à une exécution ou une restauration.
 
+## Durcissement du parseur de sonde locale
+
+Le consommateur CLI `scripts/probe_demo_policy_readonly.py` refuse les clés JSON dupliquées, y compris imbriquées, et les constantes non JSON `NaN`/`Infinity`/`-Infinity`. Ces valeurs ambiguës sont **BLOCKED**, jamais interprétées comme une disposition Policy. La lecture Core reste sur loopback, sous Bearer interne, sans redirection ni proxy. Ce contrôle ne qualifie ni HITL/Temporal, ni RBAC tenant, ni une exécution LIVE. Le contrat de sortie `aiops.demo-policy-readonly-probe.v1` ne change pas ; le parseur est seulement plus strict.
+
 Qualification : `tests/test_core_demo_policy_real_integration.py` via le job existant `core-postgres-noc-real-integration` de `.github/workflows/quality.yml`. PostgreSQL 16 et Core HTTP sont de vrais services CI éphémères, mais Policy HTTP, Temporal, HITL et l'ACL tenant ne sont pas intégrés dans cette suite.
