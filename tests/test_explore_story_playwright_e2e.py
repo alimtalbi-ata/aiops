@@ -205,5 +205,89 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("SIM-ACME-", self.page.locator("#scenario").inner_text())
 
 
+    def test_04_readonly_aggregate_recipe_against_real_ephemeral_portal(self):
+        """The CLI reads the actual portal HTTP API, not a mocked backend."""
+        env = os.environ.copy()
+        env["AIOPS_PORTAL_READ_TOKEN"] = VIEWER
+        command = [sys.executable, str(ROOT / "scripts" / "qualify_acme_readonly.py"),
+                   "--base-url", self.base]
+        completed = subprocess.run(command, cwd=ROOT, env=env,
+                                   capture_output=True, text=True, timeout=20)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        report = json.loads(completed.stdout)
+        self.assertEqual(report["contract_status"], "PASS")
+        self.assertEqual(report["overall"], "NO_GO")
+        self.assertEqual(report["scope"], "EPHEMERAL_PORTAL_SIMULATED_CONTRACT_ONLY")
+        self.assertEqual(report["checkpoint_count"], 9)
+        self.assertFalse(report["runtime_attested"])
+        self.assertIn("CORE_TEMPORAL_ANALYST_CRITIC_POLICY_EVIDENCE_NOT_TESTED",
+                      report["blockers"])
+        self.assertNotIn(VIEWER, completed.stdout + completed.stderr)
+        env.pop("AIOPS_PORTAL_READ_TOKEN")
+        denied = subprocess.run(command, cwd=ROOT, env=env,
+                                capture_output=True, text=True, timeout=20)
+        self.assertEqual(denied.returncode, 2)
+        self.assertEqual(json.loads(denied.stdout)["reason"], "missing_viewer_token")
+        env["AIOPS_PORTAL_READ_TOKEN"] = VIEWER + "\nsecret"
+        invalid = subprocess.run(command, cwd=ROOT, env=env,
+                                 capture_output=True, text=True, timeout=20)
+        self.assertEqual(invalid.returncode, 2)
+        self.assertEqual(json.loads(invalid.stdout)["reason"], "invalid_viewer_token")
+        self.assertNotIn("secret", invalid.stdout + invalid.stderr)
+
+    def test_05_readonly_recipe_rejects_falsified_provenance_and_ids(self):
+        """Negative contract tests use actual ephemeral portal response documents."""
+        from copy import deepcopy
+        from scripts.qualify_acme_readonly import (
+            QualificationError, loopback_base, validate_pair,
+        )
+        impact = self.context.request.get(self.base + "/api/demo/acme-impact").json()
+        story_response = self.context.request.post(
+            self.base + "/api/demo/explore-story/control",
+            headers={"Authorization": "Bearer " + VIEWER},
+            data={"action": "start", "cursor": 0, "mode": "explore"},
+        )
+        self.assertEqual(story_response.status, 200)
+        story = story_response.json()
+        self.assertEqual(validate_pair(impact, story)["contract_status"], "PASS")
+        for side, field, value in (
+            ("impact", "provenance", "LIVE"),
+            ("impact", "run_id", "RUN-FAKE"),
+            ("impact", "ticket_id", "GLPI-REAL-CLAIM"),
+            ("impact", "runtime_attested", True),
+            ("story", "source_sha256", "0" * 64),
+            ("story", "production_qualified", True),
+        ):
+            with self.subTest(side=side, field=field):
+                left, right = deepcopy(impact), deepcopy(story)
+                (left if side == "impact" else right)[field] = value
+                with self.assertRaises(QualificationError):
+                    validate_pair(left, right)
+        for key, value in (
+            ("status", "VERIFIED"),
+            ("screenshot_sha256", "0" * 64),
+            ("runtime_authenticated", True),
+        ):
+            with self.subTest(checkpoint=key):
+                left = deepcopy(impact)
+                left["checkpoint_evidence"][0][key] = value
+                with self.assertRaises(QualificationError):
+                    validate_pair(left, story)
+        left = deepcopy(impact)
+        left["decision_preview"]["policy"]["decision"] = "ALLOW_LIVE_ACTION"
+        with self.assertRaises(QualificationError):
+            validate_pair(left, story)
+        right = deepcopy(story)
+        right["scenario"]["incident_id"] = "OTHER-TENANT"
+        with self.assertRaises(QualificationError):
+            validate_pair(impact, right)
+        for url in ("http://10.79.94.202:7777", "https://127.0.0.1:7777",
+                    "http://localhost:7777", "http://127.0.0.1:7777/api/demo",
+                    "http://127.0.0.1:secret"):
+            with self.subTest(url=url), self.assertRaises(QualificationError):
+                loopback_base(url)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
