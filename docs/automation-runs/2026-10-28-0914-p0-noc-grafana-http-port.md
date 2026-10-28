@@ -9,3 +9,13 @@
 - Risque / blocage : réseaux Compose portail et Grafana disjoints; ne pas activer le contrôle Debian sans conception réseau/ACL approuvée. Aucun accès Debian, déploiement, migration ni commande LIVE.
 - Rollback : fermer la PR / revert des commits ciblés.
 - Prochain micro-lot : lecture métriques Grafana observées et scoped par identité tenant serveur, avec Core/PostgreSQL éphémères et tests ACL A/B avant exposition.
+
+## Qualification GitHub Actions — 2026-10-28 09:17 Europe/Paris
+
+- PR draft : [#110](https://github.com/alimtalbi-ata/aiops/pull/110).
+- Commit de code/tests/docs : [`22a5678497f4e0a5e3eb5ddc2d15bb5d1694706c`](https://github.com/alimtalbi-ata/aiops/commit/22a5678497f4e0a5e3eb5ddc2d15bb5d1694706c).
+- [quality.yml run #40655638892](https://github.com/alimtalbi-ata/aiops/actions/runs/40655638892) : **completed/success**, HEAD exact `22a5678497f4e0a5e3eb5ddc2d15bb5d1694706c`.
+- Job `policy-and-static` : **success**, compilation, tests contractuels Grafana (auth, refus de sources, redirection, JSON malformé, doublons, taille), régressions NOC/portail, audit statique, configuration Compose.
+- Job `grafana-real-integration` : **success**, conteneur réel `grafana/grafana:11.6.0` initialisé, endpoint `/api/health` effectivement interrogé, test de l'adaptateur sans mock **success**.
+- Ces résultats n'attestent ni des métriques observées, ni le RBAC tenant, ni la connectivité Debian. Pas de preuve LIVE.
+- Un commit documentaire final est nécessaire pour consigner cette preuve : ses checks devront être revérifiés avant toute fusion. Aucun résultat non exécuté n'est déclaré PASS.
