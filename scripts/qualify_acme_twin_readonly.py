@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -150,6 +151,8 @@ def decode_impact_json(raw: bytes) -> object:
                 pending.extend((v, depth + 1) for v in item.values())
             elif type(item) is list:
                 pending.extend((v, depth + 1) for v in item)
+            elif type(item) is float:
+                require(math.isfinite(item), "nonfinite_twin_json")
         return value
     except QualificationError:
         raise

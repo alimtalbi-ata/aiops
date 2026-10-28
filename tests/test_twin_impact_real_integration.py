@@ -173,6 +173,8 @@ class TwinImpactRealIntegration(unittest.TestCase):
              "nonfinite_twin_json"),
             ("negative_infinity", b'{"untrusted":-Infinity,' + original[1:],
              "nonfinite_twin_json"),
+            ("overflow_exponent", b'{"untrusted":1e999,' + original[1:],
+             "nonfinite_twin_json"),
             ("invalid_utf8", original + b'\xff', "invalid_json"),
             ("truncated", original[:-1], "invalid_json"),
             ("too_deep", b"[" * 1200 + b"]" * 1200,
