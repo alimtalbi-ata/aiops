@@ -47,19 +47,19 @@ def evaluate(x: Decision) -> dict:
         return {"state":"BLOCKED","decision":"ESCALATE","reason":"AUTONOMY_STATE_UNAVAILABLE"}
     if autonomy_mode not in ("NORMAL", "FREEZE", "STOP_AUTO"):
         return {"state":"BLOCKED","decision":"ESCALATE","reason":"INVALID_AUTONOMY_MODE"}
-    if effect and autonomy_mode == "STOP_AUTO" and x.operation_class == "AUTONOMOUS_REMEDIATION":
+    if x.mode == "LIVE" and effect and autonomy_mode == "STOP_AUTO" and x.operation_class == "AUTONOMOUS_REMEDIATION":
         return {"state":"BLOCKED","decision":"ESCALATE","reason":"AUTONOMOUS_REMEDIATION_SUSPENDED"}
-    if effect and autonomy_mode == "FREEZE" and x.operation_class not in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE"):
+    if x.mode == "LIVE" and effect and autonomy_mode == "FREEZE" and x.operation_class not in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE"):
         return {"state":"BLOCKED","decision":"HUMAN_APPROVAL","reason":"FREEZE_RESTRICTS_OPERATION_CLASS"}
-    if effect and x.operation_class in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE") and not x.preconditions_verified:
+    if x.mode == "LIVE" and effect and x.operation_class in ("ROUTINE_PREAPPROVED","STANDARD_CHANGE") and not x.preconditions_verified:
         return {"state":"BLOCKED","decision":"HUMAN_APPROVAL","reason":"PREAPPROVED_OPERATION_NOT_VERIFIED"}
-    if effect and os.getenv("AIOPS_POLICY_EMERGENCY_STOP", "true").lower() != "false":
+    if x.mode == "LIVE" and effect and os.getenv("AIOPS_POLICY_EMERGENCY_STOP", "true").lower() != "false":
         return {"state":"BLOCKED","decision":"ESCALATE",
                 "reason":"EMERGENCY_STOP_ACTIVE: effect prohibited"}
-    if effect and x.freeze_active is None:
+    if x.mode == "LIVE" and effect and x.freeze_active is None:
         return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
                 "reason":"FREEZE_STATUS_UNKNOWN: effect prohibited"}
-    if effect and x.freeze_active and not (x.management_exception_verified and x.change_approval_verified):
+    if x.mode == "LIVE" and effect and x.freeze_active and not (x.management_exception_verified and x.change_approval_verified):
         return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
                 "reason":"CHANGE_FREEZE_ACTIVE: management exception and Change approval required"}
     # Severity is an independent safety signal: never downgrade P1 to UNKNOWN
