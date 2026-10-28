@@ -17,12 +17,12 @@ import stat
 import sys
 
 from demo.evidence_video import SERVICES, verify
-from demo.evidence_video_bundle import IDENT, NAMES, subtitles as canonical_subtitles
+from demo.evidence_video_bundle import IDENT, NAMES, _correlation, subtitles as canonical_subtitles
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 RECEIPT_KEYS = {"schema_version", "provenance", "runtime_authenticated",
                 "production_qualified", "capture_count", "correlation",
-                "captures", "video", "subtitles"}
+                "captures", "video", "subtitles", "source_manifest_sha256"}
 
 
 def _unique(pairs):
@@ -69,9 +69,9 @@ def _hash_file(root: Path, name: str, digest: str, limit: int) -> None:
     return data
 
 
-def audit_bundle(bundle_dir: Path, capture_root: Path) -> dict:
+def audit_bundle(bundle_dir: Path, capture_root: Path, capture_manifest: Path) -> dict:
     """Verify receipt structure and local bytes; never elevate provenance."""
-    bundle_dir, capture_root = Path(bundle_dir), Path(capture_root)
+    bundle_dir, capture_root, capture_manifest = map(Path, (bundle_dir, capture_root, capture_manifest))
     _private_directory(bundle_dir)
     if capture_root.is_symlink() or not capture_root.is_dir():
         raise ValueError("real capture directory required")
@@ -85,6 +85,31 @@ def audit_bundle(bundle_dir: Path, capture_root: Path) -> dict:
             or receipt["production_qualified"] is not False
             or type(receipt["capture_count"]) is not int or receipt["capture_count"] != 5):
         raise ValueError("unsafe receipt provenance or count")
+    # The receipt alone is self-declared. Require the original capture
+    # manifest as an independent local input, linked by its exact byte hash.
+    # This proves local consistency, not the identity of the browser/operator.
+    source_bytes = _read_stable(capture_manifest, 256 * 1024)
+    manifest_hash = receipt["source_manifest_sha256"]
+    if not isinstance(manifest_hash, str) or not SHA256.fullmatch(manifest_hash) or \
+            hashlib.sha256(source_bytes).hexdigest() != manifest_hash:
+        raise ValueError("source capture manifest checksum mismatch")
+    source = json.loads(source_bytes.decode("utf-8"), object_pairs_hook=_unique)
+    if (not isinstance(source, dict) or
+            set(source) - {"schema_version", "provenance", "captures",
+                           "runtime_authenticated", "production_qualified"} or
+            type(source.get("schema_version")) is not int or source["schema_version"] != 1 or
+            source.get("provenance") != "OPERATOR_SUPPLIED_UNATTESTED" or
+            source.get("runtime_authenticated", False) is not False or
+            source.get("production_qualified", False) is not False or
+            not isinstance(source.get("captures"), list)):
+        raise ValueError("invalid source capture manifest provenance")
+    for entry in source["captures"]:
+        if (not isinstance(entry, dict) or
+                entry.get("runtime_authenticated", False) is not False or
+                entry.get("production_qualified", False) is not False or
+                entry.get("capture_method", "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED")
+                != "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED"):
+            raise ValueError("unsafe source capture metadata")
     correlation = receipt["correlation"]
     if (not isinstance(correlation, dict) or
             set(correlation) != {"run_id", "incident_id", "ticket_id", "session_label"} or
@@ -94,6 +119,10 @@ def audit_bundle(bundle_dir: Path, capture_root: Path) -> dict:
     captures = receipt["captures"]
     if not isinstance(captures, list) or [x.get("service") for x in captures if isinstance(x, dict)] != list(SERVICES):
         raise ValueError("noncanonical capture order")
+    if _correlation(source) != correlation:
+        raise ValueError("source manifest correlation mismatch")
+    if verify(capture_root, source) != captures:
+        raise ValueError("source manifest captures differ from receipt")
     # The original verifier checks PNG framing/decoded scanlines, SHA, UTC,
     # source URL and all five distinct services; the receipt may not add claims.
     if verify(capture_root, {"schema_version": 1,
@@ -134,9 +163,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle-dir", type=Path, required=True)
     parser.add_argument("--capture-root", type=Path, required=True)
+    parser.add_argument("--capture-manifest", type=Path, required=True)
     args = parser.parse_args()
     try:
-        print(json.dumps(audit_bundle(args.bundle_dir, args.capture_root), indent=2))
+        print(json.dumps(audit_bundle(args.bundle_dir, args.capture_root, args.capture_manifest), indent=2))
         return 0
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, json.JSONDecodeError) as exc:
         print("BLOCKED: " + str(exc), file=sys.stderr)
