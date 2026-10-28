@@ -57,6 +57,12 @@ jobs:
         run: python -m unittest discover -s tests -p "test_noc_grafana_health.py" -v
       - name: ACME SAN to Payments synthetic impact contract tests
         run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
+      - name: Authenticated Explore Story synthetic timeline and security regressions
+        run: python -m unittest discover -s tests -p "test_portal_explore_story.py" -v
+      - name: Explore Story browser syntax
+        run: node --check app/portal/acme_explore_story_client.js
+      - name: Explore Story synthetic DOM browser contract (unit-only)
+        run: node --test tests/test_portal_explore_story_client.cjs
       - name: Worker simulation Policy contract and safety regression tests
         run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
       - name: Secret preflight unit tests
