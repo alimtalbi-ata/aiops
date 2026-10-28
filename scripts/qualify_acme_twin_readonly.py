@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -121,6 +122,44 @@ def validate_impact(data: object) -> dict:
     }
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
+    """Reject duplicate JSON keys at any depth, including nested edge IDs."""
+    result = {}
+    for key, value in pairs:
+        require(key not in result, "duplicate_twin_json_key")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_json(_value: str) -> None:
+    raise QualificationError("nonfinite_twin_json")
+
+
+def decode_impact_json(raw: bytes) -> object:
+    """Strict UTF-8 JSON: ambiguous or non-finite topology is never qualified."""
+    try:
+        value = json.loads(raw.decode("utf-8"),
+                           object_pairs_hook=_unique_json_object,
+                           parse_constant=_reject_nonfinite_json)
+        # CPython may accept thousands of nested arrays before its own
+        # recursion limit. Bound nesting iteratively to avoid relying on it.
+        pending = [(value, 0)]
+        while pending:
+            item, depth = pending.pop()
+            require(depth <= 64, "excessive_twin_json_nesting")
+            if type(item) is dict:
+                pending.extend((v, depth + 1) for v in item.values())
+            elif type(item) is list:
+                pending.extend((v, depth + 1) for v in item)
+            elif type(item) is float:
+                require(math.isfinite(item), "nonfinite_twin_json")
+        return value
+    except QualificationError:
+        raise
+    except (ValueError, UnicodeError, RecursionError):
+        raise QualificationError("invalid_json") from None
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         return None
@@ -170,11 +209,7 @@ def read_impact(base: str, token: str | None) -> tuple[int, object | None]:
                 "invalid_content_type")
         raw = response.read(256 * 1024 + 1)
     require(len(raw) <= 256 * 1024, "oversized_response")
-    try:
-        value = json.loads(raw)
-    except (UnicodeError, ValueError):
-        raise QualificationError("invalid_json") from None
-    return 200, value
+    return 200, decode_impact_json(raw)
 
 
 def qualify(base_url: str, token: str) -> dict:
