@@ -20,3 +20,11 @@
 - **GitHub Actions :** [quality.yml run 40649223851](https://github.com/alimtalbi-ata/aiops/actions/runs/40649223851), HEAD `b4cc72da`, **completed/success**. Job `policy-and-static` : compilation, tests sécurité NOC existants et nouveaux (dont aliases et non-régression), corrélation, RAG, tests policy/portal, preflight secrets, audit statique et validation Compose = success. Ce sont des tests unitaires/contractuels, pas des services intégrés.
 - **Fusion précédente PR #99 :** [PR #99](https://github.com/alimtalbi-ata/aiops/pull/99), squash SHA `aae50b02557143ea5a7f0f2633271a0602de8800`, CI avant fusion [40642379077](https://github.com/alimtalbi-ata/aiops/actions/runs/40642379077) completed/success, mergeable clean avant fusion.
 - **État de la présente PR :** brouillon, non fusionnée au moment de cette entrée. Le commit documentaire de mise à jour déclenche un nouveau check : ne pas réutiliser le statut du commit précédent pour prétendre qualifier le HEAD final.
+
+## Clôture du micro-lot code — 2026-10-28 08:21 Europe/Paris
+
+- **PR #104 fusionnée :** squash SHA `f4473c3ba2a46daac62b22ac13543fa255dc76e7` sur `main` (GitHub a confirmé `merged=true`).
+- **Dernier HEAD de PR #104 avant fusion :** `6b06e480a5e9a94c1c3890ea0aeebee6b1d5f67d` (commit de journal après `b4cc72da`).
+- **CI sur ce HEAD final :** [push 40649282086](https://github.com/alimtalbi-ata/aiops/actions/runs/40649282086) et [pull_request 40649289107](https://github.com/alimtalbi-ata/aiops/actions/runs/40649289107) tous deux `completed/success`. Vérification de `mergeable=true`, `mergeable_state=clean` et `main` inchangé avant fusion. Pas de contournement des protections.
+- **Nature de preuve :** compilation, tests unitaires/contractuels de sécurité et non-régression, audit statique, `docker compose config`. Aucun service Checkmk/Thruk/Core tenant/Grafana/Ollama en conteneur éphémère testé dans ce micro-lot : **NOT_TESTED**. Aucun NGX réel ni preuve LIVE.
+- **Cette correction de journal :** branche `docs/p0-noc-merge-evidence-20261028-0821` basée sur `f4473c3ba2a46daac62b22ac13543fa255dc76e7`, PR documentaire séparée pour consigner le SHA fusionné sans écriture directe sur `main`. Son propre contrôle CI doit être vérifié indépendamment.
