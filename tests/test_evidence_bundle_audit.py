@@ -45,7 +45,7 @@ class BundleAuditTests(unittest.TestCase):
         self.mp4 = self.bundle / audit.NAMES[0]
         self.srt = self.bundle / audit.NAMES[1]
         self.mp4.write_bytes(b"offline hash-only fixture; NOT playable video")
-        self.srt.write_bytes(b"1\n00:00:00,000 --> 00:00:02,000\nTest fixture\n")
+        self.srt.write_bytes(audit.canonical_subtitles(captures, 2).encode("utf-8"))
         self.receipt = {
             "schema_version": 1, "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
             "runtime_authenticated": False, "production_qualified": False,
@@ -84,6 +84,35 @@ class BundleAuditTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.run_audit()
                 target.write_bytes(original)
+
+    def test_rehashed_sensitive_or_reordered_subtitles_rejected(self):
+        """Rehashing an injected SRT must not launder it as verified evidence."""
+        original = self.srt.read_text(encoding="utf-8")
+        for changed in (original.replace("Portail AIOps", "INC-001 SECRET"),
+                        original.replace("Thruk", "Grafana", 1)):
+            with self.subTest(caption=changed[:60]):
+                self.srt.write_text(changed, encoding="utf-8")
+                self.receipt["subtitles"]["sha256"] = hashlib.sha256(
+                    self.srt.read_bytes()).hexdigest()
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "noncanonical subtitles"):
+                    self.run_audit()
+        self.srt.write_text(original, encoding="utf-8")
+        self.receipt["subtitles"]["sha256"] = hashlib.sha256(
+            self.srt.read_bytes()).hexdigest()
+        self.write_receipt()
+        self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+
+    def test_nonfinite_or_noncanonical_scene_duration_rejected(self):
+        for duration in (True, float("nan"), float("inf"), 10 ** 400, 10.4, 11.0, 12.0, 100.5):
+            with self.subTest(duration=duration):
+                self.receipt["video"]["duration_seconds"] = duration
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "video receipt|duration"):
+                    self.run_audit()
+        self.receipt["video"]["duration_seconds"] = 10.0
+        self.write_receipt()
+        self.assertEqual(self.run_audit()["capture_count"], 5)
 
     def test_duplicate_json_keys_rejected(self):
         (self.bundle / audit.NAMES[2]).write_text('{"schema_version":1,"schema_version":1}')

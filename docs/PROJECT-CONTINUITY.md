@@ -102,3 +102,17 @@ correctif vers `main` après revue et CI. Journal :
 - Stacked on PR #81 (itself stacked on #43); source base SHA `f367175206eed07e3e7715c2057fa652d2583ac5`. No bulk PR #36 merge; reuses its STAR-style duplicate-key rejection and the existing video/capture validation contract.
 - `tests/test_evidence_bundle_audit.py` covers local byte checks and negative cases (tampering, symlinks, duplicate keys, forged LIVE flags, unsafe names, missing files). Wired into the existing `quality.yml` workflow.
 - This is **not** MP4 decoding, runtime session authentication, application screenshot proof, visual privacy review or LIVE qualification. No Debian access or deployment. See `docs/demo/EVIDENCE-MP4-SRT-BUNDLE-CONTRACT.md` and `docs/automation-runs/2026-10-28-0449-video-evidence.md`.
+
+
+## 2026-10-28 05:44 Europe/Paris — Audit SRT canonique (draft PR #91)
+
+Le micro-lot P0, empilé sur la PR #86 (puis #81/#43), renforce l'auditeur
+hors ligne du bundle : le SRT doit correspondre exactement aux cinq libellés
+canoniques et aux durées de scènes déclarées. Recalculer l'empreinte SHA-256
+d'un SRT injecté ne suffit plus à le faire accepter. Tests négatifs pour
+injections et durées non finies/incohérentes, avec le workflow `quality.yml`
+existant. Ne pas confondre intégrité déclarative avec authentification des
+sessions, vérification visuelle, attestation LIVE ou qualification du MP4.
+Aucun accès Debian, déploiement, merge ou action LIVE. Consulter le journal
+`docs/automation-runs/2026-10-28-0544-video-evidence.md` pour les SHA,
+les résultats CI effectifs et les limites.

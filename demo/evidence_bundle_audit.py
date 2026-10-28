@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -16,7 +17,7 @@ import stat
 import sys
 
 from demo.evidence_video import SERVICES, verify
-from demo.evidence_video_bundle import IDENT, NAMES
+from demo.evidence_video_bundle import IDENT, NAMES, subtitles as canonical_subtitles
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 RECEIPT_KEYS = {"schema_version", "provenance", "runtime_authenticated",
@@ -65,6 +66,7 @@ def _hash_file(root: Path, name: str, digest: str, limit: int) -> None:
     data = _read_stable(root / name, limit)
     if hashlib.sha256(data).hexdigest() != digest:
         raise ValueError("bundle byte hash mismatch: " + name)
+    return data
 
 
 def audit_bundle(bundle_dir: Path, capture_root: Path) -> dict:
@@ -104,13 +106,22 @@ def audit_bundle(bundle_dir: Path, capture_root: Path) -> dict:
             video["file"] != NAMES[0] or video["codec"] != "h264" or
             video["resolution"] != "1920x1080" or
             type(video["duration_seconds"]) not in (int, float) or
-            not 10 <= video["duration_seconds"] <= 100):
+            not 10 <= video["duration_seconds"] <= 100 or
+            not math.isfinite(video["duration_seconds"])):
         raise ValueError("invalid video receipt metadata")
     if (not isinstance(subtitles, dict) or
             set(subtitles) != {"file", "sha256"} or subtitles["file"] != NAMES[1]):
         raise ValueError("invalid subtitles receipt metadata")
+    # SRT is generated from fixed labels, not operator text. A matching hash
+    # alone cannot prevent a forged receipt from laundering sensitive captions.
+    duration = video["duration_seconds"]
+    scene_seconds = round(duration / len(SERVICES))
+    if not 2 <= scene_seconds <= 20 or abs(duration - len(SERVICES) * scene_seconds) > 0.25:
+        raise ValueError("video duration is inconsistent with five canonical scenes")
     _hash_file(bundle_dir, NAMES[0], video["sha256"], 512 * 1024 * 1024)
-    _hash_file(bundle_dir, NAMES[1], subtitles["sha256"], 256 * 1024)
+    srt_bytes = _hash_file(bundle_dir, NAMES[1], subtitles["sha256"], 256 * 1024)
+    if srt_bytes != canonical_subtitles(captures, scene_seconds).encode("utf-8"):
+        raise ValueError("noncanonical subtitles: content or timing mismatch")
     return {"status": "LOCAL_BYTES_VERIFIED_UNATTESTED",
             "capture_count": 5, "video_sha256": video["sha256"],
             "subtitles_sha256": subtitles["sha256"],
