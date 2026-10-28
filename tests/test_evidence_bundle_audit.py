@@ -201,6 +201,23 @@ class BundleAuditTests(unittest.TestCase):
         self.assertFalse(result["runtime_authenticated"])
         self.assertFalse(result["media_decoded_by_auditor"])
 
+    def test_rehashed_receipt_cannot_relabel_or_leak_source(self):
+        # No image bytes change; the adversary rewrites only receipt metadata.
+        original = self.receipt["captures"][0].copy()
+        for key, value in (
+            ("file", "thruk.png"),
+            ("source_url", "https://example.invalid/portal?api_key=secret"),
+            ("source_url", "https://example.invalid/portal#token"),
+        ):
+            with self.subTest(field=key, value=value):
+                self.receipt["captures"][0] = {**original, key: value}
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "filename mismatch|expose secrets"):
+                    self.run_audit()
+        self.receipt["captures"][0] = original
+        self.write_receipt()
+        self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+
     def test_missing_media_rejected(self):
         self.mp4.unlink()
         with self.assertRaises(OSError):
