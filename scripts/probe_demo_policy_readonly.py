@@ -70,9 +70,15 @@ def validate_observation(value: object, run_id: str, incident_id: str) -> dict:
             and value["provenance"] == "CORE_POSTGRES_SYNTHETIC_READ",
             "invalid_provenance")
     require(value["run_id"] == run_id and value["incident_id"] == incident_id
-            and value["mode"] == "DEMO" and value["run_status"] in _STATES,
+            and value["mode"] == "DEMO" and isinstance(value["run_status"], str)
+            and value["run_status"] in _STATES,
             "canonical_identity_mismatch")
     require(all(value[key] is False for key in _FLAGS), "unqualified_runtime_claim")
+    require(isinstance(value["policy_gate_state"], str)
+            and (value["policy_decision"] is None
+                 or isinstance(value["policy_decision"], str))
+            and type(value["policy_gate_recorded"]) is bool,
+            "invalid_policy_disposition")
     pair = (value["policy_gate_state"], value["policy_decision"],
             value["policy_gate_recorded"])
     require(pair in _GATE_PAIRS, "invalid_policy_disposition")
@@ -138,7 +144,7 @@ def probe(base_url: str, run_id: str, incident_id: str, token: str) -> dict:
         raise ProbeError("core_unreachable") from None
     with response:
         require(response.status == 200, "core_denied_or_unavailable")
-        require("no-store" in response.headers.get("Cache-Control", "").lower().split(","),
+        require("no-store" in [part.strip() for part in response.headers.get("Cache-Control", "").lower().split(",")],
                 "missing_no_store")
         require(response.headers.get_content_type() == "application/json",
                 "invalid_content_type")
