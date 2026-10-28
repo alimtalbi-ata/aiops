@@ -119,16 +119,16 @@ def audit_bundle(bundle_dir: Path, capture_root: Path, capture_manifest: Path) -
     captures = receipt["captures"]
     if not isinstance(captures, list) or [x.get("service") for x in captures if isinstance(x, dict)] != list(SERVICES):
         raise ValueError("noncanonical capture order")
-    if _correlation(source) != correlation:
-        raise ValueError("source manifest correlation mismatch")
-    if verify(capture_root, source) != captures:
-        raise ValueError("source manifest captures differ from receipt")
     # The original verifier checks PNG framing/decoded scanlines, SHA, UTC,
     # source URL and all five distinct services; the receipt may not add claims.
     if verify(capture_root, {"schema_version": 1,
                              "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
                              "captures": captures}) != captures:
         raise ValueError("noncanonical capture receipt")
+    if _correlation(source) != correlation:
+        raise ValueError("source manifest correlation mismatch")
+    if verify(capture_root, source) != captures:
+        raise ValueError("source manifest captures differ from receipt")
     video, subtitles = receipt["video"], receipt["subtitles"]
     if (not isinstance(video, dict) or
             set(video) != {"file", "sha256", "duration_seconds", "codec", "resolution"} or
