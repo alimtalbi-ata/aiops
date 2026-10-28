@@ -33,4 +33,11 @@
 - [PR quality #40664498414](https://github.com/alimtalbi-ata/aiops/actions/runs/40664498414) et [push quality #40664492518](https://github.com/alimtalbi-ata/aiops/actions/runs/40664492518) : `completed/success` sur ce SHA exact.
 - Jobs vérifiés : `policy-and-static` **success** (14 tests Policy, 3 nouveaux tests HTTP explicitement `ok` dans les logs ; compilation, portail/NOC, préflight secrets, audit statique, Compose config), `grafana-real-integration` **success** (vrai conteneur Grafana éphémère, HTTP health et test adaptateur). Cela **ne teste pas** Core/Temporal/RBAC/Evidence ni Ollama/NGX.
 - Échec intermédiaire non masqué : [push #40664393548](https://github.com/alimtalbi-ata/aiops/actions/runs/40664393548) sur le commit Policy seul `9a19c52` : l'ancien test attendait encore `PASS` pour un effet LIVE ; 1 test échoué sur 7. Le commit tests `96dbd189` a corrigé cette attente et ajouté les régressions HTTP. Le HEAD final testé est vert.
-- L'ajout de cette section produit un nouveau commit documentaire : **PENDING** pour son propre SHA jusqu'à vérification. Aucun résultat n'est extrapolé.
+- L'ajout de cette section a produit le commit documentaire `d13f5e944c7f14d8114322f720119d527f6e850c`, validé par [PR CI #40664618475](https://github.com/alimtalbi-ata/aiops/actions/runs/40664618475) et [push CI #40664610523](https://github.com/alimtalbi-ata/aiops/actions/runs/40664610523) : `completed/success`, jobs `policy-and-static` et `grafana-real-integration` success, aucune étape en échec.
+
+## Fusion et qualification post-fusion
+
+- [PR #118](https://github.com/alimtalbi-ata/aiops/pull/118) fusionnée par squash dans `main` au SHA **`b33f655695949d6fef9e7d72b537d9810859c494`**, après vérification du HEAD, des checks, des 14 tests Policy (dont 3 HTTP) et de l'état GitHub `mergeable=true`, `mergeable_state=clean`.
+- [CI post-fusion #40664759313](https://github.com/alimtalbi-ata/aiops/actions/runs/40664759313) : `completed/success` sur le SHA de fusion ; jobs `policy-and-static` et `grafana-real-integration` réussis, aucune étape échouée.
+- Ancienne PR #76 fermée comme doublon après commentaire explicatif ; aucune branche ni travail tiers écrasé.
+- Ce complément documentaire est livré dans une PR séparée ; ses propres checks restent à vérifier avant fusion. Aucun déploiement, aucun effet LIVE.
