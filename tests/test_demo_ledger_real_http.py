@@ -21,6 +21,7 @@ DSN = os.environ["DATABASE_URL"]
 RUN = "RUN-CI-LEDGER-DEMO"
 LIVE = "RUN-CI-LEDGER-LIVE"
 UNSOURCED = "RUN-CI-LEDGER-UNSOURCED"
+NO_EVENT = "RUN-CI-LEDGER-NO-EVENT"
 EVIDENCE = "EVD-CI-LEDGER-SAN"
 PRIVATE = "CI-PRIVATE-PROMPT-MUST-NOT-LEAK"
 
@@ -31,7 +32,7 @@ class RealLedgerHttpQualification(unittest.TestCase):
         # Isolated PostgreSQL container is destroyed after the job; never mutate
         # an external service or reuse runtime IDs from the ACME scenario fixture.
         with psycopg.connect(DSN) as conn:
-            for rid, mode in ((RUN, "DEMO"), (LIVE, "LIVE"), (UNSOURCED, "DEMO")):
+            for rid, mode in ((RUN, "DEMO"), (LIVE, "LIVE"), (UNSOURCED, "DEMO"), (NO_EVENT, "DEMO")):
                 conn.execute(
                     "insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
                     "values(%s,%s,'CI-LEDGER-ISOLATED','CREATED',%s)",
@@ -80,6 +81,40 @@ class RealLedgerHttpQualification(unittest.TestCase):
                 (RUN, Jsonb(ids), Jsonb({"claim_checks": [
                     {"claim": "Synthetic SAN CRC", "supported": False,
                      "supporting_evidence_ids": []}]})),
+            )
+
+            # Fully consistent ledger/evidence rows without a Run event must
+            # not become a sourced claim through the Portal.
+            no_event_evidence = "EVD-CI-LEDGER-NO-EVENT"
+            conn.execute(
+                "insert into aiops.evidence(evidence_id,source,claim,confidence,provenance,"
+                "payload_hash,payload) values(%s,'CI_SYNTHETIC_SAN','No event',"
+                "0.5,%s,%s,'{}'::jsonb)",
+                (no_event_evidence, Jsonb({"synthetic": True, "observed": False,
+                                          "run_id": NO_EVENT}),
+                 hashlib.sha256(b"ci no event").hexdigest()),
+            )
+            no_event_ids = [no_event_evidence]
+            no_event_hash = hashlib.sha256(json.dumps(
+                no_event_ids, separators=(",", ":")).encode()).hexdigest()
+            conn.execute(
+                "insert into aiops.analysis_records(analysis_id,run_id,idempotency_key,"
+                "revision,contract_version,provider,model,prompt_version,evidence_ids,"
+                "evidence_set_hash,output,confidence,status) values("
+                "'ANL-CI-NO-EVENT',%s,'ci-ledger-no-event-analysis',1,'2.0',"
+                "'CI_ONLY','CI_NOT_LLM','ci',%s,%s,'{}'::jsonb,0.5,'VALID')",
+                (NO_EVENT, Jsonb(no_event_ids), no_event_hash),
+            )
+            conn.execute(
+                "insert into aiops.critique_records(critique_id,idempotency_key,"
+                "analysis_id,run_id,contract_version,provider,model,validated,issues,"
+                "evidence_ids,output,diagnostic_confidence) values("
+                "'CRT-CI-NO-EVENT','ci-ledger-no-event-critique','ANL-CI-NO-EVENT',"
+                "%s,'2.0','CI_ONLY','CI_NOT_LLM',true,'[]'::jsonb,%s,%s,0.4)",
+                (NO_EVENT, Jsonb(no_event_ids),
+                 Jsonb({"claim_checks": [{"claim": "No event synthetic claim",
+                                         "supported": True,
+                                         "supporting_evidence_ids": no_event_ids}]})),
             )
 
             # The DB contains a genuine immutable Critique row with a forged
@@ -134,6 +169,10 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertEqual(body["run_id"], RUN)
         self.assertEqual(body["mode"], "DEMO")
         self.assertEqual(body["classification"], "DEMO_CORE_RECORDED_NOT_LIVE")
+        self.assertEqual(body["evidence_classification"], "SYNTHETIC_ONLY")
+        self.assertIs(body["event_link_verified"], True)
+        self.assertEqual([ref["evidence_id"] for ref in body["evidence_refs"]], [EVIDENCE])
+        self.assertEqual(body["evidence_refs"][0]["source"], "CI_SYNTHETIC_SAN")
         self.assertIs(body["tenant_acl_qualified"], False)
         self.assertIs(body["runtime_attested"], False)
         self.assertEqual(body["analyses"][0]["evidence_ids"], [EVIDENCE])
@@ -166,6 +205,22 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertEqual(denied.headers["cache-control"], "no-store")
         for private in (UNSOURCED, "EVD-CI-NOT-IN-ANALYSIS", INTERNAL, VIEWER):
             self.assertNotIn(private, denied.text)
+
+    def test_real_ledger_without_run_event_is_unknown(self):
+        core_ledger = requests.get(
+            CORE + "/api/runs/" + NO_EVENT + "/ai-ledger",
+            headers={"Authorization": "Bearer " + INTERNAL},
+            timeout=5, allow_redirects=False)
+        self.assertEqual(core_ledger.status_code, 200, core_ledger.text)
+        self.assertTrue(core_ledger.json()["critiques"][0]["output"]
+                        ["claim_checks"][0]["supported"])
+        denied = self.read(PORTAL, rid=NO_EVENT)
+        self.assertEqual(denied.status_code, 503, denied.text)
+        self.assertEqual(denied.json(), {"status": "UNKNOWN",
+                                         "reason": "ledger_unavailable"})
+        self.assertNotIn(NO_EVENT, denied.text)
+        self.assertNotIn("EVD-CI-LEDGER-NO-EVENT", denied.text)
+        self.assertEqual(denied.headers["cache-control"], "no-store")
 
     def test_real_upstream_401_becomes_unknown_without_leak(self):
         # Second real Portal process deliberately has a different CI-only
