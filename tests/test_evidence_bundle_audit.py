@@ -104,7 +104,7 @@ class BundleAuditTests(unittest.TestCase):
         self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
 
     def test_nonfinite_or_noncanonical_scene_duration_rejected(self):
-        for duration in (True, float("nan"), float("inf"), 10.4, 11.0, 12.0, 100.5):
+        for duration in (True, float("nan"), float("inf"), 10 ** 400, 10.4, 11.0, 12.0, 100.5):
             with self.subTest(duration=duration):
                 self.receipt["video"]["duration_seconds"] = duration
                 self.write_receipt()
