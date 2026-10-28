@@ -10,3 +10,9 @@
 - **Failures retained:** [40670004635](https://github.com/alimtalbi-ata/aiops/actions/runs/40670004635), [40670050315](https://github.com/alimtalbi-ata/aiops/actions/runs/40670050315), [40670239882](https://github.com/alimtalbi-ata/aiops/actions/runs/40670239882): Core readiness failed because GitHub runner cannot bind privileged port 810 (`EACCES`), not a PostgreSQL or test PASS. Corrected by using CI-only port 1810. Earlier wrong regex `\\\\Z` was fixed before the successful run. No failures are hidden.
 - **Next micro-lot:** Core-owned authenticated actor/tenant identity and real two-tenant A/B authorization tests; then observed Checkmk/Thruk and Grafana metric provenance.
 - **Safety:** no production credentials, Debian access, deploy, merge, NGX call, remediation or LIVE command.
+
+## Integration on main — 2026-10-28 11:16 Europe/Paris
+
+- **PR #124 merged:** squash commit `5d757869a46f427b1885a19ce019ca29a18063fd`; GitHub confirmed no conflict, `mergeable_state=clean` and six successful push/PR checks on the exact pre-merge HEAD `a3fca1f53054ca3c990f7dc651abb4860d8a8296` before merge.
+- **Post-merge GitHub Actions:** [run 40670766548](https://github.com/alimtalbi-ata/aiops/actions/runs/40670766548), **completed/success** on exact merged SHA `5d757869a46f427b1885a19ce019ca29a18063fd`. Jobs: `policy-and-static`, `core-postgres-noc-real-integration`, `grafana-real-integration` all completed/success. Real Core/PostgreSQL HTTP tests: 5 OK (integration is limited to synthetic Run identity; not tenant ACL). No live verification.
+- **Documentation follow-up:** separate docs-only PR to record the actual merge SHA and CI, without modifying runtime code. Verify its checks independently; do not infer any PASS from this paragraph before GitHub reports them.
