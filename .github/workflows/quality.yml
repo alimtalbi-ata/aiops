@@ -29,6 +29,7 @@ jobs:
       - name: Policy safety unit tests
         env:
           PYTHONPATH: app
+          AIOPS_POLICY_STATE_DB: ${{ runner.temp }}/aiops-policy-safety.sqlite3
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
