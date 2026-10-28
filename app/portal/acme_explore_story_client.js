@@ -49,7 +49,7 @@
     for (const step of data.timeline) {
       if (!step || typeof step !== "object" || step.status !== "MISSING" ||
           !["cue", "service", "view"].every(k => typeof step[k] === "string" &&
-          /^[a-z_]{2,50}$/.test(step[k]))) return false;
+          /^[a-z][a-z0-9_]{1,49}$/.test(step[k]))) return false;
     }
     const expected = data.timeline[data.cursor];
     return data.step && ["cue", "service", "view", "status"].every(k => data.step[k] === expected[k]);
