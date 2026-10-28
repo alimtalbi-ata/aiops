@@ -137,9 +137,20 @@ def _reject_nonfinite_json(_value: str) -> None:
 def decode_impact_json(raw: bytes) -> object:
     """Strict UTF-8 JSON: ambiguous or non-finite topology is never qualified."""
     try:
-        return json.loads(raw.decode("utf-8"),
-                          object_pairs_hook=_unique_json_object,
-                          parse_constant=_reject_nonfinite_json)
+        value = json.loads(raw.decode("utf-8"),
+                           object_pairs_hook=_unique_json_object,
+                           parse_constant=_reject_nonfinite_json)
+        # CPython may accept thousands of nested arrays before its own
+        # recursion limit. Bound nesting iteratively to avoid relying on it.
+        pending = [(value, 0)]
+        while pending:
+            item, depth = pending.pop()
+            require(depth <= 64, "excessive_twin_json_nesting")
+            if type(item) is dict:
+                pending.extend((v, depth + 1) for v in item.values())
+            elif type(item) is list:
+                pending.extend((v, depth + 1) for v in item)
+        return value
     except QualificationError:
         raise
     except (ValueError, UnicodeError, RecursionError):

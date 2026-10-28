@@ -175,12 +175,14 @@ class TwinImpactRealIntegration(unittest.TestCase):
              "nonfinite_twin_json"),
             ("invalid_utf8", original + b'\xff', "invalid_json"),
             ("truncated", original[:-1], "invalid_json"),
-            ("too_deep", b"[" * 1200 + b"]" * 1200, "invalid_json"),
+            ("too_deep", b"[" * 1200 + b"]" * 1200,
+             "excessive_twin_json_nesting"),
         )
         for name, raw, expected in variants:
-            with self.subTest(case=name), self.assertRaises(QualificationError) as ctx:
-                decode_impact_json(raw)
-            self.assertEqual(str(ctx.exception), expected)
+            with self.subTest(case=name):
+                with self.assertRaises(QualificationError) as ctx:
+                    decode_impact_json(raw)
+                self.assertEqual(str(ctx.exception), expected)
 
     def test_qualifier_never_uses_ambient_proxy_for_loopback_token(self):
         # Real Twin/PostgreSQL CI integration; proxy points to an unavailable

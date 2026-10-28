@@ -26,7 +26,7 @@ un appel anonyme attendu HTTP 401, puis une lecture authentifiée
 ni mutation, ni action LIVE. La réponse est bornée à 256 KiB, avec
 `Cache-Control: no-store`. Le décodeur JSON exige UTF-8, refuse les clés
 dupliquées à toute profondeur (notamment `edge_id`), `NaN`, `Infinity`,
-`-Infinity`, les corps tronqués et les structures trop profondes. Un
+`-Infinity`, les corps tronqués et les structures dépassant 64 niveaux. Un
 JSON ambigu est `BLOCKED / NO_GO`, jamais une preuve topologique.
 Le jeton n'est jamais imprimé.
 
