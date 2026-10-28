@@ -7,6 +7,7 @@ import hashlib
 from contextlib import contextmanager
 import hmac
 import json
+import math
 import secrets
 import sqlite3
 from datetime import datetime, timezone
@@ -267,13 +268,26 @@ def read_status(path, *, proposal_id, now=None):
     try:
         with sqlite3.connect(uri, uri=True, timeout=5) as db:
             db.execute("PRAGMA query_only=ON")
+            # Keep proposal, approval, receipt and audit in one read snapshot.
+            db.execute("BEGIN")
             row = db.execute("""SELECT incident_id,run_id,recipe_id,target_id,
                 params_hash,binding_hash,mode,created_at,expires_at,proposer_id
                 FROM proposals WHERE proposal_id=?""", (proposal_id,)).fetchone()
             if row is None:
                 raise HITLRejected("proposal not found")
             incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, mode, created, expires, proposer_id = row
-            if mode not in MODES or recipe_id not in RECIPES or at < created or expires <= created:
+            # A read-only projection is still a trust boundary for the portal:
+            # never display an approval from a malformed or extended proposal.
+            try:
+                for value in (incident_id, run_id, recipe_id, target_id, proposer_id):
+                    _identity(value)
+            except HITLRejected as exc:
+                raise HITLRejected("invalid stored proposal identity") from exc
+            if (mode not in MODES or recipe_id not in RECIPES
+                or not all(isinstance(t, (int, float)) and not isinstance(t, bool)
+                           for t in (created, expires))
+                or not all(math.isfinite(t) for t in (created, expires))
+                or at < created or not 1 <= expires - created <= 3600):
                 raise HITLRejected("invalid proposal state")
             if (not isinstance(params_hash, str) or len(params_hash) != 64
                 or any(c not in "0123456789abcdef" for c in params_hash)):
@@ -305,10 +319,19 @@ def read_status(path, *, proposal_id, now=None):
                 expected.append("DRY_RUN_PLAN_ISSUED")
             if receipt and not approval or [a[0] for a in audit] != expected:
                 raise HITLRejected("inconsistent HITL audit")
-            if approval and (approval[0] == proposer_id or not created <= approval[1] < expires):
-                raise HITLRejected("invalid approval timestamp")
-            if receipt and not approval[1] <= receipt[1] < expires:
-                raise HITLRejected("invalid receipt timestamp")
+            if approval:
+                _identity(approval[0])
+                if (approval[0] == proposer_id
+                    or not isinstance(approval[1], (int, float))
+                    or not math.isfinite(approval[1])
+                    or not created <= approval[1] < expires):
+                    raise HITLRejected("invalid approval timestamp")
+            if receipt:
+                _identity(receipt[0])
+                if (not isinstance(receipt[1], (int, float))
+                    or not math.isfinite(receipt[1])
+                    or not approval[1] <= receipt[1] < expires):
+                    raise HITLRejected("invalid receipt timestamp")
             expected_actors = [proposer_id] + ([approval[0]] if approval else []) + (
                 ["sandbox-lab"] if receipt else []
             )

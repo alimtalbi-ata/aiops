@@ -119,3 +119,12 @@ Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/
 - Portage de principe ciblé depuis PR #36 : réservation/fence sans effet réel, pas de code massif ni second contrôle LIVE. Le mécanisme est une barrière sandbox, **pas** une preuve cryptographique d'intégrité contre l'administrateur SQLite.
 - Branche `fix/hitl-approval-preflight-20261028-0526`, base PR #84, PR #89 en brouillon. `quality.yml` existant couvre `test_hitl_lab.py`. La qualification GitHub Actions est à vérifier sur le HEAD final; aucun test conteneurisé Core/Temporal/RBAC et aucune preuve LIVE.
 - Prochaine étape : identité Core/RBAC vérifiée, Run canonique et Evidence append-only, tests d'intégration réels en conteneurs. Ne pas fusionner la pile #49/#79/#84/#89 sans résoudre ses conflits et qualifier les dépendances.
+
+
+## 2026-10-28 06:22 Europe/Paris — HITL read-only status preflight (stacked draft PR #95)
+
+- read_status refuse les identités persistées malformées, TTL hors 1–3600 s, horodatages non numériques/non finis, et incohérences des dates approbation/reçu. La lecture proposal/approval/receipt/audit utilise un seul snapshot SQLite en transaction read-only.
+- Deux tests négatifs ajoutés à tests/test_hitl_story.py : expiration prolongée, horloges malformées et dates d'approbation/reçu invalides. Les tests existants Golden Demo sont conservés.
+- PR #95 empilée sur #89 → #84 → #79 → #49, sans import massif de #36. Le principe fail-closed sans effet reste conforme au fence SIMULATION_ONLY de #36.
+- Qualification : workflow .github/workflows/quality.yml existant, étape HITL Golden Demo ; résultat exact du dernier HEAD dans docs/automation-runs/20261028-0622-hitl.md. Aucun E2E Core/Temporal/RBAC/Evidence, aucune preuve cryptographique contre un propriétaire SQLite, aucun déploiement Debian.
+- Suite : relier l'identité authentifiée et le Run canonique à Evidence append-only, sans activer LIVE ; conserver UNKNOWN/NOT_EXECUTED.

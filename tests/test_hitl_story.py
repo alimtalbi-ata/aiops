@@ -14,7 +14,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.shared.hitl_lab import HITLRejected, approve, initialize, propose, read_status
+from app.shared.hitl_lab import HITLRejected, approve, dry_run, initialize, propose, read_status
 from demo.hitl_golden_demo import build_story
 from portal.hitl_demo_read_model import router, validate_story
 
@@ -208,6 +208,60 @@ class HITLStoryTests(unittest.TestCase):
                            (p["proposal_id"], "FORGED", "attacker", now.timestamp()))
             with self.assertRaises(HITLRejected):
                 read_status(path, proposal_id=p["proposal_id"], now=now)
+
+
+    def test_readonly_rejects_forged_ttl_and_malformed_proposal_clock(self):
+        now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+        binding = dict(incident_id="INC-1", run_id="RUN-1",
+                       recipe_id="acme.demo.restart-service.v1",
+                       target_id="VM-1", params={"service": "api"}, mode="DEMO")
+        for column, value in (("expires_at", now.timestamp() + 7200),
+                              ("created_at", "not-a-clock"),
+                              ("expires_at", float("inf"))):
+            with self.subTest(column=column, value=value), tempfile.TemporaryDirectory() as tmp:
+                path = str(Path(tmp) / "lab.sqlite")
+                initialize(path)
+                p = propose(path, proposer_id="alice", now=now, **binding)
+                approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                        approver_role="approver", now=now)
+                with sqlite3.connect(path) as db:
+                    db.execute("DROP TRIGGER proposals_immutable_update")
+                    db.execute(f"UPDATE proposals SET {column}=? WHERE proposal_id=?",
+                               (value, p["proposal_id"]))
+                with self.assertRaisesRegex(HITLRejected, "invalid proposal state"):
+                    read_status(path, proposal_id=p["proposal_id"], now=now)
+
+    def test_readonly_rejects_malformed_approval_or_receipt_clock(self):
+        now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+        binding = dict(incident_id="INC-1", run_id="RUN-1",
+                       recipe_id="acme.demo.restart-service.v1",
+                       target_id="VM-1", params={"service": "api"}, mode="DEMO")
+        for phase in ("approval", "receipt"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp:
+                path = str(Path(tmp) / "lab.sqlite")
+                initialize(path)
+                p = propose(path, proposer_id="alice", now=now, **binding)
+                a = approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                            approver_role="approver", now=now)
+                if phase == "receipt":
+                    dry_run(path, proposal_id=p["proposal_id"],
+                            approval_token=a["approval_token"], now=now, **binding)
+                with sqlite3.connect(path) as db:
+                    db.execute("DROP TRIGGER audit_immutable_update")
+                    if phase == "approval":
+                        db.execute("DROP TRIGGER approvals_immutable_update")
+                        db.execute("UPDATE approvals SET approved_at='invalid' WHERE proposal_id=?",
+                                   (p["proposal_id"],))
+                        action = "APPROVED_SANDBOX_ONLY"
+                    else:
+                        db.execute("DROP TRIGGER dry_runs_immutable_update")
+                        db.execute("UPDATE dry_runs SET consumed_at='invalid' WHERE proposal_id=?",
+                                   (p["proposal_id"],))
+                        action = "DRY_RUN_PLAN_ISSUED"
+                    db.execute("UPDATE audit SET recorded_at='invalid' WHERE proposal_id=? AND action=?",
+                               (p["proposal_id"], action))
+                with self.assertRaisesRegex(HITLRejected, "invalid (approval|receipt) timestamp"):
+                    read_status(path, proposal_id=p["proposal_id"], now=now)
 
 
 class HITLPortalTests(unittest.TestCase):
