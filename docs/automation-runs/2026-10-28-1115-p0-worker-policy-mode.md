@@ -30,3 +30,9 @@
 
 ## Prochain micro-lot
 Réconcilier sélectivement le HITL sandbox #49→#106 sur `main`, raccorder identité opérateur et IDs Core au workflow Temporal sandbox, puis afficher des étapes HITL/REMEDIATE/VERIFY explicitement SIMULATED/NOT_EXECUTED, avec vrais conteneurs éphémères pour Core/Temporal/Policy/Twin/Evidence et tests de refus/rejeu. Aucune commande libre LLM ni effet LIVE.
+
+## Qualification GitHub Actions vérifiée après exécution
+
+- Commit code+journal initial `fdcf54d6a5f2c1234345d4a098d5e309d498117c` : [quality #40670937204](https://github.com/alimtalbi-ata/aiops/actions/runs/40670937204) — trois jobs terminés **success** : `policy-and-static` (dont le nouveau test Worker, compilation, Policy, portail, audit et Compose), `core-postgres-noc-real-integration` (Core HTTP + PostgreSQL éphémères) et `grafana-real-integration` (Grafana HTTP éphémère). Vérification des étapes de `policy-and-static` : chaque étape terminée `success`.
+- Commit de documentation et référence PR `0461631c72032054b3fa3dbb813d4eec89495946` : [quality #40670987107](https://github.com/alimtalbi-ata/aiops/actions/runs/40670987107) — mêmes trois jobs **completed/success** vérifiés.
+- La présente mise à jour de journal crée un nouveau commit et déclenche potentiellement un autre run : son statut devra être vérifié séparément avant toute fusion. Ces succès ne prouvent pas le couplage Worker/Temporal/HITL ; Core/PostgreSQL et Grafana ont été exercés dans des jobs indépendants.
