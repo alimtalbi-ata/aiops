@@ -296,6 +296,44 @@ class NocRuntimeRouteTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not allowlisted"):
                 noc_runtime.read_signed_noc_snapshot()
 
+    def test_cleartext_non_loopback_upstreams_fail_before_network(self):
+        # Valid credentials and an exact allowlist must not make HTTP safe.
+        for origin in (
+            "http://noc.example.test",
+            "http://aiops2-noc:8080",
+            "http://169.254.169.254",
+            "http://localhost.evil.example",
+            "http://127.0.0.2:8080",
+        ):
+            with self.subTest(origin=origin):
+                env = {
+                    "AIOPS_NOC_READ_MODEL_URL": origin + "/api/read-model",
+                    "AIOPS_NOC_READ_MODEL_TOKEN": TOKEN,
+                    "AIOPS_NOC_READ_MODEL_HMAC_KEY": HMAC_KEY,
+                    "AIOPS_NOC_ALLOWED_ORIGINS": origin,
+                }
+                with patch.dict(os.environ, env), patch.object(
+                    noc_runtime.urllib.request, "build_opener",
+                    side_effect=AssertionError("cleartext must never connect"),
+                ):
+                    with self.assertRaisesRegex(ValueError, "require HTTPS"):
+                        noc_runtime.read_signed_noc_snapshot()
+
+    def test_https_and_explicit_loopback_origins_preserve_existing_contract(self):
+        for endpoint, expected in (
+            ("https://noc.example.test/api/read-model", ORIGIN),
+            ("http://localhost:9000/api/read-model", "http://localhost:9000"),
+            ("http://127.0.0.1:9000/api/read-model", "http://127.0.0.1:9000"),
+            ("http://[::1]:9000/api/read-model", "http://[::1]:9000"),
+        ):
+            with self.subTest(endpoint=endpoint):
+                actual, _ = noc_runtime._canonical_origin(endpoint, endpoint=True)
+                self.assertEqual(actual, expected)
+                self.assertEqual(
+                    noc_runtime._canonical_origin(expected, endpoint=False)[0],
+                    expected,
+                )
+
     def test_redirect_handler_never_follows_upstream_redirects(self):
         handler = noc_runtime._NoRedirect()
         self.assertIsNone(
