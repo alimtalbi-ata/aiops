@@ -222,6 +222,40 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertNotIn("EVD-CI-LEDGER-NO-EVENT", denied.text)
         self.assertEqual(denied.headers["cache-control"], "no-store")
 
+    def test_future_dated_evidence_refused_by_real_core_and_portal(self):
+        # Change a real PostgreSQL timestamptz in this ephemeral CI database.
+        # Restore it even on assertion failure; no production service is touched.
+        with psycopg.connect(DSN) as conn:
+            original = conn.execute(
+                "select known_at from aiops.evidence where evidence_id=%s",
+                (EVIDENCE,),
+            ).fetchone()[0]
+            conn.execute(
+                "update aiops.evidence set known_at=now() + interval '1 day' "
+                "where evidence_id=%s", (EVIDENCE,),
+            )
+        try:
+            core = requests.get(
+                CORE + "/api/noc/runs/" + RUN + "/evidence-refs",
+                headers={"Authorization": "Bearer " + INTERNAL},
+                timeout=5, allow_redirects=False,
+            )
+            self.assertEqual(core.status_code, 503, core.text)
+            self.assertNotIn(EVIDENCE, core.text)
+            portal = self.read(PORTAL)
+            self.assertEqual(portal.status_code, 503, portal.text)
+            self.assertEqual(portal.json(), {"status": "UNKNOWN",
+                                             "reason": "ledger_unavailable"})
+            self.assertEqual(portal.headers["cache-control"], "no-store")
+            for private in (EVIDENCE, INTERNAL, VIEWER):
+                self.assertNotIn(private, portal.text)
+        finally:
+            with psycopg.connect(DSN) as conn:
+                conn.execute(
+                    "update aiops.evidence set known_at=%s where evidence_id=%s",
+                    (original, EVIDENCE),
+                )
+
     def test_real_upstream_401_becomes_unknown_without_leak(self):
         # Second real Portal process deliberately has a different CI-only
         # internal token; Core must reject its request, not the viewer token.
