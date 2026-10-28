@@ -57,7 +57,8 @@ def build_acme_scenario_contract(model: dict[str, Any]) -> dict[str, Any]:
     if type(checkpoints) is not list or len(checkpoints) != len(CUES):
         raise ValueError("invalid synthetic checkpoint sequence")
     events = []
-    for sequence, ((cue, service, view, expected_state), checkpoint) in enumerate(\n            zip(EXPECTED_CHECKPOINTS, checkpoints), start=1):
+    for sequence, ((cue, service, view, expected_state), checkpoint) in enumerate(
+            zip(EXPECTED_CHECKPOINTS, checkpoints), start=1):
         if (type(checkpoint) is not dict
                 or checkpoint.get("cue") != cue
                 or checkpoint.get("status") != "MISSING"
@@ -72,7 +73,8 @@ def build_acme_scenario_contract(model: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("noncanonical synthetic checkpoint target")
         events.append({
             "id": f"SIM-EVT-ACME-{sequence:03d}",
-            "sequence": sequence, "cue": cue, "service": service, "view": view,\n            "expected_state": expected_state,
+            "sequence": sequence, "cue": cue, "service": service, "view": view,
+            "expected_state": expected_state,
             "incident_id": SOURCE_INCIDENT_ID,
             "impact_incident_id": TARGET_INCIDENT_ID,
             "status": "MISSING", "event_timestamp_utc": None,
