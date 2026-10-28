@@ -172,10 +172,21 @@ def dry_run(path, *, proposal_id, approval_token, incident_id, run_id, recipe_id
     at = _now(now)
     with _connect(path) as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("""SELECT p.binding_hash,p.expires_at,a.token_hash,a.approved_at
+        row = db.execute("""SELECT p.incident_id,p.run_id,p.recipe_id,p.target_id,
+                   p.params_hash,p.mode,p.binding_hash,p.created_at,p.expires_at,
+                   a.token_hash,a.approved_at
             FROM proposals p JOIN approvals a ON a.proposal_id=p.proposal_id
             WHERE p.proposal_id=?""", (proposal_id,)).fetchone()
-        if row is None or at >= row[1] or at < row[3] or not hmac.compare_digest(row[0], digest) or not hmac.compare_digest(row[2], hashlib.sha256(approval_token.encode()).hexdigest()):
+        # Never trust the stored binding_hash alone. A damaged SQLite record
+        # could retain the old hash while changing the underlying proposal.
+        expected_fields = (incident_id, run_id, recipe_id, target_id, params_hash, mode)
+        if (row is None or row[:6] != expected_fields
+            or not isinstance(row[6], str) or not isinstance(row[9], str)
+            or not all(isinstance(row[i], (int, float)) for i in (7, 8, 10))
+            or not row[7] <= row[10] <= at < row[8]
+            or not 1 <= row[8] - row[7] <= 3600
+            or not hmac.compare_digest(row[6], digest)
+            or not hmac.compare_digest(row[9], hashlib.sha256(approval_token.encode()).hexdigest())):
             raise HITLRejected("approval missing, expired or binding mismatch")
         if db.execute("SELECT 1 FROM dry_runs WHERE proposal_id=?", (proposal_id,)).fetchone():
             raise HITLRejected("approval already consumed")
