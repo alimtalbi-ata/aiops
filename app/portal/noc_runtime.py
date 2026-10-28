@@ -138,6 +138,8 @@ _TENANT_SCOPE_NAMES = frozenset({
     "account", "accountid", "accountname",
     "customer", "customerid", "customername",
     "tenantaclqualified", "aclqualified",
+    "orgref", "organizationref", "workspaceref",
+    "accountref", "customerref",
 })
 
 
@@ -156,7 +158,11 @@ def _reject_unqualified_tenant_scope(value: object) -> None:
                     r"[^a-z0-9]", "", unicodedata.normalize("NFKC", key).casefold()
                 )
                 if (normalized in _TENANT_SCOPE_NAMES
-                        or normalized.startswith(("tenant", "organization", "workspace"))):
+                        or normalized.startswith(("tenant", "organization", "workspace"))
+                        or normalized.endswith((
+                            "tenant", "tenantid", "orgid", "organizationid",
+                            "workspaceid", "accountid", "customerid",
+                        ))):
                     raise ValueError("tenant-scoped NOC source requires qualified ACL")
                 pending.append(child)
         elif isinstance(item, list):

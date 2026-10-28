@@ -84,6 +84,27 @@ class TenantScopeFenceTests(unittest.TestCase):
                     signed_project(data)
                 self.assertNotIn("secret-", str(caught.exception))
 
+    def test_indirect_scope_aliases_rejected_before_projection(self):
+        # A signed envelope is not an ACL decision, even for indirect claims.
+        for key in ("ownerTenantId", "source_tenant", "projectTenantID",
+                    "orgRef", "organizationRef", "workspaceRef",
+                    "accountRef", "customerRef", "billingAccountID"):
+            with self.subTest(key=key):
+                data = payload()
+                data["extra"] = {"metadata": [{key: "SECRET-OTHER-TENANT"}]}
+                with self.assertRaisesRegex(ValueError, "qualified ACL") as caught:
+                    signed_project(data)
+                self.assertNotIn("SECRET-OTHER-TENANT", str(caught.exception))
+
+    def test_unrelated_metadata_does_not_change_unscoped_contract(self):
+        data = payload()
+        data["extra"] = {"organelle": "non-scope",
+                         "accounting_state": "demo",
+                         "customer_impact": "synthetic"}
+        view = signed_project(data)
+        self.assertEqual(view["source_authentication"], "HMAC_SHA256_VERIFIED")
+        self.assertFalse(view["live_remediation_authorized"])
+
     def test_bounded_scan_refuses_oversized_nested_metadata(self):
         data = payload()
         data["extra"] = [{} for _ in range(4200)]
