@@ -129,7 +129,7 @@ class DemoV2Tests(unittest.TestCase):
                      "started_at": "2026-10-21T13:21:01+00:00"},
              "events": []}, {}, {"items": []})
         self.assertIn("Fraîcheur RUNNING — INCONNU", page)
-        self.assertIn("chronologie Core", page)
+        self.assertIn("Intégrité de la chronologie", page)
         self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
     def test_truncated_first_sequence_is_unknown_even_with_old_events(self):
