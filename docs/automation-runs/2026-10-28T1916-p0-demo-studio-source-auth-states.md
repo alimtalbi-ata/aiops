@@ -18,7 +18,11 @@
 ## Contrat et qualification
 
 - Contrat interne additif `_get` : `{status: UNKNOWN, error_type: HTTPError, http_status: <int>}` si le transport HTTP a réellement répondu en erreur. En cas de timeout ou de réponse absente, `http_status` absent. Aucun changement d'API publique.
-- **CI : PENDING / NOT_TESTED au moment de ce journal**. Vérifier les runs de `.github/workflows/quality.yml` sur le SHA final de la PR, puis compléter la qualification avant toute fusion. Tests locaux de dépôt : **NOT_TESTED** (travail via connecteur GitHub, pas de checkout local authentifié).
+- Correctifs CI supplémentaires : `adb5e44d0ab72f3f4e91eec5fbd3d2c81d021a61` (rétablissement de `PYTHONPATH=.:app` dans le job existant), `95af50f52a6f748486864ad70c5483d356538990` (exécution du test UI avant la suite Policy historique).
+- [GitHub Actions quality #40743527063](https://github.com/alimtalbi-ata/aiops/actions/runs/40743527063) : échec `ModuleNotFoundError: policy` avant les tests UI ; corrigé dans le workflow.
+- [GitHub Actions quality #40743633120](https://github.com/alimtalbi-ata/aiops/actions/runs/40743633120) : la suite Policy historique échoue (11 assertions, notamment `BLOCKED != PASS`) ; test UI non atteint. Ce n'est **pas** une CI verte.
+- [GitHub Actions quality #40743801299](https://github.com/alimtalbi-ata/aiops/actions/runs/40743801299) sur `95af50f52a6f748486864ad70c5483d356538990` : **5/5 tests ciblés exécutés, OK confirmé dans les logs du job quality-build-package**, puis échec des 11 assertions Policy historiques. Workflow global **NON PASS / en cours** à la rédaction ; ne pas fusionner. Les suites Policy échouent hors du périmètre UI ; ne pas modifier leurs assertions pour masquer les refus de sécurité.
+- Tests locaux de dépôt : **NOT_TESTED** (travail via connecteur GitHub, pas de checkout local authentifié). Vérifier la CI du commit final de journal avant toute promotion.
 - **NOT_TESTED** : E2E ACME Core/Twin/GLPI/Temporal, isolation tenant réelle, navigateur du Demo Studio V2, capture authentifiée, vidéo finale, lecture ai-ledger autorisée. Aucun 401 de production n'est prétendu avoir été reproduit par ce code.
 - La seule chaîne SAN→Payments autorisée ici est celle qui possède des sources réelles vérifiables. L'impact Twin SAN-A connu reste limité à la racine ; ne pas inventer de causalité Payments.
 - Risques : branche V2 historique divergente de `main` ; ne pas fusionner sur `main` directement. La PR doit d'abord passer ses checks puis être réconciliée sélectivement avec les évolutions récentes.
