@@ -78,3 +78,19 @@ The five-application Playwright adapter now fails closed when the declared Run/I
 ## 2026-10-28 02:47 — P0 Evidence Studio request fence (draft PR #43)
 
 Portage ciblé depuis PR #36 : seules les ressources `stylesheet/script/font/image/xhr/fetch` peuvent emprunter la liste GET exacte du plan de capture. Navigation document secondaire, EventSource et type absent/inconnu refusés au niveau du contexte Playwright. Test négatif pour les URL de ressources avec query, qui restent interdites par le validateur d'URL. Les tests sont ajoutés à la suite offline déjà appelée par `.github/workflows/quality.yml` sur la PR #43 ; l'exécution de la suite sur ce HEAD n'est pas confirmée et aucune preuve LIVE n'est produite. PR #43 toujours draft et non fusionnable, pas de déploiement. Voir `docs/automation-runs/2026-10-28-0247-video-evidence.md`.
+
+## 2026-10-28 03:46 CET — P0 snapshot pinning (stacked draft PR #81)
+
+Branche `fix/evidence-pinned-inputs-20261028-0346` créée depuis le HEAD exact
+de PR #43 (`7b1664b555aaf27c7cc13fa7049d7955f46463a1`), sans modifier la
+branche des autres créneaux. Le bundle MP4/SRT revalide les cinq captures
+après copie par descripteur `O_NOFOLLOW` vers un staging privé, puis ne rend
+que ces copies. Le changement protège la cohérence octets-vérifiés / octets-encodés
+contre les modifications de fichiers sources entre vérification et FFmpeg.
+Les sept tests snapshot ont réussi localement sur le module isolé (hors ligne);
+la compilation Python locale a réussi. La suite du vrai dépôt, l'encodage FFmpeg
+intégré et GitHub Actions sur le nouveau HEAD restent à qualifier. Pas de
+capture authentifiée, pas d'accès Debian, pas de fusion, pas de LIVE.
+La PR #81 est empilée sur #43 ; lorsque #43 sera stabilisée, porter ce petit
+correctif vers `main` après revue et CI. Journal :
+`docs/automation-runs/2026-10-28-0346-video-evidence.md`.
