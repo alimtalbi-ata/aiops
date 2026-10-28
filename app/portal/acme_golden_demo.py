@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from portal.acme_impact_read_model import build_acme_impact_read_model
 
-RUN_ID = re.compile(r"RUN-[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\\Z")
+RUN_ID = re.compile(r"RUN-[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z")
 SCENARIO_ID = "SCN-GOLDEN-PAYMENT-P1"  # Existing seeded Core scenario, not fixture CI IDs.
 
 
