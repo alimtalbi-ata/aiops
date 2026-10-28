@@ -18,8 +18,8 @@
 ## Tests et preuves
 
 - Workflow existant `.github/workflows/quality.yml` réutilisé ; aucun workflow CI parallèle ajouté.
-- [GitHub Actions run 40616145232](https://github.com/alimtalbi-ata/aiops/actions/runs/40616145232), sur HEAD `cca5b451` : **IN_PROGRESS au moment de cette entrée** ; ne pas déclarer PASS avant conclusion réelle.
-- Tests ajoutés (non qualifiés tant que CI non terminée) : ordre déterministe, alternative manquante `UNKNOWN`, interdiction LIVE, dépendances invalides, HTML hostile/XSS, route JSON et montage portail.
+- [GitHub Actions run 40616145232](https://github.com/alimtalbi-ata/aiops/actions/runs/40616145232), sur HEAD `cca5b451` : **COMPLETED/SUCCESS vérifié** sur ce SHA (2026-10-28 02:37 Europe/Paris). Job `policy-and-static` 122578978090, toutes les étapes SUCCESS, dont 14 tests ACME (`Ran 14 tests ... OK`), compilation, tests Policy/NOC, audit statique et `docker compose config`. Les cinq nouveaux cas ont chacun été journalisés `ok` dans les logs. Cela ne qualifie aucun service runtime.
+- Tests ajoutés (exécutés en CI sur le commit de code/docs `cca5b451`) : ordre déterministe, alternative manquante `UNKNOWN`, interdiction LIVE, dépendances invalides, HTML hostile/XSS, route JSON et montage portail.
 - Test local non exécuté : le conteneur d'analyse ne résout pas `github.com` pour `git ls-remote` (DNS). L'exécution effective des tests dépend de GitHub Actions.
 - **NOT_TESTED/BLOCKED** : conteneurs réels Checkmk/Thruk/GLPI/Core/Temporal/n8n/Grafana, capture navigateur authentifiée, ticket GLPI réel, intégration complète, Debian, NIM 192B et Ollama 4B. Les tests unitaires n'en simulent pas les intégrations.
 
@@ -28,3 +28,9 @@
 - La topologie est une déclaration issue du fixture, pas une observation NOC/CMDB. Une route publique de démonstration ne doit jamais contenir de données CMDB réelles sans RBAC.
 - Vérifier la conclusion CI et corriger toute régression avant revue. Pas de fusion ni de déploiement dans ce créneau.
 - Micro-lot suivant : corrélation d'identités NOC/Core/GLPI authentifiées, après qualification des services réels en CI conteneurisée et du RBAC par tenant ; conserver `UNKNOWN` si les preuves manquent.
+
+## Vérification finale
+
+- Main re-vérifié avant mise à jour de ce journal : `0603e86a26978873c3b6196098674932d3378499`.
+- CI de `cca5b451` : [run 40616145232](https://github.com/alimtalbi-ata/aiops/actions/runs/40616145232), conclusion `success` et 14/14 tests ACME réussis. Les tests conteneurisés d'intégration demeurent `NOT_TESTED`.
+- Le commit documentaire final peut déclencher un nouveau run ; son résultat doit être vérifié séparément, et ne doit pas être confondu avec celui du commit de code.
