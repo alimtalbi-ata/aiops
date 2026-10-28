@@ -149,6 +149,29 @@ class BundleAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "correlation"):
             self.run_audit()
 
+    def test_real_offline_ffmpeg_bundle_roundtrip(self):
+        """Technical FFmpeg integration only; no application screenshots."""
+        import shutil
+        from demo.evidence_video_bundle import build_bundle
+
+        self.assertIsNotNone(shutil.which("ffmpeg"), "FFmpeg required by CI")
+        self.assertIsNotNone(shutil.which("ffprobe"), "FFprobe required by CI")
+        root = self.bundle.parent
+        manifest = root / "input-manifest.json"
+        entries = [{**entry, **self.receipt["correlation"]}
+                   for entry in self.receipt["captures"]]
+        manifest.write_text(json.dumps({"schema_version": 1,
+                            "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
+                            "captures": entries}), encoding="utf-8")
+        rendered = root / "rendered"
+        rendered.mkdir(mode=0o700)
+        built = build_bundle(self.captures, manifest, rendered, seconds=2)
+        self.assertEqual(built["provenance"], "OPERATOR_SUPPLIED_UNATTESTED")
+        result = audit.audit_bundle(rendered, self.captures)
+        self.assertEqual(result["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+        self.assertFalse(result["runtime_authenticated"])
+        self.assertFalse(result["media_decoded_by_auditor"])
+
     def test_missing_media_rejected(self):
         self.mp4.unlink()
         with self.assertRaises(OSError):
