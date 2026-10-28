@@ -1,0 +1,13 @@
+# Automation run — 2026-10-28 19:13 CET — ACME Twin impact direction
+
+- Start HEAD `main`: `793a5a03688dcb7c1a689d07e31bea770da4bd4f` (verified twice before branch); branch `feat/p0-twin-impact-direction-20261028-1913`; PR: draft to be opened.
+- Coordination: open PR #133 (scenario v1), #127 (enterprise), #139 (NOC trace), #120 (GLPI real negative), #137 (HITL), recent Explore/Story journals, and divergent Demo Studio V2 delivery branch `e54c4e9a` reviewed. Demo Studio adds an independent `/api/twin/acme-quality` route; this change is restricted to `/api/twin/impact/{node_id}`. No cross-branch overwrite.
+- Root cause from source: `005_seed_acme.sql` stores `consumer(source_id) → dependency(target_id)`, but the old Twin impact SQL walked `source_id → target_id`, so SAN-A had no outgoing edges. This is a **source-level diagnosis**; Debian runtime remains NOT_TESTED.
+- Files: `app/twin/main.py`, `tests/test_twin_impact_real_integration.py`, `.github/workflows/quality.yml`, `docs/demo/ACME-TWIN-IMPACT-DIRECTION-V1.md`, this journal.
+- Micro-lot: reverse dependency traversal, stable minimum depths, internal bearer auth fail-closed, additive no-evidence flags; PostgreSQL 16 real ephemeral seed + real Twin Docker HTTP test within existing quality workflow.
+- API: `GET /api/twin/impact/{node_id}` now requires admin bearer token; `root` and `affected` retained, provenance/UNKNOWN fields added. Breaking auth requirement must be coordinated with portal callers; tenant ACL **NOT_QUALIFIED**.
+- Expected seeded graph: 25 nodes, 23 edges; SAN-A → storage → VM → app → service → business is **dependency reachability only**. SAN→host is **not evidenced** in seed; SAN-B redundancy not assessed. No fake link or LIVE impact claim.
+- Code/tests/docs commit: included with this journal; final SHA to be recorded after GitHub acknowledgement.
+- CI: `quality.yml` pending PR creation. Do not mark PASS until GitHub returns completed/success for exact SHA. Local test execution: NOT_TESTED (GitHub connector edits). Integration runtime Debian/Core/GLPI/Temporal, tenant A/B, actual Payments degradation, screenshots: NOT_TESTED.
+- Risks: admin bearer requirement changes access contract; legacy consumers must supply the existing configured Twin token. Depth capped at 8, no completeness claim. Source graph lacks SAN→host link. Postgres seed is CI-only and may differ from deployed graph.
+- Next micro-lot: qualify tenant-scoped server RBAC and compare authenticated Twin graph/CMDB (with explicit approval only); do not invent SAN→host dependency. Coordinate this contract with Demo Studio/Explore owners before integration.
