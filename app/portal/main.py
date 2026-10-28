@@ -1,4 +1,5 @@
 import os,json,html,uuid,hmac,re
+import requests
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -50,7 +51,14 @@ def _get(path,base=CORE):
     try:
         return get_json(base,path)
     except Exception as exc:
-        return {"status":"UNKNOWN","error_type":type(exc).__name__}
+        # Preserve only the HTTP status: never expose upstream URL, token or body.
+        failure = {"status": "UNKNOWN", "error_type": type(exc).__name__}
+        if isinstance(exc, requests.HTTPError):
+            response = exc.response
+            code = getattr(response, "status_code", None)
+            if type(code) is int and 400 <= code <= 599:
+                failure["http_status"] = code
+        return failure
 
 def _runs():
     response=_get("/api/runs")
