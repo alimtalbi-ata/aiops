@@ -5,7 +5,7 @@ SRC="${SRC:-/home/aiops/aiops-v28-demo}"
 DELIVERY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV=/home/aiops/aiops-v28-test-venv/bin/python
 OLD=aiops2-rebuild-portal
-BACKUP=aiops2-portal-rollback-v2-20261028
+BACKUP="aiops2-portal-rollback-v2-$(date -u +%Y%m%dT%H%M%SZ)-$"
 IMAGE=aiops2-portal:demo-studio-v2-20261028
 TOKEN_FILE=""
 started=0
@@ -15,9 +15,13 @@ rollback() {
   trap - ERR
   if (( started )); then
     echo "Deployment failed: restoring previous portal..."
-    docker rm -f "$OLD" >/dev/null 2>&1 || true
-    docker rename "$BACKUP" "$OLD"
-    docker start "$OLD"
+    if docker inspect "$BACKUP" >/dev/null 2>&1; then
+      docker rm -f "$OLD" >/dev/null 2>&1 || true
+      docker rename "$BACKUP" "$OLD"
+      docker start "$OLD"
+    else
+      docker start "$OLD" >/dev/null 2>&1 || true
+    fi
   fi
   cleanup
   exit "$code"
@@ -61,9 +65,9 @@ chmod 600 "$TOKEN_FILE"
 docker inspect "$OLD" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^AIOPS_INTERNAL_TOKEN=' > "$TOKEN_FILE"
 test -s "$TOKEN_FILE"
 echo "Switching only portal (brief interruption)..."
+started=1
 docker stop "$OLD"
 docker rename "$OLD" "$BACKUP"
-started=1
 docker run -d --name "$OLD" --restart unless-stopped \
   --network aiops2-rebuild-control --network-alias aiops2-portal \
   -p 10.79.94.202:7777:777 \
@@ -84,7 +88,8 @@ for i in $(seq 1 30); do
 done
 [[ "$healthy" == 1 ]]
 curl --fail --silent --show-error --max-time 15 http://10.79.94.202:7777/demo-studio >/dev/null
-curl --fail --silent --show-error --max-time 15 http://10.79.94.202:7777/demo-studio/run/RUN-818D2B05974AE5F8 | grep -q 'Mission Control V2'
+page="$(curl --fail --silent --show-error --max-time 15 http://10.79.94.202:7777/demo-studio/run/RUN-818D2B05974AE5F8)"
+grep -q 'Mission Control V2' <<< "$page"
 started=0
 echo "SUCCESS: http://10.79.94.202:7777/demo-studio"
 echo "Rollback container retained: $BACKUP"
