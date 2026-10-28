@@ -1,12 +1,15 @@
 """Isolated ASGI/HTTP contract tests; no real upstream service is contacted."""
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 from fastapi.testclient import TestClient
-from portal.main import app
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-unit-only-portal-security-headers"}, clear=False):
+    from portal.main import app
 from portal.portal_security_headers import SECURITY_HEADERS
 
 
