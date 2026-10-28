@@ -156,3 +156,9 @@ ne constitue pas une attestation d'identité ni une revue de confidentialité.
 - A five-view capture set now requires nondecreasing declared UTC timestamps spanning at most 15 minutes; both video packaging and the independent receipt auditor reuse this gate. Tests cover the inclusive boundary, reversed clocks and simultaneous manifest/receipt rehashing.
 - This prevents accidental cross-session assembly, **not** malicious timestamp fabrication or runtime/session attestation. Playwright operator authentication, pixel privacy review, five real services, NGX/Ollama integration and LIVE remain NOT_TESTED/BLOCKED. No Debian access, deployment or remediation.
 - Use the existing `quality.yml` checks on the exact branch HEAD before merging; do not call fixtures LIVE evidence. Next: authenticated operator/session evidence and privacy review; stabilize the conflicted PR #43 chain with targeted ports.
+
+## 2026-10-28 — Evidence Studio source-manifest stable read (draft increment)
+
+- The MP4/SRT producer now shares the offline auditor's bounded, no-follow, stable regular-file reader through `demo/evidence_snapshot.py`. This prevents a manifest path swap to a symlink/FIFO and detects in-place mutation while the manifest is read; the exact accepted bytes remain bound to the receipt SHA-256.
+- Negative tests cover a symlink, FIFO, oversized manifest and mutation between descriptor checks. CI status is recorded in the dated automation journal. This is local file-integrity qualification only, **not** authenticated operator session or LIVE proof.
+- Next: independent session provenance review and reduction of the conflicted #43 stacked PR chain by targeted portage, without a massive merge.

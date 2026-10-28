@@ -17,6 +17,31 @@ def _identity(info):
             info.st_mtime_ns, info.st_ctime_ns)
 
 
+def _read_stable(path: Path, limit: int) -> bytes:
+    """Read bounded regular bytes without following a final symlink or hanging on a FIFO.
+
+    Reuse this for the original capture manifest and offline bundle audit.
+    An open descriptor is checked before/after reading and against the path.
+    """
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if not nofollow:
+        raise ValueError("O_NOFOLLOW required")
+    with os.fdopen(os.open(path, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0)), "rb") as src:
+        before = os.fstat(src.fileno())
+        if not stat.S_ISREG(before.st_mode) or not 1 <= before.st_size <= limit:
+            raise ValueError("bounded regular file required")
+        data = src.read(limit + 1)
+        after = os.fstat(src.fileno())
+        if (len(data) != before.st_size or
+                (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) !=
+                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)):
+            raise ValueError("file changed during read")
+    current = path.lstat()
+    if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (after.st_dev, after.st_ino):
+        raise ValueError("file replaced during read")
+    return data
+
+
 def pin_captures(source_root: Path, private_stage: Path, captures: list[dict]) -> Path:
     """Create owner-only regular-file snapshots; caller must verify snapshots.
 
