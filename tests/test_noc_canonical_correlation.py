@@ -50,10 +50,54 @@ class CorrelationTests(unittest.TestCase):
         self.assertFalse(result["live_remediation_authorized"])
         self.assertNotIn("private_payload", str(result))
 
-    def test_live_mode_is_never_claimed_attested(self):
-        result = noc_correlation.correlate(noc_view(), core_run("LIVE"))
-        self.assertEqual(result["data_classification"], "LIVE_MODE_UNATTESTED")
-        self.assertFalse(result["production_qualified"])
+    def test_live_mode_refused_even_when_canonical_ids_match(self):
+        with self.assertRaisesRegex(ValueError, "LIVE correlation"):
+            noc_correlation.correlate(noc_view(), core_run("LIVE"))
+
+    def test_all_synthetic_modes_remain_unattested(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            with self.subTest(mode=mode):
+                result = noc_correlation.correlate(noc_view(), core_run(mode))
+                self.assertEqual(result["state"], "MATCHED_UNATTESTED")
+                self.assertEqual(result["canonical_mode"], mode)
+                self.assertEqual(result["data_classification"], "SYNTHETIC_CANONICAL_RUN")
+                self.assertFalse(result["runtime_authenticated"])
+
+    def test_nested_and_aliased_tenant_claims_are_refused_on_both_sides(self):
+        for key in ("tenant_id", "ownerTenantId", "orgRef", "workspaceId",
+                    "accountRef", "customer_id", "tenant_acl_qualified"):
+            for side in ("noc", "core"):
+                for value in ("TENANT-PRIVATE", None):
+                    with self.subTest(key=key, side=side, value=value):
+                        noc, run = noc_view(), core_run()
+                        (noc if side == "noc" else run)["metadata"] = {
+                            "nested": [{key: value}]}
+                        with self.assertRaisesRegex(ValueError, "tenant-scoped"):
+                            noc_correlation.correlate(noc, run)
+
+    def test_scoped_run_http_refusal_redacts_identity_and_disables_cache(self):
+        run = {**core_run(), "metadata": {"ownerTenantId": "PRIVATE-TENANT-ABC"}}
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
+                noc_correlation.noc_runtime, "read_signed_noc_snapshot",
+                return_value=noc_view()), patch.object(
+                noc_correlation, "_read_core_run", return_value=run):
+            response = self.request()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"],
+                         "canonical_correlation_unavailable_or_unverified")
+        self.assertNotIn("PRIVATE-TENANT-ABC", response.text)
+        self.assertNotIn("RUN-ACME-001", response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_live_http_refusal_is_not_cached(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
+                noc_correlation.noc_runtime, "read_signed_noc_snapshot",
+                return_value=noc_view()), patch.object(
+                noc_correlation, "_read_core_run", return_value=core_run("LIVE")):
+            response = self.request()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertNotIn("RUN-ACME-001", response.text)
 
     def test_identity_mismatch_does_not_leak_canonical_ids(self):
         run = core_run()
