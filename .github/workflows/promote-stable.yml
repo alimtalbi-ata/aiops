@@ -1,0 +1,52 @@
+name: Promote qualified AIOps release to stable
+
+on:
+  workflow_run:
+    workflows:
+      - AIOps quality gates
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-aiops2-stable
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    # Never promote PR-head or feature-branch runs. The full quality workflow
+    # must finish successfully on a push to the protected main branch.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the exact qualified commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Promote only the tested commit to the approved stable branch
+        env:
+          PROMOTION_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_BRANCH" == "main" ]]
+          [[ "$PROMOTION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "${PROMOTION_SHA}^{commit}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$PROMOTION_SHA" FETCH_HEAD || {
+            echo "FAIL|qualified_commit_not_on_current_main"
+            exit 1
+          }
+          # No force push: a stale or divergent promotion must fail closed.
+          git push origin "${PROMOTION_SHA}:refs/heads/deploy/aiops2-stable"
+          echo "STABLE_PROMOTION=PASS|sha=$PROMOTION_SHA"
