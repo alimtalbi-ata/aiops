@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 from scripts.qualify_acme_twin_readonly import (QualificationError, qualify,
                                                 loopback_base, validate_impact)
@@ -153,6 +154,20 @@ class TwinImpactRealIntegration(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(json.loads(process.stdout), result)
 
+    def test_qualifier_never_uses_ambient_proxy_for_loopback_token(self):
+        # Real Twin/PostgreSQL CI integration; proxy points to an unavailable
+        # loopback listener. The bearer must go directly to Twin, not a proxy.
+        with patch.dict(os.environ, {
+            "HTTP_PROXY": "http://127.0.0.1:1",
+            "HTTPS_PROXY": "http://127.0.0.1:1",
+            "ALL_PROXY": "http://127.0.0.1:1",
+            "NO_PROXY": "",
+            "no_proxy": "",
+        }):
+            result = qualify(BASE, TOKEN)
+        self.assertEqual(result["contract_status"], "PASS")
+        self.assertEqual(result["overall"], "NO_GO")
+
     def test_readonly_qualifier_rejects_forged_paths_and_attestations(self):
         response = self.read("ACME-SAN-FABRIC-A")
         self.assertEqual(response.status_code, 200)
@@ -186,7 +201,9 @@ class TwinImpactRealIntegration(unittest.TestCase):
                     "http://localhost:811", "http://127.0.0.1:811/impact",
                     "http://user:pass@127.0.0.1:811",
                     "http://127.0.0.1:811/?token=secret",
-                    "http://127.0.0.1:99999"):
+                    "http://127.0.0.1:99999", " http://127.0.0.1:811",
+                    "http://127.0.0.1:811\n", "http://127.0.0.1:0811",
+                    "http://127.0.0.1:811\t"):
             with self.subTest(url=url), self.assertRaises(QualificationError):
                 loopback_base(url)
         with self.assertRaises(QualificationError):

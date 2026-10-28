@@ -13,7 +13,7 @@ import re
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 ROOT = "ACME-SAN-FABRIC-A"
 PATH = (
@@ -127,6 +127,9 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def loopback_base(url: str) -> str:
+    # urlsplit strips some control characters; reject non-canonical input first.
+    require(type(url) is str and re.fullmatch(r"http://127\.0\.0\.1:[1-9][0-9]{0,4}/?", url) is not None,
+            "invalid_loopback_url")
     try:
         parsed = urlsplit(url)
         port = parsed.port
@@ -147,9 +150,14 @@ def read_impact(base: str, token: str | None) -> tuple[int, object | None]:
     request = Request(base + "/api/twin/impact/" + ROOT,
                       headers=headers, method="GET")
     try:
-        response = build_opener(NoRedirect).open(request, timeout=4)
+        # Explicitly ignore HTTP(S)_PROXY/ALL_PROXY so the bearer never
+        # reaches an ambient proxy, even if NO_PROXY is empty.
+        response = build_opener(ProxyHandler({}), NoRedirect).open(request, timeout=4)
     except HTTPError as exc:
         if exc.code == 401:
+            require(exc.headers.get("Cache-Control") == "no-store"
+                    and exc.headers.get("WWW-Authenticate") == "Bearer",
+                    "invalid_anonymous_denial")
             return 401, None
         raise QualificationError("unexpected_http_status") from None
     except (URLError, TimeoutError, OSError):
