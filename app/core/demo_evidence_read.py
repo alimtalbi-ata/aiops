@@ -5,6 +5,7 @@ sources are UNKNOWN; the endpoint never returns raw evidence payloads.
 """
 import json
 import re
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 from shared.tenant_scope import reject_unqualified_tenant_scope
@@ -88,7 +89,10 @@ def register_demo_evidence_routes(app, db, auth, bearer):
                     or provenance.get("run_id") != rid
                     or not isinstance(source, str) or not _SOURCE.fullmatch(source)
                     or not isinstance(digest, str) or not _SHA.fullmatch(digest)
-                    or known_at is None or observed_at is not None):
+                    or not isinstance(known_at, datetime)
+                    or known_at.tzinfo is None or known_at.utcoffset() is None
+                    or known_at.astimezone(timezone.utc) > datetime.now(timezone.utc) + timedelta(minutes=5)
+                    or observed_at is not None):
                 _unknown()
             items.append({"evidence_id": evidence_id, "source": source,
                           "payload_sha256": digest, "known_at": known_at.isoformat()})
