@@ -1,0 +1,21 @@
+# P0 — 2026-10-28 07:56 Europe/Paris
+
+- **Dépôt / SHA de départ :** `alimtalbi-ata/aiops` ; `main` `88cb4ed01706ac09bb8e01fdceead422cab2590d` (HEAD vérifié avant branche et modifications).
+- **Branche dédiée :** `fix/p0-portal-nav-authenticated-ui-20261028-0756`. Pas de mutation de `main`.
+- **Lectures :** PR #36/#37/#39/#41/#43, continuité, architecture, décisions, catalogue, `app/portal/main.py`, registre et workflow qualité. PR #51/#57/#70/#74/#98 inspectées pour chevauchements. Portage ciblé du garde viewer NOC de PR #36 déjà dans `main`, sans merge massif.
+- **Changement :** `GET /api/portal/components` refuse les visiteurs anonymes ; le HTML public ne divulgue plus les URL d'intégration ; chargement manuel côté navigateur avec jeton à usage unique, validation de l'enveloppe et rendu DOM sans HTML injecté.
+- **Fichiers :** `app/portal/main.py`, `app/portal/portal_navigation_client.js`, `tests/test_portal_navigation_auth.py`, `.github/workflows/quality.yml`, `docs/portal/AUTHENTICATED-NAVIGATION-P0.md`, ce journal.
+- **Commits :** `065e2af8` (API + shell), `2232d955` (client), `e3b6d1c2` (tests), `f4543a08` (CI), `3c9a06bf` (docs). HEAD avant journal : `3c9a06bf46404f5dd55f9bfeba75f1129d71445a`.
+- **Tests ajoutés :** six cas TestClient (auth absente/invalide, config absente, projection non attestée, absence de fuite HTML, URL rejetée, JS sans stockage). `quality.yml` existant enrichi ; **NOT_TESTED** tant que GitHub Actions n'a pas confirmé le résultat. Tests locaux non exécutés : dépôt non clonable dans l'environnement (résolution DNS GitHub impossible).
+- **Risques / blocages :** le HTML historique lit encore Core/Twin sans RBAC ; les commandes DEMO/Copilot restent publiques. Les PR #74/#57/#70/#51 doivent être convergées. Le lien externe n'atteste jamais le service. Pas de services réels en conteneurs CI pour ce lot : `NOT_TESTED`, pas de substitution silencieuse.
+- **Prochain micro-lot :** convergence RBAC Core/Twin et commandes, tests de non-régression communs, puis vraie intégration conteneur des services hors LLM.
+- **LIVE / Debian :** aucun accès, aucune capture, aucune commande, aucun déploiement, aucun appel NGX.
+- **PR draft :** [#103](https://github.com/alimtalbi-ata/aiops/pull/103), non fusionnée ; code HEAD `e54a6f637d4e053a1f16f53d25daf3ef1511b90d` (ajout de `node --check` dans le workflow existant). Aucun conflit vérifié au moment de l'ouverture ; état de merge à recontrôler.
+- **CI réellement constatée :** [quality PR 40647140989](https://github.com/alimtalbi-ata/aiops/actions/runs/40647140989) et [quality push 40647127759](https://github.com/alimtalbi-ata/aiops/actions/runs/40647127759), `completed/success` sur `305b5bb` (tests HTTP inclus). Sur `e54a6f6`, [quality push 40647161726](https://github.com/alimtalbi-ata/aiops/actions/runs/40647161726) et [quality PR 40647166942](https://github.com/alimtalbi-ata/aiops/actions/runs/40647166942) étaient **IN_PROGRESS** au contrôle ; les étapes `node --check` et tests HTTP étaient déjà `success` dans le job push, mais le job global n'était pas encore terminé. Le commit de ce journal déclenche un nouveau contrôle, à vérifier séparément.
+
+## Validation GitHub Actions confirmée après la première rédaction
+
+- Commit de code + contrôle JS `e54a6f637d4e053a1f16f53d25daf3ef1511b90d` : [push 40647161726](https://github.com/alimtalbi-ata/aiops/actions/runs/40647161726) et [PR 40647166942](https://github.com/alimtalbi-ata/aiops/actions/runs/40647166942), **completed/success**.
+- Commit de journal `f265874377f5c27bfd8d6015c2564b63c03ca62a` : [push 40647196448](https://github.com/alimtalbi-ata/aiops/actions/runs/40647196448) et [PR 40647201738](https://github.com/alimtalbi-ata/aiops/actions/runs/40647201738), **completed/success**, job `policy-and-static` et toutes les étapes terminés avec succès (incluant `node --check`, tests navigation, policy, NOC, audit, Compose config).
+- Ces résultats valident la syntaxe et les tests contractuels in-process uniquement. **NOT_TESTED** : vraie intégration conteneurs, navigateur réel, Ollama, n8n/Thruk/Grafana/GLPI, Debian, captures et LIVE.
+- Le présent commit documentaire final déclenche à son tour des checks à vérifier ; il ne modifie aucun code exécutable.
