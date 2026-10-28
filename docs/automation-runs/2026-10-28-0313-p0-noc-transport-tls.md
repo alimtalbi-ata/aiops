@@ -19,7 +19,7 @@
 
 ## Validation et preuves
 - Tests locaux: **NOT_TESTED** (pas de checkout local de cette branche dans cette exécution).
-- GitHub Actions `quality.yml`: PR ouverte, run non encore retourné par l'API à 03:16 Europe/Paris; **PENDING/NOT_VERIFIED**. Ne pas déclarer PASS avant vérification de la conclusion du dernier HEAD. Les tests utilisent un transport factice pour prouver le refus pré-réseau : pas de véritable Checkmk/Thruk/Grafana.
+- GitHub Actions `quality.yml`: exécution [40619852022](https://github.com/alimtalbi-ata/aiops/actions/runs/40619852022) pour le SHA `7c01b6127f0a847f09348877143d7ae6c94a3546` : **completed/success**, vérifié via l'API Actions. Exécution [40619876942](https://github.com/alimtalbi-ata/aiops/actions/runs/40619876942) pour le SHA `489d418057f9c0b99aa31c27a02d2858acdd2e8f` : **completed/success**, vérifié via l'API Actions. Le job `policy-and-static` a exécuté compilation, tests NOC, tests de corrélation, tests RAG DEMO, contrôles de sécurité et Compose. Ce sont des tests unitaires/contrats et statiques, pas une intégration Checkmk/Thruk/Grafana. Le commit documentaire final de ce journal nécessite une nouvelle vérification CI.
 - Aucun secret de production, aucune commande LIVE, aucune action Debian, aucun merge, aucun déploiement.
 
 ## Risques et limites
