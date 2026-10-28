@@ -98,7 +98,7 @@ class PortalReadModelTests(unittest.TestCase):
             {"run_id": "R-1", "overall_confidence": float("nan")},
             {"run_id": "R-1", "overall_confidence": 1.5},
             {"run_id": "R-1", "scenario_id": "X" * 257},
-            {"run_id": "R-1", "status": "PASS\\r\\nInjected: true"},
+            {"run_id": "R-1", "status": "PASS\r\nInjected: true"},
             {"run_id": ""},
         )
         for row in bad_rows:
