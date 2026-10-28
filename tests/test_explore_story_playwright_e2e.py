@@ -289,5 +289,60 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
 
 
 
+    def test_06_aggregate_rejects_joint_target_and_synthetic_id_forgery(self):
+        """Both HTTP projections may agree and still contradict the canonical target."""
+        from copy import deepcopy
+        from scripts.qualify_acme_readonly import QualificationError, validate_pair
+
+        impact_response = self.context.request.get(self.base + "/api/demo/acme-impact")
+        self.assertEqual(impact_response.status, 200)
+        impact = impact_response.json()
+        story_response = self.context.request.post(
+            self.base + "/api/demo/explore-story/control",
+            headers={"Authorization": "Bearer " + VIEWER},
+            data={"action": "start", "cursor": 0, "mode": "explore"},
+        )
+        self.assertEqual(story_response.status, 200)
+        story = story_response.json()
+        self.assertEqual(validate_pair(impact, story)["overall"], "NO_GO")
+
+        for field, forged, code in (
+            ("simulation_ticket_id", "GLPI-REAL-123", "synthetic_ticket_binding_mismatch"),
+            ("simulation_ticket_provenance", "REAL_GLPI", "synthetic_ticket_binding_mismatch"),
+            ("evidence_source", "RUNTIME_EVIDENCE", "synthetic_source_provenance_mismatch"),
+            ("simulation_timestamp_provenance", "RUNTIME_CLOCK",
+             "synthetic_source_provenance_mismatch"),
+        ):
+            with self.subTest(field=field):
+                changed = deepcopy(impact)
+                changed[field] = forged
+                with self.assertRaisesRegex(QualificationError, "^" + code + "$"):
+                    validate_pair(changed, story)
+
+        for field, forged in (("service", "temporal"), ("view", "live_recovery")):
+            with self.subTest(joint_checkpoint_field=field):
+                left, right = deepcopy(impact), deepcopy(story)
+                left["checkpoint_evidence"][0][field] = forged
+                right["timeline"][0][field] = forged
+                with self.assertRaisesRegex(QualificationError, "^checkpoint_target_mismatch$"):
+                    validate_pair(left, right)
+
+        left = deepcopy(impact)
+        left["checkpoint_evidence"][0]["required_state"] = "recovered"
+        with self.assertRaisesRegex(QualificationError, "^checkpoint_target_mismatch$"):
+            validate_pair(left, story)
+
+        for field, forged in (
+            ("provider", "NGX_MISTRAL_192B_RUNTIME"),
+            ("analyst", {"status": "RUNTIME_VERIFIED"}),
+            ("critic", {"decision": "APPROVE_LIVE"}),
+        ):
+            with self.subTest(decision_field=field):
+                left = deepcopy(impact)
+                left["decision_preview"][field] = forged
+                with self.assertRaisesRegex(QualificationError, "^policy_preview_not_fail_closed$"):
+                    validate_pair(left, story)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
