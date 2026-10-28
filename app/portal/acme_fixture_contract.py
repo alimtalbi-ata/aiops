@@ -270,9 +270,93 @@ def validate_fixture(data: object) -> dict:
         "live_remediation_authorized": False,
     }
 
+
+
+def expand_enterprise_fixture(base: dict) -> dict:
+    """Deterministically extend the six-node v1 SAN scenario to 60 synthetic CIs.
+
+    The existing v1 schema, validator, canonical IDs and source fixture are
+    unchanged. Generated nodes are scenario data, never discovered inventory.
+    """
+    from copy import deepcopy
+
+    validate_fixture(base)
+    expected = {
+        "APP-PAY-01", "VM-PAY-01", "HOST-ESX-01", "VOL-PAY-01",
+        "SAN-FABRIC-A", "SAN-FABRIC-B",
+    }
+    if len(base["ci"]) != 6 or {item["id"] for item in base["ci"]} != expected:
+        raise ValueError("enterprise expansion requires the six canonical v1 CIs")
+    expanded = deepcopy(base)
+
+    def add(ident: str, kind: str, name: str, refs: list[str]) -> None:
+        expanded["ci"].append({
+            "id": ident, "kind": kind, "name": name, "depends_on": refs,
+        })
+
+    for n in range(2, 5):
+        add(f"HOST-ESX-{n:02}", "Host", f"esx-acme-{n:02}",
+            ["SAN-FABRIC-A", "SAN-FABRIC-B"])
+    for ident, host in (
+        ("VM-PAY-02", "HOST-ESX-02"), ("VM-ERP-01", "HOST-ESX-02"),
+        ("VM-CRM-01", "HOST-ESX-03"), ("VM-SHOP-01", "HOST-ESX-03"),
+        ("VM-DB-01", "HOST-ESX-04"), ("VM-OBS-01", "HOST-ESX-04"),
+    ):
+        add(ident, "VirtualMachine", ident.lower(), [host])
+    for name, vm in (
+        ("ERP", "VM-ERP-01"), ("CRM", "VM-CRM-01"),
+        ("SHOP", "VM-SHOP-01"), ("ID", "VM-OBS-01"),
+    ):
+        add(f"APP-{name}-01", "Application", f"ACME {name}", [vm])
+    for name in ("PAY", "ERP", "CRM", "SHOP", "LOG", "ID"):
+        add(f"DB-{name}-01", "Database", f"acme-{name.lower()}-db",
+            ["VM-DB-01"])
+    for name in ("ERP", "CRM", "SHOP", "LOG"):
+        add(f"VOL-{name}-01", "StorageVolume", f"{name.lower()}-data",
+            ["SAN-FABRIC-A", "SAN-FABRIC-B"])
+    for n in range(1, 5):
+        add(f"NET-EDGE-{n:02}", "Router", f"edge-{n:02}", [])
+    for n in range(1, 7):
+        add(f"NET-SW-{n:02}", "Switch", f"access-{n:02}",
+            [f"NET-EDGE-{((n - 1) % 4) + 1:02}"])
+    for n in range(1, 5):
+        add(f"NET-FW-{n:02}", "Firewall", f"fw-{n:02}",
+            [f"NET-SW-{n:02}"])
+        add(f"NET-LB-{n:02}", "LoadBalancer", f"lb-{n:02}",
+            [f"NET-FW-{n:02}"])
+    for n in range(1, 9):
+        add(f"WS-{n:03}", "Workstation", f"acme-user-{n:03}",
+            [f"NET-SW-{((n - 1) % 6) + 1:02}"])
+    for name, app, db, lb in (
+        ("PAYMENTS", "APP-PAY-01", "DB-PAY-01", 1),
+        ("ERP", "APP-ERP-01", "DB-ERP-01", 2),
+        ("CRM", "APP-CRM-01", "DB-CRM-01", 3),
+        ("SHOP", "APP-SHOP-01", "DB-SHOP-01", 4),
+        ("IDENTITY", "APP-ID-01", "DB-ID-01", 1),
+    ):
+        add(f"SVC-{name}", "BusinessService", f"ACME {name}",
+            [app, db, f"NET-LB-{lb:02}"])
+
+    for suffix, ci, severity, title in (
+        ("ERP-003", "APP-ERP-01", "P3", "ERP intermittent (historique fictif)"),
+        ("CRM-004", "APP-CRM-01", "P3", "CRM lent (historique fictif)"),
+        ("SHOP-005", "APP-SHOP-01", "P2", "Boutique indisponible (historique fictif)"),
+        ("IDENTITY-006", "APP-ID-01", "P4", "Identité dégradée (historique fictif)"),
+    ):
+        expanded["incidents"].append({
+            "id": "ACME-DEMO-" + suffix, "ci": ci, "severity": severity,
+            "title": title, "status": "simulated",
+            "observation": "Événement pédagogique, aucune télémétrie runtime",
+            "allowed_actions": ["analyze"], "live_remediation": False,
+        })
+    if len(expanded["ci"]) != 60 or len(expanded["incidents"]) != 6:
+        raise ValueError("enterprise expansion count mismatch")
+    validate_fixture(expanded)
+    return expanded
+
 __all__ = (
     "TOP_LEVEL_FIELDS", "CI_FIELDS", "INCIDENT_FIELDS", "SAFE_ACTIONS",
     "SEVERITIES", "IDENTIFIER", "SOURCE_INCIDENT_ID", "SOURCE_CI_ID",
     "TARGET_INCIDENT_ID", "TARGET_CI_ID", "load_fixture_bytes", "load_fixture",
-    "validate_fixture",
+    "validate_fixture", "expand_enterprise_fixture",
 )
