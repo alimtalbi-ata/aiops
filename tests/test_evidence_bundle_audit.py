@@ -59,13 +59,27 @@ class BundleAuditTests(unittest.TestCase):
             "subtitles": {"file": audit.NAMES[1],
                           "sha256": hashlib.sha256(self.srt.read_bytes()).hexdigest()},
         }
+        self.manifest = root / "capture-manifest.json"
+        self.source = {
+            "schema_version": 1, "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
+            "captures": [{**entry, **self.receipt["correlation"]} for entry in entries],
+        }
+        self.write_source()
+        self.rebind_manifest_hash()
         self.write_receipt()
+
+    def write_source(self):
+        self.manifest.write_text(json.dumps(self.source), encoding="utf-8")
+
+    def rebind_manifest_hash(self):
+        self.receipt["source_manifest_sha256"] = hashlib.sha256(
+            self.manifest.read_bytes()).hexdigest()
 
     def write_receipt(self):
         (self.bundle / audit.NAMES[2]).write_text(json.dumps(self.receipt), encoding="utf-8")
 
     def run_audit(self):
-        return audit.audit_bundle(self.bundle, self.captures)
+        return audit.audit_bundle(self.bundle, self.captures, self.manifest)
 
     def test_local_bytes_verified_but_never_runtime_attested(self):
         result = self.run_audit()
@@ -196,7 +210,7 @@ class BundleAuditTests(unittest.TestCase):
         rendered.mkdir(mode=0o700)
         built = build_bundle(self.captures, manifest, rendered, seconds=2)
         self.assertEqual(built["provenance"], "OPERATOR_SUPPLIED_UNATTESTED")
-        result = audit.audit_bundle(rendered, self.captures)
+        result = audit.audit_bundle(rendered, self.captures, manifest)
         self.assertEqual(result["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
         self.assertFalse(result["runtime_authenticated"])
         self.assertFalse(result["media_decoded_by_auditor"])
@@ -217,6 +231,58 @@ class BundleAuditTests(unittest.TestCase):
         self.receipt["captures"][0] = original
         self.write_receipt()
         self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+
+    def test_source_manifest_changed_without_rehash_rejected(self):
+        self.source["captures"][0]["incident_id"] = "INC-ALTERED"
+        self.write_source()
+        with self.assertRaisesRegex(ValueError, "source capture manifest checksum"):
+            self.run_audit()
+
+    def test_rehashed_source_manifest_cannot_change_correlation_or_capture(self):
+        original = json.loads(json.dumps(self.source))
+        for field, value in (("run_id", "RUN-OTHER"),
+                             ("source_url", "https://example.invalid/other")):
+            with self.subTest(field=field):
+                self.source = json.loads(json.dumps(original))
+                self.source["captures"][0][field] = value
+                self.write_source()
+                self.rebind_manifest_hash()
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "source manifest correlation|source manifest captures"):
+                    self.run_audit()
+        self.source = original
+        self.write_source()
+        self.rebind_manifest_hash()
+        self.write_receipt()
+        self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+
+    def test_rehashed_source_manifest_live_escalation_rejected(self):
+        for key, value in (("provenance", "LIVE"),
+                           ("runtime_authenticated", True),
+                           ("production_qualified", True)):
+            with self.subTest(key=key):
+                original = self.source.get(key)
+                self.source[key] = value
+                self.write_source()
+                self.rebind_manifest_hash()
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "source capture manifest provenance"):
+                    self.run_audit()
+                if original is None:
+                    del self.source[key]
+                else:
+                    self.source[key] = original
+
+    def test_source_manifest_missing_or_symlink_rejected(self):
+        original = self.manifest.read_bytes()
+        self.manifest.unlink()
+        with self.assertRaises(OSError):
+            self.run_audit()
+        outside = self.manifest.parent / "source-real.json"
+        outside.write_bytes(original)
+        self.manifest.symlink_to(outside)
+        with self.assertRaises(OSError):
+            self.run_audit()
 
     def test_missing_media_rejected(self):
         self.mp4.unlink()
