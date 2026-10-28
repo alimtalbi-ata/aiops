@@ -106,8 +106,8 @@ def audit_bundle(bundle_dir: Path, capture_root: Path) -> dict:
             video["file"] != NAMES[0] or video["codec"] != "h264" or
             video["resolution"] != "1920x1080" or
             type(video["duration_seconds"]) not in (int, float) or
-            not math.isfinite(video["duration_seconds"]) or
-            not 10 <= video["duration_seconds"] <= 100):
+            not 10 <= video["duration_seconds"] <= 100 or
+            not math.isfinite(video["duration_seconds"])):
         raise ValueError("invalid video receipt metadata")
     if (not isinstance(subtitles, dict) or
             set(subtitles) != {"file", "sha256"} or subtitles["file"] != NAMES[1]):
