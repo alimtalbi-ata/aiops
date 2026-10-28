@@ -41,9 +41,25 @@ class RealLedgerHttpQualification(unittest.TestCase):
                 "insert into aiops.evidence(evidence_id,source,claim,confidence,provenance,"
                 "payload_hash,payload) values(%s,'CI_SYNTHETIC_SAN','Synthetic SAN CRC',"
                 "0.7,%s,%s,%s)",
-                (EVIDENCE, Jsonb({"synthetic": True, "observed": False}),
+                (EVIDENCE, Jsonb({"synthetic": True, "observed": False, "run_id": RUN}),
                  hashlib.sha256(b"CI synthetic SAN evidence").hexdigest(),
                  Jsonb({"synthetic_only": True})),
+            )
+            # A genuine Run event is required: a ledger ID alone is not a source.
+            conn.execute(
+                "insert into aiops.run_events(event_id,run_id,sequence,stage,event_type,"
+                "status,evidence_ids,payload) values(%s,%s,1,'OBSERVE','CI_SYNTHETIC',"
+                "'PASS',%s,%s)",
+                ("EVT-CI-LEDGER-SAN", RUN, Jsonb([EVIDENCE]),
+                 Jsonb({"synthetic": True})),
+            )
+            # An event on a different Run must not authorize this evidence.
+            conn.execute(
+                "insert into aiops.run_events(event_id,run_id,sequence,stage,event_type,"
+                "status,evidence_ids,payload) values(%s,%s,1,'OBSERVE','CI_CROSS_RUN',"
+                "'PASS',%s,%s)",
+                ("EVT-CI-LEDGER-CROSS", UNSOURCED, Jsonb([EVIDENCE]),
+                 Jsonb({"synthetic": True})),
             )
             ids = [EVIDENCE]
             digest = hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
@@ -161,6 +177,93 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
         for secret in (VIEWER, INTERNAL, "ci-ledger-wrong"):
             self.assertNotIn(secret, response.text)
+
+    def test_core_synthetic_evidence_refs_require_internal_auth_and_event(self):
+        url = CORE + "/api/noc/runs/" + RUN + "/evidence-refs"
+        for headers in ({}, {"Authorization": "Bearer wrong"}):
+            denied = requests.get(url, headers=headers, timeout=5,
+                                  allow_redirects=False)
+            self.assertEqual(denied.status_code, 401)
+        allowed = requests.get(url, headers={"Authorization": "Bearer " + INTERNAL},
+                               timeout=5, allow_redirects=False)
+        self.assertEqual(allowed.status_code, 200, allowed.text)
+        data = allowed.json()
+        self.assertEqual(data["schema"], "aiops.core-demo-evidence-refs.v1")
+        self.assertEqual(data["run_id"], RUN)
+        self.assertEqual(data["classification"], "SYNTHETIC_ONLY")
+        self.assertIs(data["event_link_verified"], True)
+        self.assertIs(data["tenant_acl_qualified"], False)
+        self.assertIs(data["runtime_attested"], False)
+        self.assertEqual([item["evidence_id"] for item in data["items"]], [EVIDENCE])
+        self.assertEqual(data["items"][0]["source"], "CI_SYNTHETIC_SAN")
+        self.assertEqual(len(data["items"][0]["payload_sha256"]), 64)
+        self.assertTrue(data["items"][0]["known_at"])
+        for secret in (INTERNAL, VIEWER, PRIVATE, "synthetic_only", "payload"):
+            self.assertNotIn(secret, allowed.text)
+
+    def test_core_evidence_refs_fail_closed_for_live_cross_run_and_absent(self):
+        headers = {"Authorization": "Bearer " + INTERNAL}
+        for rid in (LIVE, UNSOURCED, "RUN-CI-LEDGER-MISSING"):
+            with self.subTest(rid=rid):
+                denied = requests.get(
+                    CORE + "/api/noc/runs/" + rid + "/evidence-refs",
+                    headers=headers, timeout=5, allow_redirects=False,
+                )
+                self.assertEqual(denied.status_code, 503, denied.text)
+                self.assertNotIn(rid, denied.text)
+                self.assertNotIn(EVIDENCE, denied.text)
+
+    def test_core_evidence_refs_refuse_tenant_metadata(self):
+        tenant_run = "RUN-CI-LEDGER-TENANT"
+        tenant_evidence = "EVD-CI-LEDGER-TENANT"
+        with psycopg.connect(DSN) as conn:
+            conn.execute(
+                "insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key)"
+                " values(%s,'DEMO','CI-LEDGER-ISOLATED','CREATED',%s)",
+                (tenant_run, "ci-ledger-tenant-run"),
+            )
+            conn.execute(
+                "insert into aiops.evidence(evidence_id,source,claim,confidence,provenance,"
+                "payload_hash,payload) values(%s,'CI_SYNTHETIC_SAN','tenant-only',"
+                "0.5,%s,%s,%s)",
+                (tenant_evidence,
+                 Jsonb({"synthetic": True, "observed": False,
+                        "run_id": tenant_run, "ownerTenantId": "TENANT-B"}),
+                 hashlib.sha256(b"tenant-only-ci-evidence").hexdigest(),
+                 Jsonb({"synthetic_only": True})),
+            )
+            ids = [tenant_evidence]
+            digest = hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
+            conn.execute(
+                "insert into aiops.analysis_records(analysis_id,run_id,idempotency_key,"
+                "revision,contract_version,provider,model,prompt_version,evidence_ids,"
+                "evidence_set_hash,output,confidence,status) values(%s,%s,%s,1,'2.0',"
+                "'CI_ONLY','CI_NOT_LLM','ci',%s,%s,'{}'::jsonb,0.5,'VALID')",
+                ("ANL-CI-LEDGER-TENANT", tenant_run, "ci-ledger-tenant-analysis",
+                 Jsonb(ids), digest),
+            )
+            conn.execute(
+                "insert into aiops.critique_records(critique_id,idempotency_key,"
+                "analysis_id,run_id,contract_version,provider,model,validated,issues,"
+                "evidence_ids,output,diagnostic_confidence) values(%s,%s,%s,%s,'2.0',"
+                "'CI_ONLY','CI_NOT_LLM',false,'[]'::jsonb,%s,'{}'::jsonb,0.4)",
+                ("CRT-CI-LEDGER-TENANT", "ci-ledger-tenant-critique",
+                 "ANL-CI-LEDGER-TENANT", tenant_run, Jsonb(ids)),
+            )
+            conn.execute(
+                "insert into aiops.run_events(event_id,run_id,sequence,stage,event_type,"
+                "status,evidence_ids,payload) values(%s,%s,1,'OBSERVE','CI_TENANT',"
+                "'PASS',%s,'{}'::jsonb)",
+                ("EVT-CI-LEDGER-TENANT", tenant_run, Jsonb(ids)),
+            )
+        denied = requests.get(
+            CORE + "/api/noc/runs/" + tenant_run + "/evidence-refs",
+            headers={"Authorization": "Bearer " + INTERNAL},
+            timeout=5, allow_redirects=False,
+        )
+        self.assertEqual(denied.status_code, 503, denied.text)
+        self.assertNotIn("TENANT-B", denied.text)
+        self.assertNotIn(tenant_evidence, denied.text)
 
 
 if __name__ == "__main__":
