@@ -189,7 +189,7 @@ def get_run(rid:str):
 # Read-only, internal-only synthetic Core projection for the signed NOC join.
 # This is NOT tenant authorization or runtime observation. Existing legacy Core
 # read endpoints are outside this incremental boundary and remain unqualified.
-_NOC_CORE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\\Z")
+_NOC_CORE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z")
 _NOC_CORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache",
                      "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 
