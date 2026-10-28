@@ -39,6 +39,10 @@ test("one-shot Bearer read uses no credentials or cache; DOM is text-only", asyn
     calls.push({url, options});
     assert.equal(h.ids.get("portal-read-token").value, "");
     return {ok: true, json: async () => ({
+      schema: "aiops.portal.readmodels.v1",
+      provenance: "UNATTESTED_UPSTREAM_API_READ",
+      runtime_authenticated: false,
+      live_remediation_authorized: false,
       states: {dashboard: "READABLE_UNVERIFIED", runs: "READABLE_UNVERIFIED",
                twin: "READABLE_UNVERIFIED"},
       dashboard: {open_p1: 2, open_incidents: 4, running: 0, blocked: 0,
@@ -86,5 +90,56 @@ test("clear invalidates a pending response before it can render", async () => {
   resolve({ok: true, json: async () => ({states: {dashboard: "READABLE_UNVERIFIED"},
                                         dashboard: {open_p1: 99}})});
   await pending;
+  assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
+});
+
+test("forged or malformed bootstrap envelopes fail closed before DOM updates", async () => {
+  const base = () => ({
+    schema: "aiops.portal.readmodels.v1",
+    provenance: "UNATTESTED_UPSTREAM_API_READ",
+    runtime_authenticated: false,
+    live_remediation_authorized: false,
+    states: {dashboard: "READABLE_UNVERIFIED", runs: "READABLE_UNVERIFIED",
+             twin: "READABLE_UNVERIFIED"},
+    dashboard: {open_p1: 1, open_incidents: 2, running: 0, blocked: 0,
+                twin_nodes: 3, degraded_nodes: 0},
+    runs: {items: [{run_id: "DEMO-RUN-1", mode: "DEMO"}]},
+    twin: {nodes: 3, edges: 2}
+  });
+  const mutations = [
+    (x) => { delete x.schema; },
+    (x) => { x.provenance = "LIVE"; },
+    (x) => { x.runtime_authenticated = true; },
+    (x) => { x.live_remediation_authorized = true; },
+    (x) => { x.states.dashboard = "OK"; },
+    (x) => { x.states.runs = "UNKNOWN"; },
+    (x) => { x.dashboard.open_p1 = -1; },
+    (x) => { x.runs.items = [{run_id: ""}]; },
+    (x) => { x.twin.nodes = -3; }
+  ];
+  for (const mutate of mutations) {
+    const response = base();
+    mutate(response);
+    const h = harness(async () => ({ok: true, json: async () => response}));
+    h.ids.get("portal-read-token").value = "synthetic-token";
+    await h.window.loadPortalReadModel();
+    assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
+    assert.equal(h.ids.get("portal-twin").textContent, "UNKNOWN");
+    assert.match(h.ids.get("portal-read-result").textContent, /UNKNOWN/);
+    assert.equal(h.ids.get("portal-read-token").value, "");
+  }
+});
+
+test("all unavailable sources remain UNKNOWN even after HTTP 200", async () => {
+  const h = harness(async () => ({ok: true, json: async () => ({
+    schema: "aiops.portal.readmodels.v1",
+    provenance: "UNATTESTED_UPSTREAM_API_READ",
+    runtime_authenticated: false, live_remediation_authorized: false,
+    states: {dashboard: "UNKNOWN", runs: "UNKNOWN", twin: "UNKNOWN"},
+    dashboard: null, runs: null, twin: null
+  })}));
+  h.ids.get("portal-read-token").value = "synthetic-token";
+  await h.window.loadPortalReadModel();
+  assert.match(h.ids.get("portal-read-result").textContent, /UNKNOWN/);
   assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
 });
