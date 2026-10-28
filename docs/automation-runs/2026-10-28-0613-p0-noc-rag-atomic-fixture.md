@@ -15,7 +15,7 @@
 ## Qualification
 
 - `python -m unittest discover -s tests -p test_noc_demo_rag.py -v` : **NOT_TESTED localement** ; pas de copie exécutable complète du dépôt dans le runner de l'automatisation.
-- Workflow existant `.github/workflows/quality.yml` sur PR #93 : **PENDING** lors de la création de ce journal ; consulter le résultat GitHub avant toute déclaration PASS.
+- Workflow existant `.github/workflows/quality.yml` sur PR #93 : [run 40636995787](https://github.com/alimtalbi-ata/aiops/actions/runs/40636995787), SHA `dcc70ea5824c006778fb755776e629246dec2696`, **completed/success** ; job `policy-and-static` et toutes ses étapes `success`, y compris compilation Python, `Synthetic NOC RAG citation security and regression tests`, audit statique et validation Compose. Ceci est un résultat de tests contractuels hors ligne, pas une preuve d'intégration Checkmk/Thruk ou d'observation LIVE. Le commit de journal doit être revérifié séparément.
 - Test de services Checkmk/Thruk, Core, Grafana, Ollama 4B : **NOT_TESTED/BLOCKED** ; ce lot teste seulement un contrat local et ne présente aucun mock comme intégration.
 - Capture runtime authentifiée, démonstration vidéo et matériel NGX réel : **NOT_TESTED**.
 
