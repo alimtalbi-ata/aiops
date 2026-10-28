@@ -27,3 +27,9 @@
 - Les commandes sont des sélections de checkpoints synthétiques, pas des transitions de Run canonique. Le jeton viewer reste en mémoire JS jusqu'à effacement, sans stockage persistant ; pas de SSO ni d'ACL tenant qualifiée pour les données runtime. Toute panne ou enveloppe incohérente reste UNKNOWN.
 - Prochain micro-lot : qualifier le parcours dans un navigateur réel isolé et produire une capture vérifiable sans inventer de preuve LIVE ; ensuite intégrer Incident/Run/Evidence sous ACL tenant qualifiée.
 - Aucun merge/deploy effectué à la rédaction ; rollback : fermer la PR et conserver main intact.
+
+## Clôture vérifiée (2026-10-28, 11:29 CET)
+- La CI finale de la branche [40671515321](https://github.com/alimtalbi-ata/aiops/actions/runs/40671515321) est **SUCCESS** sur le SHA 02576f6664283df2bf13ab11d6b8e359dd82dc5f : policy-and-static, core-postgres-noc-real-integration et grafana-real-integration tous SUCCESS. Les 6 tests Python et 3 tests Node Explore/Story ont réussi dans policy-and-static.
+- PR [#131](https://github.com/alimtalbi-ata/aiops/pull/131) déclarée fusionnable par GitHub, contrôles verts vérifiés, puis fusion squash confirmée au SHA **1a70da8ddda42067c7fff84fa496f127fb2e0bba**. PR #129 fermée sans fusion.
+- CI post-fusion sur main : **NOT_VERIFIED** à la clôture (l'outil de consultation des runs est limité aux événements PR). Aucune prétention de validation LIVE ou de navigateur réel.
+- Le journal de clôture est proposé sur branche dédiée, sans écriture directe sur main.
