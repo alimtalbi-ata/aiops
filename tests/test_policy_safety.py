@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest.mock import patch
 
 from app.policy.main import Decision, evaluate
 
@@ -16,12 +18,28 @@ def decision(**overrides):
         "preconditions_verified": True,
         "fencing_verified": True,
         "human_approved": True,
+        "freeze_active": False,
     }
     values.update(overrides)
     return Decision(**values)
 
 
 class PolicySafetyTests(unittest.TestCase):
+    def setUp(self):
+        # Unit-test policy branches with a healthy NORMAL store. Production remains
+        # fail-closed when state storage is unavailable or emergency stop is active.
+        self._state = patch.object(
+            evaluate.__globals__["autonomy_store"],
+            "status",
+            return_value={"mode": "NORMAL", "revision": 0, "source": "unit-test", "healthy": True},
+        )
+        self._stop = patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "false"})
+        self._state.start()
+        self._stop.start()
+
+    def tearDown(self):
+        self._stop.stop()
+        self._state.stop()
     def test_p1_is_always_escalated_even_with_all_proofs(self):
         result = evaluate(decision(severity="P1"))
         self.assertEqual(result["state"], "BLOCKED")
