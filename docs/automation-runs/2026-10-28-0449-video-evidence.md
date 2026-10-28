@@ -30,3 +30,11 @@
 - PR #86 depends on #81 and #43, and #43 still has reported merge conflicts with main. Do not merge before parent stabilization, current HEAD CI and security review.
 - Next: independently check latest CI, qualify real FFmpeg output with this auditor, then add an operator-reviewed privacy and session attestation gate; only authorized genuine captures can advance evidence beyond UNATTESTED.
 - Rollback: close draft PR #86 / revert its files; no runtime or database changes.
+
+
+## Addendum — real offline video roundtrip
+
+- Added `test_real_offline_ffmpeg_bundle_roundtrip` to `tests/test_evidence_bundle_audit.py` at commit `d5cebb97194e2641548d72ecafb911fc2c9c1bbf`: generates five technical PNGs, calls the **actual** bundle assembler (FFmpeg/FFprobe), then audits its MP4/SRT/PNG hashes. This does not authenticate applications or prove LIVE.
+- Updated `docs/demo/EVIDENCE-MP4-SRT-BUNDLE-CONTRACT.md` at `15d6bb6434566c98776e99d12dc5e81aed8f1348` to distinguish fake hash fixtures from the real offline encoding test.
+- Earlier documentation-only CI runs completed/success: https://github.com/alimtalbi-ata/aiops/actions/runs/40629015753 and https://github.com/alimtalbi-ata/aiops/actions/runs/40629051115 . Journal HEAD `e8b7516` also completed/success: https://github.com/alimtalbi-ata/aiops/actions/runs/40629098513 .
+- New roundtrip test CI on `d5cebb9`: https://github.com/alimtalbi-ata/aiops/actions/runs/40629134956 (**in progress** when this addendum was written). Documentation HEAD `15d6bb6`: https://github.com/alimtalbi-ata/aiops/actions/runs/40629156143 (**in progress**). Do not infer success for these HEADs until GitHub confirms it.
