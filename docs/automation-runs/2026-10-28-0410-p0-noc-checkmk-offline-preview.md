@@ -35,3 +35,9 @@ Commits de code/tests/CI/docs :
 - Aucun fournisseur Checkmk/Thruk CI authentifié ni service qualifié ; le POST ne prouve qu'un parseur de contrat.
 - Rollback source : revert de la PR #83, aucun schéma ni état persistant à migrer.
 - Prochain micro-lot : démarrer un vrai Checkmk éphémère en CI, qualifier un export GET read-only avec credentials de test, établir une provenance signée et une ACL tenant avant corrélation Run et observabilité Grafana. Conserver `CI_SIMULATED_LLM` uniquement pour l'endpoint NGX lorsque le contrat LLM sera testé.
+
+## Vérifications complémentaires et correction UI
+
+- [GitHub Actions 40625339504](https://github.com/alimtalbi-ata/aiops/actions/runs/40625339504) sur `08ac84065f2d8af672b1dcb1c2ea1bbbf9240742` : **completed/success** confirmé après rédaction initiale.
+- [GitHub Actions 40625380846](https://github.com/alimtalbi-ata/aiops/actions/runs/40625380846) sur `61c27f92759dd754d8e9d03075ea7330c6943b3f` : **completed/success** confirmé, journal initial inclus.
+- Relecture du HTML : correction de la génération de l'horodatage de l'exemple synthétique avec `toISOString().slice(0,19)+'Z'`, commit `06c6aa20d8a6290e8f84a6601a347f9ad85e80bd`. Ce correctif doit repasser la CI ; ne pas attribuer les résultats antérieurs au nouveau HEAD.
