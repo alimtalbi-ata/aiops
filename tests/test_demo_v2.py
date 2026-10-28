@@ -15,7 +15,7 @@ class DemoV2Tests(unittest.TestCase):
             {"items": [{"stage": "POLICY", "state": "PASS",
                         "decision": "SIMULATE", "reason": "no production mutation"}]})
         for marker in ("Mission Control V2", "EVD-1", "SIMULATE",
-                       "Observations synthétiques", "accès ou API en erreur"):
+                       "Observations synthétiques", "source non vérifiée ou indisponible"):
             self.assertIn(marker, page)
 
     def test_missing_data_not_fabricated(self):
@@ -80,7 +80,7 @@ class DemoV2Tests(unittest.TestCase):
             {"run": {"status": "RUNNING",
                      "started_at": "2026-10-21T13:21:01+00:00"},
              "events": []}, {}, {"items": []})
-        self.assertIn("potentiellement bloquée", page)
+        self.assertIn("statut RUNNING ancien à requalifier", page)
 
 
 if __name__ == "__main__":
