@@ -121,7 +121,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql", "003_seed_twin.sql", "005_seed_acme.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness
@@ -149,6 +149,36 @@ jobs:
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
       - name: Real Core PostgreSQL DEMO Policy gate observation and refusals
         run: python -m unittest discover -s tests -p "test_core_demo_policy_real_integration.py" -v
+      - name: Build real Twin container against ephemeral PostgreSQL
+        run: docker build -f app/twin/Dockerfile -t aiops-twin-impact-ci:local app
+      - name: Start real Twin HTTP container (no production access)
+        run: |
+          docker run -d --rm --name aiops-twin-impact-ci --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e AIOPS_ADMIN_TOKEN=ci-twin-impact-ephemeral-only \
+            aiops-twin-impact-ci:local
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(40):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:811/health", timeout=2) as response:
+                      if response.status == 200:
+                          print("Real Twin HTTP + seeded PostgreSQL ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("BLOCKED: ephemeral Twin container not ready")
+          PY
+      - name: Real Twin SAN to Payments reverse-dependency security and regression
+        env:
+          AIOPS_TWIN_CI_URL: http://127.0.0.1:811
+          AIOPS_TWIN_CI_TOKEN: ci-twin-impact-ephemeral-only
+        run: python -m unittest discover -s tests -p "test_twin_impact_real_integration.py" -v
+      - name: Stop ephemeral Twin container
+        if: always()
+        run: docker rm -f aiops-twin-impact-ci || true
       - name: Stop ephemeral Core
         if: always()
         run: |
