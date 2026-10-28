@@ -116,7 +116,9 @@ class BrowserCaptureTests(unittest.TestCase):
         p = plan()
         p["captures"][0]["approved_get_urls"] = [
             "https://example.invalid/app.css?token=secret"]
-        with self.assertRaisesRegex(ValueError, "GET resource"):
+        # origin() rejects a credential-bearing URL before the GET-list
+        # validator can emit its own message; both are fail-closed.
+        with self.assertRaisesRegex(ValueError, "GET resource|noncanonical or credential-bearing URL"):
             module.validate_plan(p)
 
     def test_missing_mask_denied(self):
