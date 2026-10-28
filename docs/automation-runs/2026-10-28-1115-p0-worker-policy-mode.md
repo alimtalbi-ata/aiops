@@ -12,7 +12,9 @@
 - `tests/test_simulation_policy_contract.py` : `d1a73f605f08574967907c6057d63330c04d1fbb`.
 - `.github/workflows/quality.yml` : `aa9cf430e354450f09a52fcefa3b10c34889a260`.
 - `docs/PROJECT-CONTINUITY.md` : `a6249e0f987940972feb89dd071a7c9db6baab41`.
-- Ce journal : commit de création consigné par GitHub ; PR draft à créer.
+- Ce journal : commit initial `fdcf54d6a5f2c1234345d4a098d5e309d498117c`, suivi du présent ajout de références.
+- PR : [#126](https://github.com/alimtalbi-ata/aiops/pull/126), draft, non fusionnée ; base `5d757869a46f427b1885a19ce019ca29a18063fd`.
+- CI PR initiale : [quality #40670937204](https://github.com/alimtalbi-ata/aiops/actions/runs/40670937204), **queued/in_progress lors de la consignation** ; ne pas déclarer PASS sans résultat. Après cet amendement documentaire, vérifier la CI sur le nouveau HEAD.
 - Aucune modification du schéma, aucun déploiement, aucun secret.
 
 ## Contrat de sécurité
