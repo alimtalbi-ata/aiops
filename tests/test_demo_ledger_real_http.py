@@ -20,6 +20,7 @@ VIEWER = os.environ["AIOPS_PORTAL_READ_TOKEN"]
 DSN = os.environ["DATABASE_URL"]
 RUN = "RUN-CI-LEDGER-DEMO"
 LIVE = "RUN-CI-LEDGER-LIVE"
+UNSOURCED = "RUN-CI-LEDGER-UNSOURCED"
 EVIDENCE = "EVD-CI-LEDGER-SAN"
 PRIVATE = "CI-PRIVATE-PROMPT-MUST-NOT-LEAK"
 
@@ -30,7 +31,7 @@ class RealLedgerHttpQualification(unittest.TestCase):
         # Isolated PostgreSQL container is destroyed after the job; never mutate
         # an external service or reuse runtime IDs from the ACME scenario fixture.
         with psycopg.connect(DSN) as conn:
-            for rid, mode in ((RUN, "DEMO"), (LIVE, "LIVE")):
+            for rid, mode in ((RUN, "DEMO"), (LIVE, "LIVE"), (UNSOURCED, "DEMO")):
                 conn.execute(
                     "insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
                     "values(%s,%s,'CI-LEDGER-ISOLATED','CREATED',%s)",
@@ -63,6 +64,29 @@ class RealLedgerHttpQualification(unittest.TestCase):
                 (RUN, Jsonb(ids), Jsonb({"claim_checks": [
                     {"claim": "Synthetic SAN CRC", "supported": False,
                      "supporting_evidence_ids": []}]})),
+            )
+
+            # The DB contains a genuine immutable Critique row with a forged
+            # supporting ID; the Portal must not display it as sourced.
+            conn.execute(
+                "insert into aiops.analysis_records(analysis_id,run_id,idempotency_key,"
+                "revision,contract_version,provider,model,prompt_version,evidence_ids,"
+                "evidence_set_hash,output,confidence,status) "
+                "values('ANL-CI-UNSOURCED',%s,'ci-ledger-unsourced-analysis',1,'2.0',"
+                "'CI_ONLY','CI_NOT_LLM','ci',%s,%s,%s,0.7,'VALID')",
+                (UNSOURCED, Jsonb([EVIDENCE]), digest, Jsonb({"synthetic_only": True})),
+            )
+            conn.execute(
+                "insert into aiops.critique_records(critique_id,idempotency_key,analysis_id,"
+                "run_id,contract_version,provider,model,validated,issues,evidence_ids,"
+                "output,diagnostic_confidence) "
+                "values('CRT-CI-UNSOURCED','ci-ledger-unsourced-critique',"
+                "'ANL-CI-UNSOURCED',%s,'2.0','CI_ONLY','CI_NOT_LLM',true,"
+                "'[]'::jsonb,%s,%s,0.4)",
+                (UNSOURCED, Jsonb([EVIDENCE]), Jsonb({"claim_checks": [{
+                    "claim": "Payments outage proven", "supported": True,
+                    "supporting_evidence_ids": ["EVD-CI-NOT-IN-ANALYSIS"],
+                }]})),
             )
 
     def read(self, base, rid=RUN, token=VIEWER):
@@ -110,6 +134,22 @@ class RealLedgerHttpQualification(unittest.TestCase):
             self.assertEqual(response.json()["status"], "UNKNOWN")
             self.assertEqual(response.headers["cache-control"], "no-store")
             self.assertNotIn(rid, response.text)
+
+    def test_persisted_unsourced_claim_fails_closed(self):
+        # Real Core and PostgreSQL contain the forged claim; no mock.
+        core = requests.get(CORE + "/api/runs/" + UNSOURCED + "/ai-ledger",
+                            headers={"Authorization": "Bearer " + INTERNAL},
+                            timeout=5, allow_redirects=False)
+        self.assertEqual(core.status_code, 200)
+        self.assertEqual(core.json()["critiques"][0]["output"]["claim_checks"][0]
+                         ["supporting_evidence_ids"], ["EVD-CI-NOT-IN-ANALYSIS"])
+        denied = self.read(PORTAL, rid=UNSOURCED)
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(denied.json(), {"status": "UNKNOWN",
+                                         "reason": "ledger_unavailable"})
+        self.assertEqual(denied.headers["cache-control"], "no-store")
+        for private in (UNSOURCED, "EVD-CI-NOT-IN-ANALYSIS", INTERNAL, VIEWER):
+            self.assertNotIn(private, denied.text)
 
     def test_real_upstream_401_becomes_unknown_without_leak(self):
         # Second real Portal process deliberately has a different CI-only
