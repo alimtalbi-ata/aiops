@@ -71,3 +71,9 @@ Le garde-fou intercepte les requêtes HTTP(S) du contexte Playwright et ferme le
 ## Visibilité du justificatif dans la capture (2026-10-28)
 
 Avant chaque PNG, l'adaptateur exige désormais que le sélecteur de preuve désigne un élément unique, CSS-visible, entièrement contenu dans la zone 1440×900 capturée, avec l'identifiant attendu. Chaque élément ciblé par un masque doit également être visible et dans cette zone (maximum 50 correspondances par sélecteur), et aucun masque ne peut chevaucher la boîte géométrique de la preuve. Les éléments cachés, hors cadre, les coordonnées non finies et les masques qui cacheraient l'identifiant sont refusés. Cette vérification de géométrie ne prouve pas que les pixels finaux correspondent au DOM ni que la session est authentifiée; la revue humaine et les preuves de source restent indispensables. Une page dont le layout n'est pas compatible reste BLOCKED, sans désactivation silencieuse.
+
+## Filtrage des types de ressources GET (2026-10-28)
+
+Le filtre réseau réutilise désormais la liste de types passifs de `ReadOnlyRequestPolicy` de la PR #36 : `stylesheet`, `script`, `font`, `image`, `xhr`, `fetch`. Une URL dans `approved_get_urls` ne suffit plus à autoriser une navigation de type `document`, `eventsource`, `websocket`, `manifest` ou un type inconnu. Le type est lu sur la requête Playwright au moment de l'interception ; absent ou non reconnu signifie **DENY**. Les sous-ressources contenant un paramètre d'URL sont refusées au stade du plan, car elles peuvent divulguer un jeton. Les ressources légitimes qui exigent des paramètres restent **BLOCKED** jusqu'à revue explicite et adaptation du contrat, sans assouplissement implicite.
+
+Ce garde-fou ne rend pas les GET intrinsèquement sans effet, n'authentifie pas la session et ne remplace pas la revue des pixels. Les tests ajoutés sont offline et ne sont pas une preuve LIVE.
