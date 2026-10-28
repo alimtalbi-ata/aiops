@@ -13,7 +13,8 @@
 
 ## Vérification et limites
 - Tests locaux : **NOT_TESTED** au moment du commit (la validation cible est GitHub Actions sur services éphémères).
-- CI candidate `quality.yml` : **PENDING** jusqu'à run confirmé ; ne pas marquer PASS par anticipation.
+- Commit code/tests/docs `108b558b3207e7f2775dd64a256ecfd9c082c264` ; [PR draft #173](https://github.com/alimtalbi-ata/aiops/pull/173). [quality.yml #40788394822](https://github.com/alimtalbi-ata/aiops/actions/runs/40788394822) sur ce SHA : **completed/success, 3/3 jobs SUCCESS**. Logs du job Core consultés : **8/8 tests Policy HTTP réel PASS** ; Core HTTP/PostgreSQL 16 et Grafana éphémères également PASS. Les tests Policy sont de vrais appels HTTP à FastAPI/uvicorn, pas un mock ni un E2E HITL.
+- CI du prochain commit de journal : **PENDING** jusqu'à vérification sur son SHA final.
 - **NOT_TESTED** : HITL authentifié, Temporal sandbox, postchecks/rollback, Evidence/AI Ledger, isolation tenant runtime, chaîne SAN→Payments, Debian, `applied.sha` et smoke terrain.
 - Les sept Runs DEMO (5 BLOCKED sans gate, 1 RESOLVED/PASS/SIMULATE, 1 RUNNING ancien) sont des observations utilisateur du 28/10, **pas** des mesures de cette exécution. `SIMULATE` ne prouve ni remédiation LIVE ni retour à la normale.
 
