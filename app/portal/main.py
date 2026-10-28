@@ -4,11 +4,13 @@ from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
 from portal.portal_integrations import build_navigation, render_navigation_html
 from portal.portal_read_models import read_portal_snapshot
+from portal.portal_security_headers import PortalSecurityHeaders
 from portal.noc_runtime import router as noc_runtime_router
 from portal.noc_correlation import router as noc_correlation_router
 from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.acme_impact_read_model import router as acme_impact_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
+app.add_middleware(PortalSecurityHeaders)
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
