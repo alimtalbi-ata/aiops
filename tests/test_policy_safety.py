@@ -27,8 +27,9 @@ class PolicySafetyTests(unittest.TestCase):
     def setUp(self):
         # Unit-test policy branches with a healthy NORMAL store. Production remains
         # fail-closed when state storage is unavailable or emergency stop is active.
-        self._state = patch(
-            "app.policy.main.autonomy_store.status",
+        self._state = patch.object(
+            evaluate.__globals__["autonomy_store"],
+            "status",
             return_value={"mode": "NORMAL", "revision": 0, "source": "unit-test", "healthy": True},
         )
         self._stop = patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "false"})
