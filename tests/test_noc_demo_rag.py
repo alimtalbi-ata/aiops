@@ -1,10 +1,12 @@
 """Synthetic fixture unit/HTTP contract tests; not real NOC/RAG integration."""
 import copy
+import hashlib
 import os
+import tempfile
 import pathlib
 import sys
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app"))
 from fastapi import FastAPI
@@ -72,9 +74,75 @@ class NocDemoRagTests(unittest.TestCase):
         self.assertNotIn("nonexistent", response.text)
 
     def test_duplicate_json_keys_are_rejected(self):
-        with patch.object(noc_demo_rag, "FIXTURE_PATH", Mock(read_bytes=Mock(return_value=b'{"schema":1,"schema":2}'))):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "duplicate.json"
+            path.write_bytes(b'{"schema":1,"schema":2}')
+            with patch.object(noc_demo_rag, "FIXTURE_PATH", path):
+                response = self.get()
+        self.assertEqual(response.status_code, 503)
+
+    def test_regular_fixture_has_exact_bytes_digest(self):
+        raw = noc_demo_rag.FIXTURE_PATH.read_bytes()
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "catalog.json"
+            path.write_bytes(raw)
+            with patch.object(noc_demo_rag, "FIXTURE_PATH", path):
+                rows, digest = noc_demo_rag.load_catalog()
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(digest, hashlib.sha256(raw).hexdigest())
+
+    def test_symlink_to_valid_catalog_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "linked.json"
+            path.symlink_to(noc_demo_rag.FIXTURE_PATH.resolve())
+            with patch.object(noc_demo_rag, "FIXTURE_PATH", path):
+                response = self.get()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "synthetic_rag_catalog_unavailable_or_invalid")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertNotIn(str(path), response.text)
+
+    def test_oversized_catalog_fails_closed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "oversized.json"
+            path.write_bytes(b" " * (noc_demo_rag.MAX_CATALOG_BYTES + 1))
+            with patch.object(noc_demo_rag, "FIXTURE_PATH", path):
+                response = self.get()
+        self.assertEqual(response.status_code, 503)
+
+    def test_nonregular_fifo_fails_without_hanging(self):
+        if not hasattr(os, "mkfifo"):
+            self.skipTest("FIFO not available on this platform")
+        with tempfile.TemporaryDirectory() as folder:
+            path = pathlib.Path(folder) / "fifo.json"
+            os.mkfifo(path)
+            with patch.object(noc_demo_rag, "FIXTURE_PATH", path):
+                response = self.get()
+        self.assertEqual(response.status_code, 503)
+
+    def test_missing_nofollow_capability_fails_closed(self):
+        with patch.object(noc_demo_rag.os, "O_NOFOLLOW", None, create=True):
             response = self.get()
         self.assertEqual(response.status_code, 503)
+
+    def test_file_change_between_stat_calls_fails_closed(self):
+        real_fstat = os.fstat
+        count = [0]
+        def changed_stat(fd):
+            st = real_fstat(fd)
+            count[0] += 1
+            if count[0] == 2:
+                from types import SimpleNamespace
+                return SimpleNamespace(
+                    st_dev=st.st_dev, st_ino=st.st_ino, st_mode=st.st_mode,
+                    st_size=st.st_size, st_mtime_ns=st.st_mtime_ns + 1,
+                    st_ctime_ns=st.st_ctime_ns,
+                )
+            return st
+        with patch.object(noc_demo_rag.os, "fstat", side_effect=changed_stat):
+            with self.assertRaises(ValueError):
+                noc_demo_rag.load_catalog()
+        self.assertEqual(count[0], 2)
 
     def test_rejects_live_claim_and_unlabelled_sample(self):
         rows, _ = noc_demo_rag.load_catalog()
