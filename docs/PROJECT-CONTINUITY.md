@@ -106,3 +106,10 @@ On main starting SHA `88cb4ed01706ac09bb8e01fdceead422cab2590d`, a dedicated P0 
 ## 2026-10-28 08:16 Europe/Paris — NOC scope aliases after PR #99
 
 After merging [PR #99](https://github.com/alimtalbi-ata/aiops/pull/99) at `aae50b02557143ea5a7f0f2633271a0602de8800`, the signed NOC tenant fence receives a narrow follow-up for indirect scope names (`ownerTenantId`, `projectTenantID`, `orgRef`, `accountRef`, etc.) before any projection. Tests cover rejection of validly HMAC-signed nested claims and non-regression for unrelated metadata. No authenticated Core tenant ACL or Checkmk/Thruk integration is claimed; all observed/LLM/LIVE qualification remains blocked. See `docs/automation-runs/2026-10-28-0816-p0-noc-scope-aliases.md`.
+
+## 2026-10-28 08:31 Europe/Paris — ACME portable entrypoint (draft PR #107)
+
+- Depuis `main` SHA `3a50c1c1f6c36a62272bd6b669086866a4708ee3`, modification ciblée de la vue ACME initialement portée de PR #36 : `entrypoint=/demo/acme-impact`, chemin relatif sans IP Debian ; lien retour `/` vers le portail unique. Aucune requête réseau supplémentaire.
+- Test ASGI négatif avec Host arbitraire : le JSON et la page n’exposent pas l’adresse privée, les indicateurs runtime restent non attestés. Les identifiants simulés et `ticket_id=null` sont inchangés.
+- Code SHA `c6df7fc5fbc1248440b4ea39067fc86090b38f9e` ; PR [#107](https://github.com/alimtalbi-ata/aiops/pull/107). Workflows existants : [PR quality 40650794454](https://github.com/alimtalbi-ata/aiops/actions/runs/40650794454) et [push quality 40650778675](https://github.com/alimtalbi-ata/aiops/actions/runs/40650778675), `completed/success` sur ce SHA (tests unitaires/contrat, audit statique, Compose config ; pas d’intégration conteneurisée).
+- Attention aux conflits potentiels avec PR #77 (même module). GLPI/Core/Temporal et captures authentifiées demeurent `NOT_TESTED`. Journal : `docs/automation-runs/2026-10-28T0831-p1-acme-relative-entrypoint.md`.
