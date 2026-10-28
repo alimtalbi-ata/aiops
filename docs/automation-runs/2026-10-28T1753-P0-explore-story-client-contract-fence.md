@@ -22,3 +22,9 @@
 - La validation DOM ne remplace pas une qualification dans un navigateur réel. Le viewer partagé n'est pas une ACL tenant qualifiée ; ne pas exposer de données runtime multi-tenant.
 - Coordination #133 : si la projection canonique remplace la source de la timeline, conserver un identifiant stable entre modes et conserver la forme `aiops.acme-explore-story.v1`. La session doit échouer en `UNKNOWN` lors d'une dérive, pas réinterpréter silencieusement les événements.
 - Prochain micro-lot : navigation visuelle interactive du checkpoint Explore sans écriture runtime, puis test navigateur isolé et capture vérifiable si environnement disponible.
+
+## Qualification complémentaire confirmée (2026-10-28, 17:55 CET)
+- HEAD code + tests `dcf3c1e848476ba1db59f616921152a8566394d7` : [quality push #40730297173](https://github.com/alimtalbi-ata/aiops/actions/runs/40730297173) et [quality PR #40730328020](https://github.com/alimtalbi-ata/aiops/actions/runs/40730328020) : **completed/success**.
+- HEAD code + tests + journal `bfae0f70db666867f5afb55449fbddf8f66c6e70` : [quality push #40730404757](https://github.com/alimtalbi-ata/aiops/actions/runs/40730404757) et [quality PR #40730415001](https://github.com/alimtalbi-ata/aiops/actions/runs/40730415001) : **completed/success**, jobs policy-and-static, Core/PostgreSQL éphémère, Grafana éphémère ; étapes tests Explore/Story Python, Node DOM, syntaxe JS, audit statique et Compose **success**.
+- Contrôle des conflits : GitHub `mergeable=true`, `mergeable_state=clean` sur la PR #135. Revue du diff : 3 fichiers, aucune modification d'API ni de fixture. Commentaire de coordination publié sur la PR #133.
+- Cette mise à jour documentaire ne constitue ni un test navigateur réel ni une qualification de la liaison du scénario à Core/Grafana. Son propre SHA sera vérifié avant toute fusion.
