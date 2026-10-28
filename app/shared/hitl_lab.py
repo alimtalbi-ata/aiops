@@ -321,9 +321,10 @@ def read_status(path, *, proposal_id, now=None):
                 raise HITLRejected("inconsistent HITL audit")
             if approval:
                 _identity(approval[0])
+                if (not isinstance(approval[2], str) or len(approval[2]) != 64
+                    or any(c not in "0123456789abcdef" for c in approval[2])):
+                    raise HITLRejected("invalid approval token digest")
                 if (approval[0] == proposer_id
-                    or not isinstance(approval[2], str) or len(approval[2]) != 64
-                    or any(c not in "0123456789abcdef" for c in approval[2])
                     or not isinstance(approval[1], (int, float))
                     or not math.isfinite(approval[1])
                     or not created <= approval[1] < expires or approval[1] > at):
@@ -331,8 +332,9 @@ def read_status(path, *, proposal_id, now=None):
             if receipt:
                 _identity(receipt[0])
                 if (len(receipt[0]) != 32
-                    or any(c not in "0123456789abcdef" for c in receipt[0])
-                    or not isinstance(receipt[1], (int, float))
+                    or any(c not in "0123456789abcdef" for c in receipt[0])):
+                    raise HITLRejected("invalid receipt identifier")
+                if (not isinstance(receipt[1], (int, float))
                     or not math.isfinite(receipt[1])
                     or not approval[1] <= receipt[1] < expires or receipt[1] > at):
                     raise HITLRejected("invalid receipt timestamp")
