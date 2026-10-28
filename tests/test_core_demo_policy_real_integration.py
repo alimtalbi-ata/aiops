@@ -177,5 +177,78 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                 self.assertNotIn("RUN-" + PREFIX, response.text)
 
 
+
+    def test_readonly_probe_observes_real_core_http_without_e2e_claim(self):
+        # This calls actual ephemeral Core HTTP backed by PostgreSQL, not a mock.
+        from scripts.probe_demo_policy_readonly import probe
+        for suffix, status, gate in (
+            ("BLOCKED", "BLOCKED", "MISSING"),
+            ("RESOLVED", "RESOLVED", "PASS"),
+            ("RUNNING", "RUNNING", "MISSING"),
+        ):
+            with self.subTest(suffix=suffix):
+                rid = "RUN-" + PREFIX + suffix
+                iid = "INC-" + PREFIX + suffix
+                result = probe(BASE, rid, iid, TOKEN)
+                self.assertEqual(result["overall"], "NO_GO")
+                self.assertEqual(result["observation_status"],
+                                 "CORE_READ_OBSERVED_NOT_E2E")
+                self.assertEqual((result["run_id"], result["incident_id"]),
+                                 (rid, iid))
+                self.assertEqual((result["run_status"], result["policy_gate_state"]),
+                                 (status, gate))
+                self.assertIs(result["runtime_attested"], False)
+                self.assertIs(result["live_remediation_authorized"], False)
+                self.assertNotIn(TOKEN, str(result))
+
+    def test_readonly_probe_rejects_wrong_ids_auth_and_core_refusals(self):
+        from scripts.probe_demo_policy_readonly import ProbeError, probe
+        rid, iid = "RUN-" + PREFIX + "RESOLVED", "INC-" + PREFIX + "RESOLVED"
+        for run, incident, token in (
+            (rid, iid + "-WRONG", TOKEN),
+            (rid, iid, "invalid-token"),
+            (rid, iid, ""),
+            ("RUN-" + PREFIX + "LIVE", "INC-" + PREFIX + "LIVE", TOKEN),
+            ("RUN-" + PREFIX + "FORGED-GATE",
+             "INC-" + PREFIX + "FORGED-GATE", TOKEN),
+            ("RUN-" + PREFIX + "GATE-IN-FUTURE",
+             "INC-" + PREFIX + "GATE-IN-FUTURE", TOKEN),
+        ):
+            with self.subTest(run=run, incident=incident):
+                with self.assertRaises(ProbeError):
+                    probe(BASE, run, incident, token)
+
+    def test_readonly_probe_contract_rejects_forged_attestations_and_addresses(self):
+        from scripts.probe_demo_policy_readonly import (
+            ProbeError, loopback_url, validate_observation,
+        )
+        rid, iid = "RUN-" + PREFIX + "RESOLVED", "INC-" + PREFIX + "RESOLVED"
+        source = self.read("RESOLVED").json()
+        for field, value in (
+            ("runtime_attested", True),
+            ("tenant_acl_qualified", True),
+            ("live_remediation_authorized", True),
+            ("mode", "LIVE"),
+            ("incident_id", "INC-OTHER"),
+            ("policy_decision", "ALLOW"),
+            ("explanation_code", "LIVE_REMEDIATED"),
+            ("provenance", "LIVE_ATTESTED"),
+            ("run_status", []),
+            ("policy_gate_state", []),
+        ):
+            with self.subTest(field=field):
+                forged = dict(source)
+                forged[field] = value
+                with self.assertRaises(ProbeError):
+                    validate_observation(forged, rid, iid)
+        for url in (
+            "http://10.79.94.202:1810", "http://localhost:1810",
+            "https://127.0.0.1:1810", "http://127.0.0.1:1810/api",
+            "http://user:pass@127.0.0.1:1810",
+        ):
+            with self.subTest(url=url):
+                with self.assertRaises(ProbeError):
+                    loopback_url(url)
+
 if __name__ == "__main__":
     unittest.main()
