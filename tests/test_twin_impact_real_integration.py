@@ -55,6 +55,39 @@ class TwinImpactRealIntegration(unittest.TestCase):
             {item["node_id"]: item["depth"] for item in data["affected"]},
             expected,
         )
+        # Every path edge is a real row in the seeded PostgreSQL graph.
+        # No synthetic SAN -> host shortcut may be emitted.
+        edges = data["shortest_path_edges"]
+        self.assertEqual(
+            [edge["edge_id"] for edge in edges],
+            ["ACME-E01", "ACME-E02", "ACME-E04", "ACME-E05",
+             "ACME-E06", "ACME-E07", "ACME-E08", "ACME-E14",
+             "ACME-E15", "ACME-E16"],
+        )
+        self.assertEqual(
+            data["path_semantics"],
+            "SEEDED_TOPOLOGY_SHORTEST_HOPS_NOT_RUNTIME_CAUSALITY",
+        )
+        with psycopg.connect(DATABASE_URL) as c:
+            actual = {
+                row[0]: row[1:]
+                for row in c.execute(
+                    "select edge_id,source_id,target_id,relation_type "
+                    "from aiops.twin_edges"
+                ).fetchall()
+            }
+        for edge in edges:
+            with self.subTest(edge=edge["edge_id"]):
+                self.assertEqual(
+                    (edge["source_id"], edge["target_id"], edge["relation_type"]),
+                    actual[edge["edge_id"]],
+                )
+                self.assertEqual(
+                    expected[edge["source_id"]],
+                    expected[edge["target_id"]] + 1,
+                )
+        self.assertNotIn("ACME-E10", {e["edge_id"] for e in edges})
+        self.assertNotIn("ACME-E09", {e["edge_id"] for e in edges})
         self.assertEqual(data["traversal_direction"], "REVERSE_CONSUMER_TO_DEPENDENCY")
         self.assertEqual(data["affected_semantics"], "DEPENDENT_CANDIDATES_NOT_CONFIRMED_IMPACT")
         self.assertEqual(data["runtime_impact_state"], "UNKNOWN")
@@ -77,6 +110,7 @@ class TwinImpactRealIntegration(unittest.TestCase):
             [(item["node_id"], item["depth"]) for item in r.json()["affected"]],
             [("ACME-BIZ-PAYMENTS", 0)],
         )
+        self.assertEqual(r.json()["shortest_path_edges"], [])
 
     def test_unknown_node_and_missing_auth_fail_closed(self):
         for token in (None, "", "incorrect", TOKEN + "-extra"):
@@ -85,6 +119,7 @@ class TwinImpactRealIntegration(unittest.TestCase):
                 self.assertEqual(r.status_code, 401, r.text)
                 self.assertEqual(r.headers.get("cache-control"), "no-store")
                 self.assertNotIn("ACME-STO-PURE01", r.text)
+                self.assertNotIn("shortest_path_edges", r.text)
         r = self.read("ACME-NODE-NOT-SEEDED")
         self.assertEqual(r.status_code, 404, r.text)
         self.assertEqual(r.headers.get("cache-control"), "no-store")
