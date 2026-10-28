@@ -205,7 +205,7 @@ def acme_topology_json():
 
 @router.get("/demo/acme-impact", response_class=HTMLResponse, name="synthetic_acme_impact_page")
 def acme_impact_page():
-    """Serve a local HTML snapshot; no scripts, forms, links or upstream calls."""
+    """Serve a local HTML snapshot; no scripts, forms, external links or upstream calls."""
     model = _load_or_503()
     path = " → ".join(str(part) for part in model["impact_path"])
     rows = [
