@@ -59,6 +59,18 @@ jobs:
         run: bash deploy/init-env.sh
       - name: Start actual GLPI and MariaDB ephemeral services
         run: docker compose --env-file .env up -d aiops2-glpi
+      - name: Enable legacy GLPI REST API only inside ephemeral CI GLPI
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker exec --user www-data aiops2-glpi \
+              php /var/www/glpi/bin/console config:set enable_api 1 --no-interaction >/dev/null 2>&1; then
+              echo "Ephemeral GLPI legacy REST API enabled"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "BLOCKED: ephemeral GLPI CLI could not enable REST API" >&2
+          exit 1
       - name: Verify real GLPI REST auth rejection and adapter fail-closed
         run: |
           docker run --rm \
