@@ -62,8 +62,14 @@ def correlate(noc: dict, run: dict) -> dict:
             not isinstance(run.get("status"), str) or not run["status"] or
             run.get("mode") not in ("DEMO", "REPLAY", "STORY", "LIVE")):
         raise ValueError("invalid canonical Run identity")
+    # A signed source is not a tenant authorization decision. Reuse the
+    # conservative recursive scope fence already enforced at NOC ingestion:
+    # Core may introduce nested or aliased tenant claims independently.
+    noc_runtime._reject_unqualified_tenant_scope(noc)
+    noc_runtime._reject_unqualified_tenant_scope(run)
+    if run["mode"] == "LIVE":
+        raise ValueError("LIVE correlation requires independently qualified authorization")
     matched = run_id == noc.get("run_id") and incident_id == noc.get("incident_id")
-    synthetic = run["mode"] != "LIVE"
     return {
         "schema": SCHEMA,
         "state": "MATCHED_UNATTESTED" if matched else "UNKNOWN",
@@ -77,8 +83,7 @@ def correlate(noc: dict, run: dict) -> dict:
         "canonical_incident_id": incident_id if matched else None,
         "canonical_mode": run["mode"] if matched else None,
         "canonical_status": run["status"] if matched else None,
-        "data_classification": ("SYNTHETIC_CANONICAL_RUN" if synthetic else
-                                "LIVE_MODE_UNATTESTED") if matched else "UNKNOWN",
+        "data_classification": "SYNTHETIC_CANONICAL_RUN" if matched else "UNKNOWN",
         "grafana_observation": "NOT_TESTED",
         "rag_diagnostic": "NOT_TESTED",
         "runtime_authenticated": False,
