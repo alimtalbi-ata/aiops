@@ -50,10 +50,38 @@ class CorrelationTests(unittest.TestCase):
         self.assertFalse(result["live_remediation_authorized"])
         self.assertNotIn("private_payload", str(result))
 
-    def test_live_mode_is_never_claimed_attested(self):
-        result = noc_correlation.correlate(noc_view(), core_run("LIVE"))
-        self.assertEqual(result["data_classification"], "LIVE_MODE_UNATTESTED")
-        self.assertFalse(result["production_qualified"])
+    def test_live_mode_is_refused_without_runtime_and_tenant_qualification(self):
+        with self.assertRaisesRegex(ValueError, "LIVE correlation"):
+            noc_correlation.correlate(noc_view(), core_run("LIVE"))
+
+    def test_tenant_scoped_run_or_noc_claims_fail_closed(self):
+        for key in ("tenant_id", "organization_id", "org_id", "workspace_id",
+                    "account_id", "owner_tenant_id"):
+            for side in ("core", "noc"):
+                with self.subTest(field=key, side=side), self.assertRaisesRegex(
+                        ValueError, "qualified ACL"):
+                    run, noc = core_run(), noc_view()
+                    (run if side == "core" else noc)[key] = "TENANT-OTHER"
+                    noc_correlation.correlate(noc, run)
+
+    def test_legacy_demo_replay_story_remain_explicitly_synthetic(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            with self.subTest(mode=mode):
+                result = noc_correlation.correlate(noc_view(), core_run(mode))
+                self.assertEqual(result["state"], "MATCHED_UNATTESTED")
+                self.assertEqual(result["canonical_mode"], mode)
+                self.assertEqual(result["data_classification"], "SYNTHETIC_CANONICAL_RUN")
+
+    def test_tenant_scoped_core_route_denies_without_disclosing_identity(self):
+        run = {**core_run(), "tenant_id": "TENANT-PRIVATE"}
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
+                noc_correlation.noc_runtime, "read_signed_noc_snapshot", return_value=noc_view()), patch.object(
+                noc_correlation, "_read_core_run", return_value=run):
+            response = self.request()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "canonical_correlation_unavailable_or_unverified")
+        self.assertNotIn("TENANT-PRIVATE", response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
 
     def test_identity_mismatch_does_not_leak_canonical_ids(self):
         run = core_run()
