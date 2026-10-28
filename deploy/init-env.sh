@@ -22,6 +22,9 @@ set_value() {
 INTERNAL_TOKEN="$(openssl rand -hex 32)"
 set_value AIOPS_ADMIN_TOKEN "$INTERNAL_TOKEN"
 set_value AIOPS_INTERNAL_TOKEN "$INTERNAL_TOKEN"
+# Separate browser-facing credentials; never reuse the internal service token.
+set_value AIOPS_PORTAL_READ_TOKEN "$(openssl rand -hex 32)"
+set_value AIOPS_PORTAL_OPERATOR_TOKEN "$(openssl rand -hex 32)"
 set_value POSTGRES_PASSWORD "$(openssl rand -hex 32)"
 set_value GLPI_DB_PASSWORD "$(openssl rand -hex 32)"
 set_value GLPI_DB_ROOT_PASSWORD "$(openssl rand -hex 32)"
