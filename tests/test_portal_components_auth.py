@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+# shared.http enforces an internal credential at import; CI uses only this
+# synthetic value and never calls the Core upstream from these tests.
+os.environ.setdefault("AIOPS_INTERNAL_TOKEN", "synthetic-ci-only-internal-token")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from portal import main as portal_main
 
