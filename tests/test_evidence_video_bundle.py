@@ -106,6 +106,20 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "private existing"):
             bundle.build_bundle(self.evidence, self.manifest, link)
 
+    def test_source_swap_between_verification_and_pin_fails_closed(self):
+        real_pin = bundle.pin_captures
+
+        def mutate_then_pin(root, stage, captures):
+            (root / "portal.png").write_bytes(b"tampered after initial verify")
+            return real_pin(root, stage, captures)
+
+        with patch.object(bundle, "pin_captures", side_effect=mutate_then_pin):
+            with patch.object(bundle, "render") as render:
+                with self.assertRaisesRegex(ValueError, "checksum mismatch|invalid PNG"):
+                    bundle.build_bundle(self.evidence, self.manifest, self.output)
+                render.assert_not_called()
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_render_uses_pinned_bytes_after_source_changes(self):
         original = (self.evidence / "portal.png").read_bytes()
         seen = []
