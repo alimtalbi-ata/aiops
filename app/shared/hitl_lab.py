@@ -268,6 +268,8 @@ def read_status(path, *, proposal_id, now=None):
     try:
         with sqlite3.connect(uri, uri=True, timeout=5) as db:
             db.execute("PRAGMA query_only=ON")
+            # Keep proposal, approval, receipt and audit in one read snapshot.
+            db.execute("BEGIN")
             row = db.execute("""SELECT incident_id,run_id,recipe_id,target_id,
                 params_hash,binding_hash,mode,created_at,expires_at,proposer_id
                 FROM proposals WHERE proposal_id=?""", (proposal_id,)).fetchone()
@@ -317,10 +319,19 @@ def read_status(path, *, proposal_id, now=None):
                 expected.append("DRY_RUN_PLAN_ISSUED")
             if receipt and not approval or [a[0] for a in audit] != expected:
                 raise HITLRejected("inconsistent HITL audit")
-            if approval and (approval[0] == proposer_id or not created <= approval[1] < expires):
-                raise HITLRejected("invalid approval timestamp")
-            if receipt and not approval[1] <= receipt[1] < expires:
-                raise HITLRejected("invalid receipt timestamp")
+            if approval:
+                _identity(approval[0])
+                if (approval[0] == proposer_id
+                    or not isinstance(approval[1], (int, float))
+                    or not math.isfinite(approval[1])
+                    or not created <= approval[1] < expires):
+                    raise HITLRejected("invalid approval timestamp")
+            if receipt:
+                _identity(receipt[0])
+                if (not isinstance(receipt[1], (int, float))
+                    or not math.isfinite(receipt[1])
+                    or not approval[1] <= receipt[1] < expires):
+                    raise HITLRejected("invalid receipt timestamp")
             expected_actors = [proposer_id] + ([approval[0]] if approval else []) + (
                 ["sandbox-lab"] if receipt else []
             )
