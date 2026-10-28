@@ -116,6 +116,30 @@ def validate_observation(value: object, run_id: str, incident_id: str) -> dict:
     }
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
+    """Reject duplicate keys at every nesting level, not only the top-level object."""
+    value = {}
+    for key, item in pairs:
+        require(key not in value, "duplicate_core_json_key")
+        value[key] = item
+    return value
+
+
+def _reject_nonfinite_json(_value: str) -> None:
+    raise ProbeError("nonfinite_core_json")
+
+
+def decode_core_json(raw: bytes) -> object:
+    """Strict JSON parser for a security-sensitive Core observation."""
+    try:
+        return json.loads(raw, object_pairs_hook=_unique_json_object,
+                          parse_constant=_reject_nonfinite_json)
+    except ProbeError:
+        raise
+    except (ValueError, UnicodeError):
+        raise ProbeError("invalid_core_json") from None
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         return None
@@ -150,10 +174,7 @@ def probe(base_url: str, run_id: str, incident_id: str, token: str) -> dict:
                 "invalid_content_type")
         raw = response.read(_MAX_BYTES + 1)
     require(len(raw) <= _MAX_BYTES, "oversized_core_response")
-    try:
-        data = json.loads(raw)
-    except (ValueError, UnicodeError):
-        raise ProbeError("invalid_core_json") from None
+    data = decode_core_json(raw)
     result = validate_observation(data, run_id, incident_id)
     result["observed_at_utc"] = datetime.now(timezone.utc).isoformat()
     result["clock_provenance"] = "PROBE_LOCAL_CLOCK_NOT_SERVER_ATTESTED"
