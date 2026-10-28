@@ -303,7 +303,7 @@ def read_status(path, *, proposal_id, now=None):
             if not isinstance(binding_hash, str) or not hmac.compare_digest(binding_hash, expected_binding):
                 raise HITLRejected("stored proposal binding mismatch")
             approval = db.execute(
-                "SELECT approver_id,approved_at FROM approvals WHERE proposal_id=?", (proposal_id,)
+                "SELECT approver_id,approved_at,token_hash FROM approvals WHERE proposal_id=?", (proposal_id,)
             ).fetchone()
             receipt = db.execute(
                 "SELECT receipt_id,consumed_at FROM dry_runs WHERE proposal_id=?", (proposal_id,)
@@ -321,6 +321,9 @@ def read_status(path, *, proposal_id, now=None):
                 raise HITLRejected("inconsistent HITL audit")
             if approval:
                 _identity(approval[0])
+                if (not isinstance(approval[2], str) or len(approval[2]) != 64
+                    or any(c not in "0123456789abcdef" for c in approval[2])):
+                    raise HITLRejected("invalid approval token digest")
                 if (approval[0] == proposer_id
                     or not isinstance(approval[1], (int, float))
                     or not math.isfinite(approval[1])
@@ -328,6 +331,9 @@ def read_status(path, *, proposal_id, now=None):
                     raise HITLRejected("invalid approval timestamp")
             if receipt:
                 _identity(receipt[0])
+                if (len(receipt[0]) != 32
+                    or any(c not in "0123456789abcdef" for c in receipt[0])):
+                    raise HITLRejected("invalid receipt identifier")
                 if (not isinstance(receipt[1], (int, float))
                     or not math.isfinite(receipt[1])
                     or not approval[1] <= receipt[1] < expires or receipt[1] > at):
