@@ -40,7 +40,9 @@ class Decision(BaseModel):
 
 
 def evaluate(x: Decision) -> dict:
-    effect = x.command in ("EXECUTE", "RESOLVE", "REMEDIATE")
+    # DEMO/REPLAY/STORY effects are simulation dispositions, never production mutations.
+    # Live autonomy controls and emergency stop apply only to real LIVE effects.
+    effect = x.mode == "LIVE" and x.command in ("EXECUTE", "RESOLVE", "REMEDIATE")
     persisted=autonomy_store.status()
     autonomy_mode=persisted["mode"]
     if not persisted["healthy"]:
