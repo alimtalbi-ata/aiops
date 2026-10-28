@@ -96,6 +96,18 @@ class GoldenDemoTests(unittest.TestCase):
                     golden.require_demo_auth(None)
                 self.assertEqual(caught.exception.status_code, expected)
 
+    def test_admin_token_aliases_cannot_authorize_demo(self):
+        for alias in ("AIOPS_INTERNAL_TOKEN", "AIOPS_ADMIN_TOKEN", "ADMIN_TOKEN"):
+            env = {"AIOPS_PORTAL_DEMO_TOKEN": TOKEN,
+                   "AIOPS_INTERNAL_TOKEN": "different-internal-token",
+                   "AIOPS_ADMIN_TOKEN": "different-admin-token",
+                   "ADMIN_TOKEN": "different-core-token"}
+            env[alias] = TOKEN
+            with self.subTest(alias=alias), patch.dict(os.environ, env):
+                with self.assertRaises(Exception) as caught:
+                    golden.require_demo_auth("Bearer " + TOKEN)
+                self.assertEqual(caught.exception.status_code, 503)
+
     def test_valid_token_and_invalid_token(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_DEMO_TOKEN": TOKEN,
                                      "AIOPS_INTERNAL_TOKEN": "internal-only"}):
