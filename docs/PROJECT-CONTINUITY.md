@@ -149,3 +149,10 @@ ou déploiement. Les résultats de tests et limites sont à consigner dans
 `docs/automation-runs/2026-10-28-0744-video-evidence.md`.
 La chaîne reste strictement `OPERATOR_SUPPLIED_UNATTESTED` : un SHA-256
 ne constitue pas une attestation d'identité ni une revue de confidentialité.
+
+## 2026-10-28 08:48 Europe/Paris — P0 Evidence Studio temporal session fence (draft)
+
+- On top of PR #102 (source HEAD `2c7177a1b2dc61589bec6b132a4a30fbe7e8aaf8`), a dedicated branch changes only the shared PNG verifier, targeted regression tests and documentation. No massive merge of PR #36.
+- A five-view capture set now requires nondecreasing declared UTC timestamps spanning at most 15 minutes; both video packaging and the independent receipt auditor reuse this gate. Tests cover the inclusive boundary, reversed clocks and simultaneous manifest/receipt rehashing.
+- This prevents accidental cross-session assembly, **not** malicious timestamp fabrication or runtime/session attestation. Playwright operator authentication, pixel privacy review, five real services, NGX/Ollama integration and LIVE remain NOT_TESTED/BLOCKED. No Debian access, deployment or remediation.
+- Use the existing `quality.yml` checks on the exact branch HEAD before merging; do not call fixtures LIVE evidence. Next: authenticated operator/session evidence and privacy review; stabilize the conflicted PR #43 chain with targeted ports.

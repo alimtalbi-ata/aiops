@@ -256,6 +256,18 @@ class BundleAuditTests(unittest.TestCase):
         self.write_receipt()
         self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
 
+    def test_rehashed_source_and_receipt_cannot_hide_cross_session_capture(self):
+        # Both JSON objects and their declared SHA-256 are updated together.
+        # A hash-only auditor would accept this stale fifth screenshot.
+        stamp = "2026-10-28T03:15:01Z"
+        self.source["captures"][-1]["captured_at_utc"] = stamp
+        self.receipt["captures"][-1]["captured_at_utc"] = stamp
+        self.write_source()
+        self.rebind_manifest_hash()
+        self.write_receipt()
+        with self.assertRaisesRegex(ValueError, "15-minute"):
+            self.run_audit()
+
     def test_rehashed_source_manifest_live_escalation_rejected(self):
         for key, value in (("provenance", "LIVE"),
                            ("runtime_authenticated", True),
