@@ -165,6 +165,24 @@ class ReadOnlySmokeTests(unittest.TestCase):
             self.assertNotIn("e" * 40, output.getvalue())
             self.assertNotIn("checks", receipt)
 
+    def test_applied_sha_matching_cli_is_still_not_e2e(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "applied.sha"
+            sha = "f" * 40
+            path.write_text(sha + "\n")
+            args = [item for name, url in self.endpoints.items()
+                    for item in ("--" + name + "-url", url)]
+            args += ["--expected-sha", sha, "--applied-sha-file", str(path)]
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(args)
+            receipt = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(receipt["assessment"], "READONLY_PREFLIGHT_PASS")
+            self.assertEqual(receipt["applied_sha_verified"], "MATCH_UNATTESTED")
+            self.assertEqual(receipt["overall"], "NO_GO")
+            self.assertEqual(receipt["core_temporal_analyst_critic_policy_evidence"], "NOT_TESTED")
+
     def test_applied_sha_flags_must_be_paired(self):
         args = [item for name, url in self.endpoints.items()
                 for item in ("--" + name + "-url", url)]
