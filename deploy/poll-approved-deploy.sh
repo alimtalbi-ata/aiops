@@ -31,16 +31,48 @@ if [[ -f "$BASE/failed.sha" ]] &&
   exit 1
 fi
 
-# Only accept descendants of the last successfully applied revision.
-if [[ -n "$applied" ]]; then
-  if ! git cat-file -e "$applied^{commit}" 2>/dev/null; then
-    echo "BLOCKED: applied commit unavailable locally: $applied" >&2
+# Refuse bootstrap without an independently provisioned applied.sha.
+if [[ ! "$applied" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "BLOCKED: missing or invalid applied.sha; manual bootstrap required" >&2
+  exit 1
+fi
+if ! git cat-file -e "$applied^{commit}" 2>/dev/null; then
+  echo "BLOCKED: applied commit unavailable locally" >&2
+  exit 1
+fi
+if ! git merge-base --is-ancestor "$applied" "$target"; then
+  echo "BLOCKED: non-fast-forward stable history" >&2
+  exit 1
+fi
+
+# The current deployer transports ONLY demo_v2.py and its test. It does not
+# transport Core/Twin/Copilot/Policy/SQL or a complete portal/main.py.
+# Check actual NUL-separated Git changes before checkout/deployment.
+diff_file="$(mktemp "$BASE/.approved-diff.XXXXXX")"
+trap 'rm -f "$diff_file"' EXIT
+if ! git diff --name-status -z --no-renames "$applied" "$target" > "$diff_file"; then
+  echo "BLOCKED: cannot inspect candidate file changes" >&2
+  exit 1
+fi
+changed_count=0
+while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+  ((changed_count+=1))
+  if [[ "$status" != A && "$status" != M ]] ||
+     [[ -z "$path" ]] || [[ "$path" =~ [[:cntrl:]] ]]; then
+    echo "BLOCKED: unsafe candidate diff status or path" >&2
     exit 1
   fi
-  if ! git merge-base --is-ancestor "$applied" "$target"; then
-    echo "BLOCKED: non-fast-forward stable history" >&2
-    exit 1
-  fi
+  case "$path" in
+    app/portal/demo_v2.py|tests/test_demo_v2.py|tests/*|docs/*|.github/*|README.md|VERSION|.gitignore) ;;
+    *)
+      echo "BLOCKED: changed file is not transported by portal-only deployer" >&2
+      exit 1
+      ;;
+  esac
+done < "$diff_file"
+if (( changed_count == 0 )); then
+  echo "BLOCKED: empty candidate diff" >&2
+  exit 1
 fi
 # Fail closed: no forced checkout on a dirty working tree.
 if [[ -n "$(git status --porcelain)" ]]; then

@@ -45,6 +45,10 @@ class PollApprovedDeployTests(unittest.TestCase):
             'fi\n'
         )
 
+        demo = self.work / "app/portal/demo_v2.py"
+        demo.parent.mkdir(parents=True)
+        demo.write_text("# initial demo module\n")
+
         run("git", "add", ".", cwd=self.work)
         run("git", "commit", "-m", "initial", cwd=self.work)
         self.initial = self.sha()
@@ -71,8 +75,8 @@ class PollApprovedDeployTests(unittest.TestCase):
         run(*args, cwd=self.work)
 
     def advance(self, message):
-        f = self.work / "revision.txt"
-        f.write_text(message)
+        f = self.work / "app/portal/demo_v2.py"
+        f.write_text("# " + message + "\n")
         run("git", "add", ".", cwd=self.work)
         run("git", "commit", "-m", message, cwd=self.work)
         self.push()
@@ -132,6 +136,53 @@ class PollApprovedDeployTests(unittest.TestCase):
         second = self.poll()
         self.assertNotEqual(second.returncode, 0)
         self.assertEqual(self.invocations(), ["invoked"])
+
+    def test_missing_applied_sha_never_bootstraps(self):
+        self.advance("candidate")
+        result = self.poll()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("manual bootstrap required", result.stderr)
+        self.assertEqual(self.invocations(), [])
+        self.assertFalse((self.base / "applied.sha").exists())
+
+    def test_changed_core_module_blocks_before_deployer(self):
+        self.write_applied(self.initial)
+        self.advance("candidate")
+        core = self.work / "app/core/main.py"
+        core.parent.mkdir(parents=True, exist_ok=True)
+        core.write_text("# undeployed Core change\n")
+        run("git", "add", ".", cwd=self.work)
+        run("git", "commit", "-m", "uncovered Core change", cwd=self.work)
+        self.push()
+        result = self.poll()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not transported", result.stderr)
+        self.assertEqual(self.invocations(), [])
+        self.assertEqual((self.base / "applied.sha").read_text().strip(), self.initial)
+
+    def test_changed_deployer_blocks_automatic_rollout(self):
+        self.write_applied(self.initial)
+        self.advance("candidate")
+        script = self.work / "deploy/deploy-demo-studio-v2.sh"
+        script.write_text(script.read_text() + "# changed deployer\n")
+        run("git", "add", ".", cwd=self.work)
+        run("git", "commit", "-m", "changed deployer", cwd=self.work)
+        self.push()
+        result = self.poll()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not transported", result.stderr)
+        self.assertEqual(self.invocations(), [])
+
+    def test_deleted_deployed_module_blocks(self):
+        self.write_applied(self.initial)
+        (self.work / "app/portal/demo_v2.py").unlink()
+        run("git", "add", "-A", cwd=self.work)
+        run("git", "commit", "-m", "deleted demo module", cwd=self.work)
+        self.push()
+        result = self.poll()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe candidate diff status", result.stderr)
+        self.assertEqual(self.invocations(), [])
 
     def test_successful_deployment(self):
         self.write_applied(self.initial)
