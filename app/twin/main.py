@@ -35,6 +35,8 @@ def impact(node_id: str, authorization: str | None = Header(default=None)):
             headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'},
         )
     with db() as c:
+        # Both topology reads must see one stable read-only snapshot.
+        c.execute('set transaction isolation level repeatable read read only')
         if not c.execute(
             'select 1 from aiops.twin_nodes where node_id=%s', (node_id,)
         ).fetchone():
