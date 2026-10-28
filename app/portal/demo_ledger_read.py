@@ -139,7 +139,11 @@ def _project(rid, detail, ledger, refs):
             raise ValueError("unlinked critique")
         critique_ids.add(critique_id)
         evidence_ids = _evidence_ids(item.get("evidence_ids"))
-        linked_ids = set(evidence_ids) & analysis_evidence[analysis_id]
+        # A Critique may cite only Evidence from its own linked Analysis.
+        # The Core resolver validates the Run-wide union, not this per-Analysis edge.
+        if not set(evidence_ids).issubset(analysis_evidence[analysis_id]):
+            raise ValueError("critique evidence outside linked analysis")
+        linked_ids = set(evidence_ids)
         checks = []
         for check in _records(output.get("claim_checks")):
             if not isinstance(check.get("supported"), bool):

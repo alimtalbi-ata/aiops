@@ -117,6 +117,31 @@ class DemoLedgerReadTests(unittest.TestCase):
                 self.assertNotIn("EVD-NOT-SOURCED", denied.body.decode())
                 self.assertEqual(denied.headers["cache-control"], "no-store")
 
+    def test_cross_analysis_evidence_swap_fails_closed_even_without_supported_claim(self):
+        # Run-wide union remains EVD-1/EVD-2, so Core's union check alone
+        # cannot detect a Critique that borrows another Analysis' evidence.
+        multi = json.loads(json.dumps(LEDGER))
+        multi["analyses"].append({**multi["analyses"][0],
+                                  "analysis_id": "ANA-2", "evidence_ids": ["EVD-2"]})
+        multi["critiques"].append({**multi["critiques"][0],
+                                   "critique_id": "CRT-2", "analysis_id": "ANA-2",
+                                   "evidence_ids": ["EVD-2"]})
+        refs = json.loads(json.dumps(REFS))
+        refs["items"].append({**refs["items"][0], "evidence_id": "EVD-2"})
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, multi, refs]):
+            self.assertEqual(self.read("Bearer " + VIEWER).status_code, 200)
+        # Neither Critique claims support: this still must be rejected.
+        multi["critiques"][0]["evidence_ids"] = ["EVD-2"]
+        multi["critiques"][1]["evidence_ids"] = ["EVD-1"]
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, multi, refs]):
+            denied = self.read("Bearer " + VIEWER)
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(payload(denied), {"status": "UNKNOWN",
+                                           "reason": "ledger_unavailable"})
+        self.assertEqual(denied.headers["cache-control"], "no-store")
+        for identifier in ("ANA-2", "CRT-2", "EVD-2", VIEWER):
+            self.assertNotIn(identifier, denied.body.decode())
+
     def test_resolver_required_even_when_ledger_links_are_consistent(self):
         mutations = [
             ("absent", {}),
