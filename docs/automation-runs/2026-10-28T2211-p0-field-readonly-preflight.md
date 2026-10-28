@@ -36,3 +36,9 @@
 | P1 | Sonde de disponibilité locale et refus anonyme | **PASS sur fixtures HTTP uniquement** ; terrain NOT_TESTED |
 
 **Décision : BLOCKED / NO-GO, pas READY_FOR_STABLE.** Prochain lot : proposer une branche candidate d'assemblage ciblé avec transport explicite des modules Core/Twin/Copilot, puis étendre la recette opérateur aux IDs et reçus Evidence sous auth tenant qualifiée ; exiger CI complète, rollback et preuve terrain avant toute promotion.
+
+## Clôture de la qualification du code et audit supplémentaire
+- Correctif de taille HTML bornée (Demo Studio réel potentiellement supérieur à 8 KiB) : `82fbf4bba8acc3c0335fe9fb54a5cab946b5839f` ; test de réponse HTML supérieure à 128 KiB : `7eeddd5fd87519619607f5ba4f28117438843331`.
+- Tests locaux réexécutés sur le correctif : **9/9 OK** (vrais serveurs HTTP fixtures, pas services applicatifs).
+- CI **SHA code/tests exact `7eeddd5fd87519619607f5ba4f28117438843331`** : [quality.yml PR #40770474397](https://github.com/alimtalbi-ata/aiops/actions/runs/40770474397) et [quality.yml push #40770461545](https://github.com/alimtalbi-ata/aiops/actions/runs/40770461545), tous deux `completed/success` ; **3/3 jobs SUCCESS** chacun (policy-and-static, Core/PostgreSQL éphémère, Grafana éphémère). Logs du job PR lus : **9 tests smoke exécutés, 9 OK**. Les jobs Core/PostgreSQL et Grafana ne qualifient pas le scénario ACME E2E. Après ce commit documentaire, revérifier les checks du HEAD final.
+- Revue statique complémentaire de #153 : `deploy/deploy-demo-studio-v2.sh` définit `BACKUP="aiops2-portal-rollback-v2-$(date ...)-$"`, contenant un dollar littéral terminal. Une expansion Bash **réellement exécutée localement** confirme le suffixe `-\$`, qui ne correspond pas au format des noms de conteneur Docker ; **aucun test Docker ni rollback terrain exécuté**. Blocage P0 signalé à la PR #153 ([commentaire](https://github.com/alimtalbi-ata/aiops/pull/153)). Corriger et tester avant toute promotion.
