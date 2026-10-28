@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -131,6 +132,54 @@ def install_network_fence(context, page, item):
     return blocked
 
 
+
+def _visible_box(locator, viewport):
+    """Fail closed when a claimed proof/mask is hidden or outside the PNG viewport."""
+    if not locator.is_visible():
+        raise ValueError("proof or redaction target not visible")
+    box = locator.bounding_box()
+    if not isinstance(box, dict) or not isinstance(viewport, dict):
+        raise ValueError("missing screenshot geometry")
+    try:
+        x, y, w, h = (float(box[key]) for key in ("x", "y", "width", "height"))
+        vw, vh = float(viewport["width"]), float(viewport["height"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("invalid screenshot geometry") from exc
+    if not all(math.isfinite(v) for v in (x, y, w, h, vw, vh)) or not (
+            w > 0 and h > 0 and vw > 0 and vh > 0 and
+            0 <= x < x + w <= vw and 0 <= y < y + h <= vh):
+        raise ValueError("proof or redaction target outside screenshot")
+    return (x, y, x + w, y + h)
+
+
+def verified_capture_locators(page, item):
+    """Ensure the claimed correlation is visible and not hidden by any mask.
+
+    This is a structural preflight, not proof of final pixels or runtime identity.
+    """
+    viewport = page.viewport_size
+    proof = page.locator(item["proof_selector"])
+    if proof.count() != 1:
+        raise ValueError("correlation selector must resolve exactly once")
+    proof_box = _visible_box(proof, viewport)
+    if item["proof_text"] not in proof.inner_text(timeout=5000):
+        raise ValueError("correlation ID not visible")
+    masks = []
+    for selector in item["redact_selectors"]:
+        matches = page.locator(selector)
+        count = matches.count()
+        if not 1 <= count <= 50:
+            raise ValueError("redaction selector missing or too broad")
+        for index in range(count):
+            target = matches.nth(index)
+            x1, y1, x2, y2 = _visible_box(target, viewport)
+            px1, py1, px2, py2 = proof_box
+            if x1 < px2 and px1 < x2 and y1 < py2 and py1 < y2:
+                raise ValueError("redaction mask obscures correlation proof")
+        masks.append(matches)
+    return masks
+
+
 def capture(plan, output_dir, storage_state_dir, approved=False):
     entries = validate_plan(plan)
     if not approved:
@@ -178,12 +227,7 @@ def capture(plan, output_dir, storage_state_dir, approved=False):
                         response = page.goto(item["url"], wait_until="domcontentloaded", timeout=20000)
                         if response is None or response.status >= 400 or page.url != item["url"] or blocked:
                             raise ValueError("navigation failed or request denied for " + service)
-                        proof = page.locator(item["proof_selector"])
-                        if proof.count() != 1 or item["proof_text"] not in proof.inner_text(timeout=5000):
-                            raise ValueError("correlation ID not visible for " + service)
-                        masks = [page.locator(s) for s in item["redact_selectors"]]
-                        if any(m.count() == 0 for m in masks):
-                            raise ValueError("redaction target missing for " + service)
+                        masks = verified_capture_locators(page, item)
                         image = page.screenshot(type="png", full_page=False, mask=masks,
                                                 animations="disabled", timeout=15000)
                         if blocked or not image.startswith(PNG) or len(image) > 20 * 1024 * 1024:
