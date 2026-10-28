@@ -196,6 +196,38 @@ class EvidenceVideoBundleTests(unittest.TestCase):
                 bundle.build_bundle(self.evidence, self.manifest, self.output, 2)
         self.assertEqual(list(self.output.iterdir()), [])
 
+    def test_source_manifest_metadata_allowlist_fail_closed(self):
+        # No unreviewed credential/claim fields may enter a packaged manifest.
+        for field, value in (("access_token", "secret"), ("reviewed", True)):
+            with self.subTest(field=field):
+                self.entries[0][field] = value
+                self.write_manifest()
+                with patch.object(bundle, "render") as render:
+                    with self.assertRaisesRegex(ValueError, "source capture metadata"):
+                        bundle.build_bundle(self.evidence, self.manifest, self.output)
+                    render.assert_not_called()
+                del self.entries[0][field]
+        self.write_manifest()
+        for field, value in (("session_cookie", "secret"), ("runtime_authenticated", True)):
+            with self.subTest(field=field):
+                data = json.loads(self.manifest.read_text())
+                data[field] = value
+                self.manifest.write_text(json.dumps(data))
+                with patch.object(bundle, "render") as render:
+                    with self.assertRaisesRegex(ValueError, "source capture manifest"):
+                        bundle.build_bundle(self.evidence, self.manifest, self.output)
+                    render.assert_not_called()
+        self.write_manifest()
+
+    def test_browser_unreviewed_metadata_remains_supported(self):
+        manifest = json.loads(self.manifest.read_text())
+        for entry in manifest["captures"]:
+            entry.update({"capture_method": "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED",
+                          "runtime_authenticated": False, "production_qualified": False})
+        manifest["runtime_authenticated"] = False
+        manifest["production_qualified"] = False
+        bundle.validate_source_manifest(manifest)
+
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "real ffmpeg/ffprobe unavailable")
     def test_real_mp4_srt_receipt_offline(self):
         result = bundle.build_bundle(self.evidence, self.manifest, self.output, 2)

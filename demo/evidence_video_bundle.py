@@ -76,6 +76,52 @@ def _correlation(manifest: dict) -> dict:
     return context
 
 
+# Keep operator-supplied manifests narrowly scoped: arbitrary metadata can
+# carry credentials, session cookies or forged proof claims into evidence files.
+SOURCE_MANIFEST_KEYS = frozenset({
+    "schema_version", "provenance", "captures",
+    "runtime_authenticated", "production_qualified",
+})
+SOURCE_CAPTURE_REQUIRED = frozenset({
+    "service", "file", "sha256", "captured_at_utc", "source_url",
+    "run_id", "incident_id", "ticket_id", "session_label",
+})
+SOURCE_CAPTURE_OPTIONAL = frozenset({
+    "capture_method", "runtime_authenticated", "production_qualified",
+})
+
+
+def validate_source_manifest(manifest: dict) -> None:
+    """Strict shared input contract; never authenticate an operator or LIVE."""
+    if (not isinstance(manifest, dict) or
+            set(manifest) - SOURCE_MANIFEST_KEYS or
+            type(manifest.get("schema_version")) is not int or
+            manifest["schema_version"] != 1 or
+            manifest.get("provenance") != "OPERATOR_SUPPLIED_UNATTESTED" or
+            manifest.get("runtime_authenticated", False) is not False or
+            manifest.get("production_qualified", False) is not False):
+        raise ValueError("invalid source capture manifest provenance or fields")
+    entries = manifest.get("captures")
+    if not isinstance(entries, list) or len(entries) != len(SERVICES):
+        raise ValueError("exactly five source captures required")
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("unknown or missing source capture metadata")
+        for field in ("run_id", "incident_id", "ticket_id", "session_label"):
+            if field not in entry:
+                raise ValueError("missing or unsafe correlation field: " + field)
+        if (SOURCE_CAPTURE_REQUIRED - set(entry) or
+                set(entry) - (SOURCE_CAPTURE_REQUIRED | SOURCE_CAPTURE_OPTIONAL)):
+            raise ValueError("unknown or missing source capture metadata")
+        if (entry.get("capture_method", "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED")
+                != "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED" or
+                entry.get("runtime_authenticated", False) is not False or
+                entry.get("production_qualified", False) is not False):
+            raise ValueError("unsafe source capture metadata or provenance")
+    if [entry["service"] for entry in entries] != list(SERVICES):
+        raise ValueError("source capture order must be canonical")
+
+
 def _probe(video: Path, seconds: int) -> dict:
     ffprobe = shutil.which("ffprobe")
     ffmpeg = shutil.which("ffmpeg")
@@ -125,6 +171,7 @@ def build_bundle(evidence_root: Path, manifest_path: Path, output_dir: Path, sec
     manifest = json.loads(manifest_bytes.decode("utf-8"), object_pairs_hook=no_duplicates)
     # First validation bounds paths/metadata; pin exact source bytes before
     # handing paths to FFmpeg, then reverify the pinned copies against hashes.
+    validate_source_manifest(manifest)
     captures = verify(evidence_root, manifest)
     context = _correlation(manifest)
     with tempfile.TemporaryDirectory(prefix=".evidence-bundle-", dir=output_dir) as td:

@@ -160,3 +160,21 @@ Le contrôle de session authentifiée et la revue humaine demeurent
 `tests/test_evidence_video.py` et
 `tests/test_evidence_bundle_audit.py`, exécutés par le workflow
 `quality.yml` existant sur la PR.
+
+## Incrément 2026-10-28 10:47 Europe/Paris — champs de manifeste bornés
+
+Le producteur et l'auditeur partagent `validate_source_manifest`. Les champs
+racine autorisés sont `schema_version`, `provenance`, `captures`, et les
+indicateurs facultatifs `runtime_authenticated=false` et
+`production_qualified=false`. Chaque capture doit fournir les neuf champs
+structurels et de corrélation ; seuls `capture_method` (valeur exacte
+`PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED`) et les deux indicateurs à `false`
+sont facultatifs. Les entrées doivent être dans l'ordre canonique des cinq
+applications. Les champs inconnus, jetons, cookies, marqueurs de revue ou
+revendications LIVE sont refusés avant FFmpeg, même si les SHA sont recalculés.
+
+Compatibilité : les manifestes minimaux antérieurs et les manifestes Playwright
+non attestés restent acceptés ; tout champ supplémentaire nécessite une
+évolution explicite du contrat et des tests. Cela ne vérifie **pas** les pixels,
+l'identité de session ni la confidentialité visuelle. Les tests offline sont
+exécutés par le workflow `quality.yml` existant.

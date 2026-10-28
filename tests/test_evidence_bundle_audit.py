@@ -201,7 +201,10 @@ class BundleAuditTests(unittest.TestCase):
         self.assertIsNotNone(shutil.which("ffprobe"), "FFprobe required by CI")
         root = self.bundle.parent
         manifest = root / "input-manifest.json"
-        entries = [{**entry, **self.receipt["correlation"]}
+        # The receipt adds a derived status that is NOT a source-manifest field.
+        entries = [{key: value for key, value in
+                    {**entry, **self.receipt["correlation"]}.items()
+                    if key != "status"}
                    for entry in self.receipt["captures"]]
         manifest.write_text(json.dumps({"schema_version": 1,
                             "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
@@ -284,6 +287,28 @@ class BundleAuditTests(unittest.TestCase):
                     del self.source[key]
                 else:
                     self.source[key] = original
+
+    def test_rehashed_unknown_source_metadata_rejected(self):
+        # Recalculating the manifest hash must not launder credentials or claims.
+        for scope, field, value in (("root", "session_cookie", "secret"),
+                                    ("capture", "access_token", "secret"),
+                                    ("capture", "privacy_reviewed", True),
+                                    ("capture", "status", "BYTES_HASH_VERIFIED_NOT_RUNTIME_ATTESTED"),
+                                    ("capture", "capture_method", "UNVERIFIED"),
+                                    ("capture", "runtime_authenticated", True)):
+            with self.subTest(scope=scope, field=field):
+                target = self.source if scope == "root" else self.source["captures"][0]
+                target[field] = value
+                self.write_source()
+                self.rebind_manifest_hash()
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "source capture"):
+                    self.run_audit()
+                del target[field]
+        self.write_source()
+        self.rebind_manifest_hash()
+        self.write_receipt()
+        self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
 
     def test_source_manifest_missing_or_symlink_rejected(self):
         original = self.manifest.read_bytes()

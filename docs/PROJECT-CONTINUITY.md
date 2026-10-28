@@ -162,3 +162,15 @@ ne constitue pas une attestation d'identité ni une revue de confidentialité.
 - The MP4/SRT producer now shares the offline auditor's bounded, no-follow, stable regular-file reader through `demo/evidence_snapshot.py`. This prevents a manifest path swap to a symlink/FIFO and detects in-place mutation while the manifest is read; the exact accepted bytes remain bound to the receipt SHA-256.
 - Negative tests cover a symlink, FIFO, oversized manifest and mutation between descriptor checks. CI status is recorded in the dated automation journal. This is local file-integrity qualification only, **not** authenticated operator session or LIVE proof.
 - Next: independent session provenance review and reduction of the conflicted #43 stacked PR chain by targeted portage, without a massive merge.
+
+## 2026-10-28 10:47 Europe/Paris — Evidence Studio source-manifest field fence (draft)
+
+Dedicated stacked branch based on PR #113 at `5f74005b8215a1318d7d5fb43ccbb0e106e9c440` introduces a shared
+source-manifest allowlist for MP4/SRT production and independent audit. Unknown
+root/capture fields, embedded credential-like metadata, forged review flags and
+noncanonical capture order fail closed before video rendering; optional
+Playwright unreviewed metadata is preserved. Negative/regression tests are
+added to existing offline suites and `quality.yml` is reused unchanged.
+No authenticated screenshots, visual privacy review, runtime attestation,
+LIVE action, merge or Debian deployment. See
+`docs/automation-runs/2026-10-28-1047-video-evidence.md`.
