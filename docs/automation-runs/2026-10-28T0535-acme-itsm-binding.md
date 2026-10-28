@@ -34,3 +34,8 @@
 - Le contrat #85 est empilé sur #80 et le lecteur #73 sur #69 : ne pas fusionner à l'aveugle. La route publique et l'ACL tenant restent bloquées.
 - Prochain micro-lot : vrai GLPI éphémère CI et émetteur de liaison Core avec identité tenant et anti-rejeu, puis intégration contrôlée dans le portail.
 - **Aucun merge, aucune commande Debian, aucun déploiement et aucune action LIVE.**
+
+## Vérification CI postérieure à la rédaction initiale
+- Le run [40633418815](https://github.com/alimtalbi-ata/aiops/actions/runs/40633418815) sur `5cf4a66e` a finalement conclu `completed/success`.
+- Le run [40633445098](https://github.com/alimtalbi-ata/aiops/actions/runs/40633445098) sur `611bc9d` a conclu `completed/success` ; l'étape `ACME signed ITSM binding fail-closed contract tests` est explicitement `success`.
+- Le run [40633477758](https://github.com/alimtalbi-ata/aiops/actions/runs/40633477758) sur `33ce589049dbc3fdc53dade2d9c8ce68ad046a00` (HEAD avec ce journal initial) a conclu **`completed/success`** : compilation, tests, audit statique et validation Compose réussis. Le présent ajout documentaire crée un nouveau HEAD, à revérifier indépendamment ; aucune qualification d'intégration réelle n'en découle.
