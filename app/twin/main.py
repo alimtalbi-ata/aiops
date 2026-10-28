@@ -35,6 +35,8 @@ def impact(node_id: str, authorization: str | None = Header(default=None)):
             headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'},
         )
     with db() as c:
+        # Both topology reads must see one stable read-only snapshot.
+        c.execute('set transaction isolation level repeatable read read only')
         if not c.execute(
             'select 1 from aiops.twin_nodes where node_id=%s', (node_id,)
         ).fetchone():
@@ -61,11 +63,35 @@ def impact(node_id: str, authorization: str | None = Header(default=None)):
             """,
             (node_id,),
         ).fetchall()
+        # Read only actual DB edges between shortest-hop layers. Never infer a
+        # SAN-to-host edge from two independent VM dependencies.
+        depths = {row[0]: row[4] for row in rows}
+        reachable = list(depths)
+        edge_rows = c.execute(
+            """
+            select edge_id, source_id, target_id, relation_type
+            from aiops.twin_edges
+            where source_id = any(%s) and target_id = any(%s)
+              and relation_type in (
+                  'DEPENDS_ON', 'RUNS_ON', 'USES', 'PATH', 'HOSTED_ON'
+              )
+            order by edge_id
+            """,
+            (reachable, reachable),
+        ).fetchall()
+    path_keys = ['edge_id', 'source_id', 'target_id', 'relation_type']
+    shortest_path_edges = [
+        dict(zip(path_keys, edge))
+        for edge in edge_rows
+        if depths[edge[1]] == depths[edge[2]] + 1
+    ]
     keys = ['node_id', 'type', 'name', 'criticality', 'depth']
     return JSONResponse(
         {
             'root': node_id,
             'affected': [dict(zip(keys, row)) for row in rows],
+            'shortest_path_edges': shortest_path_edges,
+            'path_semantics': 'SEEDED_TOPOLOGY_SHORTEST_HOPS_NOT_RUNTIME_CAUSALITY',
             'traversal_direction': 'REVERSE_CONSUMER_TO_DEPENDENCY',
             'affected_semantics': 'DEPENDENT_CANDIDATES_NOT_CONFIRMED_IMPACT',
             'max_depth': 8,
