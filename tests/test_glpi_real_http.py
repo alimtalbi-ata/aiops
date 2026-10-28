@@ -41,9 +41,8 @@ class GLPIRealHTTPTests(unittest.TestCase):
         for _ in range(30):
             try:
                 with opener.open(BASE + "/", timeout=4) as response:
-                    content = response.read(65537)
-                    if (response.status == 200 and len(content) <= 65536
-                            and b"glpi" in content.lower()):
+                    content = response.read(65536)
+                    if response.status == 200 and b"glpi" in content.lower():
                         cls.login_html = content
                         break
                     title_match = re.search(rb"<title[^>]*>([^<]{0,100})", content, re.I)
