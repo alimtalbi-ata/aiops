@@ -117,5 +117,69 @@ class HITLLabTests(unittest.TestCase):
                 self.proposal(ttl_seconds=ttl)
 
 
+    def test_corrupted_stored_proposal_fields_rejected_before_consumption(self):
+        # Hostile file owners can bypass SQLite triggers; detect partial
+        # corruption rather than treating the cached binding_hash as proof.
+        for column, forged in (
+            ("incident_id", "INC-FORGED"),
+            ("run_id", "RUN-FORGED"),
+            ("target_id", "VM-FORGED"),
+            ("params_hash", "f" * 64),
+            ("mode", "REPLAY"),
+        ):
+            with self.subTest(column=column):
+                p, a = self.approved()
+                with sqlite3.connect(self.path) as db:
+                    db.execute("DROP TRIGGER IF EXISTS proposals_immutable_update")
+                    db.execute(f"UPDATE proposals SET {column}=? WHERE proposal_id=?",
+                               (forged, p["proposal_id"]))
+                with self.assertRaisesRegex(HITLRejected, "binding mismatch"):
+                    dry_run(self.path, proposal_id=p["proposal_id"],
+                            approval_token=a["approval_token"], now=NOW, **ARGS)
+                with sqlite3.connect(self.path) as db:
+                    count = db.execute(
+                        "SELECT COUNT(*) FROM dry_runs WHERE proposal_id=?",
+                        (p["proposal_id"],)).fetchone()[0]
+                self.assertEqual(count, 0)
+
+    def test_corrupted_stored_expiry_rejected_before_consumption(self):
+        p, a = self.approved()
+        with sqlite3.connect(self.path) as db:
+            db.execute("DROP TRIGGER proposals_immutable_update")
+            db.execute("UPDATE proposals SET expires_at=expires_at+86400 WHERE proposal_id=?",
+                       (p["proposal_id"],))
+        with self.assertRaises(HITLRejected):
+            dry_run(self.path, proposal_id=p["proposal_id"],
+                    approval_token=a["approval_token"], now=NOW, **ARGS)
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM dry_runs WHERE proposal_id=?",
+                (p["proposal_id"],)).fetchone()[0], 0)
+
+    def test_simultaneous_consumption_yields_exactly_one_sandbox_receipt(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        p, a = self.approved()
+        gate = Barrier(2)
+        kw = dict(proposal_id=p["proposal_id"], approval_token=a["approval_token"],
+                  now=NOW, **ARGS)
+
+        def attempt(_):
+            gate.wait(timeout=10)
+            try:
+                return dry_run(self.path, **kw)["state"]
+            except HITLRejected:
+                return "REJECTED"
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(attempt, range(2)))
+        self.assertCountEqual(results, ["DRY_RUN_PLANNED", "REJECTED"])
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM dry_runs WHERE proposal_id=?",
+                (p["proposal_id"],)).fetchone()[0], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
