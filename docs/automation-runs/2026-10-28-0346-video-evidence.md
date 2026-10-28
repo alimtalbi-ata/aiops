@@ -26,3 +26,15 @@
   par `apt-get` dans `quality.yml`, sans workflow parallèle.
 - Nouvelle CI sur le HEAD corrigé : en attente de vérification ; ne pas
   marquer PASS avant la conclusion de l'exécution.
+
+## Deuxième tentative CI et correctif de non-régression
+
+- [Run 40623190141](https://github.com/alimtalbi-ata/aiops/actions/runs/40623190141) :
+  FFmpeg installé et tests du bundle exécutés, mais **FAILURE** à l'étape
+  `Playwright capture safety contract` : 20/21 tests ont réussi ; le test
+  `test_credential_bearing_approved_get_url_rejected` attendait
+  `GET resource`, alors que le filtre refuse plus tôt l'URL avec
+  `noncanonical or credential-bearing URL`. Le comportement de sécurité est
+  bien fail-closed ; c'est l'assertion de message qui était trop restrictive.
+- Correctif `56a5b69` : accepte les deux motifs de refus sans modifier le
+  filtre réseau ni autoriser de requête. CI complète à confirmer sur ce HEAD.
