@@ -8,12 +8,14 @@ from portal.noc_runtime import router as noc_runtime_router
 from portal.noc_correlation import router as noc_correlation_router
 from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.acme_impact_read_model import router as acme_impact_router
+from portal.acme_run_readback import router as acme_run_readback_router
 from portal.acme_golden_demo import require_demo_auth, launch_acme_golden_demo
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
 app.include_router(acme_impact_router)
+app.include_router(acme_run_readback_router)
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
