@@ -3,8 +3,15 @@
 Only runs in quality.yml with ephemeral services and CI-only credentials.
 No mocks, no production network, no mutation of the seeded topology.
 """
+import copy
+import json
 import os
+import subprocess
+import sys
 import unittest
+
+from scripts.qualify_acme_twin_readonly import (QualificationError, qualify,
+                                                loopback_base, validate_impact)
 
 import psycopg
 import requests
@@ -124,6 +131,75 @@ class TwinImpactRealIntegration(unittest.TestCase):
         self.assertEqual(r.status_code, 404, r.text)
         self.assertEqual(r.headers.get("cache-control"), "no-store")
         self.assertNotIn("ACME-SVC-PAYMENTS", r.text)
+
+
+    def test_readonly_qualification_against_real_twin_and_cli(self):
+        result = qualify(BASE, TOKEN)
+        self.assertEqual(result["contract_status"], "PASS")
+        self.assertEqual(result["overall"], "NO_GO")
+        self.assertEqual(result["provenance"], "SIMULATED_TOPOLOGY_NOT_RUNTIME_IMPACT")
+        self.assertEqual(result["path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02", "ACME-E01"])
+        self.assertIs(result["san_host_link_verified"], False)
+        self.assertEqual(result["runtime_impact_state"], "UNKNOWN")
+        self.assertIn("TENANT_RBAC_NOT_QUALIFIED", result["blockers"])
+        self.assertIn("DEPLOY_COVERAGE_AND_ROLLBACK_NOT_QUALIFIED", result["blockers"])
+        process = subprocess.run(
+            [sys.executable, "scripts/qualify_acme_twin_readonly.py",
+             "--base-url", BASE],
+            env={**os.environ, "AIOPS_TWIN_READ_TOKEN": TOKEN},
+            text=True, capture_output=True, timeout=15, check=False,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(json.loads(process.stdout), result)
+
+    def test_readonly_qualifier_rejects_forged_paths_and_attestations(self):
+        response = self.read("ACME-SAN-FABRIC-A")
+        self.assertEqual(response.status_code, 200)
+        original = response.json()
+        cases = (
+            ("fake_outage", lambda d: d.update(runtime_impact_state="DEGRADED")),
+            ("fake_tenant_acl", lambda d: d.update(tenant_acl_qualified=True)),
+            ("fake_runtime", lambda d: d.update(runtime_authenticated=True)),
+            ("fake_provenance", lambda d: d.update(provenance="CMDB_VERIFIED")),
+            ("wrong_direction", lambda d: d.update(traversal_direction="FORWARD")),
+            ("missing_edge", lambda d: d["shortest_path_edges"].pop()),
+            ("wrong_edge_id", lambda d: d["shortest_path_edges"][0].update(
+                edge_id="INVENTED-SAN-HOST")),
+            ("fake_host", lambda d: d["affected"].append({
+                "node_id": "ACME-SRV-RHEL01", "depth": 2})),
+            ("missing_payments", lambda d: d["affected"].pop()),
+            ("duplicate_node", lambda d: d["affected"].append(
+                copy.deepcopy(d["affected"][0]))),
+            ("wrong_path_semantics", lambda d: d.update(
+                path_semantics="CONFIRMED_PAYMENTS_OUTAGE")),
+        )
+        for name, mutate in cases:
+            with self.subTest(case=name):
+                forged = copy.deepcopy(original)
+                mutate(forged)
+                with self.assertRaises(QualificationError):
+                    validate_impact(forged)
+
+    def test_qualifier_rejects_non_loopback_without_network(self):
+        for url in ("http://10.79.94.202:811", "https://127.0.0.1:811",
+                    "http://localhost:811", "http://127.0.0.1:811/impact",
+                    "http://user:pass@127.0.0.1:811",
+                    "http://127.0.0.1:811/?token=secret",
+                    "http://127.0.0.1:99999"):
+            with self.subTest(url=url), self.assertRaises(QualificationError):
+                loopback_base(url)
+        with self.assertRaises(QualificationError):
+            qualify(BASE, "")
+        process = subprocess.run(
+            [sys.executable, "scripts/qualify_acme_twin_readonly.py",
+             "--base-url", "http://10.79.94.202:811"],
+            env={**os.environ, "AIOPS_TWIN_READ_TOKEN": TOKEN},
+            text=True, capture_output=True, timeout=10, check=False,
+        )
+        self.assertEqual(process.returncode, 2)
+        self.assertEqual(json.loads(process.stdout)["overall"], "NO_GO")
+        self.assertNotIn(TOKEN, process.stdout)
 
 
 if __name__ == "__main__":
