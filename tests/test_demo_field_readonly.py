@@ -30,7 +30,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
         if self.path in server.redirect_paths:
             status, payload = 302, b""
         if self.path in server.large_paths:
-            payload = b"x" * 9000
+            payload = b"x" * 140000
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         if status == 302:
