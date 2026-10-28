@@ -89,7 +89,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
                     age_label = f"Ancien ({int(age // 86400)} jours) — état à requalifier"
                 elif age >= 3600:
                     age_label = f"{int(age // 3600)} h depuis le début"
-                else:
+                elif age >= 0:
                     age_label = "Démarré récemment (heure Core)"
         except ValueError:
             pass
@@ -141,7 +141,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
         ]))
     # A stale RUNNING warning needs a verifiable timestamp. Missing/malformed
     # events must not be interpreted as proof that no progress occurred.
-    last_activity = last_event if events else start_clock
+    last_activity = last_event if events else (start_clock if events == [] else None)
     if (status == "RUNNING" and start_clock is not None
             and last_activity is not None
             and (clock - last_activity).total_seconds() >= 1800):
