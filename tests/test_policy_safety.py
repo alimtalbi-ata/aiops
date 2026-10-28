@@ -1,6 +1,8 @@
 import unittest
 
-from app.policy.main import Decision, evaluate
+from fastapi.testclient import TestClient
+
+from app.policy.main import Decision, app, evaluate
 
 
 def decision(**overrides):
@@ -80,6 +82,39 @@ class PolicySafetyTests(unittest.TestCase):
         result = evaluate(decision(mode="DEMO", human_approved=False))
         self.assertEqual(result["state"], "PASS")
         self.assertEqual(result["decision"], "SIMULATE")
+
+
+    def test_http_live_mutation_denies_forged_boolean(self):
+        # Exercise the actual FastAPI/Pydantic boundary, not only evaluate().
+        with TestClient(app) as client:
+            for command in ("EXECUTE", "RESOLVE", "REMEDIATE", "CANCEL"):
+                with self.subTest(command=command):
+                    payload = decision(command=command, human_approved=True).model_dump()
+                    response = client.post("/api/policy/check", json=payload)
+                    self.assertEqual(response.status_code, 200)
+                    result = response.json()
+                    self.assertEqual(result["state"], "BLOCKED")
+                    self.assertEqual(result["decision"], "HUMAN_APPROVAL")
+                    self.assertIn("one-use HITL binding", result["reason"])
+
+    def test_http_invalid_mode_and_command_are_rejected(self):
+        with TestClient(app) as client:
+            for override in ({"mode": "LIVE_SIMULATED"}, {"mode": "live"},
+                             {"command": "SHELL"}, {"command": "APPROVE"}):
+                with self.subTest(override=override):
+                    payload = decision().model_dump()
+                    payload.update(override)
+                    response = client.post("/api/policy/check", json=payload)
+                    self.assertEqual(response.status_code, 422)
+
+    def test_http_synthetic_modes_never_claim_live_allow(self):
+        with TestClient(app) as client:
+            for mode in ("DEMO", "REPLAY", "STORY"):
+                with self.subTest(mode=mode):
+                    payload = decision(mode=mode, command="REMEDIATE").model_dump()
+                    response = client.post("/api/policy/check", json=payload)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json()["decision"], "SIMULATE")
 
 
 if __name__ == "__main__":
