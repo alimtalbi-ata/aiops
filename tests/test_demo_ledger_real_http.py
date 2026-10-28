@@ -198,7 +198,7 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertEqual(data["items"][0]["source"], "CI_SYNTHETIC_SAN")
         self.assertEqual(len(data["items"][0]["payload_sha256"]), 64)
         self.assertTrue(data["items"][0]["known_at"])
-        for secret in (INTERNAL, VIEWER, PRIVATE, "synthetic_only", "payload"):
+        for secret in (INTERNAL, VIEWER, PRIVATE, "synthetic_only", '"payload":'):
             self.assertNotIn(secret, allowed.text)
 
     def test_core_evidence_refs_fail_closed_for_live_cross_run_and_absent(self):
