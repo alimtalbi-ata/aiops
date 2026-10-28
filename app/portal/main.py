@@ -67,6 +67,29 @@ def _runs():
 def _run_id(r):
     return r.get("run_id","UNKNOWN")
 
+
+def _demo_detail_matches(detail, listed):
+    """Bind Core detail to the selected DEMO run before reading ledgers.
+
+    The actual Core contract nests identity in detail["run"]. An HTTP error,
+    flat/partial response, wrong mode, or conflicting incident/scenario must
+    never be used to render another run's timeline or evidence.
+    """
+    if not isinstance(detail, dict) or not isinstance(listed, dict):
+        return False
+    run = detail.get("run")
+    if not isinstance(run, dict):
+        return False
+    if (run.get("run_id") != listed.get("run_id")
+            or run.get("mode") != listed.get("mode")
+            or run.get("mode") not in ("DEMO", "REPLAY", "STORY")):
+        return False
+    for key in ("incident_id", "scenario_id"):
+        if listed.get(key) is not None and run.get(key) != listed[key]:
+            return False
+    return True
+
+
 @app.get("/",response_class=HTMLResponse)
 def home():
     d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
@@ -270,6 +293,14 @@ def demo_run_detail(rid:str):
     from urllib.parse import quote
     key=quote(rid,safe="")
     detail=_get("/api/runs/"+key)
+    if not _demo_detail_matches(detail, matched):
+        return shell("/demo-studio", "Démonstration · "+rid,
+            "Lecture seule — identité Core non vérifiable.",
+            panel("Chronologie Core — INCONNU",
+                "<p>INCONNU — identité run/mode/scénario Core incohérente ou "
+                "indisponible. Aucun registre Analyst/Critic/Policy/Evidence "
+                "n'est affiché.</p>"),
+            mode=matched.get("mode","DEMO"))
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     gate=_get("/api/runs/"+key+"/gates")
     body=panel("Suivi de l'exécution",
@@ -293,14 +324,9 @@ def demo_run_detail(rid:str):
     body+=panel("Timeline et registres en direct",
       '<p class="muted">Données en lecture seule provenant de Core ; aucune chronologie n’est inventée.</p>'
       '<pre id="run-watch-trace" class="log">Chargement des éléments de preuve…</pre>')
+    from portal.demo_v2 import render_demo_v2
+    body+=render_demo_v2(detail,ledger,gate)
     body+=panel("État canonique du run",pretty(detail))
-    events=detail.get("events") if isinstance(detail.get("events"),list) else []
-    rows=[(e.get("sequence","?"),e.get("occurred_at","INCONNU"),e.get("stage","INCONNU"),
-           e.get("event_type","INCONNU"),e.get("status","INCONNU"),e.get("decision","INCONNU"))
-          for e in events if isinstance(e,dict)]
-    body+=panel("Timeline canonique des événements",
-      table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
-      if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
     from portal.demo_explain import render_critic_explanation
     body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
@@ -320,9 +346,11 @@ def demo_status(rid:str):
     if not allowed:
         raise HTTPException(404,"demo_run_not_found")
     detail=_get("/api/runs/"+rid)
-    if detail.get("status")=="UNKNOWN":
-        return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
-    run=detail.get("run",{}) if isinstance(detail.get("run"),dict) else detail
+    if not _demo_detail_matches(detail, allowed):
+        return {"run_id":rid,"status":"UNKNOWN","mode":allowed.get("mode"),
+                "source":"CORE_IDENTITY_UNVERIFIED","events":"INCONNU",
+                "ledger":{"status":"UNKNOWN"},"gates":{"status":"UNKNOWN"}}
+    run=detail["run"]
     ledger=_get("/api/runs/"+rid+"/ai-ledger")
     gates=_get("/api/runs/"+rid+"/gates")
     events=detail.get("events",None)

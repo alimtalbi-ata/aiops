@@ -133,7 +133,7 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_run_details_are_source_backed(self):
         def get(base,path,**kw):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
-            if path=="/api/runs/RUN-DEMO-42":return {"run_id":"RUN-DEMO-42","status":"RESOLVED"}
+            if path=="/api/runs/RUN-DEMO-42":return {"run":{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"},"events":[]}
             if path.endswith("/ai-ledger"):return {"analysis":"ANL-SOURCE-42","critic":"CRT-SOURCE-42"}
             if path.endswith("/gates"):return {"decision":"SIMULATE"}
             raise AssertionError(path)
@@ -170,7 +170,7 @@ class PortalPageContractTests(unittest.TestCase):
         from fastapi import HTTPException
         with patch.object(self.portal,"get_json",side_effect=lambda base,path: (
             {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"},{"run_id":"RUN-LIVE","mode":"LIVE"}]}
-            if path=="/api/runs" else {"status":"RUNNING"})):
+            if path=="/api/runs" else {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"}})):
             result=self.portal.demo_status("RUN-DEMO")
             self.assertEqual(result["status"],"RUNNING")
             with self.assertRaises(HTTPException) as exc:
@@ -180,7 +180,8 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_detail_contains_live_status_poll(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
-            return {"status":"RUNNING"}
+            if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"},"events":[]}
+            return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             page=self.portal.demo_run_detail("RUN-DEMO")
         self.assertIn('id="run-watch-status"',page)
@@ -190,7 +191,7 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_live_trace_is_source_backed(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
-            if path=="/api/runs/RUN-DEMO":return {"status":"BLOCKED","events":[{"event_type":"CRITIC_COMPLETED"}]}
+            if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED"},"events":[{"event_type":"CRITIC_COMPLETED"}]}
             if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
             if path.endswith("/gates"):return {"decision":"BLOCKED"}
             raise AssertionError(path)
@@ -204,7 +205,8 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_missing_event_list_is_not_invented(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
-            return {"status":"RUNNING"}
+            if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"}}
+            return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-DEMO")
         self.assertEqual(response["events"],"INCONNU")
@@ -212,7 +214,7 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_status_parses_actual_core_nested_run_contract(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-X","mode":"DEMO"}]}
-            if path=="/api/runs/RUN-X":return {"run":{"run_id":"RUN-X","status":"RESOLVED"},"events":[{"sequence":1,"event_type":"STAGE_COMPLETED"}]}
+            if path=="/api/runs/RUN-X":return {"run":{"run_id":"RUN-X","mode":"DEMO","status":"RESOLVED"},"events":[{"sequence":1,"event_type":"STAGE_COMPLETED"}]}
             return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-X")
@@ -223,13 +225,90 @@ class PortalPageContractTests(unittest.TestCase):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
             if path=="/api/runs/RUN-DEMO":
-                return {"run":{"status":"RESOLVED"},"events":[{"sequence":3,"occurred_at":"2026-10-21T08:00:00Z","stage":"CRITIC","event_type":"CRITIC_COMPLETED","status":"DONE","decision":"SIMULATE"}]}
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RESOLVED"},"events":[{"sequence":3,"occurred_at":"2026-10-21T08:00:00Z","stage":"CRITIC","event_type":"CRITIC_COMPLETED","status":"DONE","decision":"SIMULATE"}]}
             return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             result=self.portal.demo_run_detail("RUN-DEMO")
-        self.assertIn("Timeline canonique des événements",result)
+        self.assertIn("Chronologie canonique — Core",result)
         self.assertIn("CRITIC_COMPLETED",result)
         self.assertIn("2026-10-21T08:00:00Z",result)
+
+
+    def test_v2_is_wired_once_to_source_backed_detail_page(self):
+        def get(base,path):
+            if path=="/api/runs":
+                return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO","scenario_id":"SCN-ACME"}]}
+            if path=="/api/runs/RUN-DEMO":
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","scenario_id":"SCN-ACME",
+                               "status":"BLOCKED"},
+                        "events":[{"sequence":1,"occurred_at":"2026-10-28T20:00:00Z",
+                                   "event_type":"ACME_CORE_EVENT","payload":{"synthetic":True}}]}
+            if path.endswith("/ai-ledger"):return {"status":"UNKNOWN"}
+            if path.endswith("/gates"):return {"items":[]}
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("write forbidden")):
+                page=self.portal.demo_run_detail("RUN-DEMO")
+        self.assertEqual(page.count("Mission Control V2 — provenance et fraîcheur"),1)
+        self.assertIn("Chronologie canonique — Core",page)
+        self.assertIn("ACME_CORE_EVENT",page)
+        self.assertIn("Observations synthétiques",page)
+        self.assertNotIn("LIVE qualifié",page)
+
+    def test_detail_identity_conflicts_hide_other_run_and_skip_ledger(self):
+        variants=(
+            {"run":{"run_id":"RUN-OTHER","mode":"DEMO","status":"RESOLVED"},
+             "events":[{"event_type":"SENSITIVE-OTHER-RUN"}]},
+            {"run":{"run_id":"RUN-DEMO","mode":"LIVE","status":"RESOLVED"},
+             "events":[{"event_type":"SENSITIVE-OTHER-RUN"}]},
+            {"run":{"run_id":"RUN-DEMO","mode":"DEMO","scenario_id":"WRONG"},
+             "events":[{"event_type":"SENSITIVE-OTHER-RUN"}]},
+            {"status":"UNKNOWN","error_type":"HTTPError","http_status":401},
+            {"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"},
+        )
+        for detail in variants:
+            with self.subTest(detail=detail):
+                calls=[]
+                def get(base,path):
+                    calls.append(path)
+                    if path=="/api/runs":
+                        return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO",
+                                          "scenario_id":"SCN-ACME"}]}
+                    if path=="/api/runs/RUN-DEMO":return detail
+                    raise AssertionError("ledger/gates must not be queried")
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    page=self.portal.demo_run_detail("RUN-DEMO")
+                self.assertIn("Chronologie Core — INCONNU",page)
+                self.assertNotIn("SENSITIVE-OTHER-RUN",page)
+                self.assertNotIn("Mission Control V2",page)
+                self.assertEqual(calls,["/api/runs","/api/runs/RUN-DEMO"])
+
+    def test_poll_identity_conflicts_fail_closed_without_ledger_reads(self):
+        variants=(
+            {"run":{"run_id":"RUN-OTHER","mode":"DEMO","status":"RESOLVED"},
+             "events":[{"event_type":"SENSITIVE-OTHER-RUN"}]},
+            {"run":{"run_id":"RUN-DEMO","mode":"LIVE","status":"RUNNING"}},
+            {"run":{"run_id":"RUN-DEMO","mode":"DEMO","incident_id":"WRONG"}},
+            {"status":"UNKNOWN","error_type":"HTTPError","http_status":403},
+            {},
+        )
+        for detail in variants:
+            with self.subTest(detail=detail):
+                calls=[]
+                def get(base,path):
+                    calls.append(path)
+                    if path=="/api/runs":
+                        return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO",
+                                          "incident_id":"INC-ACME"}]}
+                    if path=="/api/runs/RUN-DEMO":return detail
+                    raise AssertionError("ledger/gates must not be queried")
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    result=self.portal.demo_status("RUN-DEMO")
+                self.assertEqual(result["status"],"UNKNOWN")
+                self.assertEqual(result["source"],"CORE_IDENTITY_UNVERIFIED")
+                self.assertEqual(result["events"],"INCONNU")
+                self.assertEqual(result["ledger"],{"status":"UNKNOWN"})
+                self.assertEqual(calls,["/api/runs","/api/runs/RUN-DEMO"])
 
 if __name__=="__main__":
     unittest.main()
