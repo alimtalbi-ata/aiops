@@ -31,16 +31,84 @@ if [[ -f "$BASE/failed.sha" ]] &&
   exit 1
 fi
 
-# Only accept descendants of the last successfully applied revision.
-if [[ -n "$applied" ]]; then
-  if ! git cat-file -e "$applied^{commit}" 2>/dev/null; then
-    echo "BLOCKED: applied commit unavailable locally: $applied" >&2
+# Never bootstrap an unverified machine from a branch alone. A missing or
+# malformed applied.sha requires an operator-controlled initial installation.
+if [[ ! "$applied" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "BLOCKED: missing or invalid applied.sha; manual bootstrap required" >&2
+  exit 1
+fi
+if ! git cat-file -e "$applied^{commit}" 2>/dev/null; then
+  echo "BLOCKED: applied commit unavailable locally" >&2
+  exit 1
+fi
+if ! git merge-base --is-ancestor "$applied" "$target"; then
+  echo "BLOCKED: non-fast-forward stable history" >&2
+  exit 1
+fi
+
+# Actual one-shot deployer only copies demo_v2.py/test_demo_v2.py and patches
+# portal/main.py by anchor. Do not let a protected-branch update silently
+# claim to deploy Core, Twin, Copilot, SQL, or a changed deployer/poller.
+# Offline git-diff check happens BEFORE checkout or invoking the deployer.
+diff_file="$(mktemp "$BASE/.approved-diff.XXXXXX")"
+trap 'rm -f "$diff_file"' EXIT
+if ! git diff --name-status -z --no-renames "$applied" "$target" > "$diff_file"; then
+  echo "BLOCKED: cannot inspect candidate file changes" >&2
+  exit 1
+fi
+changed_count=0
+while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+  ((changed_count+=1))
+  if [[ "$status" != A && "$status" != M ]] ||
+     [[ -z "$path" || "$path" == *# Fail closed: no forced checkout on a dirty working tree.
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "ERROR: dedicated checkout has local changes; refusing" >&2
+  exit 1
+fi
+git checkout -B aiops2-approved-deployment "$target"
+# Approval is the protected branch itself, not a file inside an unreviewed PR.
+test -f deploy/deploy-demo-studio-v2.sh
+echo "Approved update: $applied -> $target"
+if ! bash deploy/deploy-demo-studio-v2.sh; then
+  printf '%s\n' "$target" > "$BASE/failed.sha"
+  echo "FAILED: revision quarantined: $target" >&2
+  exit 1
+fi
+printf '%s\n' "$target" > "$BASE/applied.sha.tmp"
+mv "$BASE/applied.sha.tmp" "$BASE/applied.sha"
+echo "Deployment successful: $target"
+\n'* || "$path" == *# Fail closed: no forced checkout on a dirty working tree.
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "ERROR: dedicated checkout has local changes; refusing" >&2
+  exit 1
+fi
+git checkout -B aiops2-approved-deployment "$target"
+# Approval is the protected branch itself, not a file inside an unreviewed PR.
+test -f deploy/deploy-demo-studio-v2.sh
+echo "Approved update: $applied -> $target"
+if ! bash deploy/deploy-demo-studio-v2.sh; then
+  printf '%s\n' "$target" > "$BASE/failed.sha"
+  echo "FAILED: revision quarantined: $target" >&2
+  exit 1
+fi
+printf '%s\n' "$target" > "$BASE/applied.sha.tmp"
+mv "$BASE/applied.sha.tmp" "$BASE/applied.sha"
+echo "Deployment successful: $target"
+\r'* ]]; then
+    echo "BLOCKED: unsafe candidate diff status or path" >&2
     exit 1
   fi
-  if ! git merge-base --is-ancestor "$applied" "$target"; then
-    echo "BLOCKED: non-fast-forward stable history" >&2
-    exit 1
-  fi
+  case "$path" in
+    app/portal/demo_v2.py|tests/test_demo_v2.py|tests/*|docs/*|.github/*|README.md|VERSION|.gitignore) ;;
+    *)
+      echo "BLOCKED: changed file is not transported by portal-only deployer" >&2
+      exit 1
+      ;;
+  esac
+done < "$diff_file"
+if (( changed_count == 0 )); then
+  echo "BLOCKED: empty candidate diff" >&2
+  exit 1
 fi
 # Fail closed: no forced checkout on a dirty working tree.
 if [[ -n "$(git status --porcelain)" ]]; then
