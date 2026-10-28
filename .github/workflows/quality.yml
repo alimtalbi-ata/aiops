@@ -27,6 +27,9 @@ jobs:
       - name: Compile Python source
         run: python -m compileall -q app tests tools
       - name: Policy safety unit tests
+        env:
+          PYTHONPATH: app
+          AIOPS_POLICY_STATE_DB: ${{ runner.temp }}/aiops-policy-safety.sqlite3
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
@@ -292,6 +295,9 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
       - name: Re-run release-blocking unit and contract tests
+        env:
+          PYTHONPATH: app
+          AIOPS_POLICY_STATE_DB: ${{ runner.temp }}/aiops-policy-release.sqlite3
         run: |
           python -m compileall -q app tests tools
           python -m unittest discover -s tests -p "test_policy_safety.py" -v

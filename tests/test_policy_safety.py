@@ -1,5 +1,9 @@
+import os
 import unittest
 
+# Keep the safety suite deterministic and isolated from production defaults.
+os.environ["AIOPS_POLICY_EMERGENCY_STOP"] = "false"
+from app.policy import autonomy_store
 from app.policy.main import Decision, evaluate
 
 
@@ -16,12 +20,22 @@ def decision(**overrides):
         "preconditions_verified": True,
         "fencing_verified": True,
         "human_approved": True,
+        "freeze_active": False,
     }
     values.update(overrides)
     return Decision(**values)
 
 
 class PolicySafetyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        state = autonomy_store.status()
+        autonomy_store.set_mode(
+            "NORMAL", "policy-safety-tests",
+            "Initialize isolated deterministic policy safety tests",
+            state["revision"],
+        )
+
     def test_p1_is_always_escalated_even_with_all_proofs(self):
         result = evaluate(decision(severity="P1"))
         self.assertEqual(result["state"], "BLOCKED")
