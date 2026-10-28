@@ -48,3 +48,7 @@ Ce n'est pas une instruction à exécuter automatiquement sur SRV-DEB-05. Le fic
 | Promotion `deploy/aiops2-stable` | **NO-GO / READY_FOR_STABLE=BLOCKED** |
 
 **Prochain micro-lot :** vérifier la CI du HEAD final, coordonner avec #153 un transport explicite et réversible des composants retenus, puis assembler une PR candidate unique et faire exécuter une recette terrain authentifiée par un opérateur autorisé. Ne pas promouvoir ni déployer sur cette seule comparaison.
+
+## Confirmation GitHub Actions (ajoutée après achèvement)
+- **HEAD code + journal `a4611596779f2194a3c51e57d071f31efea42198`** : [quality.yml PR #40783323415](https://github.com/alimtalbi-ata/aiops/actions/runs/40783323415) **completed/success** et [quality.yml push #40783313587](https://github.com/alimtalbi-ata/aiops/actions/runs/40783313587) **completed/success**. Trois jobs SUCCESS chacun ; logs du job `policy-and-static` de la PR lus : **16 tests de la sonde fixture/lecture SHA exécutés, OK**. Jobs Core/PostgreSQL et Grafana réels CI SUCCESS, sans qualifier l'E2E ACME.
+- Ce complément documentaire constitue un nouveau commit ; vérifier séparément ses checks sur son SHA exact avant toute fusion. La décision **NO-GO** reste inchangée.
