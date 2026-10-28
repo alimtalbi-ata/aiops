@@ -22,3 +22,9 @@
 - Viewer Bearer partagé ≠ SSO/ACL tenant. États `READABLE_UNVERIFIED` / `UNKNOWN` non attestés. Intégrations réelles Core/Twin, n8n, Checkmk/Thruk, GLPI, navigateur, Ollama 4B et captures : `NOT_TESTED`/`BLOCKED`; seul Grafana réel a été vérifié dans CI.
 - DEMO/Copilot restent publics dans main : converger #57/#70 avec refus avant appels backend. Puis allowlist #82 et ACL tenant. Ne pas fusionner sans checks du dernier HEAD et absence de conflits.
 - Aucun accès Debian 10.79.94.202 ou portail 17777, aucun déploiement, aucune commande LIVE.
+
+## Fusion et CI post-fusion — 2026-10-28 10:09 Europe/Paris
+- PR [#114](https://github.com/alimtalbi-ata/aiops/pull/114) passée en review puis fusionnée par squash, SHA `cea1ed7b54ed34cf4b036b6d5f20bf968c9dac09` ; GitHub a confirmé `merged=true`. Avant fusion, base `111b3bd5988ac35cd5f83c1fc93813b96c09111e` inchangée, `mergeable_state=clean`, aucun conflit, quatre checks sur HEAD final `4b853894c523dacad4ffcb5ffc8007f1c164d0b7` terminés `success`.
+- [CI push final 40661742307](https://github.com/alimtalbi-ata/aiops/actions/runs/40661742307) et [CI PR final 40661749480](https://github.com/alimtalbi-ata/aiops/actions/runs/40661749480) : `completed/success`, jobs policy/static et Grafana réel en conteneur `success`.
+- [CI post-fusion main 40661890151](https://github.com/alimtalbi-ata/aiops/actions/runs/40661890151) : `completed/success`. Aucune preuve Core/Twin réelle, tenant ACL, navigateur ou LIVE n'est ajoutée par ces résultats.
+- Le présent addendum est une mise à jour documentaire distincte; pas de modification du code applicatif.
