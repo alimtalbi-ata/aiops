@@ -8,6 +8,7 @@ import hmac
 import json
 import os
 import re
+from datetime import datetime
 
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
@@ -16,6 +17,8 @@ from shared.tenant_scope import reject_unqualified_tenant_scope
 
 router = APIRouter()
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_SHA = re.compile(r"[a-f0-9]{64}\Z")
+_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache",
             "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 _ALLOWED_MODES = frozenset({"DEMO", "REPLAY", "STORY"})
@@ -52,7 +55,50 @@ def _records(value):
     return value
 
 
-def _project(rid, detail, ledger):
+def _qualified_refs(rid, refs, expected_ids):
+    """Only Core-linked, synthetic references qualify; never assert source truth."""
+    reject_unqualified_tenant_scope(refs)
+    if (not isinstance(refs, dict)
+            or set(refs) != {"schema", "run_id", "classification",
+                             "tenant_acl_qualified", "runtime_attested",
+                             "event_link_verified", "items"}
+            or refs["schema"] != "aiops.core-demo-evidence-refs.v1"
+            or refs["run_id"] != rid or refs["classification"] != "SYNTHETIC_ONLY"
+            or refs["tenant_acl_qualified"] is not False
+            or refs["runtime_attested"] is not False
+            or refs["event_link_verified"] is not True):
+        raise ValueError("unqualified evidence resolver")
+    items = refs["items"]
+    if (not isinstance(items, list) or not 1 <= len(items) <= 80
+            or not expected_ids or len(items) != len(expected_ids)):
+        raise ValueError("missing evidence references")
+    projected = []
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {
+                "evidence_id", "source", "payload_sha256", "known_at"}:
+            raise ValueError("invalid evidence reference")
+        evidence_id = _identifier(item["evidence_id"])
+        source = item["source"]
+        digest = item["payload_sha256"]
+        timestamp = item["known_at"]
+        if (not isinstance(source, str) or not _SOURCE.fullmatch(source)
+                or not isinstance(digest, str) or not _SHA.fullmatch(digest)
+                or not isinstance(timestamp, str) or len(timestamp) > 48):
+            raise ValueError("invalid evidence metadata")
+        try:
+            known = datetime.fromisoformat(timestamp)
+        except ValueError as exc:
+            raise ValueError("invalid evidence timestamp") from exc
+        if known.tzinfo is None or known.utcoffset() is None:
+            raise ValueError("unqualified evidence timestamp")
+        projected.append({"evidence_id": evidence_id, "source": source,
+                          "payload_sha256": digest, "known_at": timestamp})
+    if {item["evidence_id"] for item in projected} != expected_ids:
+        raise ValueError("unlinked evidence references")
+    return projected
+
+
+def _project(rid, detail, ledger, refs):
     if not isinstance(detail, dict) or not isinstance(ledger, dict):
         raise ValueError("missing Core source")
     reject_unqualified_tenant_scope(detail)
@@ -112,6 +158,8 @@ def _project(rid, detail, ledger):
             "evidence_ids": evidence_ids,
             "claim_checks": checks,
         })
+    expected_ids = set().union(*analysis_evidence.values()) if analysis_evidence else set()
+    qualified_refs = _qualified_refs(rid, refs, expected_ids)
     decisions = []
     for item in _records(ledger.get("policy_decisions")):
         decisions.append({"policy_decision_id": _identifier(item.get("policy_decision_id")),
@@ -121,6 +169,8 @@ def _project(rid, detail, ledger):
             "mode": run["mode"], "classification": "DEMO_CORE_RECORDED_NOT_LIVE",
             "source": "CORE_AI_LEDGER_INTERNAL_READ", "tenant_acl_qualified": False,
             "runtime_attested": False, "analyses": analyses, "critiques": critiques,
+            "evidence_classification": "SYNTHETIC_ONLY",
+            "event_link_verified": True, "evidence_refs": qualified_refs,
             "policy_decisions": decisions}
 
 
@@ -148,7 +198,8 @@ def read_demo_ledger(rid: str, authorization: str | None = Header(default=None))
             raise ValueError("unqualified run")
         reject_unqualified_tenant_scope(detail)
         ledger = get_json(base, "/api/runs/" + rid + "/ai-ledger")
-        return _response(_project(rid, detail, ledger))
+        refs = get_json(base, "/api/noc/runs/" + rid + "/evidence-refs")
+        return _response(_project(rid, detail, ledger, refs))
     except Exception:
         # Includes Core 401, timeout, malformed payload, missing source and tenant scope.
         # Never reflect upstream URLs, headers, exceptions or tokens.
