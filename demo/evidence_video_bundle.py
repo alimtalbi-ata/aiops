@@ -20,6 +20,7 @@ import tempfile
 from urllib.parse import urlsplit
 
 from demo.evidence_video import SERVICES, render, verify
+from demo.evidence_snapshot import pin_captures
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,127}$")
 NAMES = ("aiops-evidence.mp4", "aiops-evidence.srt", "aiops-evidence.receipt.json")
@@ -119,13 +120,17 @@ def build_bundle(evidence_root: Path, manifest_path: Path, output_dir: Path, sec
             result[key] = value
         return result
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"), object_pairs_hook=no_duplicates)
+    # First validation bounds paths/metadata; pin exact source bytes before
+    # handing paths to FFmpeg, then reverify the pinned copies against hashes.
     captures = verify(evidence_root, manifest)
     context = _correlation(manifest)
-    srt = subtitles(captures, seconds)
     with tempfile.TemporaryDirectory(prefix=".evidence-bundle-", dir=output_dir) as td:
         stage = Path(td)
+        pinned = pin_captures(evidence_root, stage, captures)
+        captures = verify(pinned, manifest)
+        srt = subtitles(captures, seconds)
         video = stage / NAMES[0]
-        render(evidence_root, captures, video, seconds)
+        render(pinned, captures, video, seconds)
         video_info = _probe(video, seconds)
         video.chmod(0o600)
         captions = stage / NAMES[1]
