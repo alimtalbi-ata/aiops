@@ -136,7 +136,10 @@ class CheckmkExportEndpointTests(unittest.TestCase):
         self.assertEqual(wrong_type.status_code, 415)
 
     def test_portal_route_and_visible_demo_preview(self):
-        from portal import main
+        # The real portal imports shared.http, whose internal token is mandatory.
+        # Supply only a synthetic CI token; do not weaken runtime authentication.
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "synthetic-ci-internal-token-only"}):
+            from portal import main
         paths = {route.path for route in main.app.routes}
         self.assertIn("/api/noc/checkmk-export/preview", paths)
         snapshot = {"dashboard": None, "runs": None, "twin": None, "states": {}}
