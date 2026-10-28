@@ -1,0 +1,159 @@
+"""Offline negative/positive tests; fixtures are NOT application captures or MP4 proof."""
+import hashlib
+import json
+from pathlib import Path
+import struct
+import tempfile
+import unittest
+import zlib
+
+from demo import evidence_bundle_audit as audit
+from demo.evidence_video import SERVICES, verify
+
+
+def _png():
+    def chunk(kind, data):
+        return (struct.pack(">I", len(data)) + kind + data +
+                struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff))
+    width, height = 320, 200
+    header = struct.pack(">II", width, height) + bytes((8, 2, 0, 0, 0))
+    rows = (b"\x00" + bytes(width * 3)) * height
+    return bytes.fromhex("89504e470d0a1a0a") + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+
+
+class BundleAuditTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        self.bundle = root / "bundle"
+        self.captures = root / "captures"
+        self.bundle.mkdir(mode=0o700)
+        self.captures.mkdir()
+        entries = []
+        for service in SERVICES:
+            data = _png()
+            name = service + ".png"
+            (self.captures / name).write_bytes(data)
+            entries.append({"service": service, "file": name,
+                            "sha256": hashlib.sha256(data).hexdigest(),
+                            "captured_at_utc": "2026-10-28T03:00:00Z",
+                            "source_url": "https://example.invalid/" + service})
+        captures = verify(self.captures, {"schema_version": 1,
+                          "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
+                          "captures": entries})
+        self.mp4 = self.bundle / audit.NAMES[0]
+        self.srt = self.bundle / audit.NAMES[1]
+        self.mp4.write_bytes(b"offline hash-only fixture; NOT playable video")
+        self.srt.write_bytes(b"1\n00:00:00,000 --> 00:00:02,000\nTest fixture\n")
+        self.receipt = {
+            "schema_version": 1, "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
+            "runtime_authenticated": False, "production_qualified": False,
+            "capture_count": 5,
+            "correlation": {"run_id": "RUN-001", "incident_id": "INC-001",
+                            "ticket_id": "TCK-001", "session_label": "offline-test"},
+            "captures": captures,
+            "video": {"file": audit.NAMES[0],
+                      "sha256": hashlib.sha256(self.mp4.read_bytes()).hexdigest(),
+                      "duration_seconds": 10.0, "codec": "h264", "resolution": "1920x1080"},
+            "subtitles": {"file": audit.NAMES[1],
+                          "sha256": hashlib.sha256(self.srt.read_bytes()).hexdigest()},
+        }
+        self.write_receipt()
+
+    def write_receipt(self):
+        (self.bundle / audit.NAMES[2]).write_text(json.dumps(self.receipt), encoding="utf-8")
+
+    def run_audit(self):
+        return audit.audit_bundle(self.bundle, self.captures)
+
+    def test_local_bytes_verified_but_never_runtime_attested(self):
+        result = self.run_audit()
+        self.assertEqual(result["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+        self.assertEqual(result["capture_count"], 5)
+        self.assertFalse(result["media_decoded_by_auditor"])
+        self.assertFalse(result["runtime_authenticated"])
+        self.assertFalse(result["production_qualified"])
+        self.assertFalse(result["live_action_authorized"])
+
+    def test_tampered_mp4_srt_and_png_rejected(self):
+        for target in (self.mp4, self.srt, self.captures / "portal.png"):
+            with self.subTest(target=target.name):
+                original = target.read_bytes()
+                target.write_bytes(original + b"tamper")
+                with self.assertRaises(ValueError):
+                    self.run_audit()
+                target.write_bytes(original)
+
+    def test_duplicate_json_keys_rejected(self):
+        (self.bundle / audit.NAMES[2]).write_text('{"schema_version":1,"schema_version":1}')
+        with self.assertRaisesRegex(ValueError, "duplicate JSON"):
+            self.run_audit()
+
+    def test_provenance_escalation_and_unknown_flags_rejected(self):
+        for key, value in (("runtime_authenticated", True),
+                           ("production_qualified", True),
+                           ("provenance", "LIVE"),
+                           ("capture_count", True),
+                           ("live_action_authorized", True)):
+            with self.subTest(key=key):
+                self.receipt[key] = value
+                self.write_receipt()
+                with self.assertRaises(ValueError):
+                    self.run_audit()
+                if key == "live_action_authorized":
+                    del self.receipt[key]
+                elif key == "provenance":
+                    self.receipt[key] = "OPERATOR_SUPPLIED_UNATTESTED"
+                elif key == "capture_count":
+                    self.receipt[key] = 5
+                else:
+                    self.receipt[key] = False
+
+    def test_traversal_and_wrong_media_filename_rejected(self):
+        for name in ("../outside.mp4", "/tmp/forged.mp4", "video.mp4"):
+            with self.subTest(name=name):
+                self.receipt["video"]["file"] = name
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "video receipt"):
+                    self.run_audit()
+        self.receipt["video"]["file"] = audit.NAMES[0]
+
+    def test_symlinked_receipt_and_media_rejected(self):
+        for target in (self.mp4, self.bundle / audit.NAMES[2]):
+            with self.subTest(name=target.name):
+                original = target.read_bytes()
+                target.unlink()
+                real = self.bundle.parent / ("outside-" + target.name)
+                real.write_bytes(original)
+                target.symlink_to(real)
+                with self.assertRaises(OSError):
+                    self.run_audit()
+                target.unlink()
+                target.write_bytes(original)
+
+    def test_world_readable_bundle_directory_rejected(self):
+        self.bundle.chmod(0o755)
+        with self.assertRaisesRegex(ValueError, "private"):
+            self.run_audit()
+
+    def test_noncanonical_capture_order_rejected(self):
+        self.receipt["captures"].reverse()
+        self.write_receipt()
+        with self.assertRaisesRegex(ValueError, "noncanonical"):
+            self.run_audit()
+
+    def test_missing_or_invalid_correlation_rejected(self):
+        self.receipt["correlation"]["run_id"] = "unsafe value"
+        self.write_receipt()
+        with self.assertRaisesRegex(ValueError, "correlation"):
+            self.run_audit()
+
+    def test_missing_media_rejected(self):
+        self.mp4.unlink()
+        with self.assertRaises(OSError):
+            self.run_audit()
+
+
+if __name__ == "__main__":
+    unittest.main()
