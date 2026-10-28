@@ -31,8 +31,7 @@ if [[ -f "$BASE/failed.sha" ]] &&
   exit 1
 fi
 
-# Never bootstrap an unverified machine from a branch alone. A missing or
-# malformed applied.sha requires an operator-controlled initial installation.
+# Refuse bootstrap without an independently provisioned applied.sha.
 if [[ ! "$applied" =~ ^[0-9a-f]{40}$ ]]; then
   echo "BLOCKED: missing or invalid applied.sha; manual bootstrap required" >&2
   exit 1
@@ -46,10 +45,9 @@ if ! git merge-base --is-ancestor "$applied" "$target"; then
   exit 1
 fi
 
-# Actual one-shot deployer only copies demo_v2.py/test_demo_v2.py and patches
-# portal/main.py by anchor. Do not let a protected-branch update silently
-# claim to deploy Core, Twin, Copilot, SQL, or a changed deployer/poller.
-# Offline git-diff check happens BEFORE checkout or invoking the deployer.
+# The current deployer transports ONLY demo_v2.py and its test. It does not
+# transport Core/Twin/Copilot/Policy/SQL or a complete portal/main.py.
+# Check actual NUL-separated Git changes before checkout/deployment.
 diff_file="$(mktemp "$BASE/.approved-diff.XXXXXX")"
 trap 'rm -f "$diff_file"' EXIT
 if ! git diff --name-status -z --no-renames "$applied" "$target" > "$diff_file"; then
@@ -60,41 +58,7 @@ changed_count=0
 while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   ((changed_count+=1))
   if [[ "$status" != A && "$status" != M ]] ||
-     [[ -z "$path" || "$path" == *# Fail closed: no forced checkout on a dirty working tree.
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "ERROR: dedicated checkout has local changes; refusing" >&2
-  exit 1
-fi
-git checkout -B aiops2-approved-deployment "$target"
-# Approval is the protected branch itself, not a file inside an unreviewed PR.
-test -f deploy/deploy-demo-studio-v2.sh
-echo "Approved update: $applied -> $target"
-if ! bash deploy/deploy-demo-studio-v2.sh; then
-  printf '%s\n' "$target" > "$BASE/failed.sha"
-  echo "FAILED: revision quarantined: $target" >&2
-  exit 1
-fi
-printf '%s\n' "$target" > "$BASE/applied.sha.tmp"
-mv "$BASE/applied.sha.tmp" "$BASE/applied.sha"
-echo "Deployment successful: $target"
-\n'* || "$path" == *# Fail closed: no forced checkout on a dirty working tree.
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "ERROR: dedicated checkout has local changes; refusing" >&2
-  exit 1
-fi
-git checkout -B aiops2-approved-deployment "$target"
-# Approval is the protected branch itself, not a file inside an unreviewed PR.
-test -f deploy/deploy-demo-studio-v2.sh
-echo "Approved update: $applied -> $target"
-if ! bash deploy/deploy-demo-studio-v2.sh; then
-  printf '%s\n' "$target" > "$BASE/failed.sha"
-  echo "FAILED: revision quarantined: $target" >&2
-  exit 1
-fi
-printf '%s\n' "$target" > "$BASE/applied.sha.tmp"
-mv "$BASE/applied.sha.tmp" "$BASE/applied.sha"
-echo "Deployment successful: $target"
-\r'* ]]; then
+     [[ -z "$path" ]] || [[ "$path" =~ [[:cntrl:]] ]]; then
     echo "BLOCKED: unsafe candidate diff status or path" >&2
     exit 1
   fi
