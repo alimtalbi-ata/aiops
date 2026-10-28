@@ -15,6 +15,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 
@@ -126,6 +127,42 @@ def _parse_utc(value: object, label: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+
+# This portal uses one shared operator token, not a tenant-bound identity.
+# An authenticated signature proves the key holder, NOT authorization to read
+# another tenant's data. Reject scoped claims anywhere, including null values.
+_TENANT_SCOPE_NAMES = frozenset({
+    "tenant", "tenantid", "tenantname", "tenantkey", "tenantids",
+    "org", "orgid", "orgname", "organization", "organizationid",
+    "workspace", "workspaceid", "workspacename",
+    "account", "accountid", "accountname",
+    "customer", "customerid", "customername",
+    "tenantaclqualified", "aclqualified",
+})
+
+
+def _reject_unqualified_tenant_scope(value: object) -> None:
+    """Fail closed on nested scope claims until independently enforced ACL exists."""
+    pending = [value]
+    visited = 0
+    while pending:
+        item = pending.pop()
+        visited += 1
+        if visited > 4096:
+            raise ValueError("NOC tenant-scope scan bound exceeded")
+        if isinstance(item, dict):
+            for key, child in item.items():
+                normalized = re.sub(
+                    r"[^a-z0-9]", "", unicodedata.normalize("NFKC", key).casefold()
+                )
+                if (normalized in _TENANT_SCOPE_NAMES
+                        or normalized.startswith(("tenant", "organization", "workspace"))):
+                    raise ValueError("tenant-scoped NOC source requires qualified ACL")
+                pending.append(child)
+        elif isinstance(item, list):
+            pending.extend(item)
+
+
 def _project_signed_payload(
     raw: bytes, *, digest_header: str | None, signature_header: str | None,
     hmac_key: bytes, source_origin: str, now: datetime | None = None,
@@ -156,6 +193,7 @@ def _project_signed_payload(
         raise ValueError("invalid NOC schema")
     if payload.get("provenance") != "RUNTIME_READMODEL":
         raise ValueError("invalid NOC provenance")
+    _reject_unqualified_tenant_scope(payload)
     if payload.get("live_remediation_authorized", False) is not False:
         raise ValueError("NOC source attempted to authorize remediation")
     if payload.get("evidence_runtime_attested", False) is not False:

@@ -19,3 +19,7 @@ The portal's **read token is an operator-wide read privilege**, not per-tenant A
 ## Tests and deployment limits
 
 `python -m unittest discover -s tests -p 'test_portal_noc_runtime_adapter.py' -v` is included in the existing quality workflow. Tests exercise synthetic signed envelopes and fake HTTP transport for **unit/security contracts only**; they are not integration tests of Checkmk, Thruk, Grafana or a running NOC provider. Runtime qualification and Debian rollout are NOT_TESTED. No new service, network port, database mutation, or action endpoint is introduced. Rollback is source-only: revert this PR's merge commit and rebuild Portal through the normal reviewed process.
+
+## 2026-10-28 — Tenant-scope refusal before projection
+
+The shared portal read token is not a tenant-scoped authorization credential. After HMAC and JSON validation, the adapter rejects any tenant/organization/workspace/account/customer scope claim, including nested or null fields, instead of dropping it from the allowlisted projection. Normalization catches common case, separator and Unicode compatibility variants; the walk is bounded. Errors are redacted, no-store 503. This does **not** establish cross-tenant ACL; it is a deny-by-default interim guard. Future qualified Core/IdP authorization must bind a verified tenant identity and pre/post-filter results before scoped data is exposed. PR #36 remains a source of selected read-only contracts only, not runtime attestation.
