@@ -9,3 +9,9 @@
 - **Limites :** l'argument `authorized_entity_id` ne prouve pas que l'appelant a réellement appliqué le RBAC. L'émetteur Core, la lecture GLPI en conteneur éphémère, la séparation tenant Core, Temporal, les captures authentifiées et la vidéo restent **NOT_TESTED/BLOCKED**. Aucun ticket GLPI réel, aucune attestation LIVE, aucune équivalence de qualité NVIDIA 192B/Ollama. Pas d'appel NGX.
 - **Sécurité / rollback :** aucune connexion au serveur Debian `10.79.94.202`, au portail `:17777`, ni aux secrets de production ; aucun merge, deploy, migration ou action LIVE. Revert du commit ciblé possible ; la PR #90 reste inchangée.
 - **Prochain micro-lot :** raccorder le scope à une identité serveur/tenant authentifiée et qualifier l'adaptateur GLPI avec service GLPI éphémère en CI, sans mocks d'intégration. Ensuite, corréler Core/GLPI indépendamment et seulement après afficher dans le portail.
+
+## 06:37 CET — résultat GitHub Actions vérifié
+
+- [Run 40638766255](https://github.com/alimtalbi-ata/aiops/actions/runs/40638766255), commit de code/tests `105367b95f7b8e4fca3eb2444c3e24b2d6ea6c3f` : **completed / success**.
+- Job `policy-and-static` : **success**. Étapes consultées : tests ACME signed ITSM binding, tests ACME impact, tests Policy/Portal/NOC, compilation Python, préflight secrets, audit statique et `docker compose config` : **success**. Cette CI n'a pas lancé de vrai GLPI/Core/Temporal en conteneurs et n'est pas une preuve d'intégration.
+- Le commit de journal `eb48ad446b7471007f11bcbb501118820a3ee9c8` suit le run de code ; son éventuel run doit être vérifié séparément. Pas de fusion.
