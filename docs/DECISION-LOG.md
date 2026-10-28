@@ -111,3 +111,13 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
+
+
+## ADR-0018 — Boolean HITL is not LIVE effect authorization (2026-10-28)
+
+- **Status:** Proposed in draft PR; not runtime-qualified.
+- **Decision:** Policy must reject LIVE `EXECUTE`, `RESOLVE`, `REMEDIATE` and `CANCEL` even when the caller supplies `human_approved=true`. This boolean is not an authenticated, immutable, expiring, one-use approval bound to incident, Run, recipe, target and parameters. A separate verified Core-owned HITL receipt contract is required before lifting the fence.
+- **Preserved:** P1 escalation, UNKNOWN on missing evidence, DEMO/REPLAY/STORY = SIMULATE only, and read-only LIVE OBSERVE/ENRICH policy decisions (not authorization to run a LIVE adapter).
+- **Reuse assessment:** PR #36 `app/policy/execution_fence.py` reserves simulation-only admissions but depends on `autonomy_store` absent from main; its principle that reservation is not permission is applied without importing a second policy store. PR #49 HITL SQLite sandbox remains separate, unqualified for Core/RBAC.
+- **Rollback:** revert the isolated Policy commit only after a reviewed replacement enforces authenticated one-use HITL bindings; never revert merely to restore the old boolean bypass.
+- **Tests:** `tests/test_policy_safety.py` is included in existing `.github/workflows/quality.yml`; no separate CI workflow.
