@@ -151,6 +151,7 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         self.assertFalse(result["runtime_authenticated"])
         self.assertFalse(result["production_qualified"])
         self.assertEqual(result["capture_count"], 5)
+        self.assertEqual(result["source_manifest_sha256"], hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertTrue(9.75 <= result["video"]["duration_seconds"] <= 10.25)
         self.assertEqual(bundle._sha(self.output / bundle.NAMES[0]), result["video"]["sha256"])
         self.assertEqual(bundle._sha(self.output / bundle.NAMES[1]), result["subtitles"]["sha256"])
