@@ -32,3 +32,20 @@ Ce test contient un **vrai rendu et décodage ffmpeg hors ligne** à partir de P
 ## Prochain incrément
 
 Contrôle strict de décodage PNG en amont de l'encodeur, manifeste Evidence Studio navigable en lecture seule, puis chaîne d'attestation de session avec vérification indépendante des cinq vues réelles. Aucun accès au Debian ni à NVIDIA NIM n'est effectué par ce lot.
+
+## Incrément 2026-10-28 — épinglage des octets avant FFmpeg
+
+Le bundle valide d'abord les PNG d'entrée, puis les copie via des descripteurs
+`O_NOFOLLOW` dans un répertoire temporaire privé. Il refuse fichiers non réguliers,
+taille excessive, changement détecté pendant la copie, collisions et chemins suspects.
+Il **revalide les empreintes SHA-256 du manifeste sur ces copies** et passe exclusivement
+ces copies à FFmpeg. Une modification du fichier source après cet épinglage ne change
+donc pas les octets lus par le moteur de rendu. Aucun nouveau droit LIVE n'est accordé.
+
+Tests : `python -m unittest discover -s tests -p 'test_evidence_snapshot.py' -v`
+et la régression `test_render_uses_pinned_bytes_after_source_changes` dans
+`test_evidence_video_bundle.py`. Les fixtures ne sont pas des preuves de
+portail/Thruk/Grafana/n8n/GLPI. Les snapshots ne garantissent pas l'authenticité
+de la session, le contenu visuel ou une protection contre un autre processus
+ayant le même compte Unix et accès au répertoire privé. Le contrôle de
+confidentialité opérateur et l'attestation indépendante restent bloquants.
