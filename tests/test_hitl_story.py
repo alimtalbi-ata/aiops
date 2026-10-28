@@ -311,6 +311,55 @@ class HITLStoryTests(unittest.TestCase):
                             now=now + timedelta(seconds=31))["state"], "DRY_RUN_PLANNED")
 
 
+    def test_readonly_rejects_malformed_approval_token_digest_in_both_states(self):
+        now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+        binding = dict(incident_id="INC-1", run_id="RUN-1",
+                       recipe_id="acme.demo.restart-service.v1",
+                       target_id="VM-1", params={"service": "api"}, mode="DEMO")
+        for consumed in (False, True):
+            with self.subTest(consumed=consumed), tempfile.TemporaryDirectory() as tmp:
+                path = str(Path(tmp) / "lab.sqlite")
+                initialize(path)
+                p = propose(path, proposer_id="alice", now=now, **binding)
+                a = approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                            approver_role="approver", now=now)
+                if consumed:
+                    dry_run(path, proposal_id=p["proposal_id"],
+                            approval_token=a["approval_token"], now=now, **binding)
+                expected = "DRY_RUN_PLANNED" if consumed else "APPROVED_FOR_DRY_RUN_ONLY"
+                self.assertEqual(read_status(path, proposal_id=p["proposal_id"],
+                                             now=now)["state"], expected)
+                with sqlite3.connect(path) as db:
+                    db.execute("DROP TRIGGER approvals_immutable_update")
+                    db.execute("UPDATE approvals SET token_hash='invalid' WHERE proposal_id=?",
+                               (p["proposal_id"],))
+                with self.assertRaisesRegex(HITLRejected, "invalid approval token digest"):
+                    read_status(path, proposal_id=p["proposal_id"], now=now)
+
+    def test_readonly_rejects_malformed_receipt_identifiers(self):
+        now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+        binding = dict(incident_id="INC-1", run_id="RUN-1",
+                       recipe_id="acme.demo.restart-service.v1",
+                       target_id="VM-1", params={"service": "api"}, mode="DEMO")
+        for forged in ("not-a-receipt", "g" * 32, "a" * 33):
+            with self.subTest(forged=forged), tempfile.TemporaryDirectory() as tmp:
+                path = str(Path(tmp) / "lab.sqlite")
+                initialize(path)
+                p = propose(path, proposer_id="alice", now=now, **binding)
+                a = approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                            approver_role="approver", now=now)
+                dry_run(path, proposal_id=p["proposal_id"],
+                        approval_token=a["approval_token"], now=now, **binding)
+                self.assertEqual(read_status(path, proposal_id=p["proposal_id"],
+                                             now=now)["state"], "DRY_RUN_PLANNED")
+                with sqlite3.connect(path) as db:
+                    db.execute("DROP TRIGGER dry_runs_immutable_update")
+                    db.execute("UPDATE dry_runs SET receipt_id=? WHERE proposal_id=?",
+                               (forged, p["proposal_id"]))
+                with self.assertRaisesRegex(HITLRejected, "invalid receipt identifier"):
+                    read_status(path, proposal_id=p["proposal_id"], now=now)
+
+
 class HITLPortalTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
