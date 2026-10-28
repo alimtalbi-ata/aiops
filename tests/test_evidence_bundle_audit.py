@@ -285,6 +285,27 @@ class BundleAuditTests(unittest.TestCase):
                 else:
                     self.source[key] = original
 
+    def test_rehashed_unknown_source_metadata_rejected(self):
+        # Recalculating the manifest hash must not launder credentials or claims.
+        for scope, field, value in (("root", "session_cookie", "secret"),
+                                    ("capture", "access_token", "secret"),
+                                    ("capture", "privacy_reviewed", True),
+                                    ("capture", "capture_method", "UNVERIFIED"),
+                                    ("capture", "runtime_authenticated", True)):
+            with self.subTest(scope=scope, field=field):
+                target = self.source if scope == "root" else self.source["captures"][0]
+                target[field] = value
+                self.write_source()
+                self.rebind_manifest_hash()
+                self.write_receipt()
+                with self.assertRaisesRegex(ValueError, "source capture"):
+                    self.run_audit()
+                del target[field]
+        self.write_source()
+        self.rebind_manifest_hash()
+        self.write_receipt()
+        self.assertEqual(self.run_audit()["status"], "LOCAL_BYTES_VERIFIED_UNATTESTED")
+
     def test_source_manifest_missing_or_symlink_rejected(self):
         original = self.manifest.read_bytes()
         self.manifest.unlink()

@@ -17,7 +17,9 @@ import sys
 
 from demo.evidence_video import SERVICES, verify
 from demo.evidence_snapshot import _read_stable
-from demo.evidence_video_bundle import IDENT, NAMES, _correlation, subtitles as canonical_subtitles
+from demo.evidence_video_bundle import (IDENT, NAMES, _correlation,
+                                        validate_source_manifest,
+                                        subtitles as canonical_subtitles)
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 RECEIPT_KEYS = {"schema_version", "provenance", "runtime_authenticated",
@@ -73,22 +75,7 @@ def audit_bundle(bundle_dir: Path, capture_root: Path, capture_manifest: Path) -
             hashlib.sha256(source_bytes).hexdigest() != manifest_hash:
         raise ValueError("source capture manifest checksum mismatch")
     source = json.loads(source_bytes.decode("utf-8"), object_pairs_hook=_unique)
-    if (not isinstance(source, dict) or
-            set(source) - {"schema_version", "provenance", "captures",
-                           "runtime_authenticated", "production_qualified"} or
-            type(source.get("schema_version")) is not int or source["schema_version"] != 1 or
-            source.get("provenance") != "OPERATOR_SUPPLIED_UNATTESTED" or
-            source.get("runtime_authenticated", False) is not False or
-            source.get("production_qualified", False) is not False or
-            not isinstance(source.get("captures"), list)):
-        raise ValueError("invalid source capture manifest provenance")
-    for entry in source["captures"]:
-        if (not isinstance(entry, dict) or
-                entry.get("runtime_authenticated", False) is not False or
-                entry.get("production_qualified", False) is not False or
-                entry.get("capture_method", "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED")
-                != "PLAYWRIGHT_OPERATOR_SESSION_UNREVIEWED"):
-            raise ValueError("unsafe source capture metadata")
+    validate_source_manifest(source)
     correlation = receipt["correlation"]
     if (not isinstance(correlation, dict) or
             set(correlation) != {"run_id", "incident_id", "ticket_id", "session_label"} or
