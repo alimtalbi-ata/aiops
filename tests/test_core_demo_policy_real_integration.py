@@ -218,6 +218,27 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                 with self.assertRaises(ProbeError):
                     probe(BASE, run, incident, token)
 
+    def test_readonly_probe_strict_json_accepts_real_core_and_rejects_ambiguity(self):
+        # Positive is the real ephemeral Core HTTP/PostgreSQL response.
+        # Malformed payloads below test the parser only, not a fake service.
+        from scripts.probe_demo_policy_readonly import ProbeError, decode_core_json
+        response = self.read("RESOLVED")
+        self.assertEqual(response.status_code, 200, response.text)
+        raw = response.content
+        self.assertEqual(decode_core_json(raw), response.json())
+        self.assertTrue(raw.startswith(b"{"))
+        for name, payload in (
+            ("top_level_duplicate", b'{"run_id":"RUN-FORGED",' + raw[1:]),
+            ("nested_duplicate", b'{"nested":{"state":"PASS","state":"ALLOW"}}'),
+            ("nan", b'{"run_status":NaN}'),
+            ("infinity", b'{"run_status":Infinity}'),
+            ("negative_infinity", b'{"run_status":-Infinity}'),
+            ("malformed", b'{"run_status":'),
+        ):
+            with self.subTest(case=name):
+                with self.assertRaises(ProbeError):
+                    decode_core_json(payload)
+
     def test_readonly_probe_contract_rejects_forged_attestations_and_addresses(self):
         from scripts.probe_demo_policy_readonly import (
             ProbeError, loopback_url, validate_observation,
