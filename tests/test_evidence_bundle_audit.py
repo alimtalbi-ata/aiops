@@ -201,7 +201,10 @@ class BundleAuditTests(unittest.TestCase):
         self.assertIsNotNone(shutil.which("ffprobe"), "FFprobe required by CI")
         root = self.bundle.parent
         manifest = root / "input-manifest.json"
-        entries = [{**entry, **self.receipt["correlation"]}
+        # The receipt adds a derived status that is NOT a source-manifest field.
+        entries = [{key: value for key, value in
+                    {**entry, **self.receipt["correlation"]}.items()
+                    if key != "status"}
                    for entry in self.receipt["captures"]]
         manifest.write_text(json.dumps({"schema_version": 1,
                             "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
@@ -290,6 +293,7 @@ class BundleAuditTests(unittest.TestCase):
         for scope, field, value in (("root", "session_cookie", "secret"),
                                     ("capture", "access_token", "secret"),
                                     ("capture", "privacy_reviewed", True),
+                                    ("capture", "status", "BYTES_HASH_VERIFIED_NOT_RUNTIME_ATTESTED"),
                                     ("capture", "capture_method", "UNVERIFIED"),
                                     ("capture", "runtime_authenticated", True)):
             with self.subTest(scope=scope, field=field):
