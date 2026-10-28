@@ -6,6 +6,7 @@
   const metricKeys = ["open_p1", "open_incidents", "running", "blocked", "twin_nodes", "degraded_nodes"];
   function clear() {
     generation += 1;
+    if ($("portal-read-token")) $("portal-read-token").value = "";
     for (const key of metricKeys) {
       const node = document.querySelector('[data-metric="' + key + '"]');
       if (node) node.textContent = "UNKNOWN";
