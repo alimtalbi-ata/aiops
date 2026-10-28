@@ -37,6 +37,12 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_navigation_auth.py" -v
       - name: Portal Core and Twin read model failure tests
         run: python -m unittest discover -s tests -p "test_portal_read_models.py" -v
+      - name: Portal authenticated Core Twin bootstrap HTTP regression
+        run: python -m unittest discover -s tests -p "test_portal_bootstrap_auth.py" -v
+      - name: Portal Core Twin browser JS syntax
+        run: node --check app/portal/portal_bootstrap_client.js
+      - name: Portal Core Twin browser DOM regression (synthetic DOM only)
+        run: node --test tests/test_portal_bootstrap_client.mjs
       - name: Signed NOC read-model security and regression tests
         run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
       - name: Signed NOC tenant-scope refusal security and regression tests
