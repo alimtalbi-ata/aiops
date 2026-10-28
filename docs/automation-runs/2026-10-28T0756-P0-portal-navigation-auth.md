@@ -12,3 +12,10 @@
 - **LIVE / Debian :** aucun accès, aucune capture, aucune commande, aucun déploiement, aucun appel NGX.
 - **PR draft :** [#103](https://github.com/alimtalbi-ata/aiops/pull/103), non fusionnée ; code HEAD `e54a6f637d4e053a1f16f53d25daf3ef1511b90d` (ajout de `node --check` dans le workflow existant). Aucun conflit vérifié au moment de l'ouverture ; état de merge à recontrôler.
 - **CI réellement constatée :** [quality PR 40647140989](https://github.com/alimtalbi-ata/aiops/actions/runs/40647140989) et [quality push 40647127759](https://github.com/alimtalbi-ata/aiops/actions/runs/40647127759), `completed/success` sur `305b5bb` (tests HTTP inclus). Sur `e54a6f6`, [quality push 40647161726](https://github.com/alimtalbi-ata/aiops/actions/runs/40647161726) et [quality PR 40647166942](https://github.com/alimtalbi-ata/aiops/actions/runs/40647166942) étaient **IN_PROGRESS** au contrôle ; les étapes `node --check` et tests HTTP étaient déjà `success` dans le job push, mais le job global n'était pas encore terminé. Le commit de ce journal déclenche un nouveau contrôle, à vérifier séparément.
+
+## Validation GitHub Actions confirmée après la première rédaction
+
+- Commit de code + contrôle JS `e54a6f637d4e053a1f16f53d25daf3ef1511b90d` : [push 40647161726](https://github.com/alimtalbi-ata/aiops/actions/runs/40647161726) et [PR 40647166942](https://github.com/alimtalbi-ata/aiops/actions/runs/40647166942), **completed/success**.
+- Commit de journal `f265874377f5c27bfd8d6015c2564b63c03ca62a` : [push 40647196448](https://github.com/alimtalbi-ata/aiops/actions/runs/40647196448) et [PR 40647201738](https://github.com/alimtalbi-ata/aiops/actions/runs/40647201738), **completed/success**, job `policy-and-static` et toutes les étapes terminés avec succès (incluant `node --check`, tests navigation, policy, NOC, audit, Compose config).
+- Ces résultats valident la syntaxe et les tests contractuels in-process uniquement. **NOT_TESTED** : vraie intégration conteneurs, navigateur réel, Ollama, n8n/Thruk/Grafana/GLPI, Debian, captures et LIVE.
+- Le présent commit documentaire final déclenche à son tour des checks à vérifier ; il ne modifie aucun code exécutable.
