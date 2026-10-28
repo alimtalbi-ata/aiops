@@ -27,3 +27,10 @@
 - Ne fusionner #118 que si `main` et HEAD sont revérifiés, absence de conflits et checks de sécurité/CI réellement verts. Ne jamais réactiver `human_approved` comme autorisation autonome lors d'un rollback.
 - Prochain micro-lot: fusionner la protection si sûre, fermer #76 comme supersédée après vérification ; puis relier HITL sandbox à Core Run/RBAC authentifiés et Evidence append-only, tests de rejeu/concurrence sur services éphémères.
 - Aucun accès au serveur Debian 10.79.94.202 ni au portail privé, aucune commande LIVE, aucun déploiement, aucun secret production, aucune capture LIVE.
+
+## CI confirmée sur le HEAD journal `aafa2e2be1a9a3bb5a6f09edc5c00bfcd487c76d`
+
+- [PR quality #40664498414](https://github.com/alimtalbi-ata/aiops/actions/runs/40664498414) et [push quality #40664492518](https://github.com/alimtalbi-ata/aiops/actions/runs/40664492518) : `completed/success` sur ce SHA exact.
+- Jobs vérifiés : `policy-and-static` **success** (14 tests Policy, 3 nouveaux tests HTTP explicitement `ok` dans les logs ; compilation, portail/NOC, préflight secrets, audit statique, Compose config), `grafana-real-integration` **success** (vrai conteneur Grafana éphémère, HTTP health et test adaptateur). Cela **ne teste pas** Core/Temporal/RBAC/Evidence ni Ollama/NGX.
+- Échec intermédiaire non masqué : [push #40664393548](https://github.com/alimtalbi-ata/aiops/actions/runs/40664393548) sur le commit Policy seul `9a19c52` : l'ancien test attendait encore `PASS` pour un effet LIVE ; 1 test échoué sur 7. Le commit tests `96dbd189` a corrigé cette attente et ajouté les régressions HTTP. Le HEAD final testé est vert.
+- L'ajout de cette section produit un nouveau commit documentaire : **PENDING** pour son propre SHA jusqu'à vérification. Aucun résultat n'est extrapolé.
