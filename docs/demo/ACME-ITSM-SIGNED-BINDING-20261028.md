@@ -26,3 +26,9 @@ Rollback : supprimer le module, ses tests et l'étape correspondante dans qualit
 Le vérificateur requiert maintenant `authorized_entity_id` (entier strict, plage 0..2147483647) dérivé **exclusivement** du contexte d'autorisation serveur de l'opérateur. Une valeur absente, booléenne, hors plage ou différente de l'entité signée et observée renvoie `UNKNOWN` sans identifiants. Un reçu valide, signé et cohérent avec une observation GLPI d'une **autre entité** ne traverse pas ce verrou. Le champ ne doit **jamais** être fourni tel quel par le navigateur ni calculé à partir du seul ticket ou du reçu. Les tests négatifs couvrent le rejeu inter-entités.
 
 Ce verrou protège la sélection d'entité GLPI **au niveau du contrat** ; il ne remplace pas l'authentification de l'appelant, les ACL multi-tenant Core, la preuve de source GLPI, la qualification réseau ou la signature par un vrai émetteur Core. Les tests sont hors ligne, avec une clé et des observations synthétiques ; aucune preuve d'intégration réelle n'est revendiquée.
+
+## 2026-10-28 — portée Run autorisée (PR empilée sur #96)
+
+Le contrat exige `authorized_run_id` en plus de `authorized_entity_id`. Le Run autorisé doit provenir d'une ACL serveur liée à l'identité authentifiée, indépendamment du reçu signé, de la réponse Core et des paramètres navigateur. Une portée absente, invalide ou différente du Run canonique retourne `UNKNOWN` sans identifiants. Un reçu HMAC valable pour un autre Run de la même entité est rejeté. La réussite demeure `CONTRACT_MATCHED_UNATTESTED`.
+
+**Non qualifié :** aucune authentification RBAC/Core réelle ni preuve de source GLPI ne sont apportées par ce contrat pur. La future API ne doit pas accepter `authorized_run_id` fourni par le navigateur. Aucun ticket GLPI réel, Temporal, LIVE ou déploiement n'est attesté.

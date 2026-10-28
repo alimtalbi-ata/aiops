@@ -37,7 +37,7 @@ def inputs():
 
 
 def check(core=None, glpi=None, receipt=None, key=KEY, raw=None,
-          signature=None, now=NOW, scope=7):
+          signature=None, now=NOW, scope=7, run_scope="RUN-ACME-1"):
     a, b, c = inputs()
     core = a if core is None else core
     glpi = b if glpi is None else glpi
@@ -46,7 +46,7 @@ def check(core=None, glpi=None, receipt=None, key=KEY, raw=None,
     signature = hmac.new(key, raw, hashlib.sha256).hexdigest() if signature is None else signature
     return correlate_acme_ticket(
         core, glpi, raw, signature, key, now=now,
-        authorized_entity_id=scope)
+        authorized_entity_id=scope, authorized_run_id=run_scope)
 
 
 class AcmeITSMBindingTests(unittest.TestCase):
@@ -135,6 +135,28 @@ class AcmeITSMBindingTests(unittest.TestCase):
         self.assert_unknown(check(glpi=glpi, receipt=receipt, scope=7))
         # Still un-attested even when an independently authorized scope matches.
         matched = check(glpi=glpi, receipt=receipt, scope=8)
+        self.assertEqual(matched["state"], "CONTRACT_MATCHED_UNATTESTED")
+        self.assertFalse(matched["runtime_attested"])
+        self.assertFalse(matched["live_remediation_authorized"])
+
+    def test_authorized_run_scope_is_mandatory_and_strict(self):
+        for run_scope in (None, True, False, 7, "", "RUN-OTHER",
+                          "run-acme-1", "RUN-!", "RUN-" + "x" * 100,
+                          ["RUN-ACME-1"]):
+            with self.subTest(run_scope=run_scope):
+                self.assert_unknown(check(run_scope=run_scope))
+        self.assertEqual(check(run_scope="RUN-ACME-1")["state"],
+                         "CONTRACT_MATCHED_UNATTESTED")
+
+    def test_same_entity_cross_run_replay_fails_closed(self):
+        core, glpi, receipt = inputs()
+        core["canonical_run_id"] = "RUN-ACME-2"
+        receipt["run_id"] = "RUN-ACME-2"
+        # Fresh valid HMAC, same GLPI entity: still reject wrong Run ACL.
+        self.assert_unknown(check(core=core, glpi=glpi, receipt=receipt,
+                                  scope=7, run_scope="RUN-ACME-1"))
+        matched = check(core=core, glpi=glpi, receipt=receipt,
+                        scope=7, run_scope="RUN-ACME-2")
         self.assertEqual(matched["state"], "CONTRACT_MATCHED_UNATTESTED")
         self.assertFalse(matched["runtime_attested"])
         self.assertFalse(matched["live_remediation_authorized"])

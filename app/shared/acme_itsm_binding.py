@@ -74,13 +74,16 @@ def _positive_id(value: object) -> str:
 def correlate_acme_ticket(core: object, glpi: object, receipt_bytes: object,
                           receipt_signature: object, signing_key: object,
                           *, authorized_entity_id: object = None,
+                          authorized_run_id: object = None,
                           now: datetime | None = None) -> dict[str, Any]:
     """Verify a fresh HMAC Core binding against independent DEMO read models.
 
     Receipt signer and GLPI adapter are not implemented here. An application
     MUST authenticate both upstream sources and derive authorized_entity_id
-    from trusted RBAC context, never from a browser-provided field. This is a
-    GLPI entity fence, not a proof of Core tenant isolation.
+    from trusted RBAC context, never from a browser-provided field. Likewise,
+    authorized_run_id must be derived from server-side access control for the
+    requested canonical Run. These are contract fences, not proof of actual
+    Core tenant isolation or upstream authentication.
     Invalid/expired/contradictory evidence returns UNKNOWN without identifiers.
     """
     unknown = _unknown()
@@ -95,6 +98,10 @@ def correlate_acme_ticket(core: object, glpi: object, receipt_bytes: object,
         if (type(authorized_entity_id) is not int
                 or not 0 <= authorized_entity_id <= 2147483647):
             raise ValueError("missing or invalid authorized GLPI entity scope")
+        # Entity authorization alone cannot grant access to other Runs.
+        if (not isinstance(authorized_run_id, str)
+                or _RUN.fullmatch(authorized_run_id) is None):
+            raise ValueError("missing or invalid authorized Run scope")
         if (not isinstance(signing_key, bytes) or len(signing_key) < 32
                 or not isinstance(receipt_bytes, bytes)
                 or not 0 < len(receipt_bytes) <= MAX_RECEIPT_BYTES
@@ -148,6 +155,7 @@ def correlate_acme_ticket(core: object, glpi: object, receipt_bytes: object,
             raise ValueError("stale GLPI observation")
         ticket = _positive_id(glpi.get("ticket_id"))
         if (receipt.get("run_id") != core["canonical_run_id"]
+                or core["canonical_run_id"] != authorized_run_id
                 or receipt.get("incident_id") != core["canonical_incident_id"]
                 or receipt.get("fixture_sha256") != core["fixture_sha256"]
                 or receipt.get("ticket_id") != ticket
