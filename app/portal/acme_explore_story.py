@@ -4,8 +4,9 @@ No runtime command, Core/GLPI/n8n request, tenant inventory or LIVE action.
 The viewer token gates every control request; cursor state belongs only to the browser.
 """
 from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Body, Header, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 
 from portal.acme_impact_read_model import _load_or_503
@@ -82,7 +83,7 @@ def explore_story_script():
 
 
 @router.post("/api/demo/explore-story/control")
-def explore_story_control(payload: dict, authorization: str | None = Header(default=None)):
+def explore_story_control(payload: Any = Body(...), authorization: str | None = Header(default=None)):
     """Pure step selection. Authenticate before opening/validating local fixture."""
     try:
         _require_portal_read_auth(authorization)
