@@ -16,7 +16,7 @@ import sys
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 COPY_PATHS = frozenset({"app/portal/demo_v2.py", "tests/test_demo_v2.py"})
-# The deployer and poller are executed from the checked-out approved revision.
+# Executable deployment controls require separate qualification; never auto-approve.
 DEPLOY_PATHS = frozenset({
     "deploy/deploy-demo-studio-v2.sh",
     "deploy/poll-approved-deploy.sh",
@@ -45,8 +45,38 @@ def git(repo: Path, *args: str) -> bytes:
 
 def is_metadata(path: str) -> bool:
     return (path in {"README.md", "VERSION", ".gitignore"}
-            or path.startswith(("docs/", "tests/", ".github/")))
+            or path.startswith(("docs/", "tests/"))
+            or (path.startswith(".github/") and not path.startswith(".github/workflows/")))
 
+
+
+def deployment_plan(path: str, status: str) -> dict:
+    """Static narrow-deployer transport contract; NOT a runtime attestation."""
+    if path == "app/portal/demo_v2.py":
+        fields = ("PORTAL_MODULE", "COPY_TO_PORTAL_SOURCE", "PORTAL_IMAGE",
+                  "PORTAL_CONTAINER", "PORTAL_REGRESSION_NOT_RUN_HERE",
+                  "SOURCE_AND_DOCKER_ROLLBACK_NOT_TESTED")
+        supported = True
+    elif path == "tests/test_demo_v2.py":
+        fields = ("DEPLOYED_PORTAL_TEST", "COPY_TO_PORTAL_TESTS",
+                  "NO_DIRECT_REBUILD", "NO_DIRECT_RESTART",
+                  "PORTAL_REGRESSION_NOT_RUN_HERE", "SOURCE_RESTORE_NOT_TESTED")
+        supported = True
+    elif path in DEPLOY_PATHS or path.startswith(("deploy/", ".github/workflows/")):
+        fields = ("RELEASE_CONTROL_REQUALIFICATION_REQUIRED", "NOT_QUALIFIED",
+                  "NOT_QUALIFIED", "NOT_QUALIFIED", "NOT_TESTED", "NOT_QUALIFIED")
+        supported = False
+    elif is_metadata(path):
+        fields = ("REPOSITORY_ONLY", "NO_RUNTIME_COPY", "NO_RUNTIME_REBUILD",
+                  "NO_RUNTIME_RESTART", "CI_NOT_ATTESTED_HERE", "NOT_APPLICABLE")
+        supported = True
+    else:
+        fields = ("UNTRANSPORTED_APPLICATION_OR_CONFIG", "NOT_TRANSPORTED",
+                  "NOT_QUALIFIED", "NOT_QUALIFIED", "NOT_TESTED", "NOT_QUALIFIED")
+        supported = False
+    return dict(zip(("category", "copy", "rebuild", "restart", "tests", "rollback"), fields),
+                path=path, git_status=status,
+                decision="REVIEWABLE" if supported and status in ("A", "M") else "BLOCKED")
 
 def qualify(repo: Path, stable_sha: str, candidate_sha: str) -> dict:
     """Check history, required deploy files, and every changed file, fail closed."""
@@ -64,7 +94,7 @@ def qualify(repo: Path, stable_sha: str, candidate_sha: str) -> dict:
         git(repo, "merge-base", "--is-ancestor", stable_sha, candidate_sha)
     except Blocked:
         raise Blocked("non_fast_forward_or_diverged") from None
-    for path in REQUIRED:
+    for path in (*REQUIRED, "tests/test_demo_v2.py"):
         git(repo, "cat-file", "-e", candidate_sha + ":" + path)
     raw = git(repo, "diff", "--name-status", "-z", "--no-renames",
               stable_sha, candidate_sha)
@@ -76,6 +106,7 @@ def qualify(repo: Path, stable_sha: str, candidate_sha: str) -> dict:
         raise Blocked("malformed_git_diff")
     changed = []
     blocked = []
+    matrix = []
     for status_raw, path_raw in zip(fields[::2], fields[1::2]):
         try:
             status = status_raw.decode("ascii")
@@ -87,8 +118,9 @@ def qualify(repo: Path, stable_sha: str, candidate_sha: str) -> dict:
         if status not in ("A", "M", "D", "T"):
             raise Blocked("unexpected_diff_status")
         changed.append(path)
-        if status not in ("A", "M") or not (path in COPY_PATHS
-                or path in DEPLOY_PATHS or is_metadata(path)):
+        plan = deployment_plan(path, status)
+        matrix.append(plan)
+        if plan["decision"] == "BLOCKED":
             blocked.append(path)
     if not changed:
         raise Blocked("empty_diff")
@@ -101,6 +133,8 @@ def qualify(repo: Path, stable_sha: str, candidate_sha: str) -> dict:
         "provenance": "OFFLINE_GIT_DIFF_NOT_RUNTIME",
         "deployer_contract": "DEMO_STUDIO_V2_NARROW_COPY_AND_MAIN_ANCHOR_INJECTION",
         "changed_count": len(changed),
+        "module_deployment_matrix": sorted(matrix, key=lambda item: item["path"]),
+        "matrix_is_static_contract_not_runtime_evidence": True,
         "unsupported_paths": sorted(blocked)[:30],
         "unsupported_count": len(blocked),
         "field_smoke_tests": "NOT_TESTED",

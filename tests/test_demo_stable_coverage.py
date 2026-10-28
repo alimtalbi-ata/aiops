@@ -57,6 +57,46 @@ class StableCoverageTests(unittest.TestCase):
         result = qualify(self.repo, self.stable, self.commit())
         self.assertIn("app/portal/main.py", result["unsupported_paths"])
 
+    def test_release_scripts_require_separate_qualification(self):
+        for path in ("deploy/deploy-demo-studio-v2.sh",
+                     "deploy/poll-approved-deploy.sh",
+                     "deploy/install-approved-cron.sh"):
+            self.write(path, "# changed release control\n")
+        result = qualify(self.repo, self.stable, self.commit())
+        self.assertEqual(result["assessment"], "BLOCKED")
+        self.assertEqual(result["unsupported_count"], 3)
+        for entry in result["module_deployment_matrix"]:
+            self.assertEqual(entry["category"], "RELEASE_CONTROL_REQUALIFICATION_REQUIRED")
+            self.assertEqual(entry["rollback"], "NOT_QUALIFIED")
+
+    def test_promotion_workflow_is_not_safe_metadata(self):
+        self.write(".github/workflows/promote-stable.yml", "name: unsafe\n")
+        result = qualify(self.repo, self.stable, self.commit())
+        self.assertEqual(result["unsupported_paths"], [".github/workflows/promote-stable.yml"])
+
+    def test_copy_rebuild_restart_and_rollback_matrix(self):
+        self.write("app/portal/demo_v2.py", "# changed\n")
+        self.write("tests/test_demo_v2.py", "# changed test\n")
+        result = qualify(self.repo, self.stable, self.commit())
+        matrix = {row["path"]: row for row in result["module_deployment_matrix"]}
+        self.assertEqual(result["assessment"], "READY_FOR_REVIEW")
+        self.assertEqual(result["overall"], "NO_GO")
+        self.assertEqual(matrix["app/portal/demo_v2.py"]["copy"], "COPY_TO_PORTAL_SOURCE")
+        self.assertEqual(matrix["app/portal/demo_v2.py"]["rebuild"], "PORTAL_IMAGE")
+        self.assertEqual(matrix["app/portal/demo_v2.py"]["restart"], "PORTAL_CONTAINER")
+        self.assertEqual(matrix["tests/test_demo_v2.py"]["copy"], "COPY_TO_PORTAL_TESTS")
+        self.assertEqual(matrix["tests/test_demo_v2.py"]["rebuild"], "NO_DIRECT_REBUILD")
+        self.assertEqual(matrix["app/portal/demo_v2.py"]["rollback"], "SOURCE_AND_DOCKER_ROLLBACK_NOT_TESTED")
+        self.assertTrue(result["matrix_is_static_contract_not_runtime_evidence"])
+
+    def test_docs_are_not_runtime_evidence(self):
+        self.write("docs/qualification.md", "offline documentation\n")
+        result = qualify(self.repo, self.stable, self.commit())
+        row = result["module_deployment_matrix"][0]
+        self.assertEqual(row["copy"], "NO_RUNTIME_COPY")
+        self.assertEqual(row["tests"], "CI_NOT_ATTESTED_HERE")
+        self.assertEqual(result["field_smoke_tests"], "NOT_TESTED")
+
     def test_deleted_copied_file_is_blocked(self):
         (self.repo / "app/portal/demo_v2.py").unlink()
         with self.assertRaisesRegex(Blocked, "git_ref_or_history_unavailable"):
