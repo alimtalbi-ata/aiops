@@ -10,3 +10,10 @@
 - **Risques** : le nouveau jeton doit être configuré explicitement pour activer la DEMO ; ancien `tests/synthetic-e2e.sh` a été adapté à ce contrat, mais la PR #37 travaille sur le même fichier (réconciliation/rebase nécessaire). La PR #77 touche `app/portal/main.py` (réconciliation des routes nécessaire). L'ancien endpoint était un write sans authentification ; cette PR ferme la frontière mais ne qualifie pas l'auth multi-tenant/RBAC complète. Le Run Core et le ticket GLPI réel restent non attestés. Aucun appel au NGX ni simulation de services non-LLM.
 - **Prochain micro-lot** : corrélation GLPI indépendante et tenant-fencée après intégration contrôlée de PR #69/#73 et qualification GLPI réel éphémère ; vérifier la visibilité Run dans le portail (PR #37) avec identités distinctes, puis captures authentifiées pour la vidéo.
 - **Actions interdites respectées** : aucun accès à Debian `10.79.94.202`, aucun accès au portail runtime, aucun déploiement, merge ou action LIVE.
+
+## 03:47 CET — hardening complémentaire et état CI
+
+- `22a144442a32640dd0784ba3261f06cc378eaa69` : le jeton DEMO ne peut égaler aucun alias privilégié `AIOPS_INTERNAL_TOKEN`, `AIOPS_ADMIN_TOKEN`, `ADMIN_TOKEN`.
+- `fbe4e9f40beeafa7bf64ef84d47fd333e6573d92` : tests négatifs pour les trois alias.
+- [GitHub Actions 40622700590](https://github.com/alimtalbi-ata/aiops/actions/runs/40622700590) sur le commit de journal initial `d10612e9` : completed/success.
+- Les runs de l'ultime durcissement étaient encore en cours ou en attente lors de cette écriture : ne pas attribuer PASS à `fbe4e9f4` avant confirmation GitHub. Le run précédent `40622657371` était bien vert mais ne couvrait pas les tests d'alias ajoutés ensuite.
