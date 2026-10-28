@@ -160,6 +160,38 @@ def decode_impact_json(raw: bytes) -> object:
         raise QualificationError("invalid_json") from None
 
 
+def validate_twin_http_headers(headers, *, anonymous: bool) -> None:
+    """Require unambiguous local Twin metadata before trusting any JSON body.
+
+    Only the seeded loopback Twin contract is accepted. A proxy or unrelated
+    server cannot replace its cache, media, framing or auth headers silently.
+    """
+    cache = headers.get_all("Cache-Control", [])
+    require(cache == ["no-store"], "missing_no_store")
+    media = headers.get_all("Content-Type", [])
+    require(len(media) == 1 and media[0].strip().lower() in (
+        "application/json", "application/json; charset=utf-8",
+    ), "invalid_content_type")
+    encoding = headers.get_all("Content-Encoding", [])
+    require(not encoding or (len(encoding) == 1
+            and encoding[0].strip().lower() == "identity"),
+            "invalid_content_encoding")
+    require(not headers.get_all("Transfer-Encoding", []),
+            "invalid_transfer_encoding")
+    lengths = headers.get_all("Content-Length", [])
+    require(len(lengths) <= 1 and (not lengths or (
+        re.fullmatch(r"[0-9]+", lengths[0]) is not None
+        and int(lengths[0]) <= 256 * 1024)),
+        "invalid_content_length")
+    challenge = headers.get_all("WWW-Authenticate", [])
+    if anonymous:
+        require(challenge == ["Bearer"], "invalid_anonymous_denial")
+    else:
+        require(not challenge, "unexpected_auth_challenge")
+        require(headers.get_all("X-Content-Type-Options", []) == ["nosniff"],
+                "missing_nosniff")
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         return None
@@ -194,19 +226,14 @@ def read_impact(base: str, token: str | None) -> tuple[int, object | None]:
         response = build_opener(ProxyHandler({}), NoRedirect).open(request, timeout=4)
     except HTTPError as exc:
         if exc.code == 401:
-            require(exc.headers.get("Cache-Control") == "no-store"
-                    and exc.headers.get("WWW-Authenticate") == "Bearer",
-                    "invalid_anonymous_denial")
+            validate_twin_http_headers(exc.headers, anonymous=True)
             return 401, None
         raise QualificationError("unexpected_http_status") from None
     except (URLError, TimeoutError, OSError):
         raise QualificationError("twin_unreachable") from None
     with response:
         require(response.status == 200, "unexpected_http_status")
-        require(response.headers.get("Cache-Control") == "no-store",
-                "missing_no_store")
-        require(response.headers.get_content_type() == "application/json",
-                "invalid_content_type")
+        validate_twin_http_headers(response.headers, anonymous=False)
         raw = response.read(256 * 1024 + 1)
     require(len(raw) <= 256 * 1024, "oversized_response")
     return 200, decode_impact_json(raw)
