@@ -13,7 +13,7 @@ permissions:
 jobs:
   policy-and-static:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,6 +63,22 @@ jobs:
         run: node --check app/portal/acme_explore_story_client.js
       - name: Explore Story synthetic DOM browser contract (unit-only)
         run: node --test tests/test_portal_explore_story_client.cjs
+      - name: Install isolated Chromium for real portal browser E2E
+        run: |
+          python -m pip install --disable-pip-version-check "uvicorn==0.35.0" "playwright==1.55.0"
+          python -m playwright install --with-deps chromium
+      - name: Explore Story real Chromium to ephemeral portal E2E (SIMULATED only)
+        env:
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/acme-browser
+        run: python -m unittest discover -s tests -p "test_explore_story_playwright_e2e.py" -v
+      - name: Upload unreviewed CI-simulated portal browser observation
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-explore-story-ci-simulated
+          path: ${{ runner.temp }}/acme-browser/
+          if-no-files-found: error
+          retention-days: 7
       - name: Worker simulation Policy contract and safety regression tests
         run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
       - name: Secret preflight unit tests

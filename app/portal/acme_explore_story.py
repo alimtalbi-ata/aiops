@@ -40,7 +40,7 @@ button[aria-pressed=true]{background:#16634d}
 input{background:#06111e;color:white;border:1px solid #63839a;padding:10px;border-radius:8px}
 .muted{color:#adc1d1}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 ol{padding-left:28px}li{padding:6px}li.current{color:#ffda7a;font-weight:bold}
-strong{overflow-wrap:anywhere}#step-detail{white-space:pre-wrap}
+strong{overflow-wrap:anywhere}#source{overflow-wrap:anywhere}#step-detail{white-space:pre-wrap}
 </style></head><body><main>
 <header><a href="/">← Portail unique</a><a href="/demo/acme-impact">Graphe ACME (simulation)</a></header>
 <h1>ACME · Explore / Story</h1>
