@@ -154,6 +154,23 @@ class AcmeReadbackTests(unittest.TestCase):
         self.assertNotIn("PRIVATE-CORE-CREDENTIAL", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_portal_displays_separate_readback_control(self):
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "test-internal-only"}):
+            from portal.main import app
+        with patch("portal.main.read_portal_snapshot", return_value={
+            "dashboard": None, "runs": None, "twin": None,
+            "states": {"core": "UNKNOWN"}
+        }), patch("portal.main.build_navigation", return_value=[]), patch(
+            "portal.main.render_navigation_html", return_value=""
+        ):
+            response = TestClient(app).get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="acme-run-id"', response.text)
+        self.assertIn('id="acme-read-token"', response.text)
+        self.assertIn("readAcmeRun()", response.text)
+        self.assertIn("UNKNOWN — aucune lecture Core", response.text)
+        self.assertNotIn("localStorage", response.text)
+
     def test_canonical_portal_mounts_readback_route(self):
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "test-internal-only"}):
             from portal.main import app
