@@ -1,0 +1,9 @@
+services:
+  aiops2-alertmanager:
+    volumes:
+      - aiops2-alertmanager-preserved:/alertmanager
+
+volumes:
+  aiops2-alertmanager-preserved:
+    external: true
+    name: "b3a3e2d08f0e32ec8620d46225ea511fad9612d9a623b7c4c70f9f2d1d4becb9"

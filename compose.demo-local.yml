@@ -1,0 +1,4 @@
+services:
+  aiops2-portal:
+    environment:
+      AIOPS_DEMO_LAUNCH_ENABLED: "true"

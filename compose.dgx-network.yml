@@ -1,0 +1,5 @@
+services:
+  aiops2-intelligence:
+    networks:
+      aiops2-control: {}
+      aiops2-public: {}

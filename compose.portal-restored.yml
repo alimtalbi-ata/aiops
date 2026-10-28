@@ -1,0 +1,16 @@
+services:
+  aiops2-portal:
+    image: "aiops2-portal:v21314"
+    environment:
+      AIOPS_DEMO_HISTORICAL_APPROVED: "false"
+      AIOPS_DEMO_LAUNCH_ENABLED: "false"
+      AIOPS_DEMO_VIEW_ENABLED: "false"
+      AIOPS_INTERNAL_TOKEN: "${AIOPS_INTERNAL_TOKEN:?required}"
+      COPILOT_URL: "http://aiops2-copilot:814"
+      CORE_URL: "http://aiops2-core:810"
+      TWIN_URL: "http://aiops2-twin:811"
+    networks:
+      - aiops2-control
+      - aiops2-public
+    ports:
+      - "10.79.94.202:17777:777"
