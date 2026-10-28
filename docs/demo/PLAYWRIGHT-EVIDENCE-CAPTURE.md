@@ -67,3 +67,7 @@ Préparer le navigateur sur le poste opérateur : `python3 -m pip install playwr
 ## Limite de qualification réseau
 
 Le garde-fou intercepte les requêtes HTTP(S) du contexte Playwright et ferme les WebSockets. Les tests offline utilisent des objets de test pour valider la logique de routage; ils ne prouvent pas l'absence de tous les canaux réseau navigateur, notamment hors contexte Playwright ou via extensions. L'usage réel reste soumis à revue des sessions, des pages et des URL autorisées. Une application qui exige WebSocket doit être déclarée BLOCKED : ne pas désactiver ce garde-fou pour obtenir une capture.
+
+## Visibilité du justificatif dans la capture (2026-10-28)
+
+Avant chaque PNG, l'adaptateur exige désormais que le sélecteur de preuve désigne un élément unique, CSS-visible, entièrement contenu dans la zone 1440×900 capturée, avec l'identifiant attendu. Chaque élément ciblé par un masque doit également être visible et dans cette zone (maximum 50 correspondances par sélecteur), et aucun masque ne peut chevaucher la boîte géométrique de la preuve. Les éléments cachés, hors cadre, les coordonnées non finies et les masques qui cacheraient l'identifiant sont refusés. Cette vérification de géométrie ne prouve pas que les pixels finaux correspondent au DOM ni que la session est authentifiée; la revue humaine et les preuves de source restent indispensables. Une page dont le layout n'est pas compatible reste BLOCKED, sans désactivation silencieuse.
