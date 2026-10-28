@@ -115,7 +115,7 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 ## ADR-2026-10-28-P0 — Authenticate Core/Twin bootstrap before upstream reads
 
 - **Date:** 2026-10-28 10:04 Europe/Paris
-- **Status:** Candidate in draft PR
+- **Status:** Accepted — merged PR #114 at cea1ed7b54ed34cf4b036b6d5f20bf968c9dac09
 - **Decision:** Reuse the merged NOC viewer token guard for the Core/Twin bootstrap and serve an anonymous UNKNOWN-only portal shell. The browser may fetch read models only after explicit one-shot Bearer entry, without cookies or persistent storage.
 - **Reason:** The existing public portal route contacted Core/Twin and exposed incident/run metadata without authorization. Shared auth avoids competing contracts.
 - **Limits:** Shared token does not establish tenant ACL, SSO, real upstream integration or LIVE attestation. DEMO/Copilot writes remain separate unmerged security work.
