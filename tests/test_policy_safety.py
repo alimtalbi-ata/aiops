@@ -18,6 +18,7 @@ def decision(**overrides):
         "preconditions_verified": True,
         "fencing_verified": True,
         "human_approved": True,
+        "freeze_active": False,
     }
     values.update(overrides)
     return Decision(**values)
