@@ -52,7 +52,7 @@ async function loadPortalNavigation() {
   try {
     const response = await fetch("/api/portal/components", {
       headers: {Authorization: "Bearer " + token}, cache: "no-store",
-      redirect: "error", signal: controller.signal
+      redirect: "error", credentials: "omit", signal: controller.signal
     });
     if (epoch !== portalNavEpoch) return;
     if (!response.ok) { resetPortalNavigation("UNKNOWN — accès refusé"); return; }

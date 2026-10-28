@@ -1,0 +1,11 @@
+# P0 — 2026-10-28 09:06 Europe/Paris — navigation DOM fail-closed
+
+- Dépôt : `alimtalbi-ata/aiops`. SHA `main` de départ vérifié : `3a50c1c1f6c36a62272bd6b669086866a4708ee3`. PR #103 HEAD avant modification : `598a0ef739182d455878b1b2467858f15a7d0687`. Branche réutilisée : `fix/p0-portal-nav-authenticated-ui-20261028-0756`, aucune écriture sur `main`.
+- Sources revues : `main`, PR ouvertes #36/#37/#39/#41/#43, PR #51/#57/#70/#74/#98/#103, `docs/PROJECT-CONTINUITY.md`, architecture, décisions, catalogue, protocole de qualification, `docs/portal/INTEGRATION-NAVIGATION-P0.md`. Réutilisation ciblée du garde NOC de PR #36 déjà portée par #103 ; pas de merge massif.
+- Fichiers du micro-lot : `app/portal/portal_navigation_client.js` (requête sans cookies via `credentials: "omit"`), `tests/test_portal_navigation_client.mjs` (4 tests DOM unitaires), `.github/workflows/quality.yml` (ajout au workflow existant), ce journal.
+- Tests **exécutés localement** : `node --check app/portal/portal_navigation_client.js` : PASS ; `node --test tests/test_portal_navigation_client.mjs` : **4/4 PASS**, Node 22.16.0, 2026-10-28 09:05 Europe/Paris. Les tests couvrent absence de cookies, effacement du jeton, refus de faux état LIVE, URL script, doublon d'identité, réponse tardive après effacement, HTTP refusé et enveloppe malformée. DOM simulé uniquement, pas de navigateur réel ni service externe.
+- **GitHub Actions : PENDING** au moment de la création de ce journal. Ne pas qualifier le workflow avant vérification de son run sur le dernier SHA ; consigner les URLs et conclusions après exécution.
+- Commit : micro-lot atomique de code/tests/CI/docs sur la branche de PR #103 (SHA confirmé après écriture GitHub). PR #103 reste draft jusqu'aux checks et revue de conflits.
+- Risques : le HTML historique lit toujours Core/Twin anonymement et les commandes DEMO/Copilot ne sont pas encore convergées ; PR #74/#57/#70/#51 à intégrer séparément. RBAC tenant et services réels en conteneurs : **NOT_TESTED**. Pas de simulation des services non-LLM. Aucun appel NVIDIA NGX, Ollama non exécuté.
+- Aucun accès au serveur Debian `10.79.94.202`, aucune commande LIVE, aucun déploiement, aucune capture authentifiée ni preuve LIVE.
+- Prochain micro-lot : convergence ciblée du bootstrap Core/Twin avec #74 et tests négatifs communs, puis intégration des vrais services CI éphémères.
