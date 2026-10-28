@@ -113,6 +113,41 @@ class AcmeScenarioContractTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_acme_scenario_contract(model)
 
+    def test_checkpoint_targets_are_canonical_not_runtime_observations(self):
+        from portal.acme_scenario_contract import EXPECTED_CHECKPOINTS
+        valid = build_acme_impact_read_model()
+        response = self.get()
+        self.assertEqual(response.status_code, 200)
+        events = response.json()["events"]
+        self.assertEqual(
+            [(e["cue"], e["service"], e["view"], e["expected_state"]) for e in events],
+            list(EXPECTED_CHECKPOINTS))
+        self.assertTrue(all(e["status"] == "MISSING" and e["event_timestamp_utc"] is None
+                            for e in events))
+        for index in (0, 4, 5, 8):
+            for field, forged in (("service", "other_service"),
+                                  ("view", "fabricated_view"),
+                                  ("required_state", "completed_live")):
+                with self.subTest(index=index, field=field):
+                    model = copy.deepcopy(valid)
+                    model["checkpoint_evidence"][index][field] = forged
+                    with self.assertRaises(ValueError):
+                        build_acme_scenario_contract(model)
+            with self.subTest(index=index, field="missing_required_state"):
+                model = copy.deepcopy(valid)
+                del model["checkpoint_evidence"][index]["required_state"]
+                with self.assertRaises(ValueError):
+                    build_acme_scenario_contract(model)
+
+    def test_tampered_checkpoint_target_returns_unknown_without_leak(self):
+        model = build_acme_impact_read_model()
+        model["checkpoint_evidence"][4]["service"] = "forged_glpi"
+        with patch("portal.acme_explore_story._load_or_503", return_value=model):
+            response = self.get()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
+        self.assertNotIn("forged_glpi", response.text)
+
     def test_invalid_projection_is_unknown_and_does_not_leak(self):
         with patch("portal.acme_explore_story._load_or_503",
                    side_effect=main.HTTPException(status_code=503, detail="private")):

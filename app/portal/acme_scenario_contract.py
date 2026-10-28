@@ -13,8 +13,21 @@ from portal.acme_fixture_contract import (
 )
 
 SCHEMA = "aiops.acme-scenario.v1"
-CUES = ("detect", "correlate", "enrich", "analyze", "ticket",
-        "approve", "simulate", "verify", "close")
+# Expected checkpoints are *targets*, never observed states. Keep these in
+# one canonical mapping so a syntactically valid but misleading service/view
+# cannot be smuggled into the shared Explore/Story contract.
+EXPECTED_CHECKPOINTS = (
+    ("detect", "grafana", "alert_dashboard", "firing"),
+    ("correlate", "n8n", "ingress_execution", "completed"),
+    ("enrich", "n8n", "context_execution", "completed"),
+    ("analyze", "n8n", "analyst_critic_execution", "completed"),
+    ("ticket", "glpi", "incident_ticket", "open"),
+    ("approve", "glpi", "hitl_decision", "approved_simulation_only"),
+    ("simulate", "n8n", "simulation_execution", "completed"),
+    ("verify", "grafana", "recovery_dashboard", "recovered"),
+    ("close", "glpi", "incident_followups", "closed"),
+)
+CUES = tuple(item[0] for item in EXPECTED_CHECKPOINTS)
 PATH = (SOURCE_CI_ID, "HOST-ESX-01", "VM-PAY-01", TARGET_CI_ID)
 
 
@@ -44,7 +57,7 @@ def build_acme_scenario_contract(model: dict[str, Any]) -> dict[str, Any]:
     if type(checkpoints) is not list or len(checkpoints) != len(CUES):
         raise ValueError("invalid synthetic checkpoint sequence")
     events = []
-    for sequence, (cue, checkpoint) in enumerate(zip(CUES, checkpoints), start=1):
+    for sequence, ((cue, service, view, expected_state), checkpoint) in enumerate(\n            zip(EXPECTED_CHECKPOINTS, checkpoints), start=1):
         if (type(checkpoint) is not dict
                 or checkpoint.get("cue") != cue
                 or checkpoint.get("status") != "MISSING"
@@ -53,14 +66,13 @@ def build_acme_scenario_contract(model: dict[str, Any]) -> dict[str, Any]:
                 or checkpoint.get("runtime_authenticated") is not False
                 or checkpoint.get("source") != "CHECKPOINT_CONTRACT_ONLY_NO_CAPTURE"):
             raise ValueError("unqualified checkpoint")
-        service, view = checkpoint.get("service"), checkpoint.get("view")
-        if (type(service) is not str or type(view) is not str
-                or re.fullmatch(r"[a-z][a-z0-9_]{1,49}", service) is None
-                or re.fullmatch(r"[a-z][a-z0-9_]{1,49}", view) is None):
-            raise ValueError("invalid synthetic checkpoint label")
+        if (checkpoint.get("service") != service
+                or checkpoint.get("view") != view
+                or checkpoint.get("required_state") != expected_state):
+            raise ValueError("noncanonical synthetic checkpoint target")
         events.append({
             "id": f"SIM-EVT-ACME-{sequence:03d}",
-            "sequence": sequence, "cue": cue, "service": service, "view": view,
+            "sequence": sequence, "cue": cue, "service": service, "view": view,\n            "expected_state": expected_state,
             "incident_id": SOURCE_INCIDENT_ID,
             "impact_incident_id": TARGET_INCIDENT_ID,
             "status": "MISSING", "event_timestamp_utc": None,

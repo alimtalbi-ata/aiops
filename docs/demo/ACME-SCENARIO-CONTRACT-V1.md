@@ -41,7 +41,7 @@ Date : 2026-10-28. **Propriétaire : lot données/fixtures ACME.** Source de vé
       "view": "alert_dashboard",
       "incident_id": "ACME-DEMO-SAN-001",
       "impact_incident_id": "ACME-DEMO-PAY-002",
-      "status": "MISSING",
+      "expected_state": "firing",\n      "status": "MISSING",
       "event_timestamp_utc": null,
       "provenance": "SIMULATED_TARGET"
     }
@@ -63,3 +63,21 @@ Les lots portail, Story, NOC et ITSM doivent **consommer** ce GET ou `build_acme
 Le jeton viewer est une barrière de lecture du fixture public synthétique, **pas** une ACL tenant qualifiée. Aucune promotion de cette API vers des observations tenant/LIVE sans identité serveur, contrôle RBAC et preuves indépendantes.
 
 Tests : `tests/test_acme_scenario_contract.py` et `tests/test_portal_explore_story.py` via `.github/workflows/quality.yml`. Les tests utilisent des requêtes ASGI in-process et ne qualifient pas de navigateur réel ni de service GLPI/Core/Temporal.
+
+## Cibles déterministes des checkpoints (ajout compatible v1)
+
+Chaque événement expose désormais `expected_state` : **état attendu pour le storyboard**, jamais un état observé. `status=MISSING` et `event_timestamp_utc=null` restent inchangés. Le validateur refuse une substitution de `service`, `view` ou `required_state` même si les valeurs sont des chaînes syntaxiquement valides ; la lecture HTTP échoue en 503 `UNKNOWN`.
+
+| Cue | Service | Vue | expected_state |
+| --- | --- | --- | --- |
+| detect | grafana | alert_dashboard | firing |
+| correlate | n8n | ingress_execution | completed |
+| enrich | n8n | context_execution | completed |
+| analyze | n8n | analyst_critic_execution | completed |
+| ticket | glpi | incident_ticket | open |
+| approve | glpi | hitl_decision | approved_simulation_only |
+| simulate | n8n | simulation_execution | completed |
+| verify | grafana | recovery_dashboard | recovered |
+| close | glpi | incident_followups | closed |
+
+**Compatibilité :** ajout du seul champ `events[].expected_state` dans `aiops.acme-scenario.v1`. Le fixture `aiops.acme.demo.v1`, le chemin d'impact, les IDs et la réponse `aiops.acme-explore-story.v1` restent inchangés. Les consommateurs doivent afficher l'état attendu comme une cible, jamais comme un résultat d'exécution.
