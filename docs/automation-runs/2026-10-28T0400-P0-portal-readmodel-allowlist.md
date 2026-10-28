@@ -10,3 +10,9 @@
 - **Non exécutés / NOT_TESTED** : conteneurs Core/Twin éphémères, intégration n8n/Thruk/Grafana/GLPI, auth navigateur, tests Debian, captures authentifiées, vidéo, NVIDIA NGX. Pas de remplacement artificiel des services. Aucun accès ni commande sur `10.79.94.202`, aucun déploiement ou remédiation LIVE.
 - **Risques / blocages** : les anciennes routes publiques demeurent non protégées dans `main` ; PR #51/#57/#70/#74 doivent être réconciliées sans écraser les travaux concurrents. Le correctif de projection n'est **pas** un RBAC. CI de branche en cours de qualification.
 - **Prochain micro-lot** : vérifier dernier workflow, corriger si échec, puis intégrer progressivement les routes bootstrap/opérateur authentifiées et qualifier les lectures contre de vrais conteneurs CI.
+
+## Vérification CI après correction (2026-10-28 04:03 CET)
+
+- [Run 40624335988](https://github.com/alimtalbi-ata/aiops/actions/runs/40624335988), commit `096d9f176a96426c1b3e79bf27c23bac8592e604` : **SUCCESS**. Inclut les 11 tests `test_portal_read_models.py` corrigés et les autres étapes du workflow existant.
+- [Run 40624364932](https://github.com/alimtalbi-ata/aiops/actions/runs/40624364932), commit `261bbeae23b737bce5a4f346c4bef21aedd640a7` (avec journal) : **SUCCESS**.
+- Le présent ajout documentaire déclenche un nouveau run CI : vérifier son résultat séparément avant toute promotion. Les résultats ci-dessus ne prouvent ni intégration conteneurs ni LIVE.
