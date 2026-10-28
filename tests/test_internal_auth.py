@@ -3,6 +3,7 @@ import importlib.util
 import os
 import pathlib
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from fastapi import HTTPException
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app'))
 os.environ.setdefault('AIOPS_INTERNAL_TOKEN','test-only-internal-token')
+os.environ.setdefault('AIOPS_POLICY_STATE_DB', str(pathlib.Path(tempfile.gettempdir()) / f'aiops-policy-auth-{os.getpid()}.sqlite3'))
 os.environ.setdefault('DATABASE_URL','postgresql://test:test@127.0.0.1:5432/test')
 
 def module(filename,slug):
