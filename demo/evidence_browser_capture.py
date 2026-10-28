@@ -24,6 +24,9 @@ SERVICES = ("portal", "thruk", "grafana", "n8n", "glpi")
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,127}$")
 SELECTOR = re.compile(r"^(?:[#.][A-Za-z][A-Za-z0-9_-]*)(?: [#.][A-Za-z][A-Za-z0-9_-]*)*$")
 PNG = bytes.fromhex("89504e470d0a1a0a")
+# Ported from PR #36 ReadOnlyRequestPolicy: only explicitly reviewed passive
+# resource types may use the exact GET allowlist; never allow fetch of documents.
+RESOURCE_TYPES = frozenset({"stylesheet", "script", "font", "image", "xhr", "fetch"})
 
 
 def origin(url):
@@ -70,7 +73,8 @@ def validate_plan(plan):
         if not isinstance(urls, list) or len(urls) > 64 or len(set(urls)) != len(urls):
             raise ValueError("invalid GET allowlist")
         for resource in urls:
-            if origin(resource) != allowed or resource == url:
+            if origin(resource) != allowed or resource == url or urlsplit(resource).query:
+                # Query strings can contain bearer credentials; no secrets in capture plans.
                 raise ValueError("GET resource outside approved origin")
         proof = item.get("proof_text")
         if proof not in (plan["run_id"], plan["incident_id"], plan["ticket_id"]):
@@ -88,14 +92,14 @@ def validate_plan(plan):
     return entries
 
 
-def permits(item, url, method, navigation, main_frame):
+def permits(item, url, method, navigation, main_frame, resource_type=""):
     """Exact GET allowlist ported from PR #36; GET itself is not side-effect-free."""
     try:
         if method != "GET" or origin(url) != item["allowed_origin"]:
             return False
         if navigation:
             return main_frame and url == item["url"]
-        return url in item.get("approved_get_urls", [])
+        return resource_type in RESOURCE_TYPES and url in item.get("approved_get_urls", [])
     except (TypeError, ValueError, KeyError):
         return False
 
@@ -117,7 +121,8 @@ def install_network_fence(context, page, item):
         except Exception:
             main = False
         if permits(item, request.url, request.method,
-                   request.is_navigation_request(), main):
+                   request.is_navigation_request(), main,
+                   getattr(request, "resource_type", "")):
             route.continue_()
         else:
             blocked.append("HTTP request denied")
