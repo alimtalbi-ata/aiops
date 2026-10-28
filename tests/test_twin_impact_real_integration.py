@@ -11,8 +11,8 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from scripts.qualify_acme_twin_readonly import (QualificationError, qualify,
-                                                loopback_base, validate_impact)
+from scripts.qualify_acme_twin_readonly import (QualificationError, decode_impact_json,
+                                                qualify, loopback_base, validate_impact)
 
 import psycopg
 import requests
@@ -153,6 +153,34 @@ class TwinImpactRealIntegration(unittest.TestCase):
         )
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(json.loads(process.stdout), result)
+
+    def test_strict_twin_json_refuses_ambiguous_or_nonfinite_http_payloads(self):
+        # Positive is the actual Twin HTTP response from ephemeral PostgreSQL,
+        # not a mocked integration. Negative variants are hostile byte payloads.
+        response = self.read("ACME-SAN-FABRIC-A")
+        self.assertEqual(response.status_code, 200, response.text)
+        original = response.content
+        self.assertEqual(validate_impact(decode_impact_json(original))["overall"],
+                         "NO_GO")
+        variants = (
+            ("duplicate_root", b'{"root":"FORGED",' + original[1:],
+             "duplicate_twin_json_key"),
+            ("duplicate_nested_edge",
+             original.replace(b'"edge_id":', b'"edge_id":"FORGED","edge_id":', 1),
+             "duplicate_twin_json_key"),
+            ("nan", b'{"untrusted":NaN,' + original[1:], "nonfinite_twin_json"),
+            ("infinity", b'{"untrusted":Infinity,' + original[1:],
+             "nonfinite_twin_json"),
+            ("negative_infinity", b'{"untrusted":-Infinity,' + original[1:],
+             "nonfinite_twin_json"),
+            ("invalid_utf8", original + b'\xff', "invalid_json"),
+            ("truncated", original[:-1], "invalid_json"),
+            ("too_deep", b"[" * 1200 + b"]" * 1200, "invalid_json"),
+        )
+        for name, raw, expected in variants:
+            with self.subTest(case=name), self.assertRaises(QualificationError) as ctx:
+                decode_impact_json(raw)
+            self.assertEqual(str(ctx.exception), expected)
 
     def test_qualifier_never_uses_ambient_proxy_for_loopback_token(self):
         # Real Twin/PostgreSQL CI integration; proxy points to an unavailable

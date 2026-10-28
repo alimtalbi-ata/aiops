@@ -24,7 +24,11 @@ et `WWW-Authenticate: Bearer`. Il effectue **deux GET** :
 un appel anonyme attendu HTTP 401, puis une lecture authentifiée
 `GET /api/twin/impact/ACME-SAN-FABRIC-A`. Il ne déclenche ni migration,
 ni mutation, ni action LIVE. La réponse est bornée à 256 KiB, avec
-`Cache-Control: no-store`. Le jeton n'est jamais imprimé.
+`Cache-Control: no-store`. Le décodeur JSON exige UTF-8, refuse les clés
+dupliquées à toute profondeur (notamment `edge_id`), `NaN`, `Infinity`,
+`-Infinity`, les corps tronqués et les structures trop profondes. Un
+JSON ambigu est `BLOCKED / NO_GO`, jamais une preuve topologique.
+Le jeton n'est jamais imprimé.
 
 ## Exemple de résultat synthétique attendu
 
@@ -85,3 +89,13 @@ décision de promotion ; **ne pas pousser sur stable**.
 **NOT_TESTED :** serveur Debian, ACL tenant qualifiée, CMDB authentifiée,
 Core/Temporal/GLPI/Copilot/Policy/Evidence E2E, smoke-tests après déploiement,
 captation opérateur et vidéo. Le cron ne constitue pas une recette E2E.
+
+## Micro-lot de durcissement JSON — 2026-10-28 23:03 CET
+
+Portage ciblé du motif de parsing strict de la sonde Core/Policy PR #163,
+adapté au contrat Twin, sans importer son module ni modifier l'API Twin.
+Le test HTTP positif lit le véritable Twin/PostgreSQL éphémère en CI ; les
+variantes négatives sont des octets adversariaux construits à partir de
+cette réponse, pas des appels réseau simulés. Les réponses JSON malformées
+ne peuvent plus être qualifiées via un parseur permissif. La sortie
+`aiops.acme-twin-readonly-qualification.v1` est inchangée.
