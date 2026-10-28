@@ -24,3 +24,9 @@
 ## Prochain micro-lot et transfert
 - Remettre PR #167 + ses checks exacts à la Recette #156, puis converger #145 → #149 → #154 → #161 → #162 → #167 sur un SHA unique après résolution des échecs Policy/Temporal avec leurs propriétaires. Vérifier couverture du déployeur et smoke read-only avant toute décision de stable.
 - Le contrôle temporel ne prouve **ni impact Payments ni diagnostic IA réel** ; ne pas remplacer UNKNOWN par une valeur synthétique non attestée.
+
+## Qualification GitHub Actions sur SHA corrigé (2026-10-28 23:30 CET)
+- HEAD de code+tests+journal avant ce complément : `4d70ee107f7f74039c17d66152482d741f521613`.
+- [`quality.yml` #40780356746](https://github.com/alimtalbi-ata/aiops/actions/runs/40780356746) : **completed/failure**, pas de GO. Job `database-migrations` **SUCCESS** ; logs lus : **10/10 tests HTTP Core/Portal/PostgreSQL 16 OK**, y compris `test_future_dated_evidence_refused_by_real_core_and_portal`. `quality-build-package` **FAIL** après compilation et **13/13 tests unitaires Ledger OK**, puis **11 échecs Policy/15**. `runtime-e2e` **FAIL** sur Temporal synthétique ; `release-kit` SKIPPED. `migration-runner-upgrade` et `mariadb-dr-rehearsal` SUCCESS.
+- Sur ce même SHA, [V2.8 #40780356745](https://github.com/alimtalbi-ata/aiops/actions/runs/40780356745) **FAIL** ; [Offline Integrity #40780356693](https://github.com/alimtalbi-ata/aiops/actions/runs/40780356693) et [Historical Trace #40780356770](https://github.com/alimtalbi-ata/aiops/actions/runs/40780356770) **SUCCESS**, sans qualification E2E.
+- **La présente mise à jour documentaire crée un nouveau SHA : ses checks doivent être revérifiés séparément.** La CI globale reste rouge, PR #167 draft, **READY_FOR_STABLE=BLOCKED / NO-GO**.
