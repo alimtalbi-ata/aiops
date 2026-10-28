@@ -73,6 +73,57 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
             bundle.build_bundle(self.evidence, self.manifest, self.output)
 
+
+    def test_manifest_symlink_and_fifo_rejected_before_render(self):
+        """Untrusted manifest path must never be followed or opened as a FIFO."""
+        import os
+        original = self.manifest.read_bytes()
+        real = self.manifest.parent / "real-manifest.json"
+        real.write_bytes(original)
+        self.manifest.unlink()
+        self.manifest.symlink_to(real)
+        with patch.object(bundle, "render") as render:
+            with self.assertRaises(ValueError):
+                bundle.build_bundle(self.evidence, self.manifest, self.output)
+            render.assert_not_called()
+        self.manifest.unlink()
+        os.mkfifo(self.manifest)
+        with patch.object(bundle, "render") as render:
+            with self.assertRaises(ValueError):
+                bundle.build_bundle(self.evidence, self.manifest, self.output)
+            render.assert_not_called()
+        self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_manifest_read_rejects_mutation_during_open_descriptor(self):
+        """A manifest rewritten after its initial fstat must fail closed."""
+        from demo import evidence_snapshot as snapshot
+        original = self.manifest.read_bytes()
+        real_fstat = snapshot.os.fstat
+        touched = False
+
+        def mutate_on_first_stat(fd):
+            nonlocal touched
+            result = real_fstat(fd)
+            if not touched:
+                touched = True
+                self.manifest.write_bytes(original + b" ")
+            return result
+
+        with patch.object(snapshot.os, "fstat", side_effect=mutate_on_first_stat):
+            with patch.object(bundle, "render") as render:
+                with self.assertRaisesRegex(ValueError, "file changed during read"):
+                    bundle.build_bundle(self.evidence, self.manifest, self.output)
+                render.assert_not_called()
+        self.assertTrue(touched)
+        self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_manifest_over_size_limit_rejected(self):
+        self.manifest.write_bytes(b" " * (256 * 1024 + 1))
+        with patch.object(bundle, "render") as render:
+            with self.assertRaisesRegex(ValueError, "bounded regular file"):
+                bundle.build_bundle(self.evidence, self.manifest, self.output)
+            render.assert_not_called()
+
     def test_world_readable_output_rejected(self):
         self.output.chmod(0o755)
         with self.assertRaisesRegex(ValueError, "private existing"):

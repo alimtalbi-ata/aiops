@@ -20,7 +20,7 @@ import tempfile
 from urllib.parse import urlsplit
 
 from demo.evidence_video import SERVICES, render, verify
-from demo.evidence_snapshot import pin_captures
+from demo.evidence_snapshot import pin_captures, _read_stable
 
 IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{2,127}$")
 NAMES = ("aiops-evidence.mp4", "aiops-evidence.srt", "aiops-evidence.receipt.json")
@@ -121,9 +121,7 @@ def build_bundle(evidence_root: Path, manifest_path: Path, output_dir: Path, sec
         return result
     # Bind the exact source-manifest bytes to the receipt. Parse those same
     # bytes so a changed file cannot silently change the audited context.
-    manifest_bytes = manifest_path.read_bytes()
-    if not 1 <= len(manifest_bytes) <= 256 * 1024:
-        raise ValueError("bounded source manifest required")
+    manifest_bytes = _read_stable(manifest_path, 256 * 1024)
     manifest = json.loads(manifest_bytes.decode("utf-8"), object_pairs_hook=no_duplicates)
     # First validation bounds paths/metadata; pin exact source bytes before
     # handing paths to FFmpeg, then reverify the pinned copies against hashes.

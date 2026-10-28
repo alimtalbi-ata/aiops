@@ -10,13 +10,13 @@ import argparse
 import hashlib
 import json
 import math
-import os
 from pathlib import Path
 import re
 import stat
 import sys
 
 from demo.evidence_video import SERVICES, verify
+from demo.evidence_snapshot import _read_stable
 from demo.evidence_video_bundle import IDENT, NAMES, _correlation, subtitles as canonical_subtitles
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -37,27 +37,6 @@ def _unique(pairs):
 def _private_directory(path: Path) -> None:
     if path.is_symlink() or not path.is_dir() or stat.S_IMODE(path.stat().st_mode) & 0o077:
         raise ValueError("private non-symlink bundle directory required (chmod 700)")
-
-
-def _read_stable(path: Path, limit: int) -> bytes:
-    """Open without following a final symlink and reject unstable/unsafe bytes."""
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    if not nofollow:
-        raise ValueError("O_NOFOLLOW required")
-    with os.fdopen(os.open(path, os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0)), "rb") as src:
-        before = os.fstat(src.fileno())
-        if not stat.S_ISREG(before.st_mode) or not 1 <= before.st_size <= limit:
-            raise ValueError("bounded regular file required")
-        digest = src.read(limit + 1)
-        after = os.fstat(src.fileno())
-        if (len(digest) != before.st_size or
-                (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) !=
-                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)):
-            raise ValueError("file changed during audit")
-    current = path.lstat()
-    if not stat.S_ISREG(current.st_mode) or (current.st_dev, current.st_ino) != (after.st_dev, after.st_ino):
-        raise ValueError("file replaced during audit")
-    return digest
 
 
 def _hash_file(root: Path, name: str, digest: str, limit: int) -> None:
