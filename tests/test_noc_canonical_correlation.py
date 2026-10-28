@@ -13,6 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app"))
 from portal import noc_correlation  # noqa: E402
 
 TOKEN = "synthetic-portal-token-not-a-secret"
+INTERNAL = "ci-internal-core-token-" + "i" * 40
 
 
 def noc_view():
@@ -190,16 +191,25 @@ class CorrelationTests(unittest.TestCase):
                 self_req = req
                 assert self_req.get_method() == "GET"
                 assert timeout == 3
-                assert self_req.full_url.endswith("/api/runs/RUN-ACME-001")
+                assert self_req.full_url.endswith("/api/noc/runs/RUN-ACME-001")
+                assert self_req.get_header("Authorization") == "Bearer " + INTERNAL
                 return Response(req.full_url, json.dumps({"run": core_run()}).encode())
-        with patch.dict(os.environ, {"CORE_URL": "http://aiops2-core:810"}), patch.object(
+        with patch.dict(os.environ, {"CORE_URL": "http://aiops2-core:810", "AIOPS_INTERNAL_TOKEN": INTERNAL}), patch.object(
                 noc_correlation.urllib.request, "build_opener", return_value=Opener()):
             self.assertEqual(noc_correlation._read_core_run("RUN-ACME-001")["mode"], "DEMO")
+
+    def test_missing_core_credential_fails_before_network(self):
+        with patch.dict(os.environ, {"CORE_URL": "http://aiops2-core:810",
+                                     "AIOPS_INTERNAL_TOKEN": ""}), patch.object(
+                noc_correlation.urllib.request, "build_opener",
+                side_effect=AssertionError("must not connect")):
+            with self.assertRaises(ValueError):
+                noc_correlation._read_core_run("RUN-ACME-001")
 
     def test_core_duplicate_json_keys_fail_closed(self):
         class Response:
             headers = {"Content-Type": "application/json"}
-            def geturl(self): return "http://aiops2-core:810/api/runs/RUN-ACME-001"
+            def geturl(self): return "http://aiops2-core:810/api/noc/runs/RUN-ACME-001"
             def getcode(self): return 200
             def read(self, n): return b'{"run":{},"run":{}}'
             def __enter__(self): return self

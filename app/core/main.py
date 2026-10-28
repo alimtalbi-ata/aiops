@@ -1,9 +1,11 @@
-import os,json,requests,datetime
+import os,json,requests,datetime,hmac,re
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from shared.db import db
 from shared.ids import new
 from shared.domain import transition,STAGES
+from shared.tenant_scope import reject_unqualified_tenant_scope
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -182,3 +184,60 @@ def get_run(rid:str):
         if not r:raise HTTPException(404,'run not found')
         e=c.execute('select sequence,stage,event_type,status,occurred_at,evidence_ids,decision,confidence,payload from aiops.run_events where run_id=%s order by sequence',(rid,)).fetchall();s=c.execute('select stage,state,attempt,started_at,completed_at,last_error from aiops.run_stage_state where run_id=%s order by array_position(%s::text[],stage)',(rid,STAGES)).fetchall();g=c.execute('select stage,state,decision,reason,evidence_ids,evaluated_at from aiops.gates where run_id=%s order by evaluated_at',(rid,)).fetchall()
     k=['run_id','incident_id','mode','scenario_id','status','version','overall_confidence','created_at','started_at','completed_at'];ek=['sequence','stage','event_type','status','occurred_at','evidence_ids','decision','confidence','payload'];sk=['stage','state','attempt','started_at','completed_at','last_error'];gk=['stage','state','decision','reason','evidence_ids','evaluated_at'];return {'run':dict(zip(k,r)),'events':[dict(zip(ek,x)) for x in e],'stages':[dict(zip(sk,x)) for x in s],'gates':[dict(zip(gk,x)) for x in g]}
+
+
+# Read-only, internal-only synthetic Core projection for the signed NOC join.
+# This is NOT tenant authorization or runtime observation. Existing legacy Core
+# read endpoints are outside this incremental boundary and remain unqualified.
+_NOC_CORE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\\Z")
+_NOC_CORE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache",
+                     "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
+
+
+def _noc_core_response(content, status_code=200, headers=None):
+    return JSONResponse(content, status_code=status_code,
+                        headers={**_NOC_CORE_HEADERS, **(headers or {})})
+
+
+@app.get("/api/noc/runs/{rid}")
+def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=None)):
+    """Bounded synthetic-only Run identity for portal NOC correlation."""
+    secret = os.getenv("AIOPS_INTERNAL_TOKEN", "")
+    if (not isinstance(secret, str) or len(secret) < 32 or len(secret) > 256
+            or not secret.isascii() or any(c.isspace() for c in secret)):
+        return _noc_core_response({"detail": "noc_core_auth_not_configured"}, 503)
+    scheme, separator, supplied = (authorization or "").partition(" ")
+    if (scheme.lower() != "bearer" or not separator or not supplied
+            or not hmac.compare_digest(supplied, secret)):
+        return _noc_core_response({"detail": "invalid_noc_core_token"}, 401,
+                                  {"WWW-Authenticate": "Bearer"})
+    if not isinstance(rid, str) or _NOC_CORE_ID.fullmatch(rid) is None:
+        return _noc_core_response({"detail": "noc_core_run_unavailable_or_unverified"}, 503)
+    try:
+        with db() as c:
+            row = c.execute(
+                "select r.run_id,r.incident_id,r.mode,r.status,i.synthetic,i.payload "
+                "from aiops.runs r join aiops.incidents i "
+                "on i.incident_id=r.incident_id where r.run_id=%s", (rid,)
+            ).fetchone()
+        if not row:
+            raise ValueError("missing canonical Run or incident")
+        run_id, incident_id, mode, status, synthetic, incident_payload = row
+        if (not isinstance(run_id, str) or _NOC_CORE_ID.fullmatch(run_id) is None
+                or not isinstance(incident_id, str)
+                or _NOC_CORE_ID.fullmatch(incident_id) is None
+                or mode not in ("DEMO", "REPLAY", "STORY")
+                or not isinstance(status, str) or not status
+                or synthetic is not True or not isinstance(incident_payload, dict)):
+            raise ValueError("not a qualified synthetic Run")
+        reject_unqualified_tenant_scope(incident_payload)
+    except Exception:
+        return _noc_core_response({"detail": "noc_core_run_unavailable_or_unverified"}, 503)
+    return _noc_core_response({
+        "run": {"run_id": run_id, "incident_id": incident_id,
+                "mode": mode, "status": status},
+        "data_classification": "SYNTHETIC_CANONICAL_RUN",
+        "runtime_authenticated": False,
+        "tenant_acl_qualified": False,
+        "live_remediation_authorized": False,
+    })

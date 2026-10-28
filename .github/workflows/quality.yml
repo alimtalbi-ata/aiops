@@ -64,6 +64,67 @@ jobs:
       - name: Validate Compose configuration with generated secrets
         run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
 
+
+  core-postgres-noc-real-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-noc-ephemeral-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-noc-ephemeral-only@127.0.0.1:5432/aiops
+      AIOPS_INTERNAL_TOKEN: ci-noc-internal-ephemeral-token-20261028-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real Core HTTP/PostgreSQL dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0"
+      - name: Apply Core schema to ephemeral real PostgreSQL
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+          with psycopg.connect(os.environ["DATABASE_URL"]) as c:
+              for name in ("001_schema.sql", "004_operational_model.sql"):
+                  c.execute((Path("db/migrations") / name).read_text())
+          PY
+      - name: Start actual Core HTTP service and verify readiness
+        run: |
+          PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 810 > /tmp/aiops-core-ci.log 2>&1 &
+          echo $! > /tmp/aiops-core-ci.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(40):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:810/health", timeout=2) as r:
+                      if r.status == 200:
+                          print("Real Core HTTP + PostgreSQL ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("BLOCKED: real Core/PostgreSQL not ready")
+          PY
+      - name: Real Core PostgreSQL NOC read security and regression
+        run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Stop ephemeral Core
+        if: always()
+        run: |
+          if test -f /tmp/aiops-core-ci.pid; then kill "$(cat /tmp/aiops-core-ci.pid)" || true; fi
+
   grafana-real-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 12

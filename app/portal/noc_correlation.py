@@ -28,8 +28,14 @@ def _read_core_run(run_id: str) -> dict:
             parsed.username is not None or parsed.password is not None or
             parsed.path or parsed.query or parsed.fragment or parsed.port != 810):
         raise ValueError("unapproved Core endpoint")
-    url = base + "/api/runs/" + run_id
-    request = urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET")
+    url = base + "/api/noc/runs/" + run_id
+    internal_token = os.getenv("AIOPS_INTERNAL_TOKEN", "")
+    if (not isinstance(internal_token, str) or len(internal_token) < 32
+            or len(internal_token) > 256 or not internal_token.isascii()
+            or any(char.isspace() for char in internal_token)):
+        raise ValueError("Core NOC internal credential not configured")
+    request = urllib.request.Request(url, headers={"Accept": "application/json",
+                                                  "Authorization": "Bearer " + internal_token}, method="GET")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), noc_runtime._NoRedirect())
     with opener.open(request, timeout=3) as response:
         if response.geturl() != url or response.getcode() != 200:
