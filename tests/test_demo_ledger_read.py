@@ -67,6 +67,44 @@ class DemoLedgerReadTests(unittest.TestCase):
         self.assertEqual(upstream.call_count, 2)
         self.assertEqual(upstream.call_args_list[1].args[1], "/api/runs/" + RUN + "/ai-ledger")
 
+    def test_sourced_claim_requires_linked_analysis_and_evidence(self):
+        valid = json.loads(json.dumps(LEDGER))
+        valid["critiques"][0]["output"]["claim_checks"][0] = {
+            "claim": "Synthetic SAN CRC", "supported": True,
+            "supporting_evidence_ids": ["EVD-1"],
+        }
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, valid]):
+            response = self.read("Bearer " + VIEWER)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload(response)["critiques"][0]["claim_checks"][0]
+                         ["supporting_evidence_ids"], ["EVD-1"])
+
+        mutations = [
+            ("dangling_analysis", lambda x: x["critiques"][0].update(analysis_id="ANA-OTHER")),
+            ("duplicate_analysis", lambda x: x["analyses"].append(dict(x["analyses"][0]))),
+            ("duplicate_critique", lambda x: x["critiques"].append(dict(x["critiques"][0]))),
+            ("unsupported_claim", lambda x: x["critiques"][0]["output"]
+             ["claim_checks"][0].update(supporting_evidence_ids=[])),
+            ("unknown_evidence", lambda x: x["critiques"][0]["output"]
+             ["claim_checks"][0].update(supporting_evidence_ids=["EVD-NOT-SOURCED"])),
+            ("not_in_analysis", lambda x: x["critiques"][0].update(
+                evidence_ids=["EVD-1", "EVD-NOT-SOURCED"])),
+            ("not_in_critique", lambda x: x["critiques"][0].update(evidence_ids=[])),
+        ]
+        for name, mutate in mutations:
+            forged = json.loads(json.dumps(valid))
+            mutate(forged)
+            if name == "not_in_analysis":
+                forged["critiques"][0]["output"]["claim_checks"][0][
+                    "supporting_evidence_ids"] = ["EVD-NOT-SOURCED"]
+            with self.subTest(name=name), patch(
+                    "portal.demo_ledger_read.get_json", side_effect=[DETAIL, forged]):
+                denied = self.read("Bearer " + VIEWER)
+                self.assertEqual(denied.status_code, 503)
+                self.assertEqual(payload(denied)["status"], "UNKNOWN")
+                self.assertNotIn("EVD-NOT-SOURCED", denied.body.decode())
+                self.assertEqual(denied.headers["cache-control"], "no-store")
+
     def test_core_401_fails_closed_without_leak(self):
         from requests import HTTPError
         with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, HTTPError("Bearer SECRET core 401")]):
