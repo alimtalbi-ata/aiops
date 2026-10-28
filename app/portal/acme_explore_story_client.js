@@ -8,6 +8,9 @@
   let credential = "";
   let epoch = 0;
   let timer = null;
+  // Pin the scenario identity for the entire authenticated browser session.
+  // A changed fixture requires an explicit Clear before another projection is shown.
+  let sessionIdentity = null;
 
   function stopTimer() {
     if (timer !== null) clearTimeout(timer);
@@ -25,7 +28,7 @@
     li.textContent = "UNKNOWN — données non vérifiées";
     byId("timeline").appendChild(li);
   }
-  function valid(data, action) {
+  function valid(data, action, requestedCursor) {
     if (!data || typeof data !== "object" ||
         data.schema !== "aiops.acme-explore-story.v1" ||
         data.provenance !== "SIMULATED_TARGET" ||
@@ -45,16 +48,31 @@
         !Array.isArray(data.scenario.impact_path) ||
         data.scenario.impact_path.length < 2 ||
         !data.scenario.impact_path.every(s => typeof s === "string" && s.length < 100)) return false;
-    if (data.playing && (mode !== "story" || data.cursor === data.timeline.length - 1)) return false;
+    const last = data.timeline.length - 1;
+    const expectedCursor = action === "reset" || action === "replay" ||
+      (action === "start" && requestedCursor === last) ? 0 :
+      action === "advance" ? Math.min(requestedCursor + 1, last) : requestedCursor;
+    const expectedPlaying = mode === "story" &&
+      ["start", "advance", "replay"].includes(action) && expectedCursor < last;
+    if (data.cursor !== expectedCursor || data.playing !== expectedPlaying) return false;
+    if (typeof data.scenario.incident_id !== "string" ||
+        typeof data.scenario.impact_incident_id !== "string" ||
+        !/^ACME-DEMO-[A-Z0-9-]+$/.test(data.scenario.incident_id) ||
+        !/^ACME-DEMO-[A-Z0-9-]+$/.test(data.scenario.impact_incident_id)) return false;
     for (const step of data.timeline) {
       if (!step || typeof step !== "object" || step.status !== "MISSING" ||
           !["cue", "service", "view"].every(k => typeof step[k] === "string" &&
           /^[a-z][a-z0-9_]{1,49}$/.test(step[k]))) return false;
     }
     const expected = data.timeline[data.cursor];
-    return data.step && ["cue", "service", "view", "status"].every(k => data.step[k] === expected[k]);
+    if (!data.step || !["cue", "service", "view", "status"].every(k => data.step[k] === expected[k])) return false;
+    const identity = JSON.stringify([data.source_sha256, data.scenario, data.timeline]);
+    return sessionIdentity === null || identity === sessionIdentity;
   }
   function render(data) {
+    if (sessionIdentity === null) {
+      sessionIdentity = JSON.stringify([data.source_sha256, data.scenario, data.timeline]);
+    }
     cursor = data.cursor;
     byId("story-status").textContent =
       (data.playing ? "STORY EN COURS" : "PAUSE / EXPLORE") +
@@ -113,7 +131,7 @@
       }
       const data = await response.json();
       if (requestId !== epoch) return;
-      if (!valid(data, action)) {
+      if (!valid(data, action, cursor)) {
         credential = "";
         unknown("enveloppe synthétique invalide");
         return;
@@ -147,6 +165,7 @@
     ++epoch;
     credential = "";
     cursor = 0;
+    sessionIdentity = null;
     byId("story-token").value = "";
     unknown("session effacée");
   });
