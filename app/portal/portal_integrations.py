@@ -20,6 +20,11 @@ LINK_ENV = {
     "glpi": "AIOPS_PORTAL_LINK_GLPI",
 }
 VISIBLE_INTEGRATIONS = ("thruk", "grafana", "n8n", "glpi", "checkmk")
+# ipaddress.is_private includes documentation/benchmark/special-use networks.
+# Browser HTTP opt-in is intentionally narrower: RFC1918 IPv4 and ULA IPv6.
+PRIVATE_HTTP_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7",
+))
 
 
 def validate_browser_link(value: str, *, allow_private_http: bool = False) -> str:
@@ -48,9 +53,8 @@ def validate_browser_link(value: str, *, allow_private_http: bool = False) -> st
             address = ipaddress.ip_address(parsed.hostname)
         except ValueError as exc:
             raise ValueError("HTTP integration URL must use private IP") from exc
-        if (not address.is_private or address.is_loopback or address.is_link_local
-                or address.is_unspecified or address.is_multicast):
-            raise ValueError("HTTP integration URL must use private IP")
+        if not any(address in network for network in PRIVATE_HTTP_NETWORKS):
+            raise ValueError("HTTP integration URL must use RFC1918/ULA IP")
     return value
 
 

@@ -22,6 +22,20 @@ Variables optionnelles, toutes vides par défaut :
 
 Utiliser des URL HTTPS complètes sans jeton dans l'URL, ni userinfo, query ou fragment. Pour les services LAN en HTTP sur **IP privée uniquement**, définir explicitement `AIOPS_PORTAL_ALLOW_HTTP_LINKS=true`; cela n'authentifie pas le serveur ni le transport. Les liens invalides sont rejetés sans exposer leur valeur dans la réponse publique. La configuration est relayée par `compose.yml` au seul conteneur portail.
 
+## Durcissement HTTP LAN (2026-10-28)
+
+L'opt-in `AIOPS_PORTAL_ALLOW_HTTP_LINKS=true` n'accepte désormais que les
+adresses IPv4 RFC1918 (`10/8`, `172.16/12`, `192.168/16`) ou IPv6 ULA
+(`fc00::/7`). Les adresses de documentation, de benchmarking, réservées,
+link-local, loopback, CGNAT et les IPv4 mappées en IPv6 sont refusées.
+Certaines de ces plages sont classées privées par `ipaddress.is_private`,
+mais aucune n'est autorisée par cette liste LAN. Les noms DNS restent refusés
+en HTTP : aucun DNS n'est résolu et aucune connexion réseau n'est effectuée
+par ce validateur. Les URL HTTPS conservent leur validation existante.
+Une URL configurée ne constitue toujours **aucune attestation** du service.
+Ce contrôle limite les liens proposés par le portail, pas la navigation
+indépendante de l'utilisateur ni les protections réseau de l'environnement.
+
 ## Contrôles et limites
 
 Tests unitaires : `tests/test_portal_integrations.py` et `tests/test_portal_read_models.py`, inclus dans le workflow qualité existant. Ils ne lancent ni ne simulent un service n8n/Thruk/Grafana/GLPI; les tests d'intégration de ces composants sont **NOT_TESTED**. Le serveur NVIDIA NIM n'est pas appelé.

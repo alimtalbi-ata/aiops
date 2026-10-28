@@ -53,6 +53,39 @@ class PortalNavigationTests(unittest.TestCase):
                                                allow_private_http=True),
                          "http://10.79.94.202:3000/")
 
+    def test_http_opt_in_rejects_special_use_and_non_lan_ranges(self):
+        # ipaddress.is_private is broader than operator-controlled LAN space.
+        for url in (
+            "http://192.0.0.1:3000/", "http://192.0.2.1:3000/",
+            "http://198.18.0.1:3000/", "http://198.51.100.2:3000/",
+            "http://203.0.113.9:3000/", "http://240.0.0.1:3000/",
+            "http://169.254.1.1:3000/", "http://100.64.0.1:3000/",
+            "http://172.15.255.255:3000/", "http://172.32.0.1:3000/",
+            "http://[2001:db8::1]:3000/", "http://[::ffff:10.0.0.1]:3000/",
+            "http://10.79.94.202.evil.example:3000/",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                validate_browser_link(url, allow_private_http=True)
+
+    def test_http_opt_in_accepts_rfc1918_and_ipv6_ula(self):
+        for url in (
+            "http://10.79.94.202:3000/", "http://172.16.0.1:3000/",
+            "http://172.31.255.254:3000/", "http://192.168.1.2:3000/",
+            "http://[fd00::1]:3000/",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(validate_browser_link(url, allow_private_http=True), url)
+
+    def test_rejected_http_address_does_not_leak_into_navigation(self):
+        model = build_navigation({
+            "AIOPS_PORTAL_ALLOW_HTTP_LINKS": "true",
+            "AIOPS_PORTAL_LINK_N8N": "http://192.0.2.1:5678/",
+        })
+        item = next(i for i in model["items"] if i["id"] == "n8n")
+        self.assertEqual(item["external_link_state"], "REJECTED_CONFIGURATION")
+        self.assertIsNone(item["external_url"])
+        self.assertNotIn("192.0.2.1", render_navigation_html(model))
+
     def test_bad_config_fails_closed_without_leaking_url(self):
         model = build_navigation({"AIOPS_PORTAL_LINK_N8N": "javascript:alert(1)"})
         item = next(i for i in model["items"] if i["id"] == "n8n")
