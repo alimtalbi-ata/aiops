@@ -63,9 +63,10 @@ class TwinImpactRealIntegration(unittest.TestCase):
         self.assertIs(data["redundancy_evaluated"], False)
         self.assertIs(data["live_remediation_authorized"], False)
         # SAN-B is a sibling path, while RHEL01 is a VM dependency, not a SAN consumer.
-        self.assertNotIn("ACME-SAN-FABRIC-B", expected)
-        self.assertNotIn("ACME-SRV-RHEL01", expected)
-        self.assertNotIn("ACME-APP-PORTAL", expected)
+        returned = {item["node_id"] for item in data["affected"]}
+        self.assertNotIn("ACME-SAN-FABRIC-B", returned)
+        self.assertNotIn("ACME-SRV-RHEL01", returned)
+        self.assertNotIn("ACME-APP-PORTAL", returned)
         self.assertEqual(response.json(), self.read("ACME-SAN-FABRIC-A").json())
 
     def test_direction_is_not_inverted_or_invented(self):
