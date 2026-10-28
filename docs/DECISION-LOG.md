@@ -111,3 +111,10 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
+
+## ADR-0018 — En-têtes HTTP de défense en profondeur du portail (2026-10-28)
+
+- **Statut :** proposé dans la [PR #92](https://github.com/alimtalbi-ata/aiops/pull/92), non fusionné.
+- **Décision :** appliquer `no-store`, `nosniff`, `DENY` pour les frames, `frame-ancestors 'none'`, `no-referrer` et une Permissions-Policy restrictive aux réponses HTTP traitées par le portail unique.
+- **Motif :** limiter cache de données opérationnelles, clickjacking et divulgation de référents sans changer les modes DEMO/SIMULATION/LIVE.
+- **Limites :** pas de RBAC, ni d'ACL tenant, ni de CSP script-src stricte ; les erreurs 500 hors middleware et les intégrations réelles sont non qualifiées. Les contrôles sont des tests HTTP ASGI isolés, pas un E2E de production.
