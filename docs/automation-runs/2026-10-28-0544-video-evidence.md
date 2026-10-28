@@ -29,3 +29,9 @@
 - PR #43 is conflicted against main; stack is not directly mergeable. Do not merge PR #91 until parents are stabilized and CI/security checks green on exact merge candidate.
 - Rollback: close draft PR #91 or revert its four scoped changes; no runtime state or DB was touched.
 - Next micro-lot: inspect completed CI including SRT audit and real offline FFmpeg step; correct failures; then build a narrowly scoped privacy-review/attestation interface that cannot promote technical fixtures to LIVE.
+
+## Qualification addendum — GitHub Actions completed
+
+- Code/test HEAD `9aef37c6f39969d20070be24b93982492061b9f2`: [quality run 40634108823](https://github.com/alimtalbi-ata/aiops/actions/runs/40634108823) **completed/success**. The log of job `122636995812` explicitly shows `test_nonfinite_or_noncanonical_scene_duration_rejected ... ok`, `test_rehashed_sensitive_or_reordered_subtitles_rejected ... ok` and `Ran 13 tests in 1.942s` for the auditeur. The offline FFmpeg bundle and other configured quality steps also concluded success.
+- Journal HEAD `db99d5906b059b390641948928782b9f91549bb2`: [quality run 40634181172](https://github.com/alimtalbi-ata/aiops/actions/runs/40634181172) **completed/success**, all steps green. This is unit/static/Compose-configuration qualification, **not** runtime integration or real application evidence.
+- The documentation-only commit adding this addendum must have its own CI result verified independently. No new tests were run locally.
