@@ -106,6 +106,39 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "private existing"):
             bundle.build_bundle(self.evidence, self.manifest, link)
 
+    def test_source_swap_between_verification_and_pin_fails_closed(self):
+        real_pin = bundle.pin_captures
+
+        def mutate_then_pin(root, stage, captures):
+            # Still a valid PNG: only the manifest hash can reject the swap.
+            (root / "portal.png").write_bytes(png(width=321))
+            return real_pin(root, stage, captures)
+
+        with patch.object(bundle, "pin_captures", side_effect=mutate_then_pin):
+            with patch.object(bundle, "render") as render:
+                with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+                    bundle.build_bundle(self.evidence, self.manifest, self.output)
+                render.assert_not_called()
+        self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_render_uses_pinned_bytes_after_source_changes(self):
+        original = (self.evidence / "portal.png").read_bytes()
+        seen = []
+
+        def inspect_render(pinned, captures, output, seconds):
+            seen.append(pinned)
+            self.assertNotEqual(pinned.resolve(), self.evidence.resolve())
+            self.assertEqual((pinned / "portal.png").read_bytes(), original)
+            (self.evidence / "portal.png").write_bytes(b"source changed after pin")
+            self.assertEqual((pinned / "portal.png").read_bytes(), original)
+            raise RuntimeError("render intercepted after snapshot")
+
+        with patch.object(bundle, "render", side_effect=inspect_render):
+            with self.assertRaisesRegex(RuntimeError, "render intercepted"):
+                bundle.build_bundle(self.evidence, self.manifest, self.output)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_no_partial_output_on_render_failure(self):
         with patch.object(bundle, "render", side_effect=RuntimeError("encoder failed")):
             with self.assertRaisesRegex(RuntimeError, "encoder failed"):

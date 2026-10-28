@@ -29,6 +29,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Evidence-backed demo video validation (offline, fail-closed)
         run: python -m unittest discover -s tests -p "test_evidence_video.py" -v
+      - name: Install offline FFmpeg qualification dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - name: Evidence video bundle MP4/SRT/receipt (real offline ffmpeg)
         run: |
           command -v ffmpeg
@@ -36,6 +38,8 @@ jobs:
           python -m unittest discover -s tests -p "test_evidence_video_bundle.py" -v
       - name: Playwright capture safety contract (offline, no browser)
         run: python -m unittest discover -s tests -p "test_evidence_browser_capture.py" -v
+      - name: Evidence input snapshot pinning and TOCTOU regression (offline)
+        run: python -m unittest discover -s tests -p "test_evidence_snapshot.py" -v
       - name: Capture publication rollback and collision safety (offline)
         run: python -m unittest discover -s tests -p "test_evidence_publish.py" -v
       - name: Secret preflight unit tests
