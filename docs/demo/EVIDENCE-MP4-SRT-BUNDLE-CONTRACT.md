@@ -76,6 +76,8 @@ d'accès des applications, ni la causalité entre les IDs. Cet auditeur ne
 décode **pas** le MP4 : le décodage FFmpeg est contrôlé séparément lors de
 la génération. Un reçu et des octets modifiés ensemble ne constituent pas
 une signature ou une attestation externe. Les tests de cet auditeur utilisent
-des PNG techniques et un faux MP4 pour tester **uniquement les hashes** ;
-ils ne sont pas des captures ni une preuve de rendu vidéo. Aucun chemin
+des PNG techniques et un faux MP4 pour les cas de hashes ; un test distinct
+assemble aussi un **vrai MP4 hors ligne avec FFmpeg**, puis le fait auditer.
+Aucun de ces fichiers n'est une capture authentifiée d'application, ni une
+preuve de session ou d'incident réel. Aucun chemin
 LIVE n'est ouvert.
