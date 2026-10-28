@@ -70,6 +70,7 @@ class DemoV2Tests(unittest.TestCase):
         missing = render_demo_v2({"run": {"status": "RUNNING",
             "started_at": "2026-10-21T12:00:00Z"}}, {}, {}, now=now)
         self.assertNotIn("statut RUNNING ancien à requalifier", missing)
+        self.assertIn("Fraîcheur RUNNING — INCONNU", missing)
         future = render_demo_v2({"run": {"status": "RUNNING",
             "started_at": "2026-10-29T12:00:00Z"}, "events": []}, {}, {}, now=now)
         self.assertIn("horodatage Core futur", future)
@@ -122,12 +123,34 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("Fraîcheur RUNNING — INCONNU", page)
         self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
-    def test_old_running_marked_for_requalification(self):
+    def test_old_running_without_events_does_not_claim_staleness(self):
         page = render_demo_v2(
             {"run": {"status": "RUNNING",
                      "started_at": "2026-10-21T13:21:01+00:00"},
              "events": []}, {}, {"items": []})
-        self.assertIn("statut RUNNING ancien à requalifier", page)
+        self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+        self.assertIn("Intégrité de la chronologie", page)
+        self.assertNotIn("statut RUNNING ancien à requalifier", page)
+
+    def test_truncated_first_sequence_is_unknown_even_with_old_events(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        page = render_demo_v2({"run": {"status": "RUNNING",
+            "started_at": "2026-10-21T12:00:00Z"}, "events": [
+                {"sequence": 2, "occurred_at": "2026-10-28T18:00:00Z", "event_type": "EVT-2"},
+                {"sequence": 3, "occurred_at": "2026-10-28T18:05:00Z", "event_type": "EVT-3"},
+            ]}, {}, {}, now=now)
+        self.assertIn("sans première séquence", page)
+        self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+        self.assertNotIn("COHÉRENT — ordre par séquence Core", page)
+        self.assertNotIn("statut RUNNING ancien à requalifier", page)
+
+    def test_missing_events_payload_is_unknown_not_stale(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        page = render_demo_v2({"run": {"status": "RUNNING",
+            "started_at": "2026-10-21T12:00:00Z"}}, {}, {}, now=now)
+        self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+        self.assertIn("événements Core indisponibles", page)
+        self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
 
 if __name__ == "__main__":
