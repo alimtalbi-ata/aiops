@@ -250,11 +250,11 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(decode_core_json(response.content), response.json())
         for name, payload in (
-            ("utf8_bom", b"\\xef\\xbb\\xbf" + response.content),
+            ("utf8_bom", b"\xef\xbb\xbf" + response.content),
             ("utf16_le", response.text.encode("utf-16-le")),
             ("utf16_be", response.text.encode("utf-16-be")),
             ("utf32_le", response.text.encode("utf-32-le")),
-            ("invalid_utf8", b'{"run_id":"\\xff"}'),
+            ("invalid_utf8", b'{"run_id":"\xff"}'),
         ):
             with self.subTest(encoding=name):
                 with self.assertRaises(ProbeError):
