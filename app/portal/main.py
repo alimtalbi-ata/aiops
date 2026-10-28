@@ -99,10 +99,13 @@ def _demo_detail_matches(detail, listed):
 
 def _unique_demo_run(items, rid):
     """Reject duplicate Core inventory IDs before any detail or ledger read."""
+    # Count *all* modes first: a LIVE/DEMO ID collision is ambiguous too.
+    # Filtering to demo modes before counting would hide the LIVE duplicate.
     matches = [r for r in items if isinstance(r, dict)
-               and r.get("run_id") == rid
-               and r.get("mode") in ("DEMO", "REPLAY", "STORY")]
-    return matches[0] if len(matches) == 1 else None
+               and r.get("run_id") == rid]
+    if len(matches) != 1:
+        return None
+    return matches[0] if matches[0].get("mode") in ("DEMO", "REPLAY", "STORY") else None
 
 
 @app.get("/",response_class=HTMLResponse)
