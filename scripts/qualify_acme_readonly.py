@@ -122,13 +122,17 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def loopback_base(url: str) -> str:
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        raise QualificationError("non_loopback_or_invalid_url") from None
     require(parsed.scheme == "http" and parsed.hostname == "127.0.0.1"
-            and parsed.port is not None and 0 < parsed.port <= 65535
+            and port is not None and 0 < port <= 65535
             and not parsed.username and not parsed.password
             and parsed.path in ("", "/") and not parsed.query and not parsed.fragment,
             "non_loopback_or_invalid_url")
-    return "http://127.0.0.1:" + str(parsed.port)
+    return "http://127.0.0.1:" + str(port)
 
 
 def request_json(base: str, path: str, payload: dict | None = None,
@@ -170,6 +174,9 @@ def request_json(base: str, path: str, payload: dict | None = None,
 def qualify(base_url: str, token: str) -> dict:
     base = loopback_base(base_url)
     require(bool(token.strip()), "missing_viewer_token")
+    require(token == token.strip() and len(token) <= 4096
+            and all(32 <= ord(char) <= 126 for char in token),
+            "invalid_viewer_token")
     payload = {"action": "start", "cursor": 0, "mode": "explore"}
     anonymous_status, _ = request_json(base, "/api/demo/explore-story/control", payload)
     require(anonymous_status == 401, "anonymous_access_not_denied")
@@ -185,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = qualify(args.base_url, os.environ.get("AIOPS_PORTAL_READ_TOKEN", ""))
-    except (QualificationError, ValueError) as exc:
+    except QualificationError as exc:
         result = {"schema": "aiops.acme-readonly-qualification.v1",
                   "scope": "EPHEMERAL_PORTAL_SIMULATED_CONTRACT_ONLY",
                   "contract_status": "BLOCKED", "overall": "NO_GO",
