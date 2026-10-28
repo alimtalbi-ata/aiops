@@ -17,3 +17,9 @@
 - `fbe4e9f40beeafa7bf64ef84d47fd333e6573d92` : tests négatifs pour les trois alias.
 - [GitHub Actions 40622700590](https://github.com/alimtalbi-ata/aiops/actions/runs/40622700590) sur le commit de journal initial `d10612e9` : completed/success.
 - Les runs de l'ultime durcissement étaient encore en cours ou en attente lors de cette écriture : ne pas attribuer PASS à `fbe4e9f4` avant confirmation GitHub. Le run précédent `40622657371` était bien vert mais ne couvrait pas les tests d'alias ajoutés ensuite.
+
+## 03:49 CET — vérification finale des checks
+
+- [GitHub Actions 40622752542](https://github.com/alimtalbi-ata/aiops/actions/runs/40622752542) sur `fbe4e9f40beeafa7bf64ef84d47fd333e6573d92` (code + tests alias) : **completed/success**.
+- [GitHub Actions 40622773480](https://github.com/alimtalbi-ata/aiops/actions/runs/40622773480) sur `c9f89b711659eda15067ca7f65e8427b5f2e92b5` (code + journal) : **completed/success**. Les checks ne sont pas une preuve d'intégration GLPI/Core réelle.
+- La présente mise à jour documentaire suit ces deux runs ; elle ne modifie pas le code ni les tests. Aucun merge/déploiement.
