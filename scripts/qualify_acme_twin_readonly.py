@@ -180,7 +180,8 @@ def validate_twin_http_headers(headers, *, anonymous: bool) -> None:
             "invalid_transfer_encoding")
     lengths = headers.get_all("Content-Length", [])
     require(len(lengths) <= 1 and (not lengths or (
-        re.fullmatch(r"[0-9]+", lengths[0]) is not None
+        len(lengths[0]) <= 6
+        and re.fullmatch(r"[0-9]+", lengths[0]) is not None
         and int(lengths[0]) <= 256 * 1024)),
         "invalid_content_length")
     challenge = headers.get_all("WWW-Authenticate", [])

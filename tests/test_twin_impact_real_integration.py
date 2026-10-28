@@ -217,6 +217,8 @@ class TwinImpactRealIntegration(unittest.TestCase):
                  "invalid_content_length"),
                 ("bad_length", "Content-Length", ["NaN"],
                  "invalid_content_length"),
+                ("huge_length", "Content-Length", ["9" * 5000],
+                 "invalid_content_length"),
             ]
             if anonymous:
                 cases += [
