@@ -21,3 +21,8 @@
 
 ## Prochain acte
 Vérifier la CI sur SHA final, puis faire porter ce garde-fou à #153 uniquement après checks verts ; réconcilier le déployeur multi-modules et la recette terrain avant toute PR de promotion. Ne jamais fusionner `main` de force dans stable.
+
+## CI initiale et correctif dans le même micro-lot
+- HEAD initial `81056b766ff5f542efc8ae650b54c3c60f531444` : [quality.yml PR #40785095757](https://github.com/alimtalbi-ata/aiops/actions/runs/40785095757), échec réel du step `Approved poller and Docker rollback-name contract (offline)` : **5 tests échoués sur 9**, erreur de syntaxe Bash ligne 63 dans le garde des chemins ; logs du job `123156168904` consultés. Ne pas compter ce run comme PASS.
+- Correctif `e3781bb2b659567d0e27e082262e6ed680ca2636` : reconstruit le fichier depuis la version #153 et utilise `[[ "$path" =~ [[:cntrl:]] ]]` au lieu d'une expression de contrôle mal échappée. Vérification locale limitée de syntaxe de la condition via `bash -n` : PASS ; **suite Git complète à requalifier en CI sur HEAD final**.
+- Pendant le passage, `main` a avancé à `103c1ded7bd39daf59699a4e416fc3f91dc74d57` par fusion ciblée de #163 Core/Policy ; ne modifie pas la décision stable.
