@@ -236,6 +236,24 @@ services:
     networks: [aiops2-integration]
     depends_on: {aiops2-glpi-db: {condition: service_healthy}}
 
+  # Explicit opt-in: GLPI ticket observation only; no public port or Portal proxy.
+  # CI may use HTTP solely to aiops2-glpi on the isolated integration network.
+  aiops2-glpi-reader:
+    profiles: ["glpi-readonly-ci"]
+    build: {context: ./app, dockerfile: glpi_reader/Dockerfile}
+    container_name: aiops2-glpi-reader
+    environment:
+      CI: ${CI:-false}
+      AIOPS_GLPI_API_BASE_URL: ${AIOPS_GLPI_API_BASE_URL:-}
+      AIOPS_GLPI_APP_TOKEN: ${AIOPS_GLPI_APP_TOKEN:-}
+      AIOPS_GLPI_SESSION_TOKEN: ${AIOPS_GLPI_SESSION_TOKEN:-}
+      AIOPS_GLPI_ENTITY_ID: ${AIOPS_GLPI_ENTITY_ID:-}
+      AIOPS_GLPI_READER_TOKEN: ${AIOPS_GLPI_READER_TOKEN:-}
+    expose: ["817"]
+    networks: [aiops2-control, aiops2-integration]
+    depends_on: {aiops2-glpi: {condition: service_started}}
+    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
+
   aiops2-n8n:
     image: ${N8N_IMAGE:-n8nio/n8n:2.40.6}
     container_name: aiops2-n8n
