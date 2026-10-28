@@ -64,6 +64,17 @@ class DemoV2Tests(unittest.TestCase):
                 self.assertIn("Fraîcheur RUNNING — INCONNU", page)
                 self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
+    def test_missing_events_or_future_start_cannot_prove_staleness(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        missing = render_demo_v2({"run": {"status": "RUNNING",
+            "started_at": "2026-10-21T12:00:00Z"}}, {}, {}, now=now)
+        self.assertNotIn("statut RUNNING ancien à requalifier", missing)
+        future = render_demo_v2({"run": {"status": "RUNNING",
+            "started_at": "2026-10-29T12:00:00Z"}, "events": []}, {}, {}, now=now)
+        self.assertIn("horodatage Core futur", future)
+        self.assertNotIn("Démarré récemment", future)
+        self.assertNotIn("statut RUNNING ancien à requalifier", future)
+
     def test_old_running_marked_for_requalification(self):
         page = render_demo_v2(
             {"run": {"status": "RUNNING",
