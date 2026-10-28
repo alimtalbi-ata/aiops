@@ -111,3 +111,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
+
+## ADR-2026-10-28-P0 — Authenticate Core/Twin bootstrap before upstream reads
+
+- **Date:** 2026-10-28 10:04 Europe/Paris
+- **Status:** Candidate in draft PR
+- **Decision:** Reuse the merged NOC viewer token guard for the Core/Twin bootstrap and serve an anonymous UNKNOWN-only portal shell. The browser may fetch read models only after explicit one-shot Bearer entry, without cookies or persistent storage.
+- **Reason:** The existing public portal route contacted Core/Twin and exposed incident/run metadata without authorization. Shared auth avoids competing contracts.
+- **Limits:** Shared token does not establish tenant ACL, SSO, real upstream integration or LIVE attestation. DEMO/Copilot writes remain separate unmerged security work.
