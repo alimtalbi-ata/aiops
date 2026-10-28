@@ -196,7 +196,6 @@ class EvidenceVideoBundleTests(unittest.TestCase):
                 bundle.build_bundle(self.evidence, self.manifest, self.output, 2)
         self.assertEqual(list(self.output.iterdir()), [])
 
-    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "real ffmpeg/ffprobe unavailable")
     def test_source_manifest_metadata_allowlist_fail_closed(self):
         # No unreviewed credential/claim fields may enter a packaged manifest.
         for field, value in (("access_token", "secret"), ("reviewed", True)):
@@ -229,6 +228,7 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         manifest["production_qualified"] = False
         bundle.validate_source_manifest(manifest)
 
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "real ffmpeg/ffprobe unavailable")
     def test_real_mp4_srt_receipt_offline(self):
         result = bundle.build_bundle(self.evidence, self.manifest, self.output, 2)
         self.assertFalse(result["runtime_authenticated"])
