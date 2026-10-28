@@ -12,3 +12,12 @@
 - **Blocages:** intégration Core tenant, vrais services éphémères et contrat de preuve non disponibles dans ce micro-lot: NOT_TESTED/BLOCKED.
 - **Prochain micro-lot:** authentifier l'identité tenant dans Core puis tester A/B avec Core réel éphémère; raccorder Checkmk/Thruk réel seulement après qualification de l'ACL.
 - **LIVE:** aucune commande, fusion, migration, déploiement ou accès Debian/portail.
+
+## Vérification GitHub — 2026-10-28 07:11 Europe/Paris
+
+- **PR draft créée :** [#99](https://github.com/alimtalbi-ata/aiops/pull/99).
+- **Commits confirmés :** `a28b1579f91e4b1014a6a00e00df713953a7b831` (code, tests, docs et journal initial) ; `ea3a46c231a30909c8d759a2f151f72a5ac46864` (ajout de l'étape dans `.github/workflows/quality.yml`). Ce workflow est également un fichier modifié.
+- **CI push vérifiée :** [run 40642298144](https://github.com/alimtalbi-ata/aiops/actions/runs/40642298144), `completed/success`, HEAD `ea3a46c`. Logs consultés : **5 tests tenant-scope exécutés, 5 OK** (unitaire/contractuel), compilation, tests NOC existants, audit statique et validation Compose réussis.
+- **CI PR vérifiée :** [run 40642312111](https://github.com/alimtalbi-ata/aiops/actions/runs/40642312111), `completed/success`, même HEAD.
+- **Limite de qualification :** transport amont remplacé dans le test de route, aucun service Checkmk/Thruk, Core tenant, Grafana ou Ollama éphémère exécuté par ce micro-lot : **NOT_TESTED**. Aucun secret NGX, aucun appel à un équipement ou serveur LIVE.
+- **Journal final :** cette mise à jour documentaire déclenche une nouvelle vérification CI; son statut doit être lu sur le nouveau HEAD avant toute fusion.
