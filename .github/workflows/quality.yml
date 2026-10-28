@@ -31,6 +31,14 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
       - name: Portal Core and Twin read model failure tests
         run: python -m unittest discover -s tests -p "test_portal_read_models.py" -v
+      - name: Portal authenticated bootstrap and anonymous shell HTTP regression
+        run: python -m unittest discover -s tests -p "test_portal_bootstrap_auth.py" -v
+      - name: Set up Node for portal browser regression
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Portal one-shot browser read behavior
+        run: node --test tests/test_portal_bootstrap_client.mjs
       - name: Signed NOC read-model security and regression tests
         run: python -m unittest discover -s tests -p "test_portal_noc_runtime_adapter.py" -v
       - name: Signed NOC to canonical Run correlation security and regression tests
