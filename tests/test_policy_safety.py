@@ -47,10 +47,34 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["state"], "BLOCKED")
         self.assertIn("human approval", result["reason"])
 
-    def test_live_p2_with_all_required_proofs_can_pass_policy(self):
-        result = evaluate(decision())
+    def test_live_p2_observe_with_all_required_proofs_can_pass_policy(self):
+        result = evaluate(decision(command="OBSERVE"))
         self.assertEqual(result["state"], "PASS")
         self.assertEqual(result["decision"], "ALLOW")
+
+    def test_live_effect_with_boolean_approval_cannot_pass(self):
+        for command in ("EXECUTE", "RESOLVE", "REMEDIATE", "CANCEL"):
+            with self.subTest(command=command):
+                result = evaluate(decision(command=command, human_approved=True))
+                self.assertEqual(result["state"], "BLOCKED")
+                self.assertEqual(result["decision"], "HUMAN_APPROVAL")
+                self.assertIn("one-use HITL binding", result["reason"])
+
+    def test_live_cancel_without_human_approval_is_blocked(self):
+        result = evaluate(decision(command="CANCEL", human_approved=False))
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertIn("human approval", result["reason"])
+
+    def test_live_enrich_with_all_required_proofs_can_pass_policy(self):
+        result = evaluate(decision(command="ENRICH", human_approved=False))
+        self.assertEqual(result["state"], "PASS")
+        self.assertEqual(result["decision"], "ALLOW")
+
+    def test_other_synthetic_modes_never_allow_live_effect(self):
+        for mode in ("REPLAY", "STORY"):
+            with self.subTest(mode=mode):
+                result = evaluate(decision(mode=mode, command="REMEDIATE"))
+                self.assertEqual(result["decision"], "SIMULATE")
 
     def test_demo_is_simulation_only(self):
         result = evaluate(decision(mode="DEMO", human_approved=False))
