@@ -73,11 +73,14 @@ def _positive_id(value: object) -> str:
 
 def correlate_acme_ticket(core: object, glpi: object, receipt_bytes: object,
                           receipt_signature: object, signing_key: object,
-                          *, now: datetime | None = None) -> dict[str, Any]:
+                          *, authorized_entity_id: object = None,
+                          now: datetime | None = None) -> dict[str, Any]:
     """Verify a fresh HMAC Core binding against independent DEMO read models.
 
     Receipt signer and GLPI adapter are not implemented here. An application
-    MUST authenticate both upstream sources before calling this pure function.
+    MUST authenticate both upstream sources and derive authorized_entity_id
+    from trusted RBAC context, never from a browser-provided field. This is a
+    GLPI entity fence, not a proof of Core tenant isolation.
     Invalid/expired/contradictory evidence returns UNKNOWN without identifiers.
     """
     unknown = _unknown()
@@ -87,6 +90,11 @@ def correlate_acme_ticket(core: object, glpi: object, receipt_bytes: object,
                 or clock.utcoffset() is None):
             raise ValueError("naive clock")
         clock = clock.astimezone(timezone.utc)
+        # The entity authorization scope is mandatory, independent of receipt
+        # and GLPI content. bool is not a valid integer authorization scope.
+        if (type(authorized_entity_id) is not int
+                or not 0 <= authorized_entity_id <= 2147483647):
+            raise ValueError("missing or invalid authorized GLPI entity scope")
         if (not isinstance(signing_key, bytes) or len(signing_key) < 32
                 or not isinstance(receipt_bytes, bytes)
                 or not 0 < len(receipt_bytes) <= MAX_RECEIPT_BYTES
@@ -144,7 +152,8 @@ def correlate_acme_ticket(core: object, glpi: object, receipt_bytes: object,
                 or receipt.get("fixture_sha256") != core["fixture_sha256"]
                 or receipt.get("ticket_id") != ticket
                 or type(receipt.get("entity_id")) is not int
-                or receipt["entity_id"] != glpi["entity_id"]):
+                or receipt["entity_id"] != glpi["entity_id"]
+                or receipt["entity_id"] != authorized_entity_id):
             raise ValueError("identity or entity mismatch")
         return {
             "schema": SCHEMA, "state": "CONTRACT_MATCHED_UNATTESTED",

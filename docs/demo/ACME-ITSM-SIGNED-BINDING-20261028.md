@@ -19,3 +19,10 @@ Avant tout raccordement, implémenter un émetteur de reçu authentifié et born
 Tests : `python -m unittest discover -s tests -p test_acme_itsm_binding.py -v` (hors ligne). Le workflow existant `.github/workflows/quality.yml` exécute également ce test ; les résultats GitHub Actions doivent être consultés sur le HEAD final de la PR. **NOT_TESTED :** intégration réelle GLPI, Core/Temporal, n8n, Thruk, Debian, captures et vidéo finale.
 
 Rollback : supprimer le module, ses tests et l'étape correspondante dans quality.yml ; aucune migration ni état runtime à restaurer.
+
+
+## 2026-10-28 — verrou d'entité GLPI obligatoire (PR empilée sur #90)
+
+Le vérificateur requiert maintenant `authorized_entity_id` (entier strict, plage 0..2147483647) dérivé **exclusivement** du contexte d'autorisation serveur de l'opérateur. Une valeur absente, booléenne, hors plage ou différente de l'entité signée et observée renvoie `UNKNOWN` sans identifiants. Un reçu valide, signé et cohérent avec une observation GLPI d'une **autre entité** ne traverse pas ce verrou. Le champ ne doit **jamais** être fourni tel quel par le navigateur ni calculé à partir du seul ticket ou du reçu. Les tests négatifs couvrent le rejeu inter-entités.
+
+Ce verrou protège la sélection d'entité GLPI **au niveau du contrat** ; il ne remplace pas l'authentification de l'appelant, les ACL multi-tenant Core, la preuve de source GLPI, la qualification réseau ou la signature par un vrai émetteur Core. Les tests sont hors ligne, avec une clé et des observations synthétiques ; aucune preuve d'intégration réelle n'est revendiquée.
