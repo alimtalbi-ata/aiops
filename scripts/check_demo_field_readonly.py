@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 SCHEMA = "aiops.demo-field-readonly-preflight.v1"
-LIMIT = 8192
+LIMIT = 131072
 COMPONENTS = ("core", "twin", "copilot", "portal")
 
 
