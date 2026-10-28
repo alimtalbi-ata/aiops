@@ -3,10 +3,14 @@ from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import io
+from contextlib import redirect_stdout
+from pathlib import Path
+import tempfile
 import threading
 import unittest
 
-from scripts.check_demo_field_readonly import UnsafeEndpoint, qualify, validate_base
+from scripts.check_demo_field_readonly import UnsafeEndpoint, main, qualify, validate_base, verify_local_applied_sha
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -106,6 +110,73 @@ class ReadOnlySmokeTests(unittest.TestCase):
         bad = dict(self.endpoints, portal="http://example.com:80")
         with self.assertRaises(UnsafeEndpoint):
             qualify(bad)
+
+    def test_applied_sha_match_remains_unattested_and_never_go(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "applied.sha"
+            sha = "a" * 40
+            for content in (sha, sha + "\n"):
+                path.write_text(content)
+                self.assertEqual(verify_local_applied_sha(str(path), sha), "MATCH_UNATTESTED")
+            result = qualify(self.endpoints, "MATCH_UNATTESTED")
+            self.assertEqual(result["checks"]["local_applied_sha_consistency"], "PASS")
+            self.assertEqual(result["applied_sha_verified"], "MATCH_UNATTESTED")
+            self.assertEqual(result["overall"], "NO_GO")
+
+    def test_applied_sha_mismatch_and_invalid_format_block(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "applied.sha"
+            path.write_text("b" * 40 + "\n")
+            for sha in ("a" * 40, "A" * 40, "a" * 39, "a" * 40 + "x"):
+                self.assertEqual(verify_local_applied_sha(str(path), sha), "BLOCKED")
+            self.assertEqual(verify_local_applied_sha("relative/applied.sha", "b" * 40), "BLOCKED")
+            self.assertEqual(qualify(self.endpoints, "BLOCKED")["assessment"], "BLOCKED")
+
+    def test_applied_sha_symlink_directory_and_oversize_block(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "applied.sha"
+            target = Path(root) / "target.sha"
+            sha = "c" * 40
+            target.write_text(sha)
+            path.symlink_to(target)
+            self.assertEqual(verify_local_applied_sha(str(path), sha), "BLOCKED")
+            self.assertEqual(verify_local_applied_sha(root, sha), "BLOCKED")
+            path.unlink()
+            path.write_text(sha + "\n" + "extra")
+            self.assertEqual(verify_local_applied_sha(str(path), sha), "BLOCKED")
+            self.assertEqual(verify_local_applied_sha(str(Path(root) / "missing"), sha), "BLOCKED")
+
+    def test_applied_sha_mismatch_blocks_before_http_and_redacts_path(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "secret-path-applied.sha"
+            path.write_text("d" * 40)
+            args = [item for name, url in self.endpoints.items()
+                    for item in ("--" + name + "-url", url)]
+            args += ["--expected-sha", "e" * 40, "--applied-sha-file", str(path)]
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(args)
+            receipt = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 2)
+            self.assertEqual(receipt["assessment"], "BLOCKED")
+            self.assertEqual(receipt["overall"], "NO_GO")
+            self.assertEqual(receipt["field_e2e"], "NOT_TESTED")
+            self.assertNotIn(str(path), output.getvalue())
+            self.assertNotIn("e" * 40, output.getvalue())
+            self.assertNotIn("checks", receipt)
+
+    def test_applied_sha_flags_must_be_paired(self):
+        args = [item for name, url in self.endpoints.items()
+                for item in ("--" + name + "-url", url)]
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = main(args + ["--expected-sha", "f" * 40])
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(json.loads(output.getvalue())["reason"], "applied_sha_pair_required")
+
+    def test_invalid_applied_status_is_refused(self):
+        with self.assertRaises(UnsafeEndpoint):
+            qualify(self.endpoints, "VERIFIED_LIVE")
 
 
 if __name__ == "__main__":
