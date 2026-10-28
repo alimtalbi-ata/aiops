@@ -8,7 +8,7 @@ mkdir -p "$BASE"
 # The script itself is installed outside the checkout; cron does not execute code from an unapproved feature branch.
 install -m 700 "$(dirname "$0")/poll-approved-deploy.sh" "$BASE/poll.sh"
 if [[ ! -d "$BASE/repo/.git" ]]; then
-  git clone --no-checkout --filter=blob:none "$REMOTE" "$BASE/repo"
+  git clone --filter=blob:none "$REMOTE" "$BASE/repo"
 fi
 git -C "$BASE/repo" fetch --no-tags origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
 target="$(git -C "$BASE/repo" rev-parse "refs/remotes/origin/$BRANCH^{commit}")"

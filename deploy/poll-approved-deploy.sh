@@ -10,7 +10,7 @@ exec 9>"$BASE/poll.lock"
 flock -n 9 || exit 0
 cd "$BASE"
 if [[ ! -d repo/.git ]]; then
-  git clone --no-checkout --filter=blob:none "$REMOTE" repo
+  git clone --filter=blob:none "$REMOTE" repo
 fi
 cd repo
 git fetch --no-tags origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
