@@ -29,7 +29,9 @@ jobs:
       - name: Compile Python source
         run: python -m compileall -q app tests tools
       - name: Demo Studio source authentication and UNKNOWN regressions
-        run: python -m unittest discover -s tests -p "test_demo_studio_source_states.py" -v
+        run: |
+          python -m unittest discover -s tests -p "test_demo_studio_source_states.py" -v
+          python -m unittest discover -s tests -p "test_demo_v2.py" -v
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
