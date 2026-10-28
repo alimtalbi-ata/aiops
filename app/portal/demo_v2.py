@@ -4,14 +4,22 @@ from portal.ui_theme import panel, table, esc
 
 
 def _source(value):
-    if not isinstance(value, dict):
-        return "INCONNU — réponse absente"
-    if value.get("status") == "UNKNOWN":
-        error = str(value.get("error_type", ""))
-        if error in ("HTTPError", "Unauthorized", "401"):
-            return "INDISPONIBLE — accès ou API en erreur (vérifier les droits)"
-        return "INDISPONIBLE — source non accessible"
-    return "DISPONIBLE — données reçues"
+    """Report transport authentication separately from unverified source content.
+
+    An HTTP 401/403 label requires an actual captured HTTPError, never a
+    user-controlled JSON field claiming an HTTP status or a generic exception.
+    """
+    if not isinstance(value, dict) or not value:
+        return "INCONNU — réponse absente ou invalide"
+    if value.get("status") == "UNKNOWN" or "error_type" in value:
+        if value.get("error_type") == "HTTPError":
+            code = value.get("http_status")
+            if type(code) is int and code == 401:
+                return "ACCÈS REFUSÉ — HTTP 401 (authentification Core requise)"
+            if type(code) is int and code == 403:
+                return "ACCÈS REFUSÉ — HTTP 403 (droits Core insuffisants)"
+        return "INCONNU — source non vérifiée ou indisponible"
+    return "DISPONIBLE — données reçues (non attestées)"
 
 
 def render_demo_v2(detail, ledger, gates):
