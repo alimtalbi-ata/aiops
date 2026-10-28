@@ -106,6 +106,24 @@ class EvidenceVideoBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "private existing"):
             bundle.build_bundle(self.evidence, self.manifest, link)
 
+    def test_render_uses_pinned_bytes_after_source_changes(self):
+        original = (self.evidence / "portal.png").read_bytes()
+        seen = []
+
+        def inspect_render(pinned, captures, output, seconds):
+            seen.append(pinned)
+            self.assertNotEqual(pinned.resolve(), self.evidence.resolve())
+            self.assertEqual((pinned / "portal.png").read_bytes(), original)
+            (self.evidence / "portal.png").write_bytes(b"source changed after pin")
+            self.assertEqual((pinned / "portal.png").read_bytes(), original)
+            raise RuntimeError("render intercepted after snapshot")
+
+        with patch.object(bundle, "render", side_effect=inspect_render):
+            with self.assertRaisesRegex(RuntimeError, "render intercepted"):
+                bundle.build_bundle(self.evidence, self.manifest, self.output)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_no_partial_output_on_render_failure(self):
         with patch.object(bundle, "render", side_effect=RuntimeError("encoder failed")):
             with self.assertRaisesRegex(RuntimeError, "encoder failed"):
