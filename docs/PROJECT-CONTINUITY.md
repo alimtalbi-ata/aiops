@@ -102,3 +102,10 @@ The P0 NOC track adds `app/portal/noc_correlation.py` and a guarded portal drill
 ## 2026-10-28 — P1 Golden DEMO write fence and fixture-to-Core identity binding (candidate)
 
 A dedicated branch introduces `app/portal/acme_golden_demo.py` to require a separate `AIOPS_PORTAL_DEMO_TOKEN` before the existing Core-writing `POST /api/demo` endpoint. Without the token the endpoint fails closed; the internal Core credential is never accepted as the browser's DEMO credential. The launcher validates the synthetic SAN P1 → Payments P2 fixture, verifies Core's returned Incident/Run/execute IDs and requires `mode=DEMO`; GLPI ID and runtime attestation remain absent. It deliberately reuses the already seeded `SCN-GOLDEN-PAYMENT-P1` and does not claim the fixture's CI IDs are Core CMDB IDs. `quality.yml` reuses existing CI with new negative tests; `tests/synthetic-e2e.sh` requires the dedicated credential. CI result and PR reference must be confirmed separately. See `docs/demo/ACME-GOLDEN-DEMO-WRITE-GATE-20261028.md`. No Debian, GLPI or LIVE verification.
+
+
+## 2026-10-28 04:32 Europe/Paris — P1 ACME Golden DEMO Core readback (stacked on #80)
+
+- Adds a dedicated operator-authenticated read-only `GET /api/demo/acme-run/{run_id}` on the canonical portal. The existing bounded internal Core GET adapter is reused; no additional upstream or write path is introduced.
+- The read model matches only the exact DEMO Run/Incident/scenario against the validated local SAN → Payments fixture. Mismatch or LIVE/REPLAY/STORY yields `UNKNOWN` without leaking canonical IDs. Even matching Core status is `MATCHED_UNATTESTED`, with GLPI ticket null and no runtime evidence.
+- New offline negative tests and existing `quality.yml` workflow. See `docs/demo/ACME-GOLDEN-RUN-READBACK-20261028.md` and the dated automation log. No real Core/Temporal/GLPI integration or Debian access claimed. Next: real ephemeral Core/Temporal and GLPI independent correlation.
