@@ -135,6 +135,19 @@ class CheckmkExportEndpointTests(unittest.TestCase):
         self.assertEqual(too_big.status_code, 413)
         self.assertEqual(wrong_type.status_code, 415)
 
+    def test_portal_route_and_visible_demo_preview(self):
+        from portal import main
+        paths = {route.path for route in main.app.routes}
+        self.assertIn("/api/noc/checkmk-export/preview", paths)
+        snapshot = {"dashboard": None, "runs": None, "twin": None, "states": {}}
+        with patch.object(main, "read_portal_snapshot", return_value=snapshot):
+            html = main.home()
+        self.assertIn("Exemple synthétique", html)
+        self.assertIn("Prévisualiser les états", html)
+        self.assertIn("/api/noc/checkmk-export/preview", html)
+        self.assertIn("SYNTHETIC DEMO ONLY", html)
+        self.assertNotIn("Checkmk LIVE vérifié", html)
+
     def test_valid_api_response_never_claims_live(self):
         payload = sample()
         payload["captured_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
