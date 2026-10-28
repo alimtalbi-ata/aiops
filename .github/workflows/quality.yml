@@ -40,6 +40,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_evidence_browser_capture.py" -v
       - name: Evidence input snapshot pinning and TOCTOU regression (offline)
         run: python -m unittest discover -s tests -p "test_evidence_snapshot.py" -v
+      - name: Evidence Studio offline receipt and byte integrity audit (no LIVE)
+        run: python -m unittest discover -s tests -p "test_evidence_bundle_audit.py" -v
       - name: Capture publication rollback and collision safety (offline)
         run: python -m unittest discover -s tests -p "test_evidence_publish.py" -v
       - name: Secret preflight unit tests

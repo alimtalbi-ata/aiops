@@ -49,3 +49,35 @@ portail/Thruk/Grafana/n8n/GLPI. Les snapshots ne garantissent pas l'authenticit�
 de la session, le contenu visuel ou une protection contre un autre processus
 ayant le même compte Unix et accès au répertoire privé. Le contrôle de
 confidentialité opérateur et l'attestation indépendante restent bloquants.
+
+
+## Incrément 2026-10-28 — audit indépendant du reçu local (PR #86)
+
+Après la génération du bundle, une vérification indépendante des **octets locaux**
+peut être effectuée sans navigateur ni réseau :
+
+```bash
+python3 -m demo.evidence_bundle_audit \
+  --bundle-dir /chemin/prive/aiops-bundle \
+  --capture-root /chemin/prive/captures
+```
+
+L'auditeur exige le répertoire bundle privé (0700), des fichiers réguliers
+non symboliques, des noms de sortie fixes, un JSON sans clés dupliquées,
+des champs de provenance strictement non attestés et cinq captures dans
+l'ordre canonique. Il réutilise `demo.evidence_video.verify` pour valider
+les PNG, leurs empreintes, leurs horodatages UTC et leurs origines déclarées,
+puis vérifie SHA-256 du MP4 et du SRT avec détection de modification pendant
+la lecture. Les échecs renvoient `BLOCKED` et le code 2.
+
+**Frontière explicite :** `LOCAL_BYTES_VERIFIED_UNATTESTED` ne valide ni
+l'authentification des sessions, ni le contenu visuel, ni les permissions
+d'accès des applications, ni la causalité entre les IDs. Cet auditeur ne
+décode **pas** le MP4 : le décodage FFmpeg est contrôlé séparément lors de
+la génération. Un reçu et des octets modifiés ensemble ne constituent pas
+une signature ou une attestation externe. Les tests de cet auditeur utilisent
+des PNG techniques et un faux MP4 pour les cas de hashes ; un test distinct
+assemble aussi un **vrai MP4 hors ligne avec FFmpeg**, puis le fait auditer.
+Aucun de ces fichiers n'est une capture authentifiée d'application, ni une
+preuve de session ou d'incident réel. Aucun chemin
+LIVE n'est ouvert.
