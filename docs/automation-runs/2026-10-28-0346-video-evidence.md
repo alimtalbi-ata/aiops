@@ -38,3 +38,20 @@
   bien fail-closed ; c'est l'assertion de message qui était trop restrictive.
 - Correctif `56a5b69` : accepte les deux motifs de refus sans modifier le
   filtre réseau ni autoriser de requête. CI complète à confirmer sur ce HEAD.
+
+## Validation après corrections
+
+- [Run 40623262946](https://github.com/alimtalbi-ata/aiops/actions/runs/40623262946),
+  commit `56a5b69` : **SUCCESS confirmé**. Étapes : policy (7 tests),
+  validation PNG (15), bundle MP4/SRT/receipt avec FFmpeg réel hors ligne
+  (13), contrat Playwright hors ligne (21), snapshot pinning (7), publication
+  (7), puis preflight secrets, audit statique et configuration Compose.
+  Total **70 tests Python** ; ceci ne constitue pas une intégration avec
+  des services applicatifs ni une preuve LIVE.
+- Commits supplémentaires : `68462db` puis `be913e8` ajoutent un
+  test négatif vérifiant qu'un PNG **structurellement valide** mais modifié
+  entre la première vérification et la copie épinglée est rejeté par son
+  SHA-256, avant tout appel à FFmpeg.
+- [Run 40623310300](https://github.com/alimtalbi-ata/aiops/actions/runs/40623310300)
+  sur `be913e8` : en cours au moment de cette entrée ; résultat final à
+  vérifier. Aucun PASS revendiqué pour ce nouveau HEAD.
