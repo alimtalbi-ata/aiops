@@ -47,3 +47,8 @@ Commits de code/tests/CI/docs :
 - Test de présence de la route et du panneau ajouté : commit `243e737594811a9a95af91632692cca47c98f06c`.
 - [Run 40625461587](https://github.com/alimtalbi-ata/aiops/actions/runs/40625461587) : **completed/failure**. La nouvelle vérification importait `portal.main` sans `AIOPS_INTERNAL_TOKEN`, qui est obligatoire dans `shared.http`. Aucun test d'intégration réel n'était en cause.
 - Correctif ciblé `686d48f3783fd599582685b511254a619f43e9f1` : injecte un jeton **synthétique de test** uniquement pendant l'import du portail. La règle d'authentification runtime reste inchangée. Nouvelle CI requise avant PASS du dernier code.
+
+## Résultat du correctif
+
+- [GitHub Actions 40625512643](https://github.com/alimtalbi-ata/aiops/actions/runs/40625512643) sur `686d48f3783fd599582685b511254a619f43e9f1` : **completed/success** confirmé après correction de l'import du portail. Les contrôles sont de niveau unit/contract/static et Compose config, non E2E réel.
+- Le commit de ce complément est documentaire uniquement ; son propre workflow doit être vérifié séparément.
