@@ -41,3 +41,9 @@ Commits de code/tests/CI/docs :
 - [GitHub Actions 40625339504](https://github.com/alimtalbi-ata/aiops/actions/runs/40625339504) sur `08ac84065f2d8af672b1dcb1c2ea1bbbf9240742` : **completed/success** confirmé après rédaction initiale.
 - [GitHub Actions 40625380846](https://github.com/alimtalbi-ata/aiops/actions/runs/40625380846) sur `61c27f92759dd754d8e9d03075ea7330c6943b3f` : **completed/success** confirmé, journal initial inclus.
 - Relecture du HTML : correction de la génération de l'horodatage de l'exemple synthétique avec `toISOString().slice(0,19)+'Z'`, commit `06c6aa20d8a6290e8f84a6601a347f9ad85e80bd`. Ce correctif doit repasser la CI ; ne pas attribuer les résultats antérieurs au nouveau HEAD.
+
+## Échec CI détecté et correction
+
+- Test de présence de la route et du panneau ajouté : commit `243e737594811a9a95af91632692cca47c98f06c`.
+- [Run 40625461587](https://github.com/alimtalbi-ata/aiops/actions/runs/40625461587) : **completed/failure**. La nouvelle vérification importait `portal.main` sans `AIOPS_INTERNAL_TOKEN`, qui est obligatoire dans `shared.http`. Aucun test d'intégration réel n'était en cause.
+- Correctif ciblé `686d48f3783fd599582685b511254a619f43e9f1` : injecte un jeton **synthétique de test** uniquement pendant l'import du portail. La règle d'authentification runtime reste inchangée. Nouvelle CI requise avant PASS du dernier code.
