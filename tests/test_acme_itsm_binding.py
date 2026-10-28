@@ -36,14 +36,17 @@ def inputs():
     return core, glpi, receipt
 
 
-def check(core=None, glpi=None, receipt=None, key=KEY, raw=None, signature=None, now=NOW):
+def check(core=None, glpi=None, receipt=None, key=KEY, raw=None,
+          signature=None, now=NOW, scope=7):
     a, b, c = inputs()
     core = a if core is None else core
     glpi = b if glpi is None else glpi
     receipt = c if receipt is None else receipt
     raw = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() if raw is None else raw
     signature = hmac.new(key, raw, hashlib.sha256).hexdigest() if signature is None else signature
-    return correlate_acme_ticket(core, glpi, raw, signature, key, now=now)
+    return correlate_acme_ticket(
+        core, glpi, raw, signature, key, now=now,
+        authorized_entity_id=scope)
 
 
 class AcmeITSMBindingTests(unittest.TestCase):
@@ -116,6 +119,25 @@ class AcmeITSMBindingTests(unittest.TestCase):
         _, glpi, _ = inputs()
         glpi["read_at_utc"] = "2026-10-28T04:10:00Z"
         self.assert_unknown(check(glpi=glpi))
+
+    def test_authorized_glpi_entity_scope_is_mandatory_and_strict(self):
+        # The same valid signed receipt and GLPI observation must never cross
+        # the independently authorized entity boundary.
+        for scope in (None, True, False, "7", -1, 8, 2147483648, 7.0):
+            with self.subTest(scope=scope):
+                self.assert_unknown(check(scope=scope))
+        self.assertEqual(check(scope=7)["state"], "CONTRACT_MATCHED_UNATTESTED")
+
+    def test_replayed_matching_receipt_in_another_entity_is_rejected(self):
+        _, glpi, receipt = inputs()
+        glpi["entity_id"] = 8
+        receipt["entity_id"] = 8
+        self.assert_unknown(check(glpi=glpi, receipt=receipt, scope=7))
+        # Still un-attested even when an independently authorized scope matches.
+        matched = check(glpi=glpi, receipt=receipt, scope=8)
+        self.assertEqual(matched["state"], "CONTRACT_MATCHED_UNATTESTED")
+        self.assertFalse(matched["runtime_attested"])
+        self.assertFalse(matched["live_remediation_authorized"])
 
     def test_untrusted_shapes_fail_closed_without_identifier_leak(self):
         for core, glpi in ((None, []), ([], {}), ({}, {}), ("evil", "evil")):
