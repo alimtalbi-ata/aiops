@@ -7,6 +7,7 @@ import hashlib
 from contextlib import contextmanager
 import hmac
 import json
+import math
 import secrets
 import sqlite3
 from datetime import datetime, timezone
@@ -273,7 +274,18 @@ def read_status(path, *, proposal_id, now=None):
             if row is None:
                 raise HITLRejected("proposal not found")
             incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, mode, created, expires, proposer_id = row
-            if mode not in MODES or recipe_id not in RECIPES or at < created or expires <= created:
+            # A read-only projection is still a trust boundary for the portal:
+            # never display an approval from a malformed or extended proposal.
+            try:
+                for value in (incident_id, run_id, recipe_id, target_id, proposer_id):
+                    _identity(value)
+            except HITLRejected as exc:
+                raise HITLRejected("invalid stored proposal identity") from exc
+            if (mode not in MODES or recipe_id not in RECIPES
+                or not all(isinstance(t, (int, float)) and not isinstance(t, bool)
+                           for t in (created, expires))
+                or not all(math.isfinite(t) for t in (created, expires))
+                or at < created or not 1 <= expires - created <= 3600):
                 raise HITLRejected("invalid proposal state")
             if (not isinstance(params_hash, str) or len(params_hash) != 64
                 or any(c not in "0123456789abcdef" for c in params_hash)):
