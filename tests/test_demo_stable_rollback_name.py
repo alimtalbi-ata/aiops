@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "deploy/deploy-demo-studio-v2.sh"
-NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,254}\\Z")
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,254}\Z")
 
 
 def valid_docker_name(name):
@@ -16,8 +16,10 @@ def valid_docker_name(name):
 
 
 def backup_expression():
-    assignments = [line.split("=", 1)[1] for line in SCRIPT.read_text().splitlines()
-                   if line.startswith("BACKUP=")]
+    assignments = [
+        line.split("=", 1)[1] for line in SCRIPT.read_text().splitlines()
+        if line.startswith("BACKUP=")
+    ]
     if len(assignments) != 1:
         raise AssertionError("expected exactly one BACKUP assignment")
     return assignments[0]
@@ -27,8 +29,8 @@ def evaluate_backup():
     # Evaluate ONLY the extracted assignment, never source the deployment script.
     expression = backup_expression()
     result = subprocess.run(
-        ["bash", "-c", "set -euo pipefail\\nBACKUP=" + expression +
-         "\\nprintf '%s' \\"$BACKUP\\""],
+        ["bash", "-c", 'set -euo pipefail\nBACKUP=' + expression +
+         '\nprintf "%s" "$BACKUP"'],
         check=True, text=True, capture_output=True, timeout=5,
     )
     return result.stdout
