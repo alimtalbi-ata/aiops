@@ -120,3 +120,74 @@ test("false LIVE attestation is rejected and late responses cannot resurrect cle
   assert.match(late.get("story-status").textContent, /UNKNOWN/);
   assert.equal(late.get("timeline").children.length, 1);
 });
+
+test("control responses cannot skip checkpoints or forge playing state", async () => {
+  let forged = null;
+  const h = harness(async (_, opts) => {
+    const p = JSON.parse(opts.body);
+    const expected = p.action === "advance" ? Math.min(p.cursor + 1, 2) : p.cursor;
+    return {ok: true, json: async () => envelope(p.action, p.mode, expected, forged || {})};
+  });
+  h.get("story-token").value = "viewer";
+  await h.get("start").click();
+  assert.match(h.get("story-status").textContent, /SIMULATED_TARGET/);
+  forged = {cursor: 2, step: envelope("advance", "explore", 2).step};
+  await h.get("advance").click();
+  assert.match(h.get("story-status").textContent, /UNKNOWN/);
+  assert.equal(h.get("timeline").children.length, 1);
+  assert.equal(h.timer(), null);
+
+  const replay = harness(async (_, opts) => {
+    const p = JSON.parse(opts.body);
+    return {ok: true, json: async () => envelope(p.action, p.mode, p.cursor,
+      {playing: true})};
+  });
+  replay.get("story-token").value = "viewer";
+  await replay.get("start").click();
+  assert.match(replay.get("story-status").textContent, /UNKNOWN/);
+  assert.equal(replay.timer(), null);
+});
+
+test("fixture identity drift fails closed until explicit session clear", async () => {
+  let digest = "a".repeat(64);
+  const h = harness(async (_, opts) => {
+    const p = JSON.parse(opts.body);
+    return {ok: true, json: async () => envelope(p.action, p.mode, p.cursor,
+      {source_sha256: digest})};
+  });
+  h.get("story-token").value = "viewer";
+  await h.get("start").click();
+  assert.match(h.get("story-status").textContent, /SIMULATED_TARGET/);
+  digest = "b".repeat(64);
+  await h.get("pause").click();
+  assert.match(h.get("story-status").textContent, /UNKNOWN/);
+  assert.equal(h.get("timeline").children.length, 1);
+  h.get("clear").click();
+  h.get("story-token").value = "viewer";
+  await h.get("start").click();
+  assert.match(h.get("story-status").textContent, /SIMULATED_TARGET/);
+  assert.match(h.get("source").textContent, /bbbbbbbb/);
+});
+
+test("valid Story auto-advance, pause and replay follow server cursor contract", async () => {
+  const h = harness(async (_, opts) => {
+    const p = JSON.parse(opts.body);
+    const cursor = p.action === "reset" || p.action === "replay" ? 0 :
+      p.action === "advance" ? Math.min(p.cursor + 1, 2) :
+      p.action === "start" && p.cursor === 2 ? 0 : p.cursor;
+    return {ok: true, json: async () => envelope(p.action, p.mode, cursor)};
+  });
+  h.get("mode-story").click();
+  h.get("story-token").value = "viewer";
+  await h.get("start").click();
+  assert.equal(typeof h.timer(), "function");
+  const advance = h.timer();
+  advance();
+  await flush();
+  assert.match(h.get("story-status").textContent, /2\/3/);
+  await h.get("pause").click();
+  assert.equal(h.timer(), null);
+  await h.get("replay").click();
+  assert.match(h.get("story-status").textContent, /1\/3/);
+  assert.equal(typeof h.timer(), "function");
+});
