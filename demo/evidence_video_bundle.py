@@ -119,7 +119,12 @@ def build_bundle(evidence_root: Path, manifest_path: Path, output_dir: Path, sec
                 raise ValueError("duplicate JSON key")
             result[key] = value
         return result
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"), object_pairs_hook=no_duplicates)
+    # Bind the exact source-manifest bytes to the receipt. Parse those same
+    # bytes so a changed file cannot silently change the audited context.
+    manifest_bytes = manifest_path.read_bytes()
+    if not 1 <= len(manifest_bytes) <= 256 * 1024:
+        raise ValueError("bounded source manifest required")
+    manifest = json.loads(manifest_bytes.decode("utf-8"), object_pairs_hook=no_duplicates)
     # First validation bounds paths/metadata; pin exact source bytes before
     # handing paths to FFmpeg, then reverify the pinned copies against hashes.
     captures = verify(evidence_root, manifest)
@@ -141,6 +146,7 @@ def build_bundle(evidence_root: Path, manifest_path: Path, output_dir: Path, sec
             "provenance": "OPERATOR_SUPPLIED_UNATTESTED",
             "runtime_authenticated": False, "production_qualified": False,
             "capture_count": 5, "correlation": context,
+            "source_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
             "captures": captures, "video": {"file": NAMES[0], "sha256": _sha(video), **video_info},
             "subtitles": {"file": NAMES[1], "sha256": _sha(captions)},
         }
