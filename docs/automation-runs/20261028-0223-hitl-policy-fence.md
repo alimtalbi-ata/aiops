@@ -17,7 +17,7 @@
 - Local isolated Python 3 environment: `python -m compileall -q app tests` => **PASS**.
 - Local isolated Python 3 environment: `python -m unittest discover -s tests -p test_policy_safety.py -v` => **11 tests, OK**, including P1, UNKNOWN, fencing, absent approval, forged boolean on four mutating commands, CANCEL, OBSERVE, ENRICH and synthetic modes.
 - Verified exact GitHub blob IDs match locally tested source: `app/policy/main.py` = `7e641b2754c4a070c1da7e88a6752d1af40ad4a2`; `tests/test_policy_safety.py` = `adf08ffe53b61b1ea55f833d3f672e18fca53a7e`.
-- GitHub Actions `AIOps quality gates` on final PR HEAD: **PENDING/NOT_CONFIRMED** at journal creation; check [PR #76 checks](https://github.com/alimtalbi-ata/aiops/pull/76/checks) for actual run ID, status and logs. No full-stack, container E2E or LIVE qualification executed.
+- GitHub Actions `AIOps quality gates` on code + initial journal HEAD `ef7b6a157f8cb3e3c7f79b3695df4bd948f5434b`: **completed / SUCCESS**, run [#40615044551](https://github.com/alimtalbi-ata/aiops/actions/runs/40615044551). Verified `policy-and-static` job and each test/compile/static/Compose-config step concluded success. This journal update is a docs-only follow-up commit; its own CI result must be checked separately. No full-stack, container E2E or LIVE qualification executed.
 - No Ollama/NIM used: this is a deterministic Policy unit test. No other service mocked as a claimed integration.
 
 ## Risques / blocages / rollback
