@@ -23,3 +23,13 @@ These references prove *internal referential linkage for synthetic records*, **n
 The Debian poller watches **only** `deploy/aiops2-stable`. The existing Studio deploy script does not install `app/core/demo_evidence_read.py` or Core route registration, so deploying only the Portal change would deliberately return 503. Schedule 5/5 must assemble and verify both services, release/rollback coverage, auth configuration and post-deploy read-only smoke tests before any stable promotion. No Debian access or `applied.sha` proof is claimed.
 
 NOT_TESTED: Debian, tenant A/B runtime actor ACL, observed SAN CRC/Payments p95, Twin impact, Ollama 4B, Temporal/Policy E2E, browser screenshot/video and rollback.
+
+## Temporal integrity addendum — candidate #167 (2026-10-28)
+
+The Portal independently rejects an Evidence reference whose `known_at`
+is timezone-naive or more than five minutes ahead of the Portal clock,
+even if an upstream Core response claims `event_link_verified=true`.
+The result is HTTP 503 `UNKNOWN`, `no-store`, without exposing IDs,
+tokens or private ledger content. The existing viewer-authenticated endpoint
+and `aiops.demo-ledger-read.v1` response schema are unchanged.
+This is **not** a source/clock attestation or proof of observed metrics.

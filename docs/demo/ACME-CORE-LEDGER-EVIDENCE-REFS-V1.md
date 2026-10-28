@@ -23,3 +23,12 @@ Existing deployment script from #143/#146 copies only Demo Studio portal files a
 The existing `.github/workflows/quality.yml` `database-migrations` job runs real Core HTTP and PostgreSQL 16; the extended `tests/test_demo_ledger_real_http.py` checks 401, positive synthetic event-link, cross-Run/LIVE/missing data 503, tenant metadata 503 and no payload/secret leakage. No extra workflow, fake Core, real NGX, production credentials or LIVE mutation. Check the exact PR SHA and GitHub run before claiming PASS.
 
 **NOT_TESTED:** tenant A/B actor-scoped RBAC, browser Portal consumption, real SAN/Payments metrics, Twin runtime impact, Ollama 4B, Debian applied.sha, rollback execution, post-deployment smoke, screenshots and video.
+
+## Temporal integrity addendum — candidate #167 (2026-10-28)
+
+The Core resolver now refuses a synthetic Evidence row whose `known_at` is
+timezone-naive or more than five minutes in the future relative to the Core
+clock. This is a **clock-skew safety bound**, not an attestation of freshness,
+source authenticity or SAN→Payments causality. A future timestamp yields
+HTTP 503 without leaking Evidence IDs. The existing endpoint and
+`aiops.core-demo-evidence-refs.v1` response schema are unchanged.

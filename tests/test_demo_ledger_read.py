@@ -1,6 +1,7 @@
 """Unit-only contract tests; upstream Core/PostgreSQL integration NOT_TESTED here."""
 import json
 import os
+from datetime import datetime, timedelta, timezone
 import sys
 import unittest
 from unittest.mock import patch
@@ -128,6 +129,8 @@ class DemoLedgerReadTests(unittest.TestCase):
             ("missing_id", {**REFS, "items": [{**REFS["items"][0], "evidence_id": "EVD-OTHER"}]}),
             ("bad_hash", {**REFS, "items": [{**REFS["items"][0], "payload_sha256": "broken"}]}),
             ("bad_time", {**REFS, "items": [{**REFS["items"][0], "known_at": "2026-10-28"}]}),
+            ("future_time", {**REFS, "items": [{**REFS["items"][0],
+                "known_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}]}),
             ("tenant_metadata", {**REFS, "ownerTenantId": "TENANT-B"}),
             ("extra_payload", {**REFS, "items": [{**REFS["items"][0], "payload": "private"}]}),
             ("duplicate", {**REFS, "items": REFS["items"] * 2}),

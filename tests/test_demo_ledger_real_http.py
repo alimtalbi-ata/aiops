@@ -222,6 +222,70 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertNotIn("EVD-CI-LEDGER-NO-EVENT", denied.text)
         self.assertEqual(denied.headers["cache-control"], "no-store")
 
+    def test_future_dated_evidence_refused_by_real_core_and_portal(self):
+        # Evidence rows are append-only: seed a separate genuine future-dated
+        # Run/Evidence/Analysis/Critique in ephemeral PostgreSQL, never UPDATE.
+        future_run = "RUN-CI-LEDGER-FUTURE"
+        future_evidence = "EVD-CI-LEDGER-FUTURE"
+        ids = [future_evidence]
+        digest = hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
+        with psycopg.connect(DSN) as conn:
+            conn.execute(
+                "insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
+                "values(%s,'DEMO','CI-LEDGER-ISOLATED','CREATED',%s)",
+                (future_run, "ci-ledger-future-run"),
+            )
+            conn.execute(
+                "insert into aiops.evidence(evidence_id,source,claim,confidence,"
+                "provenance,payload_hash,payload,known_at) values("
+                "%s,'CI_SYNTHETIC_SAN','Future synthetic claim',0.5,%s,%s,"
+                "'{}'::jsonb,now() + interval '1 day')",
+                (future_evidence, Jsonb({"synthetic": True, "observed": False,
+                                         "run_id": future_run}),
+                 hashlib.sha256(b"ci-future-evidence").hexdigest()),
+            )
+            conn.execute(
+                "insert into aiops.run_events(event_id,run_id,sequence,stage,event_type,"
+                "status,evidence_ids,payload) values(%s,%s,1,'OBSERVE','CI_FUTURE',"
+                "'PASS',%s,'{}'::jsonb)",
+                ("EVT-CI-LEDGER-FUTURE", future_run, Jsonb(ids)),
+            )
+            conn.execute(
+                "insert into aiops.analysis_records(analysis_id,run_id,idempotency_key,"
+                "revision,contract_version,provider,model,prompt_version,evidence_ids,"
+                "evidence_set_hash,output,confidence,status) values("
+                "'ANL-CI-FUTURE',%s,'ci-ledger-future-analysis',1,'2.0',"
+                "'CI_ONLY','CI_NOT_LLM','ci',%s,%s,'{}'::jsonb,0.5,'VALID')",
+                (future_run, Jsonb(ids), digest),
+            )
+            conn.execute(
+                "insert into aiops.critique_records(critique_id,idempotency_key,"
+                "analysis_id,run_id,contract_version,provider,model,validated,issues,"
+                "evidence_ids,output,diagnostic_confidence) values("
+                "'CRT-CI-FUTURE','ci-ledger-future-critique','ANL-CI-FUTURE',"
+                "%s,'2.0','CI_ONLY','CI_NOT_LLM',true,'[]'::jsonb,%s,%s,0.4)",
+                (future_run, Jsonb(ids), Jsonb({"claim_checks": [
+                    {"claim": "Future synthetic claim", "supported": True,
+                     "supporting_evidence_ids": ids}]})),
+            )
+        auth = {"Authorization": "Bearer " + INTERNAL}
+        ledger = requests.get(CORE + "/api/runs/" + future_run + "/ai-ledger",
+                              headers=auth, timeout=5, allow_redirects=False)
+        self.assertEqual(ledger.status_code, 200, ledger.text)
+        core = requests.get(
+            CORE + "/api/noc/runs/" + future_run + "/evidence-refs",
+            headers=auth, timeout=5, allow_redirects=False,
+        )
+        self.assertEqual(core.status_code, 503, core.text)
+        self.assertNotIn(future_evidence, core.text)
+        portal = self.read(PORTAL, rid=future_run)
+        self.assertEqual(portal.status_code, 503, portal.text)
+        self.assertEqual(portal.json(), {"status": "UNKNOWN",
+                                         "reason": "ledger_unavailable"})
+        self.assertEqual(portal.headers["cache-control"], "no-store")
+        for private in (future_run, future_evidence, INTERNAL, VIEWER):
+            self.assertNotIn(private, portal.text)
+
     def test_real_upstream_401_becomes_unknown_without_leak(self):
         # Second real Portal process deliberately has a different CI-only
         # internal token; Core must reject its request, not the viewer token.
