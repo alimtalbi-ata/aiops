@@ -24,7 +24,7 @@
 - Draft PR: https://github.com/alimtalbi-ata/aiops/pull/71 — not merged.
 
 ## Tests and qualification
-- GitHub Actions existing quality workflow: https://github.com/alimtalbi-ata/aiops/actions/runs/40608103398 — **IN_PROGRESS** when initially inspected (2026-10-28 ~01:21 Europe/Paris). Do not label PASS until conclusion verified.
+- GitHub Actions existing quality workflow: https://github.com/alimtalbi-ata/aiops/actions/runs/40608103398 — **COMPLETED / SUCCESS** for source head `83319aadcf967100a99a383a7de38e052429925e`, verified via workflow run and job steps. Python compilation, signed NOC regression, new DEMO context tests, static audit and Compose config all reported success. This is unit/static/config qualification only; a subsequent documentation-only journal commit must be checked independently.
 - New suite is synthetic unit/HTTP contract testing, with mocked source/Core calls; not real integration.
 - **NOT_TESTED**: actual Checkmk/Thruk, Core+Temporal end-to-end, real Grafana observations, tenant RBAC, Ollama 4B, NVIDIA NIM 192B, Debian, real browser screenshots and video.
 - No Debian/portal access, merge, deploy, production secrets or LIVE commands.
