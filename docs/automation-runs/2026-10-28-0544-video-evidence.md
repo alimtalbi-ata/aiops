@@ -35,3 +35,10 @@
 - Code/test HEAD `9aef37c6f39969d20070be24b93982492061b9f2`: [quality run 40634108823](https://github.com/alimtalbi-ata/aiops/actions/runs/40634108823) **completed/success**. The log of job `122636995812` explicitly shows `test_nonfinite_or_noncanonical_scene_duration_rejected ... ok`, `test_rehashed_sensitive_or_reordered_subtitles_rejected ... ok` and `Ran 13 tests in 1.942s` for the auditeur. The offline FFmpeg bundle and other configured quality steps also concluded success.
 - Journal HEAD `db99d5906b059b390641948928782b9f91549bb2`: [quality run 40634181172](https://github.com/alimtalbi-ata/aiops/actions/runs/40634181172) **completed/success**, all steps green. This is unit/static/Compose-configuration qualification, **not** runtime integration or real application evidence.
 - The documentation-only commit adding this addendum must have its own CI result verified independently. No new tests were run locally.
+
+## Final code hardening — oversized duration integer
+
+- `be12db16cb80627e6a273a2682ba14c0234978f6`: `demo/evidence_bundle_audit.py` — check the 10–100 s range **before** `math.isfinite` so an extremely large JSON integer cannot raise an uncaught `OverflowError`.
+- `2c3a259bf063425c6827fdb4aea0aa88bd65b64c`: `tests/test_evidence_bundle_audit.py` — regression with `10 ** 400` duration.
+- The exact new code/test HEAD `2c3a259b` passed existing non-destructive quality workflow: [GitHub Actions 40634362156](https://github.com/alimtalbi-ata/aiops/actions/runs/40634362156) **completed/success**, all steps. Earlier addendum/documentation HEAD `0e3bc61b` also passed [run 40634285296](https://github.com/alimtalbi-ata/aiops/actions/runs/40634285296).
+- This final journal-only commit will trigger its own workflow; do not infer its status from the code HEAD. Scope remains offline unit/static/Compose-config and real offline FFmpeg fixtures only. No authentic captures, LIVE attestation or service E2E.
