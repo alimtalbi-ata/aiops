@@ -1,4 +1,4 @@
-name: Promote qualified AIOps release to stable
+name: Propose qualified AIOps release to stable
 
 on:
   workflow_run:
@@ -11,15 +11,15 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
-  group: promote-aiops2-stable
+  group: propose-aiops2-stable
   cancel-in-progress: false
 
 jobs:
-  promote:
-    # Never promote PR-head or feature-branch runs. The full quality workflow
-    # must finish successfully on a push to the protected main branch.
+  propose:
+    # Only a successful push qualification on main can propose a release.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -28,25 +28,46 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out the exact qualified commit
+      - name: Check out exact qualified commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Promote only the tested commit to the approved stable branch
+          persist-credentials: true
+      - name: Propose tested SHA through a protected-branch pull request
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PROMOTION_SHA: ${{ github.event.workflow_run.head_sha }}
           SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
           [[ "$SOURCE_BRANCH" == "main" ]]
           [[ "$PROMOTION_SHA" =~ ^[0-9a-f]{40}$ ]]
           git cat-file -e "${PROMOTION_SHA}^{commit}"
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "$PROMOTION_SHA" FETCH_HEAD || {
+          git fetch --no-tags origin main deploy/aiops2-stable
+          git merge-base --is-ancestor "$PROMOTION_SHA" origin/main || {
             echo "FAIL|qualified_commit_not_on_current_main"
             exit 1
           }
-          # No force push: a stale or divergent promotion must fail closed.
-          git push origin "${PROMOTION_SHA}:refs/heads/deploy/aiops2-stable"
-          echo "STABLE_PROMOTION=PASS|sha=$PROMOTION_SHA"
+          stable_sha="$(git rev-parse origin/deploy/aiops2-stable)"
+          if [[ "$stable_sha" == "$PROMOTION_SHA" ]]; then
+            echo "STABLE_ALREADY_CURRENT|sha=$PROMOTION_SHA"
+            exit 0
+          fi
+          git merge-base --is-ancestor "$stable_sha" "$PROMOTION_SHA" || {
+            echo "FAIL|stable_history_diverged; manual reconciliation required"
+            exit 1
+          }
+          short_sha="${PROMOTION_SHA:0:12}"
+          promotion_branch="promotion/aiops2-stable-$short_sha"
+          git push origin "$PROMOTION_SHA:refs/heads/$promotion_branch"
+          existing="$(gh pr list --repo "$GH_REPO" --base deploy/aiops2-stable --head "$promotion_branch" --state open --json url --jq '.[0].url // empty')"
+          if [[ -n "$existing" ]]; then
+            echo "STABLE_PROMOTION_PR=$existing"
+            exit 0
+          fi
+          url="$(gh pr create --repo "$GH_REPO" --base deploy/aiops2-stable --head "$promotion_branch" \
+            --title "Promote qualified AIOps commit $short_sha to stable" \
+            --body "Qualified SHA: \`$PROMOTION_SHA\`. Source: successful AIOps quality gates push run on main. Merge only after required reviews and protected-branch checks. Debian cron deploys only after the protected stable branch advances.")"
+          echo "STABLE_PROMOTION_PR=$url"
