@@ -62,6 +62,43 @@ def _event_clock(events, clock):
     return last, last.astimezone(timezone.utc).isoformat()
 
 
+
+def _ordered_events(events):
+    """Render Core sequence order, but never certify incomplete chronology.
+
+    Core assigns positive per-run sequence numbers. A gap, duplicate or
+    impossible clock prevents both a canonical-order claim and stale inference.
+    """
+    if events is None:
+        return [], "INCONNU — événements Core indisponibles", False
+    if not events:
+        return [], "INCONNU — aucun événement Core", True
+    if any(not isinstance(e, dict) or type(e.get("sequence")) is not int
+           or e["sequence"] < 1 for e in events):
+        return events, "INCONNU — séquence Core absente ou invalide ; ordre non vérifié", False
+    ordered = sorted(events, key=lambda e: e["sequence"])
+    sequences = [e["sequence"] for e in ordered]
+    if len(set(sequences)) != len(sequences):
+        return events, "INCONNU — séquences Core dupliquées ; ordre non vérifié", False
+    if any(b != a + 1 for a, b in zip(sequences, sequences[1:])):
+        return ordered, "INCONNU — lacune de séquence Core ; événements potentiellement manquants", False
+    clocks = []
+    for e in ordered:
+        raw = e.get("occurred_at")
+        try:
+            if not isinstance(raw, str):
+                raise ValueError("timestamp missing")
+            stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if stamp.tzinfo is None:
+                raise ValueError("timezone missing")
+        except (ValueError, OverflowError, TypeError):
+            return ordered, "INCONNU — horodatages Core incomplets ou invalides", False
+        clocks.append(stamp)
+    if any(b < a for a, b in zip(clocks, clocks[1:])):
+        return ordered, "INCONNU — horodatages Core non monotones", False
+    return ordered, "COHÉRENT — ordre par séquence Core (non attesté indépendamment)", True
+
+
 def render_demo_v2(detail, ledger, gates, now=None):
     """No fabricated evidence, impact, remediation or LLM decisions."""
     detail = detail if isinstance(detail, dict) else {}
@@ -93,10 +130,11 @@ def render_demo_v2(detail, ledger, gates, now=None):
                     age_label = "Démarré récemment (heure Core)"
         except ValueError:
             pass
+    ordered_events, sequence_label, sequence_ok = _ordered_events(events)
     synthetic = False
     evidence_ids = set()
     rows = []
-    for e in events or []:
+    for e in ordered_events:
         if not isinstance(e, dict):
             continue
         payload = e.get("payload") if isinstance(e.get("payload"), dict) else {}
@@ -133,6 +171,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
             ("État Core", status),
             ("Fraîcheur du run", age_label),
             ("Dernier événement Core (UTC)", last_event_label),
+            ("Intégrité de la chronologie", sequence_label),
             ("Événements Core", len(events) if events is not None else "INCONNU"),
             ("Identifiants de preuves référencés", len(evidence_ids) if events is not None else "INCONNU"),
             ("Observations synthétiques", "OUI — au moins un événement" if synthetic else "NON CONFIRMÉ"),
@@ -141,16 +180,16 @@ def render_demo_v2(detail, ledger, gates, now=None):
         ]))
     # A stale RUNNING warning needs a verifiable timestamp. Missing/malformed
     # events must not be interpreted as proof that no progress occurred.
-    last_activity = last_event if events else (start_clock if events == [] else None)
+    last_activity = last_event if events and sequence_ok else (start_clock if events == [] else None)
     if (status == "RUNNING" and start_clock is not None
             and last_activity is not None
             and (clock - last_activity).total_seconds() >= 1800):
         body += panel("Attention — statut RUNNING ancien à requalifier",
             "<p>Plus de 30 minutes depuis le dernier horodatage Core vérifiable. "
             "Cela ne prouve ni un blocage, ni une absence d'activité LIVE.</p>")
-    elif status == "RUNNING" and events is not None and last_event is None and events:
+    elif status == "RUNNING" and events and (last_event is None or not sequence_ok):
         body += panel("Fraîcheur RUNNING — INCONNU",
-            "<p>Les horodatages des événements Core ne permettent pas de qualifier "
+            "<p>Les séquences ou horodatages Core ne permettent pas de qualifier "
             "la fraîcheur. Aucune activité LIVE n'est attestée.</p>")
     body += _run_navigation(run)
     body += panel("Chronologie canonique — Core",
