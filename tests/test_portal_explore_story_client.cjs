@@ -62,11 +62,10 @@ function envelope(action, mode, cursor, overrides = {}) {
 }
 
 test("anonymous controls do not fetch; authenticated Explore renders without cookies or storage", async () => {
-  const h = harness(async (_, opts) => ({
-    ok: true, json: async () => envelope(...Object.values(JSON.parse(opts.body)).slice(0, 0),
-      JSON.parse(opts.body).mode, JSON.parse(opts.body).cursor,
-      {action: JSON.parse(opts.body).action})
-  }));
+  const h = harness(async (_, opts) => {
+    const p = JSON.parse(opts.body);
+    return {ok: true, json: async () => envelope(p.action, p.mode, p.cursor)};
+  });
   await h.get("start").click();
   assert.equal(h.requests.length, 0);
   assert.match(h.get("story-status").textContent, /UNKNOWN/);
