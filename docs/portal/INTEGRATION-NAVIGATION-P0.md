@@ -27,8 +27,9 @@ Utiliser des URL HTTPS complètes sans jeton dans l'URL, ni userinfo, query ou f
 L'opt-in `AIOPS_PORTAL_ALLOW_HTTP_LINKS=true` n'accepte désormais que les
 adresses IPv4 RFC1918 (`10/8`, `172.16/12`, `192.168/16`) ou IPv6 ULA
 (`fc00::/7`). Les adresses de documentation, de benchmarking, réservées,
-link-local, loopback, CGNAT et les IPv4 mappées en IPv6 sont refusées même
-si `ipaddress.is_private` les considère privées. Les noms DNS restent refusés
+link-local, loopback, CGNAT et les IPv4 mappées en IPv6 sont refusées.
+Certaines de ces plages sont classées privées par `ipaddress.is_private`,
+mais aucune n'est autorisée par cette liste LAN. Les noms DNS restent refusés
 en HTTP : aucun DNS n'est résolu et aucune connexion réseau n'est effectuée
 par ce validateur. Les URL HTTPS conservent leur validation existante.
 Une URL configurée ne constitue toujours **aucune attestation** du service.
