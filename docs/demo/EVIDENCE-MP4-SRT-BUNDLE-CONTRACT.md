@@ -140,3 +140,23 @@ un acteur qui réécrit simultanément toutes les pièces peut encore forger
 l'ensemble. Aucune attestation d'identité, de pixels, de confidentialité
 ou de runtime LIVE n'est obtenue ; une validation humaine et une chaîne
 de confiance externe restent nécessaires.
+
+## Incrément 2026-10-28 — cohérence temporelle d'une session de capture (PR draft)
+
+Le vérificateur partagé des cinq PNG exige des horodatages UTC **non
+décroissants** dans l'ordre des captures et un intervalle maximal de
+**15 minutes** entre la première et la dernière vue. Un assemblage de
+captures provenant de sessions éloignées est **BLOCKED**, y compris si
+un acteur réécrit à la fois les horodatages du manifeste, ceux du reçu
+et leurs SHA-256. La limite inclut exactement 15:00 ; 15:01 est refusé.
+Les anciennes captures dont l'écart dépasse cette limite doivent être
+recapturées par un opérateur autorisé, et non antidatées.
+
+Cette vérification porte sur des **timestamps déclaratifs** et ne prouve
+ni l'identité de l'opérateur, ni la synchronisation des horloges, ni
+l'authenticité des applications, ni la confidentialité des pixels.
+Le contrôle de session authentifiée et la revue humaine demeurent
+**BLOCKED / NOT_TESTED**. Tests négatifs et de non-régression dans
+`tests/test_evidence_video.py` et
+`tests/test_evidence_bundle_audit.py`, exécutés par le workflow
+`quality.yml` existant sur la PR.
