@@ -9,3 +9,12 @@
 - Risques : le HTML historique lit toujours Core/Twin anonymement et les commandes DEMO/Copilot ne sont pas encore convergées ; PR #74/#57/#70/#51 à intégrer séparément. RBAC tenant et services réels en conteneurs : **NOT_TESTED**. Pas de simulation des services non-LLM. Aucun appel NVIDIA NGX, Ollama non exécuté.
 - Aucun accès au serveur Debian `10.79.94.202`, aucune commande LIVE, aucun déploiement, aucune capture authentifiée ni preuve LIVE.
 - Prochain micro-lot : convergence ciblée du bootstrap Core/Twin avec #74 et tests négatifs communs, puis intégration des vrais services CI éphémères.
+
+## Résultat GitHub vérifié après commit et fusion
+
+- Commit du micro-lot (code + tests + workflow + journal) : [`897a1325e40f972d3edc0e88dcbe11d1b411515d`](https://github.com/alimtalbi-ata/aiops/commit/897a1325e40f972d3edc0e88dcbe11d1b411515d).
+- GitHub Actions `quality.yml` sur ce HEAD : [push 40654514583](https://github.com/alimtalbi-ata/aiops/actions/runs/40654514583) et [PR 40654521757](https://github.com/alimtalbi-ata/aiops/actions/runs/40654521757) : **completed/success**, jobs `policy-and-static` terminés, y compris `node --check`, les **4 tests Node DOM**, les tests HTTP navigation, Policy, NOC, audit statique et validation Compose.
+- PR [#103](https://github.com/alimtalbi-ata/aiops/pull/103) vérifiée `mergeable=true`, `mergeable_state=clean`, HEAD inchangé et deux checks verts ; passée en ready puis **fusionnée par squash** au SHA [`9ccbdd5a9e19826fd03f83bc071671473648c45a`](https://github.com/alimtalbi-ata/aiops/commit/9ccbdd5a9e19826fd03f83bc071671473648c45a). `main` de départ : `3a50c1c1f6c36a62272bd6b669086866a4708ee3`.
+- CI post-fusion sur `main` : [push 40654630767](https://github.com/alimtalbi-ata/aiops/actions/runs/40654630767) : **completed/success** sur `9ccbdd5`. Vérifié : job `policy-and-static` terminé sans étape en échec.
+- Portée des preuves : tests unitaires/contractuels et configuration Compose uniquement. **NOT_TESTED** : conteneurs n8n, Thruk/Checkmk, Grafana, GLPI, Core/Twin runtime, Ollama/NGX, vrai navigateur, captures authentifiées, Debian et LIVE. La fusion n'est **pas** un déploiement.
+- Conflit fonctionnel restant : PR #98 couvre une partie de la même API et doit être réévaluée pour éviter un doublon. Les PR #74/#57/#70/#51 restent à converger avec `main` par portages ciblés.
