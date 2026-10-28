@@ -112,3 +112,7 @@ The P0 NOC track adds `app/portal/noc_correlation.py` and a guarded portal drill
 - Extension ciblée du contrat signé de PR #90, via une PR empilée sur sa branche et non un merge de #36/#90 : `correlate_acme_ticket` exige désormais une entité GLPI autorisée provenant d'un contexte RBAC serveur, distincte de l'entité annoncée par GLPI ou le reçu.
 - Refus fail-closed `UNKNOWN` pour scope absent, mal typé, inter-entités ou contradictoire, sans identifiants ni promotion LIVE. Tests négatifs de rejeu inter-entités dans `tests/test_acme_itsm_binding.py`, exécutés par `quality.yml` existant.
 - Cette frontière est un contrat pur, pas une preuve de tenant Core : authentification réelle, GLPI éphémère, émetteur Core, Temporal, Debian et captures restent NOT_TESTED. Voir `docs/demo/ACME-ITSM-SIGNED-BINDING-20261028.md` et journal daté `docs/automation-runs/`.
+
+## 2026-10-28 07:38 Europe/Paris — P1 ITSM : portée Run au niveau du contrat
+
+Le vérificateur ITSM exige une portée `authorized_run_id` indépendante de la signature et de la portée d'entité GLPI. Une signature valable pour un autre Run de la même entité est refusée `UNKNOWN` sans fuite d'identifiants. Tests hors ligne : absence, format invalide et rejeu inter-Run. Le RBAC serveur, les intégrations GLPI/Core/Temporal et les captures authentifiées restent **NOT_TESTED**. Voir `docs/demo/ACME-ITSM-SIGNED-BINDING-20261028.md` et le journal daté.

@@ -111,3 +111,7 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Reuse PR #36's six synthetic NOC diagnostic fixtures through a strictly read-only portal drilldown, with exact asset matching, immutable file/doc SHA-256 citations and explicit `SYNTHETIC_SIMULATION_ONLY` provenance. Do not call an LLM or blend synthetic references with observed monitoring facts.
 - **Safety:** The endpoint requires the existing operator read token, rejects malformed/missing catalogs and unsafe asset identifiers, and returns `UNKNOWN` when no matching fixture exists. Tenant ACL is not qualified; only public synthetic fixture content is eligible. No Core writes, no remediation and no LIVE evidence claims.
 - **Promotion gate:** A future observed RAG path needs authenticated tenant/actor identity, ACL filtering before retrieval and before citation, source freshness and authority, exact canonical Run/Incident binding and independently tested NIM/Ollama grounding. CI fixture tests alone do not meet this gate.
+
+## 2026-10-28 — P1 ITSM : clôture du périmètre Run
+
+Décision : l'autorisation d'une entité GLPI ne suffit pas pour lire une liaison ITSM concernant n'importe quel Run de cette entité. Le vérificateur exige un identifiant de Run autorisé provenant d'une ACL serveur indépendante, et refuse toute discordance `UNKNOWN`. Il ne prouve pas l'existence de cette ACL dans le runtime ni l'authenticité des services amont. Aucun effet LIVE, migration ou connexion réseau.
