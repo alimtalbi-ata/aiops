@@ -47,18 +47,19 @@ class DemoV2Tests(unittest.TestCase):
         now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
         run = {"run_id": "RUN-1", "status": "RUNNING", "started_at": "2026-10-21T12:00:00Z"}
         fresh = render_demo_v2({"run": run, "events": [
-            {"occurred_at": "2026-10-28T19:55:00Z"}]}, {}, {}, now=now)
+            {"sequence": 1, "occurred_at": "2026-10-28T19:55:00Z"}]}, {}, {}, now=now)
         self.assertNotIn("statut RUNNING ancien à requalifier", fresh)
         stale = render_demo_v2({"run": run, "events": [
-            {"occurred_at": "2026-10-28T18:00:00Z"}]}, {}, {}, now=now)
+            {"sequence": 1, "occurred_at": "2026-10-28T18:00:00Z"}]}, {}, {}, now=now)
         self.assertIn("statut RUNNING ancien à requalifier", stale)
         self.assertIn("ne prouve ni un blocage", stale)
 
     def test_invalid_or_future_event_time_fails_closed(self):
         now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
         run = {"status": "RUNNING", "started_at": "2026-10-21T12:00:00Z"}
-        for event in ({"occurred_at": "2026-10-29T00:00:00Z"},
-                      {"occurred_at": "invalid"}, {"stage": "RUN"}):
+        for event in ({"sequence": 1, "occurred_at": "2026-10-29T00:00:00Z"},
+                      {"sequence": 1, "occurred_at": "invalid"},
+                      {"sequence": 1, "stage": "RUN"}):
             with self.subTest(event=event):
                 page = render_demo_v2({"run": run, "events": [event]}, {}, {}, now=now)
                 self.assertIn("Fraîcheur RUNNING — INCONNU", page)
@@ -74,6 +75,52 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("horodatage Core futur", future)
         self.assertNotIn("Démarré récemment", future)
         self.assertNotIn("statut RUNNING ancien à requalifier", future)
+
+    def test_canonical_sequence_order_is_visible_even_if_transport_shuffles(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        events = [
+            {"sequence": 2, "occurred_at": "2026-10-28T19:10:00Z", "event_type": "EVT-LATER"},
+            {"sequence": 1, "occurred_at": "2026-10-28T19:00:00Z", "event_type": "EVT-FIRST"},
+        ]
+        page = render_demo_v2({"run": {"run_id": "RUN-1", "mode": "DEMO"},
+                               "events": events}, {}, {}, now=now)
+        self.assertLess(page.index("EVT-FIRST"), page.index("EVT-LATER"))
+        self.assertIn("COHÉRENT — ordre par séquence Core", page)
+        self.assertIn("non attesté indépendamment", page)
+
+    def test_duplicate_gap_and_invalid_sequence_fail_closed_on_running(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        def event(seq):
+            return {"sequence": seq, "occurred_at": "2026-10-28T18:00:00Z",
+                    "event_type": "DEMO"}
+        cases = [
+            [event(1), event(1)],
+            [event(1), event(3)],
+            [event(True)],
+            [event("1")],
+            [event(0)],
+            [{"occurred_at": "2026-10-28T18:00:00Z"}],
+        ]
+        for events in cases:
+            with self.subTest(events=events):
+                page = render_demo_v2({"run": {"status": "RUNNING",
+                    "started_at": "2026-10-21T12:00:00Z"},
+                    "events": events}, {}, {}, now=now)
+                self.assertIn("Intégrité de la chronologie", page)
+                self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+                self.assertNotIn("statut RUNNING ancien à requalifier", page)
+
+    def test_backward_core_clock_does_not_prove_stale_running(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        page = render_demo_v2({"run": {"status": "RUNNING",
+            "started_at": "2026-10-21T12:00:00Z"},
+            "events": [
+                {"sequence": 1, "occurred_at": "2026-10-28T18:30:00Z"},
+                {"sequence": 2, "occurred_at": "2026-10-28T18:00:00Z"},
+            ]}, {}, {}, now=now)
+        self.assertIn("horodatages Core non monotones", page)
+        self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+        self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
     def test_old_running_marked_for_requalification(self):
         page = render_demo_v2(
