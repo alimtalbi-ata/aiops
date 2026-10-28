@@ -11,3 +11,10 @@
 - **Risques / blocages :** la portée Run doit provenir d'un RBAC serveur authentifié, pas du navigateur ; aucun vrai Core, GLPI, Temporal ni émission HMAC Core qualifiés. Pas de ticket GLPI réel, pas de preuve LIVE, pas de capture/vidéo authentifiée. CI avec services éphémères **NOT_TESTED** ; NGX réel non contacté et aucun LLM CI simulé dans ce lot.
 - **Sécurité / rollback :** aucune connexion Debian `10.79.94.202`, au portail `:17777`, aucun déploiement, migration, secret de production, fusion ou commande LIVE. Revert ciblé du commit de contrat possible.
 - **Prochain micro-lot :** obtenir `authorized_run_id` et `authorized_entity_id` d'une identité RBAC Core/portail vérifiée, puis qualifier GLPI via un vrai service conteneurisé CI, avec refus explicite si indisponible.
+
+## 07:4x CET — CI du commit de code vérifiée
+
+- [GitHub Actions 40645261657](https://github.com/alimtalbi-ata/aiops/actions/runs/40645261657) sur `20db3922784fc32fb4b6136c168f58c17fcf018d` : **completed / success** (consultation des jobs et étapes).
+- Job `policy-and-static` : **success**. Étapes vérifiées : compilation Python, tests Policy, portail, NOC, ACME impact, **ACME signed ITSM binding**, préflight secrets, audit statique et `docker compose config` : **success**.
+- **Périmètre réel :** tests unitaires/contrat hors ligne, audit statique et validation syntaxique Compose. **NOT_TESTED :** GLPI/Core/Temporal conteneurisés, RBAC serveur effectif, LLM CI Ollama, captures réelles, vidéo, LIVE. Aucun service GLPI simulé présenté comme intégration.
+- Le présent commit documentaire suit le run de code ; son propre check final doit être vérifié séparément.
