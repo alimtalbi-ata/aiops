@@ -22,3 +22,13 @@
 - Dates persistées non signées ; un `RESOLVED` avec gate `PASS/SIMULATE` n'est pas une preuve LIVE. L'API exige le Bearer interne et ne doit pas être exposée au viewer sans ACL tenant.
 - Prochain micro-lot : lier le Story au Run/incident canoniques avec ACL tenant qualifiée, puis tester le parcours HITL/Temporal sandbox sur services CI éphémères.
 - Aucune fusion avant checks verts, absence de conflits et revue sécurité. Aucun accès/deploy Debian, aucune commande LIVE.
+
+## Vérification CI GitHub du commit code/tests/docs initial
+
+- PR draft [#147](https://github.com/alimtalbi-ata/aiops/pull/147), empilée sur #144 ; commit initial [`a987d6cc3d9f6fb1397fe2b1ab3d65bcf3a5a1dc`](https://github.com/alimtalbi-ata/aiops/commit/a987d6cc3d9f6fb1397fe2b1ab3d65bcf3a5a1dc).
+- [quality pull_request #40760625283](https://github.com/alimtalbi-ata/aiops/actions/runs/40760625283) : `completed/success` sur ce SHA. Jobs `policy-and-static`, `core-postgres-noc-real-integration`, `grafana-real-integration` : **success**.
+- [quality push #40760614741](https://github.com/alimtalbi-ata/aiops/actions/runs/40760614741) : `completed/success` sur ce même SHA.
+- Étape `Real Core PostgreSQL DEMO Policy gate observation and refusals` : **success**, avec vraie instance PostgreSQL 16 et Core HTTP éphémères ; schéma SQL appliqué et Core prêt. Les cas négatifs de chronologie et les régressions sont inclus dans cette suite. Le statut du job ne vaut pas attestation des sept Runs Debian.
+- `main` revérifié après CI : `b6cac31f6713d60f517bc6c4648002297fb87de6`. GitHub indique PR #147 `mergeable=true` ; **pas de fusion** : PR draft empilée sur #144, qualification tenant/Story encore manquante.
+- Commentaires de coordination publiés sur #144 et #137 (contrat inchangé, route interne uniquement).
+- La présente mise à jour du journal crée un **nouveau SHA documentaire** ; sa propre CI est à vérifier avant toute fusion. Aucune preuve HITL/Temporal/Payments/LIVE ajoutée.
