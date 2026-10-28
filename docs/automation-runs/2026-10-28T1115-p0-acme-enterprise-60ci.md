@@ -21,7 +21,7 @@
 - Draft PR: https://github.com/alimtalbi-ata/aiops/pull/127
 
 ## Verification / limits
-- GitHub Actions result: PENDING verification on exact final HEAD. No test is claimed PASS in this journal before confirmed completion.
+- GitHub Actions `quality.yml`: [run 40670978596](https://github.com/alimtalbi-ata/aiops/actions/runs/40670978596), completed **SUCCESS** on commit `2c8fae477ff2b128f365b958b64aeb25f23de11b` (2026-10-28). Verified individual steps: ACME enterprise tests, ACME impact regression, Python compilation, static audit, secret preflight and Compose config; real ephemeral Core/PostgreSQL NOC and Grafana jobs also succeeded. These existing integration jobs do not test enterprise/GLPI joins. This journal-only update will trigger another PR check; consult PR checks for its conclusion.
 - All synthetic fixtures are `SIMULATED_TARGET`; timestamps are scenario-clock values, not observed events. `glpi_ticket_id` and `core_run_id` remain null. No backend writes or LIVE actions.
 - Core/Twin/Temporal/GLPI real-container integration for this new projection: NOT_TESTED. PR #120 qualifies a real GLPI negative HTTP path only, not a positive ticket correlation.
 - Risk: 60-CI inventory is a deterministic fictional target, not a discovered CMDB. Site assignment is scenario metadata, not verified topology. Existing v1 fixture remains the six-node seed; future integration must not mistake the expansion for production inventory.
