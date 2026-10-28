@@ -19,3 +19,5 @@ Cette route est un **readback d'identité**, pas une preuve de succès Temporal,
 **Qualification future :** après fusion/rebase de #80, exécuter dans une CI éphémère le vrai Core + PostgreSQL + Temporal/Worker et vérifier le chemin d'exécution, puis relier le ticket via une observation GLPI indépendante (PR #69/#73) et une preuve d'association canonique. Tant que ces preuves manquent, afficher `UNKNOWN`. Ne pas réutiliser le jeton de lecture comme jeton d'écriture DEMO.
 
 **Rollback :** revert de la PR sans migration ni état à restaurer ; le nouveau GET est strictement additif.
+
+Le portail ajoute un formulaire de lecture dans le panneau Golden DEMO : identifiant Run (renseigné après la demande DEMO), jeton opérateur distinct du jeton d'écriture, réponse affichée avec `textContent`. Le champ de jeton est vidé avant l'appel et n'est ni placé dans l'URL ni conservé dans `localStorage`. La vue indique explicitement que l'état Core ne constitue pas une preuve Temporal ou GLPI.
