@@ -1,10 +1,10 @@
 import os,json,html
-from fastapi import FastAPI,Request
+from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
 from portal.portal_integrations import build_navigation, render_navigation_html
 from portal.portal_read_models import read_portal_snapshot
-from portal.noc_runtime import router as noc_runtime_router
+from portal.noc_runtime import router as noc_runtime_router, _require_portal_read_auth, _noc_json_response
 from portal.noc_correlation import router as noc_correlation_router
 from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.acme_impact_read_model import router as acme_impact_router
@@ -19,8 +19,14 @@ def health():return {'status':'ok','component':'portal','external_port':os.geten
 @app.get('/api/portal/bootstrap')
 def bootstrap():return JSONResponse(read_portal_snapshot(get_json,CORE,TWIN),headers={'Cache-Control':'no-store'})
 @app.get('/api/portal/components')
-def components():
-    return JSONResponse(build_navigation(),headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+def components(authorization: str | None = Header(default=None)):
+    # Reuse the existing signed-NOC viewer credential contract; do not expose
+    # configured internal navigation URLs before checking the caller.
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+    return _noc_json_response(build_navigation())
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 @app.post('/api/demo')

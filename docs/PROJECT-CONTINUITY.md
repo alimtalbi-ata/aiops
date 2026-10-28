@@ -98,3 +98,16 @@ The P0 NOC track adds `app/portal/noc_correlation.py` and a guarded portal drill
 - PR #52 was reviewed against main SHA `b85383f201c976397a512c9beb31857ddf7c1638` and GitHub Actions quality run [40585273487](https://github.com/alimtalbi-ata/aiops/actions/runs/40585273487), which reported completed/success for the correlation test and existing quality gates. It was merged with squash commit `81ab8ae2bfae8f8b5767578b8fcd772f82fffe82`. This proves unit/static/Compose-config checks, **not real Checkmk/Thruk or Core integration**.
 - Merged [PR #54](https://github.com/alimtalbi-ata/aiops/pull/54) (squash SHA `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`, verified green [CI run 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546)) ports only PR #36's six synthetic RAG reference cases into the canonical portal. `GET /api/noc/demo-rag` requires the operator read token and returns exact asset citations with SHA-256, `SYNTHETIC_REFERENCE_ONLY` or `UNKNOWN`; the NOC panel offers an explicit DEMO drilldown. There is no actual LLM inference, NIM/Ollama call, Grafana observation, source runtime attestation or LIVE action.
 - Security and qualification: no multi-tenant Core/portal ACL yet; the shared read token is **not tenant-scoped**. The synthetic endpoint must not be promoted to real RAG without pre/post-retrieval ACL, authoritative citations, source freshness and canonical Run binding. Existing `quality.yml` runs the new offline contract tests; PR #54 Actions are green for static/contract/Compose checks only; no real service integration is qualified. See `docs/architecture/NOC-SYNTHETIC-RAG-DRILLDOWN-20261027.md` and `docs/automation-runs/2026-10-27-2316-p0-noc-rag-fixture.md`.
+
+## 2026-10-28 — P0 component registry read authorization (draft PR)
+
+The portal component navigation JSON endpoint is being hardened with the existing
+`AIOPS_PORTAL_READ_TOKEN` Bearer viewer contract already used by the signed NOC
+read-model adapter (targeted PR #36 reuse). Anonymous, invalid and unconfigured
+requests must fail closed before building navigation. No link or registry state
+attests runtime availability; configured links remain `CONFIGURED_UNVERIFIED`.
+The legacy HTML home page can still render configured links anonymously and is
+**not** globally authenticated: this micro-lot does not claim complete portal RBAC.
+Unit HTTP tests are wired into existing `quality.yml`. Real container integration,
+NGX, Debian and LIVE qualification are `NOT_TESTED`. Merge only after GitHub
+checks and conflict review; rollback is reverting this route-only patch.
