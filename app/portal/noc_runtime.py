@@ -77,6 +77,12 @@ def _canonical_origin(value: str, *, endpoint: bool) -> tuple[str, urllib.parse.
         parsed.port
     except ValueError as exc:
         raise ValueError("invalid NOC origin") from exc
+    # An allowlist alone does not protect the upstream Bearer credential from
+    # network interception. HTTP is limited to an explicit loopback sidecar.
+    if parsed.scheme.lower() == "http" and parsed.hostname not in (
+        "localhost", "127.0.0.1", "::1"
+    ):
+        raise ValueError("non-loopback NOC endpoints require HTTPS")
     if endpoint:
         if not parsed.path.startswith("/") or parsed.path == "/" or "\\" in parsed.path:
             raise ValueError("NOC endpoint path is required")
