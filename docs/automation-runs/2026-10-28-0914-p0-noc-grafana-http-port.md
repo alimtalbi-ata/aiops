@@ -19,3 +19,11 @@
 - Job `grafana-real-integration` : **success**, conteneur réel `grafana/grafana:11.6.0` initialisé, endpoint `/api/health` effectivement interrogé, test de l'adaptateur sans mock **success**.
 - Ces résultats n'attestent ni des métriques observées, ni le RBAC tenant, ni la connectivité Debian. Pas de preuve LIVE.
 - Un commit documentaire final est nécessaire pour consigner cette preuve : ses checks devront être revérifiés avant toute fusion. Aucun résultat non exécuté n'est déclaré PASS.
+
+## Fusion et qualification post-fusion — 2026-10-28 Europe/Paris
+
+- PR [#110](https://github.com/alimtalbi-ata/aiops/pull/110) fusionnée en **squash** sur `main` : SHA [`ac683b5e00dd36555f13909542754bc8439c8fa9`](https://github.com/alimtalbi-ata/aiops/commit/ac683b5e00dd36555f13909542754bc8439c8fa9). Absence de conflits et checks verts sur le HEAD `3fcad9450ecb02e977474891b9be390a98715902` vérifiés avant fusion; aucun contournement des protections GitHub.
+- [quality.yml PR #40655732939](https://github.com/alimtalbi-ata/aiops/actions/runs/40655732939) : **completed/success**, jobs `policy-and-static` et `grafana-real-integration` **success** sur HEAD documentaire final.
+- [quality.yml main #40655866536](https://github.com/alimtalbi-ata/aiops/actions/runs/40655866536) : **completed/success** sur SHA fusionné `ac683b5e00dd36555f13909542754bc8439c8fa9`.
+- La qualification reste limitée à un vrai Grafana éphémère CI et aux contrats HTTP; aucun accès Debian, aucun Checkmk/Thruk, aucune métrique, ACL tenant, inférence Ollama ou preuve LIVE qualifiés.
+- Cette mise à jour documentaire est proposée séparément pour ne pas modifier rétroactivement le SHA de code testé.
