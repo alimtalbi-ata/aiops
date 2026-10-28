@@ -41,9 +41,11 @@ jobs:
         run: python -m unittest discover -s tests -p "test_acme_impact_read_model.py" -v
       - name: GLPI read-only ticket contract and tenant isolation tests
         run: python -m unittest discover -s tests -p "test_glpi_ticket_read.py" -v
+      - name: Internal GLPI reader gateway authentication and fail-closed tests
+        run: python -m unittest discover -s tests -p "test_glpi_reader_api.py" -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
-        run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null
+        run: bash deploy/init-env.sh && docker compose --env-file .env config >/dev/null && docker compose --env-file .env --profile glpi-readonly-ci config >/dev/null
