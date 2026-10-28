@@ -19,7 +19,7 @@
 
 ## Tests, preuves et limites
 - Test local Node : **NOT_TESTED** (pas de copie réseau GitHub dans le conteneur local; DNS github.com indisponible).
-- CI non destructive : [run 40618130314](https://github.com/alimtalbi-ata/aiops/actions/runs/40618130314) sur `68ee817` : **IN_PROGRESS au moment de la première vérification**. Vérifier le run du dernier commit documentaire `b3b9ffc` avant toute déclaration PASS.
+- CI non destructive : [run 40618130314](https://github.com/alimtalbi-ata/aiops/actions/runs/40618130314) sur `68ee817` : **SUCCESS** (job policy-and-static : compilation Python, tests portail Node et HTTP, audit statique, validation Compose, contrôlés via les étapes GitHub). [Run 40618168533](https://github.com/alimtalbi-ata/aiops/actions/runs/40618168533) sur le commit du journal `260638d` : **SUCCESS** selon GitHub Actions. Aucun test conteneur E2E réel n'est inclus.
 - Tests d'intégration conteneurs réels Core/Twin/n8n/Thruk/Grafana/GLPI : **NOT_TESTED**. NVIDIA NGX/Mistral 192B : **NOT_TESTED**. Debian/portail 17777, captures LIVE et vidéo : **NOT_TESTED**. Les tests JS utilisent un DOM synthétique pour tester le comportement UI, pas un service simulé revendiqué comme intégration.
 - Risques : PR #74 reste draft; conflits futurs avec #51/#57/#70; aucune isolation tenant globale; pas d'attestation de source runtime. Aucune fusion, aucun déploiement, aucune commande LIVE.
 - Prochain micro-lot : vérifier le résultat CI du dernier commit, corriger tout échec; ensuite convergence RBAC des routes anciennes et tests d'intégration éphémères réels, sans toucher à Debian.
