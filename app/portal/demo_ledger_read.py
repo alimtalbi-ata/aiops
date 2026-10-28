@@ -8,7 +8,7 @@ import hmac
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
@@ -89,7 +89,8 @@ def _qualified_refs(rid, refs, expected_ids):
             known = datetime.fromisoformat(timestamp)
         except ValueError as exc:
             raise ValueError("invalid evidence timestamp") from exc
-        if known.tzinfo is None or known.utcoffset() is None:
+        if (known.tzinfo is None or known.utcoffset() is None
+                or known.astimezone(timezone.utc) > datetime.now(timezone.utc) + timedelta(minutes=5)):
             raise ValueError("unqualified evidence timestamp")
         projected.append({"evidence_id": evidence_id, "source": source,
                           "payload_sha256": digest, "known_at": timestamp})
