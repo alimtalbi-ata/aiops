@@ -128,3 +128,11 @@ Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/
 - PR #95 empilée sur #89 → #84 → #79 → #49, sans import massif de #36. Le principe fail-closed sans effet reste conforme au fence SIMULATION_ONLY de #36.
 - Qualification : workflow .github/workflows/quality.yml existant, étape HITL Golden Demo ; résultat exact du dernier HEAD dans docs/automation-runs/20261028-0622-hitl.md. Aucun E2E Core/Temporal/RBAC/Evidence, aucune preuve cryptographique contre un propriétaire SQLite, aucun déploiement Debian.
 - Suite : relier l'identité authentifiée et le Run canonique à Evidence append-only, sans activer LIVE ; conserver UNKNOWN/NOT_EXECUTED.
+
+
+## 2026-10-28 07:23 Europe/Paris — HITL projection event-time causality (draft PR #100)
+
+- `read_status` refuses a sandbox approval or dry-run receipt with an event timestamp later than the requested read snapshot. Previously, such future-dated rows could appear as already approved/planned. Existing `EXPIRED` status and historical dry-run receipts remain readable after expiry.
+- Two negative/regression tests use temporary real SQLite stores, checking future approval/receipt rejection and legitimate historical states. The existing `quality.yml` HITL Golden Demo test step is reused, not duplicated.
+- PR [#100](https://github.com/alimtalbi-ata/aiops/pull/100) is stacked on #95 (then #89 → #84 → #79 → #49), with no mass merge of #36. See `docs/automation-runs/20261028-0723-hitl.md` for exact SHA and CI status; no claim of Core/RBAC/Temporal integration, LIVE proof or Debian deployment.
+- Next: reconcile the HITL stack with current main selectively, then authenticate RBAC and bind to canonical Core Run and append-only Evidence before integration qualification.

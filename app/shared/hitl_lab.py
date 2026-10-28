@@ -324,13 +324,13 @@ def read_status(path, *, proposal_id, now=None):
                 if (approval[0] == proposer_id
                     or not isinstance(approval[1], (int, float))
                     or not math.isfinite(approval[1])
-                    or not created <= approval[1] < expires):
+                    or not created <= approval[1] < expires or approval[1] > at):
                     raise HITLRejected("invalid approval timestamp")
             if receipt:
                 _identity(receipt[0])
                 if (not isinstance(receipt[1], (int, float))
                     or not math.isfinite(receipt[1])
-                    or not approval[1] <= receipt[1] < expires):
+                    or not approval[1] <= receipt[1] < expires or receipt[1] > at):
                     raise HITLRejected("invalid receipt timestamp")
             expected_actors = [proposer_id] + ([approval[0]] if approval else []) + (
                 ["sandbox-lab"] if receipt else []

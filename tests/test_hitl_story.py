@@ -264,6 +264,53 @@ class HITLStoryTests(unittest.TestCase):
                     read_status(path, proposal_id=p["proposal_id"], now=now)
 
 
+    def test_readonly_rejects_approval_from_future_relative_to_snapshot(self):
+        now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "lab.sqlite")
+            initialize(path)
+            p = propose(path, incident_id="INC-1", run_id="RUN-1",
+                        recipe_id="acme.demo.restart-service.v1",
+                        target_id="VM-1", params={"service": "api"},
+                        proposer_id="alice", now=now, ttl_seconds=30)
+            approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                    approver_role="approver", now=now + timedelta(seconds=10))
+            with self.assertRaisesRegex(HITLRejected, "invalid approval timestamp"):
+                read_status(path, proposal_id=p["proposal_id"],
+                            now=now + timedelta(seconds=5))
+            self.assertEqual(
+                read_status(path, proposal_id=p["proposal_id"],
+                            now=now + timedelta(seconds=10))["state"],
+                "APPROVED_FOR_DRY_RUN_ONLY")
+            self.assertEqual(
+                read_status(path, proposal_id=p["proposal_id"],
+                            now=now + timedelta(seconds=31))["state"], "EXPIRED")
+
+    def test_readonly_rejects_future_receipt_without_losing_historical_receipt(self):
+        now = datetime(2026, 10, 27, 21, 25, tzinfo=timezone.utc)
+        binding = dict(incident_id="INC-1", run_id="RUN-1",
+                       recipe_id="acme.demo.restart-service.v1",
+                       target_id="VM-1", params={"service": "api"}, mode="DEMO")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "lab.sqlite")
+            initialize(path)
+            p = propose(path, proposer_id="alice", now=now, ttl_seconds=30, **binding)
+            a = approve(path, proposal_id=p["proposal_id"], approver_id="bob",
+                        approver_role="approver", now=now + timedelta(seconds=10))
+            dry_run(path, proposal_id=p["proposal_id"],
+                    approval_token=a["approval_token"],
+                    now=now + timedelta(seconds=20), **binding)
+            with self.assertRaisesRegex(HITLRejected, "invalid receipt timestamp"):
+                read_status(path, proposal_id=p["proposal_id"],
+                            now=now + timedelta(seconds=15))
+            self.assertEqual(
+                read_status(path, proposal_id=p["proposal_id"],
+                            now=now + timedelta(seconds=20))["state"], "DRY_RUN_PLANNED")
+            self.assertEqual(
+                read_status(path, proposal_id=p["proposal_id"],
+                            now=now + timedelta(seconds=31))["state"], "DRY_RUN_PLANNED")
+
+
 class HITLPortalTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
