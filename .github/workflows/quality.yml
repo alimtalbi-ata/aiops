@@ -332,6 +332,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
       - name: Re-run release-blocking unit and contract tests
         env:
+          PYTHONPATH: app
           AIOPS_POLICY_STATE_DB: ${{ runner.temp }}/aiops-policy-release.sqlite3
         run: |
           python -m compileall -q app tests tools
