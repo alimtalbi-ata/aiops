@@ -17,8 +17,20 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 MAX_RESPONSE_BYTES = 512 * 1024
-CUES = ("detect", "correlate", "enrich", "analyze", "ticket",
-        "approve", "simulate", "verify", "close")
+# Canonical checkpoint targets reused from the ACME scenario contract (PR #133).
+# These are storyboard expectations, NOT observed application states.
+TARGETS = (
+    ("detect", "grafana", "alert_dashboard", "firing"),
+    ("correlate", "n8n", "ingress_execution", "completed"),
+    ("enrich", "n8n", "context_execution", "completed"),
+    ("analyze", "n8n", "analyst_critic_execution", "completed"),
+    ("ticket", "glpi", "incident_ticket", "open"),
+    ("approve", "glpi", "hitl_decision", "approved_simulation_only"),
+    ("simulate", "n8n", "simulation_execution", "completed"),
+    ("verify", "grafana", "recovery_dashboard", "recovered"),
+    ("close", "glpi", "incident_followups", "closed"),
+)
+CUES = tuple(target[0] for target in TARGETS)
 PATH = ("SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01")
 BLOCKERS = (
     "CORE_TEMPORAL_ANALYST_CRITIC_POLICY_EVIDENCE_NOT_TESTED",
@@ -64,11 +76,25 @@ def validate_pair(impact: object, story: object) -> dict:
             "impact_runtime_claim")
     require(impact.get("ticket_id_provenance") == "ABSENT_NO_GLPI_WRITE",
             "ticket_provenance_mismatch")
+    require(impact.get("simulation_ticket_id") == "SIM-GLPI-" + digest[:12].upper()
+            and impact.get("simulation_ticket_provenance") ==
+            "SYNTHETIC_LABEL_NOT_A_GLPI_TICKET",
+            "synthetic_ticket_binding_mismatch")
+    require(impact.get("evidence_source") == "LOCAL_SYNTHETIC_FIXTURE"
+            and impact.get("timestamp_provenance") == "ABSENT_NO_RUNTIME_EVENT"
+            and impact.get("simulation_timestamp_provenance") ==
+            "FIXED_SCENARIO_CLOCK_NOT_RUNTIME_EVENT",
+            "synthetic_source_provenance_mismatch")
     for key in ("runtime_attested", "production_qualified", "live_remediation_authorized"):
         require(impact.get(key) is False and story.get(key) is False,
                 "false_runtime_attestation")
     decision = impact.get("decision_preview")
     require(type(decision) is dict and type(decision.get("policy")) is dict
+            and type(decision.get("analyst")) is dict
+            and type(decision.get("critic")) is dict
+            and decision.get("provider") == "DETERMINISTIC_RULES_NOT_LLM"
+            and decision["analyst"].get("status") == "HYPOTHESIS_ONLY"
+            and decision["critic"].get("decision") == "HOLD_FOR_HUMAN_REVIEW"
             and decision["policy"].get("decision") == "DENY_LIVE_ACTION"
             and decision.get("live_execution") is False
             and decision.get("backend_writes") is False,
@@ -88,11 +114,13 @@ def validate_pair(impact: object, story: object) -> dict:
             and len(checkpoints) == len(timeline) == len(CUES),
             "checkpoint_count_mismatch")
     for index, (checkpoint, event) in enumerate(zip(checkpoints, timeline)):
+        cue, service, view, expected_state = TARGETS[index]
         require(type(checkpoint) is dict and type(event) is dict
-                and checkpoint.get("cue") == event.get("cue") == CUES[index]
-                and checkpoint.get("service") == event.get("service")
-                and checkpoint.get("view") == event.get("view"),
-                "checkpoint_identity_mismatch")
+                and checkpoint.get("cue") == event.get("cue") == cue
+                and checkpoint.get("service") == event.get("service") == service
+                and checkpoint.get("view") == event.get("view") == view
+                and checkpoint.get("required_state") == expected_state,
+                "checkpoint_target_mismatch")
         require(checkpoint.get("status") == event.get("status") == "MISSING"
                 and checkpoint.get("screenshot_sha256") is None
                 and checkpoint.get("event_timestamp_utc") is None
