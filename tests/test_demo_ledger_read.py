@@ -98,6 +98,15 @@ class DemoLedgerReadTests(unittest.TestCase):
         with patch("portal.demo_ledger_read.get_json", side_effect=AssertionError("unexpected I/O")):
             self.assertEqual(read_demo_ledger("../../other", authorization="Bearer " + VIEWER).status_code, 503)
 
+    def test_viewer_secret_is_wired_separately_for_new_installs(self):
+        root = Path(__file__).resolve().parents[1]
+        self.assertIn('AIOPS_PORTAL_READ_TOKEN: ${AIOPS_PORTAL_READ_TOKEN:-}',
+                      (root / 'compose.yml').read_text())
+        self.assertIn('AIOPS_PORTAL_READ_TOKEN=',
+                      (root / 'config/.env.example').read_text())
+        self.assertIn('set_value AIOPS_PORTAL_READ_TOKEN "$(openssl rand -hex 32)"',
+                      (root / 'deploy/init-env.sh').read_text())
+
     def test_legacy_portal_does_not_expose_ledger_anonymously(self):
         source = (Path(__file__).resolve().parents[1] / "app/portal/main.py").read_text()
         self.assertNotIn('ledger=_get("/api/runs/"+key+"/ai-ledger")', source)

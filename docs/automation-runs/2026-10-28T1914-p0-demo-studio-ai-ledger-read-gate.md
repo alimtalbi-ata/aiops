@@ -21,3 +21,9 @@
 
 ## Next micro-lot
 Qualify this read-only route against real ephemeral Core/PostgreSQL with an actual AI ledger and 401 negative case, then bind authenticated actor/tenant A/B before any observed SAN/Payments metrics or RAG retrieval.
+
+## Configuration et commit de suivi
+- Commit initial `888b6a62f523d1f0a223dff8591ab154d785e3f4`; [PR draft #145](https://github.com/alimtalbi-ata/aiops/pull/145), base `feat/demo-studio-v2-delivery-20261028`. CI initiale [run 40743763294](https://github.com/alimtalbi-ata/aiops/actions/runs/40743763294) : QUEUED lors de la vérification, aucun PASS revendiqué.
+- Wiring ajouté dans `compose.yml`, `config/.env.example` et `deploy/init-env.sh` : variable viewer distincte, génération aléatoire uniquement lors d'une **nouvelle** installation locale ; installations existantes conservées et laissées fail-closed tant que l'opérateur ne configure pas une valeur distincte. Aucun secret ni changement sur Debian.
+- Tests : ajout du contrôle statique de la configuration au fichier de tests (10 tests unitaires prévus dans `quality.yml`). CI sur le commit de suivi : PENDING, vérifier SHA exact et jobs avant fusion.
+- Contrat : la lecture nécessite `AIOPS_PORTAL_READ_TOKEN` côté serveur et un Bearer viewer saisi volontairement dans le navigateur ; le jeton interne Core n'est jamais transmis. Ce n'est pas un SSO ni une ACL tenant.
