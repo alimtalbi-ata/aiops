@@ -1,0 +1,25 @@
+# 2026-10-28 03:41–03:45 CET — P1 Jumeau ACME / Golden DEMO write boundary
+
+- **Départ main (vérifié avant branche et écriture)** : `1ed749129e32ea9a8854c437c7de9a6a8b43e35b` ; relecture de `docs/PROJECT-CONTINUITY.md`, `docs/DEMO-REPLAY-STORY.md`, `docs/COMPONENT-CATALOG-AND-REUSE.md`, `docs/DECISION-LOG.md`, `quality.yml`, source Core/portal/fixture, et métadonnées PR #36, #37, #39, #41, #43, #69, #73, #77. Pas de merge massif PR #36 ; le fixture et le validateur ciblés déjà présents sur main sont réutilisés.
+- **Branche** : `feat/p1-acme-golden-demo-auth-binding-20261028-0341` (dédiée, basée sur le SHA exact ci-dessus).
+- **PR** : [#80](https://github.com/alimtalbi-ata/aiops/pull/80), draft, cible main ; **aucune fusion**.
+- **Fichiers** : `app/portal/acme_golden_demo.py` (nouveau), `app/portal/main.py`, `compose.yml`, `tests/test_acme_golden_demo.py` (nouveau), `tests/synthetic-e2e.sh`, `.github/workflows/quality.yml`, `docs/demo/ACME-GOLDEN-DEMO-WRITE-GATE-20261028.md` (nouveau), `docs/PROJECT-CONTINUITY.md`, ce journal.
+- **Commits de code/test/doc avant journal** : `3dad0db4`, `8f8e219d`, `e8c29342`, `1c64898a`, `f392f476`, `4504981f`, `cd3b2061`, `bfa184c2`, `92a78e84`. Le correctif `1c64898a` ancre le pattern de Run.
+- **Changement livré** : POST `/api/demo` exige un jeton DEMO dédié (défaut désactivé), refuse le jeton interne Core, garde le secret hors HTML et hors URL. Liaison du fixture SAN P1 → Payments P2 au nouvel Incident Core synthétique ; contrôle de l'identité de l'Incident, du mode et de l'ID du Run, et du reçu d'exécution avant retour. La réponse conserve `ticket_id=null`, `runtime_attested=false`, `production_qualified=false`, `live_remediation_authorized=false`. Le scenario Core `SCN-GOLDEN-PAYMENT-P1` est réutilisé, mais la correspondance des CI du fixture avec la CMDB Core n'est pas attestée.
+- **Tests** : [GitHub Actions 40622657371](https://github.com/alimtalbi-ata/aiops/actions/runs/40622657371) sur `92a78e8422a5ff09d41dc956fa3d1e0ff03c38bb` : **completed/success**, job `policy-and-static` success ; étape `ACME Golden DEMO write boundary and identity tests` success, compilation Python, tests Policy/Portal/NOC/ACME, préflight secrets, audit statique et validation Compose success (vérifié par liste des étapes du job). Le journal a été ajouté après ce run : son commit n'est pas inclus dans cette exécution. Aucun vrai Core, GLPI, Temporal, n8n, Grafana ou Checkmk en conteneur éphémère n'a été qualifié ; aucun E2E Debian ni capture LIVE.
+- **Risques** : le nouveau jeton doit être configuré explicitement pour activer la DEMO ; ancien `tests/synthetic-e2e.sh` a été adapté à ce contrat, mais la PR #37 travaille sur le même fichier (réconciliation/rebase nécessaire). La PR #77 touche `app/portal/main.py` (réconciliation des routes nécessaire). L'ancien endpoint était un write sans authentification ; cette PR ferme la frontière mais ne qualifie pas l'auth multi-tenant/RBAC complète. Le Run Core et le ticket GLPI réel restent non attestés. Aucun appel au NGX ni simulation de services non-LLM.
+- **Prochain micro-lot** : corrélation GLPI indépendante et tenant-fencée après intégration contrôlée de PR #69/#73 et qualification GLPI réel éphémère ; vérifier la visibilité Run dans le portail (PR #37) avec identités distinctes, puis captures authentifiées pour la vidéo.
+- **Actions interdites respectées** : aucun accès à Debian `10.79.94.202`, aucun accès au portail runtime, aucun déploiement, merge ou action LIVE.
+
+## 03:47 CET — hardening complémentaire et état CI
+
+- `22a144442a32640dd0784ba3261f06cc378eaa69` : le jeton DEMO ne peut égaler aucun alias privilégié `AIOPS_INTERNAL_TOKEN`, `AIOPS_ADMIN_TOKEN`, `ADMIN_TOKEN`.
+- `fbe4e9f40beeafa7bf64ef84d47fd333e6573d92` : tests négatifs pour les trois alias.
+- [GitHub Actions 40622700590](https://github.com/alimtalbi-ata/aiops/actions/runs/40622700590) sur le commit de journal initial `d10612e9` : completed/success.
+- Les runs de l'ultime durcissement étaient encore en cours ou en attente lors de cette écriture : ne pas attribuer PASS à `fbe4e9f4` avant confirmation GitHub. Le run précédent `40622657371` était bien vert mais ne couvrait pas les tests d'alias ajoutés ensuite.
+
+## 03:49 CET — vérification finale des checks
+
+- [GitHub Actions 40622752542](https://github.com/alimtalbi-ata/aiops/actions/runs/40622752542) sur `fbe4e9f40beeafa7bf64ef84d47fd333e6573d92` (code + tests alias) : **completed/success**.
+- [GitHub Actions 40622773480](https://github.com/alimtalbi-ata/aiops/actions/runs/40622773480) sur `c9f89b711659eda15067ca7f65e8427b5f2e92b5` (code + journal) : **completed/success**. Les checks ne sont pas une preuve d'intégration GLPI/Core réelle.
+- La présente mise à jour documentaire suit ces deux runs ; elle ne modifie pas le code ni les tests. Aucun merge/déploiement.
