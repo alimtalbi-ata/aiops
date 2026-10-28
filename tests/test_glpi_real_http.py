@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 import unittest
@@ -37,7 +38,7 @@ class GLPIRealHTTPTests(unittest.TestCase):
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         cls.login_html = None
         last_error = "not ready"
-        for _ in range(100):
+        for _ in range(30):
             try:
                 with opener.open(BASE + "/", timeout=4) as response:
                     content = response.read(65537)
@@ -45,8 +46,15 @@ class GLPIRealHTTPTests(unittest.TestCase):
                             and b"glpi" in content.lower()):
                         cls.login_html = content
                         break
-                    last_error = "GLPI login HTML not yet available"
-            except (OSError, urllib.error.HTTPError) as exc:
+                    title_match = re.search(rb"<title[^>]*>([^<]{0,100})", content, re.I)
+                    title = title_match.group(1).decode("ascii", "replace") if title_match else "none"
+                    title = re.sub(r"[^A-Za-z0-9 .,_/-]", "?", title)
+                    last_error = ("status=" + str(response.status)
+                                  + " type=" + response.headers.get("Content-Type", "missing")
+                                  + " title=" + title)
+            except urllib.error.HTTPError as exc:
+                last_error = "HTTP_" + str(exc.code) + " type=" + exc.headers.get("Content-Type", "missing")
+            except OSError as exc:
                 last_error = type(exc).__name__
             time.sleep(3)
         if cls.login_html is None:
