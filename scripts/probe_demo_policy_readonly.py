@@ -116,6 +116,46 @@ def validate_observation(value: object, run_id: str, incident_id: str) -> dict:
     }
 
 
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
+    """Reject duplicate keys at every nesting level, not only the top-level object."""
+    value = {}
+    for key, item in pairs:
+        require(key not in value, "duplicate_core_json_key")
+        value[key] = item
+    return value
+
+
+def _reject_nonfinite_json(_value: str) -> None:
+    raise ProbeError("nonfinite_core_json")
+
+
+def decode_core_json(raw: bytes) -> object:
+    """Require canonical UTF-8 JSON; json.loads(bytes) also accepts UTF-16/32."""
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_object,
+                          parse_constant=_reject_nonfinite_json)
+    except ProbeError:
+        raise
+    except (ValueError, UnicodeError):
+        raise ProbeError("invalid_core_json") from None
+
+
+def validate_core_headers(headers) -> None:
+    """Reject conflicting cache/media headers and compressed/recoded payloads."""
+    cache = headers.get_all("Cache-Control", [])
+    require(len(cache) == 1
+            and "no-store" in {part.strip() for part in cache[0].lower().split(",")},
+            "missing_no_store")
+    media = headers.get_all("Content-Type", [])
+    require(len(media) == 1 and headers.get_content_type() == "application/json"
+            and headers.get_content_charset() in (None, "utf-8"),
+            "invalid_content_type")
+    encodings = headers.get_all("Content-Encoding", [])
+    require(not encodings or (len(encodings) == 1
+            and encodings[0].strip().lower() == "identity"),
+            "invalid_content_encoding")
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         return None
@@ -144,16 +184,10 @@ def probe(base_url: str, run_id: str, incident_id: str, token: str) -> dict:
         raise ProbeError("core_unreachable") from None
     with response:
         require(response.status == 200, "core_denied_or_unavailable")
-        require("no-store" in [part.strip() for part in response.headers.get("Cache-Control", "").lower().split(",")],
-                "missing_no_store")
-        require(response.headers.get_content_type() == "application/json",
-                "invalid_content_type")
+        validate_core_headers(response.headers)
         raw = response.read(_MAX_BYTES + 1)
     require(len(raw) <= _MAX_BYTES, "oversized_core_response")
-    try:
-        data = json.loads(raw)
-    except (ValueError, UnicodeError):
-        raise ProbeError("invalid_core_json") from None
+    data = decode_core_json(raw)
     result = validate_observation(data, run_id, incident_id)
     result["observed_at_utc"] = datetime.now(timezone.utc).isoformat()
     result["clock_provenance"] = "PROBE_LOCAL_CLOCK_NOT_SERVER_ATTESTED"
