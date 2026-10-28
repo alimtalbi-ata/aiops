@@ -10,7 +10,7 @@ import psycopg
 import requests
 from psycopg.types.json import Jsonb
 
-BASE = "http://127.0.0.1:810"
+BASE = "http://127.0.0.1:1810"
 TOKEN = os.environ["AIOPS_INTERNAL_TOKEN"]
 DATABASE_URL = os.environ["DATABASE_URL"]
 
