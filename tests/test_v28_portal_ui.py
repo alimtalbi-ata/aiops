@@ -310,5 +310,76 @@ class PortalPageContractTests(unittest.TestCase):
                 self.assertEqual(result["ledger"],{"status":"UNKNOWN"})
                 self.assertEqual(calls,["/api/runs","/api/runs/RUN-DEMO"])
 
+
+    def test_tenant_identity_disagreement_blocks_detail_and_poll_before_ledger(self):
+        # Core may omit tenant_id from one projection; neither omission nor
+        # disagreement is sufficient to authorize cross-tenant evidence.
+        for listed_tenant, detail_tenant in (
+            ("TENANT-A", "TENANT-B"), ("TENANT-A", None),
+            (None, "TENANT-A"), ("", "")):
+            with self.subTest(listed=listed_tenant, detail=detail_tenant):
+                listed={"run_id":"RUN-DEMO","mode":"DEMO"}
+                detail={"run_id":"RUN-DEMO","mode":"DEMO","status":"RESOLVED"}
+                if listed_tenant is not None:
+                    listed["tenant_id"]=listed_tenant
+                if detail_tenant is not None:
+                    detail["tenant_id"]=detail_tenant
+                calls=[]
+                def get(base,path):
+                    calls.append(path)
+                    if path=="/api/runs":return {"items":[listed]}
+                    if path=="/api/runs/RUN-DEMO":
+                        return {"run":detail,"events":[{"event_type":"PRIVATE-TENANT-EVENT"}]}
+                    raise AssertionError("ledger/gates must not be read")
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    page=self.portal.demo_run_detail("RUN-DEMO")
+                    result=self.portal.demo_status("RUN-DEMO")
+                self.assertIn("Chronologie Core — INCONNU",page)
+                self.assertNotIn("PRIVATE-TENANT-EVENT",page)
+                self.assertEqual(result["source"],"CORE_IDENTITY_UNVERIFIED")
+                self.assertEqual(result["events"],"INCONNU")
+                self.assertEqual(calls,["/api/runs","/api/runs/RUN-DEMO"]*2)
+
+    def test_duplicate_core_inventory_run_id_refuses_before_detail_io(self):
+        from fastapi import HTTPException
+        calls=[]
+        def get(base,path):
+            calls.append(path)
+            if path=="/api/runs":
+                return {"items":[
+                    {"run_id":"RUN-DEMO","mode":"DEMO","tenant_id":"TENANT-A"},
+                    {"run_id":"RUN-DEMO","mode":"DEMO","tenant_id":"TENANT-B"}]}
+            raise AssertionError("ambiguous run must never trigger detail/ledger I/O")
+        with patch.object(self.portal,"get_json",side_effect=get):
+            for action in (self.portal.demo_run_detail,self.portal.demo_status):
+                with self.assertRaises(HTTPException) as ctx:
+                    action("RUN-DEMO")
+                self.assertEqual(ctx.exception.status_code,404)
+        self.assertEqual(calls,["/api/runs","/api/runs"])
+
+    def test_matching_core_tenant_preserves_read_only_demo_path(self):
+        calls=[]
+        def get(base,path):
+            calls.append(path)
+            if path=="/api/runs":
+                return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO",
+                                  "tenant_id":"TENANT-A"}]}
+            if path=="/api/runs/RUN-DEMO":
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO",
+                               "tenant_id":"TENANT-A","status":"BLOCKED"},
+                        "events":[{"sequence":1,"occurred_at":"2026-10-28T20:00:00Z",
+                                   "event_type":"SYNTHETIC-EVENT"}]}
+            if path.endswith("/ai-ledger"):return {"status":"UNKNOWN"}
+            if path.endswith("/gates"):return {"items":[]}
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("write forbidden")):
+                page=self.portal.demo_run_detail("RUN-DEMO")
+                result=self.portal.demo_status("RUN-DEMO")
+        self.assertIn("Mission Control V2",page)
+        self.assertEqual(result["status"],"BLOCKED")
+        self.assertEqual(result["events"][0]["event_type"],"SYNTHETIC-EVENT")
+        self.assertEqual(len(calls),8)
+
 if __name__=="__main__":
     unittest.main()
