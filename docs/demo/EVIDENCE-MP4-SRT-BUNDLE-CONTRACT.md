@@ -59,7 +59,8 @@ peut être effectuée sans navigateur ni réseau :
 ```bash
 python3 -m demo.evidence_bundle_audit \
   --bundle-dir /chemin/prive/aiops-bundle \
-  --capture-root /chemin/prive/captures
+  --capture-root /chemin/prive/captures \
+  --capture-manifest /chemin/prive/captures/manifest.json
 ```
 
 L'auditeur exige le répertoire bundle privé (0700), des fichiers réguliers
@@ -119,3 +120,23 @@ une image visuellement falsifiée ou recopier les mêmes pixels sous plusieurs
 noms. Les URL et identifiants restent déclaratifs, sans attestation de session,
 revue visuelle des masques, ni qualification LIVE. Les fixtures de CI ne sont
 pas des captures authentifiées.
+
+## Incrément 2026-10-28 — liaison au manifeste de capture d'origine
+
+Le reçu contient désormais `source_manifest_sha256` : empreinte SHA-256
+des **octets exacts** du manifeste JSON fourni à l'assembleur. L'auditeur
+exige `--capture-manifest`, lit ce fichier sans suivre de lien symbolique,
+vérifie l'empreinte, refuse les clés JSON dupliquées, les déclarations LIVE,
+les changements de `run_id`/`incident_id`/`ticket_id`/`session_label`
+et les captures divergentes. Un reçu autonome ne suffit plus à qualifier
+la cohérence des octets locaux. Les anciens reçus sans cette empreinte
+sont refusés par le nouveau schéma (migration explicite nécessaire).
+
+Le manifeste d'origine doit être conservé dans un répertoire privé avec
+les cinq PNG. Les tests négatifs couvrent la modification du manifeste
+sans rehash, sa falsification avec rehash du reçu, la provenance LIVE,
+la disparition et les symlinks. Le SHA-256 **n'est pas une signature** :
+un acteur qui réécrit simultanément toutes les pièces peut encore forger
+l'ensemble. Aucune attestation d'identité, de pixels, de confidentialité
+ou de runtime LIVE n'est obtenue ; une validation humaine et une chaîne
+de confiance externe restent nécessaires.
