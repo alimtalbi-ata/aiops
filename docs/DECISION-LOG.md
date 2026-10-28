@@ -128,3 +128,11 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Preserve:** LIVE P1 escalation, missing-evidence UNKNOWN, DEMO/REPLAY/STORY SIMULATE, and non-mutating LIVE OBSERVE/ENRICH decisions. No command executor is enabled.
 - **Qualification:** Existing `quality.yml` runs Policy unit tests and in-process FastAPI request tests. Core/RBAC/Temporal/Evidence, real container E2E and LIVE remain NOT_TESTED; HTTP in-process is not integration with a real service.
 - **Rollback:** Never restore the unsafe boolean bypass; replace this fence only with a reviewed Core-owned, authenticated, expiring, one-use HITL proof validated atomically at the effect boundary.
+
+
+## ADR-2026-10-28-P0 — Core synthetic NOC projection before tenant ACL
+
+- **Status:** Candidate on dedicated branch; not production qualified.
+- **Decision:** Add a dedicated internal-token authenticated, synthetic-only, allowlisted Core Run identity endpoint for the signed NOC join. Reuse the existing NOC tenant-scope refusal in a shared helper rather than silently accepting tenant claims. Require an actual synthetic Incident record in PostgreSQL. Keep the older Core endpoints unchanged in this small lot.
+- **Qualification gate:** Existing GitHub quality workflow with real ephemeral Core HTTP and PostgreSQL 16, plus negative and non-regression tests. An internal token is service authentication, **not** tenant-bound actor identity. No A/B authorized reads or LIVE evidence until Core-owned tenant RBAC is implemented.
+- **Rollback:** Revert the small Core/portal/shared/test/workflow patch together; do not restore anonymous NOC correlation or weaken the LIVE fence.
