@@ -81,3 +81,22 @@ assemble aussi un **vrai MP4 hors ligne avec FFmpeg**, puis le fait auditer.
 Aucun de ces fichiers n'est une capture authentifiée d'application, ni une
 preuve de session ou d'incident réel. Aucun chemin
 LIVE n'est ouvert.
+
+
+## Incrément 2026-10-28 — SRT canonique et durée des scènes (PR #91)
+
+L'auditeur vérifie désormais **le contenu** du SRT en plus de son empreinte :
+les cinq sous-titres doivent être exactement ceux générés par
+`demo.evidence_video_bundle.subtitles` (libellés non sensibles et ordre
+portal/Thruk/Grafana/n8n/GLPI). Une modification du texte accompagnée d'un
+SHA-256 recalculé est **BLOCKED**. La durée déclarée doit être finie,
+correspondre à cinq scènes de 2 à 20 secondes entières et respecter une
+tolérance de 0,25 s sur le MP4 complet. Les tests couvrent l'injection de
+texte, le rehash, les durées non finies et incohérentes, ainsi que le bundle
+FFmpeg réel hors ligne.
+
+Cette validation est **une cohérence déclarative** du reçu/SRT, non une
+analyse de la bande vidéo ni une attestation de session. L'auditeur ne décode
+toujours pas le MP4 et n'établit ni la réalité des cinq vues ni leur
+confidentialité visuelle. Les PNG techniques de CI ne sont pas des captures
+opérateur authentifiées.
