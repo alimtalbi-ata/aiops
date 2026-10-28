@@ -87,7 +87,22 @@ def _demo_detail_matches(detail, listed):
     for key in ("incident_id", "scenario_id"):
         if listed.get(key) is not None and run.get(key) != listed[key]:
             return False
+    # Tenant identity is an optional Core field, but never optional to compare:
+    # a tenant appearing on only one projection cannot be silently trusted.
+    for key in ("tenant_id", "tenant"):
+        listed_tenant, detail_tenant = listed.get(key), run.get(key)
+        if listed_tenant is not None or detail_tenant is not None:
+            if (not isinstance(listed_tenant, str) or not listed_tenant
+                    or detail_tenant != listed_tenant):
+                return False
     return True
+
+def _unique_demo_run(items, rid):
+    """Reject duplicate Core inventory IDs before any detail or ledger read."""
+    matches = [r for r in items if isinstance(r, dict)
+               and r.get("run_id") == rid
+               and r.get("mode") in ("DEMO", "REPLAY", "STORY")]
+    return matches[0] if len(matches) == 1 else None
 
 
 @app.get("/",response_class=HTMLResponse)
@@ -287,7 +302,7 @@ def demo_run_detail(rid:str):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_demo_run_id")
     candidates=_runs()
-    matched=next((r for r in candidates if r.get("run_id")==rid and r.get("mode") in ("DEMO","REPLAY","STORY")),None)
+    matched=_unique_demo_run(candidates, rid)
     if not matched:
         raise HTTPException(404,"demo_run_not_found")
     from urllib.parse import quote
@@ -342,7 +357,7 @@ def demo_status(rid:str):
     """Read-only polling endpoint with strict DEMO ownership checked against Core."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_run_id")
-    allowed=next((r for r in _runs() if r.get("run_id")==rid and r.get("mode") in ("DEMO","REPLAY","STORY")),None)
+    allowed=_unique_demo_run(_runs(), rid)
     if not allowed:
         raise HTTPException(404,"demo_run_not_found")
     detail=_get("/api/runs/"+rid)
