@@ -26,6 +26,9 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
             "RESOLVED-NOGATE": ("DEMO", "RESOLVED", True, {}, None),
             "UNKNOWN-GATE": ("DEMO", "BLOCKED", True, {}, ("UNKNOWN", "HUMAN_APPROVAL")),
             "FORGED-GATE": ("DEMO", "RESOLVED", True, {}, ("PASS", "ALLOW")),
+            "GATE-BEFORE-RUN": ("DEMO", "RESOLVED", True, {}, ("PASS", "SIMULATE")),
+            "GATE-IN-FUTURE": ("DEMO", "RESOLVED", True, {}, ("PASS", "SIMULATE")),
+            "RUN-IN-FUTURE": ("DEMO", "RUNNING", True, {}, None),
             "LIVE": ("LIVE", "RESOLVED", True, {}, None),
             "OBSERVED": ("DEMO", "RESOLVED", False, {}, None),
             "TENANT": ("DEMO", "BLOCKED", True,
@@ -52,6 +55,23 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                         " values(%s,%s,'POLICY',%s,%s,'ephemeral CI record')",
                         ("GATE-" + PREFIX + suffix, rid, gate[0], gate[1]),
                     )
+            c.execute(
+                "update aiops.gates set evaluated_at = "
+                "(select created_at - interval '1 second' from aiops.runs "
+                "where run_id=%s) where run_id=%s",
+                ("RUN-" + PREFIX + "GATE-BEFORE-RUN",
+                 "RUN-" + PREFIX + "GATE-BEFORE-RUN"),
+            )
+            c.execute(
+                "update aiops.gates set evaluated_at = now() + interval '1 day' "
+                "where run_id=%s",
+                ("RUN-" + PREFIX + "GATE-IN-FUTURE",),
+            )
+            c.execute(
+                "update aiops.runs set created_at = now() + interval '1 day' "
+                "where run_id=%s",
+                ("RUN-" + PREFIX + "RUN-IN-FUTURE",),
+            )
 
     @classmethod
     def tearDownClass(cls):
@@ -125,6 +145,18 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
         self.assertEqual(response.json(), {"detail": "demo_policy_observation_unavailable"})
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertNotIn("ALLOW", response.text)
+
+    def test_impossible_run_or_gate_chronology_is_rejected(self):
+        # Actual Core HTTP and PostgreSQL timestamptz, not a mock Policy server.
+        for suffix in ("GATE-BEFORE-RUN", "GATE-IN-FUTURE", "RUN-IN-FUTURE"):
+            with self.subTest(suffix=suffix):
+                response = self.read(suffix)
+                self.assertEqual(response.status_code, 503, response.text)
+                self.assertEqual(response.json(),
+                                 {"detail": "demo_policy_observation_unavailable"})
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertNotIn("SIMULATE", response.text)
+                self.assertNotIn("RUN-" + PREFIX, response.text)
 
     def test_live_observed_tenant_and_missing_run_are_denied(self):
         for suffix in ("LIVE", "OBSERVED", "TENANT", "MISSING", "BAD!ID"):

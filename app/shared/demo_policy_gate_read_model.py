@@ -6,6 +6,7 @@ HITL, execute Temporal, establish tenant ACLs, or attest a remediation.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 from shared.tenant_scope import reject_unqualified_tenant_scope
 
@@ -24,9 +25,10 @@ _GATE_PAIRS = frozenset({
 
 def project_demo_policy_gate(row: object) -> dict:
     """Reject mismatched/tenant-scoped data rather than inventing an outcome."""
-    if not isinstance(row, (tuple, list)) or len(row) != 8:
+    if not isinstance(row, (tuple, list)) or len(row) != 11:
         raise ValueError("canonical Core row missing")
-    run_id, incident_id, mode, status, synthetic, payload, gate_state, decision = row
+    (run_id, incident_id, mode, status, synthetic, payload, gate_state, decision,
+     run_created_at, gate_evaluated_at, observed_at) = row
     if (not isinstance(run_id, str) or _ID.fullmatch(run_id) is None
             or not isinstance(incident_id, str) or _ID.fullmatch(incident_id) is None
             or mode != "DEMO" or status not in _RUN_STATES
@@ -34,10 +36,25 @@ def project_demo_policy_gate(row: object) -> dict:
         raise ValueError("unqualified DEMO run")
     reject_unqualified_tenant_scope(payload)
 
+    # Use the database statement clock, never the app server clock. This
+    # verifies chronology of persisted records, not an execution receipt.
+    if (not isinstance(run_created_at, datetime)
+            or not isinstance(observed_at, datetime)
+            or run_created_at.utcoffset() is None
+            or observed_at.utcoffset() is None
+            or run_created_at > observed_at):
+        raise ValueError("invalid canonical Run chronology")
+
     if gate_state is None and decision is None:
+        if gate_evaluated_at is not None:
+            raise ValueError("gate timestamp without gate")
         gate_state = "MISSING"
         recorded = False
     elif (gate_state, decision) in _GATE_PAIRS:
+        if (not isinstance(gate_evaluated_at, datetime)
+                or gate_evaluated_at.utcoffset() is None
+                or not run_created_at <= gate_evaluated_at <= observed_at):
+            raise ValueError("invalid Policy gate chronology")
         recorded = True
     else:
         raise ValueError("inconsistent persisted Policy gate")

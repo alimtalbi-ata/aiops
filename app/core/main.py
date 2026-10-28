@@ -269,7 +269,8 @@ def noc_read_demo_policy_status(rid: str, authorization: str | None = Header(def
         with db() as c:
             row = c.execute(
                 "select r.run_id,r.incident_id,r.mode,r.status,i.synthetic,i.payload,"
-                "g.state,g.decision from aiops.runs r "
+                "g.state,g.decision,r.created_at,g.evaluated_at,"
+                "statement_timestamp() from aiops.runs r "
                 "join aiops.incidents i on i.incident_id=r.incident_id "
                 "left join aiops.gates g on g.run_id=r.run_id and g.stage='POLICY' "
                 "where r.run_id=%s", (rid,)

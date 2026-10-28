@@ -17,7 +17,7 @@ Schéma de réponse : `aiops.core-demo-policy-observation.v1`, provenance `CORE_
 | `RUNNING` / quelconque | `RUNNING_NO_TERMINAL_PROOF` | Aucune conclusion sur durée, cause ou terminaison Temporal |
 | Autres états | `RUN_STATE_NOT_REMEDIATION_PROOF` | Aucun effet réel attesté |
 
-Une gate `PASS+ALLOW` sur DEMO, ou une combinaison incohérente, déclenche HTTP 503 `demo_policy_observation_unavailable`, sans divulgation des champs. Identifiant invalide, incident non synthétique, mode LIVE, absence d'incident, payload de tenant ambigu ou auth manquante : refus 401/503 avec `Cache-Control: no-store`.
+Une gate dont `evaluated_at` précède `runs.created_at` ou dépasse `statement_timestamp()` de lecture, ou un Run créé dans le futur, est rejeté. Cette chronologie est comparée avec l'horloge PostgreSQL et ne constitue ni une signature ni une preuve d'exécution. Une gate `PASS+ALLOW` sur DEMO, ou une combinaison incohérente, déclenche HTTP 503 `demo_policy_observation_unavailable`, sans divulgation des champs. Identifiant invalide, incident non synthétique, mode LIVE, absence d'incident, payload de tenant ambigu ou auth manquante : refus 401/503 avec `Cache-Control: no-store`.
 
 ## Contrat de coordination Explore / Story
 
