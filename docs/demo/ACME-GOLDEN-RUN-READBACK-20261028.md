@@ -4,6 +4,8 @@
 
 Le portail ajoute `GET /api/demo/acme-run/{run_id}`, protégé par le **jeton opérateur de lecture** `AIOPS_PORTAL_READ_TOKEN` déjà utilisé par le NOC. L'authentification est vérifiée **avant** de lire le fixture local ou d'interroger Core. Sans jeton configuré : 503 ; sans autorisation : 401. Les erreurs ne divulguent pas de détails Core.
 
+**Limite RBAC :** ce jeton est un secret opérateur partagé, pas une identité utilisateur ni un contrôle d'accès par tenant. La route ne révèle que le scénario ACME DEMO fixe ; aucune donnée d'autres tenants ne doit être rendue et toute extension multi-tenant exige un véritable RBAC/ACL Core.
+
 Le lecteur réutilise `noc_correlation._read_core_run` : un GET borné sur le Core interne `aiops2-core:810`, sans proxy ni redirection. Il n'ajoute aucune écriture, n'accède pas à PostgreSQL et ne fait aucun appel à GLPI.
 
 Le rapprochement exige simultanément :
