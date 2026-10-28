@@ -106,6 +106,7 @@ def verify(root, manifest):
         raise ValueError("exactly five service captures required")
     result = []
     seen = set()
+    first_capture = previous_capture = None
     for entry in entries:
         service = entry.get("service")
         if service not in SERVICES or service in seen:
@@ -147,6 +148,15 @@ def verify(root, manifest):
                 raise ValueError()
         except (ValueError, TypeError, KeyError, AttributeError):
             raise ValueError("valid UTC timestamp required")
+        # A five-view bundle must represent one short, ordered capture session.
+        # These are operator-declared timestamps, NOT authenticated clock evidence.
+        if previous_capture is not None and dt < previous_capture:
+            raise ValueError("capture timestamps must be nondecreasing")
+        if first_capture is not None and (dt - first_capture).total_seconds() > 15 * 60:
+            raise ValueError("capture session exceeds 15-minute window")
+        if first_capture is None:
+            first_capture = dt
+        previous_capture = dt
         url = entry.get("source_url")
         if not isinstance(url, str):
             raise ValueError("source URL required")
