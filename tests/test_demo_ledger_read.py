@@ -22,6 +22,13 @@ LEDGER = {"run_id": RUN,
                                                       "supporting_evidence_ids": []}]}}],
           "policy_decisions": []}
 
+REFS = {"schema": "aiops.core-demo-evidence-refs.v1", "run_id": RUN,
+        "classification": "SYNTHETIC_ONLY", "tenant_acl_qualified": False,
+        "runtime_attested": False, "event_link_verified": True,
+        "items": [{"evidence_id": "EVD-1", "source": "CI_SYNTHETIC_SAN",
+                   "payload_sha256": "a" * 64,
+                   "known_at": "2026-10-28T21:00:00+00:00"}]}
+
 
 def payload(response):
     return json.loads(response.body)
@@ -53,19 +60,23 @@ class DemoLedgerReadTests(unittest.TestCase):
             call.assert_not_called()
 
     def test_project_source_bound_and_no_private_payload(self):
-        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, LEDGER]) as upstream:
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, LEDGER, REFS]) as upstream:
             response = self.read("Bearer " + VIEWER)
         self.assertEqual(response.status_code, 200)
         result = payload(response)
         self.assertEqual(result["run_id"], RUN)
         self.assertEqual(result["classification"], "DEMO_CORE_RECORDED_NOT_LIVE")
         self.assertFalse(result["tenant_acl_qualified"])
+        self.assertEqual(result["evidence_classification"], "SYNTHETIC_ONLY")
+        self.assertEqual(result["evidence_refs"][0]["evidence_id"], "EVD-1")
+        self.assertTrue(result["event_link_verified"])
         self.assertFalse(result["critiques"][0]["claim_checks"][0]["supported"])
         self.assertNotIn("MUST_NOT_LEAK", response.body.decode())
         self.assertNotIn(VIEWER, response.body.decode())
         self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertEqual(upstream.call_count, 2)
+        self.assertEqual(upstream.call_count, 3)
         self.assertEqual(upstream.call_args_list[1].args[1], "/api/runs/" + RUN + "/ai-ledger")
+        self.assertEqual(upstream.call_args_list[2].args[1], "/api/noc/runs/" + RUN + "/evidence-refs")
 
     def test_sourced_claim_requires_linked_analysis_and_evidence(self):
         valid = json.loads(json.dumps(LEDGER))
@@ -73,7 +84,7 @@ class DemoLedgerReadTests(unittest.TestCase):
             "claim": "Synthetic SAN CRC", "supported": True,
             "supporting_evidence_ids": ["EVD-1"],
         }
-        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, valid]):
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, valid, REFS]):
             response = self.read("Bearer " + VIEWER)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload(response)["critiques"][0]["claim_checks"][0]
@@ -98,12 +109,46 @@ class DemoLedgerReadTests(unittest.TestCase):
                 forged["critiques"][0]["output"]["claim_checks"][0][
                     "supporting_evidence_ids"] = ["EVD-NOT-SOURCED"]
             with self.subTest(name=name), patch(
-                    "portal.demo_ledger_read.get_json", side_effect=[DETAIL, forged]):
+                    "portal.demo_ledger_read.get_json", side_effect=[DETAIL, forged, REFS]):
                 denied = self.read("Bearer " + VIEWER)
                 self.assertEqual(denied.status_code, 503)
                 self.assertEqual(payload(denied)["status"], "UNKNOWN")
                 self.assertNotIn("EVD-NOT-SOURCED", denied.body.decode())
                 self.assertEqual(denied.headers["cache-control"], "no-store")
+
+    def test_resolver_required_even_when_ledger_links_are_consistent(self):
+        mutations = [
+            ("absent", {}),
+            ("wrong_run", {**REFS, "run_id": "RUN-OTHER"}),
+            ("wrong_mode", {**REFS, "classification": "OBSERVED"}),
+            ("runtime_claim", {**REFS, "runtime_attested": True}),
+            ("tenant_claim", {**REFS, "tenant_acl_qualified": True}),
+            ("no_event", {**REFS, "event_link_verified": False}),
+            ("empty", {**REFS, "items": []}),
+            ("missing_id", {**REFS, "items": [{**REFS["items"][0], "evidence_id": "EVD-OTHER"}]}),
+            ("bad_hash", {**REFS, "items": [{**REFS["items"][0], "payload_sha256": "broken"}]}),
+            ("bad_time", {**REFS, "items": [{**REFS["items"][0], "known_at": "2026-10-28"}]}),
+            ("tenant_metadata", {**REFS, "ownerTenantId": "TENANT-B"}),
+            ("extra_payload", {**REFS, "items": [{**REFS["items"][0], "payload": "private"}]}),
+            ("duplicate", {**REFS, "items": REFS["items"] * 2}),
+        ]
+        for name, refs in mutations:
+            with self.subTest(name=name), patch(
+                    "portal.demo_ledger_read.get_json", side_effect=[DETAIL, LEDGER, refs]):
+                denied = self.read("Bearer " + VIEWER)
+                self.assertEqual(denied.status_code, 503)
+                self.assertEqual(payload(denied), {"status": "UNKNOWN",
+                                                   "reason": "ledger_unavailable"})
+                self.assertEqual(denied.headers["cache-control"], "no-store")
+                self.assertNotIn("TENANT-B", denied.body.decode())
+
+    def test_resolver_core_401_fails_closed(self):
+        from requests import HTTPError
+        with patch("portal.demo_ledger_read.get_json",
+                   side_effect=[DETAIL, LEDGER, HTTPError("private Core 401")]):
+            denied = self.read("Bearer " + VIEWER)
+        self.assertEqual(denied.status_code, 503)
+        self.assertNotIn("private", denied.body.decode())
 
     def test_core_401_fails_closed_without_leak(self):
         from requests import HTTPError
@@ -124,7 +169,7 @@ class DemoLedgerReadTests(unittest.TestCase):
                        {**LEDGER, "analyses": [{**LEDGER["analyses"][0], "ownerTenantId": "A"}]},
                        {**LEDGER, "critiques": [{**LEDGER["critiques"][0], "output": {"claim_checks": []}, "orgRef": None}]},
                        {**LEDGER, "analyses": [{**LEDGER["analyses"][0], "evidence_ids": ["EVD-1", "EVD-1"]}]}):
-            with self.subTest(ledger=ledger), patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, ledger]):
+            with self.subTest(ledger=ledger), patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, ledger, REFS]):
                 self.assertEqual(self.read("Bearer " + VIEWER).status_code, 503)
 
     def test_detail_tenant_denied_before_ledger_io(self):
