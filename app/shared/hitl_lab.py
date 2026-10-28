@@ -140,10 +140,39 @@ def approve(path, *, proposal_id, approver_id, approver_role, now=None):
     token = secrets.token_urlsafe(32)
     with _connect(path) as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT proposer_id,created_at,expires_at FROM proposals WHERE proposal_id=?", (proposal_id,)).fetchone()
-        if row is None or at >= row[2] or at < row[1]:
-            raise HITLRejected("proposal missing or expired")
-        if hmac.compare_digest(row[0], approver_id):
+        row = db.execute("""SELECT incident_id,run_id,recipe_id,target_id,params_hash,
+                    binding_hash,proposer_id,mode,created_at,expires_at
+                    FROM proposals WHERE proposal_id=?""", (proposal_id,)).fetchone()
+        if row is None:
+            raise HITLRejected("proposal missing or inconsistent")
+        incident_id, run_id, recipe_id, target_id, params_hash, binding_hash, proposer_id, mode, created, expires = row
+        # An approval must never be issued against a damaged proposal. Validate
+        # persisted values and its single PROPOSED audit under the write lock,
+        # before creating a one-use capability. This is NOT cryptographic DB attestation.
+        try:
+            for value in (incident_id, run_id, recipe_id, target_id, proposer_id):
+                _identity(value)
+        except HITLRejected as exc:
+            raise HITLRejected("invalid persisted proposal identity") from exc
+        if (mode not in MODES or recipe_id not in RECIPES
+            or not isinstance(params_hash, str) or len(params_hash) != 64
+            or any(c not in "0123456789abcdef" for c in params_hash)
+            or not isinstance(binding_hash, str)
+            or not isinstance(created, (int, float)) or not isinstance(expires, (int, float))
+            or not 1 <= expires - created <= 3600 or not created <= at < expires):
+            raise HITLRejected("proposal expired or inconsistent")
+        binding = {"incident_id": incident_id, "run_id": run_id, "recipe_id": recipe_id,
+                   "target_id": target_id, "params_hash": params_hash, "mode": mode}
+        digest = hashlib.sha256(json.dumps(binding, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if not hmac.compare_digest(binding_hash, digest):
+            raise HITLRejected("persisted proposal binding mismatch")
+        audit = db.execute(
+            "SELECT action,actor_id,recorded_at FROM audit WHERE proposal_id=? ORDER BY seq",
+            (proposal_id,),
+        ).fetchall()
+        if audit != [("PROPOSED", proposer_id, created)]:
+            raise HITLRejected("inconsistent proposal audit")
+        if hmac.compare_digest(proposer_id, approver_id):
             raise HITLRejected("separation of duties required")
         if db.execute("SELECT 1 FROM approvals WHERE proposal_id=?", (proposal_id,)).fetchone():
             raise HITLRejected("already approved")

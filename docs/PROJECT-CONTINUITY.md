@@ -112,3 +112,10 @@ Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/
 - Negative regression tests in `tests/test_hitl_lab.py` reject forged approver identity, missing/extra audit rows, and modified audit actors/timestamps, with no receipt.
 - Reuses PR #36's fail-closed, simulation-only admission principle; no mass merge. Existing `quality.yml` runs HITL tests; see `docs/automation-runs/20261028-0423-hitl.md` for actual CI status.
 - PR #84 is stacked on #79 -> #49. It is not an authenticated RBAC boundary or cryptographic audit against a malicious DB owner; no LIVE action, no runtime qualification.
+
+## 2026-10-28 05:26 Europe/Paris — HITL approval preflight (stacked draft PR #89)
+
+- La bibliothèque SQLite sandbox vérifie maintenant les champs de proposition persistés, le hash du binding, le TTL et l'événement d'audit PROPOSED exact **avant** de délivrer le jeton d'approbation. La vérification s'effectue dans la même transaction `BEGIN IMMEDIATE` que l'insertion d'approbation. Rejets de champs, mode, recette, TTL ou audit altérés couverts par deux tests négatifs à scénarios multiples.
+- Portage de principe ciblé depuis PR #36 : réservation/fence sans effet réel, pas de code massif ni second contrôle LIVE. Le mécanisme est une barrière sandbox, **pas** une preuve cryptographique d'intégrité contre l'administrateur SQLite.
+- Branche `fix/hitl-approval-preflight-20261028-0526`, base PR #84, PR #89 en brouillon. `quality.yml` existant couvre `test_hitl_lab.py`. La qualification GitHub Actions est à vérifier sur le HEAD final; aucun test conteneurisé Core/Temporal/RBAC et aucune preuve LIVE.
+- Prochaine étape : identité Core/RBAC vérifiée, Run canonique et Evidence append-only, tests d'intégration réels en conteneurs. Ne pas fusionner la pile #49/#79/#84/#89 sans résoudre ses conflits et qualifier les dépendances.

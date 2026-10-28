@@ -225,5 +225,60 @@ class HITLLabTests(unittest.TestCase):
                                                 (p["proposal_id"],)).fetchone()[0], 0)
 
 
+    def test_approval_refuses_corrupted_persisted_proposal(self):
+        # These edits model hostile storage corruption bypassing SQLite triggers.
+        for column, forged in (
+            ("incident_id", "INC-FORGED"),
+            ("run_id", "RUN-FORGED"),
+            ("target_id", "VM-FORGED"),
+            ("params_hash", "f" * 64),
+            ("binding_hash", "0" * 64),
+            ("mode", "LIVE"),
+            ("recipe_id", "bash"),
+            ("expires_at", NOW.timestamp() + 86400),
+        ):
+            with self.subTest(column=column):
+                p = self.proposal()
+                with sqlite3.connect(self.path) as db:
+                    db.execute("DROP TRIGGER IF EXISTS proposals_immutable_update")
+                    db.execute(f"UPDATE proposals SET {column}=? WHERE proposal_id=?",
+                               (forged, p["proposal_id"]))
+                with self.assertRaises(HITLRejected):
+                    approve(self.path, proposal_id=p["proposal_id"],
+                            approver_id="bob", approver_role="approver", now=NOW)
+                with sqlite3.connect(self.path) as db:
+                    self.assertEqual(db.execute(
+                        "SELECT COUNT(*) FROM approvals WHERE proposal_id=?",
+                        (p["proposal_id"],)).fetchone()[0], 0)
+                    self.assertEqual(db.execute(
+                        "SELECT COUNT(*) FROM audit WHERE proposal_id=?",
+                        (p["proposal_id"],)).fetchone()[0], 1)
+
+    def test_approval_refuses_corrupted_proposal_audit(self):
+        for tamper in ("actor", "timestamp", "missing", "extra"):
+            with self.subTest(tamper=tamper):
+                p = self.proposal()
+                with sqlite3.connect(self.path) as db:
+                    db.execute("DROP TRIGGER IF EXISTS audit_immutable_update")
+                    db.execute("DROP TRIGGER IF EXISTS audit_immutable_delete")
+                    if tamper == "actor":
+                        db.execute("UPDATE audit SET actor_id='mallory' WHERE proposal_id=?",
+                                   (p["proposal_id"],))
+                    elif tamper == "timestamp":
+                        db.execute("UPDATE audit SET recorded_at=recorded_at+1 WHERE proposal_id=?",
+                                   (p["proposal_id"],))
+                    elif tamper == "missing":
+                        db.execute("DELETE FROM audit WHERE proposal_id=?", (p["proposal_id"],))
+                    else:
+                        db.execute("INSERT INTO audit(proposal_id,action,actor_id,recorded_at) VALUES (?,?,?,?)",
+                                   (p["proposal_id"], "PROPOSED", "alice", NOW.timestamp()))
+                with self.assertRaisesRegex(HITLRejected, "audit"):
+                    approve(self.path, proposal_id=p["proposal_id"],
+                            approver_id="bob", approver_role="approver", now=NOW)
+                with sqlite3.connect(self.path) as db:
+                    self.assertEqual(db.execute(
+                        "SELECT COUNT(*) FROM approvals WHERE proposal_id=?",
+                        (p["proposal_id"],)).fetchone()[0], 0)
+
 if __name__ == "__main__":
     unittest.main()
