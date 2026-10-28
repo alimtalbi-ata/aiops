@@ -357,6 +357,27 @@ class PortalPageContractTests(unittest.TestCase):
                 self.assertEqual(ctx.exception.status_code,404)
         self.assertEqual(calls,["/api/runs","/api/runs"])
 
+    def test_live_demo_run_id_collision_refuses_before_detail_or_ledger(self):
+        # A Core inventory containing the same ID in LIVE and DEMO is
+        # ambiguous even if exactly one item has an allowed demo mode.
+        from fastapi import HTTPException
+        demo={"run_id":"RUN-SHARED","mode":"DEMO","tenant_id":"TENANT-A"}
+        live={"run_id":"RUN-SHARED","mode":"LIVE","tenant_id":"TENANT-B"}
+        for inventory in ([demo,live],[live,demo]):
+            with self.subTest(modes=[r["mode"] for r in inventory]):
+                calls=[]
+                def get(base,path):
+                    calls.append(path)
+                    if path=="/api/runs":
+                        return {"items":inventory}
+                    raise AssertionError("ambiguous run must not read detail/ledger/gates")
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    for action in (self.portal.demo_run_detail,self.portal.demo_status):
+                        with self.assertRaises(HTTPException) as ctx:
+                            action("RUN-SHARED")
+                        self.assertEqual(ctx.exception.status_code,404)
+                self.assertEqual(calls,["/api/runs","/api/runs"])
+
     def test_matching_core_tenant_preserves_read_only_demo_path(self):
         calls=[]
         def get(base,path):
