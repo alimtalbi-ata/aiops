@@ -147,6 +147,8 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Real Core PostgreSQL DEMO Policy gate observation and refusals
+        run: python -m unittest discover -s tests -p "test_core_demo_policy_real_integration.py" -v
       - name: Stop ephemeral Core
         if: always()
         run: |

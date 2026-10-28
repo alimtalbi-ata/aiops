@@ -6,6 +6,7 @@ from shared.db import db
 from shared.ids import new
 from shared.domain import transition,STAGES
 from shared.tenant_scope import reject_unqualified_tenant_scope
+from shared.demo_policy_gate_read_model import project_demo_policy_gate
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -199,9 +200,8 @@ def _noc_core_response(content, status_code=200, headers=None):
                         headers={**_NOC_CORE_HEADERS, **(headers or {})})
 
 
-@app.get("/api/noc/runs/{rid}")
-def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=None)):
-    """Bounded synthetic-only Run identity for portal NOC correlation."""
+def _noc_core_auth_failure(authorization: str | None):
+    """Use the same internal-only bearer fence for both synthetic Core reads."""
     secret = os.getenv("AIOPS_INTERNAL_TOKEN", "")
     if (not isinstance(secret, str) or len(secret) < 32 or len(secret) > 256
             or not secret.isascii() or any(c.isspace() for c in secret)):
@@ -211,6 +211,16 @@ def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=
             or not hmac.compare_digest(supplied, secret)):
         return _noc_core_response({"detail": "invalid_noc_core_token"}, 401,
                                   {"WWW-Authenticate": "Bearer"})
+    
+    return None
+
+
+@app.get("/api/noc/runs/{rid}")
+def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=None)):
+    """Bounded synthetic-only Run identity for portal NOC correlation."""
+    denial = _noc_core_auth_failure(authorization)
+    if denial is not None:
+        return denial
     if not isinstance(rid, str) or _NOC_CORE_ID.fullmatch(rid) is None:
         return _noc_core_response({"detail": "noc_core_run_unavailable_or_unverified"}, 503)
     try:
@@ -241,3 +251,31 @@ def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=
         "tenant_acl_qualified": False,
         "live_remediation_authorized": False,
     })
+
+
+@app.get("/api/noc/runs/{rid}/policy-status")
+def noc_read_demo_policy_status(rid: str, authorization: str | None = Header(default=None)):
+    """Observe a DEMO Core Run and its stored Policy gate without any mutation.
+
+    Internal bearer only; this is not a tenant-authorized portal endpoint.
+    A missing gate is reported as MISSING, never inferred from Run status.
+    """
+    denial = _noc_core_auth_failure(authorization)
+    if denial is not None:
+        return denial
+    if not isinstance(rid, str) or _NOC_CORE_ID.fullmatch(rid) is None:
+        return _noc_core_response({"detail": "demo_policy_observation_unavailable"}, 503)
+    try:
+        with db() as c:
+            row = c.execute(
+                "select r.run_id,r.incident_id,r.mode,r.status,i.synthetic,i.payload,"
+                "g.state,g.decision,r.created_at,g.evaluated_at,"
+                "statement_timestamp() from aiops.runs r "
+                "join aiops.incidents i on i.incident_id=r.incident_id "
+                "left join aiops.gates g on g.run_id=r.run_id and g.stage='POLICY' "
+                "where r.run_id=%s", (rid,)
+            ).fetchone()
+        observation = project_demo_policy_gate(row)
+    except Exception:
+        return _noc_core_response({"detail": "demo_policy_observation_unavailable"}, 503)
+    return _noc_core_response(observation)
