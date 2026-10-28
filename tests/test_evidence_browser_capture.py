@@ -180,6 +180,60 @@ class BrowserCaptureTests(unittest.TestCase):
         self.assertTrue(socket.closed)
         self.assertEqual(len(blocked), 4)
 
+    def test_visual_proof_and_masks_are_inside_capture(self):
+        item = plan()["captures"][0]
+
+        class Element:
+            def __init__(self, box, visible=True, text="RUN-001"):
+                self.box, self.visible, self.text = box, visible, text
+            def is_visible(self):
+                return self.visible
+            def bounding_box(self):
+                return self.box
+            def inner_text(self, timeout=None):
+                return self.text
+
+        class Locator:
+            def __init__(self, elements):
+                self.elements = elements
+            def count(self):
+                return len(self.elements)
+            def nth(self, index):
+                return self.elements[index]
+            def is_visible(self):
+                return self.elements[0].is_visible()
+            def bounding_box(self):
+                return self.elements[0].bounding_box()
+            def inner_text(self, timeout=None):
+                return self.elements[0].inner_text(timeout=timeout)
+
+        class Page:
+            viewport_size = {"width": 1440, "height": 900}
+            def __init__(self, proof, masks):
+                self.proof, self.masks = proof, masks
+            def locator(self, selector):
+                return Locator(self.proof if selector == "#run-id" else self.masks)
+
+        good_proof = Element({"x": 10, "y": 10, "width": 90, "height": 20})
+        good_mask = Element({"x": 200, "y": 100, "width": 120, "height": 30})
+        self.assertEqual(len(module.verified_capture_locators(
+            Page([good_proof], [good_mask]), item)), 1)
+
+        bad = [
+            ("hidden proof", Page([Element(good_proof.box, visible=False)], [good_mask])),
+            ("offscreen proof", Page([Element({"x": 1400, "y": 10, "width": 100, "height": 20})], [good_mask])),
+            ("hidden mask", Page([good_proof], [Element(good_mask.box, visible=False)])),
+            ("overlapping mask", Page([good_proof], [Element({"x": 0, "y": 0, "width": 120, "height": 40})])),
+            ("missing mask", Page([good_proof], [])),
+            ("too many masks", Page([good_proof], [good_mask] * 51)),
+            ("duplicate proof", Page([good_proof, good_proof], [good_mask])),
+            ("invalid geometry", Page([Element({"x": float("nan"), "y": 10, "width": 90, "height": 20})], [good_mask])),
+        ]
+        for name, page in bad:
+            with self.subTest(case=name):
+                with self.assertRaises(ValueError):
+                    module.verified_capture_locators(page, item)
+
     def test_missing_websocket_fence_blocks_capture(self):
         class Context:
             def route(self, pattern, handler):
