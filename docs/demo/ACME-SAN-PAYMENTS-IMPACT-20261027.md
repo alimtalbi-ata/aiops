@@ -14,3 +14,7 @@ The source is `SAN-FABRIC-A` (incident `ACME-DEMO-SAN-001`, P1). The validated d
 **Testing:** `tests/test_acme_impact_read_model.py` checks deterministic IDs, graph path, transitive blast radius, invalid actions/modes, cycles, unknown references, duplicate JSON keys, canonical portal mount, API, page and invalid fixtures. Existing `quality.yml` executes the test suite on PR; CI status is reported separately. No GLPI, n8n, Thruk, Grafana, Core or Debian runtime integration is qualified by these tests.
 
 **Next:** correlate actual Core incident/run IDs and GLPI ticket IDs via authenticated, provenance-bearing adapters. Do not conflate simulated labels with persisted canonical IDs. Golden Demo may link this scenario, but should not claim the static view is a real executed Run.
+
+## 2026-10-28 — Portabilité du point d’entrée de démonstration
+
+Le champ JSON `entrypoint` est désormais `/demo/acme-impact`, chemin relatif au portail unique, et non une URL IP/port d’un serveur Debian. `entrypoint_provenance=RELATIVE_PORTAL_ROUTE_NOT_DEPLOYMENT_URL` explicite qu’il ne s’agit pas d’une preuve de disponibilité runtime. La page propose un retour local `/` ; les identifiants synthétiques, `ticket_id=null`, les neuf checkpoints `MISSING`, le refus LIVE et l’absence de capture authentifiée sont inchangés. Test de non-régression via ASGI avec Host arbitraire, sans appel réseau.
