@@ -90,7 +90,8 @@ def explore_story_control(payload: dict, authorization: str | None = Header(defa
         return _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
 
     if (type(payload) is not dict or set(payload) != {"action", "cursor", "mode"}
-            or payload["action"] not in ACTIONS or payload["mode"] not in MODES
+            or type(payload["action"]) is not str or payload["action"] not in ACTIONS
+            or type(payload["mode"]) is not str or payload["mode"] not in MODES
             or type(payload["cursor"]) is not int or payload["cursor"] < 0):
         return _noc_json_response({"detail": "invalid_story_control"}, status_code=422)
 
