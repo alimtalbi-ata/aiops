@@ -162,6 +162,17 @@ def _project_signed_payload(
         raise ValueError("NOC source attempted to attest evidence bytes")
     if payload.get("production_qualified", False) is not False:
         raise ValueError("NOC source attempted to claim production qualification")
+    # This bridge has a shared operator token, not tenant-scoped RBAC.
+    # Refuse upstream multi-tenant claims rather than silently discarding scope.
+    if any(field in payload for field in ("tenant_id", "tenant", "organization_id", "org_id")):
+        raise ValueError("tenant-scoped NOC source requires qualified ACL")
+    asset = payload.get("asset")
+    event_key = payload.get("event_key")
+    for label, value in (("asset", asset), ("event_key", event_key)):
+        if value is not None and (
+            not isinstance(value, str) or IDENTIFIER.fullmatch(value) is None
+        ):
+            raise ValueError("invalid NOC " + label)
     run_id = payload.get("run_id")
     incident_id = payload.get("incident_id")
     if not isinstance(run_id, str) or IDENTIFIER.fullmatch(run_id) is None:
@@ -227,6 +238,9 @@ def _project_signed_payload(
         "runtime_authenticated": False,
         "run_id": run_id,
         "incident_id": incident_id,
+        "asset": asset,
+        "event_key": event_key,
+        "tenant_acl_qualified": False,
         "correlation_id": correlation_id,
         "handoff_status": "ABSENT",
         "handoff_runtime_authenticated": False,
