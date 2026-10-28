@@ -116,6 +116,9 @@ jobs:
                   pass
               time.sleep(1)
           else:
+              from pathlib import Path
+              print("Core startup diagnostic (ephemeral CI):")
+              print(Path("/tmp/aiops-core-ci.log").read_text()[-4000:])
               raise SystemExit("BLOCKED: real Core/PostgreSQL not ready")
           PY
       - name: Real Core PostgreSQL NOC read security and regression
