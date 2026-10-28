@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Policy modules are imported both as app.policy.* and policy.* by the tests.
+  PYTHONPATH: ${{ github.workspace }}/app
+
 jobs:
   quality-build-package:
     runs-on: ubuntu-latest
