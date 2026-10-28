@@ -99,3 +99,18 @@ variantes négatives sont des octets adversariaux construits à partir de
 cette réponse, pas des appels réseau simulés. Les réponses JSON malformées
 ne peuvent plus être qualifiées via un parseur permissif. La sortie
 `aiops.acme-twin-readonly-qualification.v1` est inchangée.
+
+## Micro-lot HTTP metadata fail-closed — 2026-10-28 23:57 CET
+
+Le qualificateur vérifie désormais les métadonnées des deux réponses HTTP du
+**vrai Twin loopback** avant toute qualification : exactement un
+`Cache-Control: no-store`, un `Content-Type: application/json` (UTF-8
+facultatif), aucun encodage compressé, aucun `Transfer-Encoding`, pas de
+`Content-Length` ambigu, `WWW-Authenticate: Bearer` unique pour 401 et
+`X-Content-Type-Options: nosniff` unique pour 200. Un en-tête incohérent
+entraîne `BLOCKED/NO_GO` sans exposer la réponse ou le bearer. La suite
+existante `quality.yml` teste le vrai service et des variations adversariales
+d'en-têtes en mémoire, sans prétendre que ces variantes sont des services réels.
+Le contrat Twin et la sortie CLI v1 ne changent pas ; seules les conditions
+de confiance de la sonde deviennent plus strictes. Cette qualification n'est
+ni une attestation tenant, ni une preuve de panne Payments, ni une recette Debian.

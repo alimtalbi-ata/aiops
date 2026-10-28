@@ -4,6 +4,7 @@ Only runs in quality.yml with ephemeral services and CI-only credentials.
 No mocks, no production network, no mutation of the seeded topology.
 """
 import copy
+from email.message import Message
 import json
 import os
 import subprocess
@@ -12,7 +13,8 @@ import unittest
 from unittest.mock import patch
 
 from scripts.qualify_acme_twin_readonly import (QualificationError, decode_impact_json,
-                                                qualify, loopback_base, validate_impact)
+                                                qualify, loopback_base, validate_impact,
+                                                validate_twin_http_headers)
 
 import psycopg
 import requests
@@ -185,6 +187,66 @@ class TwinImpactRealIntegration(unittest.TestCase):
                 with self.assertRaises(QualificationError) as ctx:
                     decode_impact_json(raw)
                 self.assertEqual(str(ctx.exception), expected)
+
+    def test_twin_qualifier_rejects_ambiguous_http_metadata(self):
+        # Both baseline responses come from the real Twin/PostgreSQL CI stack.
+        # Mutated headers are adversarial unit inputs, not claimed HTTP E2E.
+        for anonymous in (False, True):
+            response = self.read("ACME-SAN-FABRIC-A",
+                                 token=None if anonymous else TOKEN)
+            self.assertEqual(response.status_code, 401 if anonymous else 200)
+            original = Message()
+            for name, value in response.headers.items():
+                original[name] = value
+            validate_twin_http_headers(original, anonymous=anonymous)
+
+            cases = [
+                ("missing_cache", "Cache-Control", [], "missing_no_store"),
+                ("duplicate_cache", "Cache-Control", ["no-store", "public"],
+                 "missing_no_store"),
+                ("duplicate_media", "Content-Type",
+                 ["application/json", "text/plain"], "invalid_content_type"),
+                ("utf16_media", "Content-Type",
+                 ["application/json; charset=utf-16"], "invalid_content_type"),
+                ("gzip", "Content-Encoding", ["gzip"], "invalid_content_encoding"),
+                ("duplicate_identity", "Content-Encoding",
+                 ["identity", "identity"], "invalid_content_encoding"),
+                ("chunked", "Transfer-Encoding", ["chunked"],
+                 "invalid_transfer_encoding"),
+                ("duplicate_length", "Content-Length", ["2", "3"],
+                 "invalid_content_length"),
+                ("bad_length", "Content-Length", ["NaN"],
+                 "invalid_content_length"),
+                ("huge_length", "Content-Length", ["9" * 5000],
+                 "invalid_content_length"),
+            ]
+            if anonymous:
+                cases += [
+                    ("missing_challenge", "WWW-Authenticate", [],
+                     "invalid_anonymous_denial"),
+                    ("duplicate_challenge", "WWW-Authenticate",
+                     ["Bearer", "Basic"], "invalid_anonymous_denial"),
+                ]
+            else:
+                cases += [
+                    ("missing_nosniff", "X-Content-Type-Options", [],
+                     "missing_nosniff"),
+                    ("duplicate_nosniff", "X-Content-Type-Options",
+                     ["nosniff", "nosniff"], "missing_nosniff"),
+                    ("unexpected_challenge", "WWW-Authenticate", ["Bearer"],
+                     "unexpected_auth_challenge"),
+                ]
+            for label, key, values, reason in cases:
+                with self.subTest(anonymous=anonymous, case=label):
+                    altered = Message()
+                    for name, value in original.items():
+                        if name.lower() != key.lower():
+                            altered[name] = value
+                    for value in values:
+                        altered[key] = value
+                    with self.assertRaises(QualificationError) as ctx:
+                        validate_twin_http_headers(altered, anonymous=anonymous)
+                    self.assertEqual(str(ctx.exception), reason)
 
     def test_qualifier_never_uses_ambient_proxy_for_loopback_token(self):
         # Real Twin/PostgreSQL CI integration; proxy points to an unavailable
