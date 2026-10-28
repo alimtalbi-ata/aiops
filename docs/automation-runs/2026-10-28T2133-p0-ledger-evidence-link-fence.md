@@ -22,3 +22,8 @@
 
 ## Next micro-lot
 Implement an authorized Core-side evidence-reference resolution (source, hash, timestamp and tenant) for a read-only projection, with real Core/PostgreSQL A/B isolation before any claim of observed SAN→Payments causal diagnosis. Coordinate source and contract with owners #145/#139/#142; keep canonical ACME IDs from #133 distinct from CI-only ledger IDs.
+
+## Verified CI on code/test SHA (2026-10-28 21:34 Europe/Paris)
+- [Existing quality.yml PR run #40764417768](https://github.com/alimtalbi-ata/aiops/actions/runs/40764417768) on code/test SHA `223fa5f1bbdc02718dbf56e6957c8ee5a9e0a7fd`. Job `quality-build-package` completed/failure: compilation success, **ledger unit step completed/success, 11 tests / 11 OK** (job 123084602094, including new `test_sourced_claim_requires_linked_analysis_and_evidence`); then pre-existing Policy step **11 failures / 15 tests**, later steps skipped.
+- Same run: `database-migrations` completed/success, including **real Core/Portal/PostgreSQL HTTP step, 5 tests / 5 OK** (job 123084602096, including `test_persisted_unsourced_claim_fails_closed`). `mariadb-dr-rehearsal` and `migration-runner-upgrade` completed/success. `runtime-e2e` was still in progress when checked; no success claim.
+- **Overall CI NOT_PASS**, PR remains draft, no merge. A later journal-only SHA must be checked separately; no PASS inferred from the code SHA.
