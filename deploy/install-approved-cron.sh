@@ -19,6 +19,6 @@ if [[ ! -e "$BASE/applied.sha" ]]; then
   }
   printf '%s\n' "$target" > "$BASE/applied.sha"
 fi
-line="*/15 * * * * /bin/bash $BASE/poll.sh >> $BASE/poll.log 2>&1"
+line="*/5 * * * * /bin/bash $BASE/poll.sh >> $BASE/poll.log 2>&1"
 { crontab -l 2>/dev/null | grep -Fv "$BASE/poll.sh" || true; printf '%s\n' "$line"; } | crontab -
-echo "Cron installed (every 15 minutes); current approved revision: $(cat "$BASE/applied.sha")"
+echo "Cron installed (every 5 minutes); current approved revision: $(cat "$BASE/applied.sha")"
