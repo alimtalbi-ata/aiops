@@ -152,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                    if args.expected_sha else "NOT_TESTED")
         if applied == "BLOCKED":
             result = {"schema": SCHEMA, "assessment": "BLOCKED", "overall": "NO_GO",
+                      "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                       "reason": "applied_sha_unreadable_or_mismatch",
                       "applied_sha_verified": "BLOCKED", "field_e2e": "NOT_TESTED"}
         else:
