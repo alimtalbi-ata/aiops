@@ -94,3 +94,11 @@ capture authentifiée, pas d'accès Debian, pas de fusion, pas de LIVE.
 La PR #81 est empilée sur #43 ; lorsque #43 sera stabilisée, porter ce petit
 correctif vers `main` après revue et CI. Journal :
 `docs/automation-runs/2026-10-28-0346-video-evidence.md`.
+
+
+## 2026-10-28 04:49 Europe/Paris — Evidence Studio local byte-audit (draft PR #86)
+
+- New independent `demo/evidence_bundle_audit.py` verifies five PNG captures, MP4/SRT SHA-256 and strict untrusted receipt structure, without network access or provenance elevation.
+- Stacked on PR #81 (itself stacked on #43); source base SHA `f367175206eed07e3e7715c2057fa652d2583ac5`. No bulk PR #36 merge; reuses its STAR-style duplicate-key rejection and the existing video/capture validation contract.
+- `tests/test_evidence_bundle_audit.py` covers local byte checks and negative cases (tampering, symlinks, duplicate keys, forged LIVE flags, unsafe names, missing files). Wired into the existing `quality.yml` workflow.
+- This is **not** MP4 decoding, runtime session authentication, application screenshot proof, visual privacy review or LIVE qualification. No Debian access or deployment. See `docs/demo/EVIDENCE-MP4-SRT-BUNDLE-CONTRACT.md` and `docs/automation-runs/2026-10-28-0449-video-evidence.md`.
