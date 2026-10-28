@@ -30,3 +30,9 @@ La corrélation signée NOC ↔ Run Core refuse désormais les Runs `LIVE` et le
 Qualifier l'identité tenant A/B et le refus cross-tenant côté Core avec vrai service Core/PostgreSQL éphémères en CI ; puis corréler les observations Checkmk/Thruk et métriques Grafana en lecture seule avec provenance et fraîcheur. Ne jamais appeler le NGX réel en CI, et utiliser Ollama 4B uniquement sous `CI_SIMULATED_LLM` si l'adaptateur LLM est effectivement testé.
 
 **Note de validation finale :** la mise à jour documentaire qui consigne ces résultats est un nouveau commit ; sa CI doit être vérifiée séparément sur la PR avant toute fusion.
+
+## Reçu de fusion et validation sur main
+
+- **PR code/tests/journal :** [#116](https://github.com/alimtalbi-ata/aiops/pull/116), fusion squash confirmée à `93e7af597fc06d0522ebd7040cfab87551b2e99e` après vérification de `mergeable=true`, HEAD attendu `0687876340ef0e6d0a2e55faec9e97678fa3ff52`, absence de conflit et deux exécutions `quality.yml` `completed/success` sur ce HEAD : [push 40662461281](https://github.com/alimtalbi-ata/aiops/actions/runs/40662461281), [PR 40662468313](https://github.com/alimtalbi-ata/aiops/actions/runs/40662468313).
+- **main après fusion :** [run 40662565802](https://github.com/alimtalbi-ata/aiops/actions/runs/40662565802), `completed/success` sur `93e7af597fc06d0522ebd7040cfab87551b2e99e`, vérifié le 2026-10-28. Il ne qualifie pas les observations LIVE, ni les ACL Core/PostgreSQL.
+- **Reçu documentaire :** ce paragraphe est livré sur branche séparée, sans réécrire le commit fusionné. Sa propre CI sera vérifiée avant fusion ; aucun déploiement ni accès Debian.
