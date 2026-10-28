@@ -228,7 +228,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                                 capture_output=True, text=True, timeout=20)
         self.assertEqual(denied.returncode, 2)
         self.assertEqual(json.loads(denied.stdout)["reason"], "missing_viewer_token")
-        env["AIOPS_PORTAL_READ_TOKEN"] = VIEWER + "\\nsecret"
+        env["AIOPS_PORTAL_READ_TOKEN"] = VIEWER + "\nsecret"
         invalid = subprocess.run(command, cwd=ROOT, env=env,
                                  capture_output=True, text=True, timeout=20)
         self.assertEqual(invalid.returncode, 2)
