@@ -16,7 +16,11 @@ AIOPS_TWIN_READ_TOKEN="<jeton éphémère du Twin>" \
 ```
 
 Le script n'accepte que l'hôte littéral `127.0.0.1`, HTTP, un port explicite,
-sans chemin, query, credentials ni redirection. Il effectue **deux GET** :
+sans chemin, query, credentials, caractères de contrôle ni redirection.
+Les variables d'environnement `HTTP_PROXY`, `HTTPS_PROXY` et `ALL_PROXY`
+sont ignorées explicitement pour empêcher l'envoi du bearer à un proxy
+ambiant. Un HTTP 401 anonyme n'est accepté qu'avec `Cache-Control: no-store`
+et `WWW-Authenticate: Bearer`. Il effectue **deux GET** :
 un appel anonyme attendu HTTP 401, puis une lecture authentifiée
 `GET /api/twin/impact/ACME-SAN-FABRIC-A`. Il ne déclenche ni migration,
 ni mutation, ni action LIVE. La réponse est bornée à 256 KiB, avec
