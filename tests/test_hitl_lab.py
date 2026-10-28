@@ -181,5 +181,49 @@ class HITLLabTests(unittest.TestCase):
                 (p["proposal_id"],)).fetchone()[0], 1)
 
 
+    def test_forged_approver_matching_proposer_cannot_consume(self):
+        p, a = self.approved()
+        with sqlite3.connect(self.path) as db:
+            db.execute("DROP TRIGGER approvals_immutable_update")
+            db.execute("DROP TRIGGER audit_immutable_update")
+            db.execute("UPDATE approvals SET approver_id='alice' WHERE proposal_id=?",
+                       (p["proposal_id"],))
+            db.execute("UPDATE audit SET actor_id='alice' WHERE proposal_id=? AND action=?",
+                       (p["proposal_id"], "APPROVED_SANDBOX_ONLY"))
+        with self.assertRaises(HITLRejected):
+            dry_run(self.path, proposal_id=p["proposal_id"],
+                    approval_token=a["approval_token"], now=NOW, **ARGS)
+        with sqlite3.connect(self.path) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM dry_runs WHERE proposal_id=?",
+                                        (p["proposal_id"],)).fetchone()[0], 0)
+
+    def test_inconsistent_audit_cannot_consume_approval(self):
+        # Each scenario starts with a separate approved proposal and valid token.
+        for tamper in ("actor", "timestamp", "missing", "extra"):
+            with self.subTest(tamper=tamper):
+                p, a = self.approved()
+                with sqlite3.connect(self.path) as db:
+                    db.execute("DROP TRIGGER IF EXISTS audit_immutable_update")
+                    db.execute("DROP TRIGGER IF EXISTS audit_immutable_delete")
+                    if tamper == "actor":
+                        db.execute("UPDATE audit SET actor_id='mallory' WHERE proposal_id=? AND action=?",
+                                   (p["proposal_id"], "APPROVED_SANDBOX_ONLY"))
+                    elif tamper == "timestamp":
+                        db.execute("UPDATE audit SET recorded_at=recorded_at+1 WHERE proposal_id=? AND action=?",
+                                   (p["proposal_id"], "APPROVED_SANDBOX_ONLY"))
+                    elif tamper == "missing":
+                        db.execute("DELETE FROM audit WHERE proposal_id=? AND action=?",
+                                   (p["proposal_id"], "APPROVED_SANDBOX_ONLY"))
+                    else:
+                        db.execute("INSERT INTO audit(proposal_id,action,actor_id,recorded_at) VALUES (?,?,?,?)",
+                                   (p["proposal_id"], "APPROVED_SANDBOX_ONLY", "bob", NOW.timestamp()))
+                with self.assertRaisesRegex(HITLRejected, "audit"):
+                    dry_run(self.path, proposal_id=p["proposal_id"],
+                            approval_token=a["approval_token"], now=NOW, **ARGS)
+                with sqlite3.connect(self.path) as db:
+                    self.assertEqual(db.execute("SELECT COUNT(*) FROM dry_runs WHERE proposal_id=?",
+                                                (p["proposal_id"],)).fetchone()[0], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

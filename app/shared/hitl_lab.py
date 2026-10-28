@@ -174,7 +174,7 @@ def dry_run(path, *, proposal_id, approval_token, incident_id, run_id, recipe_id
         db.execute("BEGIN IMMEDIATE")
         row = db.execute("""SELECT p.incident_id,p.run_id,p.recipe_id,p.target_id,
                    p.params_hash,p.mode,p.binding_hash,p.created_at,p.expires_at,
-                   a.token_hash,a.approved_at
+                   a.token_hash,a.approved_at,p.proposer_id,a.approver_id
             FROM proposals p JOIN approvals a ON a.proposal_id=p.proposal_id
             WHERE p.proposal_id=?""", (proposal_id,)).fetchone()
         # Never trust the stored binding_hash alone. A damaged SQLite record
@@ -190,6 +190,27 @@ def dry_run(path, *, proposal_id, approval_token, incident_id, run_id, recipe_id
             raise HITLRejected("approval missing, expired or binding mismatch")
         if db.execute("SELECT 1 FROM dry_runs WHERE proposal_id=?", (proposal_id,)).fetchone():
             raise HITLRejected("approval already consumed")
+        # A valid capability token is not enough if the persisted actors or
+        # append-only audit were corrupted. Validate in the same write lock
+        # used to consume the token; never issue a receipt on partial evidence.
+        proposer_id, approver_id = row[11:13]
+        try:
+            _identity(proposer_id)
+            _identity(approver_id)
+        except HITLRejected as exc:
+            raise HITLRejected("invalid HITL actor binding") from exc
+        if hmac.compare_digest(proposer_id, approver_id):
+            raise HITLRejected("separation of duties required")
+        audit = db.execute(
+            "SELECT action,actor_id,recorded_at FROM audit WHERE proposal_id=? ORDER BY seq",
+            (proposal_id,),
+        ).fetchall()
+        expected_audit = [
+            ("PROPOSED", proposer_id, row[7]),
+            ("APPROVED_SANDBOX_ONLY", approver_id, row[10]),
+        ]
+        if audit != expected_audit:
+            raise HITLRejected("inconsistent HITL approval audit")
         receipt_id = secrets.token_hex(16)
         db.execute("INSERT INTO dry_runs VALUES (?,?,?)", (proposal_id, receipt_id, at))
         db.execute("INSERT INTO audit(proposal_id,action,actor_id,recorded_at) VALUES (?,?,?,?)",

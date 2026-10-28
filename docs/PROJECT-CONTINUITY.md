@@ -104,3 +104,11 @@ Added a local SQLite-only HITL library and tests on [PR #49](https://github.com/
 - Negative tests cover partially tampered SQLite proposals and extended expiry; a concurrent two-consumer test asserts one sandbox receipt. Tests are wired via the existing `quality.yml` HITL unit test step; confirm exact-head Actions status in the automation log.
 - This is a local SQLite **sandbox integrity guard**, not proof against a malicious DB owner, a signed approval, authenticated RBAC, or permission for LIVE remediation. Core/Temporal/GLPI integration and real container E2E remain NOT_TESTED.
 - Rebase/port this narrow patch after #49 is reconciled with main; never merge the entire divergent #36 candidate.
+
+
+## 2026-10-28 04:23 Europe/Paris — HITL audit verification at sandbox consumption (stacked PR #84)
+
+- In `app/shared/hitl_lab.py`, the same atomic SQLite transaction that consumes a one-use sandbox approval now checks stored proposer/approver separation and exact two-entry audit action/actor/timestamp consistency before recording a receipt.
+- Negative regression tests in `tests/test_hitl_lab.py` reject forged approver identity, missing/extra audit rows, and modified audit actors/timestamps, with no receipt.
+- Reuses PR #36's fail-closed, simulation-only admission principle; no mass merge. Existing `quality.yml` runs HITL tests; see `docs/automation-runs/20261028-0423-hitl.md` for actual CI status.
+- PR #84 is stacked on #79 -> #49. It is not an authenticated RBAC boundary or cryptographic audit against a malicious DB owner; no LIVE action, no runtime qualification.
