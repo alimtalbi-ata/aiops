@@ -79,6 +79,23 @@ class AcmeImpactTests(unittest.TestCase):
         self.assertIn("SAN-FABRIC-A", page.text)
         self.assertIn("APP-PAY-01", page.text)
 
+    def test_portable_entrypoint_never_claims_a_debian_runtime(self):
+        model = build_acme_impact_read_model()
+        self.assertEqual(model["entrypoint"], "/demo/acme-impact")
+        self.assertEqual(model["entrypoint_provenance"], "RELATIVE_PORTAL_ROUTE_NOT_DEPLOYMENT_URL")
+        self.assertFalse(model["runtime_attested"])
+        app = FastAPI()
+        app.include_router(router)
+        client = TestClient(app)
+        response = client.get("/api/demo/acme-impact", headers={"Host": "example.invalid:9999"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["entrypoint"], "/demo/acme-impact")
+        self.assertNotIn("10.79.94.202", response.text)
+        page = client.get("/demo/acme-impact", headers={"Host": "example.invalid:9999"})
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('href="/"', page.text)
+        self.assertNotIn("10.79.94.202", page.text)
+
     def test_canonical_portal_mounts_acme_routes(self):
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "unit-test-only"}):
             from portal.main import app as canonical_app
