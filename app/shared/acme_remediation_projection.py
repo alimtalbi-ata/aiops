@@ -58,6 +58,8 @@ def project_remediation(
     }
     if gate["status"] != "SIMULATED" or proposal["mode"] not in ALLOWED_MODES:
         return {**result, "status": "BLOCKED", "reason": gate.get("reason", "MODE_NOT_ALLOWED")}
+    if outcome == "SUCCESS" and gate["recipe_id"] != "ansible-service-restart":
+        return {**result, "status": "SIMULATED_NO_RECOVERY", "reason": "RECIPE_NOT_RECOVERY_CAPABLE"}
     if outcome == "FAILURE":
         return {
             **result,
