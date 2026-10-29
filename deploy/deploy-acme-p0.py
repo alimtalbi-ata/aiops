@@ -25,6 +25,7 @@ RUNTIME = frozenset({
     "app/core/main.py", "app/core/demo_evidence_read.py",
     "app/twin/main.py", "app/policy/main.py",
     "app/portal/main.py", "app/portal/demo_v2.py",
+    "app/portal/acme_business_story.html",
     "app/portal/demo_ledger_read.py", "app/shared/tenant_scope.py",
 })
 CONTROL = frozenset({

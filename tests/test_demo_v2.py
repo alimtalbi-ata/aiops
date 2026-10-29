@@ -105,5 +105,40 @@ class DemoV2Tests(unittest.TestCase):
             page = portal_main.demo_run_detail("RUN-ROUTE")
         self.assertNotIn("Étapes DEMO — validation non attestée", page)
 
+
+    def test_acme_business_story_is_offline_and_linked_from_portal(self):
+        from pathlib import Path
+        from unittest.mock import patch
+        from portal import main as portal_main
+        response = portal_main.demo_business_story()
+        page = response.body.decode("utf-8")
+        self.assertEqual(response.media_type, "text/html")
+        self.assertEqual(page.count('short:"'), 6)
+        for marker in ("Payments", "ACME-SAN-FABRIC-A", "SIMULATE", "HITL", "illustratifs"):
+            self.assertIn(marker, page)
+        self.assertNotIn("fetch(", page)
+        self.assertNotIn("<script src=", page)
+        self.assertTrue(Path(portal_main.__file__).with_name("acme_business_story.html").is_file())
+        with patch.object(portal_main, "_get", return_value={}), \
+             patch.object(portal_main, "_runs", return_value=[]), \
+             patch.object(portal_main, "graph_panel", return_value=""):
+            self.assertIn('href="/demo-studio/business-story"', portal_main.home())
+            self.assertIn('href="/demo-studio/business-story"', portal_main.demo_studio())
+
+    def test_acme_business_story_is_in_portal_image_transport(self):
+        import importlib.util
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        path = root / "deploy" / "deploy-acme-p0.py"
+        spec = importlib.util.spec_from_file_location("acme_p0_deployer_story", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.classify("app/portal/acme_business_story.html", "A"),
+                         "IMAGE_TRANSPORT")
+        self.assertEqual(module.classify("app/portal/acme_business_story.html", "M"),
+                         "IMAGE_TRANSPORT")
+        self.assertIn("COPY portal /app/portal",
+                      (root / "app" / "portal" / "Dockerfile").read_text(encoding="utf-8"))
+
 if __name__ == "__main__":
     unittest.main()

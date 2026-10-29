@@ -1,4 +1,5 @@
 import os,json,html,uuid,hmac,re
+from pathlib import Path
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -81,6 +82,9 @@ def home():
     content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
     content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
     content+=panel("Digital Twin — état courant",pretty(t))
+    content+=panel("Démo ACME — valeur métier",
+        '<p>Parcours guidé ACME SAN → Payments en six écrans, entièrement illustratif et sans effet LIVE.</p>'
+        '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
@@ -208,7 +212,10 @@ def demo_studio():
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
     runs=_runs()
     demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
-    body=panel("Préflight — qualification en lecture seule",
+    body=panel("Démo ACME — valeur métier",
+        '<p>Six écrans de présentation hors ligne : enjeu Payments, incident SAN, diagnostic, décision SIMULATE/HITL et valeur hypothétique. Aucune action LIVE ni gain mesuré.</p>'
+        '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
+    body+=panel("Préflight — qualification en lecture seule",
         '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
         'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
         +table(["Contrôle","Résultat"],[
@@ -252,6 +259,11 @@ def demo_studio():
     return shell("/demo-studio","ACME Demo Studio",
       "Démonstration intégrée ACME — lecture des sources Core/Twin et lancement optionnel en mode développement.",
       body,mode="DEVELOPPEMENT DEMO" if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true" else "LECTURE SEULE")
+
+@app.get("/demo-studio/business-story",response_class=HTMLResponse)
+def demo_business_story():
+    """Serve the existing offline ACME business presentation, without Core calls."""
+    return HTMLResponse(Path(__file__).with_name("acme_business_story.html").read_text(encoding="utf-8"))
 
 @app.get("/demo-studio/run/{rid}",response_class=HTMLResponse)
 def demo_run_detail(rid:str):
