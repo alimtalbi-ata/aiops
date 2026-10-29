@@ -36,3 +36,11 @@
 - CI initiale du SHA `8c769c12b356421cd42556b690e83d6a01630eab` : [quality.yml #40826341422](https://github.com/alimtalbi-ata/aiops/actions/runs/40826341422), **FAILURE** (job Core/Twin), malgré policy-and-static et Grafana SUCCESS. Logs réels lus : 14 tests Twin exécutés, 3 échecs, dont deux anciennes assertions qui supposaient à tort que le jeton admin/interservice avait accès à `/metrics`, et une assertion sur un saut de ligne littéral.
 - Correction saut de ligne : `cac50494933a60b907ad7f0035d8dc851c442ab3` ; correction des deux assertions historiques : `2c97ce42e4bdfb4788d98c62e39b35e4af3c85e3`.
 - **Ne pas qualifier READY_FOR_STABLE sur les CI précédentes** : la CI du dernier SHA doit réussir intégralement. Ce journal documentaire produit lui-même un nouveau SHA et requiert une nouvelle vérification.
+
+## Qualification finale observée avant addendum
+- SHA avec code et journal : `d7cad9eb911ad43c45b4bcfb5b5faf778f46b25d`.
+- [quality.yml #40826458509](https://github.com/alimtalbi-ata/aiops/actions/runs/40826458509) : **completed/success sur ce SHA exact, 3/3 jobs SUCCESS** (Core/PostgreSQL/Twin, policy-and-static, Grafana).
+- Logs du job Core/Twin consultés : **14/14 tests Twin HTTP réel sur Docker + PostgreSQL 16**, dont `test_prometheus_metrics_only_accept_dedicated_scrape_identity` et `test_distinct_internal_identity_reads_but_cannot_write_synthetic_events` ; **14/14 Core/Policy, 8/8 Policy HTTP, 5/5 NOC**. Logs du job statique : **3/3 tests de préparation Prometheus** réussis et `STATIC_AUDIT=PASS`.
+- La CI de `2c97ce42e4bdfb4788d98c62e39b35e4af3c85e3` est également **3/3 SUCCESS** (job results consultés). L'échec initial est documenté ci-dessus et n'a pas été contourné.
+- **Limite** : ces validations ne lancent pas le binaire Prometheus pour un vrai scrape. `PROMETHEUS_REAL_SCRAPE=NOT_TESTED`, et les contrôles Debian, E2E, rollback et tenant restent `NOT_TESTED`.
+- Cet addendum documentaire modifie encore le SHA de tête : la CI du nouveau HEAD doit être vérifiée séparément avant handoff.
