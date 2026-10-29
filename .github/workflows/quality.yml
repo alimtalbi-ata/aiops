@@ -179,9 +179,32 @@ jobs:
       - name: Stop ephemeral Twin container
         if: always()
         run: docker rm -f aiops-twin-impact-ci || true
-      - name: Stop ephemeral Core
+      - name: Start actual Policy HTTP service (ephemeral CI only)
+        run: |
+          PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &
+          echo $! > /tmp/aiops-policy-ci.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:1813/health", timeout=2) as response:
+                      if response.status == 200:
+                          print("Real ephemeral Policy HTTP ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              from pathlib import Path
+              print(Path("/tmp/aiops-policy-ci.log").read_text()[-3000:])
+              raise SystemExit("BLOCKED: actual Policy HTTP not ready")
+          PY
+      - name: Real Policy HTTP SIMULATE and LIVE refusal regression
+        run: python -m unittest discover -s tests -p "test_policy_real_http_integration.py" -v
+      - name: Stop ephemeral Core and Policy
         if: always()
         run: |
+          if test -f /tmp/aiops-policy-ci.pid; then kill "$(cat /tmp/aiops-policy-ci.pid)" || true; fi
           if test -f /tmp/aiops-core-ci.pid; then kill "$(cat /tmp/aiops-core-ci.pid)" || true; fi
 
   grafana-real-integration:
