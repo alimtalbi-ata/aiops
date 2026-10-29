@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt
+from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding
 
 
 WORKER = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
@@ -173,6 +173,59 @@ class SimulationPolicyContractTests(unittest.TestCase):
         self.assertIn("'command': 'BLOCK'", ast.unparse(body[command_at]))
         self.assertIn("blocked_run['version']", ast.unparse(body[event_at]))
         self.assertIn("'status': 'BLOCKED'", ast.unparse(body[-1]))
+
+
+    def test_canonical_core_binding_accepts_only_matching_created_run(self):
+        args = {"run_id": "RUN-DEMO-1", "mode": "DEMO",
+                "scenario_id": "ACME-SAN", "version": 1}
+        canonical = {"run": {"run_id": "RUN-DEMO-1", "mode": "DEMO",
+                             "scenario_id": "ACME-SAN", "status": "CREATED",
+                             "version": 1, "incident_id": "INC-1"}}
+        self.assertIs(validate_canonical_run_binding(canonical, args), canonical["run"])
+        for field, wrong in (("run_id", "RUN-LIVE-1"), ("mode", "LIVE"),
+                             ("scenario_id", "OTHER"), ("status", "RESOLVED"),
+                             ("version", 2)):
+            altered = {"run": dict(canonical["run"], **{field: wrong})}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                validate_canonical_run_binding(altered, args)
+
+    def test_canonical_core_binding_rejects_untrusted_inputs(self):
+        args = {"run_id": "RUN-1", "mode": "DEMO", "scenario_id": "S1", "version": 1}
+        run = {"run": dict(args, status="CREATED")}
+        for invalid in (None, {}, {"run": None}, {"run": []},
+                        {"run": dict(run["run"], version=True)},
+                        {"run": dict(run["run"], mode="LIVE")},
+                        {"run": dict(run["run"], status="RUNNING")}):
+            with self.subTest(response=repr(invalid)), self.assertRaises(ValueError):
+                validate_canonical_run_binding(invalid, args)
+        for bad in (dict(args, version=True), dict(args, version=0),
+                    dict(args, mode="DEMO ", scenario_id="S1"),
+                    dict(args, run_id=""), dict(args, scenario_id=None), []):
+            with self.subTest(args=repr(bad)), self.assertRaises(ValueError):
+                validate_canonical_run_binding(run, bad)
+
+    def test_canonical_core_binding_activity_retry_allows_started_only(self):
+        args = {"run_id": "RUN-1", "mode": "DEMO", "scenario_id": "S1", "version": 1}
+        run = {"run": dict(args, status="RUNNING", version=2)}
+        self.assertIs(validate_canonical_run_binding(run, args, allow_started=True),
+                      run["run"])
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(run, args)
+        for status in ("BLOCKED", "RESOLVED", "FAILED", "CANCELLED"):
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                validate_canonical_run_binding(
+                    {"run": dict(run["run"], status=status)}, args,
+                    allow_started=True)
+
+    def test_worker_preflights_canonical_run_before_temporal_and_core_start(self):
+        # AST wiring check only; no Temporal or Core service is started here.
+        http = ast.unparse(worker_function("start"))
+        self.assertLess(http.index("validate_canonical_run_binding("),
+                        http.index("Client.connect("))
+        activity_start = ast.unparse(worker_function("start_run"))
+        self.assertLess(activity_start.index("validate_canonical_run_binding("),
+                        activity_start.index("return call("))
+        self.assertIn("allow_started=True", activity_start)
 
 
 if __name__ == "__main__":
