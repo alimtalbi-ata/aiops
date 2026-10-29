@@ -135,7 +135,7 @@ class PortalPageContractTests(unittest.TestCase):
         def get(base,path,**kw):
             seen.append(path)
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
-            if path=="/api/runs/RUN-DEMO-42":return {"run_id":"RUN-DEMO-42","status":"RESOLVED"}
+            if path=="/api/runs/RUN-DEMO-42":return {"run":{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"},"events":[]}
             if path.endswith("/ai-ledger"):return {"analysis":"ANL-SOURCE-42","critic":"CRT-SOURCE-42"}
             if path.endswith("/gates"):return {"decision":"SIMULATE"}
             raise AssertionError(path)
@@ -176,7 +176,7 @@ class PortalPageContractTests(unittest.TestCase):
         from fastapi import HTTPException
         with patch.object(self.portal,"get_json",side_effect=lambda base,path: (
             {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"},{"run_id":"RUN-LIVE","mode":"LIVE"}]}
-            if path=="/api/runs" else {"status":"RUNNING"})):
+            if path=="/api/runs" else {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"},"events":[]})):
             result=self.portal.demo_status("RUN-DEMO")
             self.assertEqual(result["status"],"RUNNING")
             with self.assertRaises(HTTPException) as exc:
@@ -186,7 +186,8 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_detail_contains_live_status_poll(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
-            return {"status":"RUNNING"}
+            if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"},"events":[]}
+            return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             page=self.portal.demo_run_detail("RUN-DEMO")
         self.assertIn('id="run-watch-status"',page)
@@ -198,7 +199,7 @@ class PortalPageContractTests(unittest.TestCase):
         def get(base,path):
             seen.append(path)
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
-            if path=="/api/runs/RUN-DEMO":return {"status":"BLOCKED","events":[{"event_type":"CRITIC_COMPLETED"}]}
+            if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED"},"events":[{"event_type":"CRITIC_COMPLETED"}]}
             if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
             if path.endswith("/gates"):return {"decision":"BLOCKED"}
             raise AssertionError(path)
@@ -215,7 +216,8 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_missing_event_list_is_not_invented(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
-            return {"status":"RUNNING"}
+            if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RUNNING"}}
+            return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-DEMO")
         self.assertEqual(response["events"],"INCONNU")
@@ -223,7 +225,7 @@ class PortalPageContractTests(unittest.TestCase):
     def test_demo_status_parses_actual_core_nested_run_contract(self):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-X","mode":"DEMO"}]}
-            if path=="/api/runs/RUN-X":return {"run":{"run_id":"RUN-X","status":"RESOLVED"},"events":[{"sequence":1,"event_type":"STAGE_COMPLETED"}]}
+            if path=="/api/runs/RUN-X":return {"run":{"run_id":"RUN-X","mode":"DEMO","status":"RESOLVED"},"events":[{"sequence":1,"event_type":"STAGE_COMPLETED"}]}
             return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-X")
@@ -234,7 +236,7 @@ class PortalPageContractTests(unittest.TestCase):
         def get(base,path):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
             if path=="/api/runs/RUN-DEMO":
-                return {"run":{"status":"RESOLVED"},"events":[{"sequence":3,"occurred_at":"2026-10-21T08:00:00Z","stage":"CRITIC","event_type":"CRITIC_COMPLETED","status":"DONE","decision":"SIMULATE"}]}
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"RESOLVED"},"events":[{"sequence":3,"occurred_at":"2026-10-21T08:00:00Z","stage":"CRITIC","event_type":"CRITIC_COMPLETED","status":"DONE","decision":"SIMULATE"}]}
             return {"items":[]}
         with patch.object(self.portal,"get_json",side_effect=get):
             result=self.portal.demo_run_detail("RUN-DEMO")
