@@ -69,3 +69,17 @@ release integrator must qualify compatibility, not silently downgrade.
 A real Core/Portal/PostgreSQL 16 CI test persists an `ALLOW/PASS` row
 for a synthetic Run to verify the refusal. **This does not execute Policy,
 attest tenant RBAC, authorize LIVE or prove SAN→Payments causality.**
+
+
+## Malformed viewer Bearer fence — 2026-10-29 03:22 CET
+
+The viewer-authenticated endpoint rejects non-ASCII Bearer values, values
+longer than 256 characters, and values containing whitespace with HTTP 401
+`{"status":"UNKNOWN","reason":"unauthorized"}` and `Cache-Control: no-store`,
+**before** Core HTTP I/O. In particular, Unicode credentials must not
+trigger an uncaught `hmac.compare_digest` exception or a 500. Viewer
+configuration failures still return 503; valid viewer credentials remain
+separate from the internal Core token. Unit tests assert zero Core requests;
+the existing `quality.yml` runs a real ephemeral Portal HTTP regression.
+No JSON response schema or endpoint is changed. This is input-hardening,
+**not** tenant RBAC, real SAN/Payments evidence, or Debian attestation.
