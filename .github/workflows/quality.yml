@@ -147,8 +147,6 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
-      - name: Real Core PostgreSQL DEMO Policy gate observation and refusals
-        run: python -m unittest discover -s tests -p "test_core_demo_policy_real_integration.py" -v
       - name: Build real Twin container against ephemeral PostgreSQL
         run: docker build -f app/twin/Dockerfile -t aiops-twin-impact-ci:local app
       - name: Start real Twin HTTP container (no production access)
@@ -199,6 +197,8 @@ jobs:
               print(Path("/tmp/aiops-policy-ci.log").read_text()[-3000:])
               raise SystemExit("BLOCKED: actual Policy HTTP not ready")
           PY
+      - name: Real Core PostgreSQL DEMO Policy gate observation and refusals
+        run: python -m unittest discover -s tests -p "test_core_demo_policy_real_integration.py" -v
       - name: Real Policy HTTP SIMULATE and LIVE refusal regression
         run: python -m unittest discover -s tests -p "test_policy_real_http_integration.py" -v
       - name: Stop ephemeral Core and Policy
