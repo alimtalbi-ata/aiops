@@ -50,3 +50,7 @@ Comparaison Git stable → #153 : **ahead 39, behind 0**, mais contient Policy, 
 - [quality.yml PR #40844679204](https://github.com/alimtalbi-ata/aiops/actions/runs/40844679204) et [push #40844670708](https://github.com/alimtalbi-ata/aiops/actions/runs/40844670708) : **completed/success sur ce SHA**, trois jobs SUCCESS chacun. Logs du job policy-and-static PR : **13/13 tests Evidence/agrégateur PASS**, dont 4 nouveaux tests agrégateur, et exécution subprocess sans PYTHONPATH.
 - Fusion **uniquement dans la branche de développement de #156**, commit `fb658e3bc844b7b2f849c89f4dc2fb8c1cc7da04`. `main` et `deploy/aiops2-stable` inchangées. CI post-intégration sur HEAD Recette : PENDING au moment de cette mise à jour documentaire.
 - Tests locaux et Debian : NOT_TESTED. Aucun reçu opérateur réel, aucun rollback, aucune attestation de déploiement. **READY_FOR_STABLE=BLOCKED, overall=NO_GO**.
+
+## CI de clôture post-intégration (SHA `8158d1d`)
+- [quality.yml PR #40844936441](https://github.com/alimtalbi-ata/aiops/actions/runs/40844936441) et [push #40844928124](https://github.com/alimtalbi-ata/aiops/actions/runs/40844928124) : **completed/success**, trois jobs SUCCESS chacun sur `8158d1d0e386785a96d2b61b2e7b521561aedcbf`. Ces checks ne prouvent pas la recette terrain.
+- La présente actualisation documentaire change à nouveau le SHA de #156 ; la CI du HEAD documentaire doit donc être recontrôlée. Contrat et code inchangés. **NO-GO inchangé**.
