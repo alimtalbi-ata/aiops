@@ -43,10 +43,28 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     gate = projection["gate"]
     if projection.get("mode") not in ("DEMO", "REPLAY", "STORY") or gate.get("mode") != projection["mode"]:
         raise ValueError("mode_not_demo")
-    if projection.get("proposal_digest") != gate.get("proposal_digest") or not projection.get("proposal_digest"):
+    if (
+        projection.get("proposal_digest") != gate.get("proposal_digest")
+        or not isinstance(projection.get("proposal_digest"), str)
+        or not _HEX64.fullmatch(projection["proposal_digest"])
+    ):
         raise ValueError("proposal_binding_invalid")
     if projection.get("target_ci") != gate.get("target_ci") or not projection.get("target_ci"):
         raise ValueError("target_binding_invalid")
+    if (
+        gate.get("executor") != "NO_EFFECT_SIMULATOR"
+        or gate.get("effect_applied") is not False
+        or gate.get("postchecks") != "NOT_RUN"
+        or gate.get("rollback") != "NOT_REQUIRED"
+    ):
+        raise ValueError("gate_no_effect_contract_invalid")
+    if (
+        gate.get("recipe_id") != projection.get("recipe_id")
+        or not isinstance(gate.get("idempotency_key"), str)
+        or not _HEX64.fullmatch(gate["idempotency_key"])
+        or gate["idempotency_key"] != projection.get("idempotency_key")
+    ):
+        raise ValueError("gate_binding_invalid")
     if projection.get("effect_applied") is not False or projection.get("postchecks") != "NOT_RUN":
         raise ValueError("projection_effect_claim_forbidden")
     rollback = projection.get("rollback")
@@ -56,6 +74,13 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(before, dict) or not isinstance(after, dict) or before.get("target_ci") != projection["target_ci"] or after.get("target_ci") != projection["target_ci"]:
         raise ValueError("snapshot_binding_invalid")
     status = projection.get("status")
+    if gate.get("status") == "SIMULATED" and (
+        gate.get("dry_run") is not True
+        or gate.get("preconditions") != "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED"
+        or not isinstance(gate.get("approval_actor"), str)
+        or not gate["approval_actor"]
+    ):
+        raise ValueError("gate_fixture_invalid")
     if status in _SIMULATED and gate.get("status") == "SIMULATED":
         decision = "SIMULATE"
     elif status == "BLOCKED" and gate.get("status") == "BLOCKED" and before == after:
@@ -70,7 +95,20 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         "scenario_id": receipt["scenario_id"],
         "option": {"recipe_id": projection.get("recipe_id"), "target_ci": projection["target_ci"], "scope": "TARGET_ONLY_NOT_SAN_REMEDIATION"},
         "policy": {"decision": decision, "source": "LOCAL_NO_EFFECT_GATE", "core_policy_verified": False, "reason": projection.get("reason", gate.get("reason", "UNKNOWN"))},
-        "human": {"status": "APPROVAL_FIXTURE_ONLY" if decision == "SIMULATE" else "NO_APPROVAL_ATTESTED", "authenticated_runtime": False, "glpi_ticket_verified": False},
+        "human": {
+            "status": "APPROVAL_FIXTURE_ONLY" if decision == "SIMULATE" else "NO_APPROVAL_ATTESTED",
+            "authenticated_runtime": False, "glpi_ticket_verified": False,
+            "approval_valid_now": False, "approval_expiry_verified": False,
+        },
+        "permissions": {
+            "rbac_verified": False, "tenant_acl_qualified": False,
+            "separation_of_duties_runtime_verified": False, "action_allowed": False,
+        },
+        "audit": {
+            "source": "LOCAL_RECEIPT_FIXTURE_ONLY", "proposal_digest": projection["proposal_digest"],
+            "receipt_digest": digest, "persisted": False, "runtime_verified": False,
+            "observed_at": None,
+        },
         "before_after": {"before": dict(before), "after_hypothesis": dict(after), "observed": False, "provenance": "WHAT_IF_FIXTURE_NOT_OBSERVED"},
         "rollback": {"status": rollback.get("status", "UNKNOWN"), "executed": False, "projected_only": True},
         "risks": ["SAN_TO_PAYMENTS_CAUSALITY_UNVERIFIED", "HUMAN_APPROVAL_NOT_AUTHENTICATED", "NO_RUNTIME_POSTCHECKS", "ROLLBACK_NOT_EXECUTED"],
