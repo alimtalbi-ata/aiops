@@ -26,3 +26,9 @@
 - Conserver la PR #176 comme candidate, vérifier les 3 jobs `quality.yml` sur son SHA final et contrôler l'impact de l'authentification restrictive.
 - Recette #156 seule décide de l'assemblage et de la promotion après paquet multi-services, rollback, tests de compatibilité, recette authentifiée en lecture seule et attestation Debian horodatée `applied.sha`.
 - Prochain lot Policy/HITL : tester l'API Worker HTTP réelle contre Core/PostgreSQL éphémères, Temporal instrumenté sans effet, puis sandbox Temporal exécuté et liaison authentifiée Policy→Run→Evidence.
+
+## Qualification CI de la candidate après publication
+- SHA code/tests : `633d5085422be397ef43a2b4668a2d57a7e8b830` ; SHA candidate code + journal initial : `db9ff44f029d82199d014b72858b8ae898190238`.
+- `quality.yml` sur **ce SHA exact `db9ff44f`** : [pull_request #40844028463](https://github.com/alimtalbi-ata/aiops/actions/runs/40844028463) **SUCCESS, 3/3 jobs** ; [push #40844021192](https://github.com/alimtalbi-ata/aiops/actions/runs/40844021192) **SUCCESS, 3/3 jobs**.
+- Logs du job `policy-and-static` consultés : `test_simulation_policy_contract.py` **18/18 PASS**, y compris les deux nouveaux tests Bearer/AST. Logs `core-postgres-noc-real-integration` : **16/16** Core DEMO/Policy HTTP/PostgreSQL, **12/12** Policy HTTP, **5/5** Core NOC ; Grafana éphémère SUCCESS. Les deux tests ajoutés sont unitaires/AST, **pas** un HTTP Worker/Temporal exécuté.
+- La présente mise à jour documentaire crée un nouveau HEAD ; vérifier séparément les checks de ce HEAD avant toute qualification. La CI verte ne retire aucun blocage E2E ou Debian : **READY_FOR_STABLE=BLOCKED**.
