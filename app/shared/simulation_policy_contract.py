@@ -49,3 +49,31 @@ def validate_synthetic_gate_receipt(receipt: object, run_id: str, policy: dict) 
             or receipt.get("state") != policy.get("state")):
         raise ValueError("untrusted synthetic Core gate receipt")
     return receipt
+
+
+def validate_canonical_run_binding(response: object, args: object, *, allow_started: bool = False) -> dict:
+    """Bind a worker request to Core's canonical Run before any stage effect.
+
+    This is a consistency check under the internal service token, NOT tenant
+    RBAC, authenticated Policy provenance, or an atomic Core reservation.
+    The Core START command still enforces its own expected_version.
+    """
+    if (not isinstance(args, dict)
+            or any(type(args.get(k)) is not str or not args[k]
+                   for k in ("run_id", "mode", "scenario_id"))
+            or args["mode"] not in ("DEMO", "REPLAY", "STORY", "LIVE")
+            or type(args.get("version")) is not int or args["version"] < 1
+            or not isinstance(response, dict)
+            or not isinstance(response.get("run"), dict)):
+        raise ValueError("invalid canonical execution binding")
+    run = response["run"]
+    if (any(type(run.get(k)) is not str or run[k] != args[k]
+            for k in ("run_id", "mode", "scenario_id"))
+            or type(run.get("version")) is not int):
+        raise ValueError("canonical execution identity mismatch")
+    if allow_started:
+        if run.get("status") not in ("CREATED", "RUNNING") or run["version"] < args["version"]:
+            raise ValueError("canonical execution state mismatch")
+    elif run.get("status") != "CREATED" or run["version"] != args["version"]:
+        raise ValueError("canonical execution state mismatch")
+    return run
