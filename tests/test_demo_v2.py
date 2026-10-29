@@ -354,5 +354,60 @@ class DemoV2Tests(unittest.TestCase):
                     endpoint("RUN-DUP")
                 self.assertEqual(ctx.exception.status_code, 404)
 
+
+    def test_detail_and_poll_hide_foreign_core_run_before_gates(self):
+        from portal import main as portal_main
+        foreign = {"run": {"run_id": "RUN-OTHER", "mode": "DEMO",
+                           "status": "RESOLVED"},
+                   "events": [{"stage": "FOREIGN-EVENT"}]}
+        seen = []
+        def source(path, base=None):
+            seen.append(path)
+            if path == "/api/runs/RUN-SELECTED":
+                return foreign
+            raise AssertionError("no foreign gate/evidence reads: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-SELECTED", "mode": "DEMO", "status": "BLOCKED"}]),
+              patch.object(portal_main, "_get", side_effect=source)):
+            page = portal_main.demo_run_detail("RUN-SELECTED")
+            self.assertEqual(page.status_code, 503)
+            self.assertIn("UNKNOWN", page.body.decode("utf-8"))
+            self.assertNotIn("FOREIGN-EVENT", page.body.decode("utf-8"))
+            status = portal_main.demo_status("RUN-SELECTED")
+            self.assertEqual(status["status"], "UNKNOWN")
+            self.assertEqual(status["events"], "INCONNU")
+        self.assertEqual(seen, ["/api/runs/RUN-SELECTED"] * 2)
+
+    def test_timeline_hides_foreign_core_detail_before_evidence(self):
+        from portal import main as portal_main
+        seen = []
+        def source(path, base=None):
+            seen.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-SELECTED":
+                return {"run": {"run_id": "RUN-SELECTED", "mode": "LIVE"},
+                        "events": [{"stage": "FOREIGN-EVENT"}]}
+            raise AssertionError("no foreign evidence read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-SELECTED", "mode": "DEMO", "status": "BLOCKED"}]),
+              patch.object(portal_main, "_get", side_effect=source)):
+            page = portal_main.timeline_page(run_id="RUN-SELECTED")
+        self.assertIn("Timeline Core — UNKNOWN", page)
+        self.assertNotIn("FOREIGN-EVENT", page)
+        self.assertEqual(seen, ["/api/incidents", "/api/runs/RUN-SELECTED"])
+
+    def test_core_detail_must_match_incident_and_scenario_when_listed(self):
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-A", "mode": "DEMO",
+                  "incident_id": "INC-A", "scenario_id": "SCN-A"}
+        for field, value in (("incident_id", "INC-B"),
+                             ("scenario_id", "SCN-B")):
+            with self.subTest(field=field):
+                detail = {"run": {**listed, field: value}, "events": []}
+                self.assertFalse(portal_main._core_detail_matches_listed_run(detail, listed))
+        self.assertTrue(portal_main._core_detail_matches_listed_run(
+            {"run": listed, "events": []}, listed))
+
 if __name__ == "__main__":
     unittest.main()

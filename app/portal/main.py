@@ -76,6 +76,27 @@ def _qualified_demo_runs(rows):
             and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", row["run_id"])
             and counts[row["run_id"]] == 1]
 
+def _core_detail_matches_listed_run(detail, listed):
+    """Do not display another Core run's events, gates or evidence.
+
+    Inventory identity is a navigation hint, not proof that a later Core
+    detail response belongs to the same DEMO/REPLAY/STORY run.
+    """
+    if not isinstance(detail, dict) or not isinstance(listed, dict):
+        return False
+    run = detail.get("run")
+    if not isinstance(run, dict):
+        return False
+    if run.get("run_id") != listed.get("run_id"):
+        return False
+    if run.get("mode") != listed.get("mode") or run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
+        return False
+    for field in ("incident_id", "scenario_id"):
+        expected = listed.get(field)
+        if expected is not None and run.get(field) != expected:
+            return False
+    return True
+
 @app.get("/",response_class=HTMLResponse)
 def home():
     d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
@@ -172,6 +193,12 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         raise HTTPException(404,"run_not_in_registry")
     key=quote(selected,safe="")
     detail=_get("/api/runs/"+key)
+    if not _core_detail_matches_listed_run(detail, match):
+        content+=panel("Timeline Core — UNKNOWN",
+            "<p>Identité du détail Core non concordante avec l'inventaire DEMO. "
+            "Aucun événement, diagnostic ou Evidence n'est présenté.</p>")
+        return shell("/timeline", "Timeline des incidents",
+                     "Identité Core non qualifiée — lecture seule.", content, mode="UNKNOWN")
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     evidence_response=_get("/api/runs/"+key+"/evidence")
     evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
@@ -387,6 +414,13 @@ def demo_run_detail(rid:str):
     from urllib.parse import quote
     key=quote(rid,safe="")
     detail=_get("/api/runs/"+key)
+    if not _core_detail_matches_listed_run(detail, matched):
+        return HTMLResponse(shell("/demo-studio", "Run Core — UNKNOWN",
+            "Détail Core non concordant avec l'inventaire DEMO.",
+            panel("UNKNOWN — identité non qualifiée",
+                  "<p>Événements, Analyst/Critic, Policy et Evidence masqués : "
+                  "identité Core absente ou contradictoire.</p>"),
+            mode="UNKNOWN / READ-ONLY"), status_code=503)
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     gate=_get("/api/runs/"+key+"/gates")
     body=panel("Suivi de l'exécution",
@@ -458,9 +492,10 @@ def demo_status(rid:str):
     if not allowed:
         raise HTTPException(404,"demo_run_not_found")
     detail=_get("/api/runs/"+rid)
-    if detail.get("status")=="UNKNOWN":
-        return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
-    run=detail.get("run",{}) if isinstance(detail.get("run"),dict) else detail
+    if not _core_detail_matches_listed_run(detail, allowed):
+        return {"run_id":rid,"status":"UNKNOWN","source":"Core identity unverified",
+                "events":"INCONNU","gates":{"status":"UNKNOWN"}}
+    run=detail["run"]
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     gates=_get("/api/runs/"+rid+"/gates")
     events=detail.get("events",None)
