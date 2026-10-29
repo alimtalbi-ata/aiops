@@ -29,6 +29,8 @@ class FixtureHandler(BaseHTTPRequestHandler):
             status, content_type, payload = server.auth_status, "application/json", b'{}'
         elif self.path == "/demo-studio":
             status, content_type, payload = 200, "text/html", b"<title>ACME Demo Studio</title>"
+        elif self.path == "/demo-studio/business-story":
+            status, content_type, payload = server.story_status, "text/html", server.story_body
         else:
             status, content_type, payload = 404, "text/plain", b"not found"
         if self.path in server.redirect_paths:
@@ -52,6 +54,13 @@ class ReadOnlySmokeTests(unittest.TestCase):
             server.component = name
             server.auth_status = 401
             server.bad_health = False
+            server.story_status = 200
+            server.story_body = (
+                b'<section id="acme-step-1">ACME-SAN-FABRIC-A SIMULATED UNKNOWN</section>'
+                b'<section id="acme-step-6">PROJECTED_ONLY</section>'
+                b'<a href="/twin">Twin</a><a href="/policy-control">Policy</a>'
+                b'<a href="/evidence">Evidence</a>'
+            )
             server.redirect_paths = set()
             server.large_paths = set()
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -72,6 +81,28 @@ class ReadOnlySmokeTests(unittest.TestCase):
         self.assertEqual(result["overall"], "NO_GO")
         self.assertEqual(result["tenant_rbac"], "NOT_TESTED")
         self.assertEqual(result["run_incident_evidence_correlation"], "NOT_TESTED")
+
+    def test_story_route_is_checked_without_e2e_claim(self):
+        receipt = qualify(self.endpoints)
+        self.assertEqual(receipt["checks"]["portal_acme_business_story_navigable"], "PASS")
+        self.assertEqual(receipt["overall"], "NO_GO")
+        self.assertEqual(receipt["core_temporal_analyst_critic_policy_evidence"], "NOT_TESTED")
+
+    def test_missing_or_unqualified_business_story_blocks(self):
+        portal = self.servers[3][0]
+        portal.story_status = 404
+        self.assertEqual(qualify(self.endpoints)["checks"]["portal_acme_business_story_navigable"], "BLOCKED")
+        portal.story_status = 200
+        portal.story_body = b'<html>generic portal</html>'
+        self.assertEqual(qualify(self.endpoints)["assessment"], "BLOCKED")
+
+    def test_business_story_redirect_and_oversize_block(self):
+        portal = self.servers[3][0]
+        portal.redirect_paths.add("/demo-studio/business-story")
+        self.assertEqual(qualify(self.endpoints)["assessment"], "BLOCKED")
+        portal.redirect_paths.clear()
+        portal.large_paths.add("/demo-studio/business-story")
+        self.assertEqual(qualify(self.endpoints)["assessment"], "BLOCKED")
 
     def test_wrong_health_component_blocks(self):
         self.servers[1][0].bad_health = True

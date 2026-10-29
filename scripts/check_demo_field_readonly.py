@@ -122,6 +122,22 @@ def qualify(endpoints: dict[str, str], applied_sha_status: str = "NOT_TESTED") -
         "PASS" if code == 200 and len(body) <= LIMIT
         and "text/html" in ctype.lower() and b"ACME Demo Studio" in body else "BLOCKED"
     )
+
+    # Validate the actual six-step business route, not just the landing page.
+    # Static labels prove navigability only, NEVER runtime SAN/Payments/E2E.
+    code, ctype, body = read_http(
+        opener, bases["portal"], "/demo-studio/business-story", "text/html"
+    )
+    story_markers = (
+        b'ACME-SAN-FABRIC-A', b'id="acme-step-1"', b'id="acme-step-6"',
+        b'SIMULATED', b'UNKNOWN', b'PROJECTED_ONLY',
+        b'href="/twin"', b'href="/policy-control"', b'href="/evidence"',
+    )
+    checks["portal_acme_business_story_navigable"] = (
+        "PASS" if code == 200 and len(body) <= LIMIT
+        and "text/html" in ctype.lower()
+        and all(marker in body for marker in story_markers) else "BLOCKED"
+    )
     return {
         "schema": SCHEMA,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
