@@ -20,3 +20,8 @@
 ## Release et remise
 - **NO-GO E2E / READY_FOR_STABLE=BLOCKED** tant que CI finale, assemblage, couverture déployeur Core/Worker/Policy/Twin/Portal, rollback et smoke-tests Debian attestés ne sont pas validés.
 - Seule Recette 5/5 (#156) peut assembler et décider d'une promotion. Prochain lot : exécution Temporal sandbox sur Core/PostgreSQL/Policy éphémères, vérification du lien authentifié run_id/incident_id/evidence, puis recette post-déploiement en lecture seule et preuve `applied.sha`.
+
+## CI intermédiaire rouge et correction du fixture
+- SHA `55942df0c27f41a6b5f391088c6ac17d3cb3d901` : `quality.yml` [push #40824528371](https://github.com/alimtalbi-ata/aiops/actions/runs/40824528371) : `core-postgres-noc-real-integration` **FAILURE** sur les deux nouveaux cas ; `policy-and-static` et `grafana-real-integration` **SUCCESS**. Le job [PR #40824534411](https://github.com/alimtalbi-ata/aiops/actions/runs/40824534411) a également échoué sur Core.
+- Cause vérifiée dans les logs PostgreSQL : `column "event_key" does not exist`. Le job éphémère ne chargeait que les migrations 001 et 004, alors que les commandes Core utilisent `event_key` introduit par 008.
+- Correctif **dans le job existant** `core-postgres-noc-real-integration` de `quality.yml` : appliquer les migrations 006, 007 et 008 après 001/004. Aucune nouvelle CI, aucune migration appliquée sur Debian. Les tests du nouveau HEAD doivent être revérifiés ; ne pas masquer l'échec intermédiaire.
