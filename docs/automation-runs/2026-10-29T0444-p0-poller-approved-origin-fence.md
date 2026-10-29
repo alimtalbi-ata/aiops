@@ -36,3 +36,11 @@
 
 ## Prochain acte
 Après CI verte sur le SHA exact, remettre ce correctif à #153, puis figer une candidate unique par domaine et qualifier le déployeur couvrant tous les fichiers avant CI intégrée et recette post-déploiement read-only. Ne jamais promouvoir `deploy/aiops2-stable` sans checks verts, protections, rollback et reçus terrain.
+
+## Clôture CI et intégration ciblée (04:48 Europe/Paris)
+- PR [#179](https://github.com/alimtalbi-ata/aiops/pull/179), SHA exact de livraison `aca680d2e25efbc8c672580737df751fbfdb08fa`.
+- [quality.yml #40813964971](https://github.com/alimtalbi-ata/aiops/actions/runs/40813964971) **completed/success**, **6/6 jobs SUCCESS**. Logs du job `quality-build-package` `123250576432` consultés : **12/12 tests poller PASS** (dont refus des six remotes et positif HTTPS), **7/7 installateur PASS**, **4/4 rollback-name PASS**.
+- Workflows hérités sur le même SHA : [V2.8 #40813965075](https://github.com/alimtalbi-ata/aiops/actions/runs/40813965075), [Offline #40813964987](https://github.com/alimtalbi-ata/aiops/actions/runs/40813964987), [Historical #40813965083](https://github.com/alimtalbi-ata/aiops/actions/runs/40813965083), tous **completed/success**.
+- PR #179 fusionnée **uniquement dans la branche de développement de #153**, merge SHA `66f7b9776f7b533230541674302ab92e9e558b1a` après contrôle du HEAD, de la base et des checks verts. `main` et `deploy/aiops2-stable` inchangées par cette fusion.
+- Le contrôle de remote est une **allowlist de chaînes**, pas une attestation cryptographique de l'hôte Debian ; configuration Git locale `url.*.insteadOf`, clés SSH, certificat TLS, permissions et origine du cron restent **NOT_TESTED**.
+- CI post-merge et CI du commit de clôture documentaire : **PENDING** au moment de cette écriture. **READY_FOR_STABLE=BLOCKED / NO-GO** inchangé.
