@@ -1,5 +1,4 @@
 import os,json,html,uuid,hmac,re
-from pathlib import Path
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
@@ -213,7 +212,7 @@ def demo_studio():
     runs=_runs()
     demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
     body=panel("Démo ACME — valeur métier",
-        '<p>Six écrans de présentation hors ligne : enjeu Payments, incident SAN, diagnostic, décision SIMULATE/HITL et valeur hypothétique. Aucune action LIVE ni gain mesuré.</p>'
+        '<p>Six étapes dans le portail existant : enjeu Payments, incident SAN, diagnostic, décision SIMULATE/HITL et valeur hypothétique. Aucune action LIVE ni gain mesuré.</p>'
         '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
     body+=panel("Préflight — qualification en lecture seule",
         '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
@@ -262,8 +261,48 @@ def demo_studio():
 
 @app.get("/demo-studio/business-story",response_class=HTMLResponse)
 def demo_business_story():
-    """Serve the existing offline ACME business presentation, without Core calls."""
-    return HTMLResponse(Path(__file__).with_name("acme_business_story.html").read_text(encoding="utf-8"))
+    """Read-only ACME story in the existing portal shell; no external requests."""
+    from portal.acme_stories import get_story
+    story = get_story("PAYMENTS_SAN")
+    if not story:
+        return HTMLResponse(shell("/demo-studio", "ACME Payments", "Catalogue indisponible",
+            panel("UNKNOWN", "<p>Scénario absent.</p>"), mode="UNKNOWN / READ-ONLY"))
+    steps = [
+        ("Risque Payments", story["business_impact"], "/", "Cockpit NOC"),
+        ("Incident SAN", story["symptom"] + " — scénario, pas une mesure observée.",
+         "/timeline", "Incidents et runs Core"),
+        ("Impact Twin", "ACME-SAN-FABRIC-A → Payments : dépendance à confirmer par des arêtes sourcées.",
+         "/twin", "Dépendances Digital Twin"),
+        ("Analyst / Critic", "Hypothèse IA et critique à lire sur le même run Core ; aucune décision IA attestée par ce récit.",
+         "/timeline", "Investigation Core"),
+        ("ITSM GLPI / Policy SIMULATE / HITL",
+         "Ticket GLPI : UNKNOWN. Décision SIMULATE et approbation HITL : UNKNOWN tant que les registres authentifiés ne sont pas consultés. Aucun LIVE.",
+         "/policy-control", "Contrôles Policy"),
+        ("Evidence et valeur",
+         "Références evidence_ids : UNKNOWN ici. Avant/après : PROJECTED_ONLY, non mesuré ; bénéfices hypothétiques et rollback non exécuté.",
+         "/evidence", "Preuves disponibles"),
+    ]
+    nav = '<nav aria-label="Étapes ACME"><ol>' + "".join(
+        f'<li><a href="#acme-step-{i}">{i}. {esc(title)}</a></li>'
+        for i, (title, _, _, _) in enumerate(steps, 1)) + "</ol></nav>"
+    body = panel("ACME SAN → Payments — scénario guidé",
+        "<p><strong>SIMULATED</strong> : récit explicatif, pas un run observé. "
+        "<strong>UNKNOWN</strong> : données non attestées. "
+        "<strong>SOURCE-VERIFIED</strong> : réservé aux références contrôlées dans les écrans opérationnels. "
+        "Aucun ticket GLPI, effet LIVE, métrique ou preuve n'est fabriqué.</p>" + nav)
+    for i, (title, description, href, label) in enumerate(steps, 1):
+        body += f'<section id="acme-step-{i}">' + panel(
+            f"{i}/6 · {title}",
+            "<p><strong>SIMULATED / UNKNOWN</strong> — " + esc(description) + "</p>"
+            + '<p><a href="' + esc(href) + '">' + esc(label)
+            + " (lecture seule, statut à vérifier)</a></p>") + "</section>"
+    body += panel("Continuer dans AIOps2",
+        '<p><a href="/demo-studio">Demo Studio V2 et runs existants</a> · '
+        '<a href="/acme-stories">Catalogue ACME</a> · '
+        '<a href="/qualification">Qualification et limites</a></p>')
+    return HTMLResponse(shell("/demo-studio", "ACME Payments — parcours métier",
+        "Six étapes explicatives reliées aux écrans opérationnels existants.",
+        body, mode="SIMULATED / READ-ONLY"))
 
 @app.get("/demo-studio/run/{rid}",response_class=HTMLResponse)
 def demo_run_detail(rid:str):

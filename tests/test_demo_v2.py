@@ -106,39 +106,41 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn("Étapes DEMO — validation non attestée", page)
 
 
-    def test_acme_business_story_is_offline_and_linked_from_portal(self):
-        from pathlib import Path
-        from unittest.mock import patch
+    def test_acme_business_story_uses_existing_portal_shell_without_calls(self):
         from portal import main as portal_main
-        response = portal_main.demo_business_story()
+        with (patch.object(portal_main, "_get", side_effect=AssertionError("no upstream calls")),
+              patch.object(portal_main, "_runs", side_effect=AssertionError("no run calls"))):
+            response = portal_main.demo_business_story()
         page = response.body.decode("utf-8")
         self.assertEqual(response.media_type, "text/html")
-        self.assertEqual(page.count('short:"'), 6)
-        for marker in ("Payments", "ACME-SAN-FABRIC-A", "SIMULATE", "HITL", "illustratifs"):
+        self.assertIn('aria-label="Navigation principale"', page)
+        self.assertIn('href="/demo-studio"', page)
+        self.assertEqual(page.count('id="acme-step-'), 6)
+        for marker in ("Payments", "ACME-SAN-FABRIC-A", "Analyst / Critic",
+                       "GLPI", "SIMULATE", "HITL", "Evidence", "PROJECTED_ONLY",
+                       "SIMULATED", "SOURCE-VERIFIED", "UNKNOWN"):
             self.assertIn(marker, page)
         self.assertNotIn("fetch(", page)
-        self.assertNotIn("<script src=", page)
-        self.assertTrue(Path(portal_main.__file__).with_name("acme_business_story.html").is_file())
-        with patch.object(portal_main, "_get", return_value={}), \
-             patch.object(portal_main, "_runs", return_value=[]), \
-             patch.object(portal_main, "graph_panel", return_value=""):
+        self.assertNotIn('action="/api/', page)
+
+    def test_acme_business_story_links_and_no_standalone_html(self):
+        from pathlib import Path
+        from portal import main as portal_main
+        with (patch.object(portal_main, "_get", return_value={}),
+              patch.object(portal_main, "_runs", return_value=[]),
+              patch.object(portal_main, "graph_panel", return_value="")):
             self.assertIn('href="/demo-studio/business-story"', portal_main.home())
             self.assertIn('href="/demo-studio/business-story"', portal_main.demo_studio())
-
-    def test_acme_business_story_is_in_portal_image_transport(self):
+        self.assertFalse(Path(portal_main.__file__).with_name("acme_business_story.html").exists())
         import importlib.util
-        from pathlib import Path
         root = Path(__file__).resolve().parents[1]
-        path = root / "deploy" / "deploy-acme-p0.py"
-        spec = importlib.util.spec_from_file_location("acme_p0_deployer_story", path)
+        spec = importlib.util.spec_from_file_location(
+            "acme_p0_deployer_story", root / "deploy" / "deploy-acme-p0.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        self.assertEqual(module.classify("app/portal/acme_business_story.html", "A"),
-                         "IMAGE_TRANSPORT")
-        self.assertEqual(module.classify("app/portal/acme_business_story.html", "M"),
-                         "IMAGE_TRANSPORT")
-        self.assertIn("COPY portal /app/portal",
-                      (root / "app" / "portal" / "Dockerfile").read_text(encoding="utf-8"))
+        self.assertEqual(module.classify("app/portal/main.py", "M"), "IMAGE_TRANSPORT")
+        self.assertEqual(module.classify("app/portal/acme_business_story.html", "A"), "BLOCKED")
+
 
 if __name__ == "__main__":
     unittest.main()
