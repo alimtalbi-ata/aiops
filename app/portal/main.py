@@ -205,7 +205,22 @@ def demo_studio():
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
     runs=_runs()
     demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
-    body=panel("Préflight — qualification en lecture seule",
+    # P0 demo entry: reuse existing operational screens and Core/Twin data.
+    # This is navigation only; no fabricated GLPI ticket or runtime evidence.
+    body=panel("ACME Payments — parcours de démonstration métier",
+      '<p><strong>Enjeu :</strong> une dégradation SAN peut menacer les transactions Payments. '
+      'Le NOC doit comprendre l’impact, diagnostiquer et décider sans agir à l’aveugle.</p>'
+      '<ol><li><a href="/"><strong>Pilotage NOC</strong></a> — KPI et incidents Core</li>'
+      '<li><a href="/twin"><strong>Impact SAN → Payments</strong></a> — dépendances Digital Twin</li>'
+      '<li><a href="/timeline"><strong>Investigation et preuves</strong></a> — incidents, événements, Analyst et Critic</li>'
+      '<li><a href="/policy-control"><strong>Décision et sécurité</strong></a> — Policy et historique</li>'
+      '<li><a href="/evidence"><strong>Audit Evidence</strong></a> — traçabilité disponible</li>'
+      '<li><a href="/acme-stories"><strong>Autres scénarios métier</strong></a></li></ol>'
+      '<p><strong>ITSM / GLPI :</strong> intégration à vérifier sur la stack cible ; '
+      'aucun ticket n’est inventé par cette page.</p>'
+      '<p><strong>Valeur :</strong> relier les signaux techniques aux enjeux de continuité '
+      'des paiements et fournir une décision explicable.</p>')
+    body+=panel("Préflight — qualification en lecture seule",
         '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
         'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
         +table(["Contrôle","Résultat"],[
