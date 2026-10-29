@@ -1,0 +1,44 @@
+# 2026-10-29 00:04–00:07 Europe/Paris — RELEASE P0 NOC/Copilot — convergence Ledger
+
+## Lecture et baseline avant écriture
+- `main` HEAD consulté : `13c455256f34e5e0f0ac55146326888b0fb84c42` (ne pas confondre avec branche V2).
+- Demo Studio V2 HEAD consulté : `296ab8136efe9a9068cd6b6045236c5abc52694b`. La pile NOC #167 HEAD : `2cac214736b2a6a8eca70581537413003096baee`. Vérification refs avant modification.
+- PR ouvertes, #140–#146, #145/#149/#154/#161/#162/#167, Recette #156, Twin #168 et journaux NOC/Policy consultés ; `docs/PROJECT-CONTINUITY.md` lu. #141 fusionnée, #144 fermée non fusionnée. Ne pas recopier les contrats contradictoires de Twin/Story.
+- Comparaison GitHub : #167 et V2 avaient divergé depuis `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3` ; V2 avait 7 commits propres (Policy, tests, workflow). **Aucun merge de la pile #167 vers V2** : portage ciblé des 19 fichiers NOC/CI/docs dans un commit créé sur HEAD V2, conservant les 7 commits V2.
+
+## Livraison verticale et commits
+- Branche dédiée : `release/p0-noc-ledger-converged-20261029-0004`, base V2 SHA `296ab8136efe9a9068cd6b6045236c5abc52694b`.
+- Commit de code/tests/contrats : `360ba5713f22dc89e93f4a90919b41dce00c04e2`. 19 fichiers : `app/core/demo_evidence_read.py`, `app/core/main.py`, `app/portal/demo_ledger_read.py`, `app/portal/main.py`, `app/shared/tenant_scope.py`, `compose.yml`, `config/.env.example`, `deploy/init-env.sh`, `.github/workflows/quality.yml`, `tests/test_demo_ledger_read.py`, `tests/test_demo_ledger_real_http.py`, deux contrats `docs/demo/*LEDGER-EVIDENCE-REFS-V1.md` et six journaux historiques NOC.
+- Workflow fusionné **sans écraser** l'isolation `AIOPS_POLICY_STATE_DB` du job Policy et du release-kit de V2. Une seule CI existante `quality.yml`, pas de workflow créé ni de lancement manuel.
+- PR candidate unique **draft** : [#171](https://github.com/alimtalbi-ata/aiops/pull/171), base `feat/demo-studio-v2-delivery-20261028`. Les six PR NOC historiques restent des sources, pas six candidates indépendantes. Aucun push sur `deploy/aiops2-stable`.
+- Journal de ce passage : le présent fichier, commit documentaire distinct à lire dans l'historique de #171. Les checks du SHA final sont à qualifier séparément.
+
+## Contrats et sécurité
+- `GET /api/demo-studio/runs/{rid}/ai-ledger` : viewer Bearer `AIOPS_PORTAL_READ_TOKEN` distinct, vérifié avant I/O ; jeton interne Core jamais transmis au navigateur ; lecture seule, réponse bornée `aiops.demo-ledger-read.v1`. Auth viewer invalide -> HTTP 401 ; source/Core 401/LIVE/tenant/absence/contradiction -> 503 `UNKNOWN` no-store.
+- `GET /api/noc/runs/{rid}/evidence-refs` : Bearer interne Core avant SQL, Evidence et événement Run persistés, IDs Analysis/Critique concordants, empreinte SHA-256 et `known_at` timezone-aware non futur au-delà de 5 min. Contrat `aiops.core-demo-evidence-refs.v1`, classification `SYNTHETIC_ONLY`, `tenant_acl_qualified=false`, `runtime_attested=false`. 401 sans jeton, 503 pour données non qualifiées.
+- Refus des citations sans Evidence, dupliquées, cross-Run, hors scope tenant, d'horodatages futurs, de LIVE et de source manquante. Tests unitaires négatifs et HTTP réel avec Core/Portal/PostgreSQL 16 sont inclus.
+- La cohérence interne des références ne prouve pas le contenu d'origine, les métriques observées, une ACL tenant A/B authentifiée, un diagnostic Ollama ni l'impact Payments.
+
+## CI, recette et risques
+- **Tests exécutés dans ce passage sur le nouveau SHA** : en attente de GitHub Actions au moment du premier journal ; aucun PASS revendiqué.
+- **Résultats historiques, non transférables au nouveau SHA** : sur #167 `2cac2147`, [quality #40780596520](https://github.com/alimtalbi-ata/aiops/actions/runs/40780596520) completed/failure (database-migrations SUCCESS, quality-build-package FAIL Policy, runtime-e2e FAIL, release-kit SKIPPED) et [V2.8 #40780596545](https://github.com/alimtalbi-ata/aiops/actions/runs/40780596545) FAIL. Sur V2 base `296ab813`, [quality #40760105225](https://github.com/alimtalbi-ata/aiops/actions/runs/40760105225) SUCCESS ; ne pas en déduire que la combinaison passe.
+- **NOT_TESTED** : tests locaux, isolement tenant A/B authentifié, CI Ollama 4B avec provenance `CI_SIMULATED_LLM` (runtime E2E hérité utilise un provider déterministe et n'est pas une qualification LLM), SAN CRC/Payments p95 observés, causalité Twin, E2E Policy SIMULATE/Evidence, captures et vidéo, Debian/cron, `applied.sha`, rollback.
+- **Déploiement : BLOCKED.** Le script V2 ne copie que `demo_v2.py` et `test_demo_v2.py` et injecte `portal/main.py` ; il ne déploie ni `app/core/demo_evidence_read.py` ni les autres modules NOC/Portal. Promotion partielle = 503 volontaire, pas GO.
+- **READY_FOR_STABLE=BLOCKED / NO-GO** tant que CI globale de #171 non verte, compatibilité UI/Policy/Temporal non prouvée, couverture Core/Portal, rollback et smoke-test en lecture seule non qualifiés. Aucun accès Debian, aucune remédiation LIVE, aucun appel NGX, aucun secret prod.
+- Transfert vers [Recette 5/5 #156](https://github.com/alimtalbi-ata/aiops/pull/156) : candidate #171 uniquement, pas de push stable par owner NOC. Le schedule 5 seul décide une promotion après recette et attestation indépendante.
+
+## Prochain micro-lot
+Lire les jobs et logs de `quality.yml` et V2.8 sur le **SHA final** #171, corriger uniquement les régressions de convergence dans le même périmètre, ne pas affaiblir Policy/RBAC ; puis transmettre les résultats exacts à #156. Si CI rouge : NO-GO documenté, aucun déploiement.
+
+## Résultats CI observés et corrections de convergence — 2026-10-29 00:10–00:16 CET
+
+- Le premier portage `360ba5713f22dc89e93f4a90919b41dce00c04e2` a déclenché les workflows PR. [quality #40785014494](https://github.com/alimtalbi-ata/aiops/actions/runs/40785014494) a montré les jobs Policy/DB positifs, mais les anciens tests V2.8 attendaient encore un registre Core anonyme. [V2.8 #40785014461](https://github.com/alimtalbi-ata/aiops/actions/runs/40785014461) **FAIL** sur deux assertions `test_v28_portal_ui.py`.
+- Correctif test de non-régression `85da2f2c2d02533fde3fd6831223e4696e101902` : les deux tests UI vérifient maintenant que SSR/polling ne lisent **jamais** le Ledger protégé sans viewer, que l'UI montre le bouton viewer et `UNKNOWN`, tout en conservant événements Core et gate. [V2.8 #40785177916](https://github.com/alimtalbi-ata/aiops/actions/runs/40785177916) **completed/success**.
+- [quality #40785177761](https://github.com/alimtalbi-ata/aiops/actions/runs/40785177761) sur ce SHA : **completed/failure** malgré `quality-build-package` SUCCESS (Ledger unit **13/13**, Policy safety **15/15**), `database-migrations` SUCCESS (**10/10 HTTP** Core/Portal/PostgreSQL 16), `runtime-e2e` SUCCESS, migrations et MariaDB SUCCESS. Le job `release-kit` FAIL à l'import de `policy` : la fusion du workflow avait perdu `PYTHONPATH: app` dans le step de release, bien qu'elle ait préservé la base Policy isolée. Logs du job inspectés, aucun PASS global sur ce SHA.
+- Correctif `9619c874cf8d46d10c1c57f9bca0060f72ea3898` : restauration de `PYTHONPATH: app` **et** conservation de `AIOPS_POLICY_STATE_DB` isolée dans le step `release-kit`. Pas de modification des règles Policy ni de contournement de sécurité.
+- **Validation sur ce SHA code/tests/CI `9619c874cf8d46d10c1c57f9bca0060f72ea3898` :**
+  - [quality.yml #40785476423](https://github.com/alimtalbi-ata/aiops/actions/runs/40785476423) **completed/success**, jobs `quality-build-package`, `database-migrations`, `runtime-e2e`, `migration-runner-upgrade`, `mariadb-dr-rehearsal`, `release-kit` tous **SUCCESS**. Logs vérifiés : **13/13 Ledger unit**, **15/15 Policy safety**, **10/10 HTTP Core/Portal/PostgreSQL 16** (incluant 401 réel, Evidence absente/future et absence de fuite).
+  - [V2.8 #40785476498](https://github.com/alimtalbi-ata/aiops/actions/runs/40785476498) **completed/success** ; [Offline Integrity #40785476486](https://github.com/alimtalbi-ata/aiops/actions/runs/40785476486) **completed/success** ; [Historical Trace #40785476416](https://github.com/alimtalbi-ata/aiops/actions/runs/40785476416) **completed/success**.
+  - La CI runtime utilise le fournisseur déterministe synthétique hérité ; **ceci n'est pas une qualification Ollama 4B / Mistral 192B** ni une preuve terrain.
+- **Décision inchangée : READY_FOR_STABLE=BLOCKED / NO-GO terrain**, malgré la CI verte du SHA code. Déployeur V2 ne couvre pas Core/Portal additionnels ; isolation tenant A/B authentifiée, causalité Payments, mesures observées, smoke Debian, rollback et `applied.sha` restent **NOT_TESTED**. Recette 5/5 #156 doit assembler et décider, pas le propriétaire NOC.
+- Ce complément est un commit documentaire ultérieur : ses checks doivent être lus sur son propre SHA, ne pas extrapoler les succès du SHA de code.

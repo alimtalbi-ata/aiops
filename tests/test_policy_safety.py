@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 
 # Keep the safety suite deterministic and isolated from production defaults.
 os.environ["AIOPS_POLICY_EMERGENCY_STOP"] = "false"
@@ -85,6 +86,18 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["decision"], "SIMULATE")
 
 
+
+    def test_emergency_stop_is_live_only_for_validated_demo(self):
+        # A DEMO request may use the EXECUTE policy verb but must never
+        # acquire LIVE-effect privileges or be misclassified as a LIVE action.
+        with patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "true"}):
+            simulated = evaluate(decision(mode="DEMO", command="EXECUTE", severity="P1"))
+            self.assertEqual(simulated["state"], "PASS")
+            self.assertEqual(simulated["decision"], "SIMULATE")
+            live = evaluate(decision(mode="LIVE", command="EXECUTE", severity="P2"))
+            self.assertEqual(live["state"], "BLOCKED")
+            self.assertEqual(live["decision"], "ESCALATE")
+            self.assertIn("EMERGENCY_STOP_ACTIVE", live["reason"])
 
     def test_demo_rejected_critic_is_blocked(self):
         output=evaluate(decision(mode="DEMO",critic_validated=False))
