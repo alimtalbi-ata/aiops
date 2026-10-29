@@ -40,3 +40,10 @@
 
 ## Prochain acte
 Vérifier la CI sur le SHA exact de la PR de ce lot; intégrer à #153 seulement après checks verts, puis figer un SHA par domaine et construire un candidat unique avec transport, rebuild/restart, rollback et recette post-déploiement read-only réels. Ne pas pousser sur `deploy/aiops2-stable` sans protections et preuves terrain.
+
+## Clôture CI et intégration (2026-10-29, après 05:45 Europe/Paris)
+- PR [#180](https://github.com/alimtalbi-ata/aiops/pull/180), SHA de livraison final `23491eab4bf6acb7f1a628d098c5b38df60de970` (un correctif intermédiaire `23491ea` restaure le séparateur de lignes Bash dans le commentaire).
+- `quality.yml` sur ce SHA: [PR run #40819493792](https://github.com/alimtalbi-ata/aiops/actions/runs/40819493792) et [push run #40819485799](https://github.com/alimtalbi-ata/aiops/actions/runs/40819485799), **16/16 check-runs SUCCESS** au total sur le commit, dont jobs qualité, migrations, runtime-e2e de CI et release-kit. Les workflows hérités sont également SUCCESS. Le job `runtime-e2e` est une qualification CI historique, **pas l'E2E métier ACME**.
+- Logs du job `quality-build-package` #123268341232 consultés: **14/14 tests poller PASS**, dont les deux nouveaux refus `.github/workflows/quality.yml` et `.github/dependabot.yml`; **7/7 installateur** et **4/4 rollback-name** PASS.
+- PR #180 fusionnée **seulement dans la branche de développement de #153**, merge SHA `0562f3eb51f4248ff2b5282d5d6592ac8d87574a`, après vérification des 16 checks verts et de la base. `main` et `deploy/aiops2-stable` non modifiées.
+- CI post-fusion et CI du présent ajout documentaire: **PENDING** à la rédaction. Aucun GO stable, aucun reçu Debian.
