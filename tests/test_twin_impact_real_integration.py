@@ -146,6 +146,35 @@ class TwinImpactRealIntegration(unittest.TestCase):
                 self.assertEqual(response.status_code, 200, response.text[:200])
         self.assertEqual(requests.get(BASE + '/health', timeout=5).status_code, 200)
 
+    def test_distinct_internal_identity_reads_but_cannot_write_synthetic_events(self):
+        # Real Twin HTTP + ephemeral PostgreSQL: Portal/Copilot use the internal
+        # service token, not necessarily the Twin administrator token.
+        internal = os.environ["AIOPS_INTERNAL_TOKEN"]
+        self.assertNotEqual(internal, TOKEN)
+        for path in ("/api/twin/summary", "/api/twin/impact/ACME-SAN-FABRIC-A",
+                     "/api/twin/graph", "/metrics"):
+            with self.subTest(path=path):
+                response = requests.get(
+                    BASE + path, headers={"Authorization": "Bearer " + internal},
+                    timeout=5, allow_redirects=False,
+                )
+                self.assertEqual(response.status_code, 200, response.text[:200])
+        denied = requests.post(
+            BASE + "/api/twin/synthetic-event",
+            json={"action": "OBSERVE", "target_node_id": "ACME-SAN-FABRIC-A",
+                  "run_id": "CI-SYNTHETIC-DENIAL"},
+            headers={"Authorization": "Bearer " + internal},
+            timeout=5, allow_redirects=False,
+        )
+        self.assertEqual(denied.status_code, 401, denied.text)
+        # Even a valid internal service credential must not grant write authority.
+        with psycopg.connect(DATABASE_URL) as c:
+            count = c.execute(
+                "select count(*) from aiops.observations "
+                "where payload::text like '%CI-SYNTHETIC-DENIAL%'"
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
+
     def test_unknown_node_and_missing_auth_fail_closed(self):
         for token in (None, "", "incorrect", TOKEN + "-extra"):
             with self.subTest(token=token):
