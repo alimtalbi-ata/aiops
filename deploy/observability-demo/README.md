@@ -43,3 +43,21 @@ Hors de cette première livraison: à cadrer séparément (licence/édition, res
 
 ## Sécurité
 Loki et Tempo n'apportent pas ici de couche d'authentification applicative. Ne jamais publier leurs ports sur le LAN. Le collector OTLP n'est accessible qu'aux membres du réseau Docker observability. Aucun changement de production, de cron, de stable ou de secrets.
+
+## Preuves terrain du 29/10/2026 (fournies par l'opérateur)
+- Les trois conteneurs ont démarré sans redémarrages; Loki et Tempo `/ready` HTTP 200.
+- Trace synthétique OTLP acceptée par collector HTTP 200 puis retrouvée dans Tempo HTTP 200: `799a76457a474559a50328da2cb02896`, span `aiops2-observability-smoke`.
+- Log synthétique OTLP accepté HTTP 200 puis retrouvé dans Loki via LogQL: `aiops2-smoke-ffb56221484f`, `MATCHES=1`, labels `service_name=aiops2-demo-validation`, `demo_synthetic=true`.
+- **Qualification limitée aux flux synthétiques**; aucune preuve d'instrumentation réelle, datasource Grafana, vue portail, conservation ni alerting.
+
+## Provisionner les datasources dans Grafana existant (optionnel, étape suivante)
+Sur l'hôte Debian, après revue du script et vérification de la disponibilité de Grafana sur le loopback `127.0.0.1:3000` :
+
+```sh
+# Depuis le checkout de cette branche, sans sudo et sans écrire le mot de passe en ligne de commande :
+python3 deploy/observability-demo/provision-grafana-datasources.py
+```
+
+Le script demande le mot de passe Grafana, utilise l'API HTTP locale, crée uniquement les datasources **AIOps2 Demo Loki** (`http://demo-loki:3100`) et **AIOps2 Demo Tempo** (`http://demo-tempo:3200`), sans les rendre par défaut. Il est idempotent et refuse de remplacer une datasource existante incompatible. Aucun redémarrage, volume, dashboard ou service de production n'est modifié. Si Grafana n'est pas exposé sur le loopback, ne pas publier de nouveau port : utiliser une méthode d'accès autorisée et sûre avant d'exécuter le script. Vérifier ensuite les deux connexions dans Grafana. Pour rollback, supprimer uniquement les deux nouvelles datasources après vérification de leur UID et des dépendances éventuelles.
+
+**Attention :** les identifiants Grafana ne doivent jamais être collés dans les tickets publics ni dans le terminal sous forme de commande avec mot de passe. Le script utilise l'authentification Basic locale; ne pas employer HTTP sur une adresse LAN.
