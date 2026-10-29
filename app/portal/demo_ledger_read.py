@@ -22,6 +22,13 @@ _SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache",
             "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 _ALLOWED_MODES = frozenset({"DEMO", "REPLAY", "STORY"})
+# Core Policy emits ALLOW only for LIVE. A synthetic read model must never
+# present an ALLOW or an action-like decision as if it were a DEMO simulation.
+# BLOCK/OBSERVE are retained for legacy synthetic ledger compatibility.
+_ALLOWED_SYNTHETIC_POLICY_DECISIONS = frozenset({
+    "SIMULATE", "HUMAN_APPROVAL", "ESCALATE", "BLOCK", "OBSERVE",
+})
+_ALLOWED_SYNTHETIC_POLICY_STATES = frozenset({"PASS", "BLOCKED", "UNKNOWN"})
 
 
 def _response(payload, status=200):
@@ -190,9 +197,13 @@ def _project(rid, detail, ledger, refs):
             if linked_analysis is None or (
                     policy_analysis is not None and linked_analysis != policy_analysis):
                 raise ValueError("policy critique outside linked analysis")
+        decision = _short(item.get("decision"), 64)
+        state = _short(item.get("state"), 64)
+        if (decision not in _ALLOWED_SYNTHETIC_POLICY_DECISIONS
+                or state not in _ALLOWED_SYNTHETIC_POLICY_STATES):
+            raise ValueError("unqualified synthetic policy disposition")
         decisions.append({"policy_decision_id": policy_id,
-                          "decision": _short(item.get("decision"), 64),
-                          "state": _short(item.get("state"), 64)})
+                          "decision": decision, "state": state})
     return {"schema": "aiops.demo-ledger-read.v1", "run_id": rid,
             "mode": run["mode"], "classification": "DEMO_CORE_RECORDED_NOT_LIVE",
             "source": "CORE_AI_LEDGER_INTERNAL_READ", "tenant_acl_qualified": False,
