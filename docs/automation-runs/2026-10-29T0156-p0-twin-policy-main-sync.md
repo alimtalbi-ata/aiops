@@ -24,3 +24,9 @@
 
 ## Prochain lot / handoff
 Le lot 5/5 [#156](https://github.com/alimtalbi-ata/aiops/pull/156) reçoit le SHA final, le lien de la CI et la conclusion réelle. Il est seul habilité à assembler/qualifier une promotion. Ne pas considérer le poller cron comme recette E2E : le déployeur actuel transporte seulement `demo_v2.py`, `test_demo_v2.py` et l'injection `main.py`.
+
+## Addendum : synchronisation et CI sur le commit intégré
+- Commit de convergence **à deux parents** `517e5f507e6188659efe280cb92beac42cbfed8b` (parents `14a8e66b705aefa264e94505f6e1f3c03121991e` et `main=27deb9b1a66faf27df8d69b137a63451f7649d80`). Branche #170 uniquement, aucun push stable.
+- [quality.yml #40797502265](https://github.com/alimtalbi-ata/aiops/actions/runs/40797502265) : **completed/success sur ce SHA**, 3/3 jobs SUCCESS ; logs du job Core/PostgreSQL consultés : **5/5 Core NOC, 10/10 Twin réel Docker/PostgreSQL 16, 14/14 Core/Policy avec crosscheck non lié au Run, 8/8 Policy HTTP SIMULATE/refus LIVE**. Jobs statique et Grafana SUCCESS.
+- Cette CI qualifie le **commit de code et de convergence** ; une éventuelle modification documentaire ultérieure doit être recontrôlée sur son propre SHA. Les tests restent sur services éphémères CI, pas Debian ni E2E métier.
+- La synchronisation supprime la divergence Git avec `main` (comparaison GitHub `ahead`, `behind=0` après merge). La PR reste draft et **READY_FOR_STABLE=BLOCKED / NO-GO**.
