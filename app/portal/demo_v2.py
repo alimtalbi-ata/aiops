@@ -185,7 +185,10 @@ def render_demo_v2(detail, ledger, gates, now=None):
             and all(isinstance(item, dict) for item in gates["items"])):
         gate_items = gates["items"]
     gate_source = (_source(gates) if gate_items is not None
-                   else "INCONNU — décisions Policy non vérifiables")
+                   else (_source(gates) + " — décisions Policy non vérifiables"
+                         if gates.get("error_type") == "HTTPError" and
+                         gates.get("http_status") in (401, 403)
+                         else "INCONNU — décisions Policy non vérifiables"))
     decisions = []
     if isinstance(gate_items, list):
         for g in gate_items:
