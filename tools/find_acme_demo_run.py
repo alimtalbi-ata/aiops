@@ -5,6 +5,7 @@ No synthetic fixture is accepted as a Core run, and no injection is performed.
 """
 import argparse
 import json
+import os
 import re
 import sys
 from urllib.error import HTTPError, URLError
@@ -21,8 +22,11 @@ RUN_REGISTRY_LIMIT = 100
 INCIDENT_REGISTRY_LIMIT = 500
 
 
-def fetch_json(base, path):
-    request = Request(base.rstrip("/") + path, headers={"Accept": "application/json"})
+def fetch_json(base, path, token=None):
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = Request(base.rstrip("/") + path, headers=headers)
     with urlopen(request, timeout=8) as response:
         if response.status != 200:
             raise ValueError("unexpected_http_status")
@@ -101,10 +105,51 @@ def qualify(base, portal, get=fetch_json):
     return {"result": "UNKNOWN", "reason": "RUN_DETAIL_MISMATCH", "run_id": None}
 
 
+
+def probe_authenticated_evidence(base, rid, token, get=fetch_json):
+    """Probe Core's bearer-protected evidence refs, without attesting tenant or runtime.
+
+    Core registry GETs are NOT auth-enforced; only this evidence endpoint
+    checks the bearer token. Never expose tokens or raw evidence in output.
+    """
+    if not token:
+        return {"status": "UNKNOWN", "reason": "TOKEN_NOT_CONFIGURED"}
+    if not isinstance(rid, str) or not RUN_ID.fullmatch(rid):
+        return {"status": "UNKNOWN", "reason": "RUN_ID_UNQUALIFIED"}
+    try:
+        response = get(base, "/api/noc/runs/" + quote(rid, safe="") + "/evidence-refs", token=token)
+    except (HTTPError, URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError):
+        return {"status": "UNKNOWN", "reason": "AUTH_EVIDENCE_READ_FAILED"}
+    items = response.get("items") if isinstance(response, dict) else None
+    if (not isinstance(response, dict)
+            or response.get("schema") != "aiops.core-demo-evidence-refs.v1"
+            or response.get("run_id") != rid
+            or response.get("classification") != "SYNTHETIC_ONLY"
+            or response.get("event_link_verified") is not True
+            or response.get("tenant_acl_qualified") is not False
+            or response.get("runtime_attested") is not False
+            or not isinstance(items, list) or not items
+            or any(not isinstance(item, dict)
+                   or not isinstance(item.get("evidence_id"), str)
+                   or not item["evidence_id"]
+                   or not isinstance(item.get("source"), str)
+                   or not item["source"]
+                   or not isinstance(item.get("known_at"), str)
+                   or not item["known_at"]
+                   or not isinstance(item.get("payload_sha256"), str)
+                   or re.fullmatch(r"[a-f0-9]{64}", item["payload_sha256"]) is None
+                   for item in items)):
+        return {"status": "UNKNOWN", "reason": "EVIDENCE_CONTRACT_MISMATCH"}
+    return {"status": "SOURCE_VERIFIED_SYNTHETIC_ONLY", "reference_count": len(items),
+            "tenant_acl_qualified": False, "runtime_attested": False}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core-url", default="http://127.0.0.1:810")
     parser.add_argument("--portal-url", default="http://127.0.0.1:7777")
+    parser.add_argument("--probe-auth-evidence", action="store_true",
+                        help="read-only bearer-protected evidence probe using AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN")
     args = parser.parse_args(argv)
     for url in (args.core_url, args.portal_url):
         parts = urlsplit(url)
@@ -114,6 +159,13 @@ def main(argv=None):
         output = qualify(args.core_url, args.portal_url)
     except (HTTPError, URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError) as exc:
         output = {"result": "UNKNOWN", "reason": "CORE_READ_FAILED", "error_type": type(exc).__name__, "run_id": None}
+    if args.probe_auth_evidence:
+        token = os.getenv("AIOPS_INTERNAL_TOKEN") or os.getenv("AIOPS_ADMIN_TOKEN")
+        output["authenticated_evidence_probe"] = (
+            probe_authenticated_evidence(args.core_url, output["run_id"], token)
+            if output.get("run_id") else {"status": "UNKNOWN", "reason": "NO_QUALIFIED_RUN"}
+        )
+        output["registry_auth_enforced"] = False
     print(json.dumps(output, sort_keys=True, ensure_ascii=False))
     return 0 if output["result"] == "SOURCE_VERIFIED_REGISTRY_ONLY" else 2
 
