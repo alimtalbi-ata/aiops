@@ -1,6 +1,7 @@
 import unittest
 
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.policy.main import Decision, app, evaluate
 
@@ -109,6 +110,35 @@ class PolicySafetyTests(unittest.TestCase):
                 self.assertEqual((result["state"], result["decision"]),
                                  ("PASS", "SIMULATE"))
 
+
+    def test_untyped_safety_assertions_are_rejected_before_evaluation(self):
+        # Pydantic bool/number coercion previously accepted caller-supplied
+        # strings such as "yes", "true" and "2" as positive proof.
+        for field, invalid in (
+            ("critic_validated", "yes"),
+            ("critic_validated", 1),
+            ("redundancy_ok", "true"),
+            ("evidence_fresh", "true"),
+            ("preconditions_verified", "yes"),
+            ("fencing_verified", 1),
+            ("human_approved", "true"),
+            ("evidence_count", "2"),
+            ("evidence_count", True),
+            ("confidence", "0.99"),
+            ("confidence", True),
+        ):
+            with self.subTest(field=field, invalid=invalid):
+                payload = decision(mode="DEMO", command="REMEDIATE").model_dump()
+                payload[field] = invalid
+                with self.assertRaises(ValidationError):
+                    Decision(**payload)
+
+    def test_typed_synthetic_assertions_keep_simulation_only(self):
+        result = evaluate(decision(mode="DEMO", command="REMEDIATE",
+                                   confidence=1, evidence_count=1,
+                                   critic_validated=True, redundancy_ok=True))
+        self.assertEqual((result["state"], result["decision"]),
+                         ("PASS", "SIMULATE"))
 
     def test_http_live_mutation_denies_forged_boolean(self):
         # Exercise the actual FastAPI/Pydantic boundary, not only evaluate().

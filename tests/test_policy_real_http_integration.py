@@ -75,6 +75,25 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
         self.assertEqual((response.json()["state"], response.json()["decision"]),
                          ("PASS", "SIMULATE"))
 
+    def test_untyped_caller_assertions_are_rejected_over_real_http(self):
+        for field, invalid in (
+            ("critic_validated", "yes"),
+            ("critic_validated", 1),
+            ("redundancy_ok", "true"),
+            ("evidence_fresh", "true"),
+            ("preconditions_verified", "yes"),
+            ("fencing_verified", 1),
+            ("human_approved", "true"),
+            ("evidence_count", "2"),
+            ("evidence_count", True),
+            ("confidence", "0.99"),
+            ("confidence", True),
+        ):
+            with self.subTest(field=field, invalid=invalid):
+                response = self.check(mode="DEMO", command="REMEDIATE",
+                                      **{field: invalid})
+                self.assertEqual(response.status_code, 422, response.text)
+
     def test_live_p1_escalates_even_with_missing_evidence(self):
         response = self.check(mode="LIVE", severity="P1", evidence_count=0,
                               command="REMEDIATE", human_approved=True)
