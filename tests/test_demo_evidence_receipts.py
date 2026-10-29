@@ -274,3 +274,25 @@ class ReleaseAggregateTests(unittest.TestCase):
                 self.assertEqual(release_main(args), 2)
             self.assertEqual(json.loads(output.getvalue())["assessment"], "BLOCKED")
             self.assertNotIn(folder, output.getvalue())
+
+    def test_aggregate_real_subprocess_cli_without_pythonpath(self):
+        import os
+        import subprocess
+        import sys
+        stable, candidate, rid, coverage, field, ledger, refs = release_fixture()
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as folder:
+            args = [sys.executable, str(root / "scripts/check_demo_release_receipts.py"),
+                    "--stable-sha", stable, "--candidate-sha", candidate, "--run-id", rid]
+            for name, data in zip(("coverage", "field", "ledger", "refs"),
+                                  (coverage, field, ledger, refs)):
+                path = Path(folder) / (name + ".json")
+                path.write_text(json.dumps(data))
+                args.extend(["--" + name + "-file", str(path)])
+            env = os.environ.copy()
+            env.pop("PYTHONPATH", None)
+            completed = subprocess.run(args, cwd=root, env=env, capture_output=True,
+                                       text=True, timeout=10)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(json.loads(completed.stdout)["overall"], "NO_GO")
+            self.assertNotIn(folder, completed.stdout + completed.stderr)
