@@ -44,3 +44,9 @@ Comparaison Git stable → #153 : **ahead 39, behind 0**, mais contient Policy, 
 | Promotion stable | **NO-GO** |
 
 **READY_FOR_STABLE=BLOCKED.** Blocage unique : aucun candidat intégré avec déployeur multi-services/rollback qualifié. Prochain acte : assembler une fois les SHA par domaine, résoudre CI UI, requalifier transport, puis CI complète et recette terrain avec reçus indépendants. Aucun accès Debian, aucune promotion stable, aucun déploiement, aucune action LIVE.
+
+## Clôture PR #183 — intégration limitée à la branche Recette
+- PR [#183](https://github.com/alimtalbi-ata/aiops/pull/183) : HEAD candidat `a3f90736b3dedb9441d73e06daa96e883ea2ee86` (correctif import CLI `41259e51bebc63048d448d76694d9dac11407ac4`, test subprocess `a3f90736b3dedb9441d73e06daa96e883ea2ee86`).
+- [quality.yml PR #40844679204](https://github.com/alimtalbi-ata/aiops/actions/runs/40844679204) et [push #40844670708](https://github.com/alimtalbi-ata/aiops/actions/runs/40844670708) : **completed/success sur ce SHA**, trois jobs SUCCESS chacun. Logs du job policy-and-static PR : **13/13 tests Evidence/agrégateur PASS**, dont 4 nouveaux tests agrégateur, et exécution subprocess sans PYTHONPATH.
+- Fusion **uniquement dans la branche de développement de #156**, commit `fb658e3bc844b7b2f849c89f4dc2fb8c1cc7da04`. `main` et `deploy/aiops2-stable` inchangées. CI post-intégration sur HEAD Recette : PENDING au moment de cette mise à jour documentaire.
+- Tests locaux et Debian : NOT_TESTED. Aucun reçu opérateur réel, aucun rollback, aucune attestation de déploiement. **READY_FOR_STABLE=BLOCKED, overall=NO_GO**.
