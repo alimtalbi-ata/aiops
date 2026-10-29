@@ -88,6 +88,23 @@ class CoreEvidenceAdapterTests(unittest.TestCase):
         self.assertEqual(receipt, self.receipt)
         self.assertEqual(core, self.core)
 
+    def test_receipt_claims_real_effect(self):
+        self.receipt["effect_applied"] = True
+        self.check_unknown(self.core, "UNSAFE_RECEIPT_CLAIMS")
+
+    def test_receipt_claims_attested_core(self):
+        self.receipt["core_run_verified"] = True
+        self.check_unknown(self.core, "UNSAFE_RECEIPT_CLAIMS")
+
+    def test_receipt_claims_persistence(self):
+        self.receipt["persisted"] = True
+        self.check_unknown(self.core, "UNSAFE_RECEIPT_CLAIMS")
+
+    def test_missing_receipt_run_identity(self):
+        self.receipt["run_id"] = None
+        self.core["run_id"] = None
+        self.check_unknown(self.core, "RECEIPT_IDENTITY_UNQUALIFIED")
+
 
 if __name__ == "__main__":
     unittest.main()
