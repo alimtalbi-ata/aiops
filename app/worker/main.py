@@ -5,8 +5,8 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
-from shared.http import post_json
-from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt
+from shared.http import post_json, get_json
+from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -15,7 +15,15 @@ STAGES=['NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC
 RETRY=RetryPolicy(initial_interval=datetime.timedelta(seconds=1),backoff_coefficient=2.0,max_interval=datetime.timedelta(seconds=10),maximum_attempts=3)
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
 @activity.defn
-async def start_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
+async def start_run(a):
+    # Re-read Core inside the activity: the HTTP preflight alone is not a binding.
+    validate_canonical_run_binding(
+        get_json(CORE, f'/api/runs/{a["run_id"]}', token=ADMIN), a,
+        allow_started=True,
+    )
+    return call('POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+                {'expected_version': a['version'],
+                 'idempotency_key': 'START-'+a['run_id'], 'command': 'START'})
 @activity.defn
 async def execute_stage(a):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
@@ -98,6 +106,18 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
  try: policy_command_for_mode(args.get('mode') if isinstance(args,dict) else None)
  except ValueError: raise HTTPException(422,'invalid execution mode')
+ # Do not start Temporal for a caller-supplied DEMO identity that points to
+ # a different canonical Core Run (notably a LIVE Run).
+ if not isinstance(args, dict) or any(k not in args for k in ('run_id', 'version', 'scenario_id')):
+  raise HTTPException(422, 'invalid execution binding')
+ try:
+  canonical = get_json(CORE, f'/api/runs/{args["run_id"]}', token=ADMIN)
+ except Exception:
+  raise HTTPException(503, 'canonical Core Run unavailable')
+ try:
+  validate_canonical_run_binding(canonical, args)
+ except ValueError:
+  raise HTTPException(409, 'canonical Core Run binding mismatch')
  c=await Client.connect(TEMP)
  try:
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
