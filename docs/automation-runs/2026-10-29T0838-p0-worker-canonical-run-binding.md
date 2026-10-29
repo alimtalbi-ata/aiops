@@ -27,3 +27,8 @@
 - **READY_FOR_STABLE=BLOCKED ; NO-GO E2E.** Aucun push `deploy/aiops2-stable`, aucune fusion, aucun SSH/Debian, aucune mutation LIVE.
 - Recette [#156](https://github.com/alimtalbi-ata/aiops/pull/156) est seule responsable de l'assemblage et de la promotion, après CI finale verte, paquet multi-services complet, compatibilité, rollback, smoke-tests authentifiés en lecture seule, et `applied.sha` terrain horodaté.
 - Prochain lot : tests d'intégration HTTP réels de `POST /api/execution/start` contre Core/PostgreSQL + faux client Temporal instrumenté (sans mutation), puis Temporal sandbox réel et liaison authentifiée Policy/Run/Evidence ; ne pas déclarer E2E sur la seule base de fixtures.
+
+## Complément de recette HTTP réelle
+- Commit test HTTP `4fe4118d78d789dadbe7b161d67d9a78f48540c8` : `tests/test_core_demo_policy_real_integration.py` ajoute un Run CREATED synthétique dans PostgreSQL 16 éphémère, lit le véritable Core HTTP, vérifie la liaison valide et refuse un Run LIVE, un RUNNING non éligible et un scénario incohérent. Nettoyage SQL existant préservé. **Aucune exécution Temporal**, aucun effet LIVE.
+- Les runs CI intermédiaires `40836931009` et `40837039650` ont leurs trois jobs SUCCESS sur des SHA précédents ; ils ne qualifient **pas** ce nouveau test ni le HEAD documentaire final.
+- CI du HEAD final : **à vérifier séparément**, ne pas promouvoir sur la base des jobs intermédiaires. Contrats API publics inchangés.
