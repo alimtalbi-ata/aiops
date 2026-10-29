@@ -43,7 +43,7 @@ class TwinImpactRealIntegration(unittest.TestCase):
         response = scrape("ci-twin-metrics-ephemeral-only")
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(response.headers["content-type"].startswith("text/plain"))
-        self.assertIn("aiops_twin_nodes 25\\n", response.text)
+        self.assertIn("aiops_twin_nodes 25\n", response.text)
         self.assertNotIn("ACME-BIZ-PAYMENTS", response.text)
         # Metrics token cannot read topology or mutate synthetic events.
         self.assertEqual(self.read("ACME-SAN-FABRIC-A", "ci-twin-metrics-ephemeral-only").status_code, 401)
