@@ -1,12 +1,14 @@
 from fastapi import FastAPI,HTTPException,Header
 from fastapi.responses import JSONResponse
 from hmac import compare_digest
+from math import isfinite
 from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 @app.get('/health')
 def health(): return {'status':'ok','component':'twin','authority':'canonical-topology'}
 @app.get('/api/twin/acme-quality')
-def acme_quality():
+def acme_quality(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     """Read-only topology integrity audit; findings aren't simulated asset states."""
     with db() as c:
         nodes=c.execute("select node_id,type,name,site,state from aiops.twin_nodes where node_id like 'ACME-%' order by node_id").fetchall()
@@ -39,18 +41,21 @@ def require_twin_read_auth(authorization: str | None) -> None:
         )
 
 @app.get('/api/twin/summary')
-def summary():
+def summary(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:
         n=c.execute('select count(*) from aiops.twin_nodes').fetchone()[0]; e=c.execute('select count(*) from aiops.twin_edges').fetchone()[0]
         by=c.execute('select type,count(*) from aiops.twin_nodes group by type order by type').fetchall()
         states=c.execute('select state,count(*) from aiops.twin_nodes group by state').fetchall()
     return {'nodes':n,'edges':e,'nodes_by_type':dict(by),'states':dict(states)}
 @app.get('/api/twin/nodes')
-def nodes():
+def nodes(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:r=c.execute('select node_id,type,name,site,state,criticality,health,confidence from aiops.twin_nodes order by type,name').fetchall()
     k=['node_id','type','name','site','state','criticality','health','confidence']; return {'items':[dict(zip(k,x)) for x in r]}
 @app.get('/api/twin/graph')
-def graph():
+def graph(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:
         ns=c.execute('select node_id,type,name,site,state,criticality,health,confidence from aiops.twin_nodes').fetchall(); es=c.execute('select edge_id,source_id,target_id,relation_type,redundancy,confidence from aiops.twin_edges').fetchall()
     nk=['node_id','type','name','site','state','criticality','health','confidence']; ek=['edge_id','source_id','target_id','relation_type','redundancy','confidence']; return {'nodes':[dict(zip(nk,x)) for x in ns],'edges':[dict(zip(ek,x)) for x in es]}
@@ -134,7 +139,8 @@ def impact(node_id: str, authorization: str | None = Header(default=None)):
     )
 
 @app.get('/api/twin/at')
-def at(known_at:str):
+def at(known_at:str, authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
     k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']; return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r]}
 import os
@@ -143,11 +149,50 @@ from shared.ids import new
 SIM_TOKEN=os.getenv('AIOPS_ADMIN_TOKEN')
 if not SIM_TOKEN: raise RuntimeError('AIOPS_ADMIN_TOKEN must be configured')
 class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:dict={};run_id:str|None=None
+def _finite_json_number(value: object) -> bool:
+    # JSON booleans are integers in Python but are not measurements.
+    if type(value) not in (int, float):
+        return False
+    try:
+        return isfinite(value)
+    except (OverflowError, ValueError):
+        return False
+
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
-    if (authorization or '').removeprefix('Bearer ')!=SIM_TOKEN: raise HTTPException(401,'invalid token')
-    if not x.run_id: raise HTTPException(422,'run_id required')
+    # The administrator capability must use the same explicit Bearer scheme
+    # as the read endpoints; never accept a bare secret as an auth header.
+    supplied = authorization[7:] if authorization and authorization.startswith('Bearer ') else ''
+    if not supplied or not compare_digest(supplied, SIM_TOKEN):
+        raise HTTPException(401, 'invalid token',
+                            headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'})
+    if not x.run_id or not x.run_id.strip():
+        raise HTTPException(422, 'run_id required')
+    # A PASS receipt must correspond to a meaningful synthetic operation.
+    # No Core/Policy/Payments runtime outcome is asserted by this endpoint.
+    if x.action not in ('SET_STATE', 'OBSERVE'):
+        raise HTTPException(422, 'unsupported synthetic action')
+    if not x.target_node_id or not x.target_node_id.strip():
+        raise HTTPException(422, 'target_node_id required')
     with db() as c:
+        # Preserve the existing unknown-target 404 contract even when a
+        # caller supplies a malformed payload; no write precedes validation.
+        if not c.execute('select 1 from aiops.twin_nodes where node_id=%s',
+                         (x.target_node_id,)).fetchone():
+            raise HTTPException(404, 'target node not found')
+        p = x.payload
+        if x.action == 'SET_STATE':
+            if not isinstance(p.get('state'), str) or not p['state'].strip():
+                raise HTTPException(422, 'state required for synthetic SET_STATE')
+            if p.get('health') is not None and (
+                not _finite_json_number(p['health']) or not 0 <= p['health'] <= 1
+            ):
+                raise HTTPException(422, 'health must be a finite fraction')
+        else:
+            if not isinstance(p.get('metric'), str) or not p['metric'].strip():
+                raise HTTPException(422, 'metric required for synthetic OBSERVE')
+            if not _finite_json_number(p.get('value')):
+                raise HTTPException(422, 'value must be a finite number')
         if x.action=='SET_STATE' and x.target_node_id:
             p=x.payload; c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
             c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(new('FACT'),x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
