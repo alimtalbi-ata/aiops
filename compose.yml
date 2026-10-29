@@ -40,6 +40,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["811"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
