@@ -22,3 +22,26 @@
 
 ## Prochain lot
 Intégrer ce correctif à #153 après CI verte, puis figer un SHA par domaine et assembler un candidat dont le déployeur transporte/rebuild/restart/rollback chaque module réellement modifié. Exiger CI intégrée, recette read-only, attestation applied.sha et rollback sûr avant toute promotion stable.
+
+## Clôture de convergence 5/5 — 2026-10-29 vers 02:51 Europe/Paris
+- PR #175 fusionnée **uniquement dans la branche de développement de #153**, merge SHA `f202ff7b4df0a72d2882af046f51512b940e98dc` ; HEAD source #175 `9ba2845dd9b43678f0ab23504dfaba640d993939`. Ni `main` ni `deploy/aiops2-stable` modifiés. La PR #153 demeure draft et **BLOCKED**.
+- Sur le SHA exact #175, `quality.yml` [40796972747](https://github.com/alimtalbi-ata/aiops/actions/runs/40796972747) : **completed/success, 6/6 jobs** ; autres workflows hérités [40796972744](https://github.com/alimtalbi-ata/aiops/actions/runs/40796972744), [40796973585](https://github.com/alimtalbi-ata/aiops/actions/runs/40796973585), [40796972738](https://github.com/alimtalbi-ata/aiops/actions/runs/40796972738) : **completed/success**. Les 7 tests de l'installateur sont inclus dans le job quality-build-package ; aucune recette Docker terrain.
+- **CI du SHA de merge et de l'assemblage complet #153 : NOT_VERIFIED à cette écriture** ; les succès de #175 seul ne sont pas transposables automatiquement au merge. Requalifier le SHA final avant tout merge ultérieur.
+- Autres candidats consultés : UI #169 `ab7b3385392479f554fc823c47a499f0054ae92a` : `quality.yml` [40799091330](https://github.com/alimtalbi-ata/aiops/actions/runs/40799091330) **FAILURE** (quality-build-package, runtime-e2e), donc **non intégrable** ; Twin #170 `37d4a210f970a8785ae26b2dbedcf378cf368407` : [40797616879](https://github.com/alimtalbi-ata/aiops/actions/runs/40797616879) **SUCCESS** ; NOC #171 `ab91df51b0be2c87773787bb71a4fd932e8501ef` : [40800713203](https://github.com/alimtalbi-ata/aiops/actions/runs/40800713203) **SUCCESS**. Ces CI ne prouvent pas la compatibilité des lignées ni le déploiement.
+- `main` `27deb9b1a66faf27df8d69b137a63451f7649d80` ; stable `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`, **divergence 43/633 commits**. Ne pas fusionner aveuglément.
+
+### Matrice transport réellement observable dans deploy/deploy-demo-studio-v2.sh de #153
+
+| Module candidat | Copie | Build / restart | Tests | Rollback | Qualification |
+|---|---|---|---|---|---|
+| `app/portal/demo_v2.py` | oui, source portail | image et conteneur portail | unit tests V2 | source et conteneur prévus ; terrain NOT_TESTED | REVIEWABLE sous CI et recette |
+| `tests/test_demo_v2.py` | oui, source tests | par effet du rebuild portail | tests V2 | source prévue ; terrain NOT_TESTED | REVIEWABLE |
+| `app/portal/main.py` | **injection d'ancre**, pas copie complète | portail seulement | tests portail partiels | source prévue ; terrain NOT_TESTED | BLOCKED pour diff complet |
+| Core / Twin / Copilot / Policy / Evidence / Worker / SQL | **non** | **non** | **non dans le déployeur** | **non** | BLOCKED |
+| `deploy/*`, `.github/workflows/*` | scripts versionnés mais déploiement/requalification non démontrés | non applicable | CI isolée | non démontré | BLOCKED |
+
+**Risque P0 supplémentaire à traiter** : le poller #153 lit `AIOPS_DEPLOY_BRANCH` sans imposer lui-même `deploy/aiops2-stable`, bien que l'installateur #175 refuse les autres branches. Vérifier et verrouiller ce contrat au niveau du poller avant tout GO. Le poller ne qualifie pas l'E2E.
+
+**Blocage déterminant unique de release** : le déployeur actuel ne transporte pas la chaîne Core/Twin/Copilot/Policy/Evidence nécessaire au scénario SAN→Payments. `READY_FOR_STABLE=BLOCKED`, `overall=NO_GO`. `applied.sha` réel, rollback Docker Debian, auth/RBAC tenant A/B, Policy SIMULATE inter-services, corrélation `run_id/incident_id/evidence_ids`, Impact Payments, logs horodatés et smoke-tests sur SRV-DEB-05 : **NOT_TESTED**. Aucune promotion ni mutation LIVE.
+
+**Prochain acte** : verrouiller la branche au niveau du poller avec tests négatifs, corriger la CI UI #169, figer un SHA par domaine, puis construire un déployeur à couverture complète et rollback transactionnel. L'assemblage ne pourra être qualifié qu'avec `quality.yml` vert sur SHA unique et reçus terrain read-only indépendants du poller.
