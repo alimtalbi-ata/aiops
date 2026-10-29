@@ -44,9 +44,7 @@ def git(repo: Path, *args: str) -> bytes:
 
 
 def is_metadata(path: str) -> bool:
-    return (path in {"README.md", "VERSION", ".gitignore"}
-            or path.startswith(("docs/", "tests/"))
-            )
+    return path in {"README.md", "VERSION", ".gitignore"} or path.startswith(("docs/", "tests/"))
 
 
 
