@@ -37,3 +37,21 @@ git status --short
 2. Associer `run_id`, `scenario_id`, `evidence_ids`, hash de proposition et résultat de projection dans un artefact synthétique persistant, avec contrôle tenant et lecture portail.
 3. Vérifier les scénarios SAN/Payments (le catalogue actuel contient un redémarrage Linux ERP, pas de recette SAN Fabric A). Ajouter une recette SAN simulée **seulement après** examen des branches historiques et de la topologie.
 4. Tester erreurs Analyst/Critic, stale evidence, échec/rollback, GLPI et UI dans un staging Compose neuf. Aucune modification des conteneurs `aiops2-rebuild-*` sans accord et plan de retour arrière.
+
+
+## Incrément suivant — liaison offline run/evidence (29 octobre)
+
+**Livré en source** : `app/shared/acme_remediation_receipt.py` et `tests/test_acme_remediation_receipt.py`. La fonction `build_run_remediation_receipt(run,proposal,decision,preconditions,before,evidence_ids,outcome,now)` crée une enveloppe déterministe liant `run_id`, `scenario_id`, mode synthétique, hash de proposition, identifiants de preuve triés et résultat de projection. Elle rejette LIVE, un run non synthétique, une incohérence de mode, des identifiants mal formés et des preuves vides/dupliquées ; elle conserve le refus HITL/Policy du laboratoire.
+
+**Séparation cruciale** : cette enveloppe n'interroge **pas** Core ni Evidence. `core_run_verified=False`, `evidence_verified=False`, `persisted=False`, `classification=SYNTHETIC_UNVERIFIED`. Le digest est une empreinte de liaison, **pas** une signature d'authenticité. Elle ne publie pas d'API et n'effectue aucun appel réseau, SQL ou Docker. Le prochain incrément doit qualifier les références et le scope auprès de Core/Evidence et définir une persistance/read-model sûre avant exposition au portail.
+
+### Qualification à demander sur Debian
+
+```bash
+python3 -m unittest discover -s tests -p 'test_acme_remediation_receipt.py' -v
+python3 -m unittest discover -s tests -p 'test_remediation_lab.py' -v
+python3 -m unittest discover -s tests -p 'test_acme_remediation_projection.py' -v
+python3 -m py_compile app/shared/acme_remediation_receipt.py
+```
+
+**Statut au commit :** code publié, tests du nouveau module **non encore exécutés** sur Debian. Les 18 tests précédents étaient PASS sur `8901ca9`. Aucun déploiement autorisé par cette livraison.
