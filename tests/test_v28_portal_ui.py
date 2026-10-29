@@ -143,6 +143,45 @@ class PortalPageContractTests(unittest.TestCase):
                 self.assertFalse(valid)
                 self.assertIn("INCONNU", label)
 
+    def test_demo_impact_scope_rejects_foreign_root_even_with_payments(self):
+        # A well-formed Twin response for SAN-B must never qualify SAN-A.
+        foreign = {"root": "ACME-SAN-FABRIC-B", "affected": [
+            {"node_id": "ACME-SAN-FABRIC-B"},
+            {"node_id": "ACME-SAN-FABRIC-A"},
+            {"node_id": "ACME-SVC-PAYMENTS"}]}
+        label, valid = self.portal._demo_impact_scope(foreign)
+        self.assertFalse(valid)
+        self.assertIn("INCONNU", label)
+
+    def test_demo_studio_foreign_twin_root_never_highlights_impact(self):
+        root = "ACME-SAN-FABRIC-A"
+        foreign = "ACME-SAN-FABRIC-B"
+        graph = {"nodes": [
+            {"node_id": root, "name": "SAN A"},
+            {"node_id": foreign, "name": "SAN B"},
+            {"node_id": "ACME-SVC-PAYMENTS", "name": "Payments"}],
+            "edges": [{"source_id": root, "target_id": "ACME-SVC-PAYMENTS"}]}
+        def getter(base, path):
+            if path == "/api/dashboard":
+                return {"status": "ok"}
+            if path == "/api/runs":
+                return {"items": []}
+            if path == "/api/twin/graph":
+                return graph
+            if path == "/api/twin/impact/" + root:
+                return {"root": foreign, "affected": [
+                    {"node_id": foreign}, {"node_id": root},
+                    {"node_id": "ACME-SVC-PAYMENTS"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=getter):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_studio()
+        self.assertIn("INCONNU — portée de l'impact Twin non vérifiable", page)
+        self.assertIn('"impact_known":false', page)
+        self.assertIn('"impact_ids":[]', page)
+        self.assertNotIn('"impact_known":true', page)
+
     def test_demo_studio_root_only_and_error_impact_do_not_claim_payments(self):
         root = "ACME-SAN-FABRIC-A"
         graph = {"nodes": [{"node_id": root, "name": "SAN"},
