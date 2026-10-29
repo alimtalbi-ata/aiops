@@ -7,8 +7,15 @@ app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 def health(): return {'status':'ok','component':'twin','authority':'canonical-topology'}
 def require_twin_read_auth(authorization: str | None) -> None:
     """Internal service auth only, not tenant RBAC."""
-    if (not authorization or not authorization.startswith('Bearer ')
-            or not compare_digest(authorization[7:], SIM_TOKEN)):
+    # Read-only service identity is distinct from the administrator's
+    # synthetic-event capability. Keep admin reads for existing callers.
+    supplied = authorization[7:] if authorization and authorization.startswith('Bearer ') else ''
+    internal = os.getenv('AIOPS_INTERNAL_TOKEN') or ''
+    authorized = bool(supplied) and (
+        compare_digest(supplied, SIM_TOKEN)
+        or (bool(internal) and compare_digest(supplied, internal))
+    )
+    if not authorized:
         raise HTTPException(
             401, 'unauthorized',
             headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'},
