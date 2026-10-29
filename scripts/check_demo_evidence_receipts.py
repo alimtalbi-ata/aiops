@@ -163,6 +163,7 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
         analyses[aid] = unique_ids(item.get("evidence_ids"))
     require(set().union(*analyses.values()) == set(reference_map), "analysis_reference_mismatch")
     critiques = set()
+    validated_critiques = set()
     for item in records(ledger.get("critiques")):
         require(set(item) == {"critique_id", "analysis_id", "model", "validated",
                               "evidence_ids", "claim_checks"}
@@ -174,6 +175,8 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
         require(cid not in critiques and aid in analyses and type(item.get("validated")) is bool,
                 "unqualified_critique")
         critiques.add(cid)
+        if item["validated"]:
+            validated_critiques.add(cid)
         cited = unique_ids(item.get("evidence_ids"))
         require(cited.issubset(analyses[aid]), "cross_analysis_evidence")
         for check in item.get("claim_checks", []):
@@ -196,6 +199,10 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
                 "unsafe_policy_disposition")
         simulate_pass |= item["decision"] == "SIMULATE" and item["state"] == "PASS"
     require(simulate_pass, "missing_recorded_simulate_pass")
+    # Necessary only: the Portal strips Policy->Critique IDs from this read model.
+    # We can reject a PASS with zero validated Critiques, but cannot independently
+    # prove which Critique the Policy row referenced. Keep origin NOT_TESTED.
+    require(bool(validated_critiques), "simulate_pass_without_validated_critique")
     return {
         "schema": SCHEMA,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
