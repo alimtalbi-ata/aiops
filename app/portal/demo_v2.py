@@ -153,7 +153,15 @@ def render_demo_v2(detail, ledger, gates, now=None):
             e.get("decision") or "—",
         ))
     last_event, last_event_label = _event_clock(events, clock) if events is not None else (None, "INCONNU — événements Core indisponibles")
-    gate_items = gates.get("items") if isinstance(gates, dict) else None
+    # A transport failure or malformed Policy envelope is not evidence of a
+    # decision, even if an upstream payload also contains plausible "items".
+    gate_items = None
+    if (isinstance(gates, dict) and gates.get("status") != "UNKNOWN"
+            and "error_type" not in gates and isinstance(gates.get("items"), list)
+            and all(isinstance(item, dict) for item in gates["items"])):
+        gate_items = gates["items"]
+    gate_source = (_source(gates) if gate_items is not None
+                   else "INCONNU — décisions Policy non vérifiables")
     decisions = []
     if isinstance(gate_items, list):
         for g in gate_items:
@@ -178,7 +186,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
             ("Identifiants de preuves référencés", len(evidence_ids) if events is not None else "INCONNU"),
             ("Observations synthétiques", "OUI — au moins un événement" if synthetic else "NON CONFIRMÉ"),
             ("Registre Analyst/Critic", _source(ledger)),
-            ("Décisions Policy", _source(gates)),
+            ("Décisions Policy", gate_source),
         ]))
     # A stale RUNNING warning needs a verifiable timestamp. Missing/malformed
     # events must not be interpreted as proof that no progress occurred.
