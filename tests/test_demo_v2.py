@@ -34,7 +34,7 @@ class DemoV2Tests(unittest.TestCase):
                          "payload": {"synthetic": True}}]}, {}, {})
         for warning in ("Étapes DEMO", "validation non attestée",
                         "approbation humaine GLPI", "remédiation effectuée",
-                        "PASS/SIMULATE", "RESOLVED n&#x27;atteste"):
+                        "PASS/SIMULATE", "RESOLVED n'atteste"):
             self.assertIn(warning, page)
         # Do not falsify the Core event itself: its original PASS stays visible.
         self.assertIn("STAGE_COMPLETED", page)
