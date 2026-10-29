@@ -74,3 +74,8 @@ Ajouter dans GitHub : date, branche et SHA, objectif DEMO, découvertes (chemins
 ## Qualification Debian — 2026-10-29, moteur de remédiation
 
 L'opérateur a synchronisé `8901ca9` et exécuté les tests offline : **10/10** tests du labo historique `test_remediation_lab.py`, **8/8** tests de projection `test_acme_remediation_projection.py`, plus **26/26** contrôles statiques `acme_offline_source_preflight.py`. `git diff --check` et `git status --short` n'ont rien signalé. **Voir les commandes, sorties et limites dans [le journal de qualification](demo/JOURNAL-QUALIFICATION-2026-10-29.md).** Ce résultat ne qualifie pas encore l'intégration Core/Temporal/GLPI/Portail, la remédiation réelle ni le déploiement. Prochaine priorité : intégrer la projection synthétique au `run_id` et à une lecture sécurisée, sans activer LIVE.
+
+
+## 2026-10-29 — Liaison de simulation à un run ACME (offline uniquement)
+
+Le module `app/shared/acme_remediation_receipt.py` et ses 10 cas de tests `tests/test_acme_remediation_receipt.py` sont publiés sur la branche prep. Il relie de façon déterministe le `run_id`, `scenario_id`, le digest de proposition, les références de preuves et la projection succès/échec, **sans** vérifier ces identifiants dans Core. L'enveloppe déclare explicitement `SYNTHETIC_UNVERIFIED`, `core_run_verified=False`, `evidence_verified=False`, `persisted=False`. Aucun endpoint, DB, Temporal, GLPI ni portail raccordé. **Tests de ce nouvel incrément non exécutés sur Debian** ; voir [le contrat et la commande de qualification](demo/IMPLEMENTATION-REMEDIATION-2026-10-29.md). Ne pas transformer cet artefact offline en preuve opérationnelle.
