@@ -182,6 +182,21 @@ class RealLedgerHttpQualification(unittest.TestCase):
         for secret in (PRIVATE, VIEWER, INTERNAL, "private_prompt"):
             self.assertNotIn(secret, response.text)
 
+    def test_real_portal_malformed_viewer_bearer_is_401(self):
+        # Real HTTP parser + Portal; no Core/DB fixture mutation.
+        for credential in ("café", "x" * 4096, VIEWER + " "):
+            with self.subTest(credential_length=len(credential)):
+                denied = requests.get(
+                    PORTAL + "/api/demo-studio/runs/" + RUN + "/ai-ledger",
+                    headers={"Authorization": "Bearer " + credential},
+                    timeout=5, allow_redirects=False)
+                self.assertEqual(denied.status_code, 401, denied.text)
+                self.assertEqual(denied.json(),
+                                 {"status": "UNKNOWN", "reason": "unauthorized"})
+                self.assertEqual(denied.headers["cache-control"], "no-store")
+                for secret in (RUN, VIEWER, INTERNAL, PRIVATE):
+                    self.assertNotIn(secret, denied.text)
+
     def test_live_and_missing_sources_fail_closed(self):
         for rid in (LIVE, "RUN-CI-LEDGER-MISSING"):
             response = self.read(PORTAL, rid=rid)
