@@ -47,6 +47,7 @@ def demo_enriched(authorization:str|None=Header(default=None)):
 
 from portal.ui_theme import shell, panel, table, pretty, esc
 from portal.twin_graph import graph_panel
+from portal.demo_v2 import render_stage_marker_warning
 
 def _get(path,base=CORE):
     try:
@@ -288,6 +289,7 @@ def demo_run_detail(rid:str):
       '<p class="muted">Données en lecture seule provenant de Core ; aucune chronologie n’est inventée.</p>'
       '<pre id="run-watch-trace" class="log">Chargement des éléments de preuve…</pre>')
     body+=panel("État canonique du run",pretty(detail))
+    body+=render_stage_marker_warning(detail)
     events=detail.get("events") if isinstance(detail.get("events"),list) else []
     rows=[(e.get("sequence","?"),e.get("occurred_at","INCONNU"),e.get("stage","INCONNU"),
            e.get("event_type","INCONNU"),e.get("status","INCONNU"),e.get("decision","INCONNU"))

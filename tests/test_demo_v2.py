@@ -66,5 +66,40 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("potentiellement bloquée", page)
 
 
+    def test_demo_route_renders_synthetic_policy_warning(self):
+        from portal import main as portal_main
+        def source(path, base=None):
+            if path == "/api/runs/RUN-ROUTE":
+                return {"run": {"run_id": "RUN-ROUTE", "mode": "DEMO", "status": "RESOLVED"},
+                        "events": [{"sequence": 1, "stage": "POLICY",
+                                    "event_type": "STAGE_COMPLETED", "status": "PASS",
+                                    "payload": {"synthetic": True}}]}
+            if path == "/api/runs/RUN-ROUTE/gates":
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(portal_main, "_runs", return_value=[
+                {"run_id": "RUN-ROUTE", "mode": "DEMO"}]), \
+             patch.object(portal_main, "_get", side_effect=source):
+            page = portal_main.demo_run_detail("RUN-ROUTE")
+        self.assertIn("Étapes DEMO — validation non attestée", page)
+        self.assertIn("POLICY ne prouve pas", page)
+        self.assertIn("STAGE_COMPLETED", page)
+
+    def test_demo_route_does_not_invent_stage_warning(self):
+        from portal import main as portal_main
+        def source(path, base=None):
+            if path == "/api/runs/RUN-ROUTE":
+                return {"run": {"run_id": "RUN-ROUTE", "mode": "DEMO", "status": "BLOCKED"},
+                        "events": [{"stage": "NORMALIZE", "event_type": "STAGE_COMPLETED",
+                                    "status": "PASS"}]}
+            if path == "/api/runs/RUN-ROUTE/gates":
+                return {"status": "UNKNOWN"}
+            raise AssertionError(path)
+        with patch.object(portal_main, "_runs", return_value=[
+                {"run_id": "RUN-ROUTE", "mode": "DEMO"}]), \
+             patch.object(portal_main, "_get", side_effect=source):
+            page = portal_main.demo_run_detail("RUN-ROUTE")
+        self.assertNotIn("Étapes DEMO — validation non attestée", page)
+
 if __name__ == "__main__":
     unittest.main()
