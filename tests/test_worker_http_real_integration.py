@@ -165,8 +165,10 @@ class WorkerRealHTTPPreflight(unittest.TestCase):
         self.assert_no_dispatch_or_core_read()
 
     def test_real_http_rejects_missing_bare_and_malformed_bearer(self):
+        # The HTTP parser normalizes trailing optional whitespace before ASGI;
+        # raw-string strictness for that case is covered by the unit helper.
         for header in (None, TOKEN, "bearer " + TOKEN,
-                       "Bearer  " + TOKEN, "Bearer " + TOKEN + " "):
+                       "Bearer  " + TOKEN):
             with self.subTest(header=repr(header)):
                 response = self.post(self.args(), header)
                 self.assertEqual(response.status_code, 401, response.text)
