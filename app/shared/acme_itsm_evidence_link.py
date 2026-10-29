@@ -108,6 +108,11 @@ def project_itsm_evidence(core_detail, ledger, signed_noc=None):
                    "evidence_ids": sorted(evidence), "classification": "SYNTHETIC_ONLY"})
     # Reuse the old signed-NOC contract: a claim is not a GLPI API read.
     if (isinstance(signed_noc, dict)
+            and signed_noc.get("schema") == "aiops.noc-runtime-envelope.v1"
+            and signed_noc.get("source_mode") == "ALLOWLISTED_HMAC_SIGNED_READ_MODEL"
+            and signed_noc.get("provenance") == "AUTHENTICATED_SOURCE_PAYLOAD_NOT_RUNTIME_ATTESTATION"
+            and signed_noc.get("production_qualified") is False
+            and signed_noc.get("ticket_provenance") == "UPSTREAM_SIGNED_CLAIM"
             and signed_noc.get("run_id") == rid
             and signed_noc.get("incident_id") == incident
             and signed_noc.get("source_payload_authenticated") is True
