@@ -1,5 +1,6 @@
 import hashlib,json,os,hmac
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel,Field
 from shared.db import db
 from shared.ids import new
@@ -21,6 +22,16 @@ class In(BaseModel):
     payload: dict = Field(default_factory=dict)
 @app.get('/health')
 def health():return {'status':'ok','component':'evidence','append_only':True}
+
+@app.get('/metrics')
+def metrics():
+    with db() as c:
+        total = c.execute('select count(*) from aiops.evidence').fetchone()[0]
+    return PlainTextResponse(
+        f'aiops_evidence_total {total}\n',
+        media_type='text/plain; version=0.0.4'
+    )
+
 @app.get('/api/evidence')
 def search(source:str|None=None,run_id:str|None=None,limit:int=100,authorization:str|None=Header(default=None)):
     authorize(authorization)

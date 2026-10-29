@@ -2,6 +2,7 @@ from typing import Literal
 import os,hmac
 
 from fastapi import FastAPI,Header,HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 try:
     from policy import autonomy_store, execution_fence
@@ -150,7 +151,7 @@ def check(x: Decision,authorization: str|None=Header(default=None)):
 
 @app.get("/metrics")
 def metrics():
-    return "aiops_policy_up 1\n"
+    return PlainTextResponse('aiops_policy_up 1\n', media_type='text/plain; version=0.0.4')
 
 
 class ModeChange(BaseModel):

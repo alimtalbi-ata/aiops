@@ -1,5 +1,6 @@
 import os,asyncio,datetime,hashlib,json,logging,uuid
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import PlainTextResponse
 from temporalio import activity
 from temporalio.client import Client
 from temporalio.worker import Worker
@@ -371,7 +372,7 @@ def health():
   raise HTTPException(503,{'status':'unavailable','component':'worker','reason':'temporal_poller_not_running'})
  return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
-def metrics(): return 'aiops_worker_up 1\n'
+def metrics(): return PlainTextResponse('aiops_worker_up 1\n', media_type='text/plain; version=0.0.4')
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')

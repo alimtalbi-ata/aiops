@@ -1,6 +1,7 @@
 import os,json,requests,datetime,hashlib,hmac
 from shared.safety import canonical_sha256, gold_set_eligible, critical_approval_complete
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel,Field
 from shared.db import db
 from core.denial_routes import register_denial_routes
@@ -76,7 +77,7 @@ def health():
 @app.get('/metrics')
 def metrics():
     with db() as c:t,r,b,res=c.execute("select count(*),count(*) filter(where status='RUNNING'),count(*) filter(where status='BLOCKED'),count(*) filter(where status='RESOLVED') from aiops.runs").fetchone()
-    return f'aiops_runs_total {t}\naiops_runs_running {r}\naiops_runs_blocked {b}\naiops_runs_resolved {res}\n'
+    return PlainTextResponse(f'aiops_runs_total {t}\naiops_runs_running {r}\naiops_runs_blocked {b}\naiops_runs_resolved {res}\n', media_type='text/plain; version=0.0.4')
 @app.get('/api/dashboard')
 def dashboard():
     with db() as c:
