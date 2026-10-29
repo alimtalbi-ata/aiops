@@ -27,3 +27,8 @@
 - **NO-GO E2E ; READY_FOR_STABLE=BLOCKED**, y compris si `quality.yml` devient vert : le déployeur V2 ne transporte pas automatiquement `app/worker/main.py`, `app/shared/simulation_policy_contract.py`, Core/Twin/Policy ni la recette multi-services. Pas de preuve Debian `applied.sha`/smoke-test ni rollback.
 - Recette 5/5 [#156](https://github.com/alimtalbi-ata/aiops/pull/156) est seule responsable de l'assemblage et de la décision de promotion. Remettre SHA final, checks exacts et cette limite de contrat après vérification.
 - Prochain lot : lier de manière authentifiée Policy/Run/Evidence, tester Temporal sandbox avec vrai Core/PostgreSQL/Policy éphémères, puis qualifier le paquet, le rollback et les smoke-tests en lecture seule. Aucun accès Debian, aucun secret, aucune mutation LIVE.
+
+## Complément de validation HTTP
+
+- Test d'intégration ajouté à `tests/test_policy_real_http_integration.py` (commit `ea6be21d3dcb988e7112af6cfc03e097484d7169`) : réponses **réelles** du service Policy HTTP éphémère pour `PASS/SIMULATE`, `BLOCKED/HUMAN_APPROVAL` et `UNKNOWN/HUMAN_APPROVAL` validées par le même garde-fou que le worker. Ce test est déjà exécuté par le job Core/PostgreSQL/Policy de `quality.yml`.
+- Ce test ne démarre **pas** Temporal et n'atteste pas une liaison authentifiée au Run ; CI sur SHA final **PENDING** jusqu'à observation des jobs. Aucun résultat Debian.
