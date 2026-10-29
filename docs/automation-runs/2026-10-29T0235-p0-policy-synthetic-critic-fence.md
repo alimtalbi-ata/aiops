@@ -19,10 +19,10 @@
 - Les 7 Runs Debian communiqués par l'utilisateur (5 BLOCKED sans gate, 1 RESOLVED/PASS/SIMULATE, 1 RUNNING ancien) **non revérifiés** : BLOCKED/MISSING ne prouve aucune cause ; RESOLVED/PASS/SIMULATE n'est pas une remédiation LIVE ; RUNNING ne prouve pas de terminaison Temporal. Impact Payments runtime et ai-ledger authentifié : NOT_TESTED.
 
 ## CI et vérifications
-- [quality.yml PR #40801431389](https://github.com/alimtalbi-ata/aiops/actions/runs/40801431389) : **QUEUED** au premier contrôle sur SHA `871c8da4`.
-- [quality.yml push #40801414267](https://github.com/alimtalbi-ata/aiops/actions/runs/40801414267) : **IN_PROGRESS** au premier contrôle sur le même SHA.
-- **Ne pas lire ces états comme PASS**. Vérifier les trois jobs et le SHA **final après ce journal** avant toute fusion ; publier la confirmation en commentaire PR et transmettre au lot #156.
-- Tests locaux sur copie du dépôt : **NOT_TESTED**. CI finale du commit de journal : **PENDING** à ce stade.
+- Code/tests SHA `871c8da4e1e1d7cc04318caa14d78a8ec09003f6` : [quality.yml PR #40801431389](https://github.com/alimtalbi-ata/aiops/actions/runs/40801431389) et [push #40801414267](https://github.com/alimtalbi-ata/aiops/actions/runs/40801414267) **completed/success, 3/3 jobs chacun**.
+- Code/tests + journal SHA `a3788a4276557ba2050d027492a7f58e0c02bc9a` : [quality.yml PR #40801471208](https://github.com/alimtalbi-ata/aiops/actions/runs/40801471208) et [push #40801466069](https://github.com/alimtalbi-ata/aiops/actions/runs/40801466069) **completed/success, 3/3 jobs chacun**.
+- Logs du SHA `a3788a4` vérifiés : **16/16** tests Policy unitaires (dont nouveaux refus), **10/10** Policy HTTP réel (dont refus et seuil), **14/14** Core/Policy/PostgreSQL 16, Grafana HTTP réel et Policy/static **PASS**. La suite vérifie des assertions synthétiques, pas une provenance Critic authentifiée.
+- Tests locaux sur copie du dépôt : **NOT_TESTED**. Après cette mise à jour documentaire, vérifier les checks sur le nouveau HEAD exact ; aucun GO avant leur résultat.
 - **NOT_TESTED** : HITL authentifié, Temporal, postchecks, rollback, Evidence E2E, tenant A/B, impact SAN→Payments runtime, déploiement Debian, `applied.sha` authentifié, smoke terrain.
 
 ## Release et remise
