@@ -190,3 +190,10 @@ Every material change must update this record and the relevant architecture/deci
 - **Pending gate:** RC1.4 full CI and cumulative artifact qualification. Do not describe RC1.4 as qualified until the `release-kit` job succeeds on the exact commit; keep RC1.3 as the last verified release candidate until then.
 - **Next priority:** run the isolated reconstruction from a fresh directory on the Debian host only after a qualified kit is available; check real inference service connectivity, Analyst/Critic grounding/abstention and policies, then advance read-only CMDB/RAG acquisition. Keep simulated evidence distinct from real evidence; do not enable LIVE remediation without independent end-to-end qualification.
 
+
+
+## 2026-10-29 — Reprise DEMO ACME et consolidation P0
+
+**Lire en premier [le relais opérationnel du 29 octobre](PROJECT-REPRISE-DEMO-2026-10-29.md)** avant toute modification ou proposition de déploiement. Ce document contient la mission produit complète, le commit `321fd5a`, les 18 tests P0 isolés, les branches, le correctif Worker/Policy, les limites de qualification, l'erreur de suivi Git, les risques sur le worktree historique et l'ordre de travail. Il complète le [runbook de démonstration historique](ACME-DEMO-RUNBOOK-V2114.md) et les [conditions de déploiement](demo/ACME-DEMO-DEPLOYMENT-GATES-20261029.md).
+
+**Focus immuable :** générateur/simulateur ACME, Smoke/Chaos, logs et topologie, Analyst/Critic, root cause justifiée, proposition **et simulation de remédiation**, Policy, ticket GLPI, communication et questions d'entreprise, portail/Grafana. Rechercher les fonctionnalités développées au cours des mois précédents dans les branches et worktrees **avant** d'en réécrire. Pas de déploiement sur le stack existant sans staging isolé, preuves E2E et rollback.
