@@ -6,7 +6,7 @@ from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
 from shared.http import post_json
-from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response
+from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -55,7 +55,10 @@ async def execute_stage(a):
         eids=[ev['evidence_id']]
         if stage=='POLICY':
             pol=validate_synthetic_policy_response(post_json(POLICY,'/api/policy/check',{'mode':mode,'command':policy_command,'severity':'P1','confidence':.94,'evidence_count':len(eids),'critic_validated':True,'redundancy_ok':True},token=ADMIN))
-            post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':eids,'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
+            gate_receipt=post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':eids,'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
+            # A successful HTTP response is not sufficient if it acknowledges
+            # a different Run, stage, or state. Never advance on ambiguity.
+            validate_synthetic_gate_receipt(gate_receipt,rid,pol)
             if pol['state']!='PASS':
                 # Core's stage event alone does not change the canonical Run status.
                 # Persist the terminal BLOCK first: if the subsequent event fails,
