@@ -114,7 +114,7 @@ def qualify(endpoints: dict[str, str], applied_sha_status: str = "NOT_TESTED") -
         )
 
     # This is a negative authorization check, not tenant-RBAC certification.
-    code, _, _ = read_http(opener, bases["core"], "/api/noc/runs/SMOKE-UNAUTH", "application/json")
+    code, _, _ = read_http(opener, bases["core"], "/api/noc/runs/SMOKE-UNAUTH/evidence-refs", "application/json")
     checks["core_anonymous_noc_denied"] = "PASS" if code == 401 else "BLOCKED"
 
     code, ctype, body = read_http(opener, bases["portal"], "/demo-studio", "text/html")

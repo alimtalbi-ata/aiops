@@ -25,7 +25,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
             payload = json.dumps({"status": "ok", "component": server.component}).encode()
             if server.bad_health:
                 payload = b'{"status":"ok","component":"wrong"}'
-        elif self.path == "/api/noc/runs/SMOKE-UNAUTH":
+        elif self.path == "/api/noc/runs/SMOKE-UNAUTH/evidence-refs":
             status, content_type, payload = server.auth_status, "application/json", b'{}'
         elif self.path == "/demo-studio":
             status, content_type, payload = 200, "text/html", b"<title>ACME Demo Studio</title>"
@@ -79,6 +79,11 @@ class ReadOnlySmokeTests(unittest.TestCase):
 
     def test_anonymous_core_200_blocks(self):
         self.servers[0][0].auth_status = 200
+        self.assertEqual(qualify(self.endpoints)["checks"]["core_anonymous_noc_denied"], "BLOCKED")
+
+    def test_anonymous_core_404_blocks(self):
+        # Unknown route is not evidence of an authorization denial.
+        self.servers[0][0].auth_status = 404
         self.assertEqual(qualify(self.endpoints)["checks"]["core_anonymous_noc_denied"], "BLOCKED")
 
     def test_anonymous_core_503_blocks(self):
