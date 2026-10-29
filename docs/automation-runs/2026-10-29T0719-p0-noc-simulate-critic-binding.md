@@ -16,3 +16,9 @@
 - **READY_FOR_STABLE=BLOCKED / NO-GO** même si CI nouvelle verte: pas de SHA intégré UI/Twin/Policy/NOC, UI rouge, transport déployeur Core/Portal/Twin/Policy/Copilot non qualifié, tenant A/B authentifié, SAN→Payments observé, diagnostic IA Ollama, Policy SIMULATE E2E, rollback, `applied.sha` et smoke Debian **NOT_TESTED**.
 - Recette 5/5 #156 seule responsable d'assembler/promouvoir. Aucun déploiement Debian, mutation production, secret, LIVE, merge ou push stable.
 - Prochain lot: vérifier `quality.yml` et checks du SHA final, transmettre à #156; owner UI/Policy doit corriger la CI rouge et lire le verdict SQL de son Run BLOCKED. La sonde post-déploiement doit rester GET loopback, fail-closed et séparée du poller.
+
+## Addendum CI vérifiée sur le SHA code + journal initial `46e56cb3fe7e352f198c0b98ee97195260ad9128`
+- [quality.yml #40828668642](https://github.com/alimtalbi-ata/aiops/actions/runs/40828668642) : **completed/success, 6/6 jobs SUCCESS**, y compris `runtime-e2e` synthétique, Core/Portal/PostgreSQL 16 et `release-kit`.
+- Logs du job `quality-build-package` : **16/16 tests Ledger** dont les refus Critique absente/non validée et **16/16 Policy safety**. Logs `database-migrations` : **13/13 tests HTTP Core/Portal/PostgreSQL 16** dont fixture `SIMULATE/PASS` avec Critique validée.
+- [V2.8 #40828668399](https://github.com/alimtalbi-ata/aiops/actions/runs/40828668399), [Offline #40828668581](https://github.com/alimtalbi-ata/aiops/actions/runs/40828668581), [Historical #40828668656](https://github.com/alimtalbi-ata/aiops/actions/runs/40828668656) : **completed/success** sur le même SHA.
+- Le présent addendum est un **nouveau commit documentaire** : ses checks doivent être vérifiés séparément avant d'annoncer la CI verte sur le HEAD final. Les résultats ci-dessus ne prouvent ni la compatibilité d'un SHA intégré ni Debian. **READY_FOR_STABLE=BLOCKED / NO-GO** inchangé.
