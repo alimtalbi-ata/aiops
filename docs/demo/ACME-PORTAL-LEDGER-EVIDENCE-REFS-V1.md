@@ -37,3 +37,16 @@ This is **not** a source/clock attestation or proof of observed metrics.
 ## Per-Analysis citation fence — 2026-10-29
 
 For each Critique, `evidence_ids` must be a subset of the `evidence_ids` of its **own** referenced Analysis, not merely of the Run-wide union. Even if no `claim_checks` entry claims `supported=true`, a Critique borrowing an Evidence ID from another Analysis fails closed with HTTP 503 `UNKNOWN` and `no-store`. A multi-Analysis ledger with correctly linked Evidence remains readable. This tightens the existing `aiops.demo-ledger-read.v1` contract without changing the response schema or the Core resolver contract. It does **not** establish tenant ACL, source truth or Policy SIMULATE attestation.
+
+## Policy linkage fence — 2026-10-29 01:27 CET
+
+Policy decisions shown in the read-only AI Ledger must have a non-null
+`analysis_id` or `critique_id` pointing to records returned **for the same Run**.
+If both are present, the Critique must belong to the referenced Analysis.
+Duplicate `policy_decision_id` values are rejected. Missing, cross-Run,
+cross-Analysis or duplicate links yield 503 `UNKNOWN` with `no-store`,
+without exposing internal IDs or credentials. The public
+`aiops.demo-ledger-read.v1` JSON schema is unchanged; this is a stricter
+fail-closed qualification, not a proof that Policy SIMULATE actually executed.
+Unit cases and real ephemeral Core/Portal/PostgreSQL 16 HTTP regression are
+added to existing `quality.yml`; results require checking the exact SHA.

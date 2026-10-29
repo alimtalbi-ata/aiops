@@ -385,5 +385,82 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertNotIn(tenant_evidence, denied.text)
 
 
+    def test_real_policy_foreign_run_links_fail_closed(self):
+        # Actual PostgreSQL foreign keys permit a Policy decision attached to
+        # one Run to cite Analysis/Critique IDs from another. The Portal must
+        # reject the resulting Core ledger, even with valid synthetic Evidence.
+        rid = "RUN-CI-LEDGER-POLICY-CROSS"
+        evid = "EVD-CI-LEDGER-POLICY-CROSS"
+        aid = "ANL-CI-LEDGER-POLICY-CROSS"
+        cid = "CRT-CI-LEDGER-POLICY-CROSS"
+        ids = [evid]
+        digest = hashlib.sha256(json.dumps(ids, separators=(",", ":")).encode()).hexdigest()
+        with psycopg.connect(DSN) as conn:
+            conn.execute(
+                "insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
+                "values(%s,'DEMO','CI-LEDGER-ISOLATED','CREATED',%s)",
+                (rid, "ci-ledger-policy-cross-run"),
+            )
+            conn.execute(
+                "insert into aiops.evidence(evidence_id,source,claim,confidence,"
+                "provenance,payload_hash,payload) values(%s,'CI_SYNTHETIC_SAN',"
+                "'Policy linkage synthetic',0.5,%s,%s,'{}'::jsonb)",
+                (evid, Jsonb({"synthetic": True, "observed": False, "run_id": rid}),
+                 hashlib.sha256(b"ci-policy-cross-evidence").hexdigest()),
+            )
+            conn.execute(
+                "insert into aiops.run_events(event_id,run_id,sequence,stage,event_type,"
+                "status,evidence_ids,payload) values(%s,%s,1,'OBSERVE','CI_SYNTHETIC',"
+                "'PASS',%s,'{}'::jsonb)",
+                ("EVT-CI-LEDGER-POLICY-CROSS", rid, Jsonb(ids)),
+            )
+            conn.execute(
+                "insert into aiops.analysis_records(analysis_id,run_id,idempotency_key,"
+                "revision,contract_version,provider,model,prompt_version,evidence_ids,"
+                "evidence_set_hash,output,confidence,status) values(%s,%s,%s,1,'2.0',"
+                "'CI_ONLY','CI_NOT_LLM','ci',%s,%s,'{}'::jsonb,0.5,'VALID')",
+                (aid, rid, "ci-ledger-policy-cross-analysis", Jsonb(ids), digest),
+            )
+            conn.execute(
+                "insert into aiops.critique_records(critique_id,idempotency_key,"
+                "analysis_id,run_id,contract_version,provider,model,validated,issues,"
+                "evidence_ids,output,diagnostic_confidence) values("
+                "%s,%s,%s,%s,'2.0','CI_ONLY','CI_NOT_LLM',false,'[]'::jsonb,"
+                "%s,%s,0.4)",
+                (cid, "ci-ledger-policy-cross-critique", aid, rid, Jsonb(ids),
+                 Jsonb({"claim_checks": []})),
+            )
+            conn.execute(
+                "insert into aiops.policy_decisions(policy_decision_id,run_id,"
+                "analysis_id,critique_id,policy_version,input_hash,decision,state)"
+                " values('POL-CI-LEDGER-LOCAL',%s,%s,%s,'2.1.0',%s,'SIMULATE','PASS')",
+                (rid, aid, cid, hashlib.sha256(b"ci-policy-local").hexdigest()),
+            )
+        # This proves only a persisted synthetic Policy record, not execution.
+        positive = self.read(PORTAL, rid=rid)
+        self.assertEqual(positive.status_code, 200, positive.text)
+        self.assertEqual(positive.json()["policy_decisions"][0]["decision"], "SIMULATE")
+        with psycopg.connect(DSN) as conn:
+            conn.execute(
+                "insert into aiops.policy_decisions(policy_decision_id,run_id,"
+                "analysis_id,critique_id,policy_version,input_hash,decision,state)"
+                " values('POL-CI-LEDGER-FOREIGN',%s,'ANL-CI-LEDGER',"
+                "'CRT-CI-LEDGER','2.1.0',%s,'SIMULATE','PASS')",
+                (rid, hashlib.sha256(b"ci-policy-foreign").hexdigest()),
+            )
+        core = requests.get(CORE + "/api/runs/" + rid + "/ai-ledger",
+                            headers={"Authorization": "Bearer " + INTERNAL},
+                            timeout=5, allow_redirects=False)
+        self.assertEqual(core.status_code, 200, core.text)
+        self.assertEqual(len(core.json()["policy_decisions"]), 2)
+        denied = self.read(PORTAL, rid=rid)
+        self.assertEqual(denied.status_code, 503, denied.text)
+        self.assertEqual(denied.json(), {"status": "UNKNOWN",
+                                         "reason": "ledger_unavailable"})
+        self.assertEqual(denied.headers["cache-control"], "no-store")
+        for private in (rid, "POL-CI-LEDGER-FOREIGN", INTERNAL, VIEWER):
+            self.assertNotIn(private, denied.text)
+
+
 if __name__ == "__main__":
     unittest.main()

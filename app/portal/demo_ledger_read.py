@@ -129,6 +129,7 @@ def _project(rid, detail, ledger, refs):
         })
     critiques = []
     critique_ids = set()
+    critique_analysis = {}
     for item in _records(ledger.get("critiques")):
         output = item.get("output")
         if not isinstance(output, dict) or not isinstance(item.get("validated"), bool):
@@ -138,6 +139,7 @@ def _project(rid, detail, ledger, refs):
         if critique_id in critique_ids or analysis_id not in analysis_evidence:
             raise ValueError("unlinked critique")
         critique_ids.add(critique_id)
+        critique_analysis[critique_id] = analysis_id
         evidence_ids = _evidence_ids(item.get("evidence_ids"))
         # A Critique may cite only Evidence from its own linked Analysis.
         # The Core resolver validates the Run-wide union, not this per-Analysis edge.
@@ -166,8 +168,29 @@ def _project(rid, detail, ledger, refs):
     expected_ids = set().union(*analysis_evidence.values()) if analysis_evidence else set()
     qualified_refs = _qualified_refs(rid, refs, expected_ids)
     decisions = []
+    policy_ids = set()
     for item in _records(ledger.get("policy_decisions")):
-        decisions.append({"policy_decision_id": _identifier(item.get("policy_decision_id")),
+        policy_id = _identifier(item.get("policy_decision_id"))
+        if policy_id in policy_ids:
+            raise ValueError("duplicate policy identity")
+        policy_ids.add(policy_id)
+        policy_analysis = item.get("analysis_id")
+        policy_critique = item.get("critique_id")
+        # Core's foreign keys permit a Policy row for this Run to reference
+        # an Analysis/Critique from another Run. Do not project such a decision.
+        if policy_analysis is None and policy_critique is None:
+            raise ValueError("unlinked policy decision")
+        if policy_analysis is not None:
+            policy_analysis = _identifier(policy_analysis)
+            if policy_analysis not in analysis_evidence:
+                raise ValueError("policy analysis outside run ledger")
+        if policy_critique is not None:
+            policy_critique = _identifier(policy_critique)
+            linked_analysis = critique_analysis.get(policy_critique)
+            if linked_analysis is None or (
+                    policy_analysis is not None and linked_analysis != policy_analysis):
+                raise ValueError("policy critique outside linked analysis")
+        decisions.append({"policy_decision_id": policy_id,
                           "decision": _short(item.get("decision"), 64),
                           "state": _short(item.get("state"), 64)})
     return {"schema": "aiops.demo-ledger-read.v1", "run_id": rid,

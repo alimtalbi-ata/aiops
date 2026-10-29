@@ -142,6 +142,51 @@ class DemoLedgerReadTests(unittest.TestCase):
         for identifier in ("ANA-2", "CRT-2", "EVD-2", VIEWER):
             self.assertNotIn(identifier, denied.body.decode())
 
+
+    def test_policy_decisions_require_same_run_analysis_and_critique(self):
+        valid = json.loads(json.dumps(LEDGER))
+        # Two analyses on one Run; a decision cannot mix their links.
+        valid["analyses"].append({**valid["analyses"][0], "analysis_id": "ANA-2"})
+        valid["critiques"].append({**valid["critiques"][0],
+                                   "critique_id": "CRT-2", "analysis_id": "ANA-2"})
+        valid["policy_decisions"] = [
+            {"policy_decision_id": "POL-1", "analysis_id": "ANA-1",
+             "critique_id": "CRT-1", "decision": "SIMULATE", "state": "PASS"},
+            {"policy_decision_id": "POL-2", "analysis_id": "ANA-2",
+             "critique_id": None, "decision": "BLOCK", "state": "BLOCKED"},
+            {"policy_decision_id": "POL-3", "analysis_id": None,
+             "critique_id": "CRT-2", "decision": "OBSERVE", "state": "PASS"},
+        ]
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, valid, REFS]):
+            allowed = self.read("Bearer " + VIEWER)
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual([x["policy_decision_id"] for x in payload(allowed)["policy_decisions"]],
+                         ["POL-1", "POL-2", "POL-3"])
+
+        def change_policy(ledger, **fields):
+            ledger["policy_decisions"][0].update(fields)
+
+        mutations = [
+            ("foreign_analysis", lambda x: change_policy(x, analysis_id="ANA-FOREIGN")),
+            ("foreign_critique", lambda x: change_policy(x, critique_id="CRT-FOREIGN")),
+            ("cross_analysis", lambda x: change_policy(x, analysis_id="ANA-2")),
+            ("no_link", lambda x: change_policy(x, analysis_id=None, critique_id=None)),
+            ("duplicate", lambda x: x["policy_decisions"].append(
+                dict(x["policy_decisions"][0]))),
+        ]
+        for name, mutate in mutations:
+            forged = json.loads(json.dumps(valid))
+            mutate(forged)
+            with self.subTest(name=name), patch(
+                    "portal.demo_ledger_read.get_json", side_effect=[DETAIL, forged, REFS]):
+                denied = self.read("Bearer " + VIEWER)
+            self.assertEqual(denied.status_code, 503)
+            self.assertEqual(payload(denied), {"status": "UNKNOWN",
+                                               "reason": "ledger_unavailable"})
+            self.assertEqual(denied.headers["cache-control"], "no-store")
+            for private in ("ANA-FOREIGN", "CRT-FOREIGN", "POL-1", VIEWER):
+                self.assertNotIn(private, denied.body.decode())
+
     def test_resolver_required_even_when_ledger_links_are_consistent(self):
         mutations = [
             ("absent", {}),
