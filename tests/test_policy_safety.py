@@ -83,6 +83,32 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["state"], "PASS")
         self.assertEqual(result["decision"], "SIMULATE")
 
+    def test_synthetic_unsafe_critic_redundancy_or_confidence_never_passes(self):
+        # DEMO remains a safe simulation, but an unqualified synthetic
+        # assessment cannot be shown to the customer as a PASS gate.
+        cases = (
+            ({"critic_validated": False}, "critic"),
+            ({"redundancy_ok": False}, "redundancy"),
+            ({"confidence": 0.89}, "confidence"),
+        )
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for changes, reason in cases:
+                with self.subTest(mode=mode, changes=changes):
+                    result = evaluate(decision(mode=mode, command="REMEDIATE",
+                                               human_approved=True, **changes))
+                    self.assertEqual((result["state"], result["decision"]),
+                                     ("BLOCKED", "HUMAN_APPROVAL"))
+                    self.assertIn(reason, result["reason"])
+                    self.assertNotEqual(result["decision"], "ALLOW")
+
+    def test_synthetic_valid_observation_still_simulates_without_live_effect(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            with self.subTest(mode=mode):
+                result = evaluate(decision(mode=mode, command="OBSERVE",
+                                           human_approved=False, confidence=0.90))
+                self.assertEqual((result["state"], result["decision"]),
+                                 ("PASS", "SIMULATE"))
+
 
     def test_http_live_mutation_denies_forged_boolean(self):
         # Exercise the actual FastAPI/Pydantic boundary, not only evaluate().
