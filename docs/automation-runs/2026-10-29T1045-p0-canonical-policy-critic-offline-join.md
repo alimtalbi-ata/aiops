@@ -31,3 +31,8 @@ Branche `fix/p0-receipt-policy-critic-canonical-20261029-1045` issue de #156 `6c
 - **Blocage unique promotion :** aucun candidat multi-services assemblé avec transport, restart, tests et rollback qualifiés ; UI #177 rouge. Prochain acte : figer les SHAs par domaine, résoudre UI, construire déployeur couvrant réellement tous les modules, CI intégrée rapide+complète, recette terrain en lecture seule et preuve Debian indépendante. Si impossible, garder une PR de revue et NO-GO.
 
 Aucune promotion stable, aucun accès Debian, aucune mutation LIVE, aucun secret.
+
+## Clôture PR #184 — CI réelle et intégration limitée à #156
+- PR [#184](https://github.com/alimtalbi-ata/aiops/pull/184), HEAD candidat `975e8b9c2e85ad7e8daeb24549563fa4bbeb04c1` ; [quality.yml #40852432365](https://github.com/alimtalbi-ata/aiops/actions/runs/40852432365) **completed/success, 3/3 jobs SUCCESS sur ce SHA exact**. Logs du job `policy-and-static` consultés : **17/17 tests Evidence/agrégateur PASS**, dont les quatre nouveaux cas ; **12/12 tests Git couverture** et **16/16 smoke fixture** également PASS. Ces tests ne prouvent pas le terrain.
+- Fusion de #184 **uniquement dans la branche de développement de #156** au SHA `33869cc0bd9874fbdcb8c458a6e776bfef676da3`, après CI verte et contrôle de base inchangée. Aucune promotion stable, aucun merge main.
+- CI post-intégration sur le HEAD Recette : **PENDING** lors de cette note. Ne pas transférer les succès du candidat à ce nouveau SHA. Tests locaux, vrais reçus opérateur, Debian, Temporal et E2E ACME : **NOT_TESTED**. `READY_FOR_STABLE=BLOCKED / NO-GO`.
