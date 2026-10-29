@@ -32,3 +32,20 @@ def validate_synthetic_policy_response(response: object) -> dict:
     } or not reason.strip():
         raise ValueError("untrusted synthetic Policy disposition")
     return response
+
+
+def validate_synthetic_gate_receipt(receipt: object, run_id: str, policy: dict) -> dict:
+    """Require Core's gate write acknowledgement to match this synthetic Run.
+
+    This is a transport acknowledgement, NOT proof of Policy provenance,
+    Evidence linkage, tenant authorization, or an executed Temporal workflow.
+    """
+    if (not isinstance(run_id, str) or not run_id
+            or not isinstance(policy, dict)
+            or not isinstance(receipt, dict)
+            or set(receipt) != {"run_id", "stage", "state"}
+            or receipt.get("run_id") != run_id
+            or receipt.get("stage") != "POLICY"
+            or receipt.get("state") != policy.get("state")):
+        raise ValueError("untrusted synthetic Core gate receipt")
+    return receipt
