@@ -74,6 +74,28 @@ class StableCoverageTests(unittest.TestCase):
         result = qualify(self.repo, self.stable, self.commit())
         self.assertEqual(result["unsupported_paths"], [".github/workflows/promote-stable.yml"])
 
+    def test_all_github_controls_match_poller_fail_closed(self):
+        # The Debian poller rejects every .github/* path, not just workflows.
+        # Offline review must never label a candidate REVIEWABLE that cron blocks.
+        paths = (
+            ".github/CODEOWNERS",
+            ".github/dependabot.yml",
+            ".github/ISSUE_TEMPLATE/bug.md",
+            ".github/workflows/promote-stable.yml",
+        )
+        for path in paths:
+            self.write(path, "# changed control\\n")
+        result = qualify(self.repo, self.stable, self.commit())
+        self.assertEqual(result["assessment"], "BLOCKED")
+        self.assertEqual(result["overall"], "NO_GO")
+        self.assertEqual(result["unsupported_paths"], sorted(paths))
+        matrix = {row["path"]: row for row in result["module_deployment_matrix"]}
+        for path in paths:
+            self.assertEqual(matrix[path]["decision"], "BLOCKED")
+            self.assertEqual(matrix[path]["category"], "RELEASE_CONTROL_REQUALIFICATION_REQUIRED")
+            self.assertEqual(matrix[path]["copy"], "NOT_QUALIFIED")
+            self.assertEqual(matrix[path]["rollback"], "NOT_QUALIFIED")
+
     def test_copy_rebuild_restart_and_rollback_matrix(self):
         self.write("app/portal/demo_v2.py", "# changed\n")
         self.write("tests/test_demo_v2.py", "# changed test\n")
