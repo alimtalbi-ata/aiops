@@ -81,6 +81,23 @@ def render_demo_v2(detail, ledger, gates):
             ("Registre Analyst/Critic", _source(ledger)),
             ("Décisions Policy", _source(gates)),
         ]))
+    # Worker stage_marker records are synthetic workflow milestones, not
+    # independent approval, remediation, verification or Policy attestations.
+    # Keep the original Core event rows unchanged for auditability.
+    demo_mode = run.get("mode") in ("DEMO", "REPLAY", "STORY")
+    stage_markers = sorted({str(e.get("stage")) for e in events or []
+                            if isinstance(e, dict)
+                            and e.get("event_type") == "STAGE_COMPLETED"
+                            and e.get("stage") in ("POLICY", "HITL", "REMEDIATE", "VERIFY")})
+    if demo_mode and stage_markers:
+        body += panel("Étapes DEMO — validation non attestée",
+            "<p>Les événements STAGE_COMPLETED/PASS affichés ci-dessous "
+            "sont des marqueurs de workflow synthétiques. Ils ne prouvent "
+            "ni approbation humaine GLPI, ni remédiation effectuée, ni "
+            "mesure de vérification. Un marqueur POLICY ne prouve pas "
+            "une décision Policy PASS/SIMULATE : consulter la gate "
+            "et les liens Analysis/Critique/Evidence correspondants. "
+            "RESOLVED n'atteste aucune action LIVE.</p>")
     if status == "RUNNING" and age_label.startswith("Ancien"):
         body += panel("Attention — exécution potentiellement bloquée",
             "<p>Core indique RUNNING, mais le démarrage est ancien. "
