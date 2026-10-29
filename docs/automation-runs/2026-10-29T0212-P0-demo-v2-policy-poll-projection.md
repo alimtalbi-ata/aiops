@@ -1,0 +1,25 @@
+# 2026-10-29 02:12 Europe/Paris — P0 UI, projection Policy unique détail + polling
+
+## Base, coordination et périmètre
+- HEAD `main` relu avant écriture : `27deb9b1a66faf27df8d69b137a63451f7649d80` ; HEAD de départ de la PR UI #169 : `1c33e459ebf91b525ebdfb696810de6a12ef9bfd`. HEAD code/tests après corrections : `d90acc9ddffdcf9545fde9dd9751c020d3cf703d`.
+- Branche dédiée existante `release/p0-demo-v2-ui-candidate-20261029-0004`, [PR draft #169](https://github.com/alimtalbi-ata/aiops/pull/169), empilée sur #166 et la pile #140→#150→#152→#158→#166 ; pas de fusion massive. Branches et PR consultées : #143 livraison V2, #145 Ledger, #146/#153 déployeur, #156 Recette 5/5, #170 Twin, #171 NOC, #174 Policy/Core, #175 cron. Journaux récents de Policy/Core et UI relus.
+- `deploy/aiops2-stable` : `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`, **non modifiée**. Aucun accès ni déploiement Debian.
+- Fichiers : `app/portal/demo_v2.py`, `app/portal/main.py`, `tests/test_v28_portal_ui.py`, présent journal.
+
+## Une micro-livraison verticale
+- Le panneau détaillé et `GET /api/demo-status/{rid}` appliquent maintenant la **même projection de gates** : un `items` Core valide est limité aux champs de lecture Policy attendus ; une réponse HTTP 401/403, `UNKNOWN`, `ERROR`, malformée ou une ligne explicitement liée à un autre `run_id` produit `status=UNKNOWN` sans afficher les décisions, métadonnées supplémentaires ni faux PASS.
+- Un vrai HTTP 401/403 reste signalé distinctement dans le panneau, avec la mention **INCONNU — décisions Policy non vérifiables**. Les gates `PASS/SIMULATE` structurellement valides restent visibles en lecture seule. Aucune qualification d'une décision Policy causale, d'un reçu Evidence ou d'un effet LIVE.
+- Contrat modifié **uniquement côté projection portail** : `/api/demo-status/{rid}` renvoie désormais `gates={"status":"UNKNOWN"}` (et, seulement si observé, `error_type="HTTPError",http_status=401|403`) pour les enveloppes invalides, au lieu de retransmettre leur corps brut. Pour une liste valide, `gates.items` est projetée sur `stage,state,decision,reason,evidence_ids,required_evidence,evaluated_at`. Endpoints Core, Policy et schémas persistés inchangés.
+- Contrat source vérifié : `app/core/main.py` retourne `{"items":[...]}` pour `GET /api/runs/{rid}/gates`. Les anciennes fixtures de test `{"decision":"..."}` ont été alignées sur ce contrat. Pas de mock présenté comme intégration E2E.
+
+## Commits, tests et CI observée
+- Commit code/tests `adf2803c0590394021eb5f4ec80479aadcc29fd6` ; corrections issues de l'exécution réelle des tests `53e698296a8102fe398663c5ec270aaad1607a71`, `d90acc9ddffdcf9545fde9dd9751c020d3cf703d`.
+- Premier run [quality #40798774854](https://github.com/alimtalbi-ata/aiops/actions/runs/40798774854) : **FAIL ciblé** sur l'assertion HTTP 401 du nouveau test ; corrigé en conservant les deux informations « HTTP 401 » et « INCONNU ».
+- [quality.yml #40798955433](https://github.com/alimtalbi-ata/aiops/actions/runs/40798955433) sur `d90acc9ddffdcf9545fde9dd9751c020d3cf703d` : logs du job `quality-build-package` réellement lus. **5/5 source auth + 16/16 Demo V2 + 31/31 portail UI = 52/52 tests ciblés PASS**, incluant les deux nouveaux tests négatif/positif. `test_policy_safety.py` : **11 échecs historiques**, donc job `quality-build-package` **FAILURE**, CI globale **non verte**. `runtime-e2e` encore **IN_PROGRESS** lors du journal ; autres jobs migrations/MariaDB terminés SUCCESS.
+- [Offline Integrity #40798955440](https://github.com/alimtalbi-ata/aiops/actions/runs/40798955440) et [Historical Trace #40798955441](https://github.com/alimtalbi-ata/aiops/actions/runs/40798955441) : SUCCESS sur ce SHA. Core qualification #40798955436 non observée sur le SHA ; vérifier [Core #40798955436](https://github.com/alimtalbi-ata/aiops/actions/runs/40798955436) avant toute décision. Aucun workflow supplémentaire créé/déclenché manuellement.
+- Tests locaux : **NOT_TESTED** (accès réseau GitHub impossible depuis le conteneur local) ; résultats CI ci-dessus seuls revendiqués. La CI du commit documentaire final devra être vérifiée séparément.
+
+## GO/NO-GO, risques, transmission
+- **BLOCKED / READY_FOR_STABLE=false / NO-GO**. CI Policy rouge ; runtime E2E non validé ; déployeur V2 #153 ne transporte pas intégralement les changements `main.py` de la pile UI. La PR #156 Recette 5/5 doit vérifier transport, rollback et compatibilité avant promotion. Les schedules 1–4 ne poussent pas sur stable.
+- **NOT_TESTED** : intégration réelle Core/Twin/Copilot/Policy/Evidence/Portal ensemble, isolation tenant runtime, impact SAN→Payments (Twin connu limité à la racine dans le rapport utilisateur), navigateur authentifié, captures, `applied.sha`, smoke-tests terrain, rollback. Le cron Debian ne valide pas E2E et aucune preuve de déploiement n'est revendiquée.
+- Prochain micro-lot : Recette 5/5 assemble une candidate transportable et qualifie le chemin de lecture SAN→Payments→AI→Policy SIMULATE→Evidence→Portal, sans supposer de causalité ou de résultat LIVE ; résoudre Policy/runtime avant toute promotion. Pas de nouvelle fonctionnalité UI.

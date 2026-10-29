@@ -135,7 +135,7 @@ class PortalPageContractTests(unittest.TestCase):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
             if path=="/api/runs/RUN-DEMO-42":return {"run":{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"},"events":[]}
             if path.endswith("/ai-ledger"):return {"analysis":"ANL-SOURCE-42","critic":"CRT-SOURCE-42"}
-            if path.endswith("/gates"):return {"decision":"SIMULATE"}
+            if path.endswith("/gates"):return {"items":[{"stage":"POLICY","decision":"SIMULATE"}]}
             raise AssertionError(path)
         with patch.object(self.portal,"get_json",side_effect=get):
             with patch.object(self.portal,"post_json",side_effect=AssertionError("read-only violation")):
@@ -193,14 +193,73 @@ class PortalPageContractTests(unittest.TestCase):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
             if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED"},"events":[{"event_type":"CRITIC_COMPLETED"}]}
             if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
-            if path.endswith("/gates"):return {"decision":"BLOCKED"}
+            if path.endswith("/gates"):return {"items":[{"stage":"POLICY","decision":"BLOCKED"}]}
             raise AssertionError(path)
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-DEMO")
         self.assertEqual(response["status"],"BLOCKED")
         self.assertEqual(response["events"][0]["event_type"],"CRITIC_COMPLETED")
         self.assertEqual(response["ledger"]["critic"],"REJECTED")
-        self.assertEqual(response["gates"]["decision"],"BLOCKED")
+        self.assertEqual(response["gates"]["items"][0]["decision"],"BLOCKED")
+
+    def test_unverified_policy_items_never_leak_in_raw_detail_or_poll(self):
+        # The renderer was already fail-closed, but the raw HTML panel and
+        # polling JSON must not re-expose an unverified forged gate.
+        for gate in (
+            {"status":"UNKNOWN","error_type":"HTTPError","http_status":401,
+             "items":[{"decision":"FORGED-POLICY-PASS"}],"secret":"DO-NOT-ECHO"},
+            {"status":"UNKNOWN","items":[{"decision":"FORGED-POLICY-PASS"}]},
+            {"items":[{"decision":"FORGED-POLICY-PASS"},None]},
+            {"status":"ERROR","items":[{"decision":"FORGED-POLICY-PASS"}]},
+            {"items":[{"run_id":"OTHER-RUN","decision":"FORGED-POLICY-PASS"}]},
+        ):
+            with self.subTest(gate=gate):
+                def get(base,path):
+                    if path=="/api/runs":
+                        return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+                    if path=="/api/runs/RUN-DEMO":
+                        return {"run":{"run_id":"RUN-DEMO","mode":"DEMO",
+                                       "status":"BLOCKED"},"events":[]}
+                    if path.endswith("/ai-ledger"):return {"items":[]}
+                    if path.endswith("/gates"):return gate
+                    raise AssertionError(path)
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    with patch.object(self.portal,"post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page=self.portal.demo_run_detail("RUN-DEMO")
+                        polled=self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn("FORGED-POLICY-PASS",page)
+                self.assertNotIn("DO-NOT-ECHO",page)
+                self.assertNotIn("FORGED-POLICY-PASS",str(polled))
+                self.assertNotIn("DO-NOT-ECHO",str(polled))
+                self.assertEqual(polled["gates"]["status"],"UNKNOWN")
+                self.assertNotIn("items",polled["gates"])
+                if gate.get("http_status")==401:
+                    self.assertIn("HTTP 401",page)
+                    self.assertEqual(polled["gates"]["http_status"],401)
+
+    def test_verified_policy_projection_preserves_simulate_and_evidence(self):
+        gate={"items":[{"stage":"POLICY","state":"PASS","decision":"SIMULATE",
+                        "reason":"synthetic only","evidence_ids":["EVD-1"],
+                        "unexpected_private":"DO-NOT-ECHO"}]}
+        def get(base,path):
+            if path=="/api/runs":
+                return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+            if path=="/api/runs/RUN-DEMO":
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO",
+                               "status":"RESOLVED"},"events":[]}
+            if path.endswith("/ai-ledger"):return {"items":[]}
+            if path.endswith("/gates"):return gate
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            page=self.portal.demo_run_detail("RUN-DEMO")
+            polled=self.portal.demo_status("RUN-DEMO")
+        self.assertIn("SIMULATE",page)
+        self.assertIn("EVD-1",page)
+        self.assertNotIn("DO-NOT-ECHO",page)
+        self.assertEqual(polled["gates"]["items"][0]["decision"],"SIMULATE")
+        self.assertEqual(polled["gates"]["items"][0]["evidence_ids"],["EVD-1"])
+        self.assertNotIn("unexpected_private",polled["gates"]["items"][0])
 
     def test_demo_missing_event_list_is_not_invented(self):
         def get(base,path):
@@ -309,6 +368,98 @@ class PortalPageContractTests(unittest.TestCase):
                 self.assertEqual(result["events"],"INCONNU")
                 self.assertEqual(result["ledger"],{"status":"UNKNOWN"})
                 self.assertEqual(calls,["/api/runs","/api/runs/RUN-DEMO"])
+
+
+    def test_tenant_identity_disagreement_blocks_detail_and_poll_before_ledger(self):
+        # Core may omit tenant_id from one projection; neither omission nor
+        # disagreement is sufficient to authorize cross-tenant evidence.
+        for listed_tenant, detail_tenant in (
+            ("TENANT-A", "TENANT-B"), ("TENANT-A", None),
+            (None, "TENANT-A"), ("", "")):
+            with self.subTest(listed=listed_tenant, detail=detail_tenant):
+                listed={"run_id":"RUN-DEMO","mode":"DEMO"}
+                detail={"run_id":"RUN-DEMO","mode":"DEMO","status":"RESOLVED"}
+                if listed_tenant is not None:
+                    listed["tenant_id"]=listed_tenant
+                if detail_tenant is not None:
+                    detail["tenant_id"]=detail_tenant
+                calls=[]
+                def get(base,path):
+                    calls.append(path)
+                    if path=="/api/runs":return {"items":[listed]}
+                    if path=="/api/runs/RUN-DEMO":
+                        return {"run":detail,"events":[{"event_type":"PRIVATE-TENANT-EVENT"}]}
+                    raise AssertionError("ledger/gates must not be read")
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    page=self.portal.demo_run_detail("RUN-DEMO")
+                    result=self.portal.demo_status("RUN-DEMO")
+                self.assertIn("Chronologie Core — INCONNU",page)
+                self.assertNotIn("PRIVATE-TENANT-EVENT",page)
+                self.assertEqual(result["source"],"CORE_IDENTITY_UNVERIFIED")
+                self.assertEqual(result["events"],"INCONNU")
+                self.assertEqual(calls,["/api/runs","/api/runs/RUN-DEMO"]*2)
+
+    def test_duplicate_core_inventory_run_id_refuses_before_detail_io(self):
+        from fastapi import HTTPException
+        calls=[]
+        def get(base,path):
+            calls.append(path)
+            if path=="/api/runs":
+                return {"items":[
+                    {"run_id":"RUN-DEMO","mode":"DEMO","tenant_id":"TENANT-A"},
+                    {"run_id":"RUN-DEMO","mode":"DEMO","tenant_id":"TENANT-B"}]}
+            raise AssertionError("ambiguous run must never trigger detail/ledger I/O")
+        with patch.object(self.portal,"get_json",side_effect=get):
+            for action in (self.portal.demo_run_detail,self.portal.demo_status):
+                with self.assertRaises(HTTPException) as ctx:
+                    action("RUN-DEMO")
+                self.assertEqual(ctx.exception.status_code,404)
+        self.assertEqual(calls,["/api/runs","/api/runs"])
+
+    def test_live_demo_run_id_collision_refuses_before_detail_or_ledger(self):
+        # A Core inventory containing the same ID in LIVE and DEMO is
+        # ambiguous even if exactly one item has an allowed demo mode.
+        from fastapi import HTTPException
+        demo={"run_id":"RUN-SHARED","mode":"DEMO","tenant_id":"TENANT-A"}
+        live={"run_id":"RUN-SHARED","mode":"LIVE","tenant_id":"TENANT-B"}
+        for inventory in ([demo,live],[live,demo]):
+            with self.subTest(modes=[r["mode"] for r in inventory]):
+                calls=[]
+                def get(base,path):
+                    calls.append(path)
+                    if path=="/api/runs":
+                        return {"items":inventory}
+                    raise AssertionError("ambiguous run must not read detail/ledger/gates")
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    for action in (self.portal.demo_run_detail,self.portal.demo_status):
+                        with self.assertRaises(HTTPException) as ctx:
+                            action("RUN-SHARED")
+                        self.assertEqual(ctx.exception.status_code,404)
+                self.assertEqual(calls,["/api/runs","/api/runs"])
+
+    def test_matching_core_tenant_preserves_read_only_demo_path(self):
+        calls=[]
+        def get(base,path):
+            calls.append(path)
+            if path=="/api/runs":
+                return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO",
+                                  "tenant_id":"TENANT-A"}]}
+            if path=="/api/runs/RUN-DEMO":
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO",
+                               "tenant_id":"TENANT-A","status":"BLOCKED"},
+                        "events":[{"sequence":1,"occurred_at":"2026-10-28T20:00:00Z",
+                                   "event_type":"SYNTHETIC-EVENT"}]}
+            if path.endswith("/ai-ledger"):return {"status":"UNKNOWN"}
+            if path.endswith("/gates"):return {"items":[]}
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            with patch.object(self.portal,"post_json",side_effect=AssertionError("write forbidden")):
+                page=self.portal.demo_run_detail("RUN-DEMO")
+                result=self.portal.demo_status("RUN-DEMO")
+        self.assertIn("Mission Control V2",page)
+        self.assertEqual(result["status"],"BLOCKED")
+        self.assertEqual(result["events"][0]["event_type"],"SYNTHETIC-EVENT")
+        self.assertEqual(len(calls),8)
 
 if __name__=="__main__":
     unittest.main()

@@ -101,10 +101,34 @@ def _ordered_events(events):
     return ordered, "COHÉRENT — ordre par séquence Core (non attesté indépendamment)", True
 
 
+def verified_policy_gates(value, expected_run_id=None):
+    """Project only Core's gates read model; never echo unverified items.
+
+    Core GET /api/runs/{rid}/gates returns an items list. Transport errors
+    can carry an attacker-controlled items field; it is not a Policy decision.
+    """
+    if (isinstance(value, dict) and value.get("status") in (None, "OK")
+            and "error_type" not in value and isinstance(value.get("items"), list)
+            and all(isinstance(item, dict) for item in value["items"])
+            and all("run_id" not in item or item["run_id"] == expected_run_id
+                    for item in value["items"])):
+        fields = ("stage", "state", "decision", "reason", "evidence_ids",
+                  "required_evidence", "evaluated_at")
+        return {"items": [{k: item[k] for k in fields if k in item}
+                          for item in value["items"]]}
+    unknown = {"status": "UNKNOWN"}
+    if (isinstance(value, dict) and value.get("error_type") == "HTTPError"
+            and type(value.get("http_status")) is int
+            and value["http_status"] in (401, 403)):
+        unknown.update(error_type="HTTPError", http_status=value["http_status"])
+    return unknown
+
+
 def render_demo_v2(detail, ledger, gates, now=None):
     """No fabricated evidence, impact, remediation or LLM decisions."""
     detail = detail if isinstance(detail, dict) else {}
     run = detail.get("run") if isinstance(detail.get("run"), dict) else detail
+    gates = verified_policy_gates(gates, run.get("run_id"))
     events = detail.get("events")
     if not isinstance(events, list):
         events = None
@@ -153,7 +177,18 @@ def render_demo_v2(detail, ledger, gates, now=None):
             e.get("decision") or "—",
         ))
     last_event, last_event_label = _event_clock(events, clock) if events is not None else (None, "INCONNU — événements Core indisponibles")
-    gate_items = gates.get("items") if isinstance(gates, dict) else None
+    # A transport failure or malformed Policy envelope is not evidence of a
+    # decision, even if an upstream payload also contains plausible "items".
+    gate_items = None
+    if (isinstance(gates, dict) and gates.get("status") != "UNKNOWN"
+            and "error_type" not in gates and isinstance(gates.get("items"), list)
+            and all(isinstance(item, dict) for item in gates["items"])):
+        gate_items = gates["items"]
+    gate_source = (_source(gates) if gate_items is not None
+                   else (_source(gates) + " ; INCONNU — décisions Policy non vérifiables"
+                         if gates.get("error_type") == "HTTPError" and
+                         gates.get("http_status") in (401, 403)
+                         else "INCONNU — décisions Policy non vérifiables"))
     decisions = []
     if isinstance(gate_items, list):
         for g in gate_items:
@@ -178,7 +213,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
             ("Identifiants de preuves référencés", len(evidence_ids) if events is not None else "INCONNU"),
             ("Observations synthétiques", "OUI — au moins un événement" if synthetic else "NON CONFIRMÉ"),
             ("Registre Analyst/Critic", _source(ledger)),
-            ("Décisions Policy", _source(gates)),
+            ("Décisions Policy", gate_source),
         ]))
     # A stale RUNNING warning needs a verifiable timestamp. Missing/malformed
     # events must not be interpreted as proof that no progress occurred.
