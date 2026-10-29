@@ -154,6 +154,7 @@ jobs:
           docker run -d --rm --name aiops-twin-impact-ci --network host \
             -e DATABASE_URL="$DATABASE_URL" \
             -e AIOPS_ADMIN_TOKEN=ci-twin-impact-ephemeral-only \
+            -e AIOPS_INTERNAL_TOKEN="$AIOPS_INTERNAL_TOKEN" \
             aiops-twin-impact-ci:local
           python - <<'PY'
           import time, urllib.request
