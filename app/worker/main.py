@@ -57,7 +57,16 @@ async def execute_stage(a):
             pol=validate_synthetic_policy_response(post_json(POLICY,'/api/policy/check',{'mode':mode,'command':policy_command,'severity':'P1','confidence':.94,'evidence_count':len(eids),'critic_validated':True,'redundancy_ok':True},token=ADMIN))
             post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':eids,'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
             if pol['state']!='PASS':
-                return call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'GATE_BLOCKED','event_key':f'{stage}:BLOCKED','status':'BLOCKED','evidence_ids':eids,'decision':pol['decision'],'confidence':.94,'payload':pol})
+                # Core's stage event alone does not change the canonical Run status.
+                # Persist the terminal BLOCK first: if the subsequent event fails,
+                # the Run must not remain misleadingly RUNNING.
+                blocked_run=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':v,'idempotency_key':f'POLICY-DENIED-{rid}','command':'BLOCK'})
+                if (not isinstance(blocked_run,dict) or blocked_run.get('run_id')!=rid
+                        or blocked_run.get('status')!='BLOCKED'
+                        or type(blocked_run.get('version')) is not int):
+                    raise ValueError('Core policy denial terminal status unverified')
+                blocked_event=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':blocked_run['version'],'stage':stage,'event_type':'GATE_BLOCKED','event_key':f'{stage}:BLOCKED','status':'BLOCKED','evidence_ids':eids,'decision':pol['decision'],'confidence':.94,'payload':pol})
+                return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked_event['version'],'sequence':blocked_event['sequence']}
         completed=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':eids,'confidence':.94,'payload':{'executor':'temporal','synthetic':synthetic,'attempt':activity.info().attempt}})
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:

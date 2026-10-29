@@ -123,6 +123,27 @@ class SimulationPolicyContractTests(unittest.TestCase):
         self.assertIsInstance(policy_call.args[0], ast.Name)
         self.assertEqual(policy_call.args[0].id, "POLICY")
 
+    def test_worker_denial_blocks_canonical_run_before_stage_event(self):
+        # AST wiring guard only: Temporal is not started by this unit test.
+        fn = worker_function("execute_stage")
+        denial = [node for node in ast.walk(fn) if isinstance(node, ast.If)
+                  and isinstance(node.test, ast.Compare)
+                  and ast.unparse(node.test) == "pol['state'] != 'PASS'"]
+        self.assertEqual(len(denial), 1)
+        body = denial[0].body
+        command_at = next(i for i, node in enumerate(body)
+                          if isinstance(node, ast.Assign)
+                          and any(isinstance(t, ast.Name) and t.id == "blocked_run"
+                                  for t in node.targets))
+        event_at = next(i for i, node in enumerate(body)
+                        if isinstance(node, ast.Assign)
+                        and any(isinstance(t, ast.Name) and t.id == "blocked_event"
+                                for t in node.targets))
+        self.assertLess(command_at, event_at)
+        self.assertIn("'command': 'BLOCK'", ast.unparse(body[command_at]))
+        self.assertIn("blocked_run['version']", ast.unparse(body[event_at]))
+        self.assertIn("'status': 'BLOCKED'", ast.unparse(body[-1]))
+
 
 if __name__ == "__main__":
     unittest.main()
