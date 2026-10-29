@@ -1,0 +1,59 @@
+aiops2-rebuild-worker | aiops2-acme-candidate:worker-policy-observe-minimal-20261029 | Up 31 minutes (healthy)
+aiops2-rebuild-core | aiops2-acme-candidate:core-denial-observe-20261029 | Up 31 minutes (healthy)
+aiops2-rebuild-simulator | aiops2-acme-candidate:simulator-20261029-204439 | Up 2 hours (healthy)
+aiops2-demo-observability-demo-otel-1 | otel/opentelemetry-collector-contrib:0.123.0 | Up 7 hours
+aiops2-demo-observability-demo-loki-1 | grafana/loki:3.5.0 | Up 7 hours
+aiops2-demo-observability-demo-tempo-1 | grafana/tempo:2.7.2 | Up 7 hours
+aiops2-rebuild-portal | aiops2-noc-rag-portal:v1 | Up 7 hours (healthy)
+aiops2-rebuild-copilot | aiops2-noc-rag-copilot:v1 | Up 7 hours (healthy)
+aiops2-noc-rag-test | aiops2-noc-rag-portal:v1 | Up 7 hours
+aiops2-noc-rag-copilot-test | aiops2-noc-rag-copilot:v1 | Up 7 hours
+aiops2-rebuild-n8n | n8nio/n8n:2.40.6 | Up 8 hours
+aiops2-rebuild-glpi | glpi/glpi:11.0.9 | Up 8 hours
+aiops2-rebuild-prometheus | prom/prometheus:v3.14.0 | Up 8 hours (healthy)
+aiops2-rebuild-alertmanager | prom/alertmanager:v0.34.1 | Up 8 hours
+aiops2-rebuild-temporal-ui | temporalio/ui:2.49.1 | Up 8 hours
+aiops2-rebuild-grafana | grafana/grafana:13.2.2 | Up 8 hours (healthy)
+aiops2-rebuild-policy | aiops2-p0-candidate-policy:e94fe784 | Up 11 hours (healthy)
+aiops2-rebuild-twin | aiops2-p0-candidate-twin:e94fe784 | Up 11 hours (healthy)
+aiops2-portal-rollback-v2-20261028 | aiops2-portal:demo-studio-20261028 | Exited (0) 27 hours ago
+aiops2-glpi-recovery-db | mariadb:11.4 | Up 7 days
+aiops2-rebuild-intelligence | aiops2-rebuild-aiops2-intelligence | Up 8 days (healthy)
+aiops2-rebuild-test-llm | aiops2-rebuild-aiops2-test-llm | Up 8 days (healthy)
+aiops2-rebuild-temporal-namespace | temporalio/admin-tools:1.31.0 | Exited (0) 8 days ago
+aiops2-rebuild-evidence | aiops2-rebuild-aiops2-evidence | Up 8 days (healthy)
+aiops2-rebuild-temporal | temporalio/server:1.31.0 | Up 8 days (healthy)
+aiops2-rebuild-temporal-schema | temporalio/admin-tools:1.31.0 | Exited (0) 8 days ago
+aiops2-rebuild-postgres | postgres:16-alpine | Up 8 days (healthy)
+aiops2-rebuild-temporal-postgres | postgres:16-alpine | Up 8 days (healthy)
+aiops2-rebuild-glpi-db | mariadb:11.4 | Up 7 days (healthy)
+aiops2-v28-core-qf186 | aiops2-core:v28-qf185 | Up 9 days
+aiops2-v28-core-qf183 | aiops2-core:v28-qf183 | Exited (1) 9 days ago
+aiops2-v28-sql-qual | postgres:16-alpine | Up 9 days
+aiops2-v27-qual-aiops2-worker-1 | aiops2-worker:v27-9885fc5 | Up 9 days
+aiops2-v27-qual-aiops2-core-1 | aiops2-core:v27-9885fc5 | Up 9 days
+aiops2-v27-qual-aiops2-intelligence-1 | aiops2-candidate-intelligence:cf09ec3 | Up 9 days
+aiops2-v27-qual-aiops2-policy-1 | aiops2-v27-qual-aiops2-policy | Up 9 days
+aiops2-v27-qual-aiops2-twin-1 | aiops2-v27-qual-aiops2-twin | Up 9 days
+aiops2-v27-qual-aiops2-evidence-1 | aiops2-v27-qual-aiops2-evidence | Up 9 days
+aiops2-v27-qual-aiops2-test-llm-1 | aiops2-v27-qual-aiops2-test-llm | Up 9 days
+aiops2-v27-qual-aiops2-temporal-namespace-1 | temporalio/admin-tools:1.31.0 | Exited (0) 9 days ago
+aiops2-v27-qual-aiops2-temporal-1 | temporalio/server:1.31.0 | Up 9 days (healthy)
+aiops2-v27-qual-aiops2-temporal-schema-1 | temporalio/admin-tools:1.31.0 | Exited (0) 9 days ago
+aiops2-v27-qual-aiops2-temporal-postgres-1 | postgres:16-alpine | Up 9 days (healthy)
+aiops2-v27-qual-aiops2-postgres-1 | postgres:16-alpine | Up 9 days (healthy)
+aiops2-metrics-normalizer-v1 | dcd4efde10bd | Up 9 days
+aiops2-demo-web-v1 | aiops2-e2e-v1-aiops2-core | Up 9 days
+aiops2-demo-readonly | aiops2-e2e-v1-aiops2-core | Up 9 days
+aiops2-e2e-v1-aiops2-worker-1 | aiops2-candidate-worker:b870f48 | Up 9 days
+aiops2-e2e-v1-aiops2-intelligence-1 | aiops2-candidate-intelligence:cf09ec3 | Up 9 days
+aiops2-e2e-v1-aiops2-test-llm-1 | aiops2-e2e-v1-aiops2-test-llm | Up 9 days
+aiops2-e2e-v1-aiops2-twin-1 | aiops2-e2e-v1-aiops2-twin | Up 9 days
+aiops2-e2e-v1-aiops2-temporal-namespace-1 | temporalio/admin-tools:1.31.0 | Exited (0) 9 days ago
+aiops2-e2e-v1-aiops2-temporal-1 | temporalio/server:1.31.0 | Up 9 days (healthy)
+aiops2-e2e-v1-aiops2-temporal-schema-1 | temporalio/admin-tools:1.31.0 | Exited (0) 9 days ago
+aiops2-e2e-v1-aiops2-temporal-postgres-1 | postgres:16-alpine | Up 9 days (healthy)
+aiops2-e2e-v1-aiops2-evidence-1 | aiops2-e2e-v1-aiops2-evidence | Up 9 days
+aiops2-e2e-v1-aiops2-core-1 | aiops2-e2e-v1-aiops2-core | Up 9 days
+aiops2-e2e-v1-aiops2-policy-1 | aiops2-e2e-v1-aiops2-policy | Up 9 days
+aiops2-e2e-v1-aiops2-postgres-1 | postgres:16-alpine | Up 9 days (healthy)

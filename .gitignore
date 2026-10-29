@@ -1,0 +1,32 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.dump
+*.bak
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+db-exports/*
+!db-exports/README.md
+
+# Historiques complets : revue de secrets requise
+git-history/*.bundle
+
+# Environnements generes
+.venv*/
+**/.venv*/
+**/venv/
+**/node_modules/
+**/__pycache__/
+**/.pytest_cache/

@@ -1,0 +1,383 @@
+{
+  "product": "AioOps 2.0",
+  "release": "8.0.0",
+  "author": "Abdelhalim Talbi",
+  "portal_external_port": 7777,
+  "glpi_external_port": 8080,
+  "internal_ui_ports": "3-digit",
+  "internal_networks": [
+    "aiops2-public",
+    "aiops2-control",
+    "aiops2-data",
+    "aiops2-execution",
+    "aiops2-temporal-data",
+    "aiops2-integration",
+    "aiops2-observability"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1689,
+      "sha256": "5551e2420dce2ac92435ec319f24a8a9f665cc2383328e04b8e0ca66900fdde3"
+    },
+    {
+      "path": "app/copilot/Dockerfile",
+      "bytes": 285,
+      "sha256": "b464e0658477c76ad9c30371b4682efc493da2bdffd764185e4476ac0a5506c5"
+    },
+    {
+      "path": "app/copilot/main.py",
+      "bytes": 1328,
+      "sha256": "ae3b0cb8cb215efadeba0b2da6bcfb112cffe973fefc7398a23017a7ee698e0e"
+    },
+    {
+      "path": "app/core/Dockerfile",
+      "bytes": 276,
+      "sha256": "26b6114f4c6a3589e8e8b638e54fca02320f32c19d97787895e8033d87ba4f57"
+    },
+    {
+      "path": "app/core/main.py",
+      "bytes": 17395,
+      "sha256": "a1df84bdef07fa63d52e03c5b96c338b158dc3e7f066e356b8d81614307e7082"
+    },
+    {
+      "path": "app/evidence/Dockerfile",
+      "bytes": 288,
+      "sha256": "9db45b13c4884d919598637c37ce8073c379e74474d7f21dcd0f83f55b25bd0e"
+    },
+    {
+      "path": "app/evidence/main.py",
+      "bytes": 2737,
+      "sha256": "d048be129a5571548330b99417643bf05a9ebc03cc486406fee04029a226e337"
+    },
+    {
+      "path": "app/policy/Dockerfile",
+      "bytes": 282,
+      "sha256": "386c069ff1e4a2d5f98cd2a78e7990a748ff23950c7a234d673cf5e834e04cbf"
+    },
+    {
+      "path": "app/policy/main.py",
+      "bytes": 1283,
+      "sha256": "1c5c00e2657b25c0292026213c24ff4bc6cd33947094b1e8efe360aa276be796"
+    },
+    {
+      "path": "app/portal/Dockerfile",
+      "bytes": 282,
+      "sha256": "1d4c06fc8878f850ed68968c0e4d5e6840fc4b46707710cb32022e48c4c49019"
+    },
+    {
+      "path": "app/portal/main.py",
+      "bytes": 5241,
+      "sha256": "ab8f24ede252e49a975134546b48becfb2a65ab0f265c7b6bb5b34e4d180e464"
+    },
+    {
+      "path": "app/requirements.txt",
+      "bytes": 119,
+      "sha256": "33618cab838cf73970d2bd3606884105effe322c472f106e9b64b8fa3deaad51"
+    },
+    {
+      "path": "app/shared/db.py",
+      "bytes": 164,
+      "sha256": "affbd0cbf78bb449812e0bc71eca7f1d1e9739777b34c418b9e2e2005cd8d338"
+    },
+    {
+      "path": "app/shared/domain.py",
+      "bytes": 972,
+      "sha256": "7c61e0e8a2340001e0119bb91a4d657ffb904bace4b07241f63e2c228038a296"
+    },
+    {
+      "path": "app/shared/http.py",
+      "bytes": 924,
+      "sha256": "f59d89a2006a4bf7baa1fef11dec9b7991548595e1ddc202678073de02e52581"
+    },
+    {
+      "path": "app/shared/ids.py",
+      "bytes": 87,
+      "sha256": "b77601c067534b89166a68f32c34cb74d7e0044a3eaa5f59dd7b9ad925f921f6"
+    },
+    {
+      "path": "app/simulator/Dockerfile",
+      "bytes": 291,
+      "sha256": "6f5d7914c85da8d788188b5bf6694efc445bdf8fd642fd82f8c43cb3f47a2bb8"
+    },
+    {
+      "path": "app/simulator/main.py",
+      "bytes": 2344,
+      "sha256": "b6e172b9844f8f6ec117cda6321cfc4dc22be7cac2d8e296bc926ccc49823b5a"
+    },
+    {
+      "path": "app/twin/Dockerfile",
+      "bytes": 276,
+      "sha256": "13f3604a539409bec2428f0f7853ce39eaa4181f3e4aa4cae204311889eee1d6"
+    },
+    {
+      "path": "app/twin/main.py",
+      "bytes": 4652,
+      "sha256": "e6cfb2cf17c46e3e7b3cd52776b54b6c10b88081c0aa7ab14bc02db8bd1b6735"
+    },
+    {
+      "path": "app/worker/Dockerfile",
+      "bytes": 282,
+      "sha256": "467c8706554efddad8b72e4a1dda18f85a9d1412633a2c03b57257446e680ca9"
+    },
+    {
+      "path": "app/worker/main.py",
+      "bytes": 6662,
+      "sha256": "d4bdec42b0a70dc49c29c6a6d10751617688ce1f27771af3face288901c307da"
+    },
+    {
+      "path": "compose.yml",
+      "bytes": 10780,
+      "sha256": "d692fb38d65e8519c906e39d88574281e615ee3417d38cf45c962f4a1f34ce4d"
+    },
+    {
+      "path": "config/.env.example",
+      "bytes": 292,
+      "sha256": "59bcf61efcffda60ed31b8db540ae3bcb725d3ee826cb38aaa32f7a83034759b"
+    },
+    {
+      "path": "config/alertmanager/alertmanager.yml",
+      "bytes": 90,
+      "sha256": "9ad1f664cf3bf770933c15adb84c49e84aca7d62eb17d2ef1c5bb6e4b8155ebc"
+    },
+    {
+      "path": "config/grafana/dashboards/acme-command-center.json",
+      "bytes": 812,
+      "sha256": "de107f6ddc083c014eaa8081ebf65133e4be90157fe18b7b5c7b276dda829b10"
+    },
+    {
+      "path": "config/grafana/provisioning/dashboards/dashboard.yml",
+      "bytes": 209,
+      "sha256": "dc838c2b887accb31b1003a22efc0ee3c5088530c22aadc375e857941f4eea7c"
+    },
+    {
+      "path": "config/grafana/provisioning/datasources/datasource.yml",
+      "bytes": 150,
+      "sha256": "83edd54c5f518e09159f22e7b26f1533e34d71595e8e4e80e1fa2358058a9005"
+    },
+    {
+      "path": "config/prometheus/prometheus.yml",
+      "bytes": 584,
+      "sha256": "3251d4948c8e0cdefe2c22f11e0343697e0c4c815bce1ee3e5222868f3f20862"
+    },
+    {
+      "path": "db/migrations/000_n8n.sql",
+      "bytes": 21,
+      "sha256": "a8de080e15cd68fbf796b6812301722c914d6d66bbe00ad4b3f9948c17a4c940"
+    },
+    {
+      "path": "db/migrations/001_schema.sql",
+      "bytes": 3346,
+      "sha256": "174f23dc0e6ad991deb2b76c93599e48484a9e9eb98e19669bdccd06f4c9c534"
+    },
+    {
+      "path": "db/migrations/002_integrity.sql",
+      "bytes": 555,
+      "sha256": "5dd064c37123314d6f4ad81a5cd18f5f2450ca01247ec719a66bbaeb18fbc5d5"
+    },
+    {
+      "path": "db/migrations/003_seed_twin.sql",
+      "bytes": 1228,
+      "sha256": "ac7a4fa8df405fccff9de941811ec18d2b5e922f8d08dbbce1d7a3ef3414fa78"
+    },
+    {
+      "path": "db/migrations/004_operational_model.sql",
+      "bytes": 3807,
+      "sha256": "0efd17f406704070adf30f292f0eba0f04b4e3c66433fc739de77a8ccb3558af"
+    },
+    {
+      "path": "db/migrations/005_seed_acme.sql",
+      "bytes": 4320,
+      "sha256": "6b8f8a1c52bb2493e51217835c6a09d7408fcc06acf02f6c975e99659cdf85af"
+    },
+    {
+      "path": "db/migrations/006_execution_receipts.sql",
+      "bytes": 194,
+      "sha256": "3a1fc13b22bdfaab9e698929f992d147045c5090e8f37e321ba036205c768114"
+    },
+    {
+      "path": "db/migrations/007_runtime_hardening.sql",
+      "bytes": 1108,
+      "sha256": "8a244c96542dbee9afc391f67cfded0136210eefd705adb8fb78d01442029b8b"
+    },
+    {
+      "path": "db/migrations/008_event_idempotency.sql",
+      "bytes": 195,
+      "sha256": "bc2a095e795695363ece046cf1e640d205f39e0e42ff400c1f2389317d4e3083"
+    },
+    {
+      "path": "deploy/big-bang.sh",
+      "bytes": 589,
+      "sha256": "51381f7f353307e22b74a888f984729d55485738d457dfa85edfdf92e641e92b"
+    },
+    {
+      "path": "deploy/install.sh",
+      "bytes": 477,
+      "sha256": "49cf2b003bda55f4247b5049fe112bf72430a3aff708653b11cc503000f4ba30"
+    },
+    {
+      "path": "deploy/package.sh",
+      "bytes": 477,
+      "sha256": "66fe63d0ae6126ca9652032f83641617e45b0e4ab6cd388deb4b44e6666eafec"
+    },
+    {
+      "path": "deploy/preflight.sh",
+      "bytes": 610,
+      "sha256": "3e8d7be7bd249094abba78510b90eed0d9dc8e59fd158e4ef3328113278ddc50"
+    },
+    {
+      "path": "deploy/retire-legacy.sh",
+      "bytes": 922,
+      "sha256": "82df79c1dbae9c1806748fad3b0a649fb63226005475cc3d82f1aceb5c1d19b4"
+    },
+    {
+      "path": "deploy/retirement-plan.sh",
+      "bytes": 379,
+      "sha256": "0aefa0d5ee7bceb7d5a4a7176b8922d413384639af776fc1cc1c5a11c124b77b"
+    },
+    {
+      "path": "deploy/stop.sh",
+      "bytes": 117,
+      "sha256": "90dbfbf6a977a7de9b0c408cb2e400ec79b141587d5ed21df072dc3658b00c58"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 2167,
+      "sha256": "db4623c28b6c16a50dca3a4c7d7b9090c9ca0dc957719b050565cb45eded274b"
+    },
+    {
+      "path": "docs/AUDIT-REPORT.md",
+      "bytes": 1750,
+      "sha256": "51ecba07fd8bae7413526516cb022efc5809425371b78b6f47034824d38e5e7f"
+    },
+    {
+      "path": "docs/BIG-BANG.md",
+      "bytes": 681,
+      "sha256": "4e738b1b9d44f8f4d37a177ad490efe7c8ab188c8ec0f73bde6ec7c3ae3d672c"
+    },
+    {
+      "path": "docs/DATA-MODEL.md",
+      "bytes": 530,
+      "sha256": "055c25be096892fc1b6074414de9c0f51d8a19cbcc88bd4b39f0912046a107bb"
+    },
+    {
+      "path": "docs/DEMO-REPLAY-STORY.md",
+      "bytes": 499,
+      "sha256": "289e88ec87011aa2275cab1c6f740a22e20ff858c04804a996038cb4bdcfc9ed"
+    },
+    {
+      "path": "docs/FINAL-ARCHITECTURE-REVIEW.md",
+      "bytes": 1866,
+      "sha256": "0612f7db8054f19060b798e8e7eccdac92901759fc2f29006a88a35a036ec4e1"
+    },
+    {
+      "path": "docs/LEGACY-RETIREMENT.md",
+      "bytes": 382,
+      "sha256": "e4a5e4528f6dde33bd1230f27fdc298e80841d531c41641e223f64e199fea5a7"
+    },
+    {
+      "path": "docs/NAMING-PORTS-NETWORKS.md",
+      "bytes": 531,
+      "sha256": "3372afa31060fce798249fcacd59408ba8e4c1df6846a1521e36877886f297fb"
+    },
+    {
+      "path": "docs/OPERATIONAL-FLOWS.md",
+      "bytes": 600,
+      "sha256": "2c3aeac4fdcdced2f57da05e3104fc2d225e7a2e085d8f2db29b455432a6eb15"
+    },
+    {
+      "path": "docs/PORT-REGISTRY.md",
+      "bytes": 741,
+      "sha256": "b4104bffd2200faab78ec86156e90d0958ce43d5b6202669178cc42ad6bb9207"
+    },
+    {
+      "path": "docs/README-DEPLOY.md",
+      "bytes": 439,
+      "sha256": "769bebe1242f68d349edeae3fb5e895b4d40522a218b79ae2f81bb962598b502"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "bytes": 545,
+      "sha256": "cda930f64c9467004cde141a82828e033d457d0bf86db80c9417f9699239ea97"
+    },
+    {
+      "path": "docs/SERVICE-MATRIX.md",
+      "bytes": 822,
+      "sha256": "b06ec5a0cc7eef1fc012e4bea13f4a3e7b6d245849502e45c79acc87f7ba4414"
+    },
+    {
+      "path": "docs/TEST-STRATEGY.md",
+      "bytes": 976,
+      "sha256": "cdcdcd2f99c3762b2a144e32e458ac3d7b9cc8736d6966b67beccbd9817a81df"
+    },
+    {
+      "path": "integration/n8n/README.md",
+      "bytes": 312,
+      "sha256": "43c999adf78b41224c6abd4ebc6514029165524784410061953df1cb929a6ee8"
+    },
+    {
+      "path": "integration/n8n/incident-to-run.json",
+      "bytes": 3593,
+      "sha256": "b793d8674d3ad7ec6172b42bb9ec817e9198def44548cbc4dec054fa9c254b75"
+    },
+    {
+      "path": "schemas/contracts.md",
+      "bytes": 727,
+      "sha256": "b9856b8e3336c8d06f89be69eab8a64ca5218857433f841baff57ee505877a70"
+    },
+    {
+      "path": "tests/qualification.sh",
+      "bytes": 673,
+      "sha256": "e192340ae05396d4660e71e4e8ec692c6e8eaa07634fca5b1e4da74ab99dae5b"
+    },
+    {
+      "path": "tests/runtime-contract.sh",
+      "bytes": 493,
+      "sha256": "c3fca6c03ac3bba8a80c630d8bf70714a8393c5f25b2dcaba139846d66a2b98a"
+    },
+    {
+      "path": "tests/seed-demo.sh",
+      "bytes": 301,
+      "sha256": "f68ff16313d3c3703bcaea911c3d809876bc6efd0ed1b7b808e3535a669cb024"
+    },
+    {
+      "path": "tests/sql-audit.sh",
+      "bytes": 509,
+      "sha256": "6c499e07a8565e997c26f7884a89a9c114a38703736b86ccbc8e2128ada2124c"
+    },
+    {
+      "path": "tests/static-audit.sh",
+      "bytes": 875,
+      "sha256": "1fb836c042c1f808cce3d7d6367bfc4cf2d3adf8ff5eef1427206b8318101406"
+    },
+    {
+      "path": "tests/synthetic-e2e.sh",
+      "bytes": 563,
+      "sha256": "c978a79c457758869b5f4d501a4cd7efd6a3900f237b181e45eaf800f72b4faf"
+    }
+  ],
+  "name": "AIOps 2.0 V8.0 Rebuild",
+  "runtime_qualified": false,
+  "legacy_runtime_dependency": false,
+  "external_ports": {
+    "portal": 7777,
+    "glpi": 8080,
+    "n8n": 5678,
+    "prometheus": 9090,
+    "grafana": 3000
+  },
+  "internal_ports": {
+    "portal": 777,
+    "core": 810,
+    "twin": 811,
+    "evidence": 812,
+    "policy": 813,
+    "copilot": 814,
+    "worker": 815,
+    "simulator": 816,
+    "integration": 817,
+    "intelligence": 818,
+    "rag": 819,
+    "temporal": 7233
+  }
+}
