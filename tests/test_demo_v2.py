@@ -303,5 +303,56 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("aucun run DEMO / REPLAY / STORY non ambigu", page)
         self.assertFalse(any(p.startswith("/api/runs/") for p in seen))
 
+
+    def test_demo_studio_links_only_unique_core_demo_ids(self):
+        from portal import main as portal_main
+        records = [
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-DUP", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-OK", "mode": "STORY", "status": "RESOLVED"},
+        ]
+        with (patch.object(portal_main, "_runs", return_value=records),
+              patch.object(portal_main, "_get", return_value={}),
+              patch.object(portal_main, "graph_panel", return_value="")):
+            page = portal_main.demo_studio()
+        self.assertIn('href="/demo-studio/run/RUN-OK"', page)
+        self.assertIn('href="/timeline?run_id=RUN-OK"', page)
+        self.assertNotIn('href="/demo-studio/run/RUN-DUP"', page)
+        self.assertNotIn('href="/timeline?run_id=RUN-DUP"', page)
+
+    def test_timeline_explicit_live_or_ambiguous_run_refused(self):
+        from fastapi import HTTPException
+        from portal import main as portal_main
+        records = [
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-DUP", "mode": "STORY", "status": "RESOLVED"},
+        ]
+        def source(path, base=None):
+            if path == "/api/incidents":
+                return {"items": []}
+            raise AssertionError("unexpected run detail read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=records),
+              patch.object(portal_main, "_get", side_effect=source)):
+            for rid in ("RUN-LIVE", "RUN-DUP"):
+                with self.subTest(rid=rid), self.assertRaises(HTTPException) as ctx:
+                    portal_main.timeline_page(run_id=rid)
+                self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_detail_and_poll_refuse_ambiguous_core_identity_before_read(self):
+        from fastapi import HTTPException
+        from portal import main as portal_main
+        records = [
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "RESOLVED"},
+        ]
+        with (patch.object(portal_main, "_runs", return_value=records),
+              patch.object(portal_main, "_get",
+                           side_effect=AssertionError("no detail/gate read allowed"))):
+            for endpoint in (portal_main.demo_run_detail, portal_main.demo_status):
+                with self.subTest(endpoint=endpoint.__name__), self.assertRaises(HTTPException) as ctx:
+                    endpoint("RUN-DUP")
+                self.assertEqual(ctx.exception.status_code, 404)
+
 if __name__ == "__main__":
     unittest.main()

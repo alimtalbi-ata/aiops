@@ -62,6 +62,20 @@ def _runs():
 def _run_id(r):
     return r.get("run_id","UNKNOWN")
 
+
+def _qualified_demo_runs(rows):
+    """Only unambiguous Core DEMO identities may become navigation targets."""
+    counts = {}
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get("run_id"), str):
+            rid = row["run_id"]
+            counts[rid] = counts.get(rid, 0) + 1
+    return [row for row in rows if isinstance(row, dict)
+            and row.get("mode") in ("DEMO", "REPLAY", "STORY")
+            and isinstance(row.get("run_id"), str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", row["run_id"])
+            and counts[row["run_id"]] == 1]
+
 @app.get("/",response_class=HTMLResponse)
 def home():
     d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
@@ -95,23 +109,12 @@ def runs_page():
     # The registry table is escaped by table(); deep links need validated IDs.
     # Never link LIVE, invalid or ambiguous run identities into a DEMO detail.
     from urllib.parse import quote
-    eligible={}
-    ambiguous=set()
-    for run in runs:
-        if not isinstance(run,dict) or run.get("mode") not in ("DEMO","REPLAY","STORY"):
-            continue
-        rid=run.get("run_id")
-        if not isinstance(rid,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
-            continue
-        if rid in eligible:
-            ambiguous.add(rid)
-        else:
-            eligible[rid]=run
+    eligible=_qualified_demo_runs(runs)
     links="".join(
-        '<li><a href="/demo-studio/run/'+quote(rid,safe="")+'">'+esc(rid)+'</a>'
-        ' · <a href="/timeline?run_id='+quote(rid,safe="")+'">Timeline</a>'
-        ' · '+esc(eligible[rid].get("status") or "UNKNOWN")+'</li>'
-        for rid in eligible if rid not in ambiguous
+        '<li><a href="/demo-studio/run/'+quote(row["run_id"],safe="")+'">'+esc(row["run_id"])+'</a>'
+        ' · <a href="/timeline?run_id='+quote(row["run_id"],safe="")+'">Timeline</a>'
+        ' · '+esc(row.get("status") or "UNKNOWN")+'</li>'
+        for row in eligible
     )
     body=panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows))
     body+=panel("Explorer un run DEMO / REPLAY / STORY — inventaire Core, non attesté",
@@ -129,14 +132,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     incidents=registry.get("items",[]) if isinstance(registry.get("items"),list) else []
     # A default DEMO journey must not land on a stale RUNNING or LIVE row.
     # Reject ambiguous IDs rather than selecting one of two conflicting Core rows.
-    eligible=[r for r in items if isinstance(r,dict)
-              and r.get("mode") in ("DEMO","REPLAY","STORY")
-              and isinstance(r.get("run_id"),str)
-              and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",r["run_id"])]
-    counts={}
-    for r in eligible:
-        counts[r["run_id"]]=counts.get(r["run_id"],0)+1
-    eligible=[r for r in eligible if counts[r["run_id"]]==1]
+    eligible=_qualified_demo_runs(items)
     preferred=next((r["run_id"] for r in eligible
                     if r.get("status") in ("BLOCKED","RESOLVED")),None)
     selected=run_id or preferred or (eligible[0]["run_id"] if eligible else None)
@@ -171,7 +167,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",selected):
         raise HTTPException(404,"invalid_run_id")
-    match=next((x for x in items if x.get("run_id")==selected),None)
+    match=next((x for x in eligible if x["run_id"]==selected),None)
     if not match:
         raise HTTPException(404,"run_not_in_registry")
     key=quote(selected,safe="")
@@ -280,9 +276,7 @@ def demo_studio():
           '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
     # Navigate a real Core inventory entry; never substitute a fixture or LIVE run.
     import urllib.parse
-    eligible=[r for r in demo_runs
-              if isinstance(r.get("run_id"),str)
-              and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",r["run_id"])]
+    eligible=_qualified_demo_runs(runs)
     selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
                   eligible[0] if eligible else None)
     if selected:
@@ -325,8 +319,8 @@ def demo_studio():
        (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
         r.get("status","INCONNU"),r.get("scenario_id","INCONNU")) for r in demo_runs[:30]]))
     import urllib.parse
-    if demo_runs:
-        links="".join('<li><a href="/demo-studio/run/'+urllib.parse.quote(str(r.get("run_id","")),safe="")+'">'+esc(r.get("run_id","INCONNU"))+'</a></li>' for r in demo_runs[:30] if re.fullmatch(r"[A-Za-z0-9_-]{1,128}",str(r.get("run_id",""))))
+    if eligible:
+        links="".join('<li><a href="/demo-studio/run/'+urllib.parse.quote(r["run_id"],safe="")+'">'+esc(r["run_id"])+'</a></li>' for r in eligible[:30])
         body+=panel("Ouvrir les traces Analyst/Critic/Policy","<ul>"+links+"</ul>")
     body+=panel("Qualification et prochaines étapes",
       '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
@@ -387,7 +381,7 @@ def demo_run_detail(rid:str):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_demo_run_id")
     candidates=_runs()
-    matched=next((r for r in candidates if r.get("run_id")==rid and r.get("mode") in ("DEMO","REPLAY","STORY")),None)
+    matched=next((r for r in _qualified_demo_runs(candidates) if r["run_id"]==rid),None)
     if not matched:
         raise HTTPException(404,"demo_run_not_found")
     from urllib.parse import quote
@@ -460,7 +454,7 @@ def demo_status(rid:str):
     """Read-only polling endpoint with strict DEMO ownership checked against Core."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_run_id")
-    allowed=next((r for r in _runs() if r.get("run_id")==rid and r.get("mode") in ("DEMO","REPLAY","STORY")),None)
+    allowed=next((r for r in _qualified_demo_runs(_runs()) if r["run_id"]==rid),None)
     if not allowed:
         raise HTTPException(404,"demo_run_not_found")
     detail=_get("/api/runs/"+rid)

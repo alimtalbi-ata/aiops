@@ -1,0 +1,9 @@
+# 2/5 Portail — identité de navigation Core cohérente (29/10/2026, 23:xx CET)
+
+- **Candidate unique :** PR #185, branche `release/p0-acme-integrated-candidate-20261029-1100`, parent `cb57811bc3b32de5c36db242d5836e53b36269c8`. Le SHA exact de livraison est le commit contenant ce journal.
+- **Bloqueur démontré par lecture de source :** `/demo-studio` proposait un lien vers un `run_id` dupliqué, `/timeline?run_id=` pouvait lire un run LIVE explicitement demandé, et les routes détail/polling prenaient la première ligne Core en cas de doublon. Le registre `/runs` possédait déjà une protection partielle ; elle est désormais commune aux routes de navigation.
+- **Correctif minimal :** `app/portal/main.py` utilise une sélection unique de runs DEMO/REPLAY/STORY à identifiant valide, sans doublon dans l'inventaire Core (y compris LIVE). `/demo-studio`, `/runs`, `/timeline`, `/demo-studio/run/{rid}`, `/api/demo-status/{rid}` appliquent le même filtre. Sans candidat, UNKNOWN ; sélection explicite LIVE ou ambiguë : HTTP 404 avant lecture du détail/gates.
+- **Tests ciblés ajoutés :** trois cas `tests/test_demo_v2.py` pour les liens du Studio, le refus timeline LIVE/ambigu, le refus détail/polling avant lecture Core. **Tests locaux/CI : NOT_TESTED au moment du commit** ; suivre `quality.yml` sur le SHA exact. Aucun test Debian/navigateur.
+- **Contrats :** aucune nouvelle route, dépendance, workflow, source métier ni effet. SAN→Payments, ticket GLPI, HITL, Policy et Evidence restent UNKNOWN/SIMULATED tant que non attestés. Pas de modification du `demo_v2.py` local non suivi.
+- **Packaging :** `app/portal/main.py` = `IMAGE_TRANSPORT` dans `deploy/deploy-acme-p0.py` ; le cron Debian portal-only ne transporte pas cette version. `applied.sha`, rollback réel et smoke sur SRV-DEB-05 : NOT_TESTED.
+- **Décision :** READY_FOR_STABLE=BLOCKED ; promotion réservée à 5/5 après CI verte et qualification opérateur. Aucun push stable ni LIVE.
