@@ -54,3 +54,13 @@ Ajouter dans GitHub : date, branche et SHA, objectif DEMO, découvertes (chemins
 
 ## Consigne de reprise à l'assistant
 **Ne jamais perdre le fil** : l'objectif est le parcours ACME incident → IA RCA → simulation remédiation → décision → ticket/communication → UI. Lire ce document et les dossiers historiques avant de recommander de nouvelles implémentations ou un déploiement. Préparer le maximum directement dans une branche GitHub ; demander à Debian uniquement les vérifications ou actions qui nécessitent réellement l'hôte. 
+
+
+## Mise à jour vérifiée — 2026-10-29, Debian 26/26 et synchronisation Git
+
+**Journal détaillé : [JOURNAL-QUALIFICATION-2026-10-29.md](demo/JOURNAL-QUALIFICATION-2026-10-29.md).** L'opérateur a confirmé :
+- `git switch -c prep/acme-demo-offline-20261029 refs/remotes/origin/prep/acme-demo-offline-20261029` réussi au SHA `0274765` ; aucune nécessité de `--track`.
+- `python3 tools/acme_offline_source_preflight.py` : **26 PASS / 0 FAIL** (11 sources Python, 15 motifs/contrats). **Statique uniquement** ; pas de tests Docker, DB, Temporal, IA réelle, remédiation simulée ou GLPI.
+- `git fetch` explicite et `git merge --ff-only` : `0274765..adbdc30`, ajout de deux documents, 63 lignes ; `git status --short` vide. Debian était au SHA `adbdc30` au moment de cette vérification.
+- Le présent journal a été publié **après** cette synchronisation et rendra Debian momentanément en retard sur GitHub ; nouvelle synchronisation nécessaire avant de prétendre à l'alignement.
+- **Prochaine priorité :** inventaire historique transversal des branches, anciens composants et fichiers locaux non suivis, puis qualification de la simulation de remédiation. Ne pas déployer la consolidation sur `aiops2-rebuild` à ce stade.
