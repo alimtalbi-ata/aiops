@@ -99,3 +99,29 @@ as an admin credential. Review server-side integration before deployment.
 Internal service auth is NOT tenant RBAC; tenant_acl_qualified=false.
 READY_FOR_STABLE=BLOCKED until compatibility, isolation, deploy coverage,
 rollback, applied.sha and Debian smoke tests are qualified.
+
+## P0 server-to-server read compatibility — 2026-10-29 06:xx CET
+
+Twin read-only endpoints accept **either** the configured
+`AIOPS_ADMIN_TOKEN` (legacy) or `AIOPS_INTERNAL_TOKEN` (existing
+service-to-service identity), both as exact Bearer credentials. The
+`compose.yml` Twin service now receives the existing internal token.
+This is needed because Portal `shared.http.get_json` uses
+`AIOPS_INTERNAL_TOKEN` for its server-side `/api/twin/summary` call;
+the two environment values are **not guaranteed to be equal** on a
+previously configured installation. No credential is passed to browser JS.
+The internal token is **not** authorized to call the Twin
+`POST /api/twin/synthetic-event` administrator write endpoint.
+
+A real Twin HTTP/PostgreSQL 16 CI test uses **distinct** ephemeral admin
+and internal credentials and checks reads and refusal of synthetic writes.
+This tests the Twin-side contract, **not** a full Portal browser E2E.
+
+Prometheus still scrapes `/metrics` without a Bearer credential in
+`config/prometheus/prometheus.yml`: expect HTTP 401 and missing Twin
+metrics until a separately qualified, least-privilege scrape identity
+is provided. Do **not** put an administrator token in a committed
+Prometheus configuration. No tenant A/B authorization is proven;
+`tenant_acl_qualified=false`, `runtime_impact_state=UNKNOWN`.
+`READY_FOR_STABLE=BLOCKED`; deployment coverage, rollback and
+Debian `applied.sha` / smoke tests remain NOT_TESTED.
