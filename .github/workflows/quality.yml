@@ -1,6 +1,9 @@
 name: AIOps quality gates
 
 on:
+  schedule:
+    - cron: "23 */2 * * *"
+  workflow_dispatch:
   pull_request:
   push:
     branches:
