@@ -1,0 +1,24 @@
+name: AIOps2 deployed runtime smoke
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiops2-deployed-runtime-smoke
+  cancel-in-progress: true
+
+jobs:
+  read-only-runtime-smoke:
+    # Repository-scoped runner on SRV-DEB-05; deliberately no PR/push trigger.
+    runs-on: [self-hosted, linux, x64, aiops2-runtime]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout trusted default-branch workflow source
+        uses: actions/checkout@v4
+      - name: Run read-only deployed runtime smoke checks
+        run: bash scripts/runtime-smoke.sh
