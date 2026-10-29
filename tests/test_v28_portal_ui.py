@@ -116,6 +116,72 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("INCONNU",page)
         self.assertIn("Demo Studio",page)
 
+    def test_demo_impact_scope_never_certifies_payments_from_root_only(self):
+        root = "ACME-SAN-FABRIC-A"
+        only_root = {"root": root, "affected": [{"node_id": root}]}
+        label, valid = self.portal._demo_impact_scope(only_root)
+        self.assertTrue(valid)
+        self.assertIn("RACINE SEULE", label)
+        self.assertIn("NON PROUVÉE", label)
+        declared = {"root": root, "affected": [{"node_id": root},
+                                               {"node_id": "ACME-SVC-PAYMENTS"}]}
+        label, valid = self.portal._demo_impact_scope(declared)
+        self.assertTrue(valid)
+        self.assertIn("2 NŒUDS TWIN DÉCLARÉS", label)
+        self.assertIn("NON ATTESTÉE", label)
+        for malformed in (
+            {"status": "UNKNOWN", **declared},
+            {"status": "ERROR", **declared},
+            {"error_type": "HTTPError", "http_status": 401, **declared},
+            {"root": root, "affected": [{"node_id": "ACME-SVC-PAYMENTS"}]},
+            {"root": root, "affected": [{"node_id": root}, {"node_id": root}]},
+            {"root": root, "affected": [{"node_id": root}, "ACME-SVC-PAYMENTS"]},
+            {"root": root, "affected": []},
+        ):
+            with self.subTest(malformed=malformed):
+                label, valid = self.portal._demo_impact_scope(malformed)
+                self.assertFalse(valid)
+                self.assertIn("INCONNU", label)
+
+    def test_demo_studio_root_only_and_error_impact_do_not_claim_payments(self):
+        root = "ACME-SAN-FABRIC-A"
+        graph = {"nodes": [{"node_id": root, "name": "SAN"},
+                           {"node_id": "ACME-SVC-PAYMENTS", "name": "Payments"}],
+                 "edges": [{"source_id": root, "target_id": "ACME-SVC-PAYMENTS"}]}
+        for impact, expected, impact_known in (
+            ({"root": root, "affected": [{"node_id": root}]},
+             "RACINE SEULE", "true"),
+            ({"status": "UNKNOWN", "error_type": "HTTPError",
+              "http_status": 401, "root": root,
+              "affected": [{"node_id": root},
+                           {"node_id": "ACME-SVC-PAYMENTS"}]},
+             "INCONNU", "false"),
+        ):
+            with self.subTest(impact=impact):
+                def getter(base, path):
+                    if path == "/api/dashboard":
+                        return {"status": "ok"}
+                    if path == "/api/runs":
+                        return {"items": []}
+                    if path == "/api/twin/graph":
+                        return graph
+                    if path.startswith("/api/twin/impact/"):
+                        return impact
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=getter):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_studio()
+                self.assertIn(expected, page)
+                self.assertIn("SAN→Payments", page)
+                self.assertIn('"impact_known":' + impact_known, page)
+                self.assertNotIn("propagation SAN→Payments PROUVÉE", page)
+                if impact_known == "true":
+                    self.assertIn('"impact_ids":["' + root + '"]', page)
+                    self.assertNotIn('"impact_ids":["' + root + '","ACME-SVC-PAYMENTS"]', page)
+                else:
+                    self.assertIn('"impact_ids":[]', page)
+
     def test_connected_demo_studio_uses_twin_payload_only(self):
         def getter(base,path,**kwargs):
             if path=="/api/dashboard":return {"open_p1":0}
