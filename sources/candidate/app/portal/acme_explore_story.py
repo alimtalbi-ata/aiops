@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Header, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 
 from portal.acme_impact_read_model import _load_or_503
+from portal.acme_hitl_story import project_hitl_story
 from portal.noc_runtime import _require_portal_read_auth, _noc_json_response
 
 router = APIRouter()
@@ -102,7 +103,22 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
         return _noc_json_response({"state": "UNKNOWN", "detail": "synthetic_fixture_unavailable"},
                                   status_code=503)
 
-    steps = model["checkpoint_evidence"]
+    # Fail closed before projecting any synthetic scenario identifiers.
+    try:
+        checkpoints = model["checkpoint_evidence"]
+        if type(checkpoints) is not list or not checkpoints:
+            raise ValueError("invalid checkpoints")
+        for checkpoint in checkpoints:
+            if type(checkpoint) is not dict or type(checkpoint.get("cue")) is not str:
+                raise ValueError("invalid checkpoint")
+            project_hitl_story(model, checkpoint["cue"])
+    except (ValueError, KeyError, TypeError):
+        return _noc_json_response(
+            {"state": "UNKNOWN", "detail": "synthetic_fixture_unavailable"},
+            status_code=503,
+        )
+
+    steps = checkpoints
     if not steps or payload["cursor"] >= len(steps):
         return _noc_json_response({"detail": "invalid_story_cursor"}, status_code=422)
 
@@ -115,7 +131,9 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
     # Strict projection: no raw fixture, secret, backend URLs or unqualified evidence.
     timeline = [{"cue": s["cue"], "service": s["service"], "view": s["view"],
                  "status": "MISSING"} for s in steps]
+    hitl_story = project_hitl_story(model, steps[cursor]["cue"])
     return _noc_json_response({
+        "hitl_story": hitl_story,
         "schema": "aiops.acme-explore-story.v1",
         "mode": mode, "action": action, "cursor": cursor, "playing": playing,
         "provenance": "SIMULATED_TARGET", "source_sha256": model["source_sha256"],
