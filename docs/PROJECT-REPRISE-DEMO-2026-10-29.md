@@ -64,3 +64,8 @@ Ajouter dans GitHub : date, branche et SHA, objectif DEMO, découvertes (chemins
 - `git fetch` explicite et `git merge --ff-only` : `0274765..adbdc30`, ajout de deux documents, 63 lignes ; `git status --short` vide. Debian était au SHA `adbdc30` au moment de cette vérification.
 - Le présent journal a été publié **après** cette synchronisation et rendra Debian momentanément en retard sur GitHub ; nouvelle synchronisation nécessaire avant de prétendre à l'alignement.
 - **Prochaine priorité :** inventaire historique transversal des branches, anciens composants et fichiers locaux non suivis, puis qualification de la simulation de remédiation. Ne pas déployer la consolidation sur `aiops2-rebuild` à ce stade.
+
+
+## Incrément de code — 2026-10-29 : labo de remédiation historique réutilisé
+
+**Voir [l'implémentation et ses tests](demo/IMPLEMENTATION-REMEDIATION-2026-10-29.md)** et [l'inventaire historique](demo/INVENTAIRE-HISTORIQUE-GITHUB-2026-10-29.md). Le labo no-effect a été retrouvé dans `feat/p0-hitl-remediation-lab-simulator-20261027-2024` puis porté dans la branche prep : `app/shared/remediation_lab.py`, `config/remediation/recipes.v1.json`, `tests/test_remediation_lab.py`. Un nouveau module `app/shared/acme_remediation_projection.py` et ses tests projettent un état synthétique avant/après et un rollback hypothétique. **Aucun effet réel, aucune postcondition observée, aucune authentification HITL réelle, aucun raccord Core/Temporal/Portal/GLPI pour le moment.** Dernier commit de cette livraison avant cette mise à jour documentaire : `18193a17`. Les tests de ce nouvel incrément **ne sont pas encore exécutés sur Debian** ; demander uniquement les tests Python offline, pas de déploiement Docker.
