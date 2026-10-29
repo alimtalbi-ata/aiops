@@ -153,10 +153,23 @@ def _verified_demo_ledger(value, run):
 
     if not matches(value):
         return unknown
-    items = value.get("items")
-    if items is not None and (not isinstance(items, list)
-                              or not all(matches(item) for item in items)):
-        return unknown
+    # The canonical Core AI Ledger returns analyses/critiques/policy_decisions
+    # arrays (not the legacy "items" array). Bind every record to the
+    # selected run before HTML, Critic explanation or polling can expose it.
+    for collection in ("items", "analyses", "critiques", "policy_decisions"):
+        records = value.get(collection)
+        if records is None:
+            continue
+        if not isinstance(records, list):
+            return unknown
+        for record in records:
+            if not matches(record):
+                return unknown
+            # Core's output/proof_snapshot may contain an explicit identity.
+            # Missing identity is not attestation; a conflicting one is fatal.
+            for nested in ("output", "proof_snapshot"):
+                if isinstance(record.get(nested), dict) and not matches(record[nested]):
+                    return unknown
     for section in ("analysis", "critic"):
         if isinstance(value.get(section), dict) and not matches(value[section]):
             return unknown
