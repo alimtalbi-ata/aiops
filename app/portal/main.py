@@ -53,7 +53,36 @@ def _get(path,base=CORE):
     try:
         return get_json(base,path)
     except Exception as exc:
-        return {"status":"UNKNOWN","error_type":type(exc).__name__}
+        # UI-only classification: preserve HTTP denial without exposing URLs or tokens.
+        result={"status":"UNKNOWN","error_type":type(exc).__name__}
+        response=getattr(exc,"response",None)
+        code=getattr(response,"status_code",None)
+        if type(code) is int and 100 <= code <= 599:
+            result["http_status"]=code
+        return result
+
+def _source_state(payload, kind):
+    """API reachability, not source attestation or business impact."""
+    if not isinstance(payload,dict):
+        return "UNKNOWN"
+    if payload.get("status")=="UNKNOWN" and payload.get("error_type"):
+        if payload.get("http_status") in (401,403):
+            return "UNAUTHORIZED"
+        if (payload.get("http_status") in (502,503,504) or
+            payload.get("error_type") in ("ConnectionError","Timeout",
+                                           "ConnectTimeout","ReadTimeout")):
+            return "UNAVAILABLE"
+        # HTTP 404 does not establish that a service is NOT_INSTALLED.
+        return "UNKNOWN"
+    if kind=="dashboard" and any(
+        type(payload.get(field)) is int
+        for field in ("open_incidents","running","blocked")):
+        return "CONNECTED"
+    if kind=="graph" and isinstance(payload.get("nodes"),list) and isinstance(payload.get("edges"),list):
+        return "CONNECTED"
+    if kind=="impact" and payload.get("root") and isinstance(payload.get("affected"),list):
+        return "CONNECTED"
+    return "UNKNOWN"
 
 def _runs():
     response=_get("/api/runs")
@@ -182,7 +211,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
 
     content+=panel("Périmètre et transparence",
         "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
-        "Les listes sont limitées aux enregistrements renvoyés par Core. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
+        "Les listes sont limitées aux enregistrements renvoyés par Core. Les observations DEMO sont SYNTHETIC ; les décisions IA éventuellement enregistrées exigent une vérification de provenance. Aucune approbation ou remédiation LIVE n’est attestée.</p>")
     if not selected:
         content+=panel("Timeline","<p>UNKNOWN — aucun run DEMO / REPLAY / STORY non ambigu accessible depuis Core.</p>")
         return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
@@ -273,6 +302,22 @@ def demo_studio():
     body=panel("Démo ACME — valeur métier",
         '<p>Six étapes dans le portail existant : enjeu Payments, incident SAN, diagnostic, décision SIMULATE/HITL et valeur hypothétique. Aucune action LIVE ni gain mesuré.</p>'
         '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
+    body+=panel("État des sources — lecture seule",
+        '<p>CONNECTED signifie uniquement réponse API structurée, pas corrélation métier ni E2E attesté. '
+        'UNAUTHORIZED = HTTP 401/403 ; UNAVAILABLE = erreur de transport ou serveur ; '
+        'NOT_INSTALLED exige un inventaire de déploiement qualifié (non disponible ici). '
+        'UNKNOWN couvre les réponses incomplètes et les API non qualifiées.</p>'
+        +table(["Source","État","Provenance / limite"],[
+          ("Core /api/dashboard",_source_state(dashboard,"dashboard"),
+           "API Core — contenu REAL ou SYNTHETIC à qualifier"),
+          ("Twin /api/twin/graph",_source_state(graph,"graph"),
+           "API Twin — arêtes présentes ne prouvent pas SAN → Payments"),
+          ("Twin /api/twin/impact/ACME-SAN-FABRIC-A",_source_state(impact,"impact"),
+           "API Twin — impact métier UNKNOWN sans dépendance sourcée"),
+          ("ITSM GLPI","UNKNOWN","Aucun ticket_id ni lecture GLPI authentifiée"),
+          ("Evidence / AI Ledger","UNKNOWN","Accès viewer/RBAC et provenance non attestés"),
+          ("Policy / HITL","UNKNOWN","Décision et approbation à vérifier sur /policy-control"),
+        ]))
     body+=panel("Préflight — qualification en lecture seule",
         '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
         'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
@@ -280,7 +325,7 @@ def demo_studio():
           ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
           ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
           ("Impact SAN-A","DISPONIBLE" if isinstance(impact.get("affected"),list) and impact.get("root") else "INCONNU"),
-          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)))
+          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)) if runs else "UNKNOWN — registre vide ou inaccessible")
         ]))
     if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
         body+=panel("Lancer le scénario synthétique ACME",
@@ -423,7 +468,16 @@ def demo_run_detail(rid:str):
             mode="UNKNOWN / READ-ONLY"), status_code=503)
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     gate=_get("/api/runs/"+key+"/gates")
-    body=panel("Suivi de l'exécution",
+    body=panel("Parcours opérateur — même run Core",
+      '<nav aria-label="Parcours opérateur ACME">'
+      '<a href="/">Cockpit NOC</a> · <a href="/runs">Runs Core</a> · '
+      '<a href="/twin">Digital Twin</a> · '
+      '<a href="/timeline?run_id='+key+'">Timeline / Analyst / Critic</a> · '
+      '<a href="/evidence">Evidence</a> · '
+      '<a href="/policy-control">Policy SIMULATE / HITL</a></nav>'
+      '<p>ITSM GLPI : <strong>UNKNOWN</strong> — aucun ticket connecté à ce run n’est attesté. '
+      'Mode DEMO/REPLAY/STORY : <strong>SYNTHETIC</strong> ; aucun effet LIVE.</p>')
+    body+=panel("Suivi de l'exécution",
       '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
       '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
       '<pre id="run-watch-state" class="log">En attente du premier rafraîchissement.</pre>'

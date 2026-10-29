@@ -409,5 +409,85 @@ class DemoV2Tests(unittest.TestCase):
         self.assertTrue(portal_main._core_detail_matches_listed_run(
             {"run": listed, "events": []}, listed))
 
+    def test_source_status_requires_schema_and_never_infers_installation(self):
+        from portal import main as portal_main
+        self.assertEqual(portal_main._source_state(
+            {"open_incidents": 2}, "dashboard"), "CONNECTED")
+        self.assertEqual(portal_main._source_state(
+            {"nodes": [], "edges": []}, "graph"), "CONNECTED")
+        self.assertEqual(portal_main._source_state(
+            {"nodes": []}, "graph"), "UNKNOWN")
+        self.assertEqual(portal_main._source_state(
+            {"status": "UNKNOWN", "error_type": "HTTPError", "http_status": 404},
+            "dashboard"), "UNKNOWN")
+        self.assertEqual(portal_main._source_state(
+            {"status": "UNKNOWN", "error_type": "Timeout"},
+            "dashboard"), "UNAVAILABLE")
+        self.assertEqual(portal_main._source_state(
+            {"status": "UNKNOWN", "error_type": "HTTPError", "http_status": 403},
+            "dashboard"), "UNAUTHORIZED")
+
+    def test_get_preserves_http_401_without_secret_or_upstream_url(self):
+        from requests import HTTPError, Response
+        from portal import main as portal_main
+        response = Response()
+        response.status_code = 401
+        error = HTTPError("upstream auth denied", response=response)
+        with patch.object(portal_main, "get_json", side_effect=error):
+            result = portal_main._get("/api/dashboard")
+        self.assertEqual(result, {"status": "UNKNOWN",
+                                  "error_type": "HTTPError", "http_status": 401})
+        self.assertEqual(portal_main._source_state(result, "dashboard"), "UNAUTHORIZED")
+
+    def test_demo_studio_route_shows_source_states_without_claiming_glpi(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        def source(path, base=None):
+            if path == "/api/dashboard":
+                return {"status": "UNKNOWN", "error_type": "HTTPError", "http_status": 401}
+            if path == "/api/twin/graph":
+                return {"status": "UNKNOWN", "error_type": "ConnectionError"}
+            if path == "/api/twin/impact/ACME-SAN-FABRIC-A":
+                return {"root": "ACME-SAN-FABRIC-A", "affected": []}
+            if path == "/api/incidents":
+                return {"items": []}
+            return {}
+        with (patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-DEMO", "mode": "DEMO", "status": "BLOCKED"}]),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("unexpected write"))):
+            response = TestClient(portal_main.app).get("/demo-studio")
+        self.assertEqual(response.status_code, 200)
+        for marker in ("UNAUTHORIZED", "UNAVAILABLE", "CONNECTED", "NOT_INSTALLED",
+                       "UNKNOWN", "SYNTHETIC", "GLPI", "Policy / HITL"):
+            self.assertIn(marker, response.text)
+        self.assertIn('href="/demo-studio/run/RUN-DEMO"', response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', response.text)
+        self.assertIn("aucun ticket_id", response.text)
+
+    def test_run_detail_has_same_run_navigation_without_fake_ticket(self):
+        from portal import main as portal_main
+        def source(path, base=None):
+            if path == "/api/runs/RUN-ACME":
+                return {"run": {"run_id": "RUN-ACME", "mode": "DEMO",
+                                "status": "BLOCKED"}, "events": []}
+            if path == "/api/runs/RUN-ACME/gates":
+                return {"status": "UNKNOWN"}
+            raise AssertionError(path)
+        with (patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-ACME", "mode": "DEMO", "status": "BLOCKED"}]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("unexpected write"))):
+            page = portal_main.demo_run_detail("RUN-ACME")
+        self.assertIn('href="/timeline?run_id=RUN-ACME"', page)
+        for path in ("/runs", "/twin", "/evidence", "/policy-control"):
+            self.assertIn('href="' + path + '"', page)
+        self.assertIn("ITSM GLPI", page)
+        self.assertIn("UNKNOWN", page)
+        self.assertNotIn("ticket connecté</a>", page)
+
 if __name__ == "__main__":
     unittest.main()
