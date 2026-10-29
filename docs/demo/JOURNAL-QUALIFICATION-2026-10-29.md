@@ -125,3 +125,18 @@ Chaque nouvelle session ajoute une entrée datée à ce journal ou crée `docs/d
 **Gates toujours ouverts :** pas de DB/Temporal, aucun raccord `run_id` entre Core et simulation, aucun ticket GLPI/n8n qualifié, pas de preuve Analyst/Critic réel, aucune postcondition observée ni rollback réel, aucun E2E conteneur. Les états `SIMULATED_SUCCESS` et `SIMULATED_FAILURE` sont des projections `WHAT_IF_FIXTURE_NOT_OBSERVED` ; `effect_applied=False`, `postchecks=NOT_RUN`. Le script de preflight n'a pas été étendu dans cet incrément pour inspecter le nouveau module ; sa réussite ne remplace pas les 18 tests.
 
 **Suite technique prioritaire :** raccordement synthétique traçable au run ACME, conservation de la provenance et de la séparation Policy/HITL, exposition read-only sécurisée, puis E2E isolé. Pas de modification Docker avant qualification et autorisation.
+
+
+## 9. 2026-10-29 — Deuxième passe autonome : analyse et code offline
+
+**Dernière preuve Debian communiquée :** HEAD `5c408cf`, **28/28 tests Python PASS** (10 laboratoire, 8 projection, 10 receipt), compilation des 3 modules sans erreur. La commande envoyée contient une fin de here-doc suivie du texte `BASHstatus --short` ; **ne pas en déduire** que `git status --short` ou `git diff --check` a été exécuté lors de cette passe. Les sorties des tests et de `py_compile` sont bien présentes et réussies.
+
+**Travaux GitHub effectués depuis ce SHA :**
+1. Audit comparatif des branches `feat/p0-acme-scenario-contract-20261028-1153`, `feat/acme-core-noc-itsm-correlation-20261027`, `feat/p1-glpi-real-http-ci-20261028-1035`, `feat/golden-demo-journey-20261027`, `release/p0-demo-v2-ui-candidate-20261029-0004`. Fichiers source ciblés lus. Voir [audit d'architecture](AUDIT-ARCHITECTURE-CONVERGENCE-2026-10-29.md).
+2. Correction de sécurité métier : une recette read-only (inspection ou ticket) ne peut plus projeter arbitrairement `HEALTHY`. Test dédié ajouté.
+3. Nouveau `app/shared/acme_demo_offline.py` : CLI JSON déterministe SUCCESS/FAILURE sans Docker, sans secrets en clair ni effets ; 4 tests dédiés.
+4. État : code publié, **aucun test de ce nouvel incrément exécuté sur Debian**. Attendus 33 tests (10 + 9 + 10 + 4), plus 26 preflight statiques. Ne pas annoncer PASS avant la sortie opérateur.
+
+**Risques encore ouverts :** CLI basée sur fixtures non observées, IDs Core/Evidence non vérifiés, pas de GLPI, aucune authentification réelle HITL, aucune simulation SAN, aucune traversée DB/Temporal/Portal. Les tests sont de la logique offline uniquement.
+
+**Prochaine action opérateur** : synchroniser GitHub puis exécuter les 33 tests Python et les deux sorties JSON de la CLI ; ne pas toucher Docker.
