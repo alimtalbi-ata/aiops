@@ -470,7 +470,7 @@ class RealLedgerHttpQualification(unittest.TestCase):
                 "insert into aiops.critique_records(critique_id,idempotency_key,"
                 "analysis_id,run_id,contract_version,provider,model,validated,issues,"
                 "evidence_ids,output,diagnostic_confidence) values("
-                "%s,%s,%s,%s,'2.0','CI_ONLY','CI_NOT_LLM',false,'[]'::jsonb,"
+                "%s,%s,%s,%s,'2.0','CI_ONLY','CI_NOT_LLM',true,'[]'::jsonb,"
                 "%s,%s,0.4)",
                 (cid, "ci-ledger-policy-cross-critique", aid, rid, Jsonb(ids),
                  Jsonb({"claim_checks": []})),
