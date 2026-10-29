@@ -17,7 +17,9 @@ def _id(value):
 
 
 def _ids(value):
-    if not isinstance(value, list) or not 1 <= len(value) <= 80 or not all(_id(x) for x in value):
+    # Portal ledger permits a historical Analysis or Critique with zero
+    # citations. The nonempty Run-wide Evidence union is checked below.
+    if not isinstance(value, list) or len(value) > 80 or not all(_id(x) for x in value):
         raise ValueError("invalid evidence IDs")
     if len(value) != len(set(value)):
         raise ValueError("duplicate evidence IDs")

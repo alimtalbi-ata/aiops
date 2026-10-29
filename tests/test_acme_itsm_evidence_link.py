@@ -78,6 +78,44 @@ class LinkTests(unittest.TestCase):
             self.assertIsNone(out['glpi_ticket_claim'])
             self.assertIsNone(out['ticket_id'])
 
+    def test_empty_historical_analysis_and_critique_do_not_hide_sourced_run(self):
+        # Portal demo_ledger_read._evidence_ids permits empty arrays on
+        # individual records, while Core still requires a nonempty Run union.
+        historical = {
+            **LEDGER,
+            'analyses': [*LEDGER['analyses'],
+                         {'analysis_id': 'AN-HIST', 'evidence_ids': []}],
+            'critiques': [*LEDGER['critiques'],
+                          {'critique_id': 'CR-HIST', 'analysis_id': 'AN-HIST',
+                           'evidence_ids': []}],
+        }
+        out = project_itsm_evidence(RUN, historical)
+        self.assertEqual(out['state'], 'CORRELATED_UNATTESTED')
+        self.assertEqual(out['evidence_ids'], ['EVD-1'])
+        self.assertEqual(out['analysis_ids'], ['AN-1', 'AN-HIST'])
+        self.assertEqual(out['critique_ids'], ['CR-1', 'CR-HIST'])
+        self.assertIsNone(out['ticket_id'])
+
+    def test_empty_critique_citation_does_not_invent_support(self):
+        # A critique with zero citations may still be a recorded rejection.
+        ledger = {**LEDGER, 'critiques': [
+            {**LEDGER['critiques'][0], 'evidence_ids': []}]}
+        out = project_itsm_evidence(RUN, ledger)
+        self.assertEqual(out['state'], 'CORRELATED_UNATTESTED')
+        self.assertEqual(out['evidence_ids'], ['EVD-1'])
+        self.assertIsNone(out['ticket_id'])
+
+    def test_empty_union_and_missing_citation_still_unknown(self):
+        # Never turn a run without evidence or with a foreign citation into
+        # a sourced correlation.
+        no_union = {**LEDGER, 'analyses': [
+            {**LEDGER['analyses'][0], 'evidence_ids': []}],
+            'critiques': [{**LEDGER['critiques'][0], 'evidence_ids': []}]}
+        self.assertEqual(project_itsm_evidence(RUN, no_union)['state'], 'UNKNOWN')
+        foreign = {**LEDGER, 'critiques': [
+            {**LEDGER['critiques'][0], 'evidence_ids': ['EVD-OTHER']}]}
+        self.assertEqual(project_itsm_evidence(RUN, foreign)['state'], 'UNKNOWN')
+
     def test_no_network_or_auth_bypass_surface(self):
         out = project_itsm_evidence(RUN, LEDGER)
         self.assertNotIn('token', str(out).lower())
