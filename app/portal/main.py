@@ -421,7 +421,7 @@ def demo_run_detail(rid:str):
             mode=matched.get("mode","DEMO"))
     ledger=_verified_demo_ledger(_get("/api/runs/"+key+"/ai-ledger"), detail["run"])
     from portal.demo_v2 import render_demo_v2, verified_policy_gates
-    gate=verified_policy_gates(_get("/api/runs/"+key+"/gates"), rid)
+    gate=verified_policy_gates(_get("/api/runs/"+key+"/gates"), rid, detail["run"])
     body=panel("Suivi de l'exécution",
       '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
       '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
@@ -471,7 +471,7 @@ def demo_status(rid:str):
     run=detail["run"]
     ledger=_verified_demo_ledger(_get("/api/runs/"+rid+"/ai-ledger"), run)
     from portal.demo_v2 import verified_policy_gates
-    gates=verified_policy_gates(_get("/api/runs/"+rid+"/gates"), rid)
+    gates=verified_policy_gates(_get("/api/runs/"+rid+"/gates"), rid, run)
     events=detail.get("events",None)
     if not isinstance(events,list):
         events="INCONNU"
