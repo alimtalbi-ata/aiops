@@ -320,5 +320,110 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                 with self.assertRaises(ProbeError):
                     loopback_url(url)
 
+    def test_real_policy_http_core_values_match_but_never_attest_run_binding(self):
+        # Both HTTP services and PostgreSQL 16 are real and ephemeral in CI.
+        # The Core gate fixture is seeded independently of Policy: no causality.
+        from scripts.probe_demo_policy_readonly import (
+            ProbeError, compare_unbound_policy_values,
+        )
+        payload = {
+            "mode": "DEMO", "command": "OBSERVE", "severity": "P2",
+            "confidence": 0.99, "evidence_count": 2,
+            "critic_validated": True, "redundancy_ok": True,
+            "evidence_fresh": True, "preconditions_verified": True,
+            "fencing_verified": True, "human_approved": False,
+        }
+        policy_http = requests.post(
+            "http://127.0.0.1:1813/api/policy/check",
+            json=payload, timeout=3, allow_redirects=False,
+        )
+        self.assertEqual(policy_http.status_code, 200, policy_http.text)
+        self.assertEqual(
+            (policy_http.json()["state"], policy_http.json()["decision"]),
+            ("PASS", "SIMULATE"),
+        )
+        rid = "RUN-" + PREFIX + "RESOLVED"
+        iid = "INC-" + PREFIX + "RESOLVED"
+        core_http = self.read("RESOLVED")
+        self.assertEqual(core_http.status_code, 200, core_http.text)
+        comparison = compare_unbound_policy_values(
+            core_http.json(), policy_http.json(), rid, iid,
+        )
+        self.assertEqual(comparison["overall"], "NO_GO")
+        self.assertEqual(comparison["comparison"], "VALUES_MATCH_NOT_CAUSAL_PROOF")
+        self.assertIs(comparison["policy_run_binding_verified"], False)
+        self.assertIs(comparison["live_remediation_authorized"], False)
+        self.assertNotIn("reason", comparison)
+
+        # Matching a fresh Policy response must never fabricate a missing gate.
+        for suffix in ("RESOLVED-NOGATE", "BLOCKED", "RUNNING"):
+            with self.subTest(missing_gate=suffix):
+                core = self.read(suffix)
+                self.assertEqual(core.status_code, 200, core.text)
+                with self.assertRaises(ProbeError):
+                    compare_unbound_policy_values(
+                        core.json(), policy_http.json(),
+                        "RUN-" + PREFIX + suffix, "INC-" + PREFIX + suffix,
+                    )
+        with self.assertRaises(ProbeError):
+            compare_unbound_policy_values(
+                core_http.json(), policy_http.json(), rid, iid + "-OTHER",
+            )
+        with self.assertRaises(ProbeError):
+            compare_unbound_policy_values(
+                core_http.json(), {**policy_http.json(), "decision": "ALLOW"},
+                rid, iid,
+            )
+        with self.assertRaises(ProbeError):
+            compare_unbound_policy_values(
+                core_http.json(), {**policy_http.json(), "run_id": rid},
+                rid, iid,
+            )
+        for invalid in ([], True, None):
+            with self.subTest(malformed_policy=repr(invalid)):
+                with self.assertRaises(ProbeError):
+                    compare_unbound_policy_values(
+                        core_http.json(), {**policy_http.json(), "state": invalid},
+                        rid, iid,
+                    )
+
+        # No Evidence: Policy UNKNOWN is compatible with an independently
+        # persisted UNKNOWN gate, but still NOT a verified HITL approval.
+        unknown = requests.post(
+            "http://127.0.0.1:1813/api/policy/check",
+            json={**payload, "evidence_count": 0},
+            timeout=3, allow_redirects=False,
+        )
+        self.assertEqual(unknown.status_code, 200, unknown.text)
+        unknown_core = self.read("UNKNOWN-GATE")
+        self.assertEqual(unknown_core.status_code, 200, unknown_core.text)
+        report = compare_unbound_policy_values(
+            unknown_core.json(), unknown.json(),
+            "RUN-" + PREFIX + "UNKNOWN-GATE",
+            "INC-" + PREFIX + "UNKNOWN-GATE",
+        )
+        self.assertEqual(
+            (report["policy_gate_state"], report["policy_decision"]),
+            ("UNKNOWN", "HUMAN_APPROVAL"),
+        )
+        self.assertIs(report["hitl_approval_verified"], False)
+
+        live = requests.post(
+            "http://127.0.0.1:1813/api/policy/check",
+            json={**payload, "mode": "LIVE", "severity": "P1",
+                  "command": "REMEDIATE", "human_approved": True},
+            timeout=3, allow_redirects=False,
+        )
+        self.assertEqual(live.status_code, 200, live.text)
+        self.assertEqual(
+            (live.json()["state"], live.json()["decision"]),
+            ("BLOCKED", "ESCALATE"),
+        )
+        self.assertEqual(self.read("LIVE").status_code, 503)
+        with self.assertRaises(ProbeError):
+            compare_unbound_policy_values(
+                core_http.json(), live.json(), rid, iid,
+            )
+
 if __name__ == "__main__":
     unittest.main()
