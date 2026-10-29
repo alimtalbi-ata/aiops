@@ -19,3 +19,9 @@
 - **BLOCKED / READY_FOR_STABLE=false / NO-GO** : échéance ~05h dépassée, CI globale antérieure rouge, transport incomplet, recette terrain et rollback non attestés. Aucune fusion, aucun push stable, aucun accès Debian, aucun effet LIVE.
 - **NOT_TESTED** : navigateur authentifié, RBAC/tenant runtime, impact réel SAN→Payments, chaîne Core→Temporal→Analyst/Critic→Policy SIMULATE→Evidence→Portal, `applied.sha` authentique, smoke-tests et rollback sur SRV-DEB-05.
 - Prochain lot : vérifier CI du SHA final, transmettre à Recette 5/5 la PR #177 avec SHA et NO-GO ; ne promouvoir que si quality.yml intégrale verte, couverture déployeur et rollback qualifiés, recette read-only observée et preuves serveur horodatées.
+
+## Suivi CI et correction (05:10 Europe/Paris)
+- [quality.yml #40816105232](https://github.com/alimtalbi-ata/aiops/actions/runs/40816105232) sur `5e41cc49` : job `quality-build-package` **FAILURE** pendant les tests portail ; 2 cas en échec, identifiés dans les logs (un `NameError impact_shape_ok` dans `twin_page` causé par un remplacement trop large et une assertion HTML qui attendait `SAN→Payments` sur l'enveloppe d'erreur).
+- Correction `e5b2a0124014441166ad862a0dce08d9f0fa6c6e` : `twin_page` retrouve son rendu inchangé ; le filtre de portée Twin s'applique **uniquement** à `demo_studio`, avec intitulé de tableau `Propagation SAN→Payments` explicite. Aucun changement Core/Twin ni autre contrat public.
+- CI du commit de correction : **QUEUED** au relevé ; ne pas confondre avec un PASS. Tests locaux et terrain toujours NOT_TESTED. La présente mise à jour documentaire déclenche un nouveau SHA final à vérifier.
+- Décision inchangée : **BLOCKED / NO-GO** même si les tests UI deviennent verts ; Policy/Temporal et transport stable restent à qualifier.
