@@ -5,10 +5,12 @@ Call only with snapshots fetched by existing authorized server-side readers.
 Never expose a Core credential or promote a signed NOC ticket claim to a GLPI ticket.
 """
 import re
+from datetime import datetime, timedelta, timezone
 from shared.tenant_scope import reject_unqualified_tenant_scope
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
+_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _MODES = frozenset({"DEMO", "REPLAY", "STORY"})
 _SCHEMA = "aiops.acme-itsm-evidence-link.v1"
 
@@ -32,7 +34,8 @@ def project_itsm_evidence(core_detail, ledger, signed_noc=None):
     result = {
         "schema": _SCHEMA, "state": "UNKNOWN", "run_id": None,
         "incident_id": None, "analysis_ids": [], "critique_ids": [],
-        "policy_decision_ids": [], "evidence_ids": [], "glpi_ticket_claim": None,
+        "policy_decision_ids": [], "evidence_ids": [], "evidence_refs": [],
+        "evidence_source_contract": None, "glpi_ticket_claim": None,
         "ticket_id": None, "ticket_verification": "NOT_TESTED_NO_GLPI_API_READ",
         "classification": "UNKNOWN", "tenant_acl_qualified": False,
         "runtime_attested": False, "effect_applied": False,
@@ -76,12 +79,24 @@ def project_itsm_evidence(core_detail, ledger, signed_noc=None):
             reject_unqualified_tenant_scope(signed_noc)
         evidence = {}
         for item in refs:
-            if (not isinstance(item, dict) or not _id(item.get("evidence_id"))
-                    or not isinstance(item.get("source"), str) or not item["source"]
-                    or not isinstance(item.get("known_at"), str) or not item["known_at"]
+            if (not isinstance(item, dict)
+                    or set(item) != {"evidence_id", "source", "payload_sha256", "known_at"}
+                    or not _id(item.get("evidence_id"))
+                    or not isinstance(item.get("source"), str)
+                    or _SOURCE.fullmatch(item["source"]) is None
+                    or not isinstance(item.get("known_at"), str)
+                    or len(item["known_at"]) > 48
                     or not isinstance(item.get("payload_sha256"), str)
                     or _SHA.fullmatch(item["payload_sha256"]) is None
                     or item["evidence_id"] in evidence):
+                return result
+            try:
+                known = datetime.fromisoformat(item["known_at"])
+            except ValueError:
+                return result
+            if (known.tzinfo is None or known.utcoffset() is None
+                    or known.astimezone(timezone.utc) >
+                    datetime.now(timezone.utc) + timedelta(minutes=5)):
                 return result
             evidence[item["evidence_id"]] = item
         analysis_map = {}
@@ -118,7 +133,12 @@ def project_itsm_evidence(core_detail, ledger, signed_noc=None):
                    "incident_id": incident, "analysis_ids": sorted(analysis_map),
                    "critique_ids": sorted(critique_map),
                    "policy_decision_ids": sorted(policy_ids),
-                   "evidence_ids": sorted(evidence), "classification": "SYNTHETIC_ONLY"})
+                   "evidence_ids": sorted(evidence),
+                   # Copy only the four already-qualified Core reference fields;
+                   # never expose raw payloads or infer observed metrics.
+                   "evidence_refs": [evidence[key].copy() for key in sorted(evidence)],
+                   "evidence_source_contract": "CORE_AI_LEDGER_INTERNAL_READ",
+                   "classification": "SYNTHETIC_ONLY"})
     # Reuse the old signed-NOC contract: a claim is not a GLPI API read.
     if (isinstance(signed_noc, dict)
             and signed_noc.get("schema") == "aiops.noc-runtime-envelope.v1"
