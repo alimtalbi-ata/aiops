@@ -9,7 +9,7 @@ import unittest
 import psycopg
 import requests
 from psycopg.types.json import Jsonb
-from app.shared.simulation_policy_contract import validate_synthetic_gate_receipt
+from app.shared.simulation_policy_contract import validate_synthetic_gate_receipt, validate_canonical_run_binding
 
 BASE = "http://127.0.0.1:1810"
 TOKEN = os.environ["AIOPS_INTERNAL_TOKEN"]
@@ -21,6 +21,7 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.cases = {
+            "CREATED": ("DEMO", "CREATED", True, {}, None),
             "BLOCKED": ("DEMO", "BLOCKED", True, {}, None),
             "RESOLVED": ("DEMO", "RESOLVED", True, {}, ("PASS", "SIMULATE")),
             "RUNNING": ("DEMO", "RUNNING", True, {}, None),
@@ -87,6 +88,34 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
         return requests.get(BASE + "/api/noc/runs/RUN-" + PREFIX + suffix +
                             "/policy-status", headers=headers, timeout=3,
                             allow_redirects=False)
+
+    def test_real_core_run_identity_binding_rejects_live_and_started(self):
+        # Real Core HTTP/PostgreSQL: no Temporal client or effectful endpoint.
+        def core_run(suffix):
+            rid = "RUN-" + PREFIX + suffix
+            response = requests.get(
+                BASE + "/api/runs/" + rid,
+                headers={"Authorization": "Bearer " + TOKEN},
+                timeout=3, allow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            return response.json()
+
+        rid = "RUN-" + PREFIX + "CREATED"
+        args = {"run_id": rid, "mode": "DEMO",
+                "scenario_id": "CI-ACME", "version": 1}
+        created = core_run("CREATED")
+        self.assertEqual(
+            validate_canonical_run_binding(created, args)["run_id"], rid)
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(
+                core_run("LIVE"), dict(args, run_id="RUN-" + PREFIX + "LIVE"))
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(
+                core_run("RUNNING"),
+                dict(args, run_id="RUN-" + PREFIX + "RUNNING"))
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(created, dict(args, scenario_id="OTHER"))
 
     def test_resolved_with_recorded_simulate_is_never_live_proof(self):
         response = self.read("RESOLVED")
