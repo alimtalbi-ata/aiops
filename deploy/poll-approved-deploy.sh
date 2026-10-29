@@ -11,6 +11,15 @@ if [[ "$BRANCH" != "deploy/aiops2-stable" ]]; then
   exit 1
 fi
 REMOTE="${AIOPS_DEPLOY_REMOTE:-git@github.com:alimtalbi-ata/aiops.git}"
+# Do not let an environment override silently redirect the approved stable ref
+# to an unreviewed repository with an identically named branch.
+case "$REMOTE" in
+  git@github.com:alimtalbi-ata/aiops.git|https://github.com/alimtalbi-ata/aiops.git) ;;
+  *)
+    echo "BLOCKED: poller remote must be the approved GitHub repository" >&2
+    exit 1
+    ;;
+esac
 mkdir -p "$BASE"
 exec 9>"$BASE/poll.lock"
 flock -n 9 || exit 0

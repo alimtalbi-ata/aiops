@@ -1,4 +1,6 @@
 import os
+import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -56,11 +58,32 @@ class PollApprovedDeployTests(unittest.TestCase):
         self.push()
 
         self.base.mkdir()
+        # Keep the production poller unmodified. A test-only git executable
+        # maps ONLY the approved GitHub clone URL to the ephemeral bare repo;
+        # subsequent fetches use that local origin. The production script has
+        # no test-mode or remote-override bypass.
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        shim = bin_dir / "git"
+        shim.write_text(
+            '#!/usr/bin/env bash\n'
+            'if [[ "$1" == clone && "$2" == --filter=blob:none && '
+            '( "$3" == git@github.com:alimtalbi-ata/aiops.git || '
+            '"$3" == https://github.com/alimtalbi-ata/aiops.git ) ]]; then\n'
+            f'  exec {shlex.quote(real_git)} clone --filter=blob:none "$AIOPS_TEST_ORIGIN" "$4"\n'
+            'fi\n'
+            f'exec {shlex.quote(real_git)} "$@"\n'
+        )
+        shim.chmod(0o700)
         self.env = os.environ.copy()
+        self.env.pop("AIOPS_DEPLOY_REMOTE", None)
         self.env.update({
             "AIOPS_AUTODEPLOY_HOME": str(self.base),
-            "AIOPS_DEPLOY_REMOTE": str(self.origin),
+            "AIOPS_TEST_ORIGIN": str(self.origin),
             "AIOPS_DEPLOY_BRANCH": "deploy/aiops2-stable",
+            "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", ""),
             "GIT_TERMINAL_PROMPT": "0",
         })
 
@@ -110,6 +133,34 @@ class PollApprovedDeployTests(unittest.TestCase):
                 self.assertEqual(self.invocations(), [])
                 self.assertEqual((self.base / "applied.sha").read_text(),
                                  self.initial + "\n")
+
+    def test_poller_rejects_unapproved_remote_before_git_or_deployment(self):
+        self.write_applied(self.initial)
+        for remote in (str(self.origin), "file:///tmp/unreviewed.git",
+                       "git@github.com:attacker/aiops.git",
+                       "https://github.com/alimtalbi-ata/aiops",
+                       "https://evil.example/alimtalbi-ata/aiops.git",
+                       " https://github.com/alimtalbi-ata/aiops.git"):
+            with self.subTest(remote=remote):
+                env = dict(self.env, AIOPS_DEPLOY_REMOTE=remote)
+                result = run("bash", POLLER, env=env, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("remote must be the approved GitHub repository",
+                              result.stderr)
+                self.assertFalse((self.base / "repo").exists())
+                self.assertFalse((self.base / "poll.lock").exists())
+                self.assertEqual(self.invocations(), [])
+                self.assertEqual((self.base / "applied.sha").read_text(),
+                                 self.initial + "\n")
+
+    def test_approved_https_remote_deploys_from_ephemeral_git_fixture(self):
+        self.write_applied(self.initial)
+        target = self.advance("approved HTTPS candidate")
+        env = dict(self.env, AIOPS_DEPLOY_REMOTE="https://github.com/alimtalbi-ata/aiops.git")
+        result = run("bash", POLLER, env=env, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.invocations(), ["invoked"])
+        self.assertEqual((self.base / "applied.sha").read_text().strip(), target)
 
     def test_already_applied(self):
         self.write_applied(self.initial)
