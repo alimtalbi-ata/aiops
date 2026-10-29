@@ -81,7 +81,7 @@ def qualify(base, portal, get=fetch_json):
             "service_id": SERVICE, "event_types": types, "evidence_refs_unattested": evidence_refs,
             "payments_runtime_impact": "UNKNOWN", "glpi_ticket": "UNKNOWN",
             "tenant_acl_qualified": False, "e2e_attested": False,
-            "portal_url": portal.rstrip("/") + "/demo-studio?run_id=" + quote(rid, safe=""),
+            "portal_url": portal.rstrip("/") + "/demo-studio/run/" + quote(rid, safe=""),
             "timeline_url": portal.rstrip("/") + "/timeline?run_id=" + quote(rid, safe=""),
         }
     return {"result": "UNKNOWN", "reason": "RUN_DETAIL_MISMATCH", "run_id": None}

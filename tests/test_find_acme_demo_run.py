@@ -36,7 +36,8 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(result["result"], "SOURCE_VERIFIED_REGISTRY_ONLY")
         self.assertEqual(result["run_id"], "RUN-ABC123")
         self.assertEqual(result["evidence_refs_unattested"], ["EVD-1", "EVD-2"])
-        self.assertEqual(result["portal_url"], "http://portal/demo-studio?run_id=RUN-ABC123")
+        self.assertEqual(result["portal_url"], "http://portal/demo-studio/run/RUN-ABC123")
+        self.assertEqual(result["timeline_url"], "http://portal/timeline?run_id=RUN-ABC123")
         self.assertEqual(result["payments_runtime_impact"], "UNKNOWN")
         self.assertFalse(result["e2e_attested"])
 
