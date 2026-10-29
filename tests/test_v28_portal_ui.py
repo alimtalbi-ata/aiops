@@ -519,5 +519,65 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertEqual(result["events"][0]["event_type"],"SYNTHETIC-EVENT")
         self.assertEqual(len(calls),8)
 
+
+    def test_demo_ledger_foreign_identity_and_error_body_fail_closed(self):
+        forged = (
+            {"run_id": "RUN-OTHER", "analysis": "FOREIGN-LEDGER-SECRET"},
+            {"tenant_id": "TENANT-B", "analysis": "FOREIGN-LEDGER-SECRET"},
+            {"items": [{"run_id": "RUN-OTHER", "analysis": "FOREIGN-LEDGER-SECRET"}]},
+            {"analysis": {"tenant_id": "TENANT-B", "text": "FOREIGN-LEDGER-SECRET"}},
+            {"status": "UNKNOWN", "error_type": "HTTPError",
+             "http_status": 401, "analysis": "FOREIGN-LEDGER-SECRET"},
+        )
+        for ledger in forged:
+            with self.subTest(ledger=ledger):
+                def get(base, path):
+                    if path == "/api/runs":
+                        return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                           "tenant_id": "TENANT-A"}]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                        "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                                "events": []}
+                    if path.endswith("/ai-ledger"):
+                        return ledger
+                    if path.endswith("/gates"):
+                        return {"items": []}
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_run_detail("RUN-DEMO")
+                        poll = self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn("FOREIGN-LEDGER-SECRET", page)
+                self.assertNotIn("FOREIGN-LEDGER-SECRET", str(poll))
+                self.assertEqual(poll["ledger"]["status"], "UNKNOWN")
+                if ledger.get("http_status") == 401:
+                    self.assertIn("HTTP 401", page)
+                    self.assertEqual(poll["ledger"]["http_status"], 401)
+
+    def test_demo_ledger_matching_identity_preserves_source_data(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                   "tenant_id": "TENANT-A"}]}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                "tenant_id": "TENANT-A", "status": "RESOLVED"},
+                        "events": []}
+            if path.endswith("/ai-ledger"):
+                return {"run_id": "RUN-DEMO", "tenant_id": "TENANT-A",
+                        "analysis": "MATCHED-LEDGER-DEMO"}
+            if path.endswith("/gates"):
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_run_detail("RUN-DEMO")
+                poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("MATCHED-LEDGER-DEMO", page)
+        self.assertEqual(poll["ledger"]["analysis"], "MATCHED-LEDGER-DEMO")
+
 if __name__=="__main__":
     unittest.main()

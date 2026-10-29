@@ -114,6 +114,43 @@ def _demo_detail_matches(detail, listed):
                     return False
     return True
 
+def _verified_demo_ledger(value, run):
+    """Reject foreign or error-wrapped AI Ledger data before HTML and polling.
+
+    The Core ledger may omit identity fields. Explicit run/tenant claims must
+    agree with the already verified Core detail; absence is not attestation.
+    Never echo an error body, even if it carries plausible analysis records.
+    """
+    unknown = {"status": "UNKNOWN"}
+    if not isinstance(value, dict) or not isinstance(run, dict):
+        return unknown
+    if value.get("status") in ("UNKNOWN", "ERROR") or "error_type" in value:
+        if (value.get("error_type") == "HTTPError"
+                and type(value.get("http_status")) is int
+                and value["http_status"] in (401, 403)):
+            return {"status": "UNKNOWN", "error_type": "HTTPError",
+                    "http_status": value["http_status"]}
+        return unknown
+
+    def matches(claim):
+        if not isinstance(claim, dict):
+            return False
+        return all(key not in claim or
+                   (key in run and claim[key] == run[key])
+                   for key in ("run_id", "tenant_id", "tenant"))
+
+    if not matches(value):
+        return unknown
+    items = value.get("items")
+    if items is not None and (not isinstance(items, list)
+                              or not all(matches(item) for item in items)):
+        return unknown
+    for section in ("analysis", "critic"):
+        if isinstance(value.get(section), dict) and not matches(value[section]):
+            return unknown
+    return value
+
+
 def _unique_demo_run(items, rid):
     """Reject duplicate Core inventory IDs before any detail or ledger read."""
     # Count *all* modes first: a LIVE/DEMO ID collision is ambiguous too.
@@ -336,7 +373,7 @@ def demo_run_detail(rid:str):
                 "indisponible. Aucun registre Analyst/Critic/Policy/Evidence "
                 "n'est affiché.</p>"),
             mode=matched.get("mode","DEMO"))
-    ledger=_get("/api/runs/"+key+"/ai-ledger")
+    ledger=_verified_demo_ledger(_get("/api/runs/"+key+"/ai-ledger"), detail["run"])
     from portal.demo_v2 import render_demo_v2, verified_policy_gates
     gate=verified_policy_gates(_get("/api/runs/"+key+"/gates"), rid)
     body=panel("Suivi de l'exécution",
@@ -386,7 +423,7 @@ def demo_status(rid:str):
                 "source":"CORE_IDENTITY_UNVERIFIED","events":"INCONNU",
                 "ledger":{"status":"UNKNOWN"},"gates":{"status":"UNKNOWN"}}
     run=detail["run"]
-    ledger=_get("/api/runs/"+rid+"/ai-ledger")
+    ledger=_verified_demo_ledger(_get("/api/runs/"+rid+"/ai-ledger"), run)
     from portal.demo_v2 import verified_policy_gates
     gates=verified_policy_gates(_get("/api/runs/"+rid+"/gates"), rid)
     events=detail.get("events",None)
