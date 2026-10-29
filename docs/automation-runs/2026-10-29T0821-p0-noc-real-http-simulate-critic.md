@@ -21,3 +21,8 @@
 - **READY_FOR_STABLE=BLOCKED / NO-GO**. L'assemblage UI/Twin/NOC/Policy, CI UI rouge, impact Payments observé, tenant A/B authentifié, chemin Temporal/Policy SIMULATE métier, transport Core/Twin/Copilot/Policy par déployeur, rollback, `applied.sha` et smoke-tests Debian restent **NOT_TESTED**.
 - Aucun push stable, aucun merge, aucune commande LIVE, aucun accès à SRV-DEB-05. Le poller ne déploie pas les PR et ne prouve pas l'E2E.
 - Prochain lot : confirmer le test HTTP et CI complète sur SHA final, transmettre à Recette 5/5 ; seul le schedule 5/5 peut assembler et décider d'une promotion après recette et rollback.
+
+## Vérification CI après commit documentaire initial
+- SHA `d3ce43231e7da5a93a67a321b360962aaca0e51e` : [quality.yml #40835090813](https://github.com/alimtalbi-ata/aiops/actions/runs/40835090813) **completed/success, 6/6 jobs** ; [V2.8 #40835090807](https://github.com/alimtalbi-ata/aiops/actions/runs/40835090807), [Offline #40835090838](https://github.com/alimtalbi-ata/aiops/actions/runs/40835090838), [Historical #40835090801](https://github.com/alimtalbi-ata/aiops/actions/runs/40835090801) **completed/success**.
+- Logs du job `database-migrations` consultés : `test_real_simulate_requires_linked_validated_critique ... ok`, **14/14 tests HTTP Core/Portal/PostgreSQL 16 PASS**. Le job `quality-build-package` et `runtime-e2e` sont SUCCESS ; ce dernier est synthétique, **pas** une recette métier ACME.
+- Ce nouvel addendum crée un **nouveau HEAD** documentaire : ses checks doivent être vérifiés séparément avant toute déclaration de CI verte sur le SHA final. Aucun GO terrain implicite.
