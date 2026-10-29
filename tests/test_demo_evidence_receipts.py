@@ -25,13 +25,14 @@ def fixture():
               "tenant_acl_qualified": False, "runtime_attested": False,
               "evidence_classification": "SYNTHETIC_ONLY", "event_link_verified": True,
               "evidence_refs": [deepcopy(item)],
-              "analyses": [{"analysis_id": "A-1", "model": "synthetic", "status": "COMPLETE",
+              "analyses": [{"analysis_id": "A-1", "model": "synthetic", "status": "VALID",
                             "evidence_ids": ["EVD-1"]}],
               "critiques": [{"critique_id": "C-1", "analysis_id": "A-1", "model": "synthetic",
                              "validated": True, "evidence_ids": ["EVD-1"], "claim_checks": [
                                  {"claim": "synthetic", "supported": True,
                                   "supporting_evidence_ids": ["EVD-1"]}]}],
-              "policy_decisions": [{"policy_decision_id": "P-1", "decision": "SIMULATE",
+              "policy_decisions": [{"policy_decision_id": "P-1", "analysis_id": "A-1",
+                                    "critique_id": "C-1", "decision": "SIMULATE",
                                     "state": "PASS"}]}
     return rid, ledger, refs
 
@@ -137,7 +138,73 @@ class EvidenceReceiptTests(unittest.TestCase):
         receipt = qualify(rid, ledger, refs)
         self.assertEqual(receipt["assessment"], "REFERENTIAL_CHECK_PASS")
         self.assertEqual(receipt["policy_critic_linkage_origin"], "NOT_TESTED")
+        self.assertEqual(receipt["checks"]["recorded_policy_critic_join"], "PASS_UNATTESTED")
         self.assertEqual(receipt["overall"], "NO_GO")
+
+    def test_policy_linkage_rejects_foreign_missing_and_cross_analysis(self):
+        for mutation in ("missing_analysis_key", "missing_critique_key",
+                         "foreign_analysis", "foreign_critique", "cross_analysis",
+                         "null_both", "invalid_analysis_type", "invalid_critique_type",
+                         "duplicate_policy"):
+            rid, ledger, refs = fixture()
+            decision = ledger["policy_decisions"][0]
+            if mutation == "missing_analysis_key":
+                del decision["analysis_id"]
+            elif mutation == "missing_critique_key":
+                del decision["critique_id"]
+            elif mutation == "foreign_analysis":
+                decision["analysis_id"] = "A-FOREIGN"
+            elif mutation == "foreign_critique":
+                decision["critique_id"] = "C-FOREIGN"
+            elif mutation == "cross_analysis":
+                ledger["analyses"].append({
+                    "analysis_id": "A-2", "model": "synthetic", "status": "VALID",
+                    "evidence_ids": ["EVD-1"]})
+                decision["analysis_id"] = "A-2"
+            elif mutation == "null_both":
+                decision["analysis_id"] = None
+                decision["critique_id"] = None
+            elif mutation == "invalid_analysis_type":
+                decision["analysis_id"] = 123
+            elif mutation == "invalid_critique_type":
+                decision["critique_id"] = False
+            else:
+                ledger["policy_decisions"].append(deepcopy(decision))
+            with self.subTest(mutation=mutation), self.assertRaises(Blocked):
+                qualify(rid, ledger, refs)
+
+    def test_policy_pass_requires_own_validated_critique(self):
+        rid, ledger, refs = fixture()
+        ledger["critiques"].append({
+            "critique_id": "C-2", "analysis_id": "A-1", "model": "synthetic",
+            "validated": False, "evidence_ids": ["EVD-1"], "claim_checks": [],
+        })
+        ledger["policy_decisions"][0]["critique_id"] = "C-2"
+        # A different validated Critique in the same Run must not certify PASS.
+        with self.assertRaisesRegex(Blocked, "simulate_pass_without_validated_critique"):
+            qualify(rid, ledger, refs)
+
+    def test_policy_pass_requires_valid_analysis_not_historical(self):
+        for status in ("INVALID", "UNAVAILABLE", "SUPERSEDED", "COMPLETE"):
+            rid, ledger, refs = fixture()
+            ledger["analyses"][0]["status"] = status
+            with self.subTest(status=status), self.assertRaisesRegex(
+                    Blocked, "simulate_pass_without_valid_analysis"):
+                qualify(rid, ledger, refs)
+
+    def test_historical_block_and_nullable_policy_links_remain_readable(self):
+        rid, ledger, refs = fixture()
+        ledger["policy_decisions"][0]["analysis_id"] = None
+        ledger["analyses"].append({
+            "analysis_id": "A-2", "model": "synthetic", "status": "SUPERSEDED",
+            "evidence_ids": ["EVD-1"]})
+        ledger["policy_decisions"].append({
+            "policy_decision_id": "P-2", "analysis_id": "A-2",
+            "critique_id": None, "decision": "BLOCK", "state": "BLOCKED"})
+        receipt = qualify(rid, ledger, refs)
+        self.assertEqual(receipt["assessment"], "REFERENTIAL_CHECK_PASS")
+        self.assertEqual(receipt["overall"], "NO_GO")
+        self.assertEqual(receipt["policy_critic_linkage_origin"], "NOT_TESTED")
 
     def test_local_files_cli_redacts_and_blocks_symlinks(self):
         rid, ledger, refs = fixture()
