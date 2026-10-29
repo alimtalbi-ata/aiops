@@ -142,5 +142,43 @@ class DemoV2Tests(unittest.TestCase):
         self.assertEqual(module.classify("app/portal/acme_business_story.html", "A"), "BLOCKED")
 
 
+    def test_demo_studio_guides_to_existing_core_run_without_live_or_ticket(self):
+        from portal import main as portal_main
+        runs = [
+            {"run_id": "RUN-STALE", "mode": "DEMO", "status": "RUNNING"},
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-BLOCKED", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "<invalid>", "mode": "DEMO", "status": "RESOLVED"},
+        ]
+        with (patch.object(portal_main, "_get", return_value={}),
+              patch.object(portal_main, "_runs", return_value=runs),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("unexpected write"))):
+            page = portal_main.demo_studio()
+        self.assertIn('href="/demo-studio/run/RUN-BLOCKED"', page)
+        self.assertIn('href="/timeline?run_id=RUN-BLOCKED"', page)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
+        self.assertNotIn('href="/demo-studio/run/%3Cinvalid%3E"', page)
+        for path in ('href="/"', 'href="/twin"', 'href="/timeline"',
+                     'href="/policy-control"', 'href="/evidence"'):
+            self.assertIn(path, page)
+        self.assertIn("Ticket ITSM GLPI", page)
+        self.assertIn("UNKNOWN", page)
+        self.assertIn("non attesté", page)
+
+    def test_demo_studio_no_core_run_keeps_unknown_and_no_fake_deep_link(self):
+        from portal import main as portal_main
+        with (patch.object(portal_main, "_get", return_value={}),
+              patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+                  {"run_id": "bad/run", "mode": "DEMO", "status": "BLOCKED"}]),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("unexpected write"))):
+            page = portal_main.demo_studio()
+        self.assertIn("aucun run DEMO/REPLAY/STORY valide", page)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
+        self.assertNotIn('href="/demo-studio/run/bad', page)
+
+
 if __name__ == "__main__":
     unittest.main()

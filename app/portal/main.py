@@ -210,7 +210,7 @@ def demo_studio():
     graph=_get("/api/twin/graph",TWIN)
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
     runs=_runs()
-    demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
+    demo_runs=[r for r in runs if isinstance(r,dict) and r.get("mode") in ("DEMO","REPLAY","STORY")]
     body=panel("Démo ACME — valeur métier",
         '<p>Six étapes dans le portail existant : enjeu Payments, incident SAN, diagnostic, décision SIMULATE/HITL et valeur hypothétique. Aucune action LIVE ni gain mesuré.</p>'
         '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
@@ -242,6 +242,30 @@ def demo_studio():
           'if(!/^[A-Za-z0-9_-]{1,128}$/.test(rid)){status.textContent="Réponse de lancement sans identifiant valide";return;}'
           'location.assign("/demo-studio/run/"+encodeURIComponent(rid));'
           '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
+    # Navigate a real Core inventory entry; never substitute a fixture or LIVE run.
+    import urllib.parse
+    eligible=[r for r in demo_runs
+              if isinstance(r.get("run_id"),str)
+              and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",r["run_id"])]
+    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
+                  eligible[0] if eligible else None)
+    if selected:
+        rid=urllib.parse.quote(selected["run_id"],safe="")
+        run_entry=('<p><strong>Run Core proposé (non attesté) :</strong> '
+                   +esc(selected["run_id"])+' · '+esc(selected.get("status","UNKNOWN"))
+                   +' · <a href="/demo-studio/run/'+rid+'">Détail Analyst/Critic</a>'
+                   +' · <a href="/timeline?run_id='+rid+'">Timeline du même run</a></p>')
+    else:
+        run_entry='<p><strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY valide accessible depuis Core.</p>'
+    body+=panel("Parcours opérationnel ACME — navigation guidée",
+        '<ol><li><a href="/">Cockpit NOC / enjeu Payments</a></li>'
+        '<li><a href="/twin">SAN et dépendances Twin</a> — impact Payments à confirmer</li>'
+        '<li><a href="/timeline">Investigation Core et Analyst/Critic</a></li>'
+        '<li>Ticket ITSM GLPI : <strong>UNKNOWN</strong> — aucune liaison de ticket attestée '
+        '(<a href="/acme-stories">contexte métier</a>)</li>'
+        '<li><a href="/policy-control">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li>'
+        '<li><a href="/evidence">Evidence et provenance</a> — aucune remédiation LIVE</li></ol>'
+        +run_entry)
     body+=graph_panel(graph,impact=impact)
     body+=panel("Exécutions de démonstration déjà enregistrées",
       table(["Run","Mode","État","Scénario"],[
