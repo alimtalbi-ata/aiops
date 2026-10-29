@@ -40,3 +40,8 @@ Sortie JSON horodatée UTC sans IDs, chemins, tokens ni données sources; code 0
 | Promotion stable | NO-GO |
 
 **READY_FOR_STABLE=BLOCKED. Blocage déterminant : le déployeur #153 ne transporte pas les composants Core/Twin/Copilot/Policy/Evidence.** Prochain acte: figer un SHA par domaine, assembler un candidat unique sans fusion aveugle de `main` dans stable, construire/qualifier transport et rollback multi-services, exécuter CI intégrée et recette terrain authentifiée. Aucune promotion, aucune modification Debian, aucune remédiation LIVE.
+
+## Clôture du lot #181 (après CI de la PR dédiée)
+- PR dédiée [#181](https://github.com/alimtalbi-ata/aiops/pull/181), SHA de tête `deceef411eaebc069fdd0ad11349e52d8be57d57`, fusionnée **uniquement dans la branche Recette #156** au commit `9f59e0593206be7bbbf7d94690692a1743bba66c`. Ni `main` ni `deploy/aiops2-stable` modifiées.
+- CI du SHA de tête #181 : [quality.yml PR #40831580652](https://github.com/alimtalbi-ata/aiops/actions/runs/40831580652) et [push #40831588944](https://github.com/alimtalbi-ata/aiops/actions/runs/40831588944), **3/3 jobs SUCCESS chacun** ; logs du job policy-and-static : **7/7 tests Evidence PASS**. CI de fusion sur `9f59e059` : [#40831747759](https://github.com/alimtalbi-ata/aiops/actions/runs/40831747759), **IN_PROGRESS au contrôle**.
+- Contrat de sortie inchangé : `overall=NO_GO` même si le comparateur passe. La fusion dans #156 est une intégration de **tests et garde hors ligne**, **pas** une promotion stable ou une qualification E2E.
