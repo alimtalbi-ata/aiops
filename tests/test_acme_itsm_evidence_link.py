@@ -17,7 +17,11 @@ LEDGER = {
     'critiques': [{'critique_id': 'CR-1', 'analysis_id': 'AN-1', 'evidence_ids': ['EVD-1']}],
     'policy_decisions': [{'policy_decision_id': 'POL-1', 'analysis_id': 'AN-1', 'critique_id': 'CR-1'}],
 }
-NOC = {'run_id': 'RUN-1', 'incident_id': 'INC-1', 'ticket_id': '12345',
+NOC = {'schema': 'aiops.noc-runtime-envelope.v1',
+       'source_mode': 'ALLOWLISTED_HMAC_SIGNED_READ_MODEL',
+       'provenance': 'AUTHENTICATED_SOURCE_PAYLOAD_NOT_RUNTIME_ATTESTATION',
+       'production_qualified': False, 'ticket_provenance': 'UPSTREAM_SIGNED_CLAIM',
+       'run_id': 'RUN-1', 'incident_id': 'INC-1', 'ticket_id': '12345',
        'source_payload_authenticated': True, 'source_authentication': 'HMAC_SHA256_VERIFIED',
        'source_payload_sha256': 'b'*64, 'runtime_attested': False,
        'live_remediation_authorized': False}
@@ -61,6 +65,19 @@ class LinkTests(unittest.TestCase):
             self.assertEqual(out['state'], 'CORRELATED_UNATTESTED')
             self.assertIsNone(out['glpi_ticket_claim'])
             self.assertIsNone(out['ticket_id'])
+    def test_spoofed_noc_envelope_cannot_claim_glpi_ticket(self):
+        for change in (
+            {'schema': 'untrusted'},
+            {'source_mode': 'UNSIGNED'},
+            {'provenance': 'UNVERIFIED'},
+            {'production_qualified': True},
+            {'ticket_provenance': 'UNKNOWN'},
+        ):
+            out = project_itsm_evidence(RUN, LEDGER, {**NOC, **change})
+            self.assertEqual(out['state'], 'CORRELATED_UNATTESTED')
+            self.assertIsNone(out['glpi_ticket_claim'])
+            self.assertIsNone(out['ticket_id'])
+
     def test_no_network_or_auth_bypass_surface(self):
         out = project_itsm_evidence(RUN, LEDGER)
         self.assertNotIn('token', str(out).lower())
