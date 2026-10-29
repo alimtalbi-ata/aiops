@@ -14,9 +14,14 @@ import re
 import sys
 from pathlib import Path
 
-from scripts.check_demo_evidence_receipts import (
-    Blocked, identifier, load_local_json, qualify as qualify_evidence, require,
-)
+if __package__:
+    from .check_demo_evidence_receipts import (
+        Blocked, identifier, load_local_json, qualify as qualify_evidence, require,
+    )
+else:
+    from check_demo_evidence_receipts import (
+        Blocked, identifier, load_local_json, qualify as qualify_evidence, require,
+    )
 
 SCHEMA = "aiops.demo-release-receipt-aggregate.v1"
 SHA = re.compile(r"[a-f0-9]{40}\Z")
