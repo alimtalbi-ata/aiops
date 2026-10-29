@@ -179,8 +179,14 @@ class DemoLedgerReadTests(unittest.TestCase):
         with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, valid, REFS]):
             allowed = self.read("Bearer " + VIEWER)
         self.assertEqual(allowed.status_code, 200)
-        self.assertEqual([x["policy_decision_id"] for x in payload(allowed)["policy_decisions"]],
-                         ["POL-1", "POL-2", "POL-3"])
+        self.assertEqual(payload(allowed)["policy_decisions"], [
+            {"policy_decision_id": "POL-1", "analysis_id": "ANA-1",
+             "critique_id": "CRT-1", "decision": "SIMULATE", "state": "PASS"},
+            {"policy_decision_id": "POL-2", "analysis_id": "ANA-2",
+             "critique_id": None, "decision": "BLOCK", "state": "BLOCKED"},
+            {"policy_decision_id": "POL-3", "analysis_id": None,
+             "critique_id": "CRT-2", "decision": "OBSERVE", "state": "PASS"},
+        ])
 
         def change_policy(ledger, **fields):
             ledger["policy_decisions"][0].update(fields)

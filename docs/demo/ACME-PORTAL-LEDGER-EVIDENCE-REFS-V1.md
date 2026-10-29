@@ -96,3 +96,23 @@ not change; previously accepted inconsistent synthetic rows may be refused.
 This checks the recorded Critique flag, **not** the actual independence of
 review, freshness of observed SAN/Payments metrics, tenant ACL or an E2E
 Policy execution. A qualified `SIMULATE/PASS` is still synthetic only.
+
+## Canonical Policy → Critique/Analysis read-only linkage — 2026-10-29 09:23 CET
+
+The viewer-authenticated `aiops.demo-ledger-read.v1` projection now includes
+`analysis_id` and `critique_id` on **each** `policy_decisions[]` item, with
+`null` when that particular Core Policy row did not record the link. These
+are existing, canonical identifiers already qualified against this Run's
+Analysis/Critique rows. They are not tenant identities, private prompts or
+internal credentials. `SIMULATE/PASS` still requires an explicitly linked,
+validated Critique, and malformed/cross-Run links still return 503 `UNKNOWN`
+with `no-store`. Viewer 401-before-Core-I/O remains unchanged.
+
+**Consumer compatibility warning (P0):** This is an additive JSON-field
+change but strict consumers enforcing exact `policy_decisions[]` keys
+(including Recette #156 `scripts/check_demo_evidence_receipts.py`) will
+reject the new projection until updated. That is a deliberate fail-closed
+release block, **not** evidence that the offline receipt is validated.
+Recette 5/5 must validate the join per Policy row, then rerun its CI and
+post-deploy read-only recipe on one integrated SHA. No schema-version bump,
+new workflow, or claim of E2E/tenant ACL/Payments runtime evidence.

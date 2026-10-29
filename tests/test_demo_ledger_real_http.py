@@ -484,7 +484,11 @@ class RealLedgerHttpQualification(unittest.TestCase):
         # This proves only a persisted synthetic Policy record, not execution.
         positive = self.read(PORTAL, rid=rid)
         self.assertEqual(positive.status_code, 200, positive.text)
-        self.assertEqual(positive.json()["policy_decisions"][0]["decision"], "SIMULATE")
+        self.assertEqual(positive.json()["policy_decisions"][0], {
+            "policy_decision_id": "POL-CI-LEDGER-LOCAL",
+            "analysis_id": aid, "critique_id": cid,
+            "decision": "SIMULATE", "state": "PASS",
+        })
         with psycopg.connect(DSN) as conn:
             conn.execute(
                 "insert into aiops.policy_decisions(policy_decision_id,run_id,"

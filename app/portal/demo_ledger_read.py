@@ -210,7 +210,12 @@ def _project(rid, detail, ledger, refs):
         # alone must never turn a rejected diagnostic into a demo success.
         if decision == "SIMULATE" and state == "PASS" and policy_critique not in validated_critiques:
             raise ValueError("synthetic simulation without validated critique")
+        # Preserve only the canonical, already-qualified Core linkage IDs.
+        # An offline receipt must be able to join this specific Policy row to
+        # its Critique, rather than assuming any validated Critique in the Run.
         decisions.append({"policy_decision_id": policy_id,
+                          "analysis_id": policy_analysis,
+                          "critique_id": policy_critique,
                           "decision": decision, "state": state})
     return {"schema": "aiops.demo-ledger-read.v1", "run_id": rid,
             "mode": run["mode"], "classification": "DEMO_CORE_RECORDED_NOT_LIVE",
