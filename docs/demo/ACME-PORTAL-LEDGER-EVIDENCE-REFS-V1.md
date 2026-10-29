@@ -83,3 +83,16 @@ separate from the internal Core token. Unit tests assert zero Core requests;
 the existing `quality.yml` runs a real ephemeral Portal HTTP regression.
 No JSON response schema or endpoint is changed. This is input-hardening,
 **not** tenant RBAC, real SAN/Payments evidence, or Debian attestation.
+
+## SIMULATE/PASS requires validated Critique — 2026-10-29
+
+A synthetic Policy row claiming `SIMULATE/PASS` must link to a Critique
+in the same Run whose persisted `validated` flag is **true**. A missing
+Critique link or a linked Critique with `validated=false` yields HTTP 503
+`UNKNOWN` with `no-store`, without leaking IDs or tokens. Merely matching
+Analysis/Evidence IDs is insufficient to present a successful simulation.
+The `aiops.demo-ledger-read.v1` JSON shape and upstream Core contracts do
+not change; previously accepted inconsistent synthetic rows may be refused.
+This checks the recorded Critique flag, **not** the actual independence of
+review, freshness of observed SAN/Payments metrics, tenant ACL or an E2E
+Policy execution. A qualified `SIMULATE/PASS` is still synthetic only.
