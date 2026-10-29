@@ -24,6 +24,7 @@ def module(filename,slug):
 EVIDENCE=module('evidence','aiops_evidence_auth')
 POLICY=module('policy','aiops_policy_auth')
 TWIN=module('twin','aiops_twin_auth')
+CORE=module('core','aiops_core_policy_gate_auth')
 
 class BoundaryAuthTests(unittest.TestCase):
     def test_evidence_read_requires_auth(self):
@@ -55,6 +56,39 @@ class BoundaryAuthTests(unittest.TestCase):
                 EVIDENCE.authorize('Bearer anything')
         self.assertEqual(exc.exception.status_code,503)
 
+
+    def test_core_demo_policy_pass_allow_rejected_before_gate_write(self):
+        with patch.object(CORE, 'db') as db:
+            cursor=db.return_value.__enter__.return_value
+            cursor.execute.return_value.fetchone.return_value=('DEMO',)
+            with self.assertRaises(HTTPException) as exc:
+                CORE.gate('RUN-DEMO', {'stage':'POLICY','state':'PASS',
+                                       'decision':'ALLOW','evidence_ids':[]},
+                          authorization='Bearer test-only-internal-token')
+            self.assertEqual(exc.exception.status_code, 422)
+            self.assertEqual(cursor.execute.call_count, 1)
+
+    def test_core_demo_policy_record_pass_allow_rejected_before_critic_or_write(self):
+        with patch.object(CORE, 'db') as db:
+            cursor=db.return_value.__enter__.return_value
+            cursor.execute.return_value.fetchone.return_value=('DEMO',)
+            with self.assertRaises(HTTPException) as exc:
+                CORE.persist_policy_decision(
+                    'RUN-DEMO', {'policy':{'state':'PASS','decision':'ALLOW'},
+                                 'analysis_id':'ANL-DEMO','critique_id':'CRT-DEMO'},
+                    authorization='Bearer test-only-internal-token')
+            self.assertEqual(exc.exception.status_code, 422)
+            self.assertEqual(cursor.execute.call_count, 1)
+
+    def test_core_demo_policy_gate_pass_simulate_keeps_existing_contract(self):
+        with patch.object(CORE, 'db') as db:
+            cursor=db.return_value.__enter__.return_value
+            cursor.execute.return_value.fetchone.return_value=('DEMO',)
+            result=CORE.gate('RUN-DEMO', {'stage':'POLICY','state':'PASS',
+                                          'decision':'SIMULATE','evidence_ids':[]},
+                             authorization='Bearer test-only-internal-token')
+            self.assertEqual(result['state'], 'PASS')
+            self.assertEqual(cursor.execute.call_count, 2)
 
     def test_twin_all_topology_reads_deny_anonymous_before_db(self):
         routes = [
