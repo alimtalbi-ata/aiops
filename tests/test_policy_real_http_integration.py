@@ -7,6 +7,8 @@ import unittest
 
 import requests
 
+from app.shared.simulation_policy_contract import validate_synthetic_policy_response
+
 BASE = "http://127.0.0.1:1813"
 
 
@@ -32,6 +34,16 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
     def check(self, **changes):
         return requests.post(BASE + "/api/policy/check", json=request_body(**changes),
                              timeout=3, allow_redirects=False)
+
+    def test_real_policy_http_matches_worker_simulation_fence(self):
+        # The real Policy HTTP response must be accepted by the same
+        # fail-closed validator used before a Temporal worker writes Core gates.
+        for changes in ({}, {"critic_validated": False}, {"evidence_count": 0}):
+            with self.subTest(changes=changes):
+                response = self.check(**changes)
+                self.assertEqual(response.status_code, 200, response.text)
+                payload = response.json()
+                self.assertIs(validate_synthetic_policy_response(payload), payload)
 
     def test_health_is_actual_policy_service(self):
         response = requests.get(BASE + "/health", timeout=3, allow_redirects=False)
