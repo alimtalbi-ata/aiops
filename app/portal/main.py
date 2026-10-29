@@ -60,9 +60,21 @@ def _get(path,base=CORE):
                 failure["http_status"] = code
         return failure
 
-def _runs():
+def _runs(strict=False):
+    """Read Core inventory; strict DEMO callers must reject error envelopes.
+
+    A failed Core read may contain a plausible attacker-controlled items list.
+    Never treat such items as authorization to read run details or registries.
+    None denotes an unverified inventory, distinct from a verified empty list.
+    """
     response=_get("/api/runs")
-    return response.get("items",[]) if isinstance(response.get("items"),list) else []
+    items=response.get("items")
+    if strict and (response.get("status") not in (None, "OK")
+                   or "error_type" in response
+                   or not isinstance(items, list)
+                   or any(not isinstance(item, dict) for item in items)):
+        return None
+    return items if isinstance(items,list) else []
 
 def _run_id(r):
     return r.get("run_id","UNKNOWN")
@@ -76,6 +88,9 @@ def _demo_detail_matches(detail, listed):
     never be used to render another run's timeline or evidence.
     """
     if not isinstance(detail, dict) or not isinstance(listed, dict):
+        return False
+    # Never trust a plausible nested run inside an upstream error envelope.
+    if detail.get("status") in ("UNKNOWN", "ERROR") or "error_type" in detail:
         return False
     run = detail.get("run")
     if not isinstance(run, dict):
@@ -95,7 +110,71 @@ def _demo_detail_matches(detail, listed):
             if (not isinstance(listed_tenant, str) or not listed_tenant
                     or detail_tenant != listed_tenant):
                 return False
+    # Core events normally omit identity. Explicit claims must match the run
+    # before raw HTML, polling, or privileged ledger reads can expose them.
+    events = detail.get("events")
+    if events is not None:
+        if not isinstance(events, list):
+            return False
+        for event in events:
+            if not isinstance(event, dict):
+                return False
+            if "run_id" in event and event["run_id"] != run["run_id"]:
+                return False
+            for key in ("tenant_id", "tenant"):
+                if key in event and (key not in run or event[key] != run[key]):
+                    return False
     return True
+
+def _verified_demo_ledger(value, run):
+    """Reject foreign or error-wrapped AI Ledger data before HTML and polling.
+
+    The Core ledger may omit identity fields. Explicit run/tenant claims must
+    agree with the already verified Core detail; absence is not attestation.
+    Never echo an error body, even if it carries plausible analysis records.
+    """
+    unknown = {"status": "UNKNOWN"}
+    if not isinstance(value, dict) or not isinstance(run, dict):
+        return unknown
+    if value.get("status") in ("UNKNOWN", "ERROR") or "error_type" in value:
+        if (value.get("error_type") == "HTTPError"
+                and type(value.get("http_status")) is int
+                and value["http_status"] in (401, 403)):
+            return {"status": "UNKNOWN", "error_type": "HTTPError",
+                    "http_status": value["http_status"]}
+        return unknown
+
+    def matches(claim):
+        if not isinstance(claim, dict):
+            return False
+        return all(key not in claim or
+                   (key in run and claim[key] == run[key])
+                   for key in ("run_id", "tenant_id", "tenant"))
+
+    if not matches(value):
+        return unknown
+    # The canonical Core AI Ledger returns analyses/critiques/policy_decisions
+    # arrays (not the legacy "items" array). Bind every record to the
+    # selected run before HTML, Critic explanation or polling can expose it.
+    for collection in ("items", "analyses", "critiques", "policy_decisions"):
+        records = value.get(collection)
+        if records is None:
+            continue
+        if not isinstance(records, list):
+            return unknown
+        for record in records:
+            if not matches(record):
+                return unknown
+            # Core's output/proof_snapshot may contain an explicit identity.
+            # Missing identity is not attestation; a conflicting one is fatal.
+            for nested in ("output", "proof_snapshot"):
+                if isinstance(record.get(nested), dict) and not matches(record[nested]):
+                    return unknown
+    for section in ("analysis", "critic"):
+        if isinstance(value.get(section), dict) and not matches(value[section]):
+            return unknown
+    return value
+
 
 def _unique_demo_run(items, rid):
     """Reject duplicate Core inventory IDs before any detail or ledger read."""
@@ -106,6 +185,39 @@ def _unique_demo_run(items, rid):
     if len(matches) != 1:
         return None
     return matches[0] if matches[0].get("mode") in ("DEMO", "REPLAY", "STORY") else None
+
+
+
+_DEMO_SAN_ROOT = "ACME-SAN-FABRIC-A"
+
+
+def _demo_impact_scope(impact):
+    """Describe Twin impact scope without claiming SAN-to-Payments causality.
+
+    A root-only response is a real read-model result, not a proven downstream
+    business impact. Malformed/error envelopes must not highlight graph nodes.
+    """
+    unknown = ("INCONNU — portée de l'impact Twin non vérifiable", False)
+    if (not isinstance(impact, dict)
+            or impact.get("status") in ("UNKNOWN", "ERROR")
+            or "error_type" in impact):
+        return unknown
+    root, affected = impact.get("root"), impact.get("affected")
+    # A valid impact for another root cannot qualify this SAN-A preflight.
+    if root != _DEMO_SAN_ROOT or not isinstance(affected, list):
+        return unknown
+    ids = []
+    for item in affected:
+        if (not isinstance(item, dict)
+                or not isinstance(item.get("node_id"), str)
+                or not item["node_id"]):
+            return unknown
+        ids.append(item["node_id"])
+    if root not in ids or len(set(ids)) != len(ids):
+        return unknown
+    if len(ids) == 1:
+        return ("RACINE SEULE — propagation SAN→Payments NON PROUVÉE", True)
+    return (str(len(ids)) + " NŒUDS TWIN DÉCLARÉS — propagation SAN→Payments NON ATTESTÉE", True)
 
 
 @app.get("/",response_class=HTMLResponse)
@@ -251,17 +363,18 @@ def demo_studio():
     """Safe read-only ACME storyboard: no launch, effects, or credentials in browser."""
     dashboard=_get("/api/dashboard")
     graph=_get("/api/twin/graph",TWIN)
-    impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
-    runs=_runs()
-    demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
+    impact=_get("/api/twin/impact/"+_DEMO_SAN_ROOT,TWIN)
+    impact_scope, impact_shape_ok = _demo_impact_scope(impact)
+    runs=_runs(strict=True)
+    demo_runs=[r for r in (runs or []) if r.get("mode") in ("DEMO","REPLAY","STORY")]
     body=panel("Préflight — qualification en lecture seule",
         '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
         'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
         +table(["Contrôle","Résultat"],[
           ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
           ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
-          ("Impact SAN-A","DISPONIBLE" if isinstance(impact.get("affected"),list) and impact.get("root") else "INCONNU"),
-          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)))
+          ("Propagation SAN→Payments",impact_scope),
+          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)) if runs is not None else "INCONNU — inventaire Core indisponible")
         ]))
     if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
         body+=panel("Lancer le scénario synthétique ACME",
@@ -282,7 +395,7 @@ def demo_studio():
           'if(!/^[A-Za-z0-9_-]{1,128}$/.test(rid)){status.textContent="Réponse de lancement sans identifiant valide";return;}'
           'location.assign("/demo-studio/run/"+encodeURIComponent(rid));'
           '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
-    body+=graph_panel(graph,impact=impact)
+    body+=graph_panel(graph,impact=impact if impact_shape_ok else None)
     body+=panel("Exécutions de démonstration déjà enregistrées",
       table(["Run","Mode","État","Scénario"],[
        (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
@@ -304,7 +417,7 @@ def demo_run_detail(rid:str):
     """Show source-backed demo evidence, never substitute fixtures for live records."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_demo_run_id")
-    candidates=_runs()
+    candidates=_runs(strict=True) or []
     matched=_unique_demo_run(candidates, rid)
     if not matched:
         raise HTTPException(404,"demo_run_not_found")
@@ -319,9 +432,9 @@ def demo_run_detail(rid:str):
                 "indisponible. Aucun registre Analyst/Critic/Policy/Evidence "
                 "n'est affiché.</p>"),
             mode=matched.get("mode","DEMO"))
-    ledger=_get("/api/runs/"+key+"/ai-ledger")
+    ledger=_verified_demo_ledger(_get("/api/runs/"+key+"/ai-ledger"), detail["run"])
     from portal.demo_v2 import render_demo_v2, verified_policy_gates
-    gate=verified_policy_gates(_get("/api/runs/"+key+"/gates"), rid)
+    gate=verified_policy_gates(_get("/api/runs/"+key+"/gates"), rid, detail["run"])
     body=panel("Suivi de l'exécution",
       '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
       '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
@@ -360,7 +473,7 @@ def demo_status(rid:str):
     """Read-only polling endpoint with strict DEMO ownership checked against Core."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_run_id")
-    allowed=_unique_demo_run(_runs(), rid)
+    allowed=_unique_demo_run(_runs(strict=True) or [], rid)
     if not allowed:
         raise HTTPException(404,"demo_run_not_found")
     detail=_get("/api/runs/"+rid)
@@ -369,9 +482,9 @@ def demo_status(rid:str):
                 "source":"CORE_IDENTITY_UNVERIFIED","events":"INCONNU",
                 "ledger":{"status":"UNKNOWN"},"gates":{"status":"UNKNOWN"}}
     run=detail["run"]
-    ledger=_get("/api/runs/"+rid+"/ai-ledger")
+    ledger=_verified_demo_ledger(_get("/api/runs/"+rid+"/ai-ledger"), run)
     from portal.demo_v2 import verified_policy_gates
-    gates=verified_policy_gates(_get("/api/runs/"+rid+"/gates"), rid)
+    gates=verified_policy_gates(_get("/api/runs/"+rid+"/gates"), rid, run)
     events=detail.get("events",None)
     if not isinstance(events,list):
         events="INCONNU"

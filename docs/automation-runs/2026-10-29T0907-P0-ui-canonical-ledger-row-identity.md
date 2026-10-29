@@ -1,0 +1,19 @@
+# 2026-10-29 09:07 Europe/Paris — P0 UI : identité des lignes canoniques AI Ledger
+
+## État GitHub, périmètre et coordination
+- HEAD `main` vérifié : `27deb9b1a66faf27df8d69b137a63451f7649d80`. `deploy/aiops2-stable` vérifié : `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`. Aucun push sur ces branches.
+- Candidate UI **PR draft #177** https://github.com/alimtalbi-ata/aiops/pull/177 ; branche `ui/p0-demo-v2-core-detail-envelope-20261029-0307`, base #169 ; contient déjà #140→#150→#152→#158→#166→#169. Les branches récentes `release/p0-demo-v2-ui-candidate-20261029-0004` et `ui/p0-demo-v2-core-detail-envelope-20261029-0307` ont été vérifiées. Pas de nouvelle PR ni workflow.
+- PR historiques #140/#142/#143/#145/#146 ouvertes ; #141 fusionnée, #144 fermée sans fusion. PR #153 déployeur, #156 Recette, #170 Twin, #171 NOC, #176 Policy, #177 UI consultées. #182 Evidence fusionnée **uniquement dans la branche de #156** avec CI verte ; pas de preuve E2E.
+- Journaux consultés : UI 08h (Policy tenant), Recette 08:51 (Evidence offline), Twin 07:58, Policy 07:35. Le lot #156 garde `READY_FOR_STABLE=BLOCKED` ; le déployeur #153 n'embarque pas tous les services.
+
+## UNE livraison verticale mesurable : bloquer les lignes AI Ledger étrangères
+- Défaut : `_verified_demo_ledger` contrôlait l'enveloppe et la liste legacy `items`, mais pas les trois **tableaux canoniques Core** `analyses`, `critiques`, `policy_decisions`. Une ligne étrangère pouvait apparaître dans le HTML brut, l'explication Critic et le polling malgré une enveloppe `run_id` correcte.
+- `app/portal/main.py` : pour chaque tableau présent, exige une liste de dictionnaires et refuse les claims explicites `run_id`, `tenant_id`, `tenant` contradictoires. Vérifie également les claims des dictionnaires `output` et `proof_snapshot` imbriqués. Une seule ligne discordante masque **tout le registre** (`status=UNKNOWN`) avant projection ; absence de claim n'est pas une attestation RBAC.
+- `tests/test_v28_portal_ui.py` : deux tests de non-régression (huit variantes adversariales incluant listes mixtes, types invalides et identités imbriquées ; témoin canonique même run/tenant). Vérifient page HTML, polling, absence de fuite du marqueur et absence de POST. Contrats API Core/Twin/Copilot/Policy/Evidence inchangés ; contrat de projection UI resserré, DEMO/SIMULATED et lecture seule.
+- Commits : code `e47dae420a8055fd62f551bc99ea9b991b7b7150` ; tests `ec27718eaf8e787629aa901e3d216b7bf71c5d63`. SHA de la PR après ce journal : consulter le HEAD GitHub, ne pas confondre avec SHA tests.
+
+## CI, terrain et décision
+- [quality.yml sur le SHA tests](https://github.com/alimtalbi-ata/aiops/actions/runs/40840119622) : **IN_PROGRESS** au relevé, résultats non présumés. Les trois workflows historiques sont également en cours. Les 64/64 tests UI et 11 échecs Policy rapportés précédemment concernent le SHA antérieur `b5b0986`, **pas** ce lot.
+- Tests locaux : **NOT_TESTED** (pas de checkout local, modifications par connecteur GitHub). Tests navigateur, auth/RBAC multi-tenant réel, Temporal/Policy/Evidence E2E, impact SAN→Payments, smoke-test et `applied.sha` Debian, rollback terrain : **NOT_TESTED**. Le 29/29 Debian du 28/10 reste historique, non applicable à cette candidate.
+- Déployeur #153 : transporte le portail de façon partielle ; la modification `app/portal/main.py` **n'est pas couverte de manière prouvée**. Le poller ne qualifie pas E2E. Aucune promotion possible sans matrice transport code↔scripts, tests verts, rollback sûr et preuve horodatée opérateur.
+- **READY_FOR_STABLE=BLOCKED / NO-GO.** Aucun merge, push stable, accès Debian, action LIVE ou secret. Prochain lot Recette 5/5 : vérifier CI du SHA final, assembler les PR compatibles #170/#171/#176/#177 sur un SHA unique, qualifier le déployeur et le parcours Core→Twin→IA→Policy SIMULATE→Evidence→Portal avec les sondes read-only et attestation `applied.sha`.

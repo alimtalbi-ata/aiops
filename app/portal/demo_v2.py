@@ -63,7 +63,7 @@ def _event_clock(events, clock):
 
 
 
-def _ordered_events(events):
+def _ordered_events(events, clock):
     """Render Core sequence order, but never certify incomplete chronology.
 
     Core assigns positive per-run sequence numbers. A gap, duplicate or
@@ -93,6 +93,8 @@ def _ordered_events(events):
             stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if stamp.tzinfo is None:
                 raise ValueError("timezone missing")
+            if stamp > clock:
+                return ordered, "INCONNU — horodatages Core futurs ; chronologie non vérifiable", False
         except (ValueError, OverflowError, TypeError):
             return ordered, "INCONNU — horodatages Core incomplets ou invalides", False
         clocks.append(stamp)
@@ -101,17 +103,29 @@ def _ordered_events(events):
     return ordered, "COHÉRENT — ordre par séquence Core (non attesté indépendamment)", True
 
 
-def verified_policy_gates(value, expected_run_id=None):
-    """Project only Core's gates read model; never echo unverified items.
+def verified_policy_gates(value, expected_run_id=None, expected_run=None):
+    """Project Core Policy gates only when their explicit identity is bound.
 
-    Core GET /api/runs/{rid}/gates returns an items list. Transport errors
-    can carry an attacker-controlled items field; it is not a Policy decision.
+    Core gates can omit tenant identity. If they claim a run or tenant, it
+    must match the verified Core run. An error envelope or foreign gate must
+    never become a verified SIMULATE decision in HTML or polling.
     """
+    def matches(claim):
+        if not isinstance(claim, dict):
+            return False
+        if "run_id" in claim and claim["run_id"] != expected_run_id:
+            return False
+        if isinstance(expected_run, dict):
+            for key in ("tenant_id", "tenant"):
+                if key in claim and (key not in expected_run
+                                     or claim[key] != expected_run[key]):
+                    return False
+        return True
+
     if (isinstance(value, dict) and value.get("status") in (None, "OK")
             and "error_type" not in value and isinstance(value.get("items"), list)
-            and all(isinstance(item, dict) for item in value["items"])
-            and all("run_id" not in item or item["run_id"] == expected_run_id
-                    for item in value["items"])):
+            and matches(value)
+            and all(matches(item) for item in value["items"])):
         fields = ("stage", "state", "decision", "reason", "evidence_ids",
                   "required_evidence", "evaluated_at")
         return {"items": [{k: item[k] for k in fields if k in item}
@@ -128,7 +142,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
     """No fabricated evidence, impact, remediation or LLM decisions."""
     detail = detail if isinstance(detail, dict) else {}
     run = detail.get("run") if isinstance(detail.get("run"), dict) else detail
-    gates = verified_policy_gates(gates, run.get("run_id"))
+    gates = verified_policy_gates(gates, run.get("run_id"), run)
     events = detail.get("events")
     if not isinstance(events, list):
         events = None
@@ -156,7 +170,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
                     age_label = "Démarré récemment (heure Core)"
         except ValueError:
             pass
-    ordered_events, sequence_label, sequence_ok = _ordered_events(events)
+    ordered_events, sequence_label, sequence_ok = _ordered_events(events, clock)
     synthetic = False
     evidence_ids = set()
     rows = []

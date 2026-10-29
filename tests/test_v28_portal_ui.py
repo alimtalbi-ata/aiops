@@ -116,6 +116,113 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("INCONNU",page)
         self.assertIn("Demo Studio",page)
 
+    def test_demo_impact_scope_never_certifies_payments_from_root_only(self):
+        root = "ACME-SAN-FABRIC-A"
+        only_root = {"root": root, "affected": [{"node_id": root}]}
+        label, valid = self.portal._demo_impact_scope(only_root)
+        self.assertTrue(valid)
+        self.assertIn("RACINE SEULE", label)
+        self.assertIn("NON PROUVÉE", label)
+        declared = {"root": root, "affected": [{"node_id": root},
+                                               {"node_id": "ACME-SVC-PAYMENTS"}]}
+        label, valid = self.portal._demo_impact_scope(declared)
+        self.assertTrue(valid)
+        self.assertIn("2 NŒUDS TWIN DÉCLARÉS", label)
+        self.assertIn("NON ATTESTÉE", label)
+        for malformed in (
+            {"status": "UNKNOWN", **declared},
+            {"status": "ERROR", **declared},
+            {"error_type": "HTTPError", "http_status": 401, **declared},
+            {"root": root, "affected": [{"node_id": "ACME-SVC-PAYMENTS"}]},
+            {"root": root, "affected": [{"node_id": root}, {"node_id": root}]},
+            {"root": root, "affected": [{"node_id": root}, "ACME-SVC-PAYMENTS"]},
+            {"root": root, "affected": []},
+        ):
+            with self.subTest(malformed=malformed):
+                label, valid = self.portal._demo_impact_scope(malformed)
+                self.assertFalse(valid)
+                self.assertIn("INCONNU", label)
+
+    def test_demo_impact_scope_rejects_foreign_root_even_with_payments(self):
+        # A well-formed Twin response for SAN-B must never qualify SAN-A.
+        foreign = {"root": "ACME-SAN-FABRIC-B", "affected": [
+            {"node_id": "ACME-SAN-FABRIC-B"},
+            {"node_id": "ACME-SAN-FABRIC-A"},
+            {"node_id": "ACME-SVC-PAYMENTS"}]}
+        label, valid = self.portal._demo_impact_scope(foreign)
+        self.assertFalse(valid)
+        self.assertIn("INCONNU", label)
+
+    def test_demo_studio_foreign_twin_root_never_highlights_impact(self):
+        root = "ACME-SAN-FABRIC-A"
+        foreign = "ACME-SAN-FABRIC-B"
+        graph = {"nodes": [
+            {"node_id": root, "name": "SAN A"},
+            {"node_id": foreign, "name": "SAN B"},
+            {"node_id": "ACME-SVC-PAYMENTS", "name": "Payments"}],
+            "edges": [{"source_id": root, "target_id": "ACME-SVC-PAYMENTS"}]}
+        def getter(base, path):
+            if path == "/api/dashboard":
+                return {"status": "ok"}
+            if path == "/api/runs":
+                return {"items": []}
+            if path == "/api/twin/graph":
+                return graph
+            if path == "/api/twin/impact/" + root:
+                return {"root": foreign, "affected": [
+                    {"node_id": foreign}, {"node_id": root},
+                    {"node_id": "ACME-SVC-PAYMENTS"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=getter):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_studio()
+        # HTML escapes the apostrophe; verify the visible fail-closed label.
+        self.assertIn("INCONNU — portée de", page)
+        self.assertIn("Twin non vérifiable", page)
+        self.assertIn('"impact_known":false', page)
+        self.assertIn('"impact_ids":[]', page)
+        self.assertNotIn('"impact_known":true', page)
+
+    def test_demo_studio_root_only_and_error_impact_do_not_claim_payments(self):
+        root = "ACME-SAN-FABRIC-A"
+        graph = {"nodes": [{"node_id": root, "name": "SAN"},
+                           {"node_id": "ACME-SVC-PAYMENTS", "name": "Payments"}],
+                 "edges": [{"source_id": root, "target_id": "ACME-SVC-PAYMENTS"}]}
+        for impact, expected, impact_known in (
+            ({"root": root, "affected": [{"node_id": root}]},
+             "RACINE SEULE", "true"),
+            ({"status": "UNKNOWN", "error_type": "HTTPError",
+              "http_status": 401, "root": root,
+              "affected": [{"node_id": root},
+                           {"node_id": "ACME-SVC-PAYMENTS"}]},
+             "INCONNU", "false"),
+        ):
+            with self.subTest(impact=impact):
+                def getter(base, path):
+                    if path == "/api/dashboard":
+                        return {"status": "ok"}
+                    if path == "/api/runs":
+                        return {"items": []}
+                    if path == "/api/twin/graph":
+                        return graph
+                    if path.startswith("/api/twin/impact/"):
+                        return impact
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=getter):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_studio()
+                self.assertIn(expected, page)
+                self.assertIn("SAN→Payments", page)
+                self.assertIn('"impact_known":' + impact_known, page)
+                self.assertNotIn("propagation SAN→Payments PROUVÉE", page)
+                if impact_known == "true":
+                    self.assertIn('"impact_ids":["' + root + '"]', page)
+                    self.assertNotIn('"impact_ids":["' + root + '","ACME-SVC-PAYMENTS"]', page)
+                else:
+                    self.assertIn('"impact_ids":[]', page)
+
     def test_connected_demo_studio_uses_twin_payload_only(self):
         def getter(base,path,**kwargs):
             if path=="/api/dashboard":return {"open_p1":0}
@@ -129,6 +236,64 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("RUN-DEMO",page)
         self.assertNotIn("RUN-LIVE",page)
         self.assertIn('"impact_known":true',page)
+
+    def test_demo_core_detail_envelope_and_event_identity_fail_closed(self):
+        listed = {"run_id": "RUN-DEMO", "mode": "DEMO", "tenant_id": "ACME"}
+        run = {"run_id": "RUN-DEMO", "mode": "DEMO", "tenant_id": "ACME",
+               "status": "RESOLVED"}
+        cases = [
+            {"status": "UNKNOWN", "error_type": "HTTPError",
+             "run": run, "events": [{"event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"status": "ERROR", "run": run,
+             "events": [{"event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"run": run, "events": [{"run_id": "OTHER-RUN",
+                                     "event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"run": run, "events": [{"tenant_id": "OTHER-TENANT",
+                                     "event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"run": run, "events": [{"tenant_id": "ACME",
+                                     "run_id": "RUN-DEMO"}, None]},
+        ]
+        for detail in cases:
+            with self.subTest(detail=detail):
+                requested = []
+                def get(base, path):
+                    requested.append(path)
+                    if path == "/api/runs":
+                        return {"items": [listed]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return detail
+                    raise AssertionError("unexpected privileged registry read: " + path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    page = self.portal.demo_run_detail("RUN-DEMO")
+                    poll = self.portal.demo_status("RUN-DEMO")
+                self.assertIn("Chronologie Core — INCONNU", page)
+                self.assertNotIn("FORGED-FOREIGN-EVENT", page)
+                self.assertEqual(poll["status"], "UNKNOWN")
+                self.assertEqual(poll["events"], "INCONNU")
+                self.assertEqual(poll["ledger"], {"status": "UNKNOWN"})
+                self.assertEqual(poll["gates"], {"status": "UNKNOWN"})
+                self.assertEqual(requested, ["/api/runs", "/api/runs/RUN-DEMO"] * 2)
+
+    def test_demo_core_event_matching_explicit_identity_remains_readable(self):
+        listed = {"run_id": "RUN-DEMO", "mode": "DEMO", "tenant_id": "ACME"}
+        detail = {"run": {**listed, "status": "BLOCKED"},
+                  "events": [{"run_id": "RUN-DEMO", "tenant_id": "ACME",
+                              "sequence": 1, "event_type": "MATCHED-EVENT"}]}
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [listed]}
+            if path == "/api/runs/RUN-DEMO":
+                return detail
+            if path.endswith("/ai-ledger"):
+                return {"status": "UNKNOWN"}
+            if path.endswith("/gates"):
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            page = self.portal.demo_run_detail("RUN-DEMO")
+            poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("MATCHED-EVENT", page)
+        self.assertEqual(poll["events"][0]["event_type"], "MATCHED-EVENT")
 
     def test_demo_run_details_are_source_backed(self):
         def get(base,path,**kw):
@@ -460,6 +625,265 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertEqual(result["status"],"BLOCKED")
         self.assertEqual(result["events"][0]["event_type"],"SYNTHETIC-EVENT")
         self.assertEqual(len(calls),8)
+
+
+    def test_demo_ledger_foreign_identity_and_error_body_fail_closed(self):
+        forged = (
+            {"run_id": "RUN-OTHER", "analysis": "FOREIGN-LEDGER-SECRET"},
+            {"tenant_id": "TENANT-B", "analysis": "FOREIGN-LEDGER-SECRET"},
+            {"items": [{"run_id": "RUN-OTHER", "analysis": "FOREIGN-LEDGER-SECRET"}]},
+            {"analysis": {"tenant_id": "TENANT-B", "text": "FOREIGN-LEDGER-SECRET"}},
+            {"status": "UNKNOWN", "error_type": "HTTPError",
+             "http_status": 401, "analysis": "FOREIGN-LEDGER-SECRET"},
+        )
+        for ledger in forged:
+            with self.subTest(ledger=ledger):
+                def get(base, path):
+                    if path == "/api/runs":
+                        return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                           "tenant_id": "TENANT-A"}]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                        "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                                "events": []}
+                    if path.endswith("/ai-ledger"):
+                        return ledger
+                    if path.endswith("/gates"):
+                        return {"items": []}
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_run_detail("RUN-DEMO")
+                        poll = self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn("FOREIGN-LEDGER-SECRET", page)
+                self.assertNotIn("FOREIGN-LEDGER-SECRET", str(poll))
+                self.assertEqual(poll["ledger"]["status"], "UNKNOWN")
+                if ledger.get("http_status") == 401:
+                    self.assertIn("HTTP 401", page)
+                    self.assertEqual(poll["ledger"]["http_status"], 401)
+
+    def test_demo_ledger_matching_identity_preserves_source_data(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                   "tenant_id": "TENANT-A"}]}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                "tenant_id": "TENANT-A", "status": "RESOLVED"},
+                        "events": []}
+            if path.endswith("/ai-ledger"):
+                return {"run_id": "RUN-DEMO", "tenant_id": "TENANT-A",
+                        "analysis": "MATCHED-LEDGER-DEMO"}
+            if path.endswith("/gates"):
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_run_detail("RUN-DEMO")
+                poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("MATCHED-LEDGER-DEMO", page)
+        self.assertEqual(poll["ledger"]["analysis"], "MATCHED-LEDGER-DEMO")
+
+
+    def test_demo_inventory_error_envelopes_never_authorize_detail_or_poll(self):
+        from fastapi import HTTPException
+        forged = {"run_id": "FORGED-DEMO", "mode": "DEMO", "status": "RESOLVED"}
+        for inventory in (
+            {"status": "UNKNOWN", "error_type": "HTTPError", "http_status": 401,
+             "items": [forged]},
+            {"status": "ERROR", "items": [forged]},
+            {"status": "UNKNOWN", "items": [forged]},
+            {"status": "UNVERIFIED", "items": [forged]},
+            {"items": [forged, "not-a-run"]},
+            {"items": {"run_id": "FORGED-DEMO", "mode": "DEMO"}},
+        ):
+            with self.subTest(inventory=inventory):
+                calls = []
+                def get(base, path):
+                    calls.append(path)
+                    if path == "/api/runs":
+                        return inventory
+                    if path == "/api/dashboard":
+                        return {"status": "ok"}
+                    if path == "/api/twin/graph":
+                        return {"nodes": [], "edges": []}
+                    if path.startswith("/api/twin/impact/"):
+                        return {"root": "ACME-SAN-FABRIC-A",
+                                "affected": [{"node_id": "ACME-SAN-FABRIC-A"}]}
+                    raise AssertionError("unverified inventory must not authorize " + path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_studio()
+                        for action in (self.portal.demo_run_detail, self.portal.demo_status):
+                            with self.assertRaises(HTTPException) as ctx:
+                                action("FORGED-DEMO")
+                            self.assertEqual(ctx.exception.status_code, 404)
+                self.assertIn("INCONNU — inventaire Core indisponible", page)
+                self.assertNotIn("FORGED-DEMO", page)
+                self.assertEqual(calls.count("/api/runs"), 3)
+                self.assertFalse(any("/api/runs/FORGED-DEMO" in path for path in calls))
+
+    def test_demo_verified_empty_inventory_is_not_a_transport_error(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": []}
+            if path == "/api/dashboard":
+                return {"status": "ok"}
+            if path == "/api/twin/graph":
+                return {"nodes": [], "edges": []}
+            if path.startswith("/api/twin/impact/"):
+                return {"root": "ACME-SAN-FABRIC-A",
+                        "affected": [{"node_id": "ACME-SAN-FABRIC-A"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            page = self.portal.demo_studio()
+        self.assertIn("Scénarios DEMO/REPLAY/STORY visibles", page)
+        self.assertNotIn("INCONNU — inventaire Core indisponible", page)
+
+
+    def test_demo_policy_gates_foreign_identity_never_reaches_html_or_poll(self):
+        foreign = (
+            {"run_id": "RUN-OTHER", "items": [
+                {"decision": "PASS", "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"tenant_id": "TENANT-B", "items": [
+                {"decision": "PASS", "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"run_id": "RUN-OTHER", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"tenant_id": "TENANT-B", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"tenant": "TENANT-B", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"decision": "PASS", "reason": "SAFE"},
+                       {"tenant_id": "TENANT-B", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+        )
+        for gates in foreign:
+            with self.subTest(gates=gates):
+                def get(base, path):
+                    if path == "/api/runs":
+                        return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                           "tenant_id": "TENANT-A"}]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                        "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                                "events": []}
+                    if path.endswith("/ai-ledger"):
+                        return {"status": "UNKNOWN"}
+                    if path.endswith("/gates"):
+                        return gates
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_run_detail("RUN-DEMO")
+                        poll = self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn("FOREIGN-POLICY-SECRET", page)
+                self.assertNotIn("FOREIGN-POLICY-SECRET", str(poll))
+                self.assertEqual(poll["gates"], {"status": "UNKNOWN"})
+                self.assertIn("décisions Policy indisponibles", page)
+
+    def test_demo_policy_gate_matching_tenant_preserves_simulate_decision(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                   "tenant_id": "TENANT-A"}]}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                        "events": []}
+            if path.endswith("/ai-ledger"):
+                return {"status": "UNKNOWN"}
+            if path.endswith("/gates"):
+                return {"run_id": "RUN-DEMO", "tenant_id": "TENANT-A",
+                        "items": [{"run_id": "RUN-DEMO", "tenant_id": "TENANT-A",
+                                   "stage": "POLICY", "state": "SIMULATE",
+                                   "decision": "PASS",
+                                   "reason": "SOURCE-POLICY-SIMULATE"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_run_detail("RUN-DEMO")
+                poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("SOURCE-POLICY-SIMULATE", page)
+        self.assertEqual(poll["gates"]["items"][0]["decision"], "PASS")
+        self.assertEqual(poll["gates"]["items"][0]["state"], "SIMULATE")
+        self.assertNotIn("tenant_id", poll["gates"]["items"][0])
+
+    def test_demo_canonical_ledger_foreign_rows_never_reach_html_or_poll(self):
+        # Core actually returns these three arrays, not legacy "items".
+        marker = "FOREIGN-LEDGER-SECRET"
+        cases = (
+            {"analyses": [{"run_id": "RUN-OTHER", "output": {"text": marker}}]},
+            {"critiques": [{"tenant_id": "TENANT-B", "issues": [marker]}]},
+            {"policy_decisions": [{"tenant": "TENANT-B", "reasons": [marker]}]},
+            {"analyses": [{"output": {"run_id": "RUN-OTHER", "text": marker}}]},
+            {"critiques": [{"output": {"tenant_id": "TENANT-B", "text": marker}}]},
+            {"policy_decisions": [{"proof_snapshot": {"tenant": "TENANT-B",
+                                                      "text": marker}}]},
+            {"analyses": [{"output": {"text": "SAFE"}}, None,
+                          {"output": {"text": marker}}]},
+            {"critiques": {"run_id": "RUN-OTHER", "text": marker}},
+        )
+        for extra in cases:
+            with self.subTest(extra=extra):
+                def get(base, path):
+                    if path == "/api/runs":
+                        return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                           "tenant_id": "TENANT-A"}]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                        "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                                "events": []}
+                    if path.endswith("/ai-ledger"):
+                        return {"run_id": "RUN-DEMO", **extra}
+                    if path.endswith("/gates"):
+                        return {"items": []}
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_run_detail("RUN-DEMO")
+                        poll = self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn(marker, page)
+                self.assertNotIn(marker, str(poll))
+                self.assertEqual(poll["ledger"], {"status": "UNKNOWN"})
+                self.assertIn("INCONNU", page)
+
+    def test_demo_canonical_ledger_matching_rows_remain_read_only(self):
+        ledger = {"run_id": "RUN-DEMO", "analyses": [
+                    {"analysis_id": "ANL-1", "output": {
+                        "run_id": "RUN-DEMO", "text": "CANONICAL-ANALYSIS-ACME"}}],
+                  "critiques": [{"critique_id": "CRT-1", "tenant_id": "TENANT-A",
+                                 "validated": True, "issues": []}],
+                  "policy_decisions": [{"policy_decision_id": "POL-1",
+                                        "decision": "SIMULATE", "state": "PASS",
+                                        "proof_snapshot": {"tenant_id": "TENANT-A"}}]}
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                   "tenant_id": "TENANT-A"}]}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                        "events": []}
+            if path.endswith("/ai-ledger"):
+                return ledger
+            if path.endswith("/gates"):
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_run_detail("RUN-DEMO")
+                poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("CANONICAL-ANALYSIS-ACME", page)
+        self.assertEqual(poll["ledger"], ledger)
+        self.assertIn("SIMULATE", page)
+
 
 if __name__=="__main__":
     unittest.main()

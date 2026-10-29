@@ -172,6 +172,24 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn("COHÉRENT — ordre par séquence Core", page)
         self.assertNotIn("statut RUNNING ancien à requalifier", page)
 
+    def test_future_core_event_cannot_certify_canonical_chronology(self):
+        now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
+        run = {"run_id": "RUN-1", "mode": "DEMO", "status": "RUNNING",
+               "started_at": "2026-10-21T12:00:00Z"}
+        events = [{"sequence": 1, "occurred_at": "2026-10-28T19:00:00Z"},
+                  {"sequence": 2, "occurred_at": "2026-10-28T20:01:00Z"}]
+        page = render_demo_v2({"run": run, "events": events}, {}, {}, now=now)
+        self.assertIn("horodatages Core futurs ; chronologie non vérifiable", page)
+        self.assertIn("Fraîcheur RUNNING — INCONNU", page)
+        self.assertNotIn("COHÉRENT — ordre par séquence Core", page)
+        self.assertNotIn("statut RUNNING ancien à requalifier", page)
+
+        # A complete, past-dated monotone timeline still qualifies its ordering.
+        events[1]["occurred_at"] = "2026-10-28T19:10:00Z"
+        valid = render_demo_v2({"run": run, "events": events}, {}, {}, now=now)
+        self.assertIn("COHÉRENT — ordre par séquence Core", valid)
+        self.assertNotIn("horodatages Core futurs ; chronologie non vérifiable", valid)
+
     def test_missing_events_payload_is_unknown_not_stale(self):
         now = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
         page = render_demo_v2({"run": {"status": "RUNNING",
