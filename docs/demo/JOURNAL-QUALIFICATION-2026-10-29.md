@@ -175,3 +175,8 @@ Chaque nouvelle session ajoute une entrée datée à ce journal ou crée `docs/d
 | `tools/acme_offline_source_preflight.py` | 26 contrôles statiques distincts | **26/26 PASS** |
 
 `git diff --check` et `git status --short` ne montrent aucune sortie : pas d'anomalie signalée. **Qualification prouvée au SHA `0d7f2ac` uniquement.** Les snapshots sont des objets fournis à une fonction pure, pas des données authentifiées par Core/Evidence. Aucune exécution DB, Temporal, GLPI, n8n, Portal, Docker ou LIVE n'est démontrée.
+
+
+## 12. 2026-10-29 — Revue Policy/HITL de l'adaptateur Core Evidence (sans Debian)
+
+**Source GitHub :** `f100945` (adaptateur initial), commits `e7e2227` (refus claims de reçu dangereux/identité absente) et `c9a85f8` (4 tests négatifs). L'adaptateur reste read-only et `SYNTHETIC_UNVERIFIED` ; aucun claim Core/tenant/runtime n'est élevé. **16/16 tests de l'adaptateur PASS en environnement local éphémère**, sur fichiers dont les Git blob SHA concordent exactement avec GitHub ; `demo_receipt` remplacé par une fixture minimale de même forme. **Le dépôt complet et Debian au nouveau SHA sont NOT_TESTED.** La preuve antérieure **44/44 Python PASS + 26/26 statiques** concerne exclusivement `0d7f2ac` ; nouveau total théorique **60**, pas 60 PASS Debian. Aucun E2E/Temporal/HITL authentifié ni SAN→Payments prouvé. Détails, SHA, contrats et blocages : [rapport automation-runs](../automation-runs/2026-10-29T1731-p0-core-evidence-adapter-receipt-fence.md). **READY_FOR_STABLE=BLOCKED**, intégration et décision réservées à 5/5.
