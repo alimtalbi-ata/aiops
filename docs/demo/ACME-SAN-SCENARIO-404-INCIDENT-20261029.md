@@ -48,3 +48,12 @@ L'opérateur a exécuté depuis le conteneur Worker des GET sur Core :
 **Cause immédiate confirmée :** le run référence `acme-san`, identifiant absent du catalogue Core actif. Le code Core utilise `aiops.scenarios` et `aiops.scenario_steps`; le GET individuel retourne 404 si la ligne scénario est absente. La raison amont de cette divergence reste à établir (référencement/seed/versions). `SCN-GOLDEN-PAYMENT-P1` est un candidat à examiner, **pas** un alias confirmé. Ne pas inscrire `acme-san` par POST sans définition des étapes et validation métier; ne pas modifier le run bloqué ni autoriser de remédiation.
 
 **Prochaine vérification :** lire `GET /api/scenarios/SCN-GOLDEN-PAYMENT-P1` et inspecter les références `acme-san` dans le code, la configuration et le seed. Préparer une correction versionnée, testée, avec statut SYNTHETIC explicite.
+
+## Validation du scénario candidat (lecture seule, 2026-10-29)
+
+L'opérateur a interrogé les détails des scénarios actifs :
+
+- `SCN-GOLDEN-PAYMENT-P1` : nom **Golden Payment SAN degradation**, `synthetic=true`, **7 étapes** : (1) `INCIDENT_OPEN` sur `ACME-SVC-PAYMENTS`, (2) `SET_STATE` sur `ACME-SAN-FABRIC-A`, (3) `OBSERVE` sur `ACME-SAN-FABRIC-A`, (4) `CHANGE_LOOKUP` sur `ACME-SAN-FABRIC-A`, (5) `POLICY_CHECK` sur `ACME-SVC-PAYMENTS`, (6) `VERIFY` sur `ACME-SVC-PAYMENTS`, (7) `RECONCILE` sur `ACME-SAN-FABRIC-A`.
+- `SCN-ESX-FC-P1` : nom **ESX FC port failure**, `synthetic=true`, **0 étape** dans le catalogue actif.
+
+Le scénario Golden Payment est le **candidat de référence** pour la prochaine validation synthétique SAN → Payments. Les étapes observées ne prouvent ni leur contenu exact (payload), ni leur exécution réussie, ni une remédiation LIVE. Ne pas substituer cet identifiant dans le run historique `RUN-073A9D4D7B4B767C`, qui reste BLOCKED. Avant un nouveau run : inspecter les payloads d'étapes et la manière dont le portail/simulateur référence les scénarios; qualifier les garde-fous, puis effectuer une exécution synthétique explicitement autorisée.
