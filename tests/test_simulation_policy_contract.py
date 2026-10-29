@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from app.shared.simulation_policy_contract import policy_command_for_mode
+from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response
 
 
 WORKER = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
@@ -71,6 +71,57 @@ class SimulationPolicyContractTests(unittest.TestCase):
                               isinstance(x, ast.Attribute) and x.attr == "connect"
                               for x in ast.walk(node)))
         self.assertLess(validation, connection)
+
+
+    def test_worker_rejects_policy_pass_allow_and_malformed_dispositions(self):
+        valid_reason = "synthetic only"
+        bad = (
+            {"state": "PASS", "decision": "ALLOW", "reason": valid_reason},
+            {"state": "PASS", "decision": "HUMAN_APPROVAL", "reason": valid_reason},
+            {"state": "BLOCKED", "decision": "SIMULATE", "reason": valid_reason},
+            {"state": "UNKNOWN", "decision": "ALLOW", "reason": valid_reason},
+            {"state": "ERROR", "decision": "HUMAN_APPROVAL", "reason": valid_reason},
+            {"state": "PASS", "decision": "SIMULATE", "reason": ""},
+            {"state": "PASS", "decision": "SIMULATE", "reason": "   "},
+            {"state": "PASS", "decision": "SIMULATE"},
+            {"state": "PASS", "decision": "SIMULATE", "reason": valid_reason,
+             "effect_applied": True},
+            {"state": ["PASS"], "decision": "SIMULATE", "reason": valid_reason},
+            {"state": "PASS", "decision": {"value": "SIMULATE"}, "reason": valid_reason},
+            None,
+            [],
+            "PASS",
+        )
+        for response in bad:
+            with self.subTest(response=repr(response)), self.assertRaises(ValueError):
+                validate_synthetic_policy_response(response)
+
+    def test_worker_accepts_only_explicit_synthetic_dispositions(self):
+        for state, decision in (
+            ("PASS", "SIMULATE"),
+            ("BLOCKED", "HUMAN_APPROVAL"),
+            ("UNKNOWN", "HUMAN_APPROVAL"),
+        ):
+            with self.subTest(state=state, decision=decision):
+                payload = {"state": state, "decision": decision, "reason": "synthetic"}
+                self.assertIs(validate_synthetic_policy_response(payload), payload)
+
+    def test_worker_validates_policy_response_before_core_gate_write(self):
+        fn = worker_function("execute_stage")
+        validators = [
+            node for node in ast.walk(fn)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "validate_synthetic_policy_response"
+        ]
+        self.assertEqual(len(validators), 1)
+        self.assertEqual(len(validators[0].args), 1)
+        policy_call = validators[0].args[0]
+        self.assertIsInstance(policy_call, ast.Call)
+        self.assertIsInstance(policy_call.func, ast.Name)
+        self.assertEqual(policy_call.func.id, "post_json")
+        self.assertIsInstance(policy_call.args[0], ast.Name)
+        self.assertEqual(policy_call.args[0].id, "POLICY")
 
 
 if __name__ == "__main__":
