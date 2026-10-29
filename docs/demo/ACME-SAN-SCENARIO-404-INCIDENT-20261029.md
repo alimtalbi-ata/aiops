@@ -37,3 +37,14 @@ Le service Evidence renvoie régulièrement `404` sur `GET /metrics`. Il s'agit 
 ## Impact sur la vidéo
 
 Le run reste `BLOCKED`. Ne pas le présenter comme une démonstration SAN → Payments réussie, ni comme preuve LIVE. Voir [inventaire runtime et vidéo](ACME-RUNTIME-VIDEO-PLATFORM-20261029.md).
+
+## Confirmation par catalogue actif (lecture seule)
+
+L'opérateur a exécuté depuis le conteneur Worker des GET sur Core :
+
+- `GET /api/scenarios` → HTTP 200, **quatre scénarios**, tous `synthetic=true` : `SCN-ESX-FC-P1` (ESX FC port failure), `SCN-GOLDEN-PAYMENT-P1` (Golden Payment SAN degradation), `SCN-ORACLE-LATENCY-P1` (Oracle payment latency), `SCN-STORAGE-CAPACITY-P2` (Storage capacity pressure).
+- `GET /api/scenarios/acme-san` → HTTP 404, `{"detail":"scenario not found"}`.
+
+**Cause immédiate confirmée :** le run référence `acme-san`, identifiant absent du catalogue Core actif. Le code Core utilise `aiops.scenarios` et `aiops.scenario_steps`; le GET individuel retourne 404 si la ligne scénario est absente. La raison amont de cette divergence reste à établir (référencement/seed/versions). `SCN-GOLDEN-PAYMENT-P1` est un candidat à examiner, **pas** un alias confirmé. Ne pas inscrire `acme-san` par POST sans définition des étapes et validation métier; ne pas modifier le run bloqué ni autoriser de remédiation.
+
+**Prochaine vérification :** lire `GET /api/scenarios/SCN-GOLDEN-PAYMENT-P1` et inspecter les références `acme-san` dans le code, la configuration et le seed. Préparer une correction versionnée, testée, avec statut SYNTHETIC explicite.
