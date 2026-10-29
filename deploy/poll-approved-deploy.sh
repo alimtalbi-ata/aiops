@@ -4,6 +4,12 @@ set -Eeuo pipefail
 umask 077
 BASE="${AIOPS_AUTODEPLOY_HOME:-/home/aiops/aiops2-auto-deploy}"
 BRANCH="${AIOPS_DEPLOY_BRANCH:-deploy/aiops2-stable}"
+# The poller itself must enforce the reviewed ref, even if cron is invoked
+# directly with an overridden environment after installation.
+if [[ "$BRANCH" != "deploy/aiops2-stable" ]]; then
+  echo "BLOCKED: poller only accepts deploy/aiops2-stable" >&2
+  exit 1
+fi
 REMOTE="${AIOPS_DEPLOY_REMOTE:-git@github.com:alimtalbi-ata/aiops.git}"
 mkdir -p "$BASE"
 exec 9>"$BASE/poll.lock"
