@@ -6,6 +6,9 @@ on:
     branches:
       - main
       - "fix/**"
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
