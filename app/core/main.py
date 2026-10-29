@@ -4,6 +4,7 @@ from fastapi import FastAPI,HTTPException,Header
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel,Field
 from shared.db import db
+from core.demo_evidence_read import register_demo_evidence_routes
 from core.denial_routes import register_denial_routes
 from core.critic_denial_block import block_with_denial
 from core.critic_denial_resume import resume_critic_denial
@@ -34,6 +35,7 @@ def auth(token):
     if token!=ADMIN: raise HTTPException(401,'invalid internal token')
 def bearer(authorization): return (authorization or '').removeprefix('Bearer ')
 register_denial_routes(app,db,auth,bearer)
+register_demo_evidence_routes(app,db,auth,bearer)
 def append_event(c,rid,stage,etype,status,eids=None,decision=None,confidence=None,payload=None,event_key=None):
     if event_key:
         old=c.execute(

@@ -242,8 +242,8 @@ def _execute_stage_blocking(a,attempt):
             if not stable_event or not stable_event.get('occurred_at'):
                 raise RuntimeError('stable_observation_timestamp_unavailable')
             observed=stable_event['occurred_at']
-            post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fc-errors','observed_at':observed,'claim':'Synthetic ACME scenario reports FC errors at 184 errors/min on ACME-SAN-FABRIC-A.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL','mode':mode,'run_id':rid}},token=ADMIN)
-            post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fabric-health','observed_at':observed,'claim':'Synthetic ACME scenario reports ACME-SAN-FABRIC-A degraded with health 0.42.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','state':'DEGRADED','health':0.42,'mode':mode,'run_id':rid}},token=ADMIN)
+            post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fc-errors','observed_at':None,'claim':'Synthetic ACME scenario reports FC errors at 184 errors/min on ACME-SAN-FABRIC-A.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed':False,'simulated_event_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL','mode':mode,'run_id':rid}},token=ADMIN)
+            post_json(EVID,'/api/evidence',{'source':'twin-simulator','external_id':f'{rid}:fabric-health','observed_at':None,'claim':'Synthetic ACME scenario reports ACME-SAN-FABRIC-A degraded with health 0.42.','confidence':0.95,'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE','adapter':'twin-simulator','scenario_id':scenario,'observed':False,'simulated_event_at':observed},'payload':{'node_id':'ACME-SAN-FABRIC-A','state':'DEGRADED','health':0.42,'mode':mode,'run_id':rid}},token=ADMIN)
             # DEMO B adds independent-looking *synthetic* observation types; all
             # provenance stays explicitly synthetic and remains open to Critic.
             run_detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
@@ -263,12 +263,12 @@ def _execute_stage_blocking(a,attempt):
                     post_json(EVID,'/api/evidence',{
                         'source':'acme-enriched-simulator',
                         'external_id':f'{rid}:{suffix}',
-                        'observed_at':observed,
+                        'observed_at':None,
                         'claim':claim,
                         'confidence':0.75,
                         'provenance':{'synthetic':True,'run_id':rid,'stage':'OBSERVE',
                             'adapter':'acme-enriched-simulator','scenario_id':scenario,
-                            'observed_at':observed},
+                            'observed':False,'simulated_event_at':observed},
                         'payload':{**payload,'mode':mode,'run_id':rid,'synthetic':True}
                     },token=ADMIN)
         if stage in ('DGX_ANALYST','DGX_CRITIC'):
@@ -346,7 +346,7 @@ def _execute_stage_blocking(a,attempt):
             analysis_record_id=(analyst_event or {}).get('payload',{}).get('analysis_record_id')
             critique_record_id=(critic_event or {}).get('payload',{}).get('critique_record_id')
             freshness=assess_evidence_freshness(source_evidence)
-            policy_input={'mode':mode,'command':'EXECUTE','severity':analysis.get('severity','UNKNOWN'),'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),'evidence_count':len(source_evidence),'critic_validated':critique.get('validated') is True,'redundancy_ok':False if not source_evidence else True,'evidence_fresh':freshness['status']=='FRESH','evidence_freshness':freshness,'preconditions_verified':False,'fencing_verified':False,'human_approved':False}
+            policy_input={'mode':mode,'command':('OBSERVE' if mode in ('DEMO','REPLAY','STORY') else 'EXECUTE'),'severity':analysis.get('severity','UNKNOWN'),'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),'evidence_count':len(source_evidence),'critic_validated':critique.get('validated') is True,'redundancy_ok':False if not source_evidence else True,'evidence_fresh':freshness['status']=='FRESH','evidence_freshness':freshness,'preconditions_verified':False,'fencing_verified':False,'human_approved':False}
             pol=post_json(POLICY,'/api/policy/check',policy_input,token=ADMIN)
             decision_record=post_json(CORE,f'/api/runs/{rid}/policy-record',{'policy':pol,'analysis_id':analysis_record_id,'critique_id':critique_record_id,'evidence_ids':[x['evidence_id'] for x in source_evidence],'policy_version':'2.1.0','policy_input':policy_input},timeout=15,token=ADMIN)
             pol['policy_decision_id']=decision_record['policy_decision_id']

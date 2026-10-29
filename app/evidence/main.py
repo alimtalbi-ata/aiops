@@ -26,7 +26,9 @@ def health():return {'status':'ok','component':'evidence','append_only':True}
 @app.get('/metrics')
 def metrics():
     with db() as c:
-        total = c.execute('select count(*) from aiops.evidence').fetchone()[0]
+        total = c.execute(
+            'select count(*) from aiops.evidence'
+        ).fetchone()[0]
     return PlainTextResponse(
         f'aiops_evidence_total {total}\n',
         media_type='text/plain; version=0.0.4'

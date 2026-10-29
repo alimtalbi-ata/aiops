@@ -3,7 +3,7 @@ import os,hmac
 
 from fastapi import FastAPI,Header,HTTPException
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 try:
     from policy import autonomy_store, execution_fence
 except ModuleNotFoundError:
@@ -28,9 +28,9 @@ class Decision(BaseModel):
     confidence: float = Field(ge=0, le=1)
     evidence_count: int = Field(ge=0)
     # Deliberately required: callers must not inherit a trusted default.
-    critic_validated: bool
-    redundancy_ok: bool
-    evidence_fresh: bool = False
+    critic_validated: StrictBool
+    redundancy_ok: StrictBool
+    evidence_fresh: StrictBool = False
     preconditions_verified: bool = False
     fencing_verified: bool = False
     human_approved: bool = False
@@ -86,13 +86,16 @@ def evaluate(x: Decision) -> dict:
         if not x.critic_validated:
             return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
                     "reason":"synthetic diagnostic rejected or not validated by independent critic"}
+        if not x.redundancy_ok:
+            return {"state":"BLOCKED","decision":"HUMAN_APPROVAL",
+                    "reason":"synthetic redundancy or safety check failed"}
         if not x.evidence_fresh:
             return {"state":"BLOCKED","decision":"ENRICH",
                     "reason":"synthetic diagnostic lacks fresh current-state evidence"}
         if x.severity == "UNKNOWN":
             return {"state":"UNKNOWN","decision":"ENRICH",
                     "reason":"synthetic incident severity is still unknown"}
-        if x.confidence < 0.65:
+        if x.confidence < 0.90:
             return {"state":"BLOCKED","decision":"ENRICH",
                     "reason":"synthetic diagnostic confidence below qualification threshold"}
         return {
