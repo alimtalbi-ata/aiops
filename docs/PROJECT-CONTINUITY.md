@@ -140,3 +140,12 @@ Dedicated P0 branch from main `723ca6458c722a1aa0e57ddb5eee3374d20cc830`: shared
 ## 2026-10-28 11:15 Europe/Paris — Worker simulation/Policy fence (draft)
 
 Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current main. The Worker rejects invalid execution modes before Temporal connection or stage effects; DEMO/REPLAY/STORY send OBSERVE to Policy, not EXECUTE. LIVE continues to hit the existing emergency stop and Policy HITL refusal. The helper and AST regression tests are reused without a mass merge. This is unit/static qualification only; no Core/Temporal/Twin/Evidence integration or HITL approval claimed. See `docs/automation-runs/2026-10-28-1115-p0-worker-policy-mode.md` for exact CI status and follow-up.
+
+
+## 2026-10-30 — GitHub scheduled qualification and Debian runtime smoke (candidate branch)
+
+- Branch: `ops/automated-runtime-cron`. Existing `.github/workflows/quality.yml` now also runs daily at 02:23 UTC and supports manual dispatch; existing PR/push triggers remain.
+- New `.github/workflows/runtime-smoke.yml` schedules read-only checks every 15 minutes on a repository-scoped self-hosted runner labelled `aiops2-runtime`. New `scripts/runtime-smoke.sh` checks the known Core/Worker/Policy/Evidence containers, HTTP health, the synthetic Golden Payment scenario, deployed Worker image and non-null `observed_at` code contract, plus Worker-to-Temporal TCP connectivity. It does not create Runs/incidents, write Evidence, call GLPI, restart services or remediate.
+- Runner installation is a one-time operator action documented in `docs/automation/RUNTIME-CRON.md`. Until that runner is online and the PR is merged to main, the 15-minute runtime schedule is not active.
+- Source/runtime divergence discovered: GitHub main Worker source differs from the deployed fixed Worker image on SRV-DEB-05. Do not rebuild/deploy main Worker over the deployed image until reconciled in a reviewed change.
+- Qualification status at branch creation: source files committed to branch; GitHub PR checks and runtime smoke have not yet been executed. The old pilot `RUN-2646AF806DC7CB40` remains BLOCKED; no new pilot or LIVE qualification is claimed.
