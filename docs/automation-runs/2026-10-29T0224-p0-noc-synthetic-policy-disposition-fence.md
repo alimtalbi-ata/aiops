@@ -23,3 +23,10 @@
 ## Handoff / prochain lot
 - Après contrôle de la CI sur le SHA final, transmettre à #156 : SHA #171, contrats resserrés, résultats des tests, statut BLOCKED et risque de compatibilité Policy.
 - Prochain lot : recette intégrée et couverture de déploiement, pas une nouvelle PR NOC empilée.
+
+## Qualification GitHub Actions du SHA code + journal initial
+
+- SHA exact `ab92ee5d00c63d251cfa37474955c74397ca1d71` : [`quality.yml` #40800451608](https://github.com/alimtalbi-ata/aiops/actions/runs/40800451608), **completed/success, 6/6 jobs SUCCESS** (quality-build-package, mariadb-dr-rehearsal, migration-runner-upgrade, database-migrations, runtime-e2e, release-kit).
+- Logs consultés : **15/15 tests Ledger unit**, **15/15 Policy safety**, **12/12 HTTP Core/Portal/PostgreSQL 16 éphémères**, dont `test_real_policy_live_allow_fails_closed ... ok`. Les refus 401 et sources absentes restent couverts. Temporal/Evidence replay et évaluation synthétique ont réussi en CI, sans attestation métier ACME.
+- Autres checks sur le même SHA : [V2.8 #40800451555](https://github.com/alimtalbi-ata/aiops/actions/runs/40800451555) **SUCCESS**, [Offline #40800451680](https://github.com/alimtalbi-ata/aiops/actions/runs/40800451680) **SUCCESS**, [Historical #40800451476](https://github.com/alimtalbi-ata/aiops/actions/runs/40800451476) **SUCCESS**.
+- Le présent addendum est un nouveau commit documentaire : sa propre CI doit être vérifiée sur son SHA final. Les checks ci-dessus ne qualifient pas automatiquement ce commit.
