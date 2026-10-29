@@ -29,11 +29,11 @@ if docker ps -a --format '{{.Names}}' | grep -Eq '^aiops2-demo-observability-(de
   die "Conteneurs candidats déjà présents; vérifier manuellement avant de poursuivre."
 fi
 
-say "Téléchargement de la révision immuable ${EXPECTED_SHA}"
+say "Téléchargement de la configuration figée ${EXPECTED_SHA}"
 tmp="$(mktemp -d)"
 git -C "${tmp}" init -q
 git -C "${tmp}" remote add origin "${REPO_URL}"
-git -C "${tmp}" fetch --no-tags --depth=1 origin "${BRANCH}"
+git -C "${tmp}" fetch --no-tags --depth=1 origin "${EXPECTED_SHA}"
 actual="$(git -C "${tmp}" rev-parse FETCH_HEAD)"
 [[ "${actual}" == "${EXPECTED_SHA}" ]] || die "SHA de branche différent (${actual}); candidat modifié, déploiement arrêté"
 git -C "${tmp}" archive FETCH_HEAD deploy/observability-demo | tar -xf - -C "${tmp}"
