@@ -159,23 +159,25 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
         raise HTTPException(422, 'unsupported synthetic action')
     if not x.target_node_id or not x.target_node_id.strip():
         raise HTTPException(422, 'target_node_id required')
-    p = x.payload
-    if x.action == 'SET_STATE':
-        if not isinstance(p.get('state'), str) or not p['state'].strip():
-            raise HTTPException(422, 'state required for synthetic SET_STATE')
-        if p.get('health') is not None and (
-            not _finite_json_number(p['health']) or not 0 <= p['health'] <= 1
-        ):
-            raise HTTPException(422, 'health must be a finite fraction')
-    else:
-        if not isinstance(p.get('metric'), str) or not p['metric'].strip():
-            raise HTTPException(422, 'metric required for synthetic OBSERVE')
-        if not _finite_json_number(p.get('value')):
-            raise HTTPException(422, 'value must be a finite number')
     with db() as c:
+        # Preserve the existing unknown-target 404 contract even when a
+        # caller supplies a malformed payload; no write precedes validation.
         if not c.execute('select 1 from aiops.twin_nodes where node_id=%s',
                          (x.target_node_id,)).fetchone():
             raise HTTPException(404, 'target node not found')
+        p = x.payload
+        if x.action == 'SET_STATE':
+            if not isinstance(p.get('state'), str) or not p['state'].strip():
+                raise HTTPException(422, 'state required for synthetic SET_STATE')
+            if p.get('health') is not None and (
+                not _finite_json_number(p['health']) or not 0 <= p['health'] <= 1
+            ):
+                raise HTTPException(422, 'health must be a finite fraction')
+        else:
+            if not isinstance(p.get('metric'), str) or not p['metric'].strip():
+                raise HTTPException(422, 'metric required for synthetic OBSERVE')
+            if not _finite_json_number(p.get('value')):
+                raise HTTPException(422, 'value must be a finite number')
         if x.action=='SET_STATE' and x.target_node_id:
             p=x.payload; c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
             c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(new('FACT'),x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
