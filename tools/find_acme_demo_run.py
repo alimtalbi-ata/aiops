@@ -16,6 +16,11 @@ SERVICE = "ACME-SVC-PAYMENTS"
 RUN_ID = re.compile(r"RUN-[A-Za-z0-9_-]{1,120}\Z")
 
 
+# Core caps the list endpoints; these windows do not cover historical records.
+RUN_REGISTRY_LIMIT = 100
+INCIDENT_REGISTRY_LIMIT = 500
+
+
 def fetch_json(base, path):
     request = Request(base.rstrip("/") + path, headers={"Accept": "application/json"})
     with urlopen(request, timeout=8) as response:
@@ -58,9 +63,18 @@ def candidates(runs, incidents):
 
 
 def qualify(base, portal, get=fetch_json):
-    matches = candidates(get(base, "/api/runs"), get(base, "/api/incidents?limit=500"))
+    runs = get(base, "/api/runs")
+    incidents = get(base, "/api/incidents?limit=500")
+    matches = candidates(runs, incidents)
     if not matches:
-        return {"result": "UNKNOWN", "reason": "NO_MATCHING_CORE_RUN", "run_id": None}
+        # A full window cannot rule out older matching runs or incidents.
+        limited = (len(runs["items"]) >= RUN_REGISTRY_LIMIT
+                   or len(incidents["items"]) >= INCIDENT_REGISTRY_LIMIT)
+        return {
+            "result": "UNKNOWN",
+            "reason": "REGISTRY_WINDOW_LIMITED" if limited else "NO_MATCHING_CORE_RUN",
+            "run_id": None,
+        }
     for run, incident in matches:
         rid = run["run_id"]
         detail = get(base, "/api/runs/" + quote(rid, safe=""))
