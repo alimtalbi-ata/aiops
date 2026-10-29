@@ -32,3 +32,9 @@
 
 - Test d'intégration ajouté à `tests/test_policy_real_http_integration.py` (commit `ea6be21d3dcb988e7112af6cfc03e097484d7169`) : réponses **réelles** du service Policy HTTP éphémère pour `PASS/SIMULATE`, `BLOCKED/HUMAN_APPROVAL` et `UNKNOWN/HUMAN_APPROVAL` validées par le même garde-fou que le worker. Ce test est déjà exécuté par le job Core/PostgreSQL/Policy de `quality.yml`.
 - Ce test ne démarre **pas** Temporal et n'atteste pas une liaison authentifiée au Run ; CI sur SHA final **PENDING** jusqu'à observation des jobs. Aucun résultat Debian.
+
+## Qualification du SHA de code + journal initial
+
+- SHA `5e680817560c395b46f5c385d1aa17a08d0ed95c` : [quality.yml push #40812760007](https://github.com/alimtalbi-ata/aiops/actions/runs/40812760007) et [PR #40812765654](https://github.com/alimtalbi-ata/aiops/actions/runs/40812765654), tous deux **completed/success, 3/3 jobs SUCCESS**. Logs push consultés : **9/9 tests** du contrat worker (dont 3 nouveaux), **12/12 Policy HTTP réel** (dont croisement avec le validateur worker), **18/18 Policy unitaires**, **14/14 Core/Policy/PostgreSQL 16**, **5/5 Core NOC**, Grafana réel et étapes statiques PASS.
+- Ce résultat valide le SHA ci-dessus, pas automatiquement le nouveau commit documentaire. Le HEAD final sera indiqué sur [PR #176](https://github.com/alimtalbi-ata/aiops/pull/176) et remis à [Recette #156](https://github.com/alimtalbi-ata/aiops/pull/156) après confirmation des checks sur ce HEAD exact.
+- Aucun test Temporal en exécution ni sur Debian ; `READY_FOR_STABLE=BLOCKED` maintenu.
