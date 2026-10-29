@@ -19,7 +19,11 @@ def validate_snapshot(targets: dict, up: dict, nodes: dict) -> None:
     if targets.get("status") != "success":
         raise ValueError("targets_not_success")
     active = targets.get("data", {}).get("activeTargets", [])
-    if not isinstance(active, list) or len(active) != 1:
+    if not isinstance(active, list):
+        raise ValueError("invalid_targets")
+    active = [item for item in active if isinstance(item, dict)
+              and item.get("labels", {}).get("job") == "aiops2-twin"]
+    if len(active) != 1:
         raise ValueError("ambiguous_twin_target")
     target = active[0]
     if (target.get("labels", {}).get("job") != "aiops2-twin"
