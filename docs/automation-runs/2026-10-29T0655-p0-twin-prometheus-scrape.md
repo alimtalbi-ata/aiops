@@ -31,3 +31,8 @@
 - Collecter SHA appliqué par cron Debian, preuves UTC, résultats Core/Twin/Copilot/Portal, Policy SIMULATE, provenance synthétique, IDs Run/Evidence et rollback. **Le poller seul ne valide pas l'E2E.**
 
 **READY_FOR_STABLE=BLOCKED ; overall=NO_GO.** Le script de déploiement actuel ne transporte pas Twin/Core/Copilot/Prometheus, et la recette 5/5 est seule habilitée à décider d'une éventuelle promotion. Aucun push stable, aucune fusion, aucun accès Debian, aucun LIVE. Prochain lot : vérifier CI finale et vrai scrape Prometheus éphémère, puis remettre le SHA et les blocages à #156.
+
+## Addendum CI : correction de régression de test
+- CI initiale du SHA `8c769c12b356421cd42556b690e83d6a01630eab` : [quality.yml #40826341422](https://github.com/alimtalbi-ata/aiops/actions/runs/40826341422), **FAILURE** (job Core/Twin), malgré policy-and-static et Grafana SUCCESS. Logs réels lus : 14 tests Twin exécutés, 3 échecs, dont deux anciennes assertions qui supposaient à tort que le jeton admin/interservice avait accès à `/metrics`, et une assertion sur un saut de ligne littéral.
+- Correction saut de ligne : `cac50494933a60b907ad7f0035d8dc851c442ab3` ; correction des deux assertions historiques : `2c97ce42e4bdfb4788d98c62e39b35e4af3c85e3`.
+- **Ne pas qualifier READY_FOR_STABLE sur les CI précédentes** : la CI du dernier SHA doit réussir intégralement. Ce journal documentaire produit lui-même un nouveau SHA et requiert une nouvelle vérification.
