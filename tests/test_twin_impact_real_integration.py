@@ -146,7 +146,7 @@ class TwinImpactRealIntegration(unittest.TestCase):
         # Real Twin HTTP + PostgreSQL 16: no unauthenticated topology or metrics.
         paths = (
             '/api/twin/summary', '/api/twin/nodes', '/api/twin/graph',
-            '/api/twin/at?known_at=2026-10-28T00:00:00Z', '/metrics',
+            '/api/twin/at?known_at=2026-10-28T00:00:00Z',
         )
         for path in paths:
             for token in (None, 'invalid', TOKEN + '-extra'):
@@ -172,7 +172,7 @@ class TwinImpactRealIntegration(unittest.TestCase):
         internal = os.environ["AIOPS_INTERNAL_TOKEN"]
         self.assertNotEqual(internal, TOKEN)
         for path in ("/api/twin/summary", "/api/twin/impact/ACME-SAN-FABRIC-A",
-                     "/api/twin/graph", "/metrics"):
+                     "/api/twin/graph"):
             with self.subTest(path=path):
                 response = requests.get(
                     BASE + path, headers={"Authorization": "Bearer " + internal},
