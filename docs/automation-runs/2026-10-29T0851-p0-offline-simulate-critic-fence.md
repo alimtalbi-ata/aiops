@@ -16,12 +16,12 @@
 - `tests/test_demo_evidence_receipts.py` : test négatif de Critique non validée et test positif qui maintient `policy_critic_linkage_origin=NOT_TESTED` et `overall=NO_GO`.
 - Contrat de sortie `aiops.demo-evidence-offline-receipt.v1` inchangé ; condition nécessaire mais non suffisante. Les décisions projetées ne contiennent pas leur `critique_id` : le lien exact Policy→Critique ne peut être attesté par ces deux exports. Preuves synthétiques = références, jamais validation indépendante.
 - Réutilisation du step `quality.yml` existant, aucun workflow supplémentaire, aucun changement HTTP, secret, LIVE ou déploiement.
-- Tests locaux : NOT_TESTED (pas de checkout local réseau). CI du nouveau SHA : PENDING à la création du journal ; mise à jour de la preuve à effectuer après observation.
+- Tests locaux : NOT_TESTED (pas de checkout local réseau). CI du SHA #182 `7796535455896e23cf4d35afec077bf77410e86f` : [quality.yml #40838301372](https://github.com/alimtalbi-ata/aiops/actions/runs/40838301372) **completed/success, 3/3 jobs SUCCESS** ; logs `policy-and-static` : **9/9 tests Evidence PASS** (dont 2 nouveaux). PR [#182](https://github.com/alimtalbi-ata/aiops/pull/182) fusionnée **uniquement dans la branche de développement #156**, merge `e93b8709264a43330ef77ec7f2e4bf017d20a794` ; CI post-intégration à vérifier sur le HEAD final.
 
 ## Matrice GO/NO-GO
 | Dimension | Qualification |
 | --- | --- |
-| Critique nécessaire au PASS synthétique sur fixtures | CI PENDING |
+| Critique nécessaire au PASS synthétique sur fixtures | PASS CI #40838301372 sur SHA #182 ; post-intégration PENDING |
 | Policy→Critique exacte, `incident_id`, Temporal | NOT_TESTED |
 | Tenant A/B, SAN→Payments runtime, E2E Core→Temporal→Analyst/Critic→Policy→Evidence→Portal | NOT_TESTED |
 | Déployeur Core/Twin/Copilot/Policy/Evidence (copie/rebuild/restart/tests/rollback) | BLOCKED — #153 portail uniquement |
