@@ -220,6 +220,7 @@ class SimulationPolicyContractTests(unittest.TestCase):
     def test_worker_preflights_canonical_run_before_temporal_and_core_start(self):
         # AST wiring check only; no Temporal or Core service is started here.
         http = ast.unparse(worker_function("start"))
+        self.assertLess(http.index("re.fullmatch("), http.index("get_json("))
         self.assertLess(http.index("validate_canonical_run_binding("),
                         http.index("Client.connect("))
         activity_start = ast.unparse(worker_function("start_run"))
