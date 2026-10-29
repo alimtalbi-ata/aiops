@@ -17,6 +17,35 @@ class DemoV2Tests(unittest.TestCase):
                        "Observations synthétiques", "accès ou API en erreur"):
             self.assertIn(marker, page)
 
+    def test_synthetic_stage_markers_are_not_attestations(self):
+        page = render_demo_v2(
+            {"run": {"run_id": "RUN-SYN", "mode": "DEMO", "status": "RESOLVED"},
+             "events": [{"sequence": 1, "stage": "POLICY",
+                         "event_type": "STAGE_COMPLETED", "status": "PASS",
+                         "payload": {"synthetic": True}},
+                        {"sequence": 2, "stage": "HITL",
+                         "event_type": "STAGE_COMPLETED", "status": "PASS",
+                         "payload": {"synthetic": True}},
+                        {"sequence": 3, "stage": "REMEDIATE",
+                         "event_type": "STAGE_COMPLETED", "status": "PASS",
+                         "payload": {"synthetic": True}},
+                        {"sequence": 4, "stage": "VERIFY",
+                         "event_type": "STAGE_COMPLETED", "status": "PASS",
+                         "payload": {"synthetic": True}}]}, {}, {})
+        for warning in ("Étapes DEMO", "validation non attestée",
+                        "approbation humaine GLPI", "remédiation effectuée",
+                        "PASS/SIMULATE", "RESOLVED n&#x27;atteste"):
+            self.assertIn(warning, page)
+        # Do not falsify the Core event itself: its original PASS stays visible.
+        self.assertIn("STAGE_COMPLETED", page)
+
+    def test_no_attestation_warning_for_unrelated_events(self):
+        page = render_demo_v2(
+            {"run": {"run_id": "RUN-N", "mode": "DEMO", "status": "BLOCKED"},
+             "events": [{"stage": "NORMALIZE", "event_type": "STAGE_COMPLETED",
+                         "status": "PASS", "payload": {"synthetic": True}}]}, {}, {})
+        self.assertNotIn("Étapes DEMO — validation non attestée", page)
+
     def test_missing_data_not_fabricated(self):
         page = render_demo_v2({"run": {"status": "BLOCKED"}}, {}, {})
         self.assertIn("INCONNU", page)
