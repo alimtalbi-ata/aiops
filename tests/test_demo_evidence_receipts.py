@@ -122,6 +122,23 @@ class EvidenceReceiptTests(unittest.TestCase):
         with self.assertRaises(Blocked):
             qualify(rid, ledger, refs)
 
+    def test_simulate_pass_with_only_unvalidated_critique_is_blocked(self):
+        rid, ledger, refs = fixture()
+        ledger["critiques"][0]["validated"] = False
+        with self.assertRaisesRegex(Blocked, "simulate_pass_without_validated_critique"):
+            qualify(rid, ledger, refs)
+
+    def test_validated_critique_is_necessary_not_independent_policy_proof(self):
+        rid, ledger, refs = fixture()
+        ledger["critiques"].append({
+            "critique_id": "C-2", "analysis_id": "A-1", "model": "synthetic",
+            "validated": False, "evidence_ids": ["EVD-1"], "claim_checks": [],
+        })
+        receipt = qualify(rid, ledger, refs)
+        self.assertEqual(receipt["assessment"], "REFERENTIAL_CHECK_PASS")
+        self.assertEqual(receipt["policy_critic_linkage_origin"], "NOT_TESTED")
+        self.assertEqual(receipt["overall"], "NO_GO")
+
     def test_local_files_cli_redacts_and_blocks_symlinks(self):
         rid, ledger, refs = fixture()
         with tempfile.TemporaryDirectory() as folder:
