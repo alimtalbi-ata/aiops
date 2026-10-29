@@ -195,13 +195,17 @@ def wait_healthy(source: Path) -> None:
     raise Refused("targeted_services_unhealthy")
 
 
-def apply(delivery: Path, source: Path, state: Path, sha: str) -> dict:
+def apply(delivery: Path, source: Path, state: Path, sha: str, stable_sha: str) -> dict:
     if (not state.is_dir() or state.is_symlink()
             or not (state / "applied.sha").is_file()
             or (state / "applied.sha").is_symlink()):
         raise Refused("missing_existing_operator_release_state")
     if (state / "DEPLOYMENT_BLOCKED").exists():
         raise Refused("existing_deployment_block_marker")
+    if (not SHA.fullmatch(stable_sha)
+            or (state / "applied.sha").stat().st_size != 41
+            or (state / "applied.sha").read_text(encoding="ascii") != stable_sha + "\\n"):
+        raise Refused("applied_sha_not_matching_approved_stable")
     # Never alter local source files, non-owned containers or persistent volumes.
     originals = preflight_host(source)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -238,7 +242,7 @@ def apply(delivery: Path, source: Path, state: Path, sha: str) -> dict:
                 "import urllib.request; b=urllib.request.urlopen("
                 "'http://127.0.0.1:777/demo-studio',timeout=5).read(131073); "
                 "assert b'ACME Demo Studio' in b and len(b)<=131072")
-    except (Refused, ValueError, KeyError):
+    except BaseException:
         if switched:
             try:
                 command(*compose_args(source, rollback_file), "up", "-d", "--no-deps",
@@ -246,7 +250,7 @@ def apply(delivery: Path, source: Path, state: Path, sha: str) -> dict:
                 wait_healthy(source)
                 if inspect_owned(source, require_healthy=True) != originals:
                     raise Refused("rollback_image_identity_mismatch")
-            except (Refused, ValueError, KeyError):
+            except BaseException:
                 (state / "DEPLOYMENT_BLOCKED").write_text(
                     "P0 rollback incomplete; operator intervention required\n")
                 raise Refused("rollback_incomplete_operator_intervention") from None
@@ -277,8 +281,10 @@ def main(argv=None) -> int:
             if (not a.operator_approved or os.environ.get("AIOPS_RELEASE_APPLY") != "YES"
                     or a.source_dir is None):
                 raise Refused("explicit_operator_approval_required")
+            if a.source_dir.is_symlink() or a.state_dir.is_symlink():
+                raise Refused("symlinked_operator_directory")
             result = apply(delivery, a.source_dir.resolve(strict=True),
-                           a.state_dir.resolve(strict=True), a.candidate_sha)
+                           a.state_dir.resolve(strict=True), a.candidate_sha, a.stable_sha)
         print(json.dumps(result, sort_keys=True))
         return 0 if result["assessment"] != "BLOCKED" else 2
     except (Refused, OSError, ValueError, subprocess.TimeoutExpired):
