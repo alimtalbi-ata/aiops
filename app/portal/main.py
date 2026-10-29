@@ -60,9 +60,21 @@ def _get(path,base=CORE):
                 failure["http_status"] = code
         return failure
 
-def _runs():
+def _runs(strict=False):
+    """Read Core inventory; strict DEMO callers must reject error envelopes.
+
+    A failed Core read may contain a plausible attacker-controlled items list.
+    Never treat such items as authorization to read run details or registries.
+    None denotes an unverified inventory, distinct from a verified empty list.
+    """
     response=_get("/api/runs")
-    return response.get("items",[]) if isinstance(response.get("items"),list) else []
+    items=response.get("items")
+    if strict and (response.get("status") not in (None, "OK")
+                   or "error_type" in response
+                   or not isinstance(items, list)
+                   or any(not isinstance(item, dict) for item in items)):
+        return None
+    return items if isinstance(items,list) else []
 
 def _run_id(r):
     return r.get("run_id","UNKNOWN")
@@ -340,8 +352,8 @@ def demo_studio():
     graph=_get("/api/twin/graph",TWIN)
     impact=_get("/api/twin/impact/"+_DEMO_SAN_ROOT,TWIN)
     impact_scope, impact_shape_ok = _demo_impact_scope(impact)
-    runs=_runs()
-    demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
+    runs=_runs(strict=True)
+    demo_runs=[r for r in (runs or []) if r.get("mode") in ("DEMO","REPLAY","STORY")]
     body=panel("Préflight — qualification en lecture seule",
         '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
         'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
@@ -349,7 +361,7 @@ def demo_studio():
           ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
           ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
           ("Propagation SAN→Payments",impact_scope),
-          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)))
+          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)) if runs is not None else "INCONNU — inventaire Core indisponible")
         ]))
     if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
         body+=panel("Lancer le scénario synthétique ACME",
@@ -392,7 +404,7 @@ def demo_run_detail(rid:str):
     """Show source-backed demo evidence, never substitute fixtures for live records."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_demo_run_id")
-    candidates=_runs()
+    candidates=_runs(strict=True) or []
     matched=_unique_demo_run(candidates, rid)
     if not matched:
         raise HTTPException(404,"demo_run_not_found")
@@ -448,7 +460,7 @@ def demo_status(rid:str):
     """Read-only polling endpoint with strict DEMO ownership checked against Core."""
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_run_id")
-    allowed=_unique_demo_run(_runs(), rid)
+    allowed=_unique_demo_run(_runs(strict=True) or [], rid)
     if not allowed:
         raise HTTPException(404,"demo_run_not_found")
     detail=_get("/api/runs/"+rid)
