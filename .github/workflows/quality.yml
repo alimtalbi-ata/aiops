@@ -178,6 +178,34 @@ jobs:
           AIOPS_TWIN_CI_URL: http://127.0.0.1:811
           AIOPS_TWIN_CI_TOKEN: ci-twin-impact-ephemeral-only
         run: python -m unittest discover -s tests -p "test_twin_impact_real_integration.py" -v
+      - name: Real Prometheus scrape of seeded Twin (ephemeral CI only)
+        env:
+          AIOPS_REAL_PROMETHEUS_TWIN_CI: "true"
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          source = Path("config/prometheus/prometheus.yml").read_text()
+          old = "aiops2-twin:811"
+          if source.count(old) != 1:
+              raise SystemExit("BLOCKED: unexpected Twin scrape target configuration")
+          dest = Path(os.environ["RUNNER_TEMP"]) / "ci-twin-prometheus.yml"
+          dest.write_text(source.replace(old, "127.0.0.1:811"))
+          dest.chmod(0o644)
+          PY
+          printf '%s' 'ci-twin-metrics-ephemeral-only' > "$RUNNER_TEMP/ci-twin-metrics-token"
+          chmod 0644 "$RUNNER_TEMP/ci-twin-metrics-token"
+          docker run -d --rm --name aiops-prometheus-twin-ci --network host \
+            -v "$RUNNER_TEMP/ci-twin-prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$RUNNER_TEMP/ci-twin-metrics-token:/run/aiops2/twin-metrics-token:ro" \
+            prom/prometheus:v3.14.0 \
+            --config.file=/etc/prometheus/prometheus.yml \
+            --web.listen-address=127.0.0.1:19090 \
+            --storage.tsdb.path=/tmp/prometheus
+          python -m unittest discover -s tests -p "test_prometheus_twin_real_scrape.py" -v
+      - name: Stop ephemeral Prometheus
+        if: always()
+        run: docker rm -f aiops-prometheus-twin-ci || true
       - name: Stop ephemeral Twin container
         if: always()
         run: docker rm -f aiops-twin-impact-ci || true
