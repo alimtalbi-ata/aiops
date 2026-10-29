@@ -9,6 +9,7 @@ import unittest
 import psycopg
 import requests
 from psycopg.types.json import Jsonb
+from app.shared.simulation_policy_contract import validate_synthetic_gate_receipt
 
 BASE = "http://127.0.0.1:1810"
 TOKEN = os.environ["AIOPS_INTERNAL_TOKEN"]
@@ -469,6 +470,10 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                         headers=headers, timeout=3, allow_redirects=False,
                     )
                     self.assertEqual(gate.status_code, 200, gate.text)
+                    self.assertEqual(
+                        validate_synthetic_gate_receipt(gate.json(), rid, disposition),
+                        {"run_id": rid, "stage": "POLICY", "state": expected},
+                    )
                     # Stage-only BLOCKED does not terminalize a Run; worker
                     # must call Core's versioned BLOCK command.
                     command = {"expected_version": 1,
