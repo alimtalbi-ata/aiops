@@ -84,7 +84,7 @@ class StableCoverageTests(unittest.TestCase):
             ".github/workflows/promote-stable.yml",
         )
         for path in paths:
-            self.write(path, "# changed control\\n")
+            self.write(path, "# changed control\n")
         result = qualify(self.repo, self.stable, self.commit())
         self.assertEqual(result["assessment"], "BLOCKED")
         self.assertEqual(result["overall"], "NO_GO")
