@@ -116,6 +116,49 @@ def validate_observation(value: object, run_id: str, incident_id: str) -> dict:
     }
 
 
+def compare_unbound_policy_values(
+    core_observation: object, policy_response: object, run_id: str, incident_id: str,
+) -> dict:
+    """Compare two independent values, NEVER attest a Policy-to-Run binding.
+
+    Policy /api/policy/check has no canonical run_id/incident_id or authenticated
+    request binding. A matching decision is therefore not evidence that Policy
+    produced the persisted Core gate. Only for synthetic read-model qualification.
+    """
+    validate_observation(core_observation, run_id, incident_id)
+    require(type(policy_response) is dict
+            and set(policy_response) == {"state", "decision", "reason"}
+            and type(policy_response["state"]) is str
+            and type(policy_response["decision"]) is str
+            and type(policy_response["reason"]) is str
+            and 0 < len(policy_response["reason"]) <= 512,
+            "invalid_policy_http_contract")
+    pair = (policy_response["state"], policy_response["decision"])
+    require(pair in {
+        ("PASS", "SIMULATE"), ("UNKNOWN", "HUMAN_APPROVAL"),
+        ("BLOCKED", "HUMAN_APPROVAL"), ("BLOCKED", "ESCALATE"),
+    }, "invalid_policy_http_disposition")
+    require(core_observation["policy_gate_recorded"] is True
+            and (core_observation["policy_gate_state"],
+                 core_observation["policy_decision"]) == pair,
+            "unbound_policy_core_mismatch")
+    return {
+        "schema": "aiops.demo-policy-unbound-value-crosscheck.v1",
+        "overall": "NO_GO",
+        "comparison": "VALUES_MATCH_NOT_CAUSAL_PROOF",
+        "run_id": run_id,
+        "incident_id": incident_id,
+        "policy_gate_state": pair[0],
+        "policy_decision": pair[1],
+        "policy_input_provenance": "UNVERIFIED_CALLER_SUPPLIED_VALUE",
+        "policy_run_binding_verified": False,
+        "hitl_approval_verified": False,
+        "temporal_execution_verified": False,
+        "postchecks_verified": False,
+        "live_remediation_authorized": False,
+    }
+
+
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict:
     """Reject duplicate keys at every nesting level, not only the top-level object."""
     value = {}
