@@ -77,8 +77,8 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     echo "BLOCKED: unsafe candidate diff status or path" >&2
     exit 1
   fi
-  case "$path" in
-    app/portal/demo_v2.py|tests/test_demo_v2.py|tests/*|docs/*|.github/*|README.md|VERSION|.gitignore) ;;
+  # All .github files (including workflows and release controls) require\n  # separate review; none is transported or exercised by this deployer.\n  case "$path" in
+    app/portal/demo_v2.py|tests/test_demo_v2.py|tests/*|docs/*|README.md|VERSION|.gitignore) ;;
     *)
       echo "BLOCKED: changed file is not transported by portal-only deployer" >&2
       exit 1
