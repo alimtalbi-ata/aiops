@@ -53,6 +53,23 @@ class DemoLedgerReadTests(unittest.TestCase):
                 self.assertEqual(self.read(header).status_code, 401)
             call.assert_not_called()
 
+    def test_malformed_bearer_is_401_before_core_io(self):
+        # compare_digest(str, str) raises on non-ASCII unless guarded.
+        # Oversized/whitespace credentials must also be refused without I/O.
+        malformed = ("Bearer café", "Bearer " + "x" * 4096,
+                     "Bearer " + VIEWER + " ", "Bearer " + VIEWER + "\t")
+        with patch("portal.demo_ledger_read.get_json",
+                   side_effect=AssertionError("Core I/O before auth")) as upstream:
+            for authorization in malformed:
+                with self.subTest(kind=len(authorization)):
+                    denied = self.read(authorization)
+                    self.assertEqual(denied.status_code, 401)
+                    self.assertEqual(payload(denied),
+                                     {"status": "UNKNOWN", "reason": "unauthorized"})
+                    self.assertEqual(denied.headers["cache-control"], "no-store")
+                    self.assertNotIn(VIEWER, denied.body.decode())
+            upstream.assert_not_called()
+
     def test_missing_or_shared_viewer_secret_fails_closed(self):
         with patch("portal.demo_ledger_read.get_json", side_effect=AssertionError("I/O before config")) as call:
             for value in ("", "short", "ci-only-internal-token-32-characters"):
