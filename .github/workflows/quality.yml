@@ -37,6 +37,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
+      - name: Demo Studio V2 synthetic stage-marker presentation contract
+        run: python -m unittest discover -s tests -p "test_demo_v2.py" -v
       - name: AI evaluation harness tests
         run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
       - name: Model evaluation API unit tests
