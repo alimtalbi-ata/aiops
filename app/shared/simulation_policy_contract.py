@@ -4,6 +4,20 @@ A DEMO/REPLAY/STORY decision is a read-only disposition request. The Policy
 engine may return SIMULATE, but this module never authorizes any LIVE effect.
 """
 
+import hmac
+
+
+def valid_internal_bearer(authorization: object, expected_token: object) -> bool:
+    """Require an exact Bearer scheme for the internal Worker start endpoint.
+
+    Never accept a bare shared secret or a differently cased/ambiguous header.
+    This authenticates only the internal caller, not a tenant or HITL actor.
+    """
+    return (type(authorization) is str and type(expected_token) is str
+            and bool(expected_token) and authorization.startswith("Bearer ")
+            and hmac.compare_digest(authorization.encode("utf-8"),
+                                    ("Bearer " + expected_token).encode("utf-8")))
+
 
 def policy_command_for_mode(mode: str) -> str:
     if mode == "LIVE":

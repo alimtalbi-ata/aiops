@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding
+from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding, valid_internal_bearer
 
 
 WORKER = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
@@ -23,6 +23,31 @@ def contains_call(node, name):
 
 
 class SimulationPolicyContractTests(unittest.TestCase):
+    def test_worker_internal_bearer_requires_exact_scheme(self):
+        token = "ephemeral-test-secret-keep-private"
+        self.assertTrue(valid_internal_bearer("Bearer " + token, token))
+        for header in (
+            None, "", token, "bearer " + token, "BEARER " + token,
+            "Bearer  " + token, "Bearer " + token + " ",
+            "Bearer " + token + ",Bearer " + token,
+            "Basic " + token, "Bearer " + token + "\\n",
+            True, [], {},
+        ):
+            with self.subTest(header=repr(header)):
+                self.assertFalse(valid_internal_bearer(header, token))
+        for expected in (None, "", True, [], {}):
+            with self.subTest(expected=repr(expected)):
+                self.assertFalse(valid_internal_bearer("Bearer " + token, expected))
+
+    def test_worker_start_wires_strict_internal_bearer_guard(self):
+        fn = worker_function("start")
+        self.assertTrue(contains_call(fn, "valid_internal_bearer"))
+        self.assertFalse(any(
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "removeprefix"
+            for node in ast.walk(fn)
+        ))
+
     def test_synthetic_modes_request_observation_not_execution(self):
         for mode in ("DEMO", "REPLAY", "STORY"):
             with self.subTest(mode=mode):

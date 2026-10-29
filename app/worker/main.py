@@ -6,7 +6,7 @@ from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
 from shared.http import post_json, get_json
-from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding
+from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding, valid_internal_bearer
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -103,7 +103,7 @@ def health():return {'status':'ok','component':'worker','executor':'temporal','t
 def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
- if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
+ if not valid_internal_bearer(authorization, ADMIN):raise HTTPException(401,'invalid internal token')
  try: policy_command_for_mode(args.get('mode') if isinstance(args,dict) else None)
  except ValueError: raise HTTPException(422,'invalid execution mode')
  # Do not start Temporal for a caller-supplied DEMO identity that points to
