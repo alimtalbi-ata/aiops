@@ -127,8 +127,19 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     items=_runs()
     registry=_get("/api/incidents")
     incidents=registry.get("items",[]) if isinstance(registry.get("items"),list) else []
-    # Core returns most recent runs first; do not promote stale RUNNING rows by default.
-    selected=run_id or next((str(x.get("run_id")) for x in items if x.get("run_id")),None)
+    # A default DEMO journey must not land on a stale RUNNING or LIVE row.
+    # Reject ambiguous IDs rather than selecting one of two conflicting Core rows.
+    eligible=[r for r in items if isinstance(r,dict)
+              and r.get("mode") in ("DEMO","REPLAY","STORY")
+              and isinstance(r.get("run_id"),str)
+              and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",r["run_id"])]
+    counts={}
+    for r in eligible:
+        counts[r["run_id"]]=counts.get(r["run_id"],0)+1
+    eligible=[r for r in eligible if counts[r["run_id"]]==1]
+    preferred=next((r["run_id"] for r in eligible
+                    if r.get("status") in ("BLOCKED","RESOLVED")),None)
+    selected=run_id or preferred or (eligible[0]["run_id"] if eligible else None)
     content='''<style>
     main{max-width:1500px}
     .timeline-ui input,.timeline-ui select{font:inherit;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;min-width:170px}
@@ -156,7 +167,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
         "Les listes sont limitées aux enregistrements renvoyés par Core. Les observations DEMO sont synthétiques ; les décisions IA enregistrées sont réelles.</p>")
     if not selected:
-        content+=panel("Timeline","<p>Aucun run accessible depuis Core.</p>")
+        content+=panel("Timeline","<p>UNKNOWN — aucun run DEMO / REPLAY / STORY non ambigu accessible depuis Core.</p>")
         return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",selected):
         raise HTTPException(404,"invalid_run_id")
@@ -180,8 +191,8 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         +'<div class="timeline">'+cards+'</div>')
     if match.get("status") in ("CREATED","RUNNING"):
         content+=panel("Actualisation de l'investigation",
-            '<p>Ce run est en cours. Actualisation automatique toutes les 10 secondes ; '
-            'aucune action n’est déclenchée.</p>'
+            '<p>Core déclare ce run en cours ; fraîcheur UNKNOWN sans horodatage vérifié. '
+            'Actualisation en lecture seule toutes les 10 secondes ; aucune action n’est déclenchée.</p>'
             '<script>setTimeout(function(){window.location.reload()},10000)</script>')
     content+=panel("Registre des preuves liées — provenance vérifiable",evidence_catalog(evidence_items))
     content+=panel("Raisonnement observable — Analyst / Critic",render_critic_explanation(ledger))

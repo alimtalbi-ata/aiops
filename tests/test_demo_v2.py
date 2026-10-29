@@ -254,5 +254,54 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn('href="/demo-studio/run/', page)
 
 
+    def test_timeline_default_prefers_terminal_demo_over_old_running_or_live(self):
+        from portal import main as portal_main
+        runs = [
+            {"run_id": "RUN-OLD", "mode": "DEMO", "status": "RUNNING"},
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "RESOLVED"},
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-BLOCKED", "mode": "DEMO", "status": "BLOCKED"},
+        ]
+        seen = []
+        def source(path, base=None):
+            seen.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-BLOCKED":
+                return {"run": {"run_id": "RUN-BLOCKED", "mode": "DEMO",
+                                "status": "BLOCKED"}, "events": []}
+            if path == "/api/runs/RUN-BLOCKED/evidence":
+                return {"items": []}
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=runs),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("unexpected write"))):
+            page = portal_main.timeline_page()
+        self.assertIn("Run sélectionné : RUN-BLOCKED", page)
+        self.assertIn('href="/demo-studio/run/RUN-BLOCKED"', page)
+        self.assertIn("/api/runs/RUN-BLOCKED", seen)
+        self.assertFalse(any("/api/runs/RUN-OLD" in p or
+                             "/api/runs/RUN-LIVE" in p or
+                             "/api/runs/RUN-DUP" in p for p in seen))
+
+    def test_timeline_without_unambiguous_demo_run_keeps_unknown(self):
+        from portal import main as portal_main
+        runs = [
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-DUP", "mode": "STORY", "status": "BLOCKED"},
+            {"run_id": "RUN-DUP", "mode": "STORY", "status": "RESOLVED"},
+        ]
+        seen = []
+        def source(path, base=None):
+            seen.append(path)
+            return {"items": []}
+        with (patch.object(portal_main, "_runs", return_value=runs),
+              patch.object(portal_main, "_get", side_effect=source)):
+            page = portal_main.timeline_page()
+        self.assertIn("aucun run DEMO / REPLAY / STORY non ambigu", page)
+        self.assertFalse(any(p.startswith("/api/runs/") for p in seen))
+
 if __name__ == "__main__":
     unittest.main()
