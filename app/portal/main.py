@@ -2,8 +2,10 @@ import os,json,html,uuid,hmac,re
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
+from portal.demo_ledger_read import router as demo_ledger_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
+app.include_router(demo_ledger_router)
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
 @app.get('/api/portal/bootstrap')
@@ -134,7 +136,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         raise HTTPException(404,"run_not_in_registry")
     key=quote(selected,safe="")
     detail=_get("/api/runs/"+key)
-    ledger=_get("/api/runs/"+key+"/ai-ledger")
+    ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     evidence_response=_get("/api/runs/"+key+"/evidence")
     evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
     events=detail.get("events") if isinstance(detail.get("events"),list) else []
@@ -262,7 +264,7 @@ def demo_run_detail(rid:str):
     from urllib.parse import quote
     key=quote(rid,safe="")
     detail=_get("/api/runs/"+key)
-    ledger=_get("/api/runs/"+key+"/ai-ledger")
+    ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     gate=_get("/api/runs/"+key+"/gates")
     body=panel("Suivi de l'exécution",
       '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
@@ -295,7 +297,27 @@ def demo_run_detail(rid:str):
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
     from portal.demo_explain import render_critic_explanation
     body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
-    body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
+    body+=panel("Registre IA autorisé — lecture seule",
+      '<p>Le registre Core est protégé. Jeton viewer distinct du jeton interne ; '
+      'aucune décision ni métrique LIVE n’est attestée ici.</p>'
+      '<label for="demo-ledger-viewer">Jeton viewer (jamais conservé)</label>'
+      '<input id="demo-ledger-viewer" type="password" autocomplete="off">'
+      '<button id="demo-ledger-read" type="button">Lire le registre IA</button>'
+      '<pre id="demo-ledger-output" class="log" role="status">INCONNU — autorisation requise.</pre>'
+      '<script>(function(){const rid='+json.dumps(rid)+
+      ';const input=document.getElementById("demo-ledger-viewer");'
+      'const output=document.getElementById("demo-ledger-output");'
+      'document.getElementById("demo-ledger-read").addEventListener("click",async function(){'
+      'const token=input.value;input.value="";output.textContent="Lecture en cours…";'
+      'if(!token){output.textContent="INCONNU — jeton viewer requis.";return;}'
+      'try{const response=await fetch("/api/demo-studio/runs/"+encodeURIComponent(rid)+"/ai-ledger",'
+      '{headers:{"Authorization":"Bearer "+token},cache:"no-store",credentials:"omit"});'
+      'if(!response.ok){output.textContent="INCONNU — lecture refusée (HTTP "+response.status+").";return;}'
+      'const data=await response.json();'
+      'if(data.schema!=="aiops.demo-ledger-read.v1"||data.run_id!==rid||data.runtime_attested!==false)'
+      '{output.textContent="INCONNU — contrat invalide.";return;}'
+      'output.textContent=JSON.stringify(data,null,2);'
+      '}catch(e){output.textContent="INCONNU — registre indisponible.";}});})();</script>')
     body+=panel("Gates et décisions",pretty(gate))
     body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
       'Aucune remédiation, ré-exécution ni approbation n’est disponible ici.</p>')
@@ -315,7 +337,7 @@ def demo_status(rid:str):
     if detail.get("status")=="UNKNOWN":
         return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
     run=detail.get("run",{}) if isinstance(detail.get("run"),dict) else detail
-    ledger=_get("/api/runs/"+rid+"/ai-ledger")
+    ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     gates=_get("/api/runs/"+rid+"/gates")
     events=detail.get("events",None)
     if not isinstance(events,list):
