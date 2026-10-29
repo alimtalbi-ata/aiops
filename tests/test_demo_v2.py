@@ -465,7 +465,7 @@ class DemoV2Tests(unittest.TestCase):
             self.assertIn(marker, response.text)
         self.assertIn('href="/demo-studio/run/RUN-DEMO"', response.text)
         self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', response.text)
-        self.assertIn("aucun ticket_id", response.text)
+        self.assertIn("Aucun ticket_id", response.text)
 
     def test_run_detail_has_same_run_navigation_without_fake_ticket(self):
         from portal import main as portal_main
