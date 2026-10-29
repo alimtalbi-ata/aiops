@@ -153,6 +153,7 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
         seen.add(eid)
 
     analyses = {}
+    analysis_status = {}
     for item in records(ledger.get("analyses")):
         require(set(item) == {"analysis_id", "model", "status", "evidence_ids"}
                 and isinstance(item["model"], str) and len(item["model"]) <= 160
@@ -161,8 +162,10 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
         aid = identifier(item.get("analysis_id"))
         require(aid not in analyses, "duplicate_analysis")
         analyses[aid] = unique_ids(item.get("evidence_ids"))
+        analysis_status[aid] = item["status"]
     require(set().union(*analyses.values()) == set(reference_map), "analysis_reference_mismatch")
     critiques = set()
+    critique_analysis = {}
     validated_critiques = set()
     for item in records(ledger.get("critiques")):
         require(set(item) == {"critique_id", "analysis_id", "model", "validated",
@@ -175,6 +178,7 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
         require(cid not in critiques and aid in analyses and type(item.get("validated")) is bool,
                 "unqualified_critique")
         critiques.add(cid)
+        critique_analysis[cid] = aid
         if item["validated"]:
             validated_critiques.add(cid)
         cited = unique_ids(item.get("evidence_ids"))
@@ -190,19 +194,34 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
     policies = set()
     simulate_pass = False
     for item in records(ledger.get("policy_decisions")):
-        require(set(item) == {"policy_decision_id", "decision", "state"},
-                "invalid_policy_fields")
+        # Match the canonical Portal #171 read model. A successful simulation
+        # must join its OWN validated Critique and VALID Analysis, not any
+        # unrelated validated Critique on the same Run.
+        require(set(item) == {"policy_decision_id", "analysis_id", "critique_id",
+                              "decision", "state"}, "invalid_policy_fields")
         pid = identifier(item.get("policy_decision_id"))
         require(pid not in policies, "duplicate_policy_decision")
         policies.add(pid)
+        aid = item.get("analysis_id")
+        cid = item.get("critique_id")
+        require(aid is not None or cid is not None, "unlinked_policy_decision")
+        if aid is not None:
+            aid = identifier(aid)
+            require(aid in analyses, "policy_analysis_outside_run")
+        if cid is not None:
+            cid = identifier(cid)
+            require(cid in critique_analysis
+                    and (aid is None or critique_analysis[cid] == aid),
+                    "policy_critique_outside_analysis")
         require(item.get("decision") in DECISIONS and item.get("state") in STATES,
                 "unsafe_policy_disposition")
-        simulate_pass |= item["decision"] == "SIMULATE" and item["state"] == "PASS"
+        if item["decision"] == "SIMULATE" and item["state"] == "PASS":
+            require(cid is not None and cid in validated_critiques,
+                    "simulate_pass_without_validated_critique")
+            require(analysis_status[critique_analysis[cid]] == "VALID",
+                    "simulate_pass_without_valid_analysis")
+            simulate_pass = True
     require(simulate_pass, "missing_recorded_simulate_pass")
-    # Necessary only: the Portal strips Policy->Critique IDs from this read model.
-    # We can reject a PASS with zero validated Critiques, but cannot independently
-    # prove which Critique the Policy row referenced. Keep origin NOT_TESTED.
-    require(bool(validated_critiques), "simulate_pass_without_validated_critique")
     return {
         "schema": SCHEMA,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -211,7 +230,8 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
         "classification": "SYNTHETIC_ONLY",
         "provenance": "OPERATOR_SUPPLIED_JSON_UNATTESTED",
         "checks": {"same_run_id": "PASS", "synthetic_reference_join": "PASS",
-                   "per_analysis_critique_citations": "PASS", "recorded_policy_simulate_pass": "PASS"},
+                   "per_analysis_critique_citations": "PASS", "recorded_policy_simulate_pass": "PASS",
+                   "recorded_policy_critic_join": "PASS_UNATTESTED"},
         "incident_id_correlation": "NOT_TESTED",
         "temporal_execution": "NOT_TESTED",
         "policy_critic_linkage_origin": "NOT_TESTED",
