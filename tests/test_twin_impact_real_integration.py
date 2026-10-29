@@ -52,6 +52,46 @@ class TwinImpactRealIntegration(unittest.TestCase):
             headers={"Authorization":"Bearer ci-twin-metrics-ephemeral-only"},
             timeout=5).status_code, 401)
 
+    def test_admin_synthetic_event_refuses_noop_receipts_without_mutation(self):
+        # Real Twin HTTP + seeded PostgreSQL 16; negative requests only.
+        # A PASS for an unsupported action or absent target would falsely
+        # claim that a DEMO step ran. No LIVE action or DB write is permitted.
+        marker = "CI-TWIN-NOOP-REFUSAL-20261029"
+        cases = (
+            ({"action": "INCIDENT_OPEN", "target_node_id": "ACME-SAN-FABRIC-A"}, 422),
+            ({"action": "SET_STATE", "target_node_id": None}, 422),
+            ({"action": "OBSERVE", "target_node_id": ""}, 422),
+            ({"action": "SET_STATE", "target_node_id": "ACME-NOT-SEEDED"}, 404),
+            ({"action": "OBSERVE", "target_node_id": "ACME-NOT-SEEDED"}, 404),
+        )
+        def snapshot():
+            with psycopg.connect(DATABASE_URL) as c:
+                state = c.execute(
+                    "select state,health from aiops.twin_nodes "
+                    "where node_id='ACME-SAN-FABRIC-A'"
+                ).fetchone()
+                facts = c.execute(
+                    "select count(*) from aiops.twin_facts "
+                    "where value::text like %s", ("%" + marker + "%",)
+                ).fetchone()[0]
+                observations = c.execute(
+                    "select count(*) from aiops.observations "
+                    "where payload::text like %s", ("%" + marker + "%",)
+                ).fetchone()[0]
+                return state, facts, observations
+        before = snapshot()
+        for payload, expected in cases:
+            with self.subTest(payload=payload):
+                response = requests.post(
+                    BASE + "/api/twin/synthetic-event",
+                    json={**payload, "run_id": marker, "payload": {"state": "FAILED"}},
+                    headers={"Authorization": "Bearer " + TOKEN},
+                    timeout=5, allow_redirects=False,
+                )
+                self.assertEqual(response.status_code, expected, response.text)
+                self.assertNotEqual(response.json().get("status"), "PASS")
+        self.assertEqual(snapshot(), before)
+
     def test_ephemeral_seed_is_25_nodes_and_23_directed_edges(self):
         with psycopg.connect(DATABASE_URL) as c:
             self.assertEqual(c.execute("select count(*) from aiops.twin_nodes").fetchone()[0], 25)

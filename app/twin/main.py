@@ -137,7 +137,16 @@ class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
     if (authorization or '').removeprefix('Bearer ')!=SIM_TOKEN: raise HTTPException(401,'invalid token')
     if not x.run_id: raise HTTPException(422,'run_id required')
+    # A successful receipt must correspond to an actionable synthetic write.
+    # Other scenario stages are handled by the worker, not this Twin endpoint.
+    if x.action not in ('SET_STATE', 'OBSERVE'):
+        raise HTTPException(422, 'unsupported synthetic action')
+    if not x.target_node_id:
+        raise HTTPException(422, 'target_node_id required')
     with db() as c:
+        if not c.execute('select 1 from aiops.twin_nodes where node_id=%s',
+                         (x.target_node_id,)).fetchone():
+            raise HTTPException(404, 'target node not found')
         if x.action=='SET_STATE' and x.target_node_id:
             p=x.payload; c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
             c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(new('FACT'),x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
