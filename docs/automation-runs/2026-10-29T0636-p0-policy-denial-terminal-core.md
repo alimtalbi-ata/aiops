@@ -25,3 +25,9 @@
 - SHA `55942df0c27f41a6b5f391088c6ac17d3cb3d901` : `quality.yml` [push #40824528371](https://github.com/alimtalbi-ata/aiops/actions/runs/40824528371) : `core-postgres-noc-real-integration` **FAILURE** sur les deux nouveaux cas ; `policy-and-static` et `grafana-real-integration` **SUCCESS**. Le job [PR #40824534411](https://github.com/alimtalbi-ata/aiops/actions/runs/40824534411) a également échoué sur Core.
 - Cause vérifiée dans les logs PostgreSQL : `column "event_key" does not exist`. Le job éphémère ne chargeait que les migrations 001 et 004, alors que les commandes Core utilisent `event_key` introduit par 008.
 - Correctif **dans le job existant** `core-postgres-noc-real-integration` de `quality.yml` : appliquer les migrations 006, 007 et 008 après 001/004. Aucune nouvelle CI, aucune migration appliquée sur Debian. Les tests du nouveau HEAD doivent être revérifiés ; ne pas masquer l'échec intermédiaire.
+
+## Qualification du SHA de code + fixture CI
+- **SHA qualifié :** `d164f1d8f8b93d54c858b9ca3f2b9ceb9f29dd91`. [quality.yml push #40824659179](https://github.com/alimtalbi-ata/aiops/actions/runs/40824659179) et [quality.yml PR #40824664006](https://github.com/alimtalbi-ata/aiops/actions/runs/40824664006) : **completed/success, 3/3 jobs chacun**, sur ce SHA exact.
+- Logs du job `core-postgres-noc-real-integration` : **15/15 tests Core/Policy/PostgreSQL 16**, dont le test HTTP de terminalisation refus Critic / Evidence absente, et **12/12 tests Policy HTTP réel**. Logs du job `policy-and-static` : **10/10 tests contrat worker**, dont ordre BLOCK→GATE_BLOCKED ; **18/18 Policy unitaires**. Grafana éphémère : job SUCCESS.
+- Le test HTTP vérifie les API Core/Policy directement, **pas** l'activité Temporal exécutée. L'échec intermédiaire `55942df0` est documenté ci-dessus, sans le présenter comme un PASS.
+- Un commit documentaire final suit ce SHA ; ses checks devront être vérifiés séparément. **READY_FOR_STABLE=BLOCKED / NO-GO E2E** inchangé.
