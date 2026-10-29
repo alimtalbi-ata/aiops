@@ -53,7 +53,7 @@ class PortalPreviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(env["AIOPS_INTERNAL_TOKEN"], "live-credential")
         self.assertNotIn("AIOPS_ADMIN_TOKEN", env)
         self.assertEqual(env["AIOPS_DEMO_LAUNCH_ENABLED"], "false")
-        for name in ("CORE_URL", "TWIN_URL", "COPILOT_URL"):
+        for name in ("CORE_URL", "TWIN_URL", "COPILOT_URL", "POLICY_URL"):
             self.assertEqual(env[name], "http://127.0.0.1:1")
 
 

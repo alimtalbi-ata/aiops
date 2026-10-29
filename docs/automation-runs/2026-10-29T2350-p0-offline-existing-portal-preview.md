@@ -18,3 +18,9 @@ Puis sur **la même machine** ouvrir `http://127.0.0.1:17777/demo-studio/busines
 - Stable `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3` inchangé; le déployeur installé copie `demo_v2.py` et son test, injecte `main.py`, mais ne transporte pas la candidate Core/Twin/Policy/Portal. Le poller disponible sur #153 bloque ces chemins non transportés. `deploy/deploy-acme-p0.py --inspect-host` reste le préflight opérateur, sans `--apply`.
 - `applied.sha`, smoke Debian, ownership Compose, rollback réel, tenant RBAC et E2E métier: **NOT_TESTED**. Verdict **READY_FOR_STABLE=BLOCKED / DEMO_READY_DEBIAN=NOT_READY**. Pas de promotion ni de déploiement.
 - Prochain acte unique: préflight `--inspect-host` par l'opérateur autorisé; si refus, conserver le preview isolé comme démonstration explicative et ne pas promouvoir stable.
+
+## Correctif P0 après smoke isolé (même journée, 23:5x CET)
+- Un test HTTP réel de l'aperçu depuis le paquet CI a confirmé `/demo-studio/business-story` **200**, `POST /api/demo` **405**, mais `/policy-control` dépassait 5 secondes : `POLICY_URL` n'était pas isolé et pouvait résoudre l'hôte Docker par défaut.
+- Correction minimale dans le même script : `POLICY_URL=http://127.0.0.1:1` comme Core/Twin/Copilot, sans toucher à `app/portal/main.py`. Test négatif d'isolation étendu; 4/4 tests unitaires PASS localement.
+- Smoke HTTP local réel après correctif (conteneur d'exécution isolé, **PAS Debian**) : **HTTP 200** sur `/demo-studio`, `/demo-studio/business-story`, `/runs`, `/timeline`, `/twin`, `/policy-control`, `/evidence` (7/7) ; **POST /api/demo` 405** observé avant correctif, garde inchangée. Aucun backend réel contacté, aucune preuve E2E, aucune écriture production.
+- CI du SHA correctif : **PENDING** à la rédaction ; requalifier avant tout handoff. Le paquet CI précédent portait un SHA de merge PR distinct du SHA HEAD ; ne pas le promouvoir comme SHA source exact.

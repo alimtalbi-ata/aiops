@@ -37,7 +37,7 @@ def isolate_environment(env):
     env["AIOPS_DEMO_LAUNCH_ENABLED"] = "false"
     env["AIOPS_INTERNAL_TOKEN"] = secrets.token_urlsafe(32)
     env.pop("AIOPS_ADMIN_TOKEN", None)
-    for name in ("CORE_URL", "TWIN_URL", "COPILOT_URL"):
+    for name in ("CORE_URL", "TWIN_URL", "COPILOT_URL", "POLICY_URL"):
         env[name] = "http://127.0.0.1:1"
 
 
