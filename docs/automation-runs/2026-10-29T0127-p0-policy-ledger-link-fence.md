@@ -22,3 +22,12 @@
 - Déployeur actuel ne transporte pas Core/Portal complet ; impact Twin Payments, métriques SAN observées, tenant A/B authentifié, E2E Policy SIMULATE, Ollama, rollback et `applied.sha` Debian : NOT_TESTED.
 - Aucun push sur `deploy/aiops2-stable`, aucun merge, accès Debian, commande LIVE ou NGX.
 - Prochain micro-lot : requalifier `quality.yml` sur SHA final, remettre SHA et résultats à #156 ; Recette 5/5 seule habilitée à assembler et promouvoir après couverture de déploiement, rollback et smoke-test terrain.
+
+## Qualification GitHub Actions du commit code/tests
+
+- SHA code/tests/docs initial : `8fe5e1760ed907387e0930883a1f5e9a5c7eaf46`.
+- [quality.yml #40794412462](https://github.com/alimtalbi-ata/aiops/actions/runs/40794412462) : **completed/success**, 5/5 jobs SUCCESS (migration-runner-upgrade, mariadb-dr-rehearsal, database-migrations, quality-build-package, runtime-e2e). Logs lus : **15/15 Ledger unit**, **15/15 Policy safety**, **11/11 HTTP réel Core/Portal/PostgreSQL 16**. Le nouveau cas SQL Policy étrangère au Run est **ok** ; le test unitaire Policy↔Analysis/Critique est **ok**.
+- [V2.8 #40794412411](https://github.com/alimtalbi-ata/aiops/actions/runs/40794412411) : completed/success.
+- [Offline Integrity #40794412836](https://github.com/alimtalbi-ata/aiops/actions/runs/40794412836) : completed/success.
+- [Historical Trace #40794412389](https://github.com/alimtalbi-ata/aiops/actions/runs/40794412389) : completed/success.
+- Cette qualification est attachée **au SHA code** `8fe5e1760ed907387e0930883a1f5e9a5c7eaf46` ; le commit documentaire d'actualisation nécessite son propre contrôle de CI. Les tests CI sont éphémères et ne prouvent pas Debian ni l'E2E métier ACME.
