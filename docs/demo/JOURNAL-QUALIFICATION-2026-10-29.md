@@ -105,3 +105,23 @@ Ensuite : produire un inventaire **lecture seule** des branches/PR et des fichie
 ## 7. Discipline de mise à jour
 
 Chaque nouvelle session ajoute une entrée datée à ce journal ou crée `docs/demo/session-YYYY-MM-DD-NN.md` avec : SHA GitHub, SHA Debian, branche, objectif, commandes et sorties, vérifications réalisées, hypothèses, échecs, risques, décisions, critères GO/NO-GO et **une seule prochaine action opérateur**. Mettre à jour `docs/PROJECT-CONTINUITY.md` et `docs/PROJECT-REPRISE-DEMO-2026-10-29.md` pour maintenir le point d'entrée. Ne jamais copier de secrets ou de dumps dans GitHub.
+
+
+## 8. 2026-10-29 — Qualification offline du laboratoire de remédiation sur Debian
+
+**Source : sortie de terminal communiquée par l'opérateur, non exécutée par l'assistant.** Worktree : `/home/aiops/aiops2-p0-consolidation`, branche `prep/acme-demo-offline-20261029`.
+
+| Commande / étape | Résultat observé | Qualification |
+|---|---|---|
+| `git fetch` explicite puis `git merge --ff-only` | `e1748b7..8901ca9`, fast-forward, 8 fichiers, 701 insertions | Code du labo et de la projection récupéré sur Debian |
+| `git log -1 --oneline` | HEAD `8901ca9` | SHA Debian confirmé au moment de l'essai |
+| `python3 -m unittest discover -s tests -p 'test_remediation_lab.py' -v` | **10 tests OK**, `Ran 10 tests in 0.005s` | Contrats historiques : recettes, approbations, sécurité, idempotence, zéro effet |
+| `python3 -m unittest discover -s tests -p 'test_acme_remediation_projection.py' -v` | **8 tests OK**, `Ran 8 tests in 0.003s` | Projection pure : succès, échec, rollback hypothétique, LIVE refusé, préconditions, cible, déterminisme |
+| `python3 tools/acme_offline_source_preflight.py` | `ACME_OFFLINE_PREFLIGHT=PASS | checks=26 | failed=0` | Contrôle statique existant toujours PASS |
+| `git diff --check`, `git status --short` | Aucune sortie | Aucun défaut de diff ni changement local signalé |
+
+**Total des nouveaux tests de remédiation exécutés dans cette session : 18/18 PASS.** Les 26 contrôles de preflight sont distincts des tests unitaires ; ne pas annoncer 44 tests unitaires.
+
+**Gates toujours ouverts :** pas de DB/Temporal, aucun raccord `run_id` entre Core et simulation, aucun ticket GLPI/n8n qualifié, pas de preuve Analyst/Critic réel, aucune postcondition observée ni rollback réel, aucun E2E conteneur. Les états `SIMULATED_SUCCESS` et `SIMULATED_FAILURE` sont des projections `WHAT_IF_FIXTURE_NOT_OBSERVED` ; `effect_applied=False`, `postchecks=NOT_RUN`. Le script de preflight n'a pas été étendu dans cet incrément pour inspecter le nouveau module ; sa réussite ne remplace pas les 18 tests.
+
+**Suite technique prioritaire :** raccordement synthétique traçable au run ACME, conservation de la provenance et de la séparation Policy/HITL, exposition read-only sécurisée, puis E2E isolé. Pas de modification Docker avant qualification et autorisation.
