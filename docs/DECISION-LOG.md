@@ -136,3 +136,12 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Add a dedicated internal-token authenticated, synthetic-only, allowlisted Core Run identity endpoint for the signed NOC join. Reuse the existing NOC tenant-scope refusal in a shared helper rather than silently accepting tenant claims. Require an actual synthetic Incident record in PostgreSQL. Keep the older Core endpoints unchanged in this small lot.
 - **Qualification gate:** Existing GitHub quality workflow with real ephemeral Core HTTP and PostgreSQL 16, plus negative and non-regression tests. An internal token is service authentication, **not** tenant-bound actor identity. No A/B authorized reads or LIVE evidence until Core-owned tenant RBAC is implemented.
 - **Rollback:** Revert the small Core/portal/shared/test/workflow patch together; do not restore anonymous NOC correlation or weaken the LIVE fence.
+
+
+## ADR-2026-10-30 — Separate scheduled source qualification from read-only deployed runtime smoke
+
+- **Status:** Proposed on branch `ops/automated-runtime-cron`; awaiting PR checks and operator runner installation.
+- **Decision:** Reuse the existing quality workflow for daily scheduled source/unit/ephemeral-integration checks. Add a separate 15-minute GitHub Actions cron targeting a repository-scoped self-hosted runner on SRV-DEB-05, running only a read-only runtime smoke script.
+- **Reason:** GitHub-hosted runners cannot reach the private Debian runtime. A self-hosted runner provides local Docker/API visibility without opening internal ports. The runtime workflow deliberately has no push or pull-request trigger to avoid executing untrusted PR code on the Docker host.
+- **Safety:** No production writes, Run creation, Evidence creation, GLPI mutation, container restart, or LIVE action. Secrets are not printed or committed. The smoke checks only container state/health, the synthetic scenario read contract, the deployed Worker image/timestamp code contract, and Worker-to-Temporal TCP connectivity.
+- **Limits:** A green smoke is not a full Temporal workflow test or production qualification. The runner must be installed and online; scheduled GitHub workflows run from the default branch. GitHub main Worker source currently differs from the deployed fixed Worker, so no rebuild/deploy is authorized by this change.
