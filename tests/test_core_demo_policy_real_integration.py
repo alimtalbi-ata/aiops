@@ -9,6 +9,7 @@ import unittest
 import psycopg
 import requests
 from psycopg.types.json import Jsonb
+from app.shared.simulation_policy_contract import validate_synthetic_gate_receipt, validate_canonical_run_binding
 
 BASE = "http://127.0.0.1:1810"
 TOKEN = os.environ["AIOPS_INTERNAL_TOKEN"]
@@ -20,6 +21,7 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.cases = {
+            "CREATED": ("DEMO", "CREATED", True, {}, None),
             "BLOCKED": ("DEMO", "BLOCKED", True, {}, None),
             "RESOLVED": ("DEMO", "RESOLVED", True, {}, ("PASS", "SIMULATE")),
             "RUNNING": ("DEMO", "RUNNING", True, {}, None),
@@ -86,6 +88,34 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
         return requests.get(BASE + "/api/noc/runs/RUN-" + PREFIX + suffix +
                             "/policy-status", headers=headers, timeout=3,
                             allow_redirects=False)
+
+    def test_real_core_run_identity_binding_rejects_live_and_started(self):
+        # Real Core HTTP/PostgreSQL: no Temporal client or effectful endpoint.
+        def core_run(suffix):
+            rid = "RUN-" + PREFIX + suffix
+            response = requests.get(
+                BASE + "/api/runs/" + rid,
+                headers={"Authorization": "Bearer " + TOKEN},
+                timeout=3, allow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            return response.json()
+
+        rid = "RUN-" + PREFIX + "CREATED"
+        args = {"run_id": rid, "mode": "DEMO",
+                "scenario_id": "CI-ACME", "version": 1}
+        created = core_run("CREATED")
+        self.assertEqual(
+            validate_canonical_run_binding(created, args)["run_id"], rid)
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(
+                core_run("LIVE"), dict(args, run_id="RUN-" + PREFIX + "LIVE"))
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(
+                core_run("RUNNING"),
+                dict(args, run_id="RUN-" + PREFIX + "RUNNING"))
+        with self.assertRaises(ValueError):
+            validate_canonical_run_binding(created, dict(args, scenario_id="OTHER"))
 
     def test_resolved_with_recorded_simulate_is_never_live_proof(self):
         response = self.read("RESOLVED")
@@ -424,6 +454,103 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
             compare_unbound_policy_values(
                 core_http.json(), live.json(), rid, iid,
             )
+
+    def test_policy_denial_terminalizes_core_run_on_real_http_postgres(self):
+        # Real ephemeral Core + Policy HTTP and PostgreSQL; direct API calls,
+        # NOT an executed Temporal workflow or an authenticated Policy→Run link.
+        payload = {
+            "mode": "DEMO", "command": "OBSERVE", "severity": "P2",
+            "confidence": 0.94, "evidence_count": 1,
+            "critic_validated": True, "redundancy_ok": True,
+        }
+        headers = {"Authorization": "Bearer " + TOKEN}
+        for suffix, overrides, expected in (
+            ("CRITIC", {"critic_validated": False}, "BLOCKED"),
+            ("NO-EVIDENCE", {"evidence_count": 0}, "UNKNOWN"),
+        ):
+            with self.subTest(suffix=suffix):
+                policy = requests.post(
+                    "http://127.0.0.1:1813/api/policy/check",
+                    json={**payload, **overrides}, timeout=3,
+                    allow_redirects=False,
+                )
+                self.assertEqual(policy.status_code, 200, policy.text)
+                disposition = policy.json()
+                self.assertEqual(
+                    (disposition["state"], disposition["decision"]),
+                    (expected, "HUMAN_APPROVAL"),
+                )
+                rid = "RUN-" + PREFIX + "DENIAL-" + suffix
+                iid = "INC-" + PREFIX + "BLOCKED"
+                with psycopg.connect(DATABASE_URL) as c:
+                    c.execute(
+                        "insert into aiops.runs(run_id,incident_id,mode,scenario_id,"
+                        "status,idempotency_key) values(%s,%s,'DEMO','CI-ACME',"
+                        "'RUNNING',%s)",
+                        (rid, iid, PREFIX + "denial-" + suffix),
+                    )
+                try:
+                    gate = requests.post(
+                        BASE + "/api/runs/" + rid + "/gates",
+                        json={"stage": "POLICY", "state": disposition["state"],
+                              "decision": disposition["decision"],
+                              "reason": disposition["reason"],
+                              "evidence_ids": [], "required_evidence": []},
+                        headers=headers, timeout=3, allow_redirects=False,
+                    )
+                    self.assertEqual(gate.status_code, 200, gate.text)
+                    self.assertEqual(
+                        validate_synthetic_gate_receipt(gate.json(), rid, disposition),
+                        {"run_id": rid, "stage": "POLICY", "state": expected},
+                    )
+                    # Stage-only BLOCKED does not terminalize a Run; worker
+                    # must call Core's versioned BLOCK command.
+                    command = {"expected_version": 1,
+                               "idempotency_key": "POLICY-DENIED-" + rid,
+                               "command": "BLOCK"}
+                    blocked = requests.post(
+                        BASE + "/api/runs/" + rid + "/command",
+                        json=command, headers=headers, timeout=3,
+                        allow_redirects=False,
+                    )
+                    self.assertEqual(blocked.status_code, 200, blocked.text)
+                    self.assertEqual(blocked.json()["status"], "BLOCKED")
+                    event = requests.post(
+                        BASE + "/api/runs/" + rid + "/events",
+                        json={"expected_version": blocked.json()["version"],
+                              "stage": "POLICY", "event_type": "GATE_BLOCKED",
+                              "event_key": "POLICY:BLOCKED",
+                              "status": "BLOCKED", "decision": disposition["decision"],
+                              "evidence_ids": [], "confidence": 0.94,
+                              "payload": disposition},
+                        headers=headers, timeout=3, allow_redirects=False,
+                    )
+                    self.assertEqual(event.status_code, 200, event.text)
+                    state = requests.get(
+                        BASE + "/api/runs/" + rid, timeout=3,
+                        allow_redirects=False,
+                    )
+                    self.assertEqual(state.status_code, 200, state.text)
+                    self.assertEqual(state.json()["run"]["status"], "BLOCKED")
+                    self.assertEqual(state.json()["gates"][0]["state"], expected)
+                    self.assertTrue(any(
+                        e["event_type"] == "GATE_BLOCKED"
+                        for e in state.json()["events"]
+                    ))
+                    replay = requests.post(
+                        BASE + "/api/runs/" + rid + "/command",
+                        json=command, headers=headers, timeout=3,
+                        allow_redirects=False,
+                    )
+                    self.assertEqual(replay.status_code, 200, replay.text)
+                    self.assertEqual(replay.json(), blocked.json())
+                finally:
+                    with psycopg.connect(DATABASE_URL) as c:
+                        c.execute("delete from aiops.command_receipts where run_id=%s", (rid,))
+                        c.execute("delete from aiops.run_events where run_id=%s", (rid,))
+                        c.execute("delete from aiops.gates where run_id=%s", (rid,))
+                        c.execute("delete from aiops.run_stage_state where run_id=%s", (rid,))
+                        c.execute("delete from aiops.runs where run_id=%s", (rid,))
 
 if __name__ == "__main__":
     unittest.main()

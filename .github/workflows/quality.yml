@@ -121,7 +121,9 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql",
+                           "006_execution_receipts.sql", "007_runtime_hardening.sql",
+                           "008_event_idempotency.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness
@@ -147,6 +149,12 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Install actual Worker HTTP module dependencies (Temporal dispatch instrumented)
+        run: python -m pip install --disable-pip-version-check "temporalio==1.17.0"
+      - name: Real Worker HTTP canonical binding and duplicate-header refusal (no Temporal execution)
+        env:
+          AIOPS_REAL_WORKER_HTTP_CI: "1"
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_worker_http_real_integration.py" -v
       - name: Start actual Policy HTTP service (ephemeral CI only)
         run: |
           PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &
