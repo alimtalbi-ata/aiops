@@ -385,6 +385,34 @@ class RealLedgerHttpQualification(unittest.TestCase):
         self.assertNotIn(tenant_evidence, denied.text)
 
 
+    def test_real_policy_live_allow_fails_closed(self):
+        # Policy's real evaluate() emits ALLOW only for LIVE. A persisted
+        # synthetic Run with ALLOW must never be presented as a DEMO success.
+        before = self.read(PORTAL, rid=RUN)
+        self.assertEqual(before.status_code, 200, before.text)
+        with psycopg.connect(DSN) as conn:
+            conn.execute(
+                "insert into aiops.policy_decisions(policy_decision_id,run_id,"
+                "analysis_id,critique_id,policy_version,input_hash,decision,state)"
+                " values('POL-CI-LEDGER-LIVE-ALLOW',%s,'ANL-CI-LEDGER',"
+                "'CRT-CI-LEDGER','2.1.0',%s,'ALLOW','PASS')",
+                (RUN, hashlib.sha256(b"ci-policy-forged-live-allow").hexdigest()),
+            )
+        core = requests.get(
+            CORE + "/api/runs/" + RUN + "/ai-ledger",
+            headers={"Authorization": "Bearer " + INTERNAL},
+            timeout=5, allow_redirects=False,
+        )
+        self.assertEqual(core.status_code, 200, core.text)
+        self.assertIn("ALLOW", [x["decision"] for x in core.json()["policy_decisions"]])
+        denied = self.read(PORTAL, rid=RUN)
+        self.assertEqual(denied.status_code, 503, denied.text)
+        self.assertEqual(denied.json(), {"status": "UNKNOWN",
+                                         "reason": "ledger_unavailable"})
+        self.assertEqual(denied.headers["cache-control"], "no-store")
+        for private in (RUN, "POL-CI-LEDGER-LIVE-ALLOW", INTERNAL, VIEWER):
+            self.assertNotIn(private, denied.text)
+
     def test_real_policy_foreign_run_links_fail_closed(self):
         # Actual PostgreSQL foreign keys permit a Policy decision attached to
         # one Run to cite Analysis/Critique IDs from another. The Portal must
