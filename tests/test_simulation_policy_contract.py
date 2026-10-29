@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response
+from app.shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt
 
 
 WORKER = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
@@ -122,6 +122,36 @@ class SimulationPolicyContractTests(unittest.TestCase):
         self.assertEqual(policy_call.func.id, "post_json")
         self.assertIsInstance(policy_call.args[0], ast.Name)
         self.assertEqual(policy_call.args[0].id, "POLICY")
+
+    def test_core_gate_receipt_must_match_synthetic_run_stage_and_state(self):
+        rid = "RUN-CI-DEMO-POLICY"
+        policy = {"state": "PASS", "decision": "SIMULATE", "reason": "synthetic"}
+        valid = {"run_id": rid, "stage": "POLICY", "state": "PASS"}
+        self.assertIs(validate_synthetic_gate_receipt(valid, rid, policy), valid)
+        bad = (
+            None, [], True, "ok", {},
+            {"run_id": rid, "stage": "POLICY", "state": "BLOCKED"},
+            {"run_id": rid + "-OTHER", "stage": "POLICY", "state": "PASS"},
+            {"run_id": rid, "stage": "HITL", "state": "PASS"},
+            {"run_id": rid, "stage": "POLICY", "state": "PASS", "decision": "SIMULATE"},
+            {"run_id": rid, "stage": "POLICY", "state": True},
+        )
+        for receipt in bad:
+            with self.subTest(receipt=repr(receipt)), self.assertRaises(ValueError):
+                validate_synthetic_gate_receipt(receipt, rid, policy)
+        for invalid_run in (None, "", True):
+            with self.subTest(run_id=repr(invalid_run)), self.assertRaises(ValueError):
+                validate_synthetic_gate_receipt(valid, invalid_run, policy)
+
+    def test_worker_checks_core_gate_receipt_before_any_gate_outcome(self):
+        # AST wiring guard, not a Temporal runtime test.
+        fn = worker_function("execute_stage")
+        source = ast.unparse(fn)
+        self.assertIn("validate_synthetic_gate_receipt(gate_receipt, rid, pol)", source)
+        self.assertLess(source.index("validate_synthetic_gate_receipt("),
+                        source.index("if pol['state'] != 'PASS'"))
+        self.assertLess(source.index("validate_synthetic_gate_receipt("),
+                        source.index("event_type': 'STAGE_COMPLETED'"))
 
     def test_worker_denial_blocks_canonical_run_before_stage_event(self):
         # AST wiring guard only: Temporal is not started by this unit test.
