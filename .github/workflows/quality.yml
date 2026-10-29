@@ -43,6 +43,14 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_demo_v2.py" -v
           python -m unittest discover -s tests -p "test_portal_preview_readonly.py" -v
+      - name: ACME P0 cross-lot fail-closed contracts (1-4/5)
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_find_acme_demo_run.py" -v
+          python -m unittest discover -s tests -p "test_acme_core_authenticated_probe.py" -v
+          python -m unittest discover -s tests -p "test_acme_itsm_evidence*.py" -v
+          python -m unittest discover -s tests -p "test_acme_policy_demo_result.py" -v
       - name: AI evaluation harness tests
         run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
       - name: Model evaluation API unit tests

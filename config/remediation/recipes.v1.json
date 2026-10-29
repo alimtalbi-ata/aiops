@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "purpose": "Versioned allowlist of NO-EFFECT remediation examples; not executable artifacts",
+  "recipes": [
+    {
+      "id": "linux-service-inspect",
+      "version": "1.0.0",
+      "kind": "bash",
+      "adapter": "linux",
+      "operation": "inspect_service",
+      "target_prefix": "ACME-LNX-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "service": {
+          "type": "identifier"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced",
+        "service_exists"
+      ],
+      "postchecks": [
+        "service_active",
+        "business_slo_ok"
+      ],
+      "compensation": "none-read-only",
+      "timeout_seconds": 15
+    },
+    {
+      "id": "python-disk-diagnostic",
+      "version": "1.0.0",
+      "kind": "python",
+      "adapter": "linux",
+      "operation": "inspect_disk",
+      "target_prefix": "ACME-LNX-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "mount_id": {
+          "type": "identifier"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced"
+      ],
+      "postchecks": [
+        "disk_usage_observed"
+      ],
+      "compensation": "none-read-only",
+      "timeout_seconds": 15
+    },
+    {
+      "id": "ansible-service-restart",
+      "version": "1.0.0",
+      "kind": "ansible",
+      "adapter": "linux",
+      "operation": "restart_allowlisted_service",
+      "target_prefix": "ACME-LNX-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "service": {
+          "type": "identifier"
+        },
+        "credential_ref": {
+          "type": "secret_ref"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced",
+        "service_exists",
+        "maintenance_window"
+      ],
+      "postchecks": [
+        "service_active",
+        "business_slo_ok"
+      ],
+      "compensation": "restore_prior_service_state",
+      "timeout_seconds": 90
+    },
+    {
+      "id": "linux-cli-status",
+      "version": "1.0.0",
+      "kind": "linux_cli",
+      "adapter": "linux",
+      "operation": "status_only",
+      "target_prefix": "ACME-LNX-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "service": {
+          "type": "identifier"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced"
+      ],
+      "postchecks": [
+        "status_observed"
+      ],
+      "compensation": "none-read-only",
+      "timeout_seconds": 10
+    },
+    {
+      "id": "network-cli-interface",
+      "version": "1.0.0",
+      "kind": "network_cli",
+      "adapter": "network",
+      "operation": "inspect_interface",
+      "target_prefix": "ACME-NET-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "interface": {
+          "type": "identifier"
+        },
+        "credential_ref": {
+          "type": "secret_ref"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced",
+        "network_reachable"
+      ],
+      "postchecks": [
+        "interface_state_observed"
+      ],
+      "compensation": "restore_previous_config_if_mutating_adapter_added",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "db-cli-health",
+      "version": "1.0.0",
+      "kind": "db_cli",
+      "adapter": "database",
+      "operation": "read_only_health_check",
+      "target_prefix": "ACME-DB-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "database": {
+          "type": "identifier"
+        },
+        "credential_ref": {
+          "type": "secret_ref"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced",
+        "read_only_access"
+      ],
+      "postchecks": [
+        "database_reachable"
+      ],
+      "compensation": "none-read-only",
+      "timeout_seconds": 15
+    },
+    {
+      "id": "checkmk-api-ack",
+      "version": "1.0.0",
+      "kind": "api",
+      "adapter": "checkmk",
+      "operation": "propose_acknowledgement",
+      "target_prefix": "ACME-MON-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "service": {
+          "type": "identifier"
+        },
+        "credential_ref": {
+          "type": "secret_ref"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced",
+        "alert_still_active"
+      ],
+      "postchecks": [
+        "acknowledgement_reconciled"
+      ],
+      "compensation": "remove_acknowledgement_if_supported",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "glpi-api-ticket-note",
+      "version": "1.0.0",
+      "kind": "api",
+      "adapter": "glpi",
+      "operation": "propose_ticket_note",
+      "target_prefix": "ACME-GLPI-",
+      "implementation": "SIMULATOR_ONLY",
+      "parameters": {
+        "ticket_id": {
+          "type": "integer",
+          "min": 1,
+          "max": 999999999
+        },
+        "credential_ref": {
+          "type": "secret_ref"
+        }
+      },
+      "preconditions": [
+        "ci_fresh",
+        "owner_fenced",
+        "ticket_open"
+      ],
+      "postchecks": [
+        "ticket_note_reconciled"
+      ],
+      "compensation": "append_correction_note",
+      "timeout_seconds": 20
+    }
+  ]
+}
