@@ -46,7 +46,7 @@ def git(repo: Path, *args: str) -> bytes:
 def is_metadata(path: str) -> bool:
     return (path in {"README.md", "VERSION", ".gitignore"}
             or path.startswith(("docs/", "tests/"))
-            or (path.startswith(".github/") and not path.startswith(".github/workflows/")))
+            )
 
 
 
@@ -62,7 +62,7 @@ def deployment_plan(path: str, status: str) -> dict:
                   "NO_DIRECT_REBUILD", "NO_DIRECT_RESTART",
                   "PORTAL_REGRESSION_NOT_RUN_HERE", "SOURCE_RESTORE_NOT_TESTED")
         supported = True
-    elif path in DEPLOY_PATHS or path.startswith(("deploy/", ".github/workflows/")):
+    elif path in DEPLOY_PATHS or path.startswith(("deploy/", ".github/")):
         fields = ("RELEASE_CONTROL_REQUALIFICATION_REQUIRED", "NOT_QUALIFIED",
                   "NOT_QUALIFIED", "NOT_QUALIFIED", "NOT_TESTED", "NOT_QUALIFIED")
         supported = False
