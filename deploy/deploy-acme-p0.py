@@ -204,7 +204,7 @@ def apply(delivery: Path, source: Path, state: Path, sha: str, stable_sha: str) 
         raise Refused("existing_deployment_block_marker")
     if (not SHA.fullmatch(stable_sha)
             or (state / "applied.sha").stat().st_size != 41
-            or (state / "applied.sha").read_text(encoding="ascii") != stable_sha + "\\n"):
+            or (state / "applied.sha").read_text(encoding="ascii") != stable_sha + "\n"):
         raise Refused("applied_sha_not_matching_approved_stable")
     # Never alter local source files, non-owned containers or persistent volumes.
     originals = preflight_host(source)
