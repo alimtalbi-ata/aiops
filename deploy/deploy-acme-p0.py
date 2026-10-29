@@ -196,8 +196,12 @@ def wait_healthy(source: Path) -> None:
 
 
 def apply(delivery: Path, source: Path, state: Path, sha: str) -> dict:
-    if not state.is_dir() or state.is_symlink() or not (state / "applied.sha").is_file():
+    if (not state.is_dir() or state.is_symlink()
+            or not (state / "applied.sha").is_file()
+            or (state / "applied.sha").is_symlink()):
         raise Refused("missing_existing_operator_release_state")
+    if (state / "DEPLOYMENT_BLOCKED").exists():
+        raise Refused("existing_deployment_block_marker")
     # Never alter local source files, non-owned containers or persistent volumes.
     originals = preflight_host(source)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -223,6 +227,12 @@ def apply(delivery: Path, source: Path, state: Path, sha: str) -> dict:
         command(*compose_args(source, candidate_file), "up", "-d", "--no-deps",
                 "--no-build", "--force-recreate", *SERVICES)
         wait_healthy(source)
+        observed = inspect_owned(source, require_healthy=True)
+        expected = {service: json.loads(command("docker", "image", "inspect", "--format",
+                                                  "{{json .Id}}", new_tags[service]))
+                    for service in SERVICES}
+        if observed != expected:
+            raise Refused("candidate_image_identity_mismatch")
         # Read-only local portal smoke. Full E2E remains NOT_TESTED.
         command("docker", "exec", PROJECT + "-portal", "python", "-c",
                 "import urllib.request; b=urllib.request.urlopen("
@@ -234,6 +244,8 @@ def apply(delivery: Path, source: Path, state: Path, sha: str) -> dict:
                 command(*compose_args(source, rollback_file), "up", "-d", "--no-deps",
                         "--no-build", "--force-recreate", *SERVICES)
                 wait_healthy(source)
+                if inspect_owned(source, require_healthy=True) != originals:
+                    raise Refused("rollback_image_identity_mismatch")
             except (Refused, ValueError, KeyError):
                 (state / "DEPLOYMENT_BLOCKED").write_text(
                     "P0 rollback incomplete; operator intervention required\n")
