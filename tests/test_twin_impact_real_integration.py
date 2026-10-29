@@ -32,6 +32,26 @@ class TwinImpactRealIntegration(unittest.TestCase):
             headers=headers, timeout=5, allow_redirects=False,
         )
 
+    def test_prometheus_metrics_only_accept_dedicated_scrape_identity(self):
+        metrics_url = BASE + "/metrics"
+        def scrape(token=None):
+            headers = {} if token is None else {"Authorization": "Bearer " + token}
+            return requests.get(metrics_url, headers=headers, timeout=5, allow_redirects=False)
+        for token in (None, TOKEN, os.environ["AIOPS_INTERNAL_TOKEN"], "invalid"):
+            with self.subTest(identity="anonymous" if token is None else "non-metrics"):
+                self.assertEqual(scrape(token).status_code, 401)
+        response = scrape("ci-twin-metrics-ephemeral-only")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.headers["content-type"].startswith("text/plain"))
+        self.assertIn("aiops_twin_nodes 25\\n", response.text)
+        self.assertNotIn("ACME-BIZ-PAYMENTS", response.text)
+        # Metrics token cannot read topology or mutate synthetic events.
+        self.assertEqual(self.read("ACME-SAN-FABRIC-A", "ci-twin-metrics-ephemeral-only").status_code, 401)
+        self.assertEqual(requests.post(BASE + "/api/twin/synthetic-event",
+            json={"action":"OBSERVE","target_node_id":"ACME-SAN-FABRIC-A","run_id":"CI-METRICS"},
+            headers={"Authorization":"Bearer ci-twin-metrics-ephemeral-only"},
+            timeout=5).status_code, 401)
+
     def test_ephemeral_seed_is_25_nodes_and_23_directed_edges(self):
         with psycopg.connect(DATABASE_URL) as c:
             self.assertEqual(c.execute("select count(*) from aiops.twin_nodes").fetchone()[0], 25)

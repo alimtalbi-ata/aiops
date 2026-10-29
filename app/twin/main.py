@@ -1,5 +1,5 @@
 from fastapi import FastAPI,HTTPException,Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from hmac import compare_digest
 from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
@@ -128,7 +128,10 @@ import os
 from pydantic import BaseModel
 from shared.ids import new
 SIM_TOKEN=os.getenv('AIOPS_ADMIN_TOKEN')
+METRICS_TOKEN=os.getenv('AIOPS_TWIN_METRICS_TOKEN')
 if not SIM_TOKEN: raise RuntimeError('AIOPS_ADMIN_TOKEN must be configured')
+if not METRICS_TOKEN or METRICS_TOKEN in (SIM_TOKEN, os.getenv('AIOPS_INTERNAL_TOKEN')):
+    raise RuntimeError('AIOPS_TWIN_METRICS_TOKEN must be configured and distinct')
 class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:dict={};run_id:str|None=None
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
@@ -144,7 +147,10 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
 
 @app.get('/metrics')
 def metrics(authorization: str | None = Header(default=None)):
-    require_twin_read_auth(authorization)
+    supplied = authorization[7:] if authorization and authorization.startswith('Bearer ') else ''
+    if not supplied or not compare_digest(supplied, METRICS_TOKEN):
+        raise HTTPException(401, 'unauthorized',
+                            headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'})
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
-    return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'
+    return PlainTextResponse(f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n', media_type='text/plain; version=0.0.4')

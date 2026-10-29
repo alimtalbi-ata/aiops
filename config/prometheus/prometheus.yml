@@ -7,6 +7,9 @@ scrape_configs:
     static_configs: [{targets: ['aiops2-core:810']}]
   - job_name: aiops2-twin
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/aiops2/twin-metrics-token
     static_configs: [{targets: ['aiops2-twin:811']}]
   - job_name: aiops2-evidence
     metrics_path: /metrics
