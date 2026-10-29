@@ -135,7 +135,7 @@ class PortalPageContractTests(unittest.TestCase):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
             if path=="/api/runs/RUN-DEMO-42":return {"run":{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"},"events":[]}
             if path.endswith("/ai-ledger"):return {"analysis":"ANL-SOURCE-42","critic":"CRT-SOURCE-42"}
-            if path.endswith("/gates"):return {"decision":"SIMULATE"}
+            if path.endswith("/gates"):return {"items":[{"stage":"POLICY","decision":"SIMULATE"}]}
             raise AssertionError(path)
         with patch.object(self.portal,"get_json",side_effect=get):
             with patch.object(self.portal,"post_json",side_effect=AssertionError("read-only violation")):
@@ -193,14 +193,73 @@ class PortalPageContractTests(unittest.TestCase):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
             if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED"},"events":[{"event_type":"CRITIC_COMPLETED"}]}
             if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
-            if path.endswith("/gates"):return {"decision":"BLOCKED"}
+            if path.endswith("/gates"):return {"items":[{"stage":"POLICY","decision":"BLOCKED"}]}
             raise AssertionError(path)
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-DEMO")
         self.assertEqual(response["status"],"BLOCKED")
         self.assertEqual(response["events"][0]["event_type"],"CRITIC_COMPLETED")
         self.assertEqual(response["ledger"]["critic"],"REJECTED")
-        self.assertEqual(response["gates"]["decision"],"BLOCKED")
+        self.assertEqual(response["gates"]["items"][0]["decision"],"BLOCKED")
+
+    def test_unverified_policy_items_never_leak_in_raw_detail_or_poll(self):
+        # The renderer was already fail-closed, but the raw HTML panel and
+        # polling JSON must not re-expose an unverified forged gate.
+        for gate in (
+            {"status":"UNKNOWN","error_type":"HTTPError","http_status":401,
+             "items":[{"decision":"FORGED-POLICY-PASS"}],"secret":"DO-NOT-ECHO"},
+            {"status":"UNKNOWN","items":[{"decision":"FORGED-POLICY-PASS"}]},
+            {"items":[{"decision":"FORGED-POLICY-PASS"},None]},
+            {"status":"ERROR","items":[{"decision":"FORGED-POLICY-PASS"}]},
+            {"items":[{"run_id":"OTHER-RUN","decision":"FORGED-POLICY-PASS"}]},
+        ):
+            with self.subTest(gate=gate):
+                def get(base,path):
+                    if path=="/api/runs":
+                        return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+                    if path=="/api/runs/RUN-DEMO":
+                        return {"run":{"run_id":"RUN-DEMO","mode":"DEMO",
+                                       "status":"BLOCKED"},"events":[]}
+                    if path.endswith("/ai-ledger"):return {"items":[]}
+                    if path.endswith("/gates"):return gate
+                    raise AssertionError(path)
+                with patch.object(self.portal,"get_json",side_effect=get):
+                    with patch.object(self.portal,"post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page=self.portal.demo_run_detail("RUN-DEMO")
+                        polled=self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn("FORGED-POLICY-PASS",page)
+                self.assertNotIn("DO-NOT-ECHO",page)
+                self.assertNotIn("FORGED-POLICY-PASS",str(polled))
+                self.assertNotIn("DO-NOT-ECHO",str(polled))
+                self.assertEqual(polled["gates"]["status"],"UNKNOWN")
+                self.assertNotIn("items",polled["gates"])
+                if gate.get("http_status")==401:
+                    self.assertIn("HTTP 401",page)
+                    self.assertEqual(polled["gates"]["http_status"],401)
+
+    def test_verified_policy_projection_preserves_simulate_and_evidence(self):
+        gate={"items":[{"stage":"POLICY","state":"PASS","decision":"SIMULATE",
+                        "reason":"synthetic only","evidence_ids":["EVD-1"],
+                        "unexpected_private":"DO-NOT-ECHO"}]}
+        def get(base,path):
+            if path=="/api/runs":
+                return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
+            if path=="/api/runs/RUN-DEMO":
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO",
+                               "status":"RESOLVED"},"events":[]}
+            if path.endswith("/ai-ledger"):return {"items":[]}
+            if path.endswith("/gates"):return gate
+            raise AssertionError(path)
+        with patch.object(self.portal,"get_json",side_effect=get):
+            page=self.portal.demo_run_detail("RUN-DEMO")
+            polled=self.portal.demo_status("RUN-DEMO")
+        self.assertIn("SIMULATE",page)
+        self.assertIn("EVD-1",page)
+        self.assertNotIn("DO-NOT-ECHO",page)
+        self.assertEqual(polled["gates"]["items"][0]["decision"],"SIMULATE")
+        self.assertEqual(polled["gates"]["items"][0]["evidence_ids"],["EVD-1"])
+        self.assertNotIn("unexpected_private",polled["gates"]["items"][0])
 
     def test_demo_missing_event_list_is_not_invented(self):
         def get(base,path):

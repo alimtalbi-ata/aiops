@@ -320,7 +320,8 @@ def demo_run_detail(rid:str):
                 "n'est affiché.</p>"),
             mode=matched.get("mode","DEMO"))
     ledger=_get("/api/runs/"+key+"/ai-ledger")
-    gate=_get("/api/runs/"+key+"/gates")
+    from portal.demo_v2 import render_demo_v2, verified_policy_gates
+    gate=verified_policy_gates(_get("/api/runs/"+key+"/gates"), rid)
     body=panel("Suivi de l'exécution",
       '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
       '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
@@ -342,7 +343,6 @@ def demo_run_detail(rid:str):
     body+=panel("Timeline et registres en direct",
       '<p class="muted">Données en lecture seule provenant de Core ; aucune chronologie n’est inventée.</p>'
       '<pre id="run-watch-trace" class="log">Chargement des éléments de preuve…</pre>')
-    from portal.demo_v2 import render_demo_v2
     body+=render_demo_v2(detail,ledger,gate)
     body+=panel("État canonique du run",pretty(detail))
     from portal.demo_explain import render_critic_explanation
@@ -370,7 +370,8 @@ def demo_status(rid:str):
                 "ledger":{"status":"UNKNOWN"},"gates":{"status":"UNKNOWN"}}
     run=detail["run"]
     ledger=_get("/api/runs/"+rid+"/ai-ledger")
-    gates=_get("/api/runs/"+rid+"/gates")
+    from portal.demo_v2 import verified_policy_gates
+    gates=verified_policy_gates(_get("/api/runs/"+rid+"/gates"), rid)
     events=detail.get("events",None)
     if not isinstance(events,list):
         events="INCONNU"

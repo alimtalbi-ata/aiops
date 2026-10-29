@@ -101,10 +101,34 @@ def _ordered_events(events):
     return ordered, "COHÉRENT — ordre par séquence Core (non attesté indépendamment)", True
 
 
+def verified_policy_gates(value, expected_run_id=None):
+    """Project only Core's gates read model; never echo unverified items.
+
+    Core GET /api/runs/{rid}/gates returns an items list. Transport errors
+    can carry an attacker-controlled items field; it is not a Policy decision.
+    """
+    if (isinstance(value, dict) and value.get("status") in (None, "OK")
+            and "error_type" not in value and isinstance(value.get("items"), list)
+            and all(isinstance(item, dict) for item in value["items"])
+            and all("run_id" not in item or item["run_id"] == expected_run_id
+                    for item in value["items"])):
+        fields = ("stage", "state", "decision", "reason", "evidence_ids",
+                  "required_evidence", "evaluated_at")
+        return {"items": [{k: item[k] for k in fields if k in item}
+                          for item in value["items"]]}
+    unknown = {"status": "UNKNOWN"}
+    if (isinstance(value, dict) and value.get("error_type") == "HTTPError"
+            and type(value.get("http_status")) is int
+            and value["http_status"] in (401, 403)):
+        unknown.update(error_type="HTTPError", http_status=value["http_status"])
+    return unknown
+
+
 def render_demo_v2(detail, ledger, gates, now=None):
     """No fabricated evidence, impact, remediation or LLM decisions."""
     detail = detail if isinstance(detail, dict) else {}
     run = detail.get("run") if isinstance(detail.get("run"), dict) else detail
+    gates = verified_policy_gates(gates, run.get("run_id"))
     events = detail.get("events")
     if not isinstance(events, list):
         events = None
