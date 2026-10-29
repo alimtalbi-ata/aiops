@@ -163,6 +163,9 @@ def _unique_demo_run(items, rid):
 
 
 
+_DEMO_SAN_ROOT = "ACME-SAN-FABRIC-A"
+
+
 def _demo_impact_scope(impact):
     """Describe Twin impact scope without claiming SAN-to-Payments causality.
 
@@ -175,7 +178,8 @@ def _demo_impact_scope(impact):
             or "error_type" in impact):
         return unknown
     root, affected = impact.get("root"), impact.get("affected")
-    if not isinstance(root, str) or not root or not isinstance(affected, list):
+    # A valid impact for another root cannot qualify this SAN-A preflight.
+    if root != _DEMO_SAN_ROOT or not isinstance(affected, list):
         return unknown
     ids = []
     for item in affected:
@@ -334,7 +338,7 @@ def demo_studio():
     """Safe read-only ACME storyboard: no launch, effects, or credentials in browser."""
     dashboard=_get("/api/dashboard")
     graph=_get("/api/twin/graph",TWIN)
-    impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    impact=_get("/api/twin/impact/"+_DEMO_SAN_ROOT,TWIN)
     impact_scope, impact_shape_ok = _demo_impact_scope(impact)
     runs=_runs()
     demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
