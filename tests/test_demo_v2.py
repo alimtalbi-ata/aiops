@@ -180,5 +180,48 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn('href="/demo-studio/run/bad', page)
 
 
+    def test_demo_studio_links_real_incident_state_from_core_without_status_alias(self):
+        from portal import main as portal_main
+        runs = [{"run_id": "RUN-ACME", "incident_id": "INC-ACME",
+                 "mode": "DEMO", "status": "BLOCKED"}]
+        def source(path, base=None):
+            if path == "/api/incidents":
+                return {"items": [{"incident_id": "INC-ACME",
+                    "title": "SAN & Payments <test>", "severity": "P1",
+                    "state": "OPEN", "status": "CLOSED"}]}
+            return {}
+        with (patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "_runs", return_value=runs),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("unexpected write"))):
+            page = portal_main.demo_studio()
+        self.assertIn('href="/runs"', page)
+        self.assertIn('href="/demo-studio/run/RUN-ACME"', page)
+        self.assertIn("état incident OPEN", page)
+        self.assertNotIn("état incident CLOSED", page)
+        self.assertIn("SAN &amp; Payments &lt;test&gt;", page)
+        self.assertNotIn("SAN & Payments <test>", page)
+        self.assertIn("Corrélation SAN → Payments : UNKNOWN", page)
+
+    def test_demo_studio_refuses_mismatched_or_missing_incident_identity(self):
+        from portal import main as portal_main
+        runs = [{"run_id": "RUN-ACME", "incident_id": "INC-ACME",
+                 "mode": "DEMO", "status": "RESOLVED"}]
+        def source(path, base=None):
+            if path == "/api/incidents":
+                return {"items": [{"incident_id": "INC-OTHER",
+                                   "title": "Secret unrelated incident",
+                                   "state": "OPEN"}]}
+            return {}
+        with (patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "_runs", return_value=runs),
+              patch.object(portal_main, "graph_panel", return_value="")):
+            page = portal_main.demo_studio()
+        self.assertIn("Incident Core associé :</strong> UNKNOWN", page)
+        self.assertNotIn("Secret unrelated incident", page)
+        self.assertNotIn("état incident OPEN", page)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -257,15 +257,32 @@ def demo_studio():
                    +' · <a href="/timeline?run_id='+rid+'">Timeline du même run</a></p>')
     else:
         run_entry='<p><strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY valide accessible depuis Core.</p>'
+    # Only correlate the incident explicitly referenced by this Core run inventory row.
+    # A missing or ambiguous incident must not become a fabricated Payments impact.
+    incident_entry='<p><strong>Incident Core associé :</strong> UNKNOWN — identité ou état non qualifié.</p>'
+    if selected:
+        incident_id=selected.get("incident_id")
+        if isinstance(incident_id,str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",incident_id):
+            incident_registry=_get("/api/incidents")
+            records=incident_registry.get("items") if isinstance(incident_registry,dict) else None
+            matches=[item for item in records if isinstance(item,dict) and item.get("incident_id")==incident_id] if isinstance(records,list) else []
+            if len(matches)==1:
+                incident=matches[0]
+                incident_entry=('<p><strong>Incident Core associé (inventaire, non attesté) :</strong> '
+                    +esc(incident_id)+' · '+esc(incident.get("title") or "UNKNOWN")
+                    +' · sévérité '+esc(incident.get("severity") or "UNKNOWN")
+                    +' · état incident '+esc(incident.get("state") or "UNKNOWN")
+                    +'. Corrélation SAN → Payments : UNKNOWN sans arêtes sourcées.</p>')
     body+=panel("Parcours opérationnel ACME — navigation guidée",
         '<ol><li><a href="/">Cockpit NOC / enjeu Payments</a></li>'
+        '<li><a href="/runs">Registre Core des runs</a></li>'
         '<li><a href="/twin">SAN et dépendances Twin</a> — impact Payments à confirmer</li>'
         '<li><a href="/timeline">Investigation Core et Analyst/Critic</a></li>'
         '<li>Ticket ITSM GLPI : <strong>UNKNOWN</strong> — aucune liaison de ticket attestée '
         '(<a href="/acme-stories">contexte métier</a>)</li>'
         '<li><a href="/policy-control">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li>'
         '<li><a href="/evidence">Evidence et provenance</a> — aucune remédiation LIVE</li></ol>'
-        +run_entry)
+        +run_entry+incident_entry)
     body+=graph_panel(graph,impact=impact)
     body+=panel("Exécutions de démonstration déjà enregistrées",
       table(["Run","Mode","État","Scénario"],[
