@@ -241,7 +241,8 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
         self.assertNotIn('href="/demo-studio/run/RUN-DUP"', page)
         self.assertNotIn('href="/demo-studio/run/bad', page)
-        self.assertNotIn('bad/&lt;id&gt;', page)  # The slash-containing ID stays escaped in the table.
+        self.assertIn('bad/&lt;id&gt;', page)  # Registry row is escaped, never linked.
+        self.assertNotIn('bad/<id>', page)
         self.assertIn("RUN-LIVE", page)  # Inventory remains visible, not a DEMO deep link.
 
     def test_runs_page_without_qualified_demo_link_is_explicit_unknown(self):
