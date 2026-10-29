@@ -299,7 +299,7 @@ def twin_page():
     edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
     body=panel("Résumé Digital Twin",pretty(summary))
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
-    body+=graph_panel(graph,impact=impact if impact_shape_ok else None)
+    body+=graph_panel(graph,impact=impact)
     body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
         [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
     body+=panel("Relations de dépendance",table(["Source","Relation","Cible"],
@@ -344,7 +344,7 @@ def demo_studio():
         +table(["Contrôle","Résultat"],[
           ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
           ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
-          ("Impact SAN-A / Payments",impact_scope),
+          ("Propagation SAN→Payments",impact_scope),
           ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)))
         ]))
     if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
@@ -366,7 +366,7 @@ def demo_studio():
           'if(!/^[A-Za-z0-9_-]{1,128}$/.test(rid)){status.textContent="Réponse de lancement sans identifiant valide";return;}'
           'location.assign("/demo-studio/run/"+encodeURIComponent(rid));'
           '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
-    body+=graph_panel(graph,impact=impact)
+    body+=graph_panel(graph,impact=impact if impact_shape_ok else None)
     body+=panel("Exécutions de démonstration déjà enregistrées",
       table(["Run","Mode","État","Scénario"],[
        (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
