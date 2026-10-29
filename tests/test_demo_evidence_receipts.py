@@ -99,6 +99,23 @@ class EvidenceReceiptTests(unittest.TestCase):
         with self.assertRaises(Blocked):
             qualify(rid, ledger, refs)
 
+    def test_core_reference_limit_80_not_50(self):
+        rid, ledger, refs = fixture()
+        for index in range(2, 52):
+            item = deepcopy(refs["items"][0])
+            item["evidence_id"] = f"EVD-{index}"
+            refs["items"].append(item)
+            ledger["evidence_refs"].append(deepcopy(item))
+            ledger["analyses"][0]["evidence_ids"].append(item["evidence_id"])
+            ledger["critiques"][0]["evidence_ids"].append(item["evidence_id"])
+        self.assertEqual(qualify(rid, ledger, refs)["overall"], "NO_GO")
+        for index in range(52, 82):
+            item = deepcopy(refs["items"][0])
+            item["evidence_id"] = f"EVD-{index}"
+            refs["items"].append(item)
+        with self.assertRaises(Blocked):
+            qualify(rid, ledger, refs)
+
     def test_missing_simulate_pass_refused(self):
         rid, ledger, refs = fixture()
         ledger["policy_decisions"][0]["state"] = "BLOCKED"
