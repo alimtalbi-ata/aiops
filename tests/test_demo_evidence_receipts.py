@@ -167,3 +167,110 @@ class EvidenceReceiptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# The existing quality.yml Evidence test step also covers the P0 aggregate gate.
+from datetime import timedelta
+from scripts.check_demo_release_receipts import qualify_release, main as release_main
+
+
+def release_fixture():
+    rid, ledger, refs = fixture()
+    stable, candidate = "a" * 40, "b" * 40
+    coverage = {
+        "schema": "aiops.demo-stable-deployment-coverage.v1",
+        "stable_sha": stable, "candidate_sha": candidate,
+        "assessment": "READY_FOR_REVIEW", "overall": "NO_GO",
+        "provenance": "OFFLINE_GIT_DIFF_NOT_RUNTIME",
+        "unsupported_count": 0, "unsupported_paths": [],
+        "changed_count": 1,
+        "module_deployment_matrix": [{
+            "path": "app/portal/demo_v2.py", "git_status": "M",
+            "decision": "REVIEWABLE",
+        }],
+        "field_smoke_tests": "NOT_TESTED", "rollback_test": "NOT_TESTED",
+    }
+    field = {
+        "schema": "aiops.demo-field-readonly-preflight.v1",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "assessment": "READONLY_PREFLIGHT_PASS", "overall": "NO_GO",
+        "provenance": "OPERATOR_LOCAL_READONLY_OBSERVATION_UNATTESTED",
+        "applied_sha_verified": "MATCH_UNATTESTED",
+        "checks": {name: "PASS" for name in (
+            "core_health", "twin_health", "copilot_health", "portal_health",
+            "core_anonymous_noc_denied", "portal_demo_studio_readable",
+            "local_applied_sha_consistency",
+        )},
+        "tenant_rbac": "NOT_TESTED",
+        "core_temporal_analyst_critic_policy_evidence": "NOT_TESTED",
+        "run_incident_evidence_correlation": "NOT_TESTED",
+        "twin_payments_impact": "NOT_TESTED", "rollback_verified": "NOT_TESTED",
+    }
+    return stable, candidate, rid, coverage, field, ledger, refs
+
+
+class ReleaseAggregateTests(unittest.TestCase):
+    def test_aggregate_never_approves_stable_or_e2e(self):
+        receipt = qualify_release(*release_fixture())
+        self.assertEqual(receipt["assessment"], "REVIEWABLE_UNATTESTED")
+        self.assertEqual(receipt["overall"], "NO_GO")
+        self.assertEqual(receipt["ready_for_stable"], "BLOCKED")
+        self.assertEqual(receipt["checks"]["local_applied_sha_match_only"], "PASS_UNATTESTED")
+        for key in ("run_incident_field_linkage", "tenant_rbac",
+                    "payments_runtime_impact", "debian_applied_sha_attestation",
+                    "debian_rollback", "policy_critic_origin"):
+            self.assertEqual(receipt[key], "NOT_TESTED")
+
+    def test_aggregate_blocks_unsafe_or_stale_receipts(self):
+        for index in range(10):
+            args = list(release_fixture())
+            if index == 0:
+                args[3]["unsupported_count"] = 1
+            elif index == 1:
+                args[3]["module_deployment_matrix"][0]["decision"] = "BLOCKED"
+            elif index == 2:
+                args[3]["candidate_sha"] = "c" * 40
+            elif index == 3:
+                args[4]["checks"]["core_anonymous_noc_denied"] = "BLOCKED"
+            elif index == 4:
+                args[4]["applied_sha_verified"] = "NOT_TESTED"
+            elif index == 5:
+                args[4]["timestamp_utc"] = (
+                    datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            elif index == 6:
+                args[4]["timestamp_utc"] = (
+                    datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+            elif index == 7:
+                args[5]["run_id"] = "OTHER-RUN"
+            elif index == 8:
+                args[6]["items"][0]["payload_sha256"] = "0" * 64
+            else:
+                args[4]["overall"] = "GO"
+            with self.subTest(case=index), self.assertRaises(Blocked):
+                qualify_release(*args)
+
+    def test_aggregate_cli_redacts_and_fails_closed(self):
+        stable, candidate, rid, coverage, field, ledger, refs = release_fixture()
+        with tempfile.TemporaryDirectory() as folder:
+            paths = []
+            for name, data in zip(("coverage", "field", "ledger", "refs"),
+                                  (coverage, field, ledger, refs)):
+                path = Path(folder) / (name + ".json")
+                path.write_text(json.dumps(data))
+                paths.extend(["--" + name + "-file", str(path)])
+            args = ["--stable-sha", stable, "--candidate-sha", candidate,
+                    "--run-id", rid] + paths
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(release_main(args), 0)
+            result = json.loads(output.getvalue())
+            self.assertEqual(result["overall"], "NO_GO")
+            self.assertNotIn("EVD-1", output.getvalue())
+            self.assertNotIn(folder, output.getvalue())
+            field["checks"]["portal_health"] = "BLOCKED"
+            (Path(folder) / "field.json").write_text(json.dumps(field))
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(release_main(args), 2)
+            self.assertEqual(json.loads(output.getvalue())["assessment"], "BLOCKED")
+            self.assertNotIn(folder, output.getvalue())
