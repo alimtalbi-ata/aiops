@@ -135,7 +135,7 @@ class DeployAcmeP0Tests(unittest.TestCase):
              patch.object(module, "inspect_owned", return_value=self._originals()), \
              patch.object(module, "wait_healthy"):
             with self.assertRaisesRegex(module.Refused, "deployment_failed_original_images_preserved"):
-                module.apply(self.delivery, source, state, "b" * 40)
+                module.apply(self.delivery, source, state, "b" * 40, self.stable)
         self.assertTrue(any("up" in x and any("rollback.yml" in str(y) for y in x)
                             for x in calls))
         self.assertEqual((state / "applied.sha").read_text(), self.stable + "\n")
@@ -156,7 +156,7 @@ class DeployAcmeP0Tests(unittest.TestCase):
              patch.object(module, "inspect_owned", return_value=self._originals()), \
              patch.object(module, "wait_healthy"):
             with self.assertRaisesRegex(module.Refused, "rollback_incomplete"):
-                module.apply(self.delivery, source, state, "b" * 40)
+                module.apply(self.delivery, source, state, "b" * 40, self.stable)
         self.assertTrue((state / "DEPLOYMENT_BLOCKED").exists())
         self.assertEqual((state / "applied.sha").read_text(), self.stable + "\n")
 
@@ -165,7 +165,15 @@ class DeployAcmeP0Tests(unittest.TestCase):
         (state / "DEPLOYMENT_BLOCKED").write_text("rollback failed\\n")
         with patch.object(module, "preflight_host") as preflight:
             with self.assertRaisesRegex(module.Refused, "existing_deployment_block_marker"):
-                module.apply(self.delivery, self.root, state, "b" * 40)
+                module.apply(self.delivery, self.root, state, "b" * 40, self.stable)
+            preflight.assert_not_called()
+
+    def test_mismatched_applied_sha_refuses_before_docker(self):
+        state = self._state()
+        (state / "applied.sha").write_text("a" * 40 + "\n")
+        with patch.object(module, "preflight_host") as preflight:
+            with self.assertRaisesRegex(module.Refused, "applied_sha_not_matching_approved_stable"):
+                module.apply(self.delivery, self.root, state, "b" * 40, self.stable)
             preflight.assert_not_called()
 
     def test_symlink_applied_sha_refused(self):
@@ -174,7 +182,7 @@ class DeployAcmeP0Tests(unittest.TestCase):
         (state / "applied.sha").symlink_to(self.delivery / "README.md")
         with patch.object(module, "preflight_host") as preflight:
             with self.assertRaisesRegex(module.Refused, "missing_existing_operator_release_state"):
-                module.apply(self.delivery, self.root, state, "b" * 40)
+                module.apply(self.delivery, self.root, state, "b" * 40, self.stable)
             preflight.assert_not_called()
 
     def test_success_is_unattested_and_preserves_applied_sha(self):
@@ -190,7 +198,7 @@ class DeployAcmeP0Tests(unittest.TestCase):
              patch.object(module, "command", side_effect=success_command), \
              patch.object(module, "inspect_owned", return_value=expected), \
              patch.object(module, "wait_healthy"):
-            receipt = module.apply(self.delivery, source, state, "b" * 40)
+            receipt = module.apply(self.delivery, source, state, "b" * 40, self.stable)
         self.assertEqual(receipt["assessment"], "APPLIED_UNATTESTED")
         self.assertEqual(receipt["overall"], "NO_GO")
         self.assertEqual(receipt["e2e"], "NOT_TESTED")
