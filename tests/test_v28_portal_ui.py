@@ -813,5 +813,77 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertEqual(poll["gates"]["items"][0]["state"], "SIMULATE")
         self.assertNotIn("tenant_id", poll["gates"]["items"][0])
 
+    def test_demo_canonical_ledger_foreign_rows_never_reach_html_or_poll(self):
+        # Core actually returns these three arrays, not legacy "items".
+        marker = "FOREIGN-LEDGER-SECRET"
+        cases = (
+            {"analyses": [{"run_id": "RUN-OTHER", "output": {"text": marker}}]},
+            {"critiques": [{"tenant_id": "TENANT-B", "issues": [marker]}]},
+            {"policy_decisions": [{"tenant": "TENANT-B", "reasons": [marker]}]},
+            {"analyses": [{"output": {"run_id": "RUN-OTHER", "text": marker}}]},
+            {"critiques": [{"output": {"tenant_id": "TENANT-B", "text": marker}}]},
+            {"policy_decisions": [{"proof_snapshot": {"tenant": "TENANT-B",
+                                                      "text": marker}}]},
+            {"analyses": [{"output": {"text": "SAFE"}}, None,
+                          {"output": {"text": marker}}]},
+            {"critiques": {"run_id": "RUN-OTHER", "text": marker}},
+        )
+        for extra in cases:
+            with self.subTest(extra=extra):
+                def get(base, path):
+                    if path == "/api/runs":
+                        return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                           "tenant_id": "TENANT-A"}]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                        "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                                "events": []}
+                    if path.endswith("/ai-ledger"):
+                        return {"run_id": "RUN-DEMO", **extra}
+                    if path.endswith("/gates"):
+                        return {"items": []}
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_run_detail("RUN-DEMO")
+                        poll = self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn(marker, page)
+                self.assertNotIn(marker, str(poll))
+                self.assertEqual(poll["ledger"], {"status": "UNKNOWN"})
+                self.assertIn("INCONNU", page)
+
+    def test_demo_canonical_ledger_matching_rows_remain_read_only(self):
+        ledger = {"run_id": "RUN-DEMO", "analyses": [
+                    {"analysis_id": "ANL-1", "output": {
+                        "run_id": "RUN-DEMO", "text": "CANONICAL-ANALYSIS-ACME"}}],
+                  "critiques": [{"critique_id": "CRT-1", "tenant_id": "TENANT-A",
+                                 "validated": True, "issues": []}],
+                  "policy_decisions": [{"policy_decision_id": "POL-1",
+                                        "decision": "SIMULATE", "state": "PASS",
+                                        "proof_snapshot": {"tenant_id": "TENANT-A"}}]}
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                   "tenant_id": "TENANT-A"}]}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                        "events": []}
+            if path.endswith("/ai-ledger"):
+                return ledger
+            if path.endswith("/gates"):
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_run_detail("RUN-DEMO")
+                poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("CANONICAL-ANALYSIS-ACME", page)
+        self.assertEqual(poll["ledger"], ledger)
+        self.assertIn("SIMULATE", page)
+
+
 if __name__=="__main__":
     unittest.main()
