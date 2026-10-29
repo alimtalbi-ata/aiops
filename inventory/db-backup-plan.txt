@@ -1,0 +1,109 @@
+# AIOps2 — Plan de sauvegarde des bases
+# Date : 2026-10-29T22:26:12+01:00
+
+## Conteneurs de bases
+aiops2-rebuild-n8n|n8nio/n8n:2.40.6|Up 8 hours
+aiops2-rebuild-glpi|glpi/glpi:11.0.9|Up 8 hours
+aiops2-rebuild-temporal-ui|temporalio/ui:2.49.1|Up 8 hours
+aiops2-glpi-recovery-db|mariadb:11.4|Up 7 days
+aiops2-rebuild-temporal-namespace|temporalio/admin-tools:1.31.0|Exited (0) 8 days ago
+aiops2-rebuild-temporal|temporalio/server:1.31.0|Up 8 days (healthy)
+aiops2-rebuild-temporal-schema|temporalio/admin-tools:1.31.0|Exited (0) 8 days ago
+aiops2-rebuild-postgres|postgres:16-alpine|Up 8 days (healthy)
+aiops2-rebuild-temporal-postgres|postgres:16-alpine|Up 8 days (healthy)
+aiops2-rebuild-glpi-db|mariadb:11.4|Up 7 days (healthy)
+aiops2-v28-sql-qual|postgres:16-alpine|Up 9 days
+aiops2-v27-qual-aiops2-temporal-namespace-1|temporalio/admin-tools:1.31.0|Exited (0) 9 days ago
+aiops2-v27-qual-aiops2-temporal-1|temporalio/server:1.31.0|Up 9 days (healthy)
+aiops2-v27-qual-aiops2-temporal-schema-1|temporalio/admin-tools:1.31.0|Exited (0) 9 days ago
+aiops2-v27-qual-aiops2-temporal-postgres-1|postgres:16-alpine|Up 9 days (healthy)
+aiops2-v27-qual-aiops2-postgres-1|postgres:16-alpine|Up 9 days (healthy)
+aiops2-e2e-v1-aiops2-temporal-namespace-1|temporalio/admin-tools:1.31.0|Exited (0) 9 days ago
+aiops2-e2e-v1-aiops2-temporal-1|temporalio/server:1.31.0|Up 9 days (healthy)
+aiops2-e2e-v1-aiops2-temporal-schema-1|temporalio/admin-tools:1.31.0|Exited (0) 9 days ago
+aiops2-e2e-v1-aiops2-temporal-postgres-1|postgres:16-alpine|Up 9 days (healthy)
+aiops2-e2e-v1-aiops2-postgres-1|postgres:16-alpine|Up 9 days (healthy)
+
+## Volumes Docker
+aiops2-demo-observability_demo_loki_data
+aiops2-demo-observability_demo_tempo_data
+aiops2-e2e-v1_pgdata
+aiops2-e2e-v1_temporal_pgdata
+aiops2-glpi-recovery-20261022
+aiops2-rebuild-glpi-data
+aiops2-rebuild-glpi-db-data
+aiops2-rebuild-grafana-data
+aiops2-rebuild-n8n-data
+aiops2-rebuild-postgres-data
+aiops2-rebuild-prometheus-data
+aiops2-rebuild-temporal-postgres-data
+aiops2-v27-qual_pgdata
+aiops2-v27-qual_temporal_pgdata
+aiops2-v28-sql-qual-pgdata
+b3a3e2d08f0e32ec8620d46225ea511fad9612d9a623b7c4c70f9f2d1d4becb9
+
+## Montages des conteneurs concernés
+### aiops2-rebuild-n8n
+volume|aiops2-rebuild-n8n-data|/home/node/.n8n
+
+### aiops2-rebuild-glpi
+volume|aiops2-rebuild-glpi-data|/var/glpi
+
+### aiops2-rebuild-temporal-ui
+
+### aiops2-glpi-recovery-db
+volume|aiops2-glpi-recovery-20261022|/var/lib/mysql
+
+### aiops2-rebuild-temporal-namespace
+bind||/scripts/create-namespace.sh
+
+### aiops2-rebuild-temporal
+bind||/etc/temporal/config/dynamicconfig
+
+### aiops2-rebuild-temporal-schema
+bind||/scripts/setup-postgres.sh
+
+### aiops2-rebuild-postgres
+bind||/docker-entrypoint-initdb.d
+volume|aiops2-rebuild-postgres-data|/var/lib/postgresql/data
+
+### aiops2-rebuild-temporal-postgres
+volume|aiops2-rebuild-temporal-postgres-data|/var/lib/postgresql/data
+
+### aiops2-rebuild-glpi-db
+volume|aiops2-rebuild-glpi-db-data|/var/lib/mysql
+
+### aiops2-v28-sql-qual
+volume|aiops2-v28-sql-qual-pgdata|/var/lib/postgresql/data
+
+### aiops2-v27-qual-aiops2-temporal-namespace-1
+bind||/scripts/create-namespace.sh
+
+### aiops2-v27-qual-aiops2-temporal-1
+bind||/etc/temporal/config/dynamicconfig
+
+### aiops2-v27-qual-aiops2-temporal-schema-1
+bind||/scripts/setup-postgres.sh
+
+### aiops2-v27-qual-aiops2-temporal-postgres-1
+volume|aiops2-v27-qual_temporal_pgdata|/var/lib/postgresql/data
+
+### aiops2-v27-qual-aiops2-postgres-1
+bind||/docker-entrypoint-initdb.d
+volume|aiops2-v27-qual_pgdata|/var/lib/postgresql/data
+
+### aiops2-e2e-v1-aiops2-temporal-namespace-1
+bind||/scripts/create-namespace.sh
+
+### aiops2-e2e-v1-aiops2-temporal-1
+bind||/etc/temporal/config/dynamicconfig
+
+### aiops2-e2e-v1-aiops2-temporal-schema-1
+bind||/scripts/setup-postgres.sh
+
+### aiops2-e2e-v1-aiops2-temporal-postgres-1
+volume|aiops2-e2e-v1_temporal_pgdata|/var/lib/postgresql/data
+
+### aiops2-e2e-v1-aiops2-postgres-1
+bind||/docker-entrypoint-initdb.d
+volume|aiops2-e2e-v1_pgdata|/var/lib/postgresql/data
