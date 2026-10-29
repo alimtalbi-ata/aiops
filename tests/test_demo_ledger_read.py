@@ -166,6 +166,8 @@ class DemoLedgerReadTests(unittest.TestCase):
         valid["analyses"].append({**valid["analyses"][0], "analysis_id": "ANA-2"})
         valid["critiques"].append({**valid["critiques"][0],
                                    "critique_id": "CRT-2", "analysis_id": "ANA-2"})
+        # A successful simulation requires the linked Critique to be validated.
+        valid["critiques"][0]["validated"] = True
         valid["policy_decisions"] = [
             {"policy_decision_id": "POL-1", "analysis_id": "ANA-1",
              "critique_id": "CRT-1", "decision": "SIMULATE", "state": "PASS"},
@@ -188,6 +190,8 @@ class DemoLedgerReadTests(unittest.TestCase):
             ("foreign_critique", lambda x: change_policy(x, critique_id="CRT-FOREIGN")),
             ("cross_analysis", lambda x: change_policy(x, analysis_id="ANA-2")),
             ("no_link", lambda x: change_policy(x, analysis_id=None, critique_id=None)),
+            ("simulated_without_critique", lambda x: change_policy(x, critique_id=None)),
+            ("simulated_rejected_critique", lambda x: x["critiques"][0].update(validated=False)),
             ("duplicate", lambda x: x["policy_decisions"].append(
                 dict(x["policy_decisions"][0]))),
             ("live_allow", lambda x: change_policy(x, decision="ALLOW")),
