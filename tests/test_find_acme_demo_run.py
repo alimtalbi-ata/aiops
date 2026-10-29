@@ -89,5 +89,24 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
 
 
+    def test_run_window_full_is_not_proof_of_absence(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": f"RUN-{i}", "scenario_id": "OTHER", "mode": "DEMO"} for i in range(100)]}
+            if path == "/api/incidents?limit=500": return {"items": []}
+            raise AssertionError(path)
+        result = locator.qualify("http://core", "http://portal", get)
+        self.assertEqual(result, {"result": "UNKNOWN", "reason": "REGISTRY_WINDOW_LIMITED", "run_id": None})
+
+    def test_incident_window_full_is_not_proof_of_absence(self):
+        def get(base, path):
+            if path == "/api/runs": return {"items": []}
+            if path == "/api/incidents?limit=500":
+                return {"items": [{"incident_id": f"INC-{i}"} for i in range(500)]}
+            raise AssertionError(path)
+        result = locator.qualify("http://core", "http://portal", get)
+        self.assertEqual(result["reason"], "REGISTRY_WINDOW_LIMITED")
+
+
 if __name__ == "__main__":
     unittest.main()
