@@ -122,12 +122,17 @@ def _project(rid, detail, ledger, refs):
     # This is referential consistency, NOT evidence existence or tenant ACL proof.
     analyses = []
     analysis_evidence = {}
+    valid_analysis_ids = set()
     for item in _records(ledger.get("analyses")):
         analysis_id = _identifier(item.get("analysis_id"))
         if analysis_id in analysis_evidence:
             raise ValueError("duplicate analysis identity")
         evidence_ids = _evidence_ids(item.get("evidence_ids"))
         analysis_evidence[analysis_id] = set(evidence_ids)
+        # Core can persist INVALID, UNAVAILABLE or SUPERSEDED analyses.
+        # A later Policy SIMULATE/PASS must not certify one as valid.
+        if item.get("status") == "VALID":
+            valid_analysis_ids.add(analysis_id)
         analyses.append({
             "analysis_id": analysis_id,
             "model": _short(item.get("model"), 160),
@@ -208,8 +213,10 @@ def _project(rid, detail, ledger, refs):
         # A recorded SIMULATE/PASS is not a qualified AI conclusion unless
         # its own linked Critique was independently validated. A policy row
         # alone must never turn a rejected diagnostic into a demo success.
-        if decision == "SIMULATE" and state == "PASS" and policy_critique not in validated_critiques:
-            raise ValueError("synthetic simulation without validated critique")
+        if decision == "SIMULATE" and state == "PASS":
+            if (policy_critique not in validated_critiques
+                    or critique_analysis[policy_critique] not in valid_analysis_ids):
+                raise ValueError("synthetic simulation without valid analysis and critique")
         # Preserve only the canonical, already-qualified Core linkage IDs.
         # An offline receipt must be able to join this specific Policy row to
         # its Critique, rather than assuming any validated Critique in the Run.
