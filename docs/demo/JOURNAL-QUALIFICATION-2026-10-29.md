@@ -158,3 +158,20 @@ Chaque nouvelle session ajoute une entrée datée à ce journal ou crée `docs/d
 - `git log -1 --oneline` : `43734aa`. Les commandes `git diff --check` et `git status --short` n'ont émis aucune sortie dans la transcription, cohérent avec un worktree propre.
 
 **Limites :** preuve d'exécution offline Python uniquement ; aucun run Core persistant ni référence Evidence vérifiée, aucun appel GLPI/n8n, aucun runtime E2E ni action LIVE. Les IDs `RUN-ACME-OFFLINE-001` et `EVD-ACME-OFFLINE-*` sont des fixtures et non des identités Core attestées.
+
+
+## 11. 2026-10-29 — Qualification Debian du contrôle de cohérence des snapshots
+
+**Source :** transcription terminal fournie par l'opérateur. Branche `prep/acme-demo-offline-20261029`, HEAD `0d7f2ac`, fast-forward `43734aa..0d7f2ac`.
+
+| Suite | Tests réellement exécutés | Résultat |
+|---|---:|---|
+| `test_remediation_lab.py` | 10 | PASS |
+| `test_acme_remediation_projection.py` | 9 | PASS |
+| `test_acme_remediation_receipt.py` | 10 | PASS |
+| `test_acme_demo_offline.py` | 4 | PASS |
+| `test_acme_remediation_qualification.py` | 11 | PASS |
+| **Total unitaires** | **44** | **44/44 PASS** |
+| `tools/acme_offline_source_preflight.py` | 26 contrôles statiques distincts | **26/26 PASS** |
+
+`git diff --check` et `git status --short` ne montrent aucune sortie : pas d'anomalie signalée. **Qualification prouvée au SHA `0d7f2ac` uniquement.** Les snapshots sont des objets fournis à une fonction pure, pas des données authentifiées par Core/Evidence. Aucune exécution DB, Temporal, GLPI, n8n, Portal, Docker ou LIVE n'est démontrée.
