@@ -23,3 +23,11 @@
 - Tenant A/B RBAC, Core/IA/Policy SIMULATE/Evidence/Studio correlation,
   deployer transport of Twin/Core/Policy, rollback and applied.sha NOT_TESTED.
 - Handoff to #156 only; no stable push, merge, Debian access or LIVE action.
+
+## CI observée sur commit code/tests
+- SHA `a81f93a7421f829dbf9c87409592a64744c96618` (PR #170).
+- `quality.yml` run https://github.com/alimtalbi-ata/aiops/actions/runs/40815867966 : completed/success, 3/3 jobs SUCCESS.
+- Log du job Core/PostgreSQL/Twin lu : 12/12 tests Twin HTTP réel, dont le nouveau test de fermeture des cinq lectures ; 14/14 Core/Policy et 8/8 Policy HTTP, 5/5 NOC.
+- Grafana réel et policy-and-static : SUCCESS. Tests CI éphémères uniquement, aucun smoke Debian.
+- Cette annotation documentaire produit un HEAD ultérieur : ne pas transférer automatiquement la CI du SHA précédent ; revalider la CI sur HEAD final.
+- READY_FOR_STABLE=BLOCKED / NO-GO, notamment pour compatibilité Portal/Prometheus et tenant RBAC.
