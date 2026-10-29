@@ -77,6 +77,9 @@ def _demo_detail_matches(detail, listed):
     """
     if not isinstance(detail, dict) or not isinstance(listed, dict):
         return False
+    # Never trust a plausible nested run inside an upstream error envelope.
+    if detail.get("status") in ("UNKNOWN", "ERROR") or "error_type" in detail:
+        return False
     run = detail.get("run")
     if not isinstance(run, dict):
         return False
@@ -95,6 +98,20 @@ def _demo_detail_matches(detail, listed):
             if (not isinstance(listed_tenant, str) or not listed_tenant
                     or detail_tenant != listed_tenant):
                 return False
+    # Core events normally omit identity. Explicit claims must match the run
+    # before raw HTML, polling, or privileged ledger reads can expose them.
+    events = detail.get("events")
+    if events is not None:
+        if not isinstance(events, list):
+            return False
+        for event in events:
+            if not isinstance(event, dict):
+                return False
+            if "run_id" in event and event["run_id"] != run["run_id"]:
+                return False
+            for key in ("tenant_id", "tenant"):
+                if key in event and (key not in run or event[key] != run[key]):
+                    return False
     return True
 
 def _unique_demo_run(items, rid):

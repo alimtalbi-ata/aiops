@@ -130,6 +130,64 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertNotIn("RUN-LIVE",page)
         self.assertIn('"impact_known":true',page)
 
+    def test_demo_core_detail_envelope_and_event_identity_fail_closed(self):
+        listed = {"run_id": "RUN-DEMO", "mode": "DEMO", "tenant_id": "ACME"}
+        run = {"run_id": "RUN-DEMO", "mode": "DEMO", "tenant_id": "ACME",
+               "status": "RESOLVED"}
+        cases = [
+            {"status": "UNKNOWN", "error_type": "HTTPError",
+             "run": run, "events": [{"event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"status": "ERROR", "run": run,
+             "events": [{"event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"run": run, "events": [{"run_id": "OTHER-RUN",
+                                     "event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"run": run, "events": [{"tenant_id": "OTHER-TENANT",
+                                     "event_type": "FORGED-FOREIGN-EVENT"}]},
+            {"run": run, "events": [{"tenant_id": "ACME",
+                                     "run_id": "RUN-DEMO"}, None]},
+        ]
+        for detail in cases:
+            with self.subTest(detail=detail):
+                requested = []
+                def get(base, path):
+                    requested.append(path)
+                    if path == "/api/runs":
+                        return {"items": [listed]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return detail
+                    raise AssertionError("unexpected privileged registry read: " + path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    page = self.portal.demo_run_detail("RUN-DEMO")
+                    poll = self.portal.demo_status("RUN-DEMO")
+                self.assertIn("Chronologie Core — INCONNU", page)
+                self.assertNotIn("FORGED-FOREIGN-EVENT", page)
+                self.assertEqual(poll["status"], "UNKNOWN")
+                self.assertEqual(poll["events"], "INCONNU")
+                self.assertEqual(poll["ledger"], {"status": "UNKNOWN"})
+                self.assertEqual(poll["gates"], {"status": "UNKNOWN"})
+                self.assertEqual(requested, ["/api/runs", "/api/runs/RUN-DEMO"] * 2)
+
+    def test_demo_core_event_matching_explicit_identity_remains_readable(self):
+        listed = {"run_id": "RUN-DEMO", "mode": "DEMO", "tenant_id": "ACME"}
+        detail = {"run": {**listed, "status": "BLOCKED"},
+                  "events": [{"run_id": "RUN-DEMO", "tenant_id": "ACME",
+                              "sequence": 1, "event_type": "MATCHED-EVENT"}]}
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [listed]}
+            if path == "/api/runs/RUN-DEMO":
+                return detail
+            if path.endswith("/ai-ledger"):
+                return {"status": "UNKNOWN"}
+            if path.endswith("/gates"):
+                return {"items": []}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            page = self.portal.demo_run_detail("RUN-DEMO")
+            poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("MATCHED-EVENT", page)
+        self.assertEqual(poll["events"][0]["event_type"], "MATCHED-EVENT")
+
     def test_demo_run_details_are_source_backed(self):
         def get(base,path,**kw):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
