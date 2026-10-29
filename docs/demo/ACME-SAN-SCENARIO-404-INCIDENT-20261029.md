@@ -57,3 +57,19 @@ L'opérateur a interrogé les détails des scénarios actifs :
 - `SCN-ESX-FC-P1` : nom **ESX FC port failure**, `synthetic=true`, **0 étape** dans le catalogue actif.
 
 Le scénario Golden Payment est le **candidat de référence** pour la prochaine validation synthétique SAN → Payments. Les étapes observées ne prouvent ni leur contenu exact (payload), ni leur exécution réussie, ni une remédiation LIVE. Ne pas substituer cet identifiant dans le run historique `RUN-073A9D4D7B4B767C`, qui reste BLOCKED. Avant un nouveau run : inspecter les payloads d'étapes et la manière dont le portail/simulateur référence les scénarios; qualifier les garde-fous, puis effectuer une exécution synthétique explicitement autorisée.
+
+## Payloads des sept étapes confirmés (lecture seule)
+
+L'opérateur a interrogé `GET /api/scenarios/SCN-GOLDEN-PAYMENT-P1`. Les payloads du catalogue actif sont :
+
+| Temps (s) | Action | Cible | Paramètres |
+|---:|---|---|---|
+| 0 | `INCIDENT_OPEN` | `ACME-SVC-PAYMENTS` | `title=Payment latency following FC fabric degradation`, `severity=P1` |
+| 15 | `SET_STATE` | `ACME-SAN-FABRIC-A` | `state=DEGRADED`, `health=0.42` |
+| 30 | `OBSERVE` | `ACME-SAN-FABRIC-A` | `metric=fc_errors`, `value=184`, `unit=errors/min`, `status=CRITICAL` |
+| 45 | `CHANGE_LOOKUP` | `ACME-SAN-FABRIC-A` | `window_minutes=60` |
+| 60 | `POLICY_CHECK` | `ACME-SVC-PAYMENTS` | `requested_action=HUMAN_APPROVAL` |
+| 90 | `VERIFY` | `ACME-SVC-PAYMENTS` | `status=OK`, `latency_ms=92` |
+| 110 | `RECONCILE` | `ACME-SAN-FABRIC-A` | `state=DEGRADED`, `residual_risk=0.31` |
+
+**Interprétation limitée :** les paramètres définissent un parcours synthétique plausible, pas une preuve d'exécution ni des mesures LIVE. Le contrôle de politique prévoit une approbation humaine. La vérification Payments `OK` ne signifie pas restauration complète du SAN, encore `DEGRADED` en réconciliation. Aucun nouveau run n'a été exécuté à ce stade.
