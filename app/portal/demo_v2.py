@@ -63,7 +63,7 @@ def _event_clock(events, clock):
 
 
 
-def _ordered_events(events):
+def _ordered_events(events, clock):
     """Render Core sequence order, but never certify incomplete chronology.
 
     Core assigns positive per-run sequence numbers. A gap, duplicate or
@@ -93,6 +93,8 @@ def _ordered_events(events):
             stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if stamp.tzinfo is None:
                 raise ValueError("timezone missing")
+            if stamp > clock:
+                return ordered, "INCONNU — horodatages Core futurs ; chronologie non vérifiable", False
         except (ValueError, OverflowError, TypeError):
             return ordered, "INCONNU — horodatages Core incomplets ou invalides", False
         clocks.append(stamp)
@@ -168,7 +170,7 @@ def render_demo_v2(detail, ledger, gates, now=None):
                     age_label = "Démarré récemment (heure Core)"
         except ValueError:
             pass
-    ordered_events, sequence_label, sequence_ok = _ordered_events(events)
+    ordered_events, sequence_label, sequence_ok = _ordered_events(events, clock)
     synthetic = False
     evidence_ids = set()
     rows = []
