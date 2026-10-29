@@ -32,3 +32,8 @@
 - Commit test HTTP `4fe4118d78d789dadbe7b161d67d9a78f48540c8` : `tests/test_core_demo_policy_real_integration.py` ajoute un Run CREATED synthétique dans PostgreSQL 16 éphémère, lit le véritable Core HTTP, vérifie la liaison valide et refuse un Run LIVE, un RUNNING non éligible et un scénario incohérent. Nettoyage SQL existant préservé. **Aucune exécution Temporal**, aucun effet LIVE.
 - Les runs CI intermédiaires `40836931009` et `40837039650` ont leurs trois jobs SUCCESS sur des SHA précédents ; ils ne qualifient **pas** ce nouveau test ni le HEAD documentaire final.
 - CI du HEAD final : **à vérifier séparément**, ne pas promouvoir sur la base des jobs intermédiaires. Contrats API publics inchangés.
+
+## Résultats CI observés après livraison code/tests
+- SHA code + journal initial `56084feffb46576aad8778eca56a4213db094cb4` : [quality.yml PR #40837180113](https://github.com/alimtalbi-ata/aiops/actions/runs/40837180113) **completed/success 3/3 jobs**, [push #40837171711](https://github.com/alimtalbi-ata/aiops/actions/runs/40837171711) **completed/success 3/3 jobs**. Les deux runs portent exactement ce SHA.
+- Logs PR consultés : `test_simulation_policy_contract.py` **16/16 PASS** (quatre nouveaux tests), `test_core_demo_policy_real_integration.py` **16/16 PASS** (un nouveau test vrai Core HTTP/PostgreSQL 16), `test_policy_real_http_integration.py` **12/12 PASS**, `test_core_noc_real_integration.py` **5/5 PASS**, job Grafana éphémère SUCCESS. `test_policy_safety.py` **18/18 PASS**.
+- Cette mise à jour documentaire crée un nouveau SHA ; ses propres checks doivent être consultés avant toute qualification finale. Aucun test serveur Debian, Temporal exécuté, RBAC tenant ni E2E métier n'est implicite. **READY_FOR_STABLE=BLOCKED / NO-GO** reste inchangé.
