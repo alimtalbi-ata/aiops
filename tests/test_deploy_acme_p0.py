@@ -1,5 +1,6 @@
 """P0 deployer contract tests: disposable Git and mocked Docker, never a host rollout."""
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -184,6 +185,48 @@ class DeployAcmeP0Tests(unittest.TestCase):
             with self.assertRaisesRegex(module.Refused, "missing_existing_operator_release_state"):
                 module.apply(self.delivery, self.root, state, "b" * 40, self.stable)
             preflight.assert_not_called()
+
+    def test_readonly_host_inspection_checks_ownership_without_apply(self):
+        candidate = self.candidate()
+        state = self._state()
+        source = self.root / "source"
+        source.mkdir()
+        out = io.StringIO()
+        with patch.object(module, "preflight_host", return_value=self._originals()) as inspect, \
+             patch.object(module, "apply") as apply, \
+             patch("sys.stdout", out):
+            code = module.main(["--delivery", str(self.delivery),
+                                "--stable-sha", self.stable, "--candidate-sha", candidate,
+                                "--source-dir", str(source), "--state-dir", str(state),
+                                "--inspect-host"])
+        self.assertEqual(code, 0)
+        inspect.assert_called_once_with(source)
+        apply.assert_not_called()
+        receipt = json.loads(out.getvalue())
+        self.assertEqual(receipt["assessment"], "HOST_PREFLIGHT_PASS_UNATTESTED")
+        self.assertEqual(receipt["overall"], "NO_GO")
+        self.assertEqual(receipt["poller_migration"], "NOT_TESTED")
+        self.assertEqual(receipt["e2e"], "NOT_TESTED")
+        self.assertEqual((state / "applied.sha").read_text(), self.stable + "\n")
+
+    def test_readonly_host_inspection_refuses_stale_state_before_docker(self):
+        candidate = self.candidate()
+        state = self._state()
+        (state / "applied.sha").write_text("a" * 40 + "\n")
+        source = self.root / "source"
+        source.mkdir()
+        out = io.StringIO()
+        with patch.object(module, "preflight_host") as inspect, \
+             patch.object(module, "apply") as apply, \
+             patch("sys.stdout", out):
+            code = module.main(["--delivery", str(self.delivery),
+                                "--stable-sha", self.stable, "--candidate-sha", candidate,
+                                "--source-dir", str(source), "--state-dir", str(state),
+                                "--inspect-host"])
+        self.assertEqual(code, 2)
+        inspect.assert_not_called()
+        apply.assert_not_called()
+        self.assertEqual(json.loads(out.getvalue())["overall"], "NO_GO")
 
     def test_success_is_unattested_and_preserves_applied_sha(self):
         state = self._state()
