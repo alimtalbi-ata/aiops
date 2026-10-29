@@ -177,7 +177,9 @@ class PortalPageContractTests(unittest.TestCase):
             with patch.object(self.portal, "post_json",
                               side_effect=AssertionError("read-only")):
                 page = self.portal.demo_studio()
-        self.assertIn("INCONNU — portée de l'impact Twin non vérifiable", page)
+        # HTML escapes the apostrophe; verify the visible fail-closed label.
+        self.assertIn("INCONNU — portée de", page)
+        self.assertIn("Twin non vérifiable", page)
         self.assertIn('"impact_known":false', page)
         self.assertIn('"impact_ids":[]', page)
         self.assertNotIn('"impact_known":true', page)
