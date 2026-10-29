@@ -72,6 +72,37 @@ class PolicyDemoResultTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "rollback_effect_claim_forbidden"):
             present_demo_policy_result(r)
 
+    def test_real_receipt_builder_success_and_failure(self):
+        """Exercise the existing receipt -> projection -> local gate -> presentation chain."""
+        from app.shared.acme_demo_offline import demo_receipt
+
+        for outcome, expected in (("SUCCESS", "SIMULATED_SUCCESS"), ("FAILURE", "SIMULATED_FAILURE")):
+            with self.subTest(outcome=outcome):
+                source = demo_receipt(outcome)
+                self.assertEqual(source["projection"]["status"], expected)
+                result = present_demo_policy_result(source)
+                self.assertEqual(result["policy"]["decision"], "SIMULATE")
+                self.assertEqual(result["classification"], "SIMULATED")
+                self.assertEqual(result["run_id"], source["run_id"])
+                self.assertEqual(result["evidence"]["ids"], source["evidence_ids"])
+                self.assertEqual(result["evidence"]["receipt_digest"], source["receipt_digest"])
+                self.assertEqual(result["human"]["status"], "APPROVAL_FIXTURE_ONLY")
+                self.assertFalse(result["human"]["authenticated_runtime"])
+                self.assertFalse(result["policy"]["core_policy_verified"])
+                self.assertFalse(result["before_after"]["observed"])
+                self.assertFalse(result["rollback"]["executed"])
+                self.assertFalse(result["effect_applied"])
+                self.assertFalse(result["persisted"])
+
+    def test_real_receipt_builder_blocked_decision_not_approved(self):
+        """The receipt builder must not be bypassed by a forged approved-looking fixture."""
+        from app.shared.acme_demo_offline import demo_receipt
+
+        source = demo_receipt("SUCCESS")
+        source["projection"]["gate"]["status"] = "BLOCKED"
+        with self.assertRaisesRegex(ValueError, "projection_gate_inconsistent"):
+            present_demo_policy_result(source)
+
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)
         present_demo_policy_result(r)
