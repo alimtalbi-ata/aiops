@@ -188,10 +188,21 @@ class DemoLedgerReadTests(unittest.TestCase):
              "critique_id": "CRT-2", "decision": "OBSERVE", "state": "PASS"},
         ])
 
+        # A superseded Analysis may still be shown historically, but never
+        # as the source of a successful SIMULATE/PASS decision.
+        historical = json.loads(json.dumps(valid))
+        historical["analyses"][0]["status"] = "SUPERSEDED"
+        historical["policy_decisions"][0].update(decision="BLOCK", state="BLOCKED")
+        with patch("portal.demo_ledger_read.get_json", side_effect=[DETAIL, historical, REFS]):
+            self.assertEqual(self.read("Bearer " + VIEWER).status_code, 200)
+
         def change_policy(ledger, **fields):
             ledger["policy_decisions"][0].update(fields)
 
         mutations = [
+            ("invalid_analysis", lambda x: x["analyses"][0].update(status="INVALID")),
+            ("unavailable_analysis", lambda x: x["analyses"][0].update(status="UNAVAILABLE")),
+            ("superseded_analysis", lambda x: x["analyses"][0].update(status="SUPERSEDED")),
             ("foreign_analysis", lambda x: change_policy(x, analysis_id="ANA-FOREIGN")),
             ("foreign_critique", lambda x: change_policy(x, critique_id="CRT-FOREIGN")),
             ("cross_analysis", lambda x: change_policy(x, analysis_id="ANA-2")),
