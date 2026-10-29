@@ -1,4 +1,4 @@
-import os,asyncio,datetime
+import os,asyncio,datetime,re
 from fastapi import FastAPI,HTTPException,Header
 from temporalio import activity,workflow
 from temporalio.client import Client
@@ -108,7 +108,11 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
  except ValueError: raise HTTPException(422,'invalid execution mode')
  # Do not start Temporal for a caller-supplied DEMO identity that points to
  # a different canonical Core Run (notably a LIVE Run).
- if not isinstance(args, dict) or any(k not in args for k in ('run_id', 'version', 'scenario_id')):
+ if (not isinstance(args, dict)
+     or type(args.get('run_id')) is not str
+     or re.fullmatch(r'RUN-[A-Za-z0-9_-]{1,120}', args['run_id']) is None
+     or type(args.get('version')) is not int or args['version'] < 1
+     or type(args.get('scenario_id')) is not str or not args['scenario_id']):
   raise HTTPException(422, 'invalid execution binding')
  try:
   canonical = get_json(CORE, f'/api/runs/{args["run_id"]}', token=ADMIN)
