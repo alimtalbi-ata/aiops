@@ -55,6 +55,26 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
         self.assertEqual((response.json()["state"], response.json()["decision"]),
                          ("UNKNOWN", "HUMAN_APPROVAL"))
 
+    def test_synthetic_bad_critic_redundancy_or_confidence_refused_over_real_http(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for changes in ({"critic_validated": False},
+                            {"redundancy_ok": False}, {"confidence": 0.89}):
+                with self.subTest(mode=mode, changes=changes):
+                    response = self.check(mode=mode, command="REMEDIATE",
+                                          human_approved=True, **changes)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual((response.json()["state"],
+                                      response.json()["decision"]),
+                                     ("BLOCKED", "HUMAN_APPROVAL"))
+                    self.assertNotIn("ALLOW", response.text)
+
+    def test_synthetic_threshold_boundary_passes_as_simulation_only(self):
+        response = self.check(mode="DEMO", confidence=0.90,
+                              command="REMEDIATE", human_approved=True)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual((response.json()["state"], response.json()["decision"]),
+                         ("PASS", "SIMULATE"))
+
     def test_live_p1_escalates_even_with_missing_evidence(self):
         response = self.check(mode="LIVE", severity="P1", evidence_count=0,
                               command="REMEDIATE", human_approved=True)
