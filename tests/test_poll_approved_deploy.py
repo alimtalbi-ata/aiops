@@ -151,7 +151,7 @@ class PollApprovedDeployTests(unittest.TestCase):
                 self.assertFalse((self.base / "poll.lock").exists())
                 self.assertEqual(self.invocations(), [])
                 self.assertEqual((self.base / "applied.sha").read_text(),
-                                 self.initial + "\\n")
+                                 self.initial + "\n")
 
     def test_approved_https_remote_deploys_from_ephemeral_git_fixture(self):
         self.write_applied(self.initial)
