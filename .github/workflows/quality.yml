@@ -40,7 +40,9 @@ jobs:
       - name: Demo Studio V2 synthetic stage-marker presentation contract
         env:
           PYTHONPATH: app
-        run: python -m unittest discover -s tests -p "test_demo_v2.py" -v
+        run: |
+          python -m unittest discover -s tests -p "test_demo_v2.py" -v
+          python -m unittest discover -s tests -p "test_portal_preview_readonly.py" -v
       - name: AI evaluation harness tests
         run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
       - name: Model evaluation API unit tests
