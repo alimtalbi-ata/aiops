@@ -92,6 +92,18 @@ class AcmeProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported_outcome"):
             project_remediation(p, d, c, b, outcome="LIVE_EXECUTE", now=NOW)
 
+    def test_read_only_recipe_cannot_claim_recovery(self):
+        p, d, c, b = fixture()
+        p["recipe_id"] = "linux-service-inspect"
+        p["parameters"] = {"service": "erp"}
+        _, digest = validate_proposal(p)
+        d["proposal_digest"] = digest
+        c.pop("maintenance_window")
+        result = project_remediation(p, d, c, b, now=NOW)
+        self.assertEqual(result["status"], "SIMULATED_NO_RECOVERY")
+        self.assertEqual(result["after"], b)
+        self.assertFalse(result["effect_applied"])
+
     def test_idempotent_projection(self):
         p, d, c, b = fixture()
         a = project_remediation(p, d, c, b, now=NOW)
