@@ -379,6 +379,13 @@ class DemoPolicyCoreRealIntegration(unittest.TestCase):
                 core_http.json(), {**policy_http.json(), "run_id": rid},
                 rid, iid,
             )
+        for invalid in ([], True, None):
+            with self.subTest(malformed_policy=repr(invalid)):
+                with self.assertRaises(ProbeError):
+                    compare_unbound_policy_values(
+                        core_http.json(), {**policy_http.json(), "state": invalid},
+                        rid, iid,
+                    )
 
         # No Evidence: Policy UNKNOWN is compatible with an independently
         # persisted UNKNOWN gate, but still NOT a verified HITL approval.
