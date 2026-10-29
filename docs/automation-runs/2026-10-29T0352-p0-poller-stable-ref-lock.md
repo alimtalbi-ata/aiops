@@ -34,3 +34,11 @@
 ## Décision et prochain lot
 - **READY_FOR_STABLE=BLOCKED ; overall=NO_GO.** Bloquant principal : le déployeur #153 n'assure ni transport ni rollback de la chaîne ACME multi-services. La CI UI #169 est rouge et aucune preuve terrain n'existe.
 - Après CI verte de cette PR, l'intégrer exclusivement dans la branche de développement de #153 ; figer un SHA unique par domaine, assembler un déployeur complet, exécuter `quality.yml` sur le SHA assemblé, puis recette read-only terrain avec preuves indépendantes et rollback. Pas de promotion stable ni d'accès Debian.
+
+## Clôture CI et intégration — 2026-10-29 vers 03:58 Europe/Paris
+- PR dédiée [#178](https://github.com/alimtalbi-ata/aiops/pull/178), SHA qualifié `b48bb8b17b3e855c45914be9d93e80a7fb094040` : [quality.yml #40809016417](https://github.com/alimtalbi-ata/aiops/actions/runs/40809016417) **completed/success, 6/6 jobs** ; jobs consultés, dont quality-build-package et runtime-e2e CI (non ACME métier).
+- Logs quality-build-package, job `123234659541` : **10/10 tests poller PASS**, **7/7 installateur PASS**, **4/4 rollback-name PASS**, dont test négatif nouveau `test_poller_rejects_nonstable_refs_before_git_or_deployment` PASS.
+- Autres workflows sur SHA #178 : [Offline Integrity #40809016378](https://github.com/alimtalbi-ata/aiops/actions/runs/40809016378), [Historical Trace #40809016367](https://github.com/alimtalbi-ata/aiops/actions/runs/40809016367), [V2.8 Core #40809016326](https://github.com/alimtalbi-ata/aiops/actions/runs/40809016326) : **completed/success**.
+- PR #178 fusionnée **uniquement dans la branche de développement #153**, merge SHA `486965060ef4a7be5ddfc40e5e1c2638ffc4ce5d`. Pas de fusion `main` ni `deploy/aiops2-stable`.
+- CI sur merge SHA et sur éventuel commit de clôture documentaire : **NOT_VERIFIED à cette écriture** ; vérifier avant toute intégration supplémentaire. CI verte de #178 ne démontre pas la recette Debian ni le transport multi-services.
+- Verdict maintenu : **READY_FOR_STABLE=BLOCKED / NO-GO**, faute de déployeur complet, E2E et attestation terrain.
