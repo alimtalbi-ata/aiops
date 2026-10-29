@@ -81,6 +81,8 @@ jobs:
           retention-days: 7
       - name: Worker simulation Policy contract and safety regression tests
         run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
+      - name: Prometheus Twin scrape credential provisioning contract (unit only)
+        run: python -m unittest discover -s tests -p "test_prometheus_twin_scrape.py" -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
       - name: Static repository audit
@@ -121,7 +123,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql", "003_seed_twin.sql", "005_seed_acme.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness
@@ -147,6 +149,66 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Build real Twin container against ephemeral PostgreSQL
+        run: docker build -f app/twin/Dockerfile -t aiops-twin-impact-ci:local app
+      - name: Start real Twin HTTP container (no production access)
+        run: |
+          docker run -d --rm --name aiops-twin-impact-ci --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e AIOPS_ADMIN_TOKEN=ci-twin-impact-ephemeral-only \
+            -e AIOPS_INTERNAL_TOKEN="$AIOPS_INTERNAL_TOKEN" \
+            -e AIOPS_TWIN_METRICS_TOKEN=ci-twin-metrics-ephemeral-only \
+            aiops-twin-impact-ci:local
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(40):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:811/health", timeout=2) as response:
+                      if response.status == 200:
+                          print("Real Twin HTTP + seeded PostgreSQL ready")
+                          break
+              except Exception:
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("BLOCKED: ephemeral Twin container not ready")
+          PY
+      - name: Real Twin SAN to Payments reverse-dependency security and regression
+        env:
+          AIOPS_TWIN_CI_URL: http://127.0.0.1:811
+          AIOPS_TWIN_CI_TOKEN: ci-twin-impact-ephemeral-only
+        run: python -m unittest discover -s tests -p "test_twin_impact_real_integration.py" -v
+      - name: Real Prometheus scrape of seeded Twin (ephemeral CI only)
+        env:
+          AIOPS_REAL_PROMETHEUS_TWIN_CI: "true"
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          source = Path("config/prometheus/prometheus.yml").read_text()
+          old = "aiops2-twin:811"
+          if source.count(old) != 1:
+              raise SystemExit("BLOCKED: unexpected Twin scrape target configuration")
+          dest = Path(os.environ["RUNNER_TEMP"]) / "ci-twin-prometheus.yml"
+          dest.write_text(source.replace(old, "127.0.0.1:811"))
+          dest.chmod(0o644)
+          PY
+          printf '%s' 'ci-twin-metrics-ephemeral-only' > "$RUNNER_TEMP/ci-twin-metrics-token"
+          chmod 0644 "$RUNNER_TEMP/ci-twin-metrics-token"
+          docker run -d --rm --name aiops-prometheus-twin-ci --network host \
+            -v "$RUNNER_TEMP/ci-twin-prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$RUNNER_TEMP/ci-twin-metrics-token:/run/aiops2/twin-metrics-token:ro" \
+            prom/prometheus:v3.14.0 \
+            --config.file=/etc/prometheus/prometheus.yml \
+            --web.listen-address=127.0.0.1:19090 \
+            --storage.tsdb.path=/tmp/prometheus
+          python -m unittest discover -s tests -p "test_prometheus_twin_real_scrape.py" -v
+      - name: Stop ephemeral Prometheus
+        if: always()
+        run: docker rm -f aiops-prometheus-twin-ci || true
+      - name: Stop ephemeral Twin container
+        if: always()
+        run: docker rm -f aiops-twin-impact-ci || true
       - name: Start actual Policy HTTP service (ephemeral CI only)
         run: |
           PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &

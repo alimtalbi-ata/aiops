@@ -40,6 +40,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_TWIN_METRICS_TOKEN: ${AIOPS_TWIN_METRICS_TOKEN:?AIOPS_TWIN_METRICS_TOKEN_required}
     expose: ["811"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
@@ -181,7 +183,14 @@ services:
     container_name: aiops2-prometheus
     restart: unless-stopped
     ports: ["9090:9090"]
-    volumes: [./config/prometheus:/etc/prometheus:ro, aiops2-prometheus-data:/prometheus]
+    volumes:
+      - ./config/prometheus:/etc/prometheus:ro
+      - aiops2-prometheus-data:/prometheus
+      - type: bind
+        source: ./.local/prometheus/twin-metrics-token
+        target: /run/aiops2/twin-metrics-token
+        read_only: true
+        bind: {create_host_path: false}
     healthcheck: {test: ["CMD","wget","-qO-","http://127.0.0.1:9090/-/ready"], interval: 5s, timeout: 3s, retries: 20}
     networks: [aiops2-observability, aiops2-control]
 
