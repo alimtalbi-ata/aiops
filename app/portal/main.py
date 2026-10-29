@@ -90,8 +90,33 @@ def home():
 
 @app.get("/runs",response_class=HTMLResponse)
 def runs_page():
-    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("overall_confidence","INCONNU"),r.get("scenario_id","UNKNOWN")) for r in _runs()]
-    return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows)))
+    runs=_runs()
+    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("overall_confidence","INCONNU"),r.get("scenario_id","UNKNOWN")) for r in runs if isinstance(r,dict)]
+    # The registry table is escaped by table(); deep links need validated IDs.
+    # Never link LIVE, invalid or ambiguous run identities into a DEMO detail.
+    from urllib.parse import quote
+    eligible={}
+    ambiguous=set()
+    for run in runs:
+        if not isinstance(run,dict) or run.get("mode") not in ("DEMO","REPLAY","STORY"):
+            continue
+        rid=run.get("run_id")
+        if not isinstance(rid,str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+            continue
+        if rid in eligible:
+            ambiguous.add(rid)
+        else:
+            eligible[rid]=run
+    links="".join(
+        '<li><a href="/demo-studio/run/'+quote(rid,safe="")+'">'+esc(rid)+'</a>'
+        ' · <a href="/timeline?run_id='+quote(rid,safe="")+'">Timeline</a>'
+        ' · '+esc(eligible[rid].get("status") or "UNKNOWN")+'</li>'
+        for rid in eligible if rid not in ambiguous
+    )
+    body=panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows))
+    body+=panel("Explorer un run DEMO / REPLAY / STORY — inventaire Core, non attesté",
+        "<ul>"+links+"</ul>" if links else "<p>UNKNOWN — aucun run DEMO non ambigu accessible.</p>")
+    return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",body)
 
 @app.get("/timeline",response_class=HTMLResponse)
 def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):

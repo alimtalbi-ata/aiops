@@ -223,5 +223,35 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn("état incident OPEN", page)
 
 
+    def test_runs_page_deep_links_only_unambiguous_demo_runs(self):
+        from portal import main as portal_main
+        records = [
+            {"run_id": "RUN-OK", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-REPLAY", "mode": "REPLAY", "status": "RESOLVED"},
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "bad/<id>", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-DUP", "mode": "STORY", "status": "BLOCKED"},
+            {"run_id": "RUN-DUP", "mode": "STORY", "status": "RESOLVED"},
+        ]
+        with patch.object(portal_main, "_runs", return_value=records):
+            page = portal_main.runs_page()
+        self.assertIn('href="/demo-studio/run/RUN-OK"', page)
+        self.assertIn('href="/timeline?run_id=RUN-OK"', page)
+        self.assertIn('href="/demo-studio/run/RUN-REPLAY"', page)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
+        self.assertNotIn('href="/demo-studio/run/RUN-DUP"', page)
+        self.assertNotIn('href="/demo-studio/run/bad', page)
+        self.assertNotIn('bad/&lt;id&gt;', page)  # The slash-containing ID stays escaped in the table.
+        self.assertIn("RUN-LIVE", page)  # Inventory remains visible, not a DEMO deep link.
+
+    def test_runs_page_without_qualified_demo_link_is_explicit_unknown(self):
+        from portal import main as portal_main
+        with patch.object(portal_main, "_runs", return_value=[
+                {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"}]):
+            page = portal_main.runs_page()
+        self.assertIn("aucun run DEMO non ambigu accessible", page)
+        self.assertNotIn('href="/demo-studio/run/', page)
+
+
 if __name__ == "__main__":
     unittest.main()
