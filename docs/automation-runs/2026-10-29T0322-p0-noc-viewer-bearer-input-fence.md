@@ -24,3 +24,8 @@
 ## Prochain lot
 - Vérifier les checks de **ce SHA exact**, documenter le résultat et remettre le SHA à Recette #156.
 - Ne pas créer de nouvelles PR NOC ; la Recette 5/5 doit qualifier la couverture du déployeur, l'assemblage et les smoke-tests lecture seule avant toute promotion.
+
+## Premier résultat CI et correction du test HTTP
+- Premier HEAD documentaire `a1022a8844b3fd5f5a79c63111840ddcd9b5a858` : [quality.yml #40806125778](https://github.com/alimtalbi-ata/aiops/actions/runs/40806125778), job `database-migrations` **FAIL** ; logs consultés : 12 des 13 tests HTTP passés, `test_real_portal_malformed_viewer_bearer_is_401` échoue sur le cas `VIEWER + " "` (attendu 401, reçu 503). Le test valide 200 antérieur avait réussi ; le cas échoué intervient après l'insertion d'une décision Policy `ALLOW` dans le Run CI, laquelle fait normalement échouer la projection. Le transport HTTP peut normaliser l'OWS terminal : on ne peut pas qualifier ce cas comme une chaîne de caractères intacte reçue par l'application.
+- Correction `a0e0a09267c95227889a8069721771057fb1973c` : le test HTTP réel conserve Unicode Latin-1 et Bearer surlong, et laisse le contrôle des espaces/contrôles aux tests unitaires qui injectent directement le header reçu par l'application. Aucun changement de comportement métier.
+- Tests unitaires et job `quality-build-package` sur le premier SHA : **SUCCESS** ; autres checks ne qualifient pas le SHA corrigé. **READY_FOR_STABLE=BLOCKED**.
