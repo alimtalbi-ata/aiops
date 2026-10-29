@@ -173,6 +173,11 @@ class DemoLedgerReadTests(unittest.TestCase):
             ("no_link", lambda x: change_policy(x, analysis_id=None, critique_id=None)),
             ("duplicate", lambda x: x["policy_decisions"].append(
                 dict(x["policy_decisions"][0]))),
+            ("live_allow", lambda x: change_policy(x, decision="ALLOW")),
+            ("live_execute", lambda x: change_policy(x, decision="EXECUTE")),
+            ("live_remediate", lambda x: change_policy(x, decision="REMEDIATE")),
+            ("unrecognized", lambda x: change_policy(x, decision="UNKNOWN_ACTION")),
+            ("unrecognized_state", lambda x: change_policy(x, state="APPLIED")),
         ]
         for name, mutate in mutations:
             forged = json.loads(json.dumps(valid))
