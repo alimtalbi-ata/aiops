@@ -195,7 +195,8 @@ def wait_healthy(source: Path) -> None:
     raise Refused("targeted_services_unhealthy")
 
 
-def apply(delivery: Path, source: Path, state: Path, sha: str, stable_sha: str) -> dict:
+def verify_release_state(state: Path, stable_sha: str) -> None:
+    """Read-only gate shared by host inspection and explicitly approved apply."""
     if (not state.is_dir() or state.is_symlink()
             or not (state / "applied.sha").is_file()
             or (state / "applied.sha").is_symlink()):
@@ -206,6 +207,10 @@ def apply(delivery: Path, source: Path, state: Path, sha: str, stable_sha: str) 
             or (state / "applied.sha").stat().st_size != 41
             or (state / "applied.sha").read_text(encoding="ascii") != stable_sha + "\n"):
         raise Refused("applied_sha_not_matching_approved_stable")
+
+
+def apply(delivery: Path, source: Path, state: Path, sha: str, stable_sha: str) -> dict:
+    verify_release_state(state, stable_sha)
     # Never alter local source files, non-owned containers or persistent volumes.
     originals = preflight_host(source)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -269,7 +274,10 @@ def main(argv=None) -> int:
     p.add_argument("--candidate-sha", required=True)
     p.add_argument("--source-dir", type=Path)
     p.add_argument("--state-dir", type=Path, default=Path("/home/aiops/aiops2-auto-deploy"))
-    p.add_argument("--apply", action="store_true")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--apply", action="store_true")
+    mode.add_argument("--inspect-host", action="store_true",
+                      help="read-only Docker/Compose ownership and release-state qualification")
     p.add_argument("--operator-approved", action="store_true")
     a = p.parse_args(argv)
     try:
@@ -277,7 +285,24 @@ def main(argv=None) -> int:
         result = plan(delivery, a.stable_sha, a.candidate_sha)
         if result["assessment"] == "BLOCKED":
             raise Refused("unsupported_candidate_paths")
-        if a.apply:
+        if a.inspect_host:
+            if a.source_dir is None or a.source_dir.is_symlink() or a.state_dir.is_symlink():
+                raise Refused("explicit_nonsymlinked_source_and_state_required")
+            state = a.state_dir.resolve(strict=True)
+            source = a.source_dir.resolve(strict=True)
+            verify_release_state(state, a.stable_sha)
+            # docker info, compose config and inspect only: no build, up or writes.
+            owned = preflight_host(source)
+            result = {
+                "schema": SCHEMA, "assessment": "HOST_PREFLIGHT_PASS_UNATTESTED",
+                "overall": "NO_GO", "candidate_sha": a.candidate_sha,
+                "stable_sha": a.stable_sha, "owned_services": sorted(owned),
+                "release_state": "MATCH_UNATTESTED",
+                "docker_compose_ownership": "PASS_LOCAL_ONLY",
+                "poller_migration": "NOT_TESTED", "rollback": "NOT_TESTED",
+                "applied_sha": "NOT_ATTESTED", "e2e": "NOT_TESTED",
+            }
+        elif a.apply:
             if (not a.operator_approved or os.environ.get("AIOPS_RELEASE_APPLY") != "YES"
                     or a.source_dir is None):
                 raise Refused("explicit_operator_approval_required")
