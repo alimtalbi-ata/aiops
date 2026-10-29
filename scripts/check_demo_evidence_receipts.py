@@ -47,8 +47,8 @@ def unique_ids(value: object, *, allow_empty: bool = False) -> set[str]:
     return set(result)
 
 
-def records(value: object) -> list[dict]:
-    require(isinstance(value, list) and 0 < len(value) <= 50
+def records(value: object, *, maximum: int = 50) -> list[dict]:
+    require(isinstance(value, list) and 0 < len(value) <= maximum
             and all(isinstance(item, dict) for item in value), "invalid_records")
     return value
 
@@ -120,7 +120,7 @@ def qualify(run_id: str, ledger: dict, refs: dict) -> dict:
             and refs["runtime_attested"] is False
             and refs["event_link_verified"] is True,
             "unqualified_core_references")
-    reference_items = records(refs["items"])
+    reference_items = records(refs["items"], maximum=80)
     reference_map = {}
     for item in reference_items:
         require(set(item) == {"evidence_id", "source", "payload_sha256", "known_at"},
