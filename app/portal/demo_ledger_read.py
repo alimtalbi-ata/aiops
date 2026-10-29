@@ -224,6 +224,8 @@ def read_demo_ledger(rid: str, authorization: str | None = Header(default=None))
         return _response({"status": "UNKNOWN", "reason": "viewer_auth_not_configured"}, 503)
     scheme, separator, supplied = (authorization or "").partition(" ")
     if (scheme.lower() != "bearer" or not separator or not supplied
+            or len(supplied) > 256 or not supplied.isascii()
+            or any(ch.isspace() for ch in supplied)
             or not hmac.compare_digest(supplied, viewer)):
         return _response({"status": "UNKNOWN", "reason": "unauthorized"}, 401)
     if not isinstance(rid, str) or _ID.fullmatch(rid) is None:
