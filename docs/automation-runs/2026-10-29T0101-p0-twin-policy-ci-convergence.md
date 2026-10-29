@@ -14,7 +14,7 @@
 
 ## Validation, risques, handoff
 - Avant ce commit, quality.yml Twin #170 sur `8f22570260ea70be1c3ffda52d00cbfe453ec2f7` : [40785148946](https://github.com/alimtalbi-ata/aiops/actions/runs/40785148946) SUCCESS (3 jobs, 10 tests Twin réels) ; qualité Policy sur main : [journal 00:33](https://github.com/alimtalbi-ata/aiops/blob/64b9f9aa7abae4b35bda2bf881defbe062268bce/docs/automation-runs/2026-10-29T0033-p0-policy-real-http-ci.md) rapporte 8 tests HTTP réels. **Ces preuves ne sont pas transférables au SHA combiné**.
-- CI du SHA combiné : PENDING au moment de rédaction ; consulter les checks de PR #170 et les commentaires de handoff pour l'URL et la conclusion **réellement vérifiées**.
+- **CI vérifiée sur SHA code/merge `f61d2930bddc185ad0430ffb4d6b658e431eb61f` : [quality.yml run 40791538138](https://github.com/alimtalbi-ata/aiops/actions/runs/40791538138), `completed/success`, 3/3 jobs SUCCESS. Logs Core consultés : 5/5 NOC, 13/13 Core Policy, 10/10 Twin HTTP/PostgreSQL 16 Docker, 8/8 Policy HTTP SIMULATE/refus LIVE. Grafana et policy-and-static SUCCESS.** Cette validation porte sur ce SHA exact ; le commit documentaire ultérieur doit avoir ses propres checks vérifiés avant promotion.
 - Tests locaux, Debian SRV-DEB-05, applied.sha, ACL tenant A/B, E2E Core→IA→Policy SIMULATE→Evidence→Studio, rollback et couverture du déployeur Twin : **NOT_TESTED**.
 - **READY_FOR_STABLE=BLOCKED / NO-GO** ; aucun accès Debian, aucun déploiement, aucune fusion, aucune mutation LIVE.
 - Prochaine action : vérifier la CI du SHA combiné, transmettre SHA et checks à #156 ; seul 5/5 peut décider de l'assemblage/recette/rollback et d'une éventuelle PR de promotion.
