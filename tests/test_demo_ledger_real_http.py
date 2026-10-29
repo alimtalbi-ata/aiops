@@ -507,5 +507,93 @@ class RealLedgerHttpQualification(unittest.TestCase):
             self.assertNotIn(private, denied.text)
 
 
+    def test_real_simulate_requires_linked_validated_critique(self):
+        # Immutable CI records in real PostgreSQL, with real Core and Portal
+        # HTTP. A valid Analysis/Evidence link alone cannot qualify PASS.
+        # The second case has a validated Critique in the Run but deliberately
+        # omits the Policy -> Critique link; no implicit binding is permitted.
+        for suffix, validated, policy_critique in (
+                ("REJECTED", False, True), ("UNLINKED", True, False)):
+            with self.subTest(case=suffix):
+                rid = "RUN-CI-SIM-CRIT-" + suffix
+                evid = "EVD-CI-SIM-CRIT-" + suffix
+                aid = "ANL-CI-SIM-CRIT-" + suffix
+                cid = "CRT-CI-SIM-CRIT-" + suffix
+                pid = "POL-CI-SIM-CRIT-" + suffix
+                ids = [evid]
+                digest = hashlib.sha256(json.dumps(
+                    ids, separators=(",", ":")).encode()).hexdigest()
+                with psycopg.connect(DSN) as conn:
+                    conn.execute(
+                        "insert into aiops.runs(run_id,mode,scenario_id,status,"
+                        "idempotency_key) values(%s,'DEMO','CI-LEDGER-ISOLATED',"
+                        "'CREATED',%s)", (rid, "ci-sim-critic-" + suffix),
+                    )
+                    conn.execute(
+                        "insert into aiops.evidence(evidence_id,source,claim,"
+                        "confidence,provenance,payload_hash,payload) values("
+                        "%s,'CI_SYNTHETIC_SAN','Synthetic only',0.5,%s,%s,"
+                        "'{}'::jsonb)",
+                        (evid, Jsonb({"synthetic": True, "observed": False,
+                                      "run_id": rid}),
+                         hashlib.sha256(rid.encode()).hexdigest()),
+                    )
+                    conn.execute(
+                        "insert into aiops.run_events(event_id,run_id,sequence,"
+                        "stage,event_type,status,evidence_ids,payload) values("
+                        "%s,%s,1,'OBSERVE','CI_SYNTHETIC','PASS',%s,"
+                        "'{}'::jsonb)",
+                        ("EVT-CI-SIM-CRIT-" + suffix, rid, Jsonb(ids)),
+                    )
+                    conn.execute(
+                        "insert into aiops.analysis_records(analysis_id,run_id,"
+                        "idempotency_key,revision,contract_version,provider,"
+                        "model,prompt_version,evidence_ids,evidence_set_hash,"
+                        "output,confidence,status) values("
+                        "%s,%s,%s,1,'2.0','CI_ONLY','CI_NOT_LLM','ci',%s,"
+                        "%s,'{}'::jsonb,0.5,'VALID')",
+                        (aid, rid, "ci-sim-critic-analysis-" + suffix,
+                         Jsonb(ids), digest),
+                    )
+                    conn.execute(
+                        "insert into aiops.critique_records(critique_id,"
+                        "idempotency_key,analysis_id,run_id,contract_version,"
+                        "provider,model,validated,issues,evidence_ids,output,"
+                        "diagnostic_confidence) values("
+                        "%s,%s,%s,%s,'2.0','CI_ONLY','CI_NOT_LLM',%s,"
+                        "'[]'::jsonb,%s,%s,0.4)",
+                        (cid, "ci-sim-critic-critique-" + suffix, aid, rid,
+                         validated, Jsonb(ids), Jsonb({"claim_checks": []})),
+                    )
+                    conn.execute(
+                        "insert into aiops.policy_decisions(policy_decision_id,"
+                        "run_id,analysis_id,critique_id,policy_version,"
+                        "input_hash,decision,state) values("
+                        "%s,%s,%s,%s,'2.1.0',%s,'SIMULATE','PASS')",
+                        (pid, rid, aid, cid if policy_critique else None,
+                         hashlib.sha256(pid.encode()).hexdigest()),
+                    )
+                auth = {"Authorization": "Bearer " + INTERNAL}
+                core = requests.get(
+                    CORE + "/api/runs/" + rid + "/ai-ledger",
+                    headers=auth, timeout=5, allow_redirects=False)
+                self.assertEqual(core.status_code, 200, core.text)
+                self.assertEqual(core.json()["policy_decisions"][0]["decision"],
+                                 "SIMULATE")
+                self.assertEqual(core.json()["policy_decisions"][0]["state"],
+                                 "PASS")
+                refs = requests.get(
+                    CORE + "/api/noc/runs/" + rid + "/evidence-refs",
+                    headers=auth, timeout=5, allow_redirects=False)
+                self.assertEqual(refs.status_code, 200, refs.text)
+                denied = self.read(PORTAL, rid=rid)
+                self.assertEqual(denied.status_code, 503, denied.text)
+                self.assertEqual(denied.json(), {
+                    "status": "UNKNOWN", "reason": "ledger_unavailable"})
+                self.assertEqual(denied.headers["cache-control"], "no-store")
+                for private in (rid, evid, aid, cid, pid, INTERNAL, VIEWER):
+                    self.assertNotIn(private, denied.text)
+
+
 if __name__ == "__main__":
     unittest.main()
