@@ -137,6 +137,7 @@ def _project(rid, detail, ledger, refs):
     critiques = []
     critique_ids = set()
     critique_analysis = {}
+    validated_critiques = set()
     for item in _records(ledger.get("critiques")):
         output = item.get("output")
         if not isinstance(output, dict) or not isinstance(item.get("validated"), bool):
@@ -147,6 +148,8 @@ def _project(rid, detail, ledger, refs):
             raise ValueError("unlinked critique")
         critique_ids.add(critique_id)
         critique_analysis[critique_id] = analysis_id
+        if item["validated"]:
+            validated_critiques.add(critique_id)
         evidence_ids = _evidence_ids(item.get("evidence_ids"))
         # A Critique may cite only Evidence from its own linked Analysis.
         # The Core resolver validates the Run-wide union, not this per-Analysis edge.
@@ -202,6 +205,11 @@ def _project(rid, detail, ledger, refs):
         if (decision not in _ALLOWED_SYNTHETIC_POLICY_DECISIONS
                 or state not in _ALLOWED_SYNTHETIC_POLICY_STATES):
             raise ValueError("unqualified synthetic policy disposition")
+        # A recorded SIMULATE/PASS is not a qualified AI conclusion unless
+        # its own linked Critique was independently validated. A policy row
+        # alone must never turn a rejected diagnostic into a demo success.
+        if decision == "SIMULATE" and state == "PASS" and policy_critique not in validated_critiques:
+            raise ValueError("synthetic simulation without validated critique")
         decisions.append({"policy_decision_id": policy_id,
                           "decision": decision, "state": state})
     return {"schema": "aiops.demo-ledger-read.v1", "run_id": rid,
