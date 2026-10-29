@@ -686,5 +686,62 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("MATCHED-LEDGER-DEMO", page)
         self.assertEqual(poll["ledger"]["analysis"], "MATCHED-LEDGER-DEMO")
 
+
+    def test_demo_inventory_error_envelopes_never_authorize_detail_or_poll(self):
+        from fastapi import HTTPException
+        forged = {"run_id": "FORGED-DEMO", "mode": "DEMO", "status": "RESOLVED"}
+        for inventory in (
+            {"status": "UNKNOWN", "error_type": "HTTPError", "http_status": 401,
+             "items": [forged]},
+            {"status": "ERROR", "items": [forged]},
+            {"status": "UNKNOWN", "items": [forged]},
+            {"status": "UNVERIFIED", "items": [forged]},
+            {"items": [forged, "not-a-run"]},
+            {"items": {"run_id": "FORGED-DEMO", "mode": "DEMO"}},
+        ):
+            with self.subTest(inventory=inventory):
+                calls = []
+                def get(base, path):
+                    calls.append(path)
+                    if path == "/api/runs":
+                        return inventory
+                    if path == "/api/dashboard":
+                        return {"status": "ok"}
+                    if path == "/api/twin/graph":
+                        return {"nodes": [], "edges": []}
+                    if path.startswith("/api/twin/impact/"):
+                        return {"root": "ACME-SAN-FABRIC-A",
+                                "affected": [{"node_id": "ACME-SAN-FABRIC-A"}]}
+                    raise AssertionError("unverified inventory must not authorize " + path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_studio()
+                        for action in (self.portal.demo_run_detail, self.portal.demo_status):
+                            with self.assertRaises(HTTPException) as ctx:
+                                action("FORGED-DEMO")
+                            self.assertEqual(ctx.exception.status_code, 404)
+                self.assertIn("INCONNU — inventaire Core indisponible", page)
+                self.assertNotIn("FORGED-DEMO", page)
+                self.assertEqual(calls.count("/api/runs"), 3)
+                self.assertFalse(any("/api/runs/FORGED-DEMO" in path for path in calls))
+
+    def test_demo_verified_empty_inventory_is_not_a_transport_error(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": []}
+            if path == "/api/dashboard":
+                return {"status": "ok"}
+            if path == "/api/twin/graph":
+                return {"nodes": [], "edges": []}
+            if path.startswith("/api/twin/impact/"):
+                return {"root": "ACME-SAN-FABRIC-A",
+                        "affected": [{"node_id": "ACME-SAN-FABRIC-A"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            page = self.portal.demo_studio()
+        self.assertIn("Scénarios DEMO/REPLAY/STORY visibles", page)
+        self.assertNotIn("INCONNU — inventaire Core indisponible", page)
+
 if __name__=="__main__":
     unittest.main()
