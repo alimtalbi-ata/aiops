@@ -122,5 +122,31 @@ class LinkTests(unittest.TestCase):
         self.assertFalse(out['live_remediation_authorized'])
         self.assertFalse(out['effect_applied'])
 
+
+    def test_unqualified_scope_in_core_and_ledger_is_unknown(self):
+        for key in ("tenant_id", "workspace_id", "org_id"):
+            with self.subTest(scope=key):
+                scoped_core = {'run': {**RUN['run'], key: 'T'}}
+                self.assertEqual(project_itsm_evidence(scoped_core, LEDGER)['state'], 'UNKNOWN')
+                nested = [{**LEDGER['evidence_refs'][0], 'metadata': {key: 'T'}}]
+                self.assertEqual(project_itsm_evidence(
+                    RUN, {**LEDGER, 'evidence_refs': nested})['state'], 'UNKNOWN')
+                analyses = [{**LEDGER['analyses'][0], 'metadata': {key: 'T'}}]
+                self.assertEqual(project_itsm_evidence(
+                    RUN, {**LEDGER, 'analyses': analyses})['state'], 'UNKNOWN')
+
+    def test_unqualified_scope_in_extra_metadata_is_unknown(self):
+        core = {**RUN, 'metadata': {'tenant_id': None}}
+        ledger = {**LEDGER, 'metadata': {'workspace_id': 'T'}}
+        self.assertEqual(project_itsm_evidence(core, LEDGER)['state'], 'UNKNOWN')
+        self.assertEqual(project_itsm_evidence(RUN, ledger)['state'], 'UNKNOWN')
+
+    def test_unqualified_signed_noc_scope_cannot_be_correlated(self):
+        noc = {**NOC, 'metadata': {'organization_id': 'T'}}
+        out = project_itsm_evidence(RUN, LEDGER, noc)
+        self.assertEqual(out['state'], 'UNKNOWN')
+        self.assertIsNone(out['ticket_id'])
+        self.assertIsNone(out['glpi_ticket_claim'])
+
 if __name__ == '__main__':
     unittest.main()

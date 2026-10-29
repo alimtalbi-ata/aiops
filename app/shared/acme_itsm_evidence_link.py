@@ -5,6 +5,7 @@ Call only with snapshots fetched by existing authorized server-side readers.
 Never expose a Core credential or promote a signed NOC ticket claim to a GLPI ticket.
 """
 import re
+from shared.tenant_scope import reject_unqualified_tenant_scope
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
@@ -63,6 +64,16 @@ def project_itsm_evidence(core_detail, ledger, signed_noc=None):
                 or not isinstance(critiques, list) or not 1 <= len(critiques) <= 50
                 or not isinstance(policies, list) or len(policies) > 50):
             return result
+        # A pure join cannot authorize tenant-scoped snapshots. The Portal
+        # envelope explicitly includes a false top-level qualification flag;
+        # scan everything else, including nested claims and the NOC source.
+        reject_unqualified_tenant_scope(core_detail)
+        reject_unqualified_tenant_scope({
+            key: value for key, value in ledger.items()
+            if key != "tenant_acl_qualified"
+        })
+        if signed_noc is not None:
+            reject_unqualified_tenant_scope(signed_noc)
         evidence = {}
         for item in refs:
             if (not isinstance(item, dict) or not _id(item.get("evidence_id"))
