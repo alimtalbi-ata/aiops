@@ -23,7 +23,7 @@
 - Commits du lot : `52e62f78cd712ce5299ab4373f05365b275b1ce6` (auth Twin), `046caf022fb20ace138cbbf48299e973a44058c7` (Compose), `ad8959a0a9b59dac07cec345365d3889def2b571` (CI), `a363d90b6e8aba26ad8e57b04253025242a3b73b` (test), `0281c0d2fdee974bddd4d442245953f76973c2a8` (contrat).
 - Branche/PR : `feat/p0-acme-twin-main-candidate-20261029-0004`, PR #170 draft ; le SHA final inclura ce journal.
 - Tests locaux ciblés : **NOT_TESTED** (environnement GitHub privé non monté et aucune infrastructure Docker/PostgreSQL disponible dans ce créneau).
-- Nouvelle CI `quality.yml` sur SHA final : **PENDING / NOT_TESTED** tant que GitHub Actions n'a pas publié un résultat vérifié. Les succès précédents de #170 ne valent pas pour ce lot.
+- CI `quality.yml` vérifiée sur le commit de code et journal initial : voir l'addendum ci-dessous. Le SHA final de cet addendum exige sa propre CI.
 - Test Portal navigateur réel avec jetons distincts : **NOT_TESTED**. Le test nouveau vérifie le service Twin réel et son isolation lecture/écriture, pas un E2E Portal.
 - Debian SRV-DEB-05, `applied.sha`, smoke-tests et rollback : **NOT_TESTED**.
 
@@ -32,3 +32,17 @@
 - Le déployeur stable actuel ne transporte que Demo Studio V2 et ne couvre pas Twin/Core/Copilot/Policy ; compatibilité release non qualifiée.
 - ACL tenant A/B, liaison Core→IA→Policy SIMULATE→Evidence→Studio, rollback et preuves terrain restent **NOT_TESTED**.
 - **READY_FOR_STABLE=BLOCKED ; overall=NO_GO**. Remettre au seul schedule 5/5 Recette #156 pour assemblage, vérifications et décision. Aucun push vers `deploy/aiops2-stable`, aucune fusion, aucun accès Debian ni remédiation LIVE.
+
+## CI observée sur le commit contenant le journal initial
+- SHA `7ca10baee2b88fb63a531f69f0211b96a2c8327a` ;
+  [quality.yml #40821201951](https://github.com/alimtalbi-ata/aiops/actions/runs/40821201951)
+  **completed/success**, trois jobs **SUCCESS** (Core/PostgreSQL/Twin,
+  policy-and-static, Grafana), vérifiés via l'API GitHub.
+- Log du job Core/Twin lu : **13/13 tests Twin** sur HTTP réel Docker +
+  PostgreSQL 16 éphémères, y compris
+  `test_distinct_internal_identity_reads_but_cannot_write_synthetic_events`
+  **ok** ; 14/14 Core/Policy, 8/8 Policy HTTP et 5/5 NOC **OK**.
+- Ces succès ne valent **pas** attestation Portal navigateur, Prometheus,
+  Debian, rollback ou E2E métier.
+- Le présent addendum documentaire produit un nouveau HEAD ; la CI de ce
+  dernier SHA doit être vérifiée séparément avant toute revue.
