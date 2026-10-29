@@ -116,3 +116,23 @@ release block, **not** evidence that the offline receipt is validated.
 Recette 5/5 must validate the join per Policy row, then rerun its CI and
 post-deploy read-only recipe on one integrated SHA. No schema-version bump,
 new workflow, or claim of E2E/tenant ACL/Payments runtime evidence.
+
+## SIMULATE/PASS requires a VALID Analysis — 2026-10-29 10:24 CET
+
+The viewer-authenticated `aiops.demo-ledger-read.v1` projection now refuses
+`SIMULATE/PASS` unless its explicitly linked validated Critique belongs to
+an Analysis with Core-recorded `status=VALID`. A Critique validated against
+an `INVALID`, `UNAVAILABLE` or `SUPERSEDED` Analysis is insufficient to
+present a successful synthetic simulation. This is a **read-only presentation
+fence**: other historical dispositions, including `BLOCK/BLOCKED`, remain
+readable with those Analysis statuses. Failure returns HTTP 503 `UNKNOWN`,
+`no-store`, without reflecting identifiers or credentials. No JSON fields,
+upstream endpoint, token handling, CI workflow or production state change.
+
+The Core ledger schema explicitly allows the four Analysis statuses; the
+Portal already exposes the status but previously ignored it when qualifying
+`SIMULATE/PASS`. Unit tests cover all three non-VALID statuses and historical
+BLOCK compatibility. Existing HTTP Core/Portal/PostgreSQL integration tests
+cover the endpoint, auth and missing sources, **not this specific persisted
+non-VALID Analysis scenario**. No claim of real Policy execution, observed
+SAN→Payments impact, tenant RBAC, Debian or `applied.sha`.
