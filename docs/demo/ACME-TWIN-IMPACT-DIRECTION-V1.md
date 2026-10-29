@@ -81,3 +81,21 @@ edge `ACME-E09` is excluded when SAN-A is the root; redundancy remains
 unqualified. Consumers may render this topology path only with a
 `SIMULATED / TOPOLOGY_ONLY` label and must not treat it as an observed
 Payments incident or an authenticated tenant-scoped result.
+
+## P0 internal read-auth fence — candidate 2026-10-29
+
+Existing AIOPS_ADMIN_TOKEN Bearer auth for /api/twin/impact/{node_id} now
+also protects /api/twin/summary, /api/twin/nodes, /api/twin/graph,
+/api/twin/at and /metrics. /health remains public for liveness.
+Missing or invalid auth returns HTTP 401 with WWW-Authenticate: Bearer and
+Cache-Control: no-store, before any DB access. No new token or CI workflow.
+Real ephemeral Twin/PostgreSQL CI tests exercise anonymous, invalid and
+valid service-token reads for each route.
+
+**Compatibility break:** Portal bootstrap and Prometheus previously relied
+on unauthenticated Twin reads; those calls may now return 401/UNKNOWN.
+Do not expose the internal token in browser JS or forward a tenant token
+as an admin credential. Review server-side integration before deployment.
+Internal service auth is NOT tenant RBAC; tenant_acl_qualified=false.
+READY_FOR_STABLE=BLOCKED until compatibility, isolation, deploy coverage,
+rollback, applied.sha and Debian smoke tests are qualified.

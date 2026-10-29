@@ -5,19 +5,31 @@ from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 @app.get('/health')
 def health(): return {'status':'ok','component':'twin','authority':'canonical-topology'}
+def require_twin_read_auth(authorization: str | None) -> None:
+    """Internal service auth only, not tenant RBAC."""
+    if (not authorization or not authorization.startswith('Bearer ')
+            or not compare_digest(authorization[7:], SIM_TOKEN)):
+        raise HTTPException(
+            401, 'unauthorized',
+            headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'},
+        )
+
 @app.get('/api/twin/summary')
-def summary():
+def summary(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:
         n=c.execute('select count(*) from aiops.twin_nodes').fetchone()[0]; e=c.execute('select count(*) from aiops.twin_edges').fetchone()[0]
         by=c.execute('select type,count(*) from aiops.twin_nodes group by type order by type').fetchall()
         states=c.execute('select state,count(*) from aiops.twin_nodes group by state').fetchall()
     return {'nodes':n,'edges':e,'nodes_by_type':dict(by),'states':dict(states)}
 @app.get('/api/twin/nodes')
-def nodes():
+def nodes(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:r=c.execute('select node_id,type,name,site,state,criticality,health,confidence from aiops.twin_nodes order by type,name').fetchall()
     k=['node_id','type','name','site','state','criticality','health','confidence']; return {'items':[dict(zip(k,x)) for x in r]}
 @app.get('/api/twin/graph')
-def graph():
+def graph(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:
         ns=c.execute('select node_id,type,name,site,state,criticality,health,confidence from aiops.twin_nodes').fetchall(); es=c.execute('select edge_id,source_id,target_id,relation_type,redundancy,confidence from aiops.twin_edges').fetchall()
     nk=['node_id','type','name','site','state','criticality','health','confidence']; ek=['edge_id','source_id','target_id','relation_type','redundancy','confidence']; return {'nodes':[dict(zip(nk,x)) for x in ns],'edges':[dict(zip(ek,x)) for x in es]}
@@ -28,12 +40,7 @@ def impact(node_id: str, authorization: str | None = Header(default=None)):
     Stored edges are consumer(source_id) -> dependency(target_id).
     This is a bounded topology hypothesis, never an observed service outage.
     """
-    if (not authorization or not authorization.startswith('Bearer ')
-            or not compare_digest(authorization[7:], SIM_TOKEN)):
-        raise HTTPException(
-            401, 'unauthorized',
-            headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'},
-        )
+    require_twin_read_auth(authorization)
     with db() as c:
         # Both topology reads must see one stable read-only snapshot.
         c.execute('set transaction isolation level repeatable read read only')
@@ -106,7 +113,8 @@ def impact(node_id: str, authorization: str | None = Header(default=None)):
     )
 
 @app.get('/api/twin/at')
-def at(known_at:str):
+def at(known_at:str, authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
     k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']; return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r]}
 import os
@@ -128,7 +136,8 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
     return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True}
 
 @app.get('/metrics')
-def metrics():
+def metrics(authorization: str | None = Header(default=None)):
+    require_twin_read_auth(authorization)
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
     return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'

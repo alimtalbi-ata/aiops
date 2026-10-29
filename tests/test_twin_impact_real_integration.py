@@ -122,6 +122,30 @@ class TwinImpactRealIntegration(unittest.TestCase):
         )
         self.assertEqual(r.json()["shortest_path_edges"], [])
 
+    def test_all_twin_read_surfaces_reject_anonymous_and_wrong_token(self):
+        # Real Twin HTTP + PostgreSQL 16: no unauthenticated topology or metrics.
+        paths = (
+            '/api/twin/summary', '/api/twin/nodes', '/api/twin/graph',
+            '/api/twin/at?known_at=2026-10-28T00:00:00Z', '/metrics',
+        )
+        for path in paths:
+            for token in (None, 'invalid', TOKEN + '-extra'):
+                with self.subTest(path=path, token=token):
+                    headers = {} if token is None else {'Authorization': 'Bearer ' + token}
+                    response = requests.get(BASE + path, headers=headers, timeout=5,
+                                            allow_redirects=False)
+                    self.assertEqual(response.status_code, 401, response.text)
+                    self.assertEqual(response.headers.get('cache-control'), 'no-store')
+                    self.assertEqual(response.headers.get('www-authenticate'), 'Bearer')
+                    self.assertNotIn('ACME-SAN-FABRIC-A', response.text)
+                    self.assertNotIn('aiops_twin_nodes', response.text)
+            with self.subTest(path=path, token='valid'):
+                response = requests.get(BASE + path,
+                                        headers={'Authorization': 'Bearer ' + TOKEN},
+                                        timeout=5, allow_redirects=False)
+                self.assertEqual(response.status_code, 200, response.text[:200])
+        self.assertEqual(requests.get(BASE + '/health', timeout=5).status_code, 200)
+
     def test_unknown_node_and_missing_auth_fail_closed(self):
         for token in (None, "", "incorrect", TOKEN + "-extra"):
             with self.subTest(token=token):
