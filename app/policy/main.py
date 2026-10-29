@@ -43,6 +43,27 @@ def evaluate(x: Decision) -> dict:
         }
 
     if x.mode in ("DEMO", "REPLAY", "STORY"):
+        # Synthetic mode bypasses effect-only fences, not evidence/critic safety.
+        # These are caller assertions, NOT authenticated critic or Evidence proof.
+        # Never label an invalid synthetic assessment PASS/SIMULATE.
+        if not x.critic_validated:
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "synthetic critic validation is missing or failed",
+            }
+        if not x.redundancy_ok:
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "synthetic redundancy/safety checks failed",
+            }
+        if x.confidence < 0.90:
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "synthetic confidence threshold not met",
+            }
         return {
             "state": "PASS",
             "decision": "SIMULATE",
