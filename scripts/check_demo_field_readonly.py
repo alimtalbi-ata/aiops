@@ -120,8 +120,21 @@ def qualify(endpoints: dict[str, str], applied_sha_status: str = "NOT_TESTED") -
     code, ctype, body = read_http(opener, bases["portal"], "/demo-studio", "text/html")
     checks["portal_demo_studio_readable"] = (
         "PASS" if code == 200 and len(body) <= LIMIT
-        and "text/html" in ctype.lower() and b"ACME Demo Studio" in body else "BLOCKED"
+        and "text/html" in ctype.lower() and b"ACME Demo Studio" in body
+        and b'href="/runs"' in body and b'href="/timeline"' in body else "BLOCKED"
     )
+
+    # Verify the existing Core run registry and timeline are actually reachable
+    # through the portal. HTML navigation is not proof of a correlated run.
+    for path, marker, key in (
+        ("/runs", b"Incidents &amp; Runs", "portal_runs_readable"),
+        ("/timeline", b"Timeline des incidents", "portal_timeline_readable"),
+    ):
+        code, ctype, body = read_http(opener, bases["portal"], path, "text/html")
+        checks[key] = (
+            "PASS" if code == 200 and len(body) <= LIMIT
+            and "text/html" in ctype.lower() and marker in body else "BLOCKED"
+        )
 
     # Validate the actual six-step business route, not just the landing page.
     # Static labels prove navigability only, NEVER runtime SAN/Payments/E2E.

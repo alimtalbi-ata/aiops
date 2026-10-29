@@ -1,0 +1,8 @@
+# 2026-10-29 20:43 CET — P0 smoke read-only de navigation Core dans le portail
+
+- Owner 5/5, branche candidate unique `release/p0-acme-integrated-candidate-20261029-1100`, PR #185 ; parent `72f35cf62654751be1ca7370790c579a841f94a3`. Aucun changement de stable ni de conteneur.
+- Lacune vérifiée : le préflight `scripts/check_demo_field_readonly.py` contrôlait `/demo-studio` et `/demo-studio/business-story`, mais ne vérifiait ni les liens du Studio vers `/runs` et `/timeline`, ni la disponibilité des deux écrans du parcours Core.
+- Adaptation REUSE-FIRST : même préflight GET loopback, sans auth ajoutée, sans endpoint ni workflow nouveau ; exige liens HTML `/runs` et `/timeline`, GET 200 HTML des deux pages, titres attendus ; refus 404, redirect, absence des liens et contenu inadéquat. `overall=NO_GO` demeure même en cas de succès.
+- Tests : extension de `tests/test_demo_field_readonly.py` avec deux cas de contrat (liens manquants ; routes absentes ou redirigées), fixture HTTP locale. À requalifier par `quality.yml` sur SHA final ; Debian, navigateur, identité Core/tenant, E2E SAN→Payments→Policy→Evidence, rollback et `applied.sha` : NOT_TESTED.
+- Packaging : `scripts/check_demo_field_readonly.py` et `tests/test_demo_field_readonly.py` restent opérateur/CI, aucun changement d'image ; les changements applicatifs antérieurs exigent toujours le déployeur quatre images non raccordé au cron portal-only. Stable `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3` au contrôle.
+- Blocage P0 unique : transport Debian multi-images et rollback non qualifiés. Préflight opérateur `deploy/deploy-acme-p0.py --inspect-host` en lecture seule ; aucun `--apply` ni promotion stable sans gates.

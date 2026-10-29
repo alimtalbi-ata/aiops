@@ -28,13 +28,19 @@ class FixtureHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/noc/runs/SMOKE-UNAUTH/evidence-refs":
             status, content_type, payload = server.auth_status, "application/json", b'{}'
         elif self.path == "/demo-studio":
-            status, content_type, payload = 200, "text/html", b"<title>ACME Demo Studio</title>"
+            status, content_type, payload = 200, "text/html", server.landing_body
+        elif self.path == "/runs":
+            status, content_type, payload = 200, "text/html", b"<h1>Incidents &amp; Runs</h1>"
+        elif self.path == "/timeline":
+            status, content_type, payload = 200, "text/html", b"<h1>Timeline des incidents</h1>"
         elif self.path == "/demo-studio/business-story":
             status, content_type, payload = server.story_status, "text/html", server.story_body
         else:
             status, content_type, payload = 404, "text/plain", b"not found"
         if self.path in server.redirect_paths:
             status, payload = 302, b""
+        if self.path in server.missing_paths:
+            status, payload = 404, b""
         if self.path in server.large_paths:
             payload = b"x" * 140000
         self.send_response(status)
@@ -55,6 +61,10 @@ class ReadOnlySmokeTests(unittest.TestCase):
             server.auth_status = 401
             server.bad_health = False
             server.story_status = 200
+            server.landing_body = (
+                b'<title>ACME Demo Studio</title>'
+                b'<a href="/runs">Runs</a><a href="/timeline">Timeline</a>'
+            )
             server.story_body = (
                 b'<section id="acme-step-1">ACME-SAN-FABRIC-A SIMULATED UNKNOWN</section>'
                 b'<section id="acme-step-6">PROJECTED_ONLY</section>'
@@ -62,6 +72,7 @@ class ReadOnlySmokeTests(unittest.TestCase):
                 b'<a href="/evidence">Evidence</a>'
             )
             server.redirect_paths = set()
+            server.missing_paths = set()
             server.large_paths = set()
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -87,6 +98,26 @@ class ReadOnlySmokeTests(unittest.TestCase):
         self.assertEqual(receipt["checks"]["portal_acme_business_story_navigable"], "PASS")
         self.assertEqual(receipt["overall"], "NO_GO")
         self.assertEqual(receipt["core_temporal_analyst_critic_policy_evidence"], "NOT_TESTED")
+
+    def test_landing_requires_real_run_and_timeline_links(self):
+        portal = self.servers[3][0]
+        portal.landing_body = b"<title>ACME Demo Studio</title>"
+        self.assertEqual(qualify(self.endpoints)["checks"]["portal_demo_studio_readable"], "BLOCKED")
+
+    def test_run_and_timeline_routes_are_checked(self):
+        portal = self.servers[3][0]
+        receipt = qualify(self.endpoints)
+        self.assertEqual(receipt["checks"]["portal_runs_readable"], "PASS")
+        self.assertEqual(receipt["checks"]["portal_timeline_readable"], "PASS")
+        self.assertEqual(receipt["overall"], "NO_GO")
+        for path, key in (("/runs", "portal_runs_readable"),
+                          ("/timeline", "portal_timeline_readable")):
+            portal.missing_paths.add(path)
+            self.assertEqual(qualify(self.endpoints)["checks"][key], "BLOCKED")
+            portal.missing_paths.clear()
+            portal.redirect_paths.add(path)
+            self.assertEqual(qualify(self.endpoints)["checks"][key], "BLOCKED")
+            portal.redirect_paths.clear()
 
     def test_missing_or_unqualified_business_story_blocks(self):
         portal = self.servers[3][0]
