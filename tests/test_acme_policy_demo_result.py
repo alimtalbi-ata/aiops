@@ -16,9 +16,17 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
         "projection": {
             "mode": "DEMO", "status": status, "recipe_id": "ansible-service-restart",
             "target_ci": "ACME-LNX-01", "proposal_digest": "b" * 64,
+            "idempotency_key": "c" * 64,
             "effect_applied": False, "postchecks": "NOT_RUN", "before": before, "after": after,
             "rollback": {"status": "PROJECTED_ONLY", "effect_applied": False},
-            "gate": {"mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01", "proposal_digest": "b" * 64},
+            "gate": {
+                "mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01",
+                "proposal_digest": "b" * 64, "recipe_id": "ansible-service-restart",
+                "idempotency_key": "c" * 64, "executor": "NO_EFFECT_SIMULATOR",
+                "effect_applied": False, "postchecks": "NOT_RUN", "rollback": "NOT_REQUIRED",
+                "dry_run": True, "preconditions": "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED",
+                "approval_actor": "approver-fixture",
+            },
         },
     }
 
@@ -102,6 +110,45 @@ class PolicyDemoResultTests(unittest.TestCase):
         source["projection"]["gate"]["status"] = "BLOCKED"
         with self.assertRaisesRegex(ValueError, "projection_gate_inconsistent"):
             present_demo_policy_result(source)
+
+    def test_forged_no_effect_gate_rejected(self):
+        for key, value in (
+            ("executor", "LIVE_EXECUTOR"), ("effect_applied", True),
+            ("postchecks", "PASS"), ("rollback", "EXECUTED"),
+        ):
+            with self.subTest(key=key):
+                r = receipt(); r["projection"]["gate"][key] = value
+                with self.assertRaisesRegex(ValueError, "gate_no_effect_contract_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_gate_recipe_and_idempotency_binding_rejected(self):
+        for key, value in (("recipe_id", "glpi-api-ticket-note"), ("idempotency_key", "f" * 64)):
+            with self.subTest(key=key):
+                r = receipt(); r["projection"]["gate"][key] = value
+                with self.assertRaisesRegex(ValueError, "gate_binding_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_fixture_permission_and_dry_run_fail_closed(self):
+        for key, value in (("dry_run", False), ("preconditions", "RUNTIME_VERIFIED"), ("approval_actor", None)):
+            with self.subTest(key=key):
+                r = receipt(); r["projection"]["gate"][key] = value
+                with self.assertRaisesRegex(ValueError, "gate_fixture_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_permissions_audit_and_expiry_never_attested(self):
+        for r in (receipt(), receipt("BLOCKED", "BLOCKED")):
+            result = present_demo_policy_result(r)
+            self.assertFalse(result["permissions"]["rbac_verified"])
+            self.assertFalse(result["permissions"]["tenant_acl_qualified"])
+            self.assertFalse(result["permissions"]["action_allowed"])
+            self.assertFalse(result["permissions"]["separation_of_duties_runtime_verified"])
+            self.assertFalse(result["human"]["approval_valid_now"])
+            self.assertFalse(result["human"]["approval_expiry_verified"])
+            self.assertFalse(result["audit"]["persisted"])
+            self.assertFalse(result["audit"]["runtime_verified"])
+            self.assertIsNone(result["audit"]["observed_at"])
+            self.assertEqual(result["audit"]["receipt_digest"], r["receipt_digest"])
+            self.assertEqual(result["audit"]["proposal_digest"], r["projection"]["proposal_digest"])
 
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)
