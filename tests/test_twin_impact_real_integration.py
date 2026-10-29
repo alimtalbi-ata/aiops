@@ -313,5 +313,51 @@ class TwinImpactRealIntegration(unittest.TestCase):
         self.assertNotIn(TOKEN, process.stdout)
 
 
+    def test_portal_fixture_and_twin_seed_are_not_an_authenticated_join(self):
+        # Two independently synthetic models, NOT one canonical runtime CMDB.
+        # Portal has SAN -> ESX host; Twin seed has VM -> RHEL host but no
+        # SAN -> host edge. A matching business name is not an identity join.
+        from app.portal.acme_fixture_contract import load_fixture, validate_fixture
+
+        fixture = load_fixture("app/portal/acme-fixtures.json")
+        portal = validate_fixture(fixture)
+        self.assertEqual(fixture["provenance"], "SIMULATED_TARGET")
+        self.assertEqual(portal["source_incident_id"], "ACME-DEMO-SAN-001")
+        self.assertEqual(portal["target_incident_id"], "ACME-DEMO-PAY-002")
+        self.assertEqual(portal["impact_path"],
+                         ["SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01"])
+        portal_ids = {item["id"] for item in fixture["ci"]}
+        with psycopg.connect(DATABASE_URL) as c:
+            twin_ids = {
+                row[0] for row in c.execute(
+                    "select node_id from aiops.twin_nodes"
+                ).fetchall()
+            }
+            twin_edges = {
+                (row[0], row[1]) for row in c.execute(
+                    "select source_id,target_id from aiops.twin_edges"
+                ).fetchall()
+            }
+        self.assertTrue(portal_ids.isdisjoint(twin_ids))
+        self.assertIn("SAN-FABRIC-A", portal_ids)
+        self.assertIn("APP-PAY-01", portal_ids)
+        self.assertIn("ACME-SAN-FABRIC-A", twin_ids)
+        self.assertIn("ACME-BIZ-PAYMENTS", twin_ids)
+        self.assertIn(("ACME-STO-PURE01", "ACME-SAN-FABRIC-A"), twin_edges)
+        self.assertIn(("ACME-VM-PAY01", "ACME-SRV-RHEL01"), twin_edges)
+        self.assertNotIn(("ACME-SRV-RHEL01", "ACME-SAN-FABRIC-A"), twin_edges)
+        self.assertNotIn(("ACME-SRV-RHEL01", "ACME-STO-PURE01"), twin_edges)
+        response = self.read("ACME-SAN-FABRIC-A")
+        self.assertEqual(response.status_code, 200)
+        impact = response.json()
+        self.assertEqual(impact["runtime_impact_state"], "UNKNOWN")
+        self.assertIs(impact["tenant_acl_qualified"], False)
+        self.assertNotIn("ACME-SRV-RHEL01",
+                         {item["node_id"] for item in impact["affected"]})
+        # No shared CI ID, no verified alias table, no Policy/Run binding:
+        # neither the Portal host path nor a runtime Payments outage may
+        # be inferred from this Twin HTTP result.
+
+
 if __name__ == "__main__":
     unittest.main()
