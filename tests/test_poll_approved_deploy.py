@@ -243,6 +243,38 @@ class PollApprovedDeployTests(unittest.TestCase):
         self.assertIn("not transported", result.stderr)
         self.assertEqual(self.invocations(), [])
 
+    def test_changed_github_workflow_blocks_before_deployer(self):
+        self.write_applied(self.initial)
+        self.advance("candidate")
+        workflow = self.work / ".github/workflows/quality.yml"
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+        workflow.write_text("name: unreviewed release workflow\n")
+        run("git", "add", ".", cwd=self.work)
+        run("git", "commit", "-m", "untransported CI workflow", cwd=self.work)
+        self.push()
+        result = self.poll()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not transported", result.stderr)
+        self.assertEqual(self.invocations(), [])
+        self.assertEqual((self.base / "applied.sha").read_text().strip(), self.initial)
+        self.assertFalse((self.base / "failed.sha").exists())
+
+    def test_changed_github_configuration_blocks_before_deployer(self):
+        self.write_applied(self.initial)
+        self.advance("candidate")
+        config = self.work / ".github/dependabot.yml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text("version: 2\n")
+        run("git", "add", ".", cwd=self.work)
+        run("git", "commit", "-m", "untransported GitHub config", cwd=self.work)
+        self.push()
+        result = self.poll()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not transported", result.stderr)
+        self.assertEqual(self.invocations(), [])
+        self.assertEqual((self.base / "applied.sha").read_text().strip(), self.initial)
+        self.assertFalse((self.base / "failed.sha").exists())
+
     def test_deleted_deployed_module_blocks(self):
         self.write_applied(self.initial)
         (self.work / "app/portal/demo_v2.py").unlink()
