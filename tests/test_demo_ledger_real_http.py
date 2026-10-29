@@ -184,7 +184,9 @@ class RealLedgerHttpQualification(unittest.TestCase):
 
     def test_real_portal_malformed_viewer_bearer_is_401(self):
         # Real HTTP parser + Portal; no Core/DB fixture mutation.
-        for credential in ("café", "x" * 4096, VIEWER + " "):
+        # HTTP parsers may normalize trailing OWS before application auth.
+        # Whitespace rejection is covered at the application boundary in unit tests.
+        for credential in ("café", "x" * 4096):
             with self.subTest(credential_length=len(credential)):
                 denied = requests.get(
                     PORTAL + "/api/demo-studio/runs/" + RUN + "/ai-ledger",
