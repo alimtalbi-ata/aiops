@@ -1,6 +1,7 @@
 from fastapi import FastAPI,HTTPException,Header
 from fastapi.responses import JSONResponse, PlainTextResponse
 from hmac import compare_digest
+from math import isfinite
 from shared.db import db
 app=FastAPI(title='ACME Digital Twin',version='2.0.0')
 @app.get('/health')
@@ -133,16 +134,44 @@ if not SIM_TOKEN: raise RuntimeError('AIOPS_ADMIN_TOKEN must be configured')
 if not METRICS_TOKEN or METRICS_TOKEN in (SIM_TOKEN, os.getenv('AIOPS_INTERNAL_TOKEN')):
     raise RuntimeError('AIOPS_TWIN_METRICS_TOKEN must be configured and distinct')
 class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:dict={};run_id:str|None=None
+def _finite_json_number(value: object) -> bool:
+    # JSON booleans are integers in Python but are not measurements.
+    if type(value) not in (int, float):
+        return False
+    try:
+        return isfinite(value)
+    except (OverflowError, ValueError):
+        return False
+
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
-    if (authorization or '').removeprefix('Bearer ')!=SIM_TOKEN: raise HTTPException(401,'invalid token')
-    if not x.run_id: raise HTTPException(422,'run_id required')
-    # A successful receipt must correspond to an actionable synthetic write.
-    # Other scenario stages are handled by the worker, not this Twin endpoint.
+    # The administrator capability must use the same explicit Bearer scheme
+    # as the read endpoints; never accept a bare secret as an auth header.
+    supplied = authorization[7:] if authorization and authorization.startswith('Bearer ') else ''
+    if not supplied or not compare_digest(supplied, SIM_TOKEN):
+        raise HTTPException(401, 'invalid token',
+                            headers={'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store'})
+    if not x.run_id or not x.run_id.strip():
+        raise HTTPException(422, 'run_id required')
+    # A PASS receipt must correspond to a meaningful synthetic operation.
+    # No Core/Policy/Payments runtime outcome is asserted by this endpoint.
     if x.action not in ('SET_STATE', 'OBSERVE'):
         raise HTTPException(422, 'unsupported synthetic action')
-    if not x.target_node_id:
+    if not x.target_node_id or not x.target_node_id.strip():
         raise HTTPException(422, 'target_node_id required')
+    p = x.payload
+    if x.action == 'SET_STATE':
+        if not isinstance(p.get('state'), str) or not p['state'].strip():
+            raise HTTPException(422, 'state required for synthetic SET_STATE')
+        if p.get('health') is not None and (
+            not _finite_json_number(p['health']) or not 0 <= p['health'] <= 1
+        ):
+            raise HTTPException(422, 'health must be a finite fraction')
+    else:
+        if not isinstance(p.get('metric'), str) or not p['metric'].strip():
+            raise HTTPException(422, 'metric required for synthetic OBSERVE')
+        if not _finite_json_number(p.get('value')):
+            raise HTTPException(422, 'value must be a finite number')
     with db() as c:
         if not c.execute('select 1 from aiops.twin_nodes where node_id=%s',
                          (x.target_node_id,)).fetchone():
