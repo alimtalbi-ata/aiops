@@ -311,7 +311,12 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
 def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
-        if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
+        run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
+        if not run: raise HTTPException(404,'run not found')
+        if (x.get('stage')=='POLICY' and x.get('state')=='PASS'
+                and run[0] in ('DEMO','REPLAY','STORY')
+                and x.get('decision')!='SIMULATE'):
+            raise HTTPException(422,'synthetic_policy_pass_requires_simulate')
         eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
         if eids:
             n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(eids,)).fetchone()[0]
@@ -424,6 +429,11 @@ def persist_policy_decision(rid:str,x:dict,authorization:str|None=Header(default
     if not x.get('analysis_id') or not x.get('critique_id'): raise HTTPException(422,'analysis_and_critic_records_required')
     if policy.get('state')=='PASS':
         with db() as c:
+            run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
+            if not run: raise HTTPException(404,'run not found')
+            if (run[0] in ('DEMO','REPLAY','STORY')
+                    and policy.get('decision')!='SIMULATE'):
+                raise HTTPException(422,'synthetic_policy_pass_requires_simulate')
             ok=c.execute("select 1 from aiops.analysis_records a join aiops.critique_records q on q.analysis_id=a.analysis_id where a.analysis_id=%s and q.critique_id=%s and a.run_id=%s and q.run_id=%s and a.status='VALID' and q.validated=true and q.output->'issues'='[]'::jsonb and q.output->'unsafe_actions'='[]'::jsonb",(x.get('analysis_id'),x.get('critique_id'),rid,rid)).fetchone()
         if not ok:raise HTTPException(409,'PASS_policy_requires_clean_validated_analysis_and_critic')
     evidence_ids=sorted(set(x.get('evidence_ids') or []))
