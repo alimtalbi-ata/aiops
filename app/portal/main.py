@@ -162,6 +162,35 @@ def _unique_demo_run(items, rid):
     return matches[0] if matches[0].get("mode") in ("DEMO", "REPLAY", "STORY") else None
 
 
+
+def _demo_impact_scope(impact):
+    """Describe Twin impact scope without claiming SAN-to-Payments causality.
+
+    A root-only response is a real read-model result, not a proven downstream
+    business impact. Malformed/error envelopes must not highlight graph nodes.
+    """
+    unknown = ("INCONNU — portée de l'impact Twin non vérifiable", False)
+    if (not isinstance(impact, dict)
+            or impact.get("status") in ("UNKNOWN", "ERROR")
+            or "error_type" in impact):
+        return unknown
+    root, affected = impact.get("root"), impact.get("affected")
+    if not isinstance(root, str) or not root or not isinstance(affected, list):
+        return unknown
+    ids = []
+    for item in affected:
+        if (not isinstance(item, dict)
+                or not isinstance(item.get("node_id"), str)
+                or not item["node_id"]):
+            return unknown
+        ids.append(item["node_id"])
+    if root not in ids or len(set(ids)) != len(ids):
+        return unknown
+    if len(ids) == 1:
+        return ("RACINE SEULE — propagation SAN→Payments NON PROUVÉE", True)
+    return (str(len(ids)) + " NŒUDS TWIN DÉCLARÉS — propagation SAN→Payments NON ATTESTÉE", True)
+
+
 @app.get("/",response_class=HTMLResponse)
 def home():
     d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
@@ -270,7 +299,7 @@ def twin_page():
     edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
     body=panel("Résumé Digital Twin",pretty(summary))
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
-    body+=graph_panel(graph,impact=impact)
+    body+=graph_panel(graph,impact=impact if impact_shape_ok else None)
     body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
         [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
     body+=panel("Relations de dépendance",table(["Source","Relation","Cible"],
@@ -306,6 +335,7 @@ def demo_studio():
     dashboard=_get("/api/dashboard")
     graph=_get("/api/twin/graph",TWIN)
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    impact_scope, impact_shape_ok = _demo_impact_scope(impact)
     runs=_runs()
     demo_runs=[r for r in runs if r.get("mode") in ("DEMO","REPLAY","STORY")]
     body=panel("Préflight — qualification en lecture seule",
@@ -314,7 +344,7 @@ def demo_studio():
         +table(["Contrôle","Résultat"],[
           ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
           ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
-          ("Impact SAN-A","DISPONIBLE" if isinstance(impact.get("affected"),list) and impact.get("root") else "INCONNU"),
+          ("Impact SAN-A / Payments",impact_scope),
           ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)))
         ]))
     if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
