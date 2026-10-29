@@ -131,7 +131,9 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn('"impact_known":true',page)
 
     def test_demo_run_details_are_source_backed(self):
+        seen=[]
         def get(base,path,**kw):
+            seen.append(path)
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO-42","mode":"DEMO","status":"RESOLVED"}]}
             if path=="/api/runs/RUN-DEMO-42":return {"run_id":"RUN-DEMO-42","status":"RESOLVED"}
             if path.endswith("/ai-ledger"):return {"analysis":"ANL-SOURCE-42","critic":"CRT-SOURCE-42"}
@@ -140,9 +142,13 @@ class PortalPageContractTests(unittest.TestCase):
         with patch.object(self.portal,"get_json",side_effect=get):
             with patch.object(self.portal,"post_json",side_effect=AssertionError("read-only violation")):
                 result=self.portal.demo_run_detail("RUN-DEMO-42")
-        self.assertIn("ANL-SOURCE-42",result)
-        self.assertIn("CRT-SOURCE-42",result)
         self.assertIn("SIMULATE",result)
+        self.assertIn('id="demo-ledger-read"',result)
+        self.assertIn("INCONNU — autorisation requise.",result)
+        self.assertNotIn("ANL-SOURCE-42",result)
+        self.assertNotIn("CRT-SOURCE-42",result)
+        self.assertFalse(any(path.endswith("/ai-ledger") for path in seen),
+                         "SSR must not read protected Core ledger anonymously")
 
     def test_demo_run_details_exclude_live_and_invalid_ids(self):
         from fastapi import HTTPException
@@ -188,7 +194,9 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("setInterval(refresh,5000)",page)
 
     def test_demo_live_trace_is_source_backed(self):
+        seen=[]
         def get(base,path):
+            seen.append(path)
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
             if path=="/api/runs/RUN-DEMO":return {"status":"BLOCKED","events":[{"event_type":"CRITIC_COMPLETED"}]}
             if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
@@ -198,8 +206,11 @@ class PortalPageContractTests(unittest.TestCase):
             response=self.portal.demo_status("RUN-DEMO")
         self.assertEqual(response["status"],"BLOCKED")
         self.assertEqual(response["events"][0]["event_type"],"CRITIC_COMPLETED")
-        self.assertEqual(response["ledger"]["critic"],"REJECTED")
+        self.assertEqual(response["ledger"],{"status":"UNKNOWN",
+                                             "reason":"viewer_authorization_required"})
         self.assertEqual(response["gates"]["decision"],"BLOCKED")
+        self.assertFalse(any(path.endswith("/ai-ledger") for path in seen),
+                         "polling must not read protected Core ledger anonymously")
 
     def test_demo_missing_event_list_is_not_invented(self):
         def get(base,path):
