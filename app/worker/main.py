@@ -1,5 +1,5 @@
 import os,asyncio,datetime,re
-from fastapi import FastAPI,HTTPException,Header
+from fastapi import FastAPI,HTTPException,Header,Request
 from temporalio import activity,workflow
 from temporalio.client import Client
 from temporalio.worker import Worker
@@ -102,8 +102,10 @@ def health():return {'status':'ok','component':'worker','executor':'temporal','t
 @app.get('/metrics')
 def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
-async def start(args:dict,authorization:str|None=Header(default=None)):
- if not valid_internal_bearer(authorization, ADMIN):raise HTTPException(401,'invalid internal token')
+async def start(args:dict,request:Request,authorization:str|None=Header(default=None)):
+ # Reject duplicate Authorization fields: a framework may otherwise select
+ # one valid Bearer value while an intermediary interprets another.
+ if len(request.headers.getlist('authorization')) != 1 or not valid_internal_bearer(authorization, ADMIN):raise HTTPException(401,'invalid internal token')
  try: policy_command_for_mode(args.get('mode') if isinstance(args,dict) else None)
  except ValueError: raise HTTPException(422,'invalid execution mode')
  # Do not start Temporal for a caller-supplied DEMO identity that points to
