@@ -1,5 +1,9 @@
+import os
 import unittest
 from unittest.mock import patch
+
+# Portal's internal HTTP client fails closed at import without an explicit test token.
+os.environ.setdefault('AIOPS_INTERNAL_TOKEN', 'unit-test-only-demo-v2')
 from portal.demo_v2 import render_demo_v2
 
 
