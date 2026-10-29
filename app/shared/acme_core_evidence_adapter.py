@@ -29,6 +29,18 @@ def normalize_core_evidence_refs(
     }
     if not isinstance(receipt, dict) or receipt.get("schema") != "aiops.acme-remediation-receipt.v1":
         raise ValueError("invalid_receipt")
+    # The adapter is presentation-only: never describe a receipt claiming a
+    # real effect, persistence or upstream attestation as "consistent".
+    if (receipt.get("classification") != "SYNTHETIC_UNVERIFIED"
+            or any(receipt.get(key) is not False for key in (
+                "core_run_verified", "evidence_verified", "effect_applied", "persisted"
+            ))):
+        result["reason"] = "UNSAFE_RECEIPT_CLAIMS"
+        return result
+    if (not isinstance(receipt.get("run_id"), str)
+            or not _ID.fullmatch(receipt["run_id"])):
+        result["reason"] = "RECEIPT_IDENTITY_UNQUALIFIED"
+        return result
     if not isinstance(response, dict):
         return result
     if (response.get("schema") != "aiops.core-demo-evidence-refs.v1"
