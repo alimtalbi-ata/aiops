@@ -50,3 +50,22 @@ without exposing internal IDs or credentials. The public
 fail-closed qualification, not a proof that Policy SIMULATE actually executed.
 Unit cases and real ephemeral Core/Portal/PostgreSQL 16 HTTP regression are
 added to existing `quality.yml`; results require checking the exact SHA.
+
+## Synthetic Policy disposition fence — 2026-10-29 02:24 CET
+
+The existing viewer-authorized `aiops.demo-ledger-read.v1` projection now
+rejects a persisted Policy decision with `ALLOW`, a LIVE effect command
+(`EXECUTE`, `REMEDIATE`, etc.), an unknown decision, or an unknown state.
+Accepted synthetic read-only dispositions are `SIMULATE`,
+`HUMAN_APPROVAL`, `ESCALATE`, and the legacy non-effect `BLOCK`/`OBSERVE`;
+states are `PASS`, `BLOCKED`, `UNKNOWN`. This is deliberately fail-closed:
+Core Policy emits `ALLOW` only for LIVE, and a DEMO ledger must not present
+it as a simulation success. A malformed disposition returns HTTP 503
+`{"status":"UNKNOWN","reason":"ledger_unavailable"}` with `no-store`,
+without reflecting internal IDs or credentials. Viewer 401-before-I/O,
+Core server-side Bearer, evidence bindings and the response JSON schema
+are unchanged. Historical unknown dispositions may now be refused; the
+release integrator must qualify compatibility, not silently downgrade.
+A real Core/Portal/PostgreSQL 16 CI test persists an `ALLOW/PASS` row
+for a synthetic Run to verify the refusal. **This does not execute Policy,
+attest tenant RBAC, authorize LIVE or prove SAN→Payments causality.**
