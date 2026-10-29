@@ -92,6 +92,57 @@ class TwinImpactRealIntegration(unittest.TestCase):
                 self.assertNotEqual(response.json().get("status"), "PASS")
         self.assertEqual(snapshot(), before)
 
+    def test_admin_synthetic_event_refuses_unbound_payloads_and_bare_auth(self):
+        # Real HTTP Twin + ephemeral PostgreSQL 16. Negative requests only:
+        # malformed DEMO operations must never return PASS or mutate state.
+        marker = "CI-TWIN-INVALID-PAYLOAD-20261029"
+        valid = {
+            "action": "SET_STATE", "target_node_id": "ACME-SAN-FABRIC-A",
+            "run_id": marker, "payload": {"state": "DEGRADED", "health": 0.42},
+        }
+        def snapshot():
+            with psycopg.connect(DATABASE_URL) as c:
+                state = c.execute(
+                    "select state,health from aiops.twin_nodes "
+                    "where node_id='ACME-SAN-FABRIC-A'"
+                ).fetchone()
+                facts = c.execute("select count(*) from aiops.twin_facts").fetchone()[0]
+                obs = c.execute("select count(*) from aiops.observations").fetchone()[0]
+                return state, facts, obs
+        cases = (
+            ("bare_admin", valid, {"Authorization": TOKEN}, 401),
+            ("basic_admin", valid, {"Authorization": "Basic " + TOKEN}, 401),
+            ("anonymous", valid, {}, 401),
+            ("blank_run", {**valid, "run_id": "   "}, None, 422),
+            ("blank_target", {**valid, "target_node_id": "   "}, None, 422),
+            ("missing_state", {**valid, "payload": {}}, None, 422),
+            ("blank_state", {**valid, "payload": {"state": " "}}, None, 422),
+            ("negative_health", {**valid, "payload": {"state": "DEGRADED", "health": -0.1}}, None, 422),
+            ("high_health", {**valid, "payload": {"state": "DEGRADED", "health": 1.1}}, None, 422),
+            ("boolean_health", {**valid, "payload": {"state": "DEGRADED", "health": True}}, None, 422),
+            ("string_health", {**valid, "payload": {"state": "DEGRADED", "health": "0.5"}}, None, 422),
+            ("empty_observe", {**valid, "action": "OBSERVE", "payload": {}}, None, 422),
+            ("blank_metric", {**valid, "action": "OBSERVE", "payload": {"metric": " ", "value": 12}}, None, 422),
+            ("missing_value", {**valid, "action": "OBSERVE", "payload": {"metric": "fc_errors"}}, None, 422),
+            ("boolean_value", {**valid, "action": "OBSERVE", "payload": {"metric": "fc_errors", "value": True}}, None, 422),
+            ("string_value", {**valid, "action": "OBSERVE", "payload": {"metric": "fc_errors", "value": "12"}}, None, 422),
+        )
+        before = snapshot()
+        for name, body, headers, expected in cases:
+            with self.subTest(case=name):
+                response = requests.post(
+                    BASE + "/api/twin/synthetic-event", json=body,
+                    headers=headers if headers is not None else
+                        {"Authorization": "Bearer " + TOKEN},
+                    timeout=5, allow_redirects=False,
+                )
+                self.assertEqual(response.status_code, expected, response.text)
+                self.assertNotEqual(response.json().get("status"), "PASS")
+                if expected == 401:
+                    self.assertEqual(response.headers.get("cache-control"), "no-store")
+                    self.assertEqual(response.headers.get("www-authenticate"), "Bearer")
+        self.assertEqual(snapshot(), before)
+
     def test_ephemeral_seed_is_25_nodes_and_23_directed_edges(self):
         with psycopg.connect(DATABASE_URL) as c:
             self.assertEqual(c.execute("select count(*) from aiops.twin_nodes").fetchone()[0], 25)
