@@ -743,5 +743,75 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertIn("Scénarios DEMO/REPLAY/STORY visibles", page)
         self.assertNotIn("INCONNU — inventaire Core indisponible", page)
 
+
+    def test_demo_policy_gates_foreign_identity_never_reaches_html_or_poll(self):
+        foreign = (
+            {"run_id": "RUN-OTHER", "items": [
+                {"decision": "PASS", "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"tenant_id": "TENANT-B", "items": [
+                {"decision": "PASS", "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"run_id": "RUN-OTHER", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"tenant_id": "TENANT-B", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"tenant": "TENANT-B", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+            {"items": [{"decision": "PASS", "reason": "SAFE"},
+                       {"tenant_id": "TENANT-B", "decision": "PASS",
+                        "reason": "FOREIGN-POLICY-SECRET"}]},
+        )
+        for gates in foreign:
+            with self.subTest(gates=gates):
+                def get(base, path):
+                    if path == "/api/runs":
+                        return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                           "tenant_id": "TENANT-A"}]}
+                    if path == "/api/runs/RUN-DEMO":
+                        return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                        "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                                "events": []}
+                    if path.endswith("/ai-ledger"):
+                        return {"status": "UNKNOWN"}
+                    if path.endswith("/gates"):
+                        return gates
+                    raise AssertionError(path)
+                with patch.object(self.portal, "get_json", side_effect=get):
+                    with patch.object(self.portal, "post_json",
+                                      side_effect=AssertionError("read-only")):
+                        page = self.portal.demo_run_detail("RUN-DEMO")
+                        poll = self.portal.demo_status("RUN-DEMO")
+                self.assertNotIn("FOREIGN-POLICY-SECRET", page)
+                self.assertNotIn("FOREIGN-POLICY-SECRET", str(poll))
+                self.assertEqual(poll["gates"], {"status": "UNKNOWN"})
+                self.assertIn("décisions Policy indisponibles", page)
+
+    def test_demo_policy_gate_matching_tenant_preserves_simulate_decision(self):
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [{"run_id": "RUN-DEMO", "mode": "DEMO",
+                                   "tenant_id": "TENANT-A"}]}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run": {"run_id": "RUN-DEMO", "mode": "DEMO",
+                                "tenant_id": "TENANT-A", "status": "BLOCKED"},
+                        "events": []}
+            if path.endswith("/ai-ledger"):
+                return {"status": "UNKNOWN"}
+            if path.endswith("/gates"):
+                return {"run_id": "RUN-DEMO", "tenant_id": "TENANT-A",
+                        "items": [{"run_id": "RUN-DEMO", "tenant_id": "TENANT-A",
+                                   "stage": "POLICY", "state": "SIMULATE",
+                                   "decision": "PASS",
+                                   "reason": "SOURCE-POLICY-SIMULATE"}]}
+            raise AssertionError(path)
+        with patch.object(self.portal, "get_json", side_effect=get):
+            with patch.object(self.portal, "post_json",
+                              side_effect=AssertionError("read-only")):
+                page = self.portal.demo_run_detail("RUN-DEMO")
+                poll = self.portal.demo_status("RUN-DEMO")
+        self.assertIn("SOURCE-POLICY-SIMULATE", page)
+        self.assertEqual(poll["gates"]["items"][0]["decision"], "PASS")
+        self.assertEqual(poll["gates"]["items"][0]["state"], "SIMULATE")
+        self.assertNotIn("tenant_id", poll["gates"]["items"][0])
+
 if __name__=="__main__":
     unittest.main()
