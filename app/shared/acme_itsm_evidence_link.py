@@ -6,8 +6,8 @@ Never expose a Core credential or promote a signed NOC ticket claim to a GLPI ti
 """
 import re
 
-_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\\Z")
-_SHA = re.compile(r"[a-f0-9]{64}\\Z")
+_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_SHA = re.compile(r"[a-f0-9]{64}\Z")
 _MODES = frozenset({"DEMO", "REPLAY", "STORY"})
 _SCHEMA = "aiops.acme-itsm-evidence-link.v1"
 
