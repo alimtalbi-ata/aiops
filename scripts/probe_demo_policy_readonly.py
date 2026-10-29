@@ -128,6 +128,8 @@ def compare_unbound_policy_values(
     validate_observation(core_observation, run_id, incident_id)
     require(type(policy_response) is dict
             and set(policy_response) == {"state", "decision", "reason"}
+            and type(policy_response["state"]) is str
+            and type(policy_response["decision"]) is str
             and type(policy_response["reason"]) is str
             and 0 < len(policy_response["reason"]) <= 512,
             "invalid_policy_http_contract")
