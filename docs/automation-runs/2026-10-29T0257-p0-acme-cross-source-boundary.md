@@ -17,3 +17,10 @@
 - `READY_FOR_STABLE=BLOCKED`, `overall=NO_GO` même si la CI passe : le déployeur V2 ne transporte pas Twin/Core/Copilot ; pas d'ACL tenant, de Run↔Policy↔Evidence, de rollback, de preuve `applied.sha` ni de smoke Debian.
 - **NOT_TESTED** : identité CMDB réelle, SAN→hôte, Payments runtime, E2E métier, tenant A/B, navigateur, Debian, déploiement et rollback. Aucune fusion, aucun push stable, aucun accès Debian ni LIVE.
 - Prochain lot : Recette 5/5 #156 assemble uniquement les candidats qualifiés, vérifie la couverture de transport et les preuves terrain avant promotion ; aucun raccordement CI par simple similarité des noms.
+
+## Résultat CI observé après commit code/tests
+- **PR #170**, SHA code/tests/contrat/journal initial : `9ed4d5049c4401f7cad731a09950c8b7343425fb`.
+- [GitHub Actions quality.yml #40803656719](https://github.com/alimtalbi-ata/aiops/actions/runs/40803656719) : **completed/success sur ce SHA exact**, **3/3 jobs SUCCESS** (Core/PostgreSQL/Twin, Policy/static, Grafana).
+- Log du job Core réel consulté : **11/11 tests Twin** réussis, dont `test_portal_fixture_and_twin_seed_are_not_an_authenticated_join ... ok`. Les données viennent des seeds SQL + du fixture Portal et du conteneur Twin/PostgreSQL 16 éphémères, pas du serveur Debian.
+- Cette mise à jour documentaire crée un nouveau HEAD : son propre `quality.yml` doit être vérifié séparément. Les succès du SHA précédent ne sont pas automatiquement transférés.
+- **Contrat API inchangé ; READY_FOR_STABLE=BLOCKED / NO-GO**. Les conclusions terrain et E2E restent NOT_TESTED.
