@@ -140,3 +140,21 @@ Chaque nouvelle session ajoute une entrée datée à ce journal ou crée `docs/d
 **Risques encore ouverts :** CLI basée sur fixtures non observées, IDs Core/Evidence non vérifiés, pas de GLPI, aucune authentification réelle HITL, aucune simulation SAN, aucune traversée DB/Temporal/Portal. Les tests sont de la logique offline uniquement.
 
 **Prochaine action opérateur** : synchroniser GitHub puis exécuter les 33 tests Python et les deux sorties JSON de la CLI ; ne pas toucher Docker.
+
+
+## 10. 2026-10-29 — Qualification Debian de l'incrément CLI et des 33 tests
+
+**Preuve :** transcription de terminal fournie par l'opérateur, HEAD Debian `43734aa`, branche `prep/acme-demo-offline-20261029`. `git fetch` puis `merge --ff-only` ont avancé `5c408cf..43734aa` (7 fichiers, 209 insertions).
+
+- `test_remediation_lab.py` : **10/10 PASS**.
+- `test_acme_remediation_projection.py` : **9/9 PASS**, y compris `test_read_only_recipe_cannot_claim_recovery`.
+- `test_acme_remediation_receipt.py` : **10/10 PASS**.
+- `test_acme_demo_offline.py` : **4/4 PASS**.
+- Total tests Python de ces quatre suites : **33/33 PASS**.
+- `tools/acme_offline_source_preflight.py` : **26/26 PASS** ; contrôles de source statiques distincts.
+- `python3 -m app.shared.acme_demo_offline --outcome SUCCESS` : JSON produit, `SIMULATED_SUCCESS`, `DEGRADED -> HEALTHY` hypothétique, `effect_applied=false`, `postchecks=NOT_RUN`, `core_run_verified=false`, `evidence_verified=false`, `persisted=false`.
+- `python3 -m app.shared.acme_demo_offline --outcome FAILURE` : JSON produit, `SIMULATED_FAILURE`, état inchangé, rollback `PROJECTED_ONLY`, zéro effet.
+- Le digest de receipt diffère entre SUCCESS et FAILURE ; la clé d'idempotence du gate reste stable pour la même proposition.
+- `git log -1 --oneline` : `43734aa`. Les commandes `git diff --check` et `git status --short` n'ont émis aucune sortie dans la transcription, cohérent avec un worktree propre.
+
+**Limites :** preuve d'exécution offline Python uniquement ; aucun run Core persistant ni référence Evidence vérifiée, aucun appel GLPI/n8n, aucun runtime E2E ni action LIVE. Les IDs `RUN-ACME-OFFLINE-001` et `EVD-ACME-OFFLINE-*` sont des fixtures et non des identités Core attestées.
