@@ -92,6 +92,25 @@ class PollApprovedDeployTests(unittest.TestCase):
         p = self.base / "invocations"
         return p.read_text().splitlines() if p.exists() else []
 
+    def test_poller_rejects_nonstable_refs_before_git_or_deployment(self):
+        # The installer is not the security boundary: the cron script may be
+        # invoked directly with a modified environment.
+        self.write_applied(self.initial)
+        for branch in ("feat/unreviewed", "main",
+                       "refs/heads/deploy/aiops2-stable",
+                       "deploy/aiops2-stable ", " "):
+            with self.subTest(branch=branch):
+                env = dict(self.env, AIOPS_DEPLOY_BRANCH=branch)
+                result = run("bash", POLLER, env=env, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("poller only accepts deploy/aiops2-stable",
+                              result.stderr)
+                self.assertFalse((self.base / "repo").exists())
+                self.assertFalse((self.base / "poll.lock").exists())
+                self.assertEqual(self.invocations(), [])
+                self.assertEqual((self.base / "applied.sha").read_text(),
+                                 self.initial + "\n")
+
     def test_already_applied(self):
         self.write_applied(self.initial)
         result = self.poll()
