@@ -18,6 +18,34 @@ class DemoV2Tests(unittest.TestCase):
                        "Observations synthétiques", "source non vérifiée ou indisponible"):
             self.assertIn(marker, page)
 
+    def test_unverified_policy_envelope_never_displays_spoofed_gate(self):
+        forged = {"stage": "POLICY", "state": "PASS",
+                  "decision": "SPOOFED-UNVERIFIED-GATE"}
+        for gates in (
+            {"status": "UNKNOWN", "items": [forged]},
+            {"status": "UNKNOWN", "error_type": "HTTPError",
+             "http_status": 401, "items": [forged]},
+            {"error_type": "ConnectionError", "items": [forged]},
+            {"items": [None, forged]},
+            {"items": {"stage": "POLICY", "decision": "SPOOFED-UNVERIFIED-GATE"}},
+        ):
+            with self.subTest(gates=gates):
+                page = render_demo_v2(
+                    {"run": {"run_id": "RUN-DEMO", "mode": "DEMO"},
+                     "events": []}, {}, gates)
+                self.assertNotIn("SPOOFED-UNVERIFIED-GATE", page)
+                self.assertIn("INCONNU — décisions Policy non vérifiables", page)
+                self.assertIn("INCONNU — décisions Policy indisponibles", page)
+
+    def test_verified_policy_list_remains_visible_in_read_only_view(self):
+        page = render_demo_v2(
+            {"run": {"run_id": "RUN-DEMO", "mode": "DEMO"}, "events": []},
+            {}, {"items": [{"stage": "POLICY", "state": "PASS",
+                            "decision": "SIMULATE", "reason": "synthetic only"}]})
+        self.assertIn("SIMULATE", page)
+        self.assertIn("synthetic only", page)
+        self.assertIn("DISPONIBLE — données reçues (non attestées)", page)
+
     def test_missing_data_not_fabricated(self):
         page = render_demo_v2({"run": {"status": "BLOCKED"}}, {}, {})
         self.assertIn("INCONNU", page)
