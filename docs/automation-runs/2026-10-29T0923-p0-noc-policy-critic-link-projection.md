@@ -20,3 +20,11 @@
 - Tests locaux : **NOT_TESTED** (connecteur GitHub, pas de clone exécutable local). Tests terrain Debian : **NOT_TESTED**.
 - **READY_FOR_STABLE=BLOCKED / NO-GO**. Dépendances bloquantes : adaptation du validateur #156, quality.yml intégrée verte, CI UI #177 rouge, transport Core/Twin/Portal/Policy par le déployeur, RBAC tenant A/B, impact Payments observé, Temporal/Policy SIMULATE E2E, rollback et `applied.sha` + smoke-tests terrain.
 - Prochain lot Recette 5/5 : intégrer cette projection, adapter le validateur exact-key pour vérifier `policy_decisions[].critique_id` contre les Critiques validées du même Run et l'Analysis associée, exiger SHA intégré et CI complète, puis recette read-only/rollback. Aucun GO implicite.
+
+## Qualification GitHub Actions du commit code + tests
+- **SHA code+tests+journal initial :** `d31c39594d61e6ee232137b843eb112854676287`, PR [#171](https://github.com/alimtalbi-ata/aiops/pull/171).
+- [quality.yml #40842081262](https://github.com/alimtalbi-ata/aiops/actions/runs/40842081262) : **completed/success, 6/6 jobs** (quality-build-package, database-migrations, runtime-e2e, migration-runner-upgrade, mariadb-dr-rehearsal, release-kit).
+- Logs consultés : **16/16 tests unitaires Ledger** dont `test_policy_decisions_require_same_run_analysis_and_critique ... ok` ; **14/14 tests HTTP Core/Portal/PostgreSQL 16** dont `test_real_policy_foreign_run_links_fail_closed ... ok` et `test_real_simulate_requires_linked_validated_critique ... ok`. Les tests 401 viewer et données absentes font partie de la suite Ledger déjà existante ; aucune attestation terrain.
+- [V2.8 #40842081579](https://github.com/alimtalbi-ata/aiops/actions/runs/40842081579), [Offline #40842081400](https://github.com/alimtalbi-ata/aiops/actions/runs/40842081400), [Historical #40842081285](https://github.com/alimtalbi-ata/aiops/actions/runs/40842081285) : **completed/success** sur ce même SHA.
+- Le `runtime-e2e` CI est **synthétique** ; il ne démontre pas ACME SAN→Payments ni un déploiement Debian.
+- Ce présent addendum est un commit documentaire supplémentaire ; **ne pas attribuer les checks du SHA code au SHA documentaire final sans vérification distincte**. SHA documentaire final et CI à relever dans #171 / #156. READY_FOR_STABLE=BLOCKED maintenu.
