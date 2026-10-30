@@ -10,6 +10,7 @@ from core.critic_denial_resume import resume_critic_denial
 from shared.ids import new
 from shared.domain import transition,STAGES,initial_stage_state
 from core.hitl_identity import router as hitl_identity_router
+from shared.hitl_identity import IdentityError, require_live_assertion
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 app.include_router(hitl_identity_router)
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
@@ -620,13 +621,22 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
 
 @app.post('/api/proposals/{proposal_id}/approval')
 def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Header(default=None)):
-    auth(bearer(authorization))
+    try:
+        identity=require_live_assertion(bearer(authorization))
+    except IdentityError as exc:
+        code=str(exc)
+        raise HTTPException(
+            503 if code=="oidc_identity_provider_not_configured" else 401,
+            code
+        ) from exc
     supplied_hash=str(x.get('proposal_hash',''))
-    actor=str(x.get('actor_id','')).strip()
+    actor=identity['subject_id']
     role=str(x.get('actor_role','')).strip().lower()
     decision=str(x.get('decision','')).strip().upper()
     nonce=str(x.get('nonce','')).strip()
     scope=x.get('scope') or {}
+    if role not in identity.get('roles',[]):
+        raise HTTPException(403,'requested_approval_role_not_in_verified_oidc_entitlements')
     requested_revoke_id=str(x.get('approval_id_to_revoke','')).strip() if decision=='REVOKE' else None
     if not actor or not role or decision not in ('APPROVE','REJECT','REVOKE') or not nonce or not supplied_hash:
         raise HTTPException(422,'actor_role_decision_nonce_and_proposal_hash_required')
@@ -659,7 +669,13 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         if decision=='APPROVE' and risk=='CRITICAL':
             if any(row[0]==actor or row[1]==role for row in prior):raise HTTPException(409,'critical_action_requires_two_distinct_actors_and_roles')
         approval_id=new('APR')
-        audit={'run_id':rid,'source':'human-in-the-loop-api'}
+        audit={
+            'run_id':rid,'source':'verified-oidc-human-approval',
+            'issuer':identity['issuer'],
+            'mapping_version':identity['mapping_version'],
+            'auth_method':identity['auth_method'],
+            'subject_jti':identity['jti'],
+        }
         if requested_revoke_id:audit['revokes_approval_id']=requested_revoke_id
         c.execute('insert into aiops.approval_records(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,scope,nonce,expires_at,audit) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(approval_id,proposal_id,digest,actor,role,decision,json.dumps(scope),nonce,expires,json.dumps(audit)))
         approval_count=(len(prior)+1) if decision=='APPROVE' else 0
