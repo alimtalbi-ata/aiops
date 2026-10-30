@@ -299,6 +299,9 @@ class PolicyDemoResultTests(unittest.TestCase):
         for status in ("SIMULATED_SUCCESS", "SIMULATED_FAILURE", "SIMULATED_NO_RECOVERY"):
             with self.subTest(status=status):
                 r = receipt(status)
+                if status == "SIMULATED_NO_RECOVERY":
+                    r["projection"]["recipe_id"] = "glpi-api-ticket-note"
+                    r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
                 r["projection"]["reason"] = "RUNTIME_APPROVED"
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
