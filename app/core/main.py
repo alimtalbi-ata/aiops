@@ -750,14 +750,15 @@ def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=
         raise HTTPException(422,'outbox_lease_token_required')
     with db() as c:
         row=c.execute(
-            'select status,lease_token from aiops.hitl_decision_outbox '
+            'select status,lease_token,(lease_until>now()) from aiops.hitl_decision_outbox '
             'where event_id=%s for update',(event_id,)
         ).fetchone()
         if not row:
             raise HTTPException(404,'outbox_event_not_found')
         if row[0]=='DELIVERED':
             return {'event_id':event_id,'status':'DELIVERED','idempotent':True}
-        if row[0]!='LEASED' or not row[1] or not hmac.compare_digest(str(row[1]),token):
+        if (row[0]!='LEASED' or not row[1] or row[2] is not True
+                or not hmac.compare_digest(str(row[1]),token)):
             raise HTTPException(409,'outbox_lease_lost_or_invalid')
         c.execute(
             "update aiops.hitl_decision_outbox set status='DELIVERED',"
