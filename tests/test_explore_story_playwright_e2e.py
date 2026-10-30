@@ -158,7 +158,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.page.locator("#pause").click()
         expect(self.page.locator("#story-status")).to_contain_text("PAUSE / EXPLORE")
         self.assertIn(run_id, self.page.locator("#scenario").inner_text())
-        self.assertEqual(self.page.locator("#timeline li").count(), 9)
+        self.assertEqual(self.page.locator("#timeline li").count(), 14)
         self.assertTrue(all(
             "MISSING" in text for text in self.page.locator("#timeline li").all_inner_texts()
         ))
@@ -269,6 +269,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             ("status", "VERIFIED"),
             ("screenshot_sha256", "0" * 64),
             ("runtime_authenticated", True),
+            ("source", "FORGED_CAPTURE"),
+            ("itil_practice", "unverified_practice"),
         ):
             with self.subTest(checkpoint=key):
                 left = deepcopy(impact)
@@ -321,7 +323,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                 with self.assertRaisesRegex(QualificationError, "^" + code + "$"):
                     validate_pair(changed, story)
 
-        for field, forged in (("service", "temporal"), ("view", "live_recovery")):
+        for field, forged in (("service", "temporal"), ("view", "live_recovery"),
+                              ("itil_practice", "fabricated_practice"),
+                              ("owner_role", "unverified_actor"),
+                              ("handoff", "unverified_handoff"),
+                              ("evidence_required", "fake_receipt")):
             with self.subTest(joint_checkpoint_field=field):
                 left, right = deepcopy(impact), deepcopy(story)
                 left["checkpoint_evidence"][0][field] = forged
