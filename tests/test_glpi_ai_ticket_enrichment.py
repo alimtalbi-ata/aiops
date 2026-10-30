@@ -101,7 +101,7 @@ def test_internal_sync_creates_and_reads_back_ticket(monkeypatch):
     assert body["ticket_id"] == "50"
     assert body["report_verified"] is True
     assert body["glpi_status"] == 2
-    assert ticket_status := FakeGLPI.tickets["50"]["status"] == 2
+    assert FakeGLPI.tickets["50"]["status"] == 2
     ticket = FakeGLPI.tickets["50"]
     assert RUN_ID in ticket["name"]
     assert "Faits observés" in ticket["content"]
