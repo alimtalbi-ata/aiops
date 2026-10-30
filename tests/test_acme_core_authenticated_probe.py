@@ -39,6 +39,46 @@ class AuthEvidenceProbeTests(unittest.TestCase):
         self.assertNotIn("secret", str(result))
         self.assertNotIn("EVD-1", str(result))
 
+    def test_authenticated_evidence_ids_must_appear_in_run_events(self):
+        # A successful bearer GET cannot silently attach a foreign Evidence ID.
+        result = locator.probe_authenticated_evidence(
+            "https://core.example", RID, "secret", lambda *a, **k: response(),
+            expected_event_evidence_ids=["EVD-2"])
+        self.assertEqual(result, {"status": "UNKNOWN", "reason": "EVIDENCE_EVENT_LINK_MISMATCH"})
+
+    def test_authenticated_evidence_subset_of_event_refs_is_source_only(self):
+        result = locator.probe_authenticated_evidence(
+            "https://core.example", RID, "secret", lambda *a, **k: response(),
+            expected_event_evidence_ids=["EVD-1", "EVD-2"])
+        self.assertEqual(result["status"], "SOURCE_VERIFIED_SYNTHETIC_ONLY")
+        self.assertFalse(result["runtime_attested"])
+        self.assertNotIn("EVD-1", str(result))
+
+    def test_missing_or_malformed_event_refs_fail_before_authenticated_get(self):
+        def get(*args, **kwargs):
+            self.fail("unqualified Core event refs must not trigger a bearer read")
+        for refs in ([], ["../invalid"], ["EVD-1", "EVD-1"],
+                     ["EVD-1", None], "EVD-1"):
+            with self.subTest(refs=refs):
+                result = locator.probe_authenticated_evidence(
+                    "https://core.example", RID, "secret", get,
+                    expected_event_evidence_ids=refs)
+                self.assertEqual(result["reason"], "EVENT_EVIDENCE_REFS_UNQUALIFIED")
+
+    def test_main_passes_registry_event_refs_to_authenticated_probe(self):
+        verified = {"result": "SOURCE_VERIFIED_REGISTRY_ONLY", "run_id": RID,
+                    "evidence_refs_unattested": ["EVD-1", "EVD-2"]}
+        with mock.patch.object(locator, "qualify", return_value=verified), \
+             mock.patch.object(locator, "probe_authenticated_evidence",
+                               return_value={"status": "SOURCE_VERIFIED_SYNTHETIC_ONLY"}) as probe, \
+             mock.patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "secret"}), \
+             mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(locator.main(["--core-url", "https://core.example",
+                                           "--portal-url", "https://portal.example",
+                                           "--probe-auth-evidence"]), 0)
+        self.assertEqual(probe.call_args.kwargs["expected_event_evidence_ids"],
+                         ["EVD-1", "EVD-2"])
+
     def test_no_token_makes_no_call(self):
         def get(*args, **kwargs):
             raise AssertionError("must not call")
