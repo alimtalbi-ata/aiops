@@ -26,6 +26,7 @@ RUNTIME = frozenset({
     "app/twin/main.py", "app/policy/main.py",
     "app/portal/main.py", "app/portal/demo_v2.py",
     "app/portal/demo_ledger_read.py", "app/shared/tenant_scope.py",
+    "app/shared/domain.py",
     # Exact shared modules are copied by the four application Dockerfiles.
     "app/shared/acme_demo_offline.py", "app/shared/acme_glpi_ticket_read.py",
     "app/shared/acme_noc_glpi_join.py",
