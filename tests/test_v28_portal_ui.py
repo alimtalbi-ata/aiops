@@ -144,7 +144,7 @@ class PortalPageContractTests(unittest.TestCase):
                 result=self.portal.demo_run_detail("RUN-DEMO-42")
         self.assertIn("SIMULATE",result)
         self.assertIn('id="demo-ledger-read"',result)
-        self.assertIn("INCONNU — autorisation requise.",result)
+        self.assertIn("UNKNOWN — autorisation requise.",result)
         self.assertNotIn("ANL-SOURCE-42",result)
         self.assertNotIn("CRT-SOURCE-42",result)
         self.assertFalse(any(path.endswith("/ai-ledger") for path in seen),
