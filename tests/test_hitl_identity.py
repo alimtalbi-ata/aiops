@@ -139,7 +139,7 @@ class HitlIdentityTests(unittest.TestCase):
             "iss": "https://id.example.invalid/tenant", "aud": "aiops2-hitl",
             "sub": "immutable-subject", "iat": now, "nbf": now,
             "exp": now + 240, "jti": "jwt-id-unique-002",
-            "auth_time": now - 900, "amr": ["pwd"],
+            "auth_time": now - 900, "amr": ["pwd", "mfa"],
             "groups": ["00ab-stable-group-sid"],
         }
         token = jwt.encode(claims, private_key, algorithm="RS256")
@@ -157,7 +157,7 @@ class HitlIdentityTests(unittest.TestCase):
         with patch.dict(os.environ, config), patch(
             "shared.hitl_identity._oidc_jwks_client", return_value=fake_client
         ):
-            with self.assertRaisesRegex(IdentityError, "oidc_mfa_assurance_required"):
+            with self.assertRaisesRegex(IdentityError, "oidc_recent_authentication_required"):
                 verify_oidc_assertion(token)
 
     def test_sudo_catalog_is_precheck_only(self):
