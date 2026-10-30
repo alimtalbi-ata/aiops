@@ -76,12 +76,22 @@ class IncidentWorkflow:
             if receipt.get("status") == "BLOCKED":
                 return {"run_id": run_id, "status": "BLOCKED", "final_version": version}
 
-            # HITL is a durable Temporal wait only when Core explicitly returns
-            # a persisted proposal reference. A browser signal alone is never
-            # execution authority; this workflow remains fail-closed.
-            if stage == "HITL" and (
+            # HITL is a mandatory barrier before every remediation stage.
+            # A generic PASS from an unimplemented/failed proposal activity must
+            # never let the workflow fall through to REMEDIATE.
+            if stage == "HITL" and not (
                 receipt.get("status") == "WAITING" or receipt.get("hitl_required") is True
             ):
+                return {
+                    "run_id": run_id, "status": "BLOCKED",
+                    "final_version": version,
+                    "reason": "hitl_proposal_not_persisted",
+                    "execution_allowed": False,
+                }
+
+            # A durable wait is allowed only with a persisted proposal binding.
+            # A browser signal alone is never execution authority.
+            if stage == "HITL":
                 proposal_id = receipt.get("proposal_id")
                 proposal_hash = receipt.get("proposal_hash")
                 revision = receipt.get("proposal_revision")
