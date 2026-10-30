@@ -14,9 +14,9 @@ HITL is not a standalone approval screen. It is a cross-platform control plane. 
 | Platform component | Required HITL integration | Current branch change | Remaining qualification |
 |---|---|---|---|
 | Portal | Operator inbox, identity status, evidence and scope review, approve/reject/revoke UX | Adds read-only `/hitl` cross-platform command center | Bind Portal sessions to verified IdP; implement decision UI only after identity verification |
-| Core | Canonical proposals, immutable revisions, approvals, role policy, audit | Adds isolated simulator identity routes; existing proposal/approval ledger remains canonical | Replace trusted caller-supplied actor fields with verified provider claims; transactional decision/outbox semantics |
+| Core | Canonical proposals, immutable revisions, approvals, role policy, audit | Adds isolated simulator identity routes and a transactional HITL decision outbox written in the same DB transaction as terminal approval/rejection/revocation | Replace trusted caller-supplied actor fields with verified provider claims; qualify outbox recovery and operational alerting |
 | Temporal | Durable wait, idempotent signal, timeout and conflict handling | Adds `submit_hitl_decision` signal and bounded wait; missing persisted proposal now blocks before REMEDIATE | Add integration tests against Temporal test server; approval still cannot release execution |
-| Worker | Reconcile Core decision state into the exact run workflow | Adds a HITL proposal activity that only uses explicit allowlisted Analyst action fields after a clean persisted Critic in LIVE; DEMO/REPLAY/STORY record an explicit no-approval simulation skip and retain execution_allowed=false; adds at-least-once Core-to-Temporal signal polling | Add durable cursor/lease or transactional outbox; verify retry/restart and workflow-not-found behavior |
+| Worker | Reconcile Core decision state into the exact run workflow | Adds a HITL proposal activity that only uses explicit allowlisted Analyst action fields after a clean persisted Critic in LIVE; DEMO/REPLAY/STORY record an explicit no-approval simulation skip and retain execution_allowed=false; claims leased Core outbox events and acknowledges only after Temporal accepts the signal; delivery is at-least-once and idempotent | Add durable cursor/lease or transactional outbox; verify retry/restart and workflow-not-found behavior |
 | Intelligence / DGX | Nemotron Analyst and Critic evidence-grounded outputs | Extends the strict Analyst action schema with explicit allowlisted action type, parameters and expected postconditions; DGX config stays deployment-owned | Add model/provider/prompt/evidence-set attestation to proposal provenance and LIVE contract qualification |
 | Evidence | Freshness, provenance, evidence IDs and hash bound to proposal | Existing Evidence API remains the source used by Worker/Core | Qualify all real-source adapters and immutable snapshot/hash semantics |
 | Digital Twin / CMDB | Bind proposal target CI to authoritative CI identity and dependency context | No write path added | Verify CMDB target ownership, CI identity and topology freshness before approval and again before execution |
@@ -65,7 +65,7 @@ HITL is not a standalone approval screen. It is a cross-platform control plane. 
 
 - No production AD/LDAP bind, OIDC/SAML federation, Kerberos or SSSD configuration. The directory connector must be a separately qualified adapter.
 - No authenticated Portal approval endpoint. Existing Core approval API requires the internal token and accepts actor fields; do not expose that API to a browser or treat browser-supplied role claims as identity.
-- No database migration or transactional HITL outbox. The current Worker poller is at-least-once best-effort reconciliation, not a transactional delivery guarantee.
+- Migration `011_hitl_decision_outbox.sql` adds a transactional Core decision outbox. Approval and terminal decision event commit atomically; Worker claims with `FOR UPDATE SKIP LOCKED`, leases, signals Temporal, then acknowledges. Delivery is at-least-once (a signal may be repeated if acknowledgement is lost); Temporal signal idempotency handles duplicates. Operational dead-letter review and restart/failure-injection qualification remain.
 - Proposal creation is wired only for LIVE runs with fully structured Analyst actions after a clean Critic. DEMO/REPLAY/STORY skip human approval explicitly and continue only through synthetic no-effect stages; they do not mint approval or execution authority. The current LIVE path remains blocked earlier because real LIVE evidence/CMDB/RAG/Analyst/Critic adapters are not qualified. Approval is still not sufficient to resume into remediation; execution stays closed.
 - No LIVE evidence, CMDB, Policy or execution adapters are enabled by this work.
 - No SSH connection, sudo command, remediation, GLPI mutation, workflow launch or production deployment was performed.
@@ -94,7 +94,7 @@ Never commit the signing key. Do not enable the simulator on an internet-facing 
 
 1. Verified human identity (issuer, audience, signature/JWKS, immutable subject, group mapping, session revocation).
 2. Core approval authorization derives actor and roles only from verified assertions; self-approval and critical role separation tested.
-3. Core approval and notification outbox commit atomically; Worker reconciles with leases/fencing and idempotent delivery.
+3. Core approval and notification outbox commit atomically; Worker reconciles with leases/fencing and idempotent delivery (implemented; restart/lease-expiry failure injection remains).
 4. Temporal restart, replay, duplicate, conflicting signal, timeout, rejection and revocation tests pass.
 5. Proposal hash binds exact run, action, target CI, parameters, evidence, preconditions, postconditions, rollback and expiry.
 6. Policy rechecks current state, evidence freshness, emergency freeze, ownership and fencing after approval.
