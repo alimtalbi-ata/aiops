@@ -78,7 +78,7 @@ class IncidentWorkflow:
             )
             version = receipt["version"]
             if receipt.get("status") == "BLOCKED":
-                return {"run_id": run_id, "status": "BLOCKED", "final_version": version, "execution_allowed": False}
+                return {"run_id": run_id, "status": "BLOCKED", "final_version": version, "execution_allowed": False, "effect_allowed": False}
 
             # HITL is a mandatory barrier before every remediation stage.
             # A generic PASS from an unimplemented/failed proposal activity must
@@ -96,7 +96,7 @@ class IncidentWorkflow:
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
                         "reason": "synthetic_hitl_bypass_contract_invalid",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
 
             if stage == "HITL" and args["mode"] == "LIVE" and not (
@@ -106,7 +106,7 @@ class IncidentWorkflow:
                     "run_id": run_id, "status": "BLOCKED",
                     "final_version": version,
                     "reason": "hitl_proposal_not_persisted",
-                    "execution_allowed": False,
+                    "execution_allowed": False, "effect_allowed": False,
                 }
 
             # A durable wait is allowed only with a persisted proposal binding.
@@ -119,7 +119,7 @@ class IncidentWorkflow:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version, "reason": "hitl_proposal_binding_missing",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 timeout_seconds = args.get("hitl_timeout_seconds", 86400)
                 if type(timeout_seconds) is not int or not 60 <= timeout_seconds <= 604800:
@@ -134,14 +134,14 @@ class IncidentWorkflow:
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
                         "reason": "hitl_timeout_or_conflicting_signal",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 if self._hitl_conflict or self._hitl_decision is None:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
                         "reason": "hitl_timeout_or_conflicting_signal",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 decision = self._hitl_decision
                 if (
@@ -153,7 +153,7 @@ class IncidentWorkflow:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version, "reason": "hitl_signal_scope_mismatch",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 # Human approval is recorded, but Policy/executor qualification
                 # is not complete in this release. Never advance to REMEDIATE.
@@ -162,7 +162,7 @@ class IncidentWorkflow:
                     "final_version": version,
                     "reason": "human_decision_recorded_execution_gate_closed",
                     "human_decision": decision.get("decision"),
-                    "execution_allowed": False,
+                    "execution_allowed": False, "effect_allowed": False,
                 }
         result = await workflow.execute_activity(
             "finish_run",
@@ -171,4 +171,4 @@ class IncidentWorkflow:
             retry_policy=RETRY,
             result_type=dict,
         )
-        return {"run_id": run_id, "status": result["status"], "final_version": result["version"], "execution_allowed": False}
+        return {"run_id": run_id, "status": result["status"], "final_version": result["version"], "execution_allowed": False, "effect_allowed": False}
