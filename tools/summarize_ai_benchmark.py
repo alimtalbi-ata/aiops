@@ -17,6 +17,7 @@ METRICS = (
     "action_type_validity", "action_evidence_grounding",
     "precondition_completeness", "postcondition_testability", "rollback_completeness",
     "latency_ms_p50", "latency_ms_p95", "usage_coverage", "retry_count",
+    "successful_calls", "failed_calls", "request_count_total",
 )
 
 def sha256(path: Path) -> str:
@@ -70,6 +71,13 @@ def aggregate_reports(paths: list[Path]) -> dict[str, Any]:
         complete = [r for r in group if r["metrics"].get("token_totals_complete") is True
                     and isinstance(r["metrics"].get("total_tokens"), int)]
         costs = [r["metrics"].get("cost_usd") for r in group]
+        error_classes = {}
+        for report in group:
+            classes = report["metrics"].get("error_classes", {})
+            if isinstance(classes, dict):
+                for name, count in classes.items():
+                    if isinstance(name, str) and type(count) is int and count > 0:
+                        error_classes[name] = error_classes.get(name, 0) + count
         costs_complete = bool(costs) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in costs)
         token_values = [r["metrics"]["total_tokens"] for r in complete]
         # A zero coverage value means no provider usage was observed, not a
@@ -90,6 +98,7 @@ def aggregate_reports(paths: list[Path]) -> dict[str, Any]:
             "evaluation_failures": sum(r.get("result") != "PASS" for r in group),
             "quality_pass_rate": round(sum(r.get("result") == "PASS" for r in group) / len(group), 4),
             "metrics_median": metrics,
+            "error_classes": error_classes,
             "usage_complete_repeats": len(complete),
             "usage_coverage_mean": round(statistics.mean(coverage_values), 4)
                 if len(coverage_values) == len(group) else None,
@@ -109,6 +118,11 @@ def aggregate_reports(paths: list[Path]) -> dict[str, Any]:
                 "result": report.get("result"),
                 "cases_total": report["metrics"].get("cases_total"),
                 "cases_analyzed": report["metrics"].get("cases_analyzed"),
+                "model_calls": report["metrics"].get("model_calls"),
+                "successful_calls": report["metrics"].get("successful_calls"),
+                "failed_calls": report["metrics"].get("failed_calls"),
+                "error_classes": report["metrics"].get("error_classes"),
+                "usage_coverage": report["metrics"].get("usage_coverage"),
                 "total_tokens": report["metrics"].get("total_tokens")
                     if report["metrics"].get("token_totals_complete") is True else None,
                 "latency_ms_p50": report["metrics"].get("latency_ms_p50"),
@@ -146,8 +160,8 @@ def markdown(summary: dict[str, Any]) -> str:
         f"- Reports: {summary['reports_total']}",
         "- Mode: SYNTHETIC_ONLY; execution_allowed=false",
         "",
-        "| Model | Repeats | Eval pass | Severity | Grounding | Critic | P50 ms | P95 ms | Tokens/repeat | Cost |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| Model | Repeats | Eval pass | Calls OK/failed | Usage coverage | Severity | Grounding | Critic | P50 ms | P95 ms | Tokens/repeat | Cost |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for item in summary["model_results"]:
         m = item["metrics_median"]
