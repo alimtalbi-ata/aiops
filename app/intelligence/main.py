@@ -41,9 +41,18 @@ class Action(Contract):
     intent: str
     risk_tier: Literal['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
     target_ci_id: str | None = None
+    # Optional structured execution intent. HITL proposal creation requires
+    # every field below to be explicit; prose is never translated into commands.
+    action_type: Literal[
+        'COLLECT_DIAGNOSTICS', 'INCREASE_LOGGING', 'RESCAN_STORAGE',
+        'FAILOVER_PATH', 'ROLLBACK_CHANGE', 'RESTART_SERVICE',
+        'CAPACITY_EXPANSION'
+    ] | None = None
+    parameters: dict = {}
     evidence_ids: list[str] = []
     preconditions: list[str] = []
     expected_effect: str
+    expected_postconditions: list[str] = []
     verification_steps: list[str] = []
     rollback_plan: str | None = None
     requires_human_approval: Literal[True] = True
