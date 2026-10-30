@@ -107,6 +107,7 @@ class BenchmarkSummaryTests(unittest.TestCase):
         compose = (ROOT / ".github" / "compose.ollama-benchmark.yml").read_text(encoding="utf-8")
         self.assertIn('model: ["qwen3:1.7b", "qwen3:4b"]', workflow)
         self.assertIn('AIOPS_BENCHMARK_TIMEOUT_SECONDS: "300"', workflow)
+        self.assertIn('AIOPS_EVALUATOR_TIMEOUT_SECONDS: "330"', workflow)
         self.assertIn('AIOPS_BENCHMARK_MAX_OUTPUT_TOKENS: "2048"', workflow)
         self.assertIn('default: "1"', workflow)
         self.assertIn("Fail benchmark job when any evaluator repeat fails", workflow)
