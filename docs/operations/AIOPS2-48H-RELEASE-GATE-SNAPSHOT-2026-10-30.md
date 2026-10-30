@@ -65,3 +65,18 @@ Main-based #197/#198/#199 are small and individually Quality-green; 2/5's main-b
 - Default `main` Quality YAML has no schedule; #188 daily `23 2 * * *` plus 15-minute read-only smoke preferred after approval; #189 duplicate `23 */2 * * *` unmerged. #146/#153 auto-deploy disabled.
 - **GO/NO-GO:** `DEMO_LOCAL=GO_SYNTHETIC`, `CUMULATIVE_KIT=NO_GO`, `RELEASE_STABLE=NO_GO`. No deployed `applied.sha`, authenticated GLPI/Evidence smoke, four-image Debian install or exercised rollback attested.
 
+<!-- convergence-5of5-477da60-20261030 -->
+## Gate snapshot — 2026-10-30T16:15:33.055Z
+
+**Audit UTC:** 2026-10-30T16:15:33.055Z. **Release candidate:** [#201](https://github.com/alimtalbi-ata/aiops/pull/201), base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, exact HEAD [`477da60d92dc777e1e635eea4c5510c350a5d90c`](https://github.com/alimtalbi-ata/aiops/commit/477da60d92dc777e1e635eea4c5510c350a5d90c), **28 ahead / 0 behind**, draft and unmerged. [Exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) **QUEUED** at audit; previous #201 [Quality 41082715412](https://github.com/alimtalbi-ata/aiops/actions/runs/41082715412) **3/3 SUCCESS** on old `59ba22f1`, not on this new SHA.
+
+| Tier | Verdict | Evidence / next exact gate |
+|---|---|---|
+| T0 tests | PENDING on new HEAD | #201 Quality 41088096834 QUEUED; old-head 3/3 is not transferable; targeted Python/JS suites wired |
+| T1 ephemeral integration | NOT_TESTED | Authenticated one-tenant Core/Portal/Temporal/Evidence contract probe in isolated environment |
+| T2 synthetic E2E | NOT_TESTED | One ACME SAN→Payments Incident/Run across 14 ITIL checkpoints, capture IDs and independent receipts |
+| T3 deployed read-only | NOT_ATTESTED | Operator-only image digest, `applied.sha`, read-only smoke |
+| T4 sandbox kit/rollback | NO-GO | Missing migration 011/OIDC/AI telemetry; no cumulative ZIP or rollback exercise |
+| T5 LIVE | NO-GO | Explicit separate authorization and all gates absent |
+
+#188 daily quality + 15-minute read-only runtime smoke remains preferred but unmerged; #189 duplicate. No runner, cron, Debian, GLPI, main/stable, deployment or LIVE action.

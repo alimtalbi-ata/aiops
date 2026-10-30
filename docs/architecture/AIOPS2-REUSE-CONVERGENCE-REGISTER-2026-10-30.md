@@ -292,3 +292,15 @@ The current GitHub session can inspect and change repository source and GitHub A
 ### 2026-10-30 15:40 UTC — verified selective #202 reuse
 
 [#201](https://github.com/alimtalbi-ata/aiops/pull/201) `5f2feb08` passed [Quality 41082437029](https://github.com/alimtalbi-ata/aiops/actions/runs/41082437029) 3/3 and Chromium 6/6 with all 14 ITIL checkpoints MISSING. 5/5 then selectively ported #202 `5fe17abd` security response changes into the same #201 candidate, HEAD `59ba22f1761c35ed46b92ffe5a3c4d050ed4f7c6`, preserving exact `acme_run_detail.py` blob `14729a4a8c3b54757e5e78e12a8043202adb7caa` and adding the negative header tests without wholesale replacement of divergent test history. #202 own [Quality 41082145661](https://github.com/alimtalbi-ata/aiops/actions/runs/41082145661) SUCCESS, but combined [#201 Quality 41082715412](https://github.com/alimtalbi-ata/aiops/actions/runs/41082715412) QUEUED. No session/OIDC/tenant/runtime promotion.
+
+<!-- convergence-5of5-477da60-20261030 -->
+## 5/5 selective transport register — 2026-10-30T16:15:33.055Z
+
+**Audit UTC:** 2026-10-30T16:15:33.055Z. **Release candidate:** [#201](https://github.com/alimtalbi-ata/aiops/pull/201), base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, exact HEAD [`477da60d92dc777e1e635eea4c5510c350a5d90c`](https://github.com/alimtalbi-ata/aiops/commit/477da60d92dc777e1e635eea4c5510c350a5d90c), **28 ahead / 0 behind**, draft and unmerged. [Exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) **QUEUED** at audit; previous #201 [Quality 41082715412](https://github.com/alimtalbi-ata/aiops/actions/runs/41082715412) **3/3 SUCCESS** on old `59ba22f1`, not on this new SHA.
+
+| Source lane / exact head | Transported paths and Git blob prefixes | Scope / remaining gap |
+|---|---|---|
+| 1/5 #198 `0504b1c4` | `tools/find_acme_demo_run.py` `0b2cad84`; `tests/test_find_acme_demo_run.py` `a41b6d97` | Fail-closed canonical/epoch-bounded UTC Evidence metadata; **not** independent Evidence attestation, tenant ACL or real Core probe |
+| 2/5 #202 `6a0403b7` | `app/portal/acme_run_detail.py` `b77645bc`; `tests/test_portal_run_detail.py` `3a88d1b3`; `app/portal/portal_run_link_client.js` `fb1f133d`; `tests/test_portal_run_link_client.cjs` `3eda6543` | Four-field Core read remains SYNTHETIC_ONLY; reject extra authority, show 401/403/503, no SSO/OIDC or tenant proof |
+
+All six blobs were inserted into #201's existing tree, preserving its Portal story, `app/portal/main.py`, `compose.yml`, `app/core/main.py` and Policy. GitHub Actions **queued** for new head; previous green does not transfer. #205 remains a mock-only GLPI↔Run xref design; #194/#204 OIDC/outbox and #196 AI telemetry remain stacked and unported. Do not merge #185 wholesale or enable #188/#189 together; #146/#153 deploy disabled and #187 deferred.
