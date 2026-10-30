@@ -124,6 +124,24 @@ class RunDetailTests(unittest.TestCase):
             self.assertNotIn("PRIVATE-TENANT", response.text)
             self.assertNotIn("RUN-FOREIGN", response.text)
 
+    def test_unrecognized_core_fields_fail_closed_instead_of_becoming_authority(self):
+        # The actual Core NOC bearer contract has only four identity keys.
+        # Newly added claims must be explicitly qualified before Portal can read them.
+        for claim in (
+            {"approval_status": "APPROVED"},
+            {"policy_decision": "ALLOW"},
+            {"scenario_id": "SCN-UNVERIFIED"},
+            {"run_context": {"run_id": "RUN-FOREIGN", "ticket": "GLPI-FAKE"}},
+        ):
+            with self.subTest(claim=claim), patch.object(
+                    acme_run_detail, "_read_core_run", return_value=run(**claim)):
+                response = self.get()
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json(), {
+                "state": "UNKNOWN", "reason": "CORE_RUN_UNVERIFIED"})
+            self.assertNotIn("APPROVED", response.text)
+            self.assertNotIn("GLPI-FAKE", response.text)
+
     def test_unqualified_authority_claims_never_become_synthetic_proof(self):
         # The four-field Core NOC identity read cannot authenticate extra
         # source, tenant, ticket, impact or runtime claims.
