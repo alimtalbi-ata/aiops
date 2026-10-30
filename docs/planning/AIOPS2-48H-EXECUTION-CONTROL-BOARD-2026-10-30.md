@@ -351,3 +351,7 @@ Downloaded #201 Quality 41113172965 artifact `13005150615` to isolated workspace
 ### 5/5 exact-head CI follow-up — 2026-10-31
 
 #201 `f38014c92b85763be8ac3f72042b50a48dbba95c` [Quality 41145124544](https://github.com/alimtalbi-ata/aiops/actions/runs/41145124544) **SUCCESS 3/3** on the exact new source SHA. Logs: Portal Python **30/30**, Portal link JS **7/7**, synthetic Chromium **6/6**, kit guard **12/12**, SAN→Payments fixture **6/6**. This upgrades **T0 to GO_LIMITED** for the fail-closed tenant-disclosure fix only. T1 remains **BLOCKED** (no Core actor+tenant exact-Run ACL), T2 NOT_TESTED, T3 NOT_ATTESTED, T4/T5 NO_GO. Artifact `13020710411` listed only, contents/checksum NOT_AUDITED; no kit qualification. Issue #186 [handoff](https://github.com/alimtalbi-ata/aiops/issues/186#issuecomment-6535763066).
+
+### 5/5 exact artifact receipt — 2026-10-31
+
+[#201 artifact 13020710411](https://github.com/alimtalbi-ata/aiops/actions/runs/41145124544/artifacts/13020710411) downloaded: ZIP SHA256 `b850361d60dd4b291d54f82db3acc838319dca2f1209f14d1b1feb3a40165b4f`, 2/2 CRC PASS, screenshot SHA256 `8a1720c3851833525d0e817a157d24826ff431fc84ce1d9d9742fd5595ebcaca` matches metadata. Source `f38014c9...`, base `27deb9b1...`, checkout `ae76127a...`; synthetic only, runtime unauthenticated, GLPI null, no kit. Release still NO_GO.
