@@ -194,6 +194,86 @@ def recover_committed_critic_block(rid):
     }
 
 
+def create_hitl_proposal(rid, mode, expected_version):
+    """Create a proposal only from a clean, persisted Analyst/Critic pair.
+
+    No natural-language intent is converted into a command. The model must
+    provide an allowlisted action type, CI target, evidence, preconditions,
+    postconditions and (for high risk) rollback information explicitly.
+    """
+    detail = get_json(CORE, f'/api/runs/{rid}', token=ADMIN)
+    events = detail.get('events', [])
+    analyst_event = next((e for e in reversed(events)
+        if e.get('stage') == 'DGX_ANALYST'
+        and e.get('event_type') == 'ANALYST_COMPLETED'
+        and e.get('status') == 'PASS'), None)
+    critic_event = next((e for e in reversed(events)
+        if e.get('stage') == 'DGX_CRITIC'
+        and e.get('event_type') == 'CRITIC_COMPLETED'
+        and e.get('status') == 'PASS'), None)
+    if not analyst_event or not critic_event:
+        return {'status': 'BLOCKED', 'reason': 'validated_analyst_and_critic_events_required'}
+    analysis = analyst_event.get('payload', {}).get('analysis', {})
+    critique = critic_event.get('payload', {}).get('critique', {})
+    if (critique.get('validated') is not True
+            or critique.get('issues')
+            or critique.get('unsafe_actions')):
+        return {'status': 'BLOCKED', 'reason': 'critic_not_cleanly_validated'}
+    analysis_id = analyst_event.get('payload', {}).get('analysis_record_id')
+    critique_id = critic_event.get('payload', {}).get('critique_record_id')
+    if not analysis_id or not critique_id:
+        return {'status': 'BLOCKED', 'reason': 'analysis_or_critique_ledger_reference_missing'}
+    actions = analysis.get('recommended_actions', [])
+    if not isinstance(actions, list):
+        return {'status': 'BLOCKED', 'reason': 'analyst_actions_invalid'}
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        target = action.get('target_ci_id')
+        action_type = action.get('action_type')
+        risk = action.get('risk_tier')
+        preconditions = action.get('preconditions')
+        postconditions = action.get('expected_postconditions')
+        evidence_ids = sorted(set(action.get('evidence_ids') or []))
+        if (action.get('advisory_only') is not True
+                or action.get('requires_human_approval') is not True
+                or not target or not action_type or not risk
+                or not isinstance(preconditions, list) or not preconditions
+                or not isinstance(postconditions, list) or not postconditions
+                or not evidence_ids):
+            continue
+        if risk in ('HIGH', 'CRITICAL') and not action.get('rollback_plan'):
+            continue
+        try:
+            proposal = post_json(CORE, f'/api/runs/{rid}/proposals', {
+                'source_action_id': action.get('action_id'),
+                'analysis_id': analysis_id,
+                'critique_id': critique_id,
+                'target_ci_id': target,
+                'action_type': action_type,
+                'risk_tier': risk,
+                'parameters': action.get('parameters') or {},
+                'evidence_ids': evidence_ids,
+                'preconditions': preconditions,
+                'expected_postconditions': postconditions,
+                'rollback_plan': ({'plan': action.get('rollback_plan')}
+                                  if action.get('rollback_plan') else {}),
+            }, timeout=15, token=ADMIN)
+        except Exception as exc:
+            log.warning('HITL proposal rejected by Core validation: %s', type(exc).__name__)
+            continue
+        return {
+            'status': 'WAITING' if mode == 'LIVE' else 'BLOCKED',
+            'proposal_id': proposal['proposal_id'],
+            'proposal_hash': proposal['proposal_hash'],
+            'proposal_revision': proposal['revision'],
+            'proposal_status': proposal.get('status', 'PROPOSED'),
+            'reason': ('awaiting_human_decision' if mode == 'LIVE'
+                       else 'synthetic_proposal_cannot_authorize_live_execution'),
+        }
+    return {'status': 'BLOCKED', 'reason': 'no_fully_structured_allowlisted_action'}
+
+
 def _execute_stage_blocking(a,attempt):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
     if stage=='DGX_CRITIC':
@@ -203,6 +283,50 @@ def _execute_stage_blocking(a,attempt):
     started=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':version,'stage':stage,'event_type':'STAGE_STARTED','event_key':f'{stage}:START','status':'RUNNING','confidence':None,'payload':{'executor':'temporal','retry_stable':True}})
     v=started['version']
     try:
+        if stage == 'HITL':
+            result = create_hitl_proposal(rid, mode, v)
+            proposal_id = result.get('proposal_id')
+            payload = {
+                'reason': result.get('reason'),
+                'proposal_id': proposal_id,
+                'proposal_hash': result.get('proposal_hash'),
+                'proposal_revision': result.get('proposal_revision'),
+                'proposal_status': result.get('proposal_status'),
+                'synthetic': mode != 'LIVE',
+                'execution_allowed': False,
+            }
+            event = call('POST', f'{CORE}/api/runs/{rid}/events', {
+                'expected_version': v,
+                'stage': stage,
+                'event_type': 'HITL_PROPOSAL_CREATED' if proposal_id else 'HITL_PROPOSAL_BLOCKED',
+                'event_key': f'{stage}:PROPOSAL',
+                'status': 'WAITING' if result.get('status') == 'WAITING' else 'BLOCKED',
+                'decision': 'HUMAN_APPROVAL',
+                'confidence': 0,
+                'payload': payload,
+            })
+            post_json(CORE, f'/api/runs/{rid}/checkpoint',
+                      {'stage': stage, 'version': event['version']}, token=ADMIN)
+            if result.get('status') != 'WAITING':
+                blocked = call('POST', f'{CORE}/api/runs/{rid}/command', {
+                    'expected_version': event['version'],
+                    'idempotency_key': f'HITL-BLOCK-{rid}',
+                    'command': 'BLOCK',
+                })
+                return {
+                    'run_id': rid, 'stage': stage, 'status': 'BLOCKED',
+                    'version': blocked['version'], **payload,
+                }
+            return {
+                'run_id': rid, 'stage': stage, 'status': 'WAITING',
+                'version': event['version'],
+                'proposal_id': proposal_id,
+                'proposal_hash': result['proposal_hash'],
+                'proposal_revision': result['proposal_revision'],
+                'hitl_required': True,
+                'execution_allowed': False,
+            }
+
         # This baseline has no qualified LIVE evidence/CMDB/RAG/analyst/critic/remediation adapters.
         # Never manufacture evidence or confidence values for a LIVE run.
         if mode == 'LIVE':
