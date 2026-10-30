@@ -74,7 +74,8 @@ for i in $(seq 1 180); do
   [[ "$RUN_STATUS" =~ ^(BLOCKED|RESOLVED|FAILED|CANCELLED)$ ]] && break
   sleep 1
 done
-[[ "$RUN_STATUS" == "RESOLVED" ]] || { FAILURE="expected_synthetic_run_resolved_without_effects_but_status_$RUN_STATUS"; exit 1; }
+# Collect persisted diagnostics before asserting terminal status. This keeps
+# failure reports useful when a workflow blocks after successful ledger writes.
 ANALYSIS_COUNT="$(psqlc "select count(*) from aiops.analysis_records where run_id='$RUN_ID'")"
 CRITIQUE_COUNT="$(psqlc "select count(*) from aiops.critique_records where run_id='$RUN_ID'")"
 POLICY_COUNT="$(psqlc "select count(*) from aiops.policy_decisions where run_id='$RUN_ID'")"
@@ -84,6 +85,7 @@ ANALYSIS_SEVERITY="$(psqlc "select coalesce(output->>'severity','UNKNOWN') from 
 CRITIQUE_VALIDATED="$(psqlc "select coalesce(validated,false)::text from aiops.critique_records where run_id='$RUN_ID' order by created_at desc limit 1")"
 POLICY_RESULT="$(psqlc "select coalesce(state,'UNKNOWN')||'|'||coalesce(decision,'UNKNOWN') from aiops.policy_decisions where run_id='$RUN_ID' order by created_at desc limit 1")"
 EVENT_TYPES="$(psqlc "select coalesce(string_agg(event_type,',' order by sequence),'') from aiops.run_events where run_id='$RUN_ID'")"
+[[ "$RUN_STATUS" == "RESOLVED" ]] || { FAILURE="expected_synthetic_run_resolved_without_effects_but_status_$RUN_STATUS"; exit 1; }
 [[ "$ANALYSIS_COUNT" -ge 1 ]] || { FAILURE="analysis_record_missing"; exit 1; }
 [[ "$CRITIQUE_COUNT" -ge 1 ]] || { FAILURE="critique_record_missing"; exit 1; }
 [[ "$POLICY_COUNT" -ge 1 ]] || { FAILURE="policy_decision_missing"; exit 1; }
