@@ -98,7 +98,7 @@ class BenchmarkSummaryTests(unittest.TestCase):
             model = aggregate_reports(paths)["model_results"][0]
             self.assertIsNone(model["total_tokens_mean"])
             self.assertEqual(model["usage_complete_repeats"], 0)
-            self.assertEqual(model["usage_coverage_mean"], 0)
+            self.assertIsNone(model["usage_coverage_mean"])
 
     def test_prompt_version_must_match_for_comparison(self):
         with tempfile.TemporaryDirectory() as directory:
