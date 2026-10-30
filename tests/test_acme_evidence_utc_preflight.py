@@ -85,5 +85,22 @@ class OfflineMockEvidencePreflightTests(unittest.TestCase):
         self.assertEqual(LEDGER, before)
 
 
+    def test_invalid_clock_short_circuits_before_core_and_glpi_get(self):
+        for clock in (datetime(2026, 10, 30, 12, 0), "invalid-clock", 42,
+                      datetime.max.replace(tzinfo=timezone.utc)):
+            with self.subTest(clock=clock):
+                core_get, glpi_get = Mock(), Mock()
+                def joined_read():
+                    core_get()
+                    glpi_get()
+                    return {"state": "MATCHED"}
+                result = preflight_then_join(LEDGER, join_read_only=joined_read, now=clock)
+                self.assertEqual(result["state"], "UNKNOWN")
+                self.assertIsNone(result["ticket_id"])
+                self.assertEqual(result["verified_evidence_ids"], [])
+                core_get.assert_not_called()
+                glpi_get.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
