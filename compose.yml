@@ -116,6 +116,7 @@ services:
     restart: unless-stopped
     environment:
       CORE_URL: http://aiops2-core:810
+      PORTAL_URL: http://aiops2-portal:777
       EVIDENCE_URL: http://aiops2-evidence:812
       POLICY_URL: http://aiops2-policy:813
       TWIN_URL: http://aiops2-twin:811
