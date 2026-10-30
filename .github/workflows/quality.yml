@@ -33,6 +33,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+          python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
       - name: Analyst Critic fail-closed fault injection
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
       - name: Portal demo launch contract tests
