@@ -56,6 +56,7 @@ def model_call_telemetry():
         'invocation_id': None, 'latency_ms': None, 'request_count': 0, 'retry_count': 0,
         'prompt_tokens': None, 'completion_tokens': None, 'total_tokens': None,
         'cached_tokens': None, 'reasoning_tokens': None, 'usage_source': 'unavailable',
+        'status': 'unavailable', 'error_class': None,
         'cost_usd': None, 'pricing_source': None,
     }
 
