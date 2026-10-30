@@ -10,11 +10,34 @@ import re
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 SCENARIO = "SCN-GOLDEN-PAYMENT-P1"
 SERVICE = "ACME-SVC-PAYMENTS"
 RUN_ID = re.compile(r"RUN-[A-Za-z0-9_-]{1,120}\Z")
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    """Never forward an internal bearer credential to a redirect destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_NO_REDIRECT = build_opener(_RejectRedirects())
+
+
+def _auth_transport_safe(base):
+    """Bearer reads require HTTPS, except explicit loopback HTTP."""
+    try:
+        parts = urlsplit(base)
+    except ValueError:
+        return False
+    return (parts.scheme == "https" or
+            (parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1"))) and (
+        bool(parts.hostname) and not parts.username and not parts.password and
+        parts.path in ("", "/") and not parts.query and not parts.fragment
+    )
 
 
 # Core caps the list endpoints; these windows do not cover historical records.
@@ -27,7 +50,7 @@ def fetch_json(base, path, token=None):
     if token:
         headers["Authorization"] = "Bearer " + token
     request = Request(base.rstrip("/") + path, headers=headers)
-    with urlopen(request, timeout=8) as response:
+    with _NO_REDIRECT.open(request, timeout=8) as response:
         if response.status != 200:
             raise ValueError("unexpected_http_status")
         payload = json.load(response)
@@ -116,6 +139,8 @@ def probe_authenticated_evidence(base, rid, token, get=fetch_json):
         return {"status": "UNKNOWN", "reason": "TOKEN_NOT_CONFIGURED"}
     if not isinstance(rid, str) or not RUN_ID.fullmatch(rid):
         return {"status": "UNKNOWN", "reason": "RUN_ID_UNQUALIFIED"}
+    if not _auth_transport_safe(base):
+        return {"status": "UNKNOWN", "reason": "AUTH_TRANSPORT_UNSAFE"}
     try:
         response = get(base, "/api/noc/runs/" + quote(rid, safe="") + "/evidence-refs", token=token)
     except (HTTPError, URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError):
@@ -167,7 +192,10 @@ def main(argv=None):
         )
         output["registry_auth_enforced"] = False
     print(json.dumps(output, sort_keys=True, ensure_ascii=False))
-    return 0 if output["result"] == "SOURCE_VERIFIED_REGISTRY_ONLY" else 2
+    registry_ok = output["result"] == "SOURCE_VERIFIED_REGISTRY_ONLY"
+    auth_ok = (not args.probe_auth_evidence or
+               output["authenticated_evidence_probe"]["status"] == "SOURCE_VERIFIED_SYNTHETIC_ONLY")
+    return 0 if registry_ok and auth_ok else 2
 
 
 if __name__ == "__main__":
