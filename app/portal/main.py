@@ -633,6 +633,22 @@ def demo_run_detail(rid:str):
     body+=panel("Timeline canonique des événements",
       table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
+    try:
+        artifact_response=_get("/api/runs/"+key+"/demo-artifacts")
+    except Exception:
+        artifact_response={"status":"UNKNOWN"}
+    artifact_items=artifact_response.get("items") if isinstance(artifact_response,dict) else None
+    artifact_items=[item for item in artifact_items if isinstance(item,dict)] if isinstance(artifact_items,list) else []
+    artifact_rows=[(
+        esc(item.get("sequence_no","?")), esc(item.get("artifact_id","UNKNOWN")),
+        esc(item.get("artifact_type","UNKNOWN")), esc(item.get("title","")),
+        esc(item.get("caption","")), esc(json.dumps(item.get("payload",{}),ensure_ascii=False,sort_keys=True))
+    ) for item in artifact_items]
+    body+=panel("Artefacts DEMO persistés — lecture Core",
+      '<p>Artefacts synthétiques rattachés à ce run. Ils ne constituent pas une preuve d’action LIVE.</p>'+
+      (table(["Séq.","Artifact ID","Type","Titre","Légende","Payload"],artifact_rows)
+       if artifact_rows else '<p class="muted">Aucun artefact DEMO disponible depuis Core ('+
+       esc(artifact_response.get("status","UNKNOWN") if isinstance(artifact_response,dict) else "UNKNOWN")+').</p>'))
     from portal.demo_explain import render_critic_explanation
     body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
     body+=panel("Registre IA et Evidence/ITSM — lecture viewer",

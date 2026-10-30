@@ -481,6 +481,13 @@ class DemoV2Tests(unittest.TestCase):
                                 "status": "BLOCKED"}, "events": []}
             if path == "/api/runs/RUN-ACME/gates":
                 return {"status": "UNKNOWN"}
+            if path == "/api/runs/RUN-ACME/demo-artifacts":
+                return {"items": [{"artifact_id": "ART-ACME-1",
+                                   "artifact_type": "business_story",
+                                   "title": "Golden Payment Evidence",
+                                   "sequence_no": 1,
+                                   "caption": "Synthetic demo artifact",
+                                   "payload": {"evidence_count": 13}}]}
             raise AssertionError(path)
         with (patch.object(portal_main, "_runs", return_value=[
                   {"run_id": "RUN-ACME", "mode": "DEMO", "status": "BLOCKED"}]),
@@ -495,6 +502,11 @@ class DemoV2Tests(unittest.TestCase):
             self.assertIn('href="' + path + '"', page)
         self.assertIn("ITSM GLPI", page)
         self.assertIn("UNKNOWN", page)
+        self.assertIn("Artefacts DEMO persistés", page)
+        self.assertIn("ART-ACME-1", page)
+        self.assertIn("Golden Payment Evidence", page)
+        self.assertIn("Synthetic demo artifact", page)
+        self.assertIn("evidence_count", page)
         self.assertNotIn("ticket connecté</a>", page)
 
     def test_evidence_itsm_route_rejects_unauthorized_before_core(self):
