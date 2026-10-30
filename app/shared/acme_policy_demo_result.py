@@ -60,6 +60,34 @@ def _same_snapshot_exact(left: Any, right: Any) -> bool:
     )
 
 
+def _catalog_redacted_parameters_valid(params: Any, spec: dict[str, Any]) -> bool:
+    """Accept only the catalog's no-effect, already-redacted gate parameters.
+
+    The receipt omits the original proposal, so this is shape validation,
+    not a cryptographic recheck of its proposal digest or authorization.
+    """
+    if not isinstance(params, dict) or set(params) != set(spec):
+        return False
+    for key, meta in spec.items():
+        value = params[key]
+        kind = meta.get("type")
+        if kind == "secret_ref":
+            # The simulator must never put a vault reference into a receipt.
+            if value != "[REDACTED]":
+                return False
+        elif kind == "identifier":
+            if type(value) is not str or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", value):
+                return False
+        elif kind == "integer":
+            if type(value) is not int or not meta["min"] <= value <= meta["max"]:
+                return False
+        elif kind == "enum":
+            if type(value) is not str or value not in meta["values"]:
+                return False
+        else:
+            return False
+    return True
+
 def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     """Summarize a *synthetic, unverified* receipt without elevating its claims.
 
@@ -131,6 +159,10 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("recipe_not_allowlisted")
     if not target.startswith(recipe["target_prefix"]):
         raise ValueError("recipe_target_scope_invalid")
+    # The builder stores catalog-typed, redacted parameters on both SIMULATED
+    # and BLOCKED gates. Reject nested approval claims and secret references.
+    if not _catalog_redacted_parameters_valid(gate.get("parameters"), recipe["parameters"]):
+        raise ValueError("gate_parameters_invalid")
     if (
         gate.get("executor") != "NO_EFFECT_SIMULATOR"
         or gate.get("effect_applied") is not False
