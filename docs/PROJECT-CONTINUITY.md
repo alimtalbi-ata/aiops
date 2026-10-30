@@ -242,3 +242,9 @@ Draft [#201](https://github.com/alimtalbi-ata/aiops/pull/201) at `2ceda14c8a21fe
 ### 2026-10-30 14:16 UTC — 5/5 release inventory guard
 
 Main-based integration draft #201 advanced to `03a5b0cce44e56d7ae315ee7df16e850a5e35b11`: added fail-closed cumulative ZIP inventory/source gate, 10/10 local offline tests and Quality test step. New exact-head CI pending; prior #201 `0bd8b4c` Quality SUCCESS 3/3 does not qualify this head. Historical #185 ZIP remains integrity-valid (395/395 checksums) but feature-incomplete; source checkout/manifest SHA mismatch and install/rollback proof block release. No host, cron, GLPI, LIVE, main/stable or merge action.
+
+### 2026-10-30 15:12 UTC — 5/5 integration/benchmark qualification
+
+The one clean main-based integration [#201](https://github.com/alimtalbi-ata/aiops/pull/201) is now `7474c74c9e6a79c5d28d6624f7b9be2100a792ac` (main comparison 17 ahead / 0 behind, 34 changed files). Selective #198 synthetic SAN→Payments fixture port: `tests/test_acme_san_payments_fixture_contract.py` source blob `675a0af6`, pinned seed `67f0124a`; `.github/workflows/quality.yml` explicitly runs its six tests. [Exact-head Quality 41077972849](https://github.com/alimtalbi-ata/aiops/actions/runs/41077972849) **SUCCESS 3/3**, six fixture tests **6/6 PASS**. This is a synthetic seed contract, not tenant/GLPI/Payments runtime proof.
+
+[#196](https://github.com/alimtalbi-ata/aiops/pull/196) head `48b353b1` remains highly divergent from main (851 ahead/43 behind). Its [Quality 41070920303](https://github.com/alimtalbi-ata/aiops/actions/runs/41070920303) is green 8/8 but **both Ollama model evaluation jobs failed all 3 repeats internally** (ReadTimeout; evaluator exit 1; zero cases analyzed; usage/latency/cost UNKNOWN). Fix fail-closed workflow status and diagnose model timeout before benchmark promotion. #201 still lacks migration 011/OIDC/outbox/AI telemetry and cumulative install/rollback evidence. Stable/LIVE NO-GO; no Debian action.
