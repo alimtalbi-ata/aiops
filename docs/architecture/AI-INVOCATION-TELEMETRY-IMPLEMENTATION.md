@@ -13,6 +13,7 @@
 - Cost and pricing source remain null until a pinned provider pricing schedule or invoice export is configured.
 - Bounds request context by `AIOPS_LLM_MAX_REQUEST_BYTES` (default 262144 bytes) and generated output by `AIOPS_LLM_MAX_OUTPUT_TOKENS` (default 4096).
 - The existing evaluation tool attaches per-call telemetry to each case and calculates usage coverage, complete token totals, partial reported token sum, p50/p95 latency and retry totals. Token totals remain null if any call in the evaluation lacks provider-reported usage.
+- The evaluation now scores corrective-proposal actionability separately: target CI correctness, allowlisted action type, evidence references, preconditions, expected postconditions, verification steps, rollback completeness, risk tier and advisory/human-approval flags. Four dataset cases pin expected target CI and action type; the unknown-only case expects no proposal.
 - The existing Core evaluation ledger receives aggregate metrics through the current model-evaluation endpoint; the per-invocation detail is retained in the JSON report artifact.
 
 ## Explicit gaps
@@ -31,3 +32,8 @@
 - Complete versus partial usage aggregation, latency percentiles and unknown cost.
 
 The CI workflow already runs `tests/test_intelligence_contract.py` and `tests/test_ai_eval_harness.py`; this branch must pass the full current-head workflow before the implementation is qualified.
+
+
+## Corrective proposal benchmark
+
+The deterministic provider now emits a fully structured, read-only `COLLECT_DIAGNOSTICS` action with a case-derived SAN or storage-pool target, evidence IDs, preconditions, measurable postconditions, verification steps and a no-effect rollback statement. The evaluator gates proposal actionability separately from general action safety. This is a contract benchmark, not a proof that a real model will produce equally correct actions.
