@@ -50,3 +50,11 @@ Permitted future Debian schedule after operator installation and review:
 - Full suite: one nightly run (plus PR/push).
 - Deployed read-only smoke: 15 minutes only when the approved self-hosted runner is online.
 - AI benchmark: run on demand after each model/prompt change and once before/after the customer rehearsal; do not schedule repeated GPU-heavy benchmarks without capacity approval.
+
+
+## 6. Verified trigger audit — 2026-10-30 12:15 UTC
+
+- `main:.github/workflows/quality.yml` has `pull_request` and `push` only, **no schedule**. Neither PR #188 nor #189 is merged, so no GitHub Quality cron can be claimed active.
+- #188 head `7512fdd`: full quality `23 2 * * *` and separate `*/15 * * * *` runtime smoke, which requires an approved, online repository-scoped `aiops2-runtime` runner. Its CI passed; no runner or deployed smoke was verified.
+- #189 head `233f4ed`: actual YAML `23 */2 * * *`; the PR description's six-hour claim is stale. It duplicates the full quality suite and must not be enabled alongside #188.
+- The five ChatGPT schedule cadence is separate from GitHub Actions. #146/#153 auto-deploy remains unauthorized. The stable portal-only deployer cannot install the integrated four-image candidate.

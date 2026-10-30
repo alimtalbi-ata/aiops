@@ -150,3 +150,13 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Qualification:** exact-head CI, real ephemeral integration, synthetic E2E, failure injection, package checksums and install/rollback are separate gates. Green CI does not qualify Debian or LIVE.
 - **Safety:** no mass merge, direct main push, production change, cron installation, Docker restart, live migration or LIVE remediation. Any execution requires separate approval, policy recheck, identity, ownership/fencing, preconditions, idempotency, independent verification and rollback.
 - **Rollback:** documentation branch can be reverted as one PR; no runtime or data migration is introduced by this ADR.
+
+
+## ADR-0018 — Preserve scoped read-model contracts and exact-head release stop
+
+- **Date:** 2026-10-30 12:15 UTC
+- **Status:** Proposed; subject to review on PR #195.
+- **Decision:** Never change a fail-closed Core Run/GLPI/Evidence/Policy response contract merely to satisfy an outdated test double. A failing exact-head CI gate stops the integrated release even when earlier heads passed. Repair mocks/fixtures to match the authoritative endpoint schema, add negative tests for foreign `run_id`, and rerun the exact SHA.
+- **Evidence:** #185 candidate `5782d6f` V2.8 [41053319372](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319372) failed one of 59 tests because a legacy mock returned `{"decision":"BLOCKED"}` rather than a scoped `{"items":[...]}` gates response. Quality [41053319020](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319020) was pending when recorded. Do not infer a runtime regression or a green gate from this single test.
+- **Ownership:** 2/5 owns Portal fixtures and UI contract; 5/5 integrates only verified fixes. #196 owns the existing Analyst/Critic telemetry implementation; 5/5 owns benchmark interpretation and release evidence, not a duplicate provider client.
+- **Consequences:** One draft release candidate, no main/stable merge, no cron activation or Debian changes; explicit UNKNOWN for unverified business links, costs, approvals and rollback.

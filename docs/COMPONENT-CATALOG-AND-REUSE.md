@@ -101,3 +101,12 @@ AI evaluation reuse:
 - `tests/test_ai_eval_harness.py`
 - `tests/test_model_evaluation_api.py`
 These were source-reviewed on the HITL candidate branch. Quality metrics exist; per-call token/cost/latency telemetry is not yet qualified. Port selectively and preserve dataset/prompt/model hashes.
+
+
+## 2026-10-30 12:15 UTC — exact-head component and overlap check
+
+- **Portal/Core/Twin/Policy ACME:** #185 HEAD `5782d6f` has eight exact 1/5–4/5 source blobs. The V2.8 isolated gate failed on a stale gates-response fixture; treat the candidate as **not qualified** until the 2/5 contract test is repaired and all exact-head workflows pass.
+- **GLPI/HITL:** #192 (read-only ticket context) and #193 (PROPOSED-only fastpath) overlap in `app/portal/glpi_run_context.py` and its test. #194 additionally overlaps #185/#190/#192 on `app/core/main.py`, `app/portal/main.py`, `compose.yml`; port contracts selectively and preserve Core authority. #193 Quality succeeded only after a transient pip-download retry; that does not validate a combined branch.
+- **AI evaluator:** #196 reuses `tools/evaluate_ai_core.py` and `tests/test_ai_eval_harness.py` for provider-reported token/latency accounting. Its exact-head workflows succeeded; no live invocation, pricing source or actual cost has been qualified. Baseline local harness: 3/3 PASS, five synthetic cases, no inference.
+- **Scheduling:** #188 daily full quality + 15-minute read-only runtime smoke is preferred, but both #188 and #189 remain unmerged. #189's actual YAML is `23 */2 * * *`, despite its stale PR description mentioning six hours. Never activate both.
+- **Release/deployer:** stable SHA `e54c4e9a` is unchanged; stable deployer is portal-only and cannot transport the four-service candidate. #187 Loki/Tempo/OTel is deferred; #146/#153 auto-deploy is not authorized.

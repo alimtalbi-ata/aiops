@@ -108,3 +108,10 @@ Stacked PR [#196](https://github.com/alimtalbi-ata/aiops/pull/196) adds the firs
 **Exact-head CI:** PR #196 correction head `388b7c48a108f70315b9fae92de72d10ac399704` passed AIOps quality gates run `41053026110` (6/6 jobs), Offline Integrity `41053026078`, Historical Trace `41053026102`, and V2.8 Core `41053026140`.
 
 **Still not qualified:** real DGX/provider benchmark (CI uses deterministic provider), dedicated durable per-invocation DB rows, tenant/run spend quotas, pricing source and actual USD cost. Missing usage/pricing remains UNKNOWN. The request-byte limit is not a token estimate. The PR is stacked on #194 and is not yet part of main.
+
+
+## 9. Baseline evidence and existing telemetry work — 2026-10-30 12:15 UTC
+
+The reproducible local dataset/harness audit is recorded in [AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md](AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md): five synthetic cases, dataset SHA256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`, harness 3/3 PASS, **zero model invocations**. This is a structural baseline, not a measured quality, latency or cost benchmark.
+
+Reuse [PR #196](https://github.com/alimtalbi-ata/aiops/pull/196) on top of #194 for provider usage and latency instrumentation; its exact-head four workflows succeeded. Do not duplicate its provider client, assume provider usage is available, or publish estimated spend as billed cost. An isolated synthetic Analyst/Critic run on a pinned provider/model/prompt/dataset is still required before reporting p50/p95, token counts or cost.

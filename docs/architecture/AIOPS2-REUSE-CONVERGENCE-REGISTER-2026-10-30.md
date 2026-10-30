@@ -71,3 +71,23 @@
 
 - #195 architecture/ITIL/48h documentation branch passed its exact quality workflow `41052336091` (3/3 jobs success: Policy/static, Core/PostgreSQL NOC integration, Grafana real integration).
 - #196 is stacked on #194 and implements per-invocation provider usage/latency telemetry and request/output caps. First run exposed two outdated HTTP test doubles without `status_code`; fixtures were corrected in commit `388b7c48a108f70315b9fae92de72d10ac399704`. Corrected quality tests for Intelligence contracts and AI evaluation passed; full Runtime E2E/release-kit remained in progress at this update.
+
+
+## 6. 5/5 integration and exact-head CI delta — 2026-10-30 12:15 UTC
+
+| PR | Exact observed head | Qualification / disposition |
+|---|---|---|
+| #185 | `5782d6fcece32cfd38ada0d50bfe68a8b74bd164` | Eight selective source blobs integrated; V2.8 [41053319372](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319372) **FAILED** (59 tests, one stale `gates.decision` mock). Quality [41053319020](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319020) in progress at snapshot; Historical/Offline SUCCESS. Not release-qualified. |
+| #187 | `0d7b2310f7c04fff5090dd11a6748ef3f4ca6b49` | Quality SUCCESS; runtime resource/retention/security review missing; DEFER. |
+| #188 | `7512fdd17f9e9cf1ab3a1d4acb7dc77c81ee532f` | Quality SUCCESS, unmerged. Daily `23 2 * * *` and 15-minute runtime smoke design; runner NOT_ATTESTED. Preferred over #189. |
+| #189 | `233f4ed4158257f1df724e4280e00804b7ae53fb` | Quality SUCCESS, unmerged. Actual workflow cron `23 */2 * * *`, PR description's six-hour claim is stale. Duplicate, DO NOT ACTIVATE. |
+| #190 | `2aa1e89dd5f8c0dd769d9ca4ca13fbe6df19f853` | Four exact-head workflows SUCCESS; correctness fix already selectively represented in #185. No automatic merge. |
+| #192 | `8488e64c718ba887cb9b1e4a3b0161c8a435232f` | Four exact-head workflows SUCCESS; staged Core/Portal/GLPI contracts need reconciliation. |
+| #193 | `e8f05d8c50045f4256e89ad0776424f4dad5bb61` | Quality [41024125286](https://github.com/alimtalbi-ata/aiops/actions/runs/41024125286) first failed on pip `IncompleteRead`, then targeted rerun 6/6 SUCCESS; stacked on #192, not an independent release. |
+| #194 | `1fade3e5b3f07bdbd6b4fa8222bbb585012894ca` | Four exact-head workflows SUCCESS; HITL/OIDC/outbox not runtime qualified. |
+| #195 | `48c83c17af51f193b4ed0bf0471622e019b196b7` | Architecture docs; latest CI queued at snapshot, no runtime implication. |
+| #196 | `388b7c48a108f70315b9fae92de72d10ac399704` | Four exact-head workflows SUCCESS; reuses evaluator/provider telemetry, not yet integrated in scenario candidate. |
+
+**Overlap map:** `.github/workflows/quality.yml` (#185/#188/#189/#194); `app/core/main.py` (#185/#190/#192/#194); `app/portal/main.py` (#185/#190/#192/#194); `compose.yml` (#185/#192/#194); `app/portal/glpi_run_context.py` (#192/#193). Keep #185 the only scenario release candidate, #195 the documentation review PR and #196 a stacked telemetry workstream; do not mass merge.
+
+**Deployer audit:** `deploy/aiops2-stable` is identical to `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3` (0/0). The stable `deploy/deploy-demo-studio-v2.sh` copies `demo_v2.py` and its test and locally patches `main.py`. The candidate `deploy/poll-approved-deploy.sh` accepts only the stable branch and refuses nontransported paths; it is not the four-image release mechanism. Actual cron installation, `applied.sha`, GLPI read, Compose ownership, smoke and rollback remain NOT_ATTESTED. **RELEASE_STABLE=NO_GO.**
