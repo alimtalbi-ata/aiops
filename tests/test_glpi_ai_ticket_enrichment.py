@@ -80,7 +80,7 @@ def test_report_contains_human_readable_facts_hypotheses_and_limits():
 
 def test_merge_report_preserves_original_and_replaces_owned_section():
     old = '<p>[AIOPS2-AI-REPORT:START]</p>old<p>[AIOPS2-AI-REPORT:END]</p>'
-    merged = merge_report("Description initiale" + old, "<section id=\"aiops2-ai-report\">new</section>")
+    merged = merge_report("Description initiale" + old, "<p>[AIOPS2-AI-REPORT:START]</p>new<p>[AIOPS2-AI-REPORT:END]</p>")
     assert merged.startswith("Description initiale")
     assert "old" not in merged
     assert merged.count("[AIOPS2-AI-REPORT:START]") == 1
@@ -110,7 +110,7 @@ def test_internal_sync_updates_existing_ticket_without_duplicate_report(monkeypa
     FakeGLPI.tickets["9"] = {
         "id": "9", "name": "[AIOps2] " + RUN_ID,
         "content": "Description opérateur d'origine"
-        '<section id="aiops2-ai-report">ancienne version</section>',
+        '<p>[AIOPS2-AI-REPORT:START]</p>ancienne version<p>[AIOPS2-AI-REPORT:END]</p>',
     }
     response = client.post(
         f"/api/internal/glpi/runs/{RUN_ID}/sync",
