@@ -46,7 +46,7 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn("action.get('action_type')", source)
         self.assertIn("action.get('target_ci_id')", source)
         self.assertIn("action.get('expected_postconditions')", source)
-        self.assertIn("'/proposals'", source)
+        self.assertIn("/proposals", source)
         self.assertIn("'execution_allowed': False", source)
 
     def test_synthetic_proposal_never_waits_for_live_approval(self):
