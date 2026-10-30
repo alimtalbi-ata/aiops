@@ -91,3 +91,19 @@
 **Overlap map:** `.github/workflows/quality.yml` (#185/#188/#189/#194); `app/core/main.py` (#185/#190/#192/#194); `app/portal/main.py` (#185/#190/#192/#194); `compose.yml` (#185/#192/#194); `app/portal/glpi_run_context.py` (#192/#193). Keep #185 the only scenario release candidate, #195 the documentation review PR and #196 a stacked telemetry workstream; do not mass merge.
 
 **Deployer audit:** `deploy/aiops2-stable` is identical to `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3` (0/0). The stable `deploy/deploy-demo-studio-v2.sh` copies `demo_v2.py` and its test and locally patches `main.py`. The candidate `deploy/poll-approved-deploy.sh` accepts only the stable branch and refuses nontransported paths; it is not the four-image release mechanism. Actual cron installation, `applied.sha`, GLPI read, Compose ownership, smoke and rollback remain NOT_ATTESTED. **RELEASE_STABLE=NO_GO.**
+
+
+## 6. Five-schedule handoff — 2026-10-30 12:20 UTC
+
+The four focused schedules delivered additional commits after the initial candidate convergence:
+
+| Lot | Current branch / head | Local targeted tests reported by schedule | Main ancestry comparison | Disposition |
+|---|---|---:|---:|---|
+| 1/5 ACME Core/Twin | `feat/p0-acme-core-run-locator-20261029` / `f50d3dac3182fd5d7c2bc5cb9ba8cf1bbba486ca` | 70/70 PASS | diverged 711 ahead / 43 behind | Source/evidence identity hardening; selective port only |
+| 2/5 Portal | `feat/p0-portal-nested-run-scope-20261030-1150` / `ca6feab123d552c32ea707620a9176757b88b822` | 62/62 PASS | diverged 740 / 43 | Nested event/run scope rejection; selective port only |
+| 3/5 NOC/Evidence/GLPI | `feat/p0-noc-evidence-provenance-readonly-20261030` / `18ff72e312d5af5c2df239b646de18c16c4c534c` | 2 commits reported; UTC timestamp fail-closed correction | diverged 736 / 43 | Evidence/GLPI provenance hardening; re-run targeted tests and selective port |
+| 4/5 Policy/HITL | `feat/p0-policy-simulate-failclosed-20261030` / `901c5bb86922504ef447609e5a286c783cf8060b` | 48/48 targeted + 195/195 convergence suite | diverged 739 / 43 | SIMULATE timestamp/actor validation; selective port only |
+
+These are schedule-reported targeted tests, not GitHub Actions qualification. No Actions run was found for the exact four commits at this update. The compare operation reports up to 300 changed paths due the divergent ancestry; do not copy complete branch trees or workflow files. Request commit-level/file-level diffs and port only the intended lot's minimal source + tests into a fresh main-based integration branch, then run full CI.
+
+The immediate 5/5 automation run was still in progress. Schedule 5/5 was updated to enforce base-branch checks, prohibit direct merge of divergent branches and coordinate a clean main-based selective integration.
