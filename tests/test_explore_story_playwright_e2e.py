@@ -192,7 +192,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "impact_incident_id": "ACME-DEMO-PAY-002",
             "glpi_ticket_id": None,
             "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-            "git_sha": os.environ.get("GITHUB_SHA"),
+            # On pull_request GITHUB_SHA is the ephemeral merge checkout, not the PR source.
+            "git_sha": os.environ.get("GITHUB_SHA"),  # legacy checkout alias
+            "checkout_sha": os.environ.get("GITHUB_SHA"),
+            "source_head_sha": os.environ.get("AIOPS_SOURCE_HEAD_SHA"),
+            "base_sha": os.environ.get("AIOPS_BASE_SHA") or None,
             "screenshot_file": "explore-story-ci-simulated.png",
             "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
             "runtime_authenticated": False,
@@ -200,6 +204,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "live_remediation_authorized": False,
             "privacy_reviewed": False,
         }
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            self.assertRegex(receipt["source_head_sha"] or "", r"^[a-f0-9]{40}$")
+            self.assertEqual(receipt["checkout_sha"], os.environ.get("GITHUB_SHA"))
+            if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+                self.assertRegex(receipt["base_sha"] or "", r"^[a-f0-9]{40}$")
         (output / "capture-metadata.json").write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
