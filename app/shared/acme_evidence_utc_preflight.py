@@ -28,9 +28,11 @@ def evidence_timestamps_valid(ledger: object, *, now: datetime | None = None) ->
     if not isinstance(refs, list) or not 1 <= len(refs) <= 80:
         return False
     try:
-        clock = (now if now is not None else datetime.now(timezone.utc)).astimezone(timezone.utc)
-        if clock.utcoffset() is None:
+        clock = now if now is not None else datetime.now(timezone.utc)
+        # A naive or malformed clock must never inherit the host's timezone.
+        if not isinstance(clock, datetime) or clock.utcoffset() is None:
             return False
+        clock = clock.astimezone(timezone.utc)
         latest = clock + timedelta(minutes=5)
         for ref in refs:
             if not isinstance(ref, dict):
