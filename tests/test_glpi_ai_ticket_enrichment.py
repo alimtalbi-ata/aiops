@@ -84,7 +84,7 @@ def test_merge_report_preserves_original_and_replaces_owned_section():
     assert merged.startswith("Description initiale")
     assert "old" not in merged
     assert merged.count("[AIOPS2-AI-REPORT:START]") == 1
-    assert ">new</section>" in merged
+    assert ">new<p>[AIOPS2-AI-REPORT:END]</p>" in merged
 
 
 def test_internal_sync_creates_and_reads_back_ticket(monkeypatch):
