@@ -24,9 +24,33 @@ RETRY = RetryPolicy(
 
 @workflow.defn
 class IncidentWorkflow:
+    def __init__(self):
+        self._hitl_decision = None
+        self._hitl_conflict = False
+
+    @workflow.signal
+    def submit_hitl_decision(self, decision: dict) -> None:
+        """Accept one immutable decision binding; conflicting retries fail closed."""
+        if not isinstance(decision, dict):
+            self._hitl_conflict = True
+            return
+        required = ("proposal_id", "proposal_hash", "proposal_revision", "decision")
+        if any(key not in decision for key in required):
+            self._hitl_conflict = True
+            return
+        if decision.get("decision") not in ("APPROVE", "REJECT"):
+            self._hitl_conflict = True
+            return
+        if self._hitl_decision is None:
+            self._hitl_decision = dict(decision)
+        elif self._hitl_decision != decision:
+            self._hitl_conflict = True
+
     @workflow.run
     async def run(self, args: dict) -> dict:
         run_id = args["run_id"]
+        self._hitl_decision = None
+        self._hitl_conflict = False
         receipt = await workflow.execute_activity(
             "start_run",
             args,
@@ -52,6 +76,56 @@ class IncidentWorkflow:
             version = receipt["version"]
             if receipt.get("status") == "BLOCKED":
                 return {"run_id": run_id, "status": "BLOCKED", "final_version": version}
+
+            # HITL is a durable Temporal wait only when Core explicitly returns
+            # a persisted proposal reference. A browser signal alone is never
+            # execution authority; this workflow remains fail-closed.
+            if stage == "HITL" and (
+                receipt.get("status") == "WAITING" or receipt.get("hitl_required") is True
+            ):
+                proposal_id = receipt.get("proposal_id")
+                proposal_hash = receipt.get("proposal_hash")
+                revision = receipt.get("proposal_revision")
+                if not proposal_id or not proposal_hash or type(revision) is not int:
+                    return {
+                        "run_id": run_id, "status": "BLOCKED",
+                        "final_version": version, "reason": "hitl_proposal_binding_missing",
+                        "execution_allowed": False,
+                    }
+                timeout_seconds = args.get("hitl_timeout_seconds", 86400)
+                if type(timeout_seconds) is not int or not 60 <= timeout_seconds <= 604800:
+                    timeout_seconds = 86400
+                signalled = await workflow.wait_condition(
+                    lambda: self._hitl_decision is not None or self._hitl_conflict,
+                    timeout=datetime.timedelta(seconds=timeout_seconds),
+                )
+                if not signalled or self._hitl_conflict:
+                    return {
+                        "run_id": run_id, "status": "BLOCKED",
+                        "final_version": version,
+                        "reason": "hitl_timeout_or_conflicting_signal",
+                        "execution_allowed": False,
+                    }
+                decision = self._hitl_decision
+                if (
+                    decision.get("proposal_id") != proposal_id
+                    or decision.get("proposal_hash") != proposal_hash
+                    or decision.get("proposal_revision") != revision
+                ):
+                    return {
+                        "run_id": run_id, "status": "BLOCKED",
+                        "final_version": version, "reason": "hitl_signal_scope_mismatch",
+                        "execution_allowed": False,
+                    }
+                # Human approval is recorded, but Policy/executor qualification
+                # is not complete in this release. Never advance to REMEDIATE.
+                return {
+                    "run_id": run_id, "status": "BLOCKED",
+                    "final_version": version,
+                    "reason": "human_decision_recorded_execution_gate_closed",
+                    "human_decision": decision.get("decision"),
+                    "execution_allowed": False,
+                }
         result = await workflow.execute_activity(
             "finish_run",
             {"run_id": run_id, "version": version},
