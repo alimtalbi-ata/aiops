@@ -254,7 +254,7 @@ def call_model(system, payload, schema):
         usage_samples.append(extract_provider_usage(payload))
         return payload
 
-    def publish_telemetry():
+    def publish_telemetry(status='success', error_class=None):
         usage_complete = bool(usage_samples) and len(usage_samples) == request_count and all(
             sample['usage_source'] == 'provider_reported' for sample in usage_samples
         )
@@ -273,6 +273,8 @@ def call_model(system, payload, schema):
             **aggregate,
             'usage_source': 'provider_reported' if usage_complete else 'unavailable',
             'http_statuses': status_codes,
+            'status': status,
+            'error_class': error_class,
             'cost_usd': None,
             'pricing_source': None,
         })
@@ -351,10 +353,35 @@ def call_model(system, payload, schema):
                 return schema.model_validate(repaired)
         return schema.model_validate(decoded)
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError, ValidationError) as exc:
-        LOG.warning('model call or contract validation failed: %s', type(exc).__name__)
-        raise HTTPException(502, 'model_unavailable_or_invalid_output') from exc
+        error_class = type(exc).__name__
+        LOG.warning('model call or contract validation failed: %s', error_class)
+        publish_telemetry(status='failed', error_class=error_class)
+        telemetry = model_call_telemetry()
+        headers = {
+            'Cache-Control': 'no-store',
+            'X-AIOPS-Invocation-Id': str(telemetry.get('invocation_id') or ''),
+            'X-AIOPS-Model-Status': 'failed',
+            'X-AIOPS-Model-Error': error_class,
+            'X-AIOPS-Latency-Ms': str(telemetry.get('latency_ms') or ''),
+            'X-AIOPS-Request-Count': str(telemetry.get('request_count') or 0),
+            'X-AIOPS-Retry-Count': str(telemetry.get('retry_count') or 0),
+            'X-AIOPS-Usage-Source': str(telemetry.get('usage_source') or 'unavailable'),
+            'X-AIOPS-HTTP-Statuses': ','.join(str(x) for x in telemetry.get('http_statuses', [])),
+        }
+        for field, header in (
+            ('prompt_tokens', 'X-AIOPS-Prompt-Tokens'),
+            ('completion_tokens', 'X-AIOPS-Completion-Tokens'),
+            ('total_tokens', 'X-AIOPS-Total-Tokens'),
+            ('cached_tokens', 'X-AIOPS-Cached-Tokens'),
+            ('reasoning_tokens', 'X-AIOPS-Reasoning-Tokens'),
+        ):
+            value = telemetry.get(field)
+            if type(value) is int and value >= 0:
+                headers[header] = str(value)
+        raise HTTPException(502, 'model_unavailable_or_invalid_output', headers=headers) from exc
     finally:
-        publish_telemetry()
+        if _MODEL_CALL_TELEMETRY.get() is None:
+            publish_telemetry()
 
 def known_ids(evidence):
     return {x.get('evidence_id') for x in evidence if isinstance(x.get('evidence_id'), str)}
