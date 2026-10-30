@@ -10,7 +10,7 @@ DETAIL = {
     "run": {
         "run_id": RUN_ID, "incident_id": "INC-TEST-001",
         "mode": "DEMO", "scenario_id": "SCN-TEST-PAYMENTS",
-        "status": "BLOCKED", "overall_confidence": 0.82,
+        "status": "RUNNING", "overall_confidence": 0.82,
     },
     "events": [{
         "sequence": 1, "stage": "DGX_ANALYST", "event_type": "ANALYST_COMPLETED",
