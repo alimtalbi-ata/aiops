@@ -84,6 +84,21 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.build()
         self.assertIn("SOURCE_TREE_NOT_PROVIDED", self.audit(source=False)["errors"])
 
+    def test_dirty_checkout_cannot_masquerade_as_exact_head(self):
+        changed = b"locally modified source, not committed\\n"
+        (self.source / "README.md").write_bytes(changed)
+        self.build(overrides={"README.md": changed})
+        # The archive and checkout bytes match, but neither is the Git HEAD.
+        result = self.audit()
+        self.assertIn("SOURCE_TREE_DIRTY", result["errors"])
+
+    def test_nested_source_directory_is_not_repository_root(self):
+        self.build()
+        nested = self.source / "db"
+        result = audit_kit(self.kit, self.sha, nested,
+                           required_paths=self.required, alternative_groups={})
+        self.assertIn("SOURCE_NOT_REPOSITORY_ROOT", result["errors"])
+
     def test_source_head_mismatch_fails(self):
         self.build()
         result = audit_kit(self.kit, "1" * 40, self.source,
