@@ -300,12 +300,15 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     items=_runs()
     registry=_get("/api/incidents")
     incidents=registry.get("items",[]) if isinstance(registry.get("items"),list) else []
-    # A default DEMO journey must not land on a stale RUNNING or LIVE row.
-    # Reject ambiguous IDs rather than selecting one of two conflicting Core rows.
+    # A default timeline must verify Core inventory/detail before selecting a
+    # run. A stale first candidate must not hide a later valid DEMO run.
+    # An explicit run_id is never replaced by a different Core identity.
     eligible=_qualified_demo_runs(items)
-    preferred=next((r["run_id"] for r in eligible
-                    if r.get("status") in ("BLOCKED","RESOLVED")),None)
-    selected=run_id or preferred or (eligible[0]["run_id"] if eligible else None)
+    default_row, default_detail=(None,None)
+    if run_id is None:
+        default_row, default_detail=_select_verified_demo_run(items)
+    selected=run_id if run_id is not None else (
+        default_row["run_id"] if default_row else None)
     content='''<style>
     main{max-width:1500px}
     .timeline-ui input,.timeline-ui select{font:inherit;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;min-width:170px}
@@ -333,7 +336,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
         "Les listes sont limitées aux enregistrements renvoyés par Core. La provenance REAL/SYNTHETIC est déclarée par Core uniquement si l'identité du run concorde ; sinon UNKNOWN. Les décisions IA exigent une vérification indépendante. Aucune approbation ou remédiation LIVE n’est attestée.</p>")
     if not selected:
-        content+=panel("Timeline","<p>UNKNOWN — aucun run DEMO / REPLAY / STORY non ambigu accessible depuis Core.</p>")
+        content+=panel("Timeline","<p>UNKNOWN — aucun run DEMO / REPLAY / STORY non ambigu et concordant entre inventaire et détail Core.</p>")
         return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",selected):
         raise HTTPException(404,"invalid_run_id")
@@ -341,7 +344,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     if not match:
         raise HTTPException(404,"run_not_in_registry")
     key=quote(selected,safe="")
-    detail=_get("/api/runs/"+key)
+    detail=default_detail if run_id is None else _get("/api/runs/"+key)
     if not _core_detail_matches_listed_run(detail, match):
         content+=panel("Timeline Core — UNKNOWN",
             "<p>Identité du détail Core non concordante avec l'inventaire DEMO. "
