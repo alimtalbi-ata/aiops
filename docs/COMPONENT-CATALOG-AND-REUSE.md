@@ -81,3 +81,23 @@ Record the following before integration:
 - **Destination:** `app/portal/fixtures/noc_rag_synthetic.json`, `app/portal/noc_demo_rag.py`, portal NOC panel. Reuses PR #36's strict catalog-validation idea and exact-asset selection; adds operator token, bounded JSON, duplicate-key rejection and SHA-256 citations.
 - **Limits:** no real Checkmk/Thruk, Grafana, Core correlation for this fixture, model inference, vendor-authenticated documentation or tenant ACL; all unqualified. Only synthetic fixture content is returned, and `live_remediation_authorized=false`.
 - **Qualification:** offline unit/API tests under existing `quality.yml`; [PR #54 CI 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546) completed/success for static/contract/Compose checks; merged at `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`. Do not use this module as evidence of a live service incident.
+
+
+## 2026-10-30 — Current convergence register
+
+Use `docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md` as the current PR/branch convergence record. The original V1/V145 inventory above remains a candidate list and must not be interpreted as qualification.
+
+New decision vocabulary for active PRs:
+- **Primary scenario candidate:** #185, subject to exact-head requalification and source-transport review.
+- **Targeted correctness fix:** #190, subject to current-head CI.
+- **Complementary integration slices:** #192 (Portal/GLPI read), #193 (guarded proposal), #194 (Core OIDC/outbox/Temporal); reconcile contracts before combining.
+- **Schedule candidate:** #188; #189 is overlapping and must not run in parallel.
+- **Deferred:** #187 observability expansion pending security/resource/retention review.
+- **Not authorized for activation:** #146/#153 Debian auto-deployment; #177 broad UI promotion until transport and CI gaps are closed.
+
+AI evaluation reuse:
+- `tools/evaluate_ai_core.py`
+- `eval/ai-core-cases.json`
+- `tests/test_ai_eval_harness.py`
+- `tests/test_model_evaluation_api.py`
+These were source-reviewed on the HITL candidate branch. Quality metrics exist; per-call token/cost/latency telemetry is not yet qualified. Port selectively and preserve dataset/prompt/model hashes.
