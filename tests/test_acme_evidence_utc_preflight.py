@@ -84,7 +84,6 @@ class OfflineMockEvidencePreflightTests(unittest.TestCase):
         self.assertTrue(evidence_timestamps_valid(LEDGER, now=NOW))
         self.assertEqual(LEDGER, before)
 
-
     def test_invalid_clock_short_circuits_before_core_and_glpi_get(self):
         for clock in (datetime(2026, 10, 30, 12, 0), "invalid-clock", 42,
                       datetime.max.replace(tzinfo=timezone.utc)):
@@ -100,6 +99,26 @@ class OfflineMockEvidencePreflightTests(unittest.TestCase):
                 self.assertEqual(result["verified_evidence_ids"], [])
                 core_get.assert_not_called()
                 glpi_get.assert_not_called()
+
+
+    def test_pre_epoch_extreme_timestamps_block_both_gets(self):
+        for value in ("0001-01-01T00:00:00Z", "1900-01-01T00:00:00+00:00",
+                      "1969-12-31T23:59:59Z", "1970-01-01T00:00:00+01:00"):
+            with self.subTest(value=value):
+                result, core_get, glpi_get = self._run(value)
+                self.assertEqual(result["state"], "UNKNOWN")
+                self.assertIsNone(result["ticket_id"])
+                self.assertIsNone(result["evidence_id"])
+                self.assertEqual(result["verified_evidence_ids"], [])
+                core_get.assert_not_called()
+                glpi_get.assert_not_called()
+
+    def test_epoch_boundary_is_valid_but_not_a_link_attestation(self):
+        result, core_get, glpi_get = self._run("1970-01-01T00:00:00Z")
+        self.assertEqual(result["state"], "UNKNOWN")
+        self.assertIsNone(result["ticket_id"])
+        core_get.assert_called_once_with()
+        glpi_get.assert_called_once_with()
 
 
 if __name__ == "__main__":
