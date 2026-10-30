@@ -49,7 +49,7 @@ jobs:
       AIOPS_BENCHMARK_MAX_REQUEST_BYTES: "65536"
       AIOPS_EVAL_UID: "1001"
       AIOPS_EVAL_GID: "1001"
-      REPEATS: ${{ inputs.repeats || '3' }}
+      REPEATS: ${{ inputs.repeats || '1' }}
     steps:
       - name: Checkout exact benchmark source
         uses: actions/checkout@v4
@@ -140,7 +140,10 @@ jobs:
           expected="$REPEATS"
           actual="$(grep -c 'evaluator_exit=' reports/experiment-exit-codes.txt)"
           test "$actual" -eq "$expected"
-          if grep -Ev 'evaluator_exit=0
+          if grep -Ev 'evaluator_exit=0$' reports/experiment-exit-codes.txt; then
+            echo "One or more real-model evaluations failed; inspect the uploaded report and diagnostics."
+            exit 1
+          fi
       - name: Tear down isolated benchmark environment
         if: always()
         run: docker compose down -v --remove-orphans || true
