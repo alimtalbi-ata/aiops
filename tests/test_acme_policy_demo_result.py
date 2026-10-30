@@ -52,6 +52,7 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
                 "mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01",
                 "reason": "NO_SIDE_EFFECTS" if gate_status == "SIMULATED" else "APPROVAL_EXPIRED",
                 "proposal_digest": "b" * 64, "recipe_id": "ansible-service-restart",
+                "recipe_version": "1.0.0",
                 "idempotency_key": idempotency_key, "executor": "NO_EFFECT_SIMULATOR",
                 "effect_applied": False, "postchecks": "NOT_RUN", "rollback": "NOT_REQUIRED",
                 "dry_run": True, "preconditions": "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED",
@@ -268,12 +269,37 @@ class PolicyDemoResultTests(unittest.TestCase):
         r = receipt()
         r["projection"]["recipe_id"] = "glpi-api-ticket-note"
         r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
-        with self.assertRaisesRegex(ValueError, "projection_recipe_outcome_inconsistent"):
+        with self.assertRaisesRegex(ValueError, "recipe_target_scope_invalid"):
             present_demo_policy_result(r)
         r = receipt("SIMULATED_NO_RECOVERY")
         r["projection"]["recipe_id"] = "glpi-api-ticket-note"
         r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
+        # The existing catalog scopes GLPI ticket notes to ACME-GLPI-*.
+        r["projection"]["target_ci"] = "ACME-GLPI-01"
+        r["projection"]["gate"]["target_ci"] = "ACME-GLPI-01"
+        for snapshot in ("before", "after"):
+            r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
+        r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
         self.assertEqual(present_demo_policy_result(r)["policy"]["decision"], "SIMULATE")
+
+    def test_recipe_catalog_and_target_scope_fail_closed(self):
+        for recipe_id, version, target, error in (
+            ("nonexistent-remediation", "1.0.0", "ACME-LNX-01", "recipe_not_allowlisted"),
+            ("ansible-service-restart", "99.0.0", "ACME-LNX-01", "recipe_not_allowlisted"),
+            ("ansible-service-restart", "1.0.0", "ACME-GLPI-01", "recipe_target_scope_invalid"),
+            ("ansible-service-restart", "1.0.0", "<script>", "target_identity_invalid"),
+        ):
+            with self.subTest(recipe_id=recipe_id, version=version, target=target):
+                r = receipt()
+                r["projection"]["recipe_id"] = recipe_id
+                r["projection"]["gate"]["recipe_id"] = recipe_id
+                r["projection"]["gate"]["recipe_version"] = version
+                r["projection"]["target_ci"] = target
+                r["projection"]["gate"]["target_ci"] = target
+                for snapshot in ("before", "after"):
+                    r["projection"][snapshot]["target_ci"] = target
+                with self.assertRaisesRegex(ValueError, error):
+                    present_demo_policy_result(r)
 
     def test_receipt_builder_shape_and_ref_validation(self):
         for change, error in (
