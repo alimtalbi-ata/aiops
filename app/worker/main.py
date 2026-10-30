@@ -128,6 +128,69 @@ def persist_critic_denial(rid, mode, analysis, critique, analysis_id, critique_i
     return record['policy_decision_id']
 
 
+def _maybe_create_synthetic_hitl_proposal(rid, mode, scenario, analysis_event,
+                                                critique_record, critique):
+    """Create a proposal only from an actual validated Analyst action and Critic record."""
+    if mode == "LIVE" or not scenario.startswith("SCN-ACME-TEST-HITL-"):
+        return None
+    analysis = analysis_event.get("payload", {}).get("analysis", {})
+    analysis_id = analysis_event.get("payload", {}).get("analysis_record_id")
+    critique_id = critique_record.get("critique_id")
+    if not isinstance(analysis, dict) or not analysis_id or not critique_id:
+        return None
+    if critique.get("validated") is not True or critique.get("issues") or critique.get("unsafe_actions"):
+        return None
+    action_types = {
+        "CI-COLLECT-READONLY": "COLLECT_DIAGNOSTICS",
+        "COLLECT_DIAGNOSTICS": "COLLECT_DIAGNOSTICS",
+    }
+    for action in analysis.get("recommended_actions", []):
+        if not isinstance(action, dict):
+            continue
+        source_id = action.get("action_id")
+        action_type = action_types.get(source_id)
+        risk = action.get("risk_tier")
+        target = action.get("target_ci_id")
+        evidence_ids = sorted(set(action.get("evidence_ids") or []))
+        if (not action_type or action.get("advisory_only") is not True
+                or action.get("requires_human_approval") is not True
+                or risk != "LOW" or not target or not evidence_ids
+                or not set(evidence_ids).issubset(set(analysis_event.get("evidence_ids") or []))
+                or not set(evidence_ids).issubset(set(critique_record.get("evidence_ids") or []))):
+            continue
+        payload = {
+            "analysis_id": analysis_id,
+            "critique_id": critique_id,
+            "source_action_id": source_id,
+            "target_ci_id": target,
+            "action_type": action_type,
+            "risk_tier": risk,
+            "parameters": {"mode": "READ_ONLY", "intent": action.get("intent", "")},
+            "evidence_ids": evidence_ids,
+            "preconditions": action.get("preconditions") or [],
+            "expected_postconditions": [
+                action.get("expected_effect", ""),
+                *(action.get("verification_steps") or []),
+            ],
+            "rollback_plan": {"description": action.get("rollback_plan", "No side effects; none required.")},
+        }
+        if not payload["preconditions"] or not all(payload["expected_postconditions"]):
+            continue
+        try:
+            proposal = post_json(
+                CORE, f"/api/runs/{rid}/proposals", payload,
+                timeout=15, token=ADMIN
+            )
+        except Exception as exc:
+            log.warning("HITL proposal creation failed for %s: %s", rid, type(exc).__name__)
+            return None
+        if (isinstance(proposal, dict) and proposal.get("proposal_id")
+                and proposal.get("proposal_hash") and proposal.get("status") == "PROPOSED"
+                and proposal.get("execution_allowed") is False):
+            return proposal
+    return None
+
+
 @activity.defn
 async def start_run(a):
     # Requests are blocking I/O. Run them off the shared FastAPI/Temporal event loop.
@@ -302,6 +365,38 @@ def _execute_stage_blocking(a,attempt):
                 ) if state=='BLOCKED' else None
                 saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'denial_policy_input':denial_snapshot,'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
+                if state == 'PASS':
+                    proposal = _maybe_create_synthetic_hitl_proposal(
+                        rid, mode, scenario, analyst_event, critique_record, result
+                    )
+                    if proposal:
+                        hitl_event = call('POST', f'{CORE}/api/runs/{rid}/events', {
+                            'expected_version': saved['version'],
+                            'stage': 'HITL',
+                            'event_type': 'HITL_PROPOSAL_CREATED',
+                            'event_key': 'HITL:PROPOSAL:' + proposal['proposal_id'],
+                            'status': 'BLOCKED',
+                            'decision': 'HUMAN_APPROVAL',
+                            'evidence_ids': evidence_ids,
+                            'confidence': result.get('diagnostic_confidence', 0),
+                            'payload': {
+                                'proposal_id': proposal['proposal_id'],
+                                'proposal_hash': proposal['proposal_hash'],
+                                'proposal_status': proposal['status'],
+                                'execution_allowed': False,
+                            },
+                        })
+                        blocked = call('POST', f'{CORE}/api/runs/{rid}/command', {
+                            'expected_version': hitl_event['version'],
+                            'idempotency_key': 'HITL-BLOCK-' + rid,
+                            'command': 'BLOCK',
+                        })
+                        return {
+                            'run_id': rid, 'stage': 'HITL', 'status': 'BLOCKED',
+                            'version': blocked['version'],
+                            'hitl_proposal_id': proposal['proposal_id'],
+                            'execution_allowed': False,
+                        }
                 if state=='BLOCKED':
                     try:
                         block=post_json(
