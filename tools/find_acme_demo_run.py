@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 SCENARIO = "SCN-GOLDEN-PAYMENT-P1"
 SERVICE = "ACME-SVC-PAYMENTS"
 RUN_ID = re.compile(r"RUN-[A-Za-z0-9_-]{1,120}\Z")
+INCIDENT_ID = re.compile(r"INC-[A-Za-z0-9_-]{1,120}\Z")
 
 
 class _RejectRedirects(HTTPRedirectHandler):
@@ -103,20 +104,35 @@ def candidates(runs, incidents):
     return sorted(matches, key=lambda pair: pair[0].get("status") not in ("RESOLVED", "BLOCKED"))
 
 
-def qualify(base, portal, get=fetch_json):
+def qualify(base, portal, get=fetch_json, expected_run_id=None, expected_incident_id=None):
+    # Optional operator-pinned pair prevents silently selecting another DEMO run.
+    if (expected_run_id is None) != (expected_incident_id is None):
+        return {"result": "UNKNOWN", "reason": "EXPECTED_PAIR_INCOMPLETE", "run_id": None}
+    if expected_run_id is not None and (
+        not isinstance(expected_run_id, str) or not RUN_ID.fullmatch(expected_run_id)
+        or not isinstance(expected_incident_id, str)
+        or not INCIDENT_ID.fullmatch(expected_incident_id)
+    ):
+        return {"result": "UNKNOWN", "reason": "EXPECTED_PAIR_INVALID", "run_id": None}
     runs = get(base, "/api/runs")
     incidents = get(base, "/api/incidents?limit=500")
     try:
         matches = candidates(runs, incidents)
     except ValueError:
         return {"result": "UNKNOWN", "reason": "REGISTRY_CONTRACT_MISMATCH", "run_id": None}
+    if expected_run_id is not None:
+        matches = [(run, incident) for run, incident in matches
+                   if run["run_id"] == expected_run_id
+                   and incident["incident_id"] == expected_incident_id]
     if not matches:
         # A full window cannot rule out older matching runs or incidents.
         limited = (len(runs["items"]) >= RUN_REGISTRY_LIMIT
                    or len(incidents["items"]) >= INCIDENT_REGISTRY_LIMIT)
         return {
             "result": "UNKNOWN",
-            "reason": "REGISTRY_WINDOW_LIMITED" if limited else "NO_MATCHING_CORE_RUN",
+            "reason": ("EXPECTED_PAIR_NOT_QUALIFIED_IN_REGISTRY_WINDOW"
+                       if expected_run_id is not None else
+                       ("REGISTRY_WINDOW_LIMITED" if limited else "NO_MATCHING_CORE_RUN")),
             "run_id": None,
         }
     for run, incident in matches:
@@ -144,6 +160,7 @@ def qualify(base, portal, get=fetch_json):
         return {
             "result": "SOURCE_VERIFIED_REGISTRY_ONLY", "run_id": rid,
             "incident_id": incident["incident_id"], "scenario_id": SCENARIO,
+            "operator_pair_pinned": expected_run_id is not None,
             "mode": canonical["mode"], "status": canonical.get("status", "UNKNOWN"),
             "incident_source": incident["source"], "synthetic": True,
             "service_id": SERVICE, "event_types": types, "evidence_refs_unattested": evidence_refs,
@@ -223,6 +240,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core-url", default="http://127.0.0.1:810")
     parser.add_argument("--portal-url", default="http://127.0.0.1:7777")
+    parser.add_argument("--expect-run-id", help="pin an operator-reported run ID; requires --expect-incident-id and authenticated evidence")
+    parser.add_argument("--expect-incident-id", help="pin the incident ID linked to --expect-run-id")
     parser.add_argument("--probe-auth-evidence", action="store_true",
                         help="read-only bearer-protected evidence probe using AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN")
     args = parser.parse_args(argv)
@@ -230,8 +249,14 @@ def main(argv=None):
         parts = urlsplit(url)
         if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment or parts.path not in ("", "/"):
             parser.error("base URLs must contain only scheme, host and optional port")
+    if bool(args.expect_run_id) != bool(args.expect_incident_id):
+        parser.error("both --expect-run-id and --expect-incident-id are required")
+    if args.expect_run_id and not args.probe_auth_evidence:
+        parser.error("pinned operator IDs require --probe-auth-evidence")
     try:
-        output = qualify(args.core_url, args.portal_url)
+        output = qualify(args.core_url, args.portal_url,
+                         expected_run_id=args.expect_run_id,
+                         expected_incident_id=args.expect_incident_id)
     except (HTTPError, URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError) as exc:
         output = {"result": "UNKNOWN", "reason": "CORE_READ_FAILED", "error_type": type(exc).__name__, "run_id": None}
     if args.probe_auth_evidence:
