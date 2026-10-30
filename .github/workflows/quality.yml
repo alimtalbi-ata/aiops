@@ -57,8 +57,9 @@ jobs:
           python -m unittest discover -s tests -p "test_probe_acme_twin_path.py" -v
           python -m unittest discover -s tests -p "test_acme_glpi_ticket_read.py" -v
           python -m unittest discover -s tests -p "test_acme_noc_glpi_join.py" -v
-      - name: AI evaluation harness tests
-        run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
+      - name: AI evaluation harness and benchmark summary tests
+        run: |
+          python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
           python -m unittest discover -s tests -p "test_ai_benchmark_summary.py" -v
       - name: Model evaluation API unit tests
         run: python -m unittest discover -s tests -p "test_model_evaluation_api.py" -v
