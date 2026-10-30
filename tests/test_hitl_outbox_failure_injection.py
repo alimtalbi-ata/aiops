@@ -40,6 +40,42 @@ def core(name, db, **extra):
 
 
 class OutboxFaultTests(unittest.TestCase):
+    def test_malformed_outbox_claim_lease_fence(self):
+        # Reject forged/malformed lease requests before any DB or Temporal activity.
+        for payload in (
+            {"owner": "", "limit": 1, "lease_seconds": 45},
+            {"owner": "offline", "limit": True, "lease_seconds": 45},
+            {"owner": "offline", "limit": 0, "lease_seconds": 45},
+            {"owner": "offline", "limit": 101, "lease_seconds": 45},
+            {"owner": "offline", "limit": 1, "lease_seconds": True},
+            {"owner": "offline", "limit": 1, "lease_seconds": 45.0},
+            {"owner": "offline", "limit": 1, "lease_seconds": 14},
+            {"owner": "offline", "limit": 1, "lease_seconds": 301},
+        ):
+            with self.subTest(payload=payload):
+                db = DB()
+                with self.assertRaises(HTTPException) as ctx:
+                    core("claim_hitl_decision_outbox", db)(payload)
+                self.assertEqual(ctx.exception.status_code, 422)
+                self.assertEqual(db.queries, [])
+
+    def test_nonleased_dead_and_missing_token_ack_are_fenced(self):
+        # A stale, dead-lettered or unowned event cannot be ACKed as delivered.
+        for row in (
+            ("PENDING", "lease", True),
+            ("DEAD", "lease", True),
+            ("LEASED", None, True),
+            ("LEASED", "lease", False),
+        ):
+            with self.subTest(row=row):
+                db = DB(row)
+                with self.assertRaises(HTTPException) as ctx:
+                    core("acknowledge_hitl_decision_outbox", db)(
+                        "HDO-OFFLINE", {"lease_token": "lease"})
+                self.assertEqual((ctx.exception.status_code, ctx.exception.detail),
+                                 (409, "outbox_lease_lost_or_invalid"))
+                self.assertFalse(any("set status='DELIVERED'" in s for s in db.queries))
+
     def test_expired_lease(self):
         db = DB(("LEASED", "lease", False))
         with self.assertRaises(HTTPException) as ctx:
