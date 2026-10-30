@@ -37,5 +37,23 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn('"execution_allowed": False', source)
 
 
+    def test_proposal_builder_requires_clean_critic_and_explicit_action_contract(self):
+        source = pathlib.Path("app/worker/main.py").read_text()
+        self.assertIn("def create_hitl_proposal(", source)
+        self.assertIn("critique.get('validated') is not True", source)
+        self.assertIn("critique.get('issues')", source)
+        self.assertIn("critique.get('unsafe_actions')", source)
+        self.assertIn("action.get('action_type')", source)
+        self.assertIn("action.get('target_ci_id')", source)
+        self.assertIn("action.get('expected_postconditions')", source)
+        self.assertIn("'/proposals'", source)
+        self.assertIn("'execution_allowed': False", source)
+
+    def test_synthetic_proposal_never_waits_for_live_approval(self):
+        source = pathlib.Path("app/worker/main.py").read_text()
+        self.assertIn("'status': 'WAITING' if mode == 'LIVE' else 'BLOCKED'", source)
+        self.assertIn("synthetic_proposal_cannot_authorize_live_execution", source)
+
+
 if __name__ == "__main__":
     unittest.main()
