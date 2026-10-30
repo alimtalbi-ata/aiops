@@ -67,6 +67,17 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn('"human_decision_recorded_execution_gate_closed"', workflow)
 
 
+    def test_core_approval_uses_verified_oidc_subject_and_role_not_browser_actor_fields(self):
+        core = pathlib.Path("app/core/main.py").read_text()
+        start = core.index("def record_proposal_approval(")
+        end = core.index("@app.post('/api/hitl/decision-outbox/claim')", start)
+        approval = core[start:end]
+        self.assertIn("identity=require_live_assertion(bearer(authorization))", approval)
+        self.assertIn("actor=identity['subject_id']", approval)
+        self.assertIn("role not in identity.get('roles',[])", approval)
+        self.assertNotIn("actor=str(x.get('actor_id'", approval)
+        self.assertIn("'source':'verified-oidc-human-approval'", approval)
+
     def test_terminal_approval_writes_transactional_outbox_in_same_core_transaction(self):
         core = pathlib.Path("app/core/main.py").read_text()
         migration = pathlib.Path("db/migrations/011_hitl_decision_outbox.sql").read_text()
