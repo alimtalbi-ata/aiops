@@ -129,7 +129,7 @@ def persist_critic_denial(rid, mode, analysis, critique, analysis_id, critique_i
 
 
 def _maybe_create_synthetic_hitl_proposal(rid, mode, scenario, analysis_event,
-                                                critique_record, critique):
+                                                critique_record, critique, evidence_scope):
     """Create a proposal only from an actual validated Analyst action and Critic record."""
     if mode == "LIVE" or not scenario.startswith("SCN-ACME-TEST-HITL-"):
         return None
@@ -156,7 +156,7 @@ def _maybe_create_synthetic_hitl_proposal(rid, mode, scenario, analysis_event,
                 or action.get("requires_human_approval") is not True
                 or risk != "LOW" or not target or not evidence_ids
                 or not set(evidence_ids).issubset(set(analysis_event.get("evidence_ids") or []))
-                or not set(evidence_ids).issubset(set(critique_record.get("evidence_ids") or []))):
+                or not set(evidence_ids).issubset(set(evidence_scope or []))):
             continue
         payload = {
             "analysis_id": analysis_id,
@@ -402,7 +402,7 @@ def _execute_stage_blocking(a,attempt):
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state == 'PASS':
                     proposal = _maybe_create_synthetic_hitl_proposal(
-                        rid, mode, scenario, analyst_event, critique_record, result
+                        rid, mode, scenario, analyst_event, critique_record, result, evidence_ids
                     )
                     if proposal:
                         hitl_event = call('POST', f'{CORE}/api/runs/{rid}/events', {
