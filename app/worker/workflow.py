@@ -35,6 +35,11 @@ class IncidentWorkflow:
             result_type=dict,
         )
         version = receipt["version"]
+        await workflow.execute_activity(
+            "sync_glpi_ticket", {"run_id": run_id, "stage": "STARTED"},
+            start_to_close_timeout=datetime.timedelta(seconds=30),
+            retry_policy=RETRY, result_type=dict,
+        )
         for stage in STAGES:
             receipt = await workflow.execute_activity(
                 "execute_stage",
@@ -50,6 +55,11 @@ class IncidentWorkflow:
                 result_type=dict,
             )
             version = receipt["version"]
+            await workflow.execute_activity(
+                "sync_glpi_ticket", {"run_id": run_id, "stage": stage},
+                start_to_close_timeout=datetime.timedelta(seconds=30),
+                retry_policy=RETRY, result_type=dict,
+            )
             if receipt.get("status") == "BLOCKED":
                 return {"run_id": run_id, "status": "BLOCKED", "final_version": version}
         result = await workflow.execute_activity(
@@ -58,5 +68,10 @@ class IncidentWorkflow:
             start_to_close_timeout=datetime.timedelta(seconds=30),
             retry_policy=RETRY,
             result_type=dict,
+        )
+        await workflow.execute_activity(
+            "sync_glpi_ticket", {"run_id": run_id, "stage": "FINAL"},
+            start_to_close_timeout=datetime.timedelta(seconds=30),
+            retry_policy=RETRY, result_type=dict,
         )
         return {"run_id": run_id, "status": result["status"], "final_version": result["version"]}
