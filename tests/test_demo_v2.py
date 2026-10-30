@@ -1227,5 +1227,72 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn("Run sélectionné : RUN-VALID", response.text)
         self.assertEqual(reads, ["/api/incidents", "/api/runs/RUN-STALE"])
 
+    def test_timeline_refuses_foreign_or_unscoped_core_evidence(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OWN", "mode": "DEMO", "status": "BLOCKED"}
+        cases = (
+            {"run_id": "RUN-OTHER", "items": [
+                {"run_id": "RUN-OTHER", "evidence_id": "EVID-FOREIGN"}]},
+            {"items": [
+                {"run_id": "RUN-OWN", "evidence_id": "EVID-OWN"},
+                {"evidence_id": "EVID-UNSCOPED"}]},
+            {"status": "UNKNOWN", "items": [
+                {"run_id": "RUN-OWN", "evidence_id": "EVID-UNTRUSTED"}]},
+        )
+        for evidence in cases:
+            with self.subTest(evidence=evidence):
+                reads = []
+                def source(path, base=None):
+                    reads.append(path)
+                    if path == "/api/incidents":
+                        return {"items": []}
+                    if path == "/api/runs/RUN-OWN":
+                        return {"run": dict(listed), "events": []}
+                    if path == "/api/runs/RUN-OWN/evidence":
+                        return evidence
+                    raise AssertionError("unexpected read: " + path)
+                with (patch.object(portal_main, "_runs", return_value=[listed]),
+                      patch.object(portal_main, "_get", side_effect=source),
+                      patch.object(portal_main, "post_json",
+                                   side_effect=AssertionError("read-only"))):
+                    response = TestClient(portal_main.app).get(
+                        "/timeline?run_id=RUN-OWN")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("Registre des preuves liées — UNKNOWN", response.text)
+                for eid in ("EVID-FOREIGN", "EVID-OWN",
+                            "EVID-UNSCOPED", "EVID-UNTRUSTED"):
+                    self.assertNotIn(eid, response.text)
+                self.assertEqual(reads, ["/api/incidents",
+                                         "/api/runs/RUN-OWN",
+                                         "/api/runs/RUN-OWN/evidence"])
+
+    def test_timeline_shows_only_core_evidence_scoped_to_selected_run(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OWN", "mode": "DEMO",
+                  "status": "BLOCKED", "synthetic": True}
+        def source(path, base=None):
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-OWN":
+                return {"run": dict(listed), "events": []}
+            if path == "/api/runs/RUN-OWN/evidence":
+                return {"run_id": "RUN-OWN", "items": [
+                    {"run_id": "RUN-OWN", "evidence_id": "EVID-SCOPED",
+                     "provenance": {"record_type": "stage_marker"}}]}
+            raise AssertionError("unexpected read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/timeline?run_id=RUN-OWN")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("EVID-SCOPED", response.text)
+        self.assertIn("Marqueur d’exécution", response.text)
+        self.assertIn("provenance Core à qualifier", response.text)
+        self.assertNotIn("Registre des preuves liées — UNKNOWN", response.text)
+
+
 if __name__ == "__main__":
     unittest.main()

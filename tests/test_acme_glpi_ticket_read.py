@@ -173,6 +173,23 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
                 self.assertIsNone(result['ticket_id'])
                 self.assertEqual(client.calls, [])
 
+    def test_extreme_timezone_offsets_fail_closed_before_glpi_get(self):
+        # datetime.astimezone(UTC) can raise OverflowError for year 1/9999.
+        # Malformed/unnormalizable ledger timestamps must not crash or GET.
+        for known_at in ('0001-01-01T00:00:00+14:00',
+                         '9999-12-31T23:59:59-14:00'):
+            with self.subTest(known_at=known_at):
+                client = MockOpener()
+                out = verify({**BASE, 'evidence_refs': [
+                    {**REF, 'known_at': known_at}]}, opener=client)
+                self.assertEqual(out['state'], 'UNKNOWN')
+                self.assertEqual(out['ticket_verification'],
+                                 'UNKNOWN_INVALID_CORE_EVIDENCE_PROJECTION')
+                self.assertIsNone(out['run_id'])
+                self.assertIsNone(out['ticket_id'])
+                self.assertEqual(out['evidence_ids'], [])
+                self.assertEqual(client.calls, [])
+
     def test_nested_tenant_scope_in_projection_refused_before_get(self):
         # A caller may bypass the pure projector and submit a modified dict.
         # No scope claim, even null or NFKC-aliased, can become a GLPI link.

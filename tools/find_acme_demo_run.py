@@ -169,7 +169,8 @@ def qualify(base, portal, get=fetch_json, expected_run_id=None, expected_inciden
         # scenario and mode. A registry/detail match alone does not establish
         # that the recorded event belongs to the requested scenario.
         created = [e for e in events if isinstance(e, dict) and e.get("event_type") == "RUN_CREATED"]
-        if (len(created) != 1 or created[0].get("stage") != "INGEST"
+        if (len(created) != 1 or created[0].get("sequence") != 1
+                or created[0].get("stage") != "INGEST"
                 or created[0].get("status") != "CREATED"
                 or not isinstance(created[0].get("payload"), dict)
                 or created[0]["payload"].get("scenario_id") != SCENARIO

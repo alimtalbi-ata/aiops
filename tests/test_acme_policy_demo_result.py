@@ -56,6 +56,7 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
                 "recipe_version": "1.0.0",
                 "idempotency_key": idempotency_key, "executor": "NO_EFFECT_SIMULATOR",
                 "effect_applied": False, "postchecks": "NOT_RUN", "rollback": "NOT_REQUIRED",
+                "parameters": {"service": "erp", "credential_ref": "[REDACTED]"},
                 "dry_run": True, "preconditions": "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED",
                 "approval_actor": "approver-fixture",
             },
@@ -292,6 +293,7 @@ class PolicyDemoResultTests(unittest.TestCase):
         if "projected_state" in r["projection"]["rollback"]:
             r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
         r["projection"]["gate"].update(
+            parameters={"ticket_id": 42, "credential_ref": "[REDACTED]"},
             planned_postchecks=["ticket_note_reconciled"],
             compensation="append_correction_note", timeout_seconds=20,
         )
@@ -348,6 +350,7 @@ class PolicyDemoResultTests(unittest.TestCase):
                     for snapshot in ("before", "after"):
                         r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
                     r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
+                    r["projection"]["gate"]["parameters"] = {"ticket_id": 42, "credential_ref": "[REDACTED]"}
                 r["projection"]["reason"] = "RUNTIME_APPROVED"
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
@@ -530,6 +533,43 @@ class PolicyDemoResultTests(unittest.TestCase):
                     r["projection"][location][key] = forged
                     with self.assertRaisesRegex(ValueError, error):
                         present_demo_policy_result(r)
+
+    def test_gate_parameters_reject_unredacted_or_forged_claims(self):
+        for status, gate_status in (("SIMULATED_SUCCESS", "SIMULATED"), ("BLOCKED", "BLOCKED")):
+            for forged in (
+                {"service": "erp", "credential_ref": "vault://acme/demo"},
+                {"service": "erp", "credential_ref": "[REDACTED]", "human_approved": True},
+                {"service": {"live": True}, "credential_ref": "[REDACTED]"},
+                {"service": "<script>", "credential_ref": "[REDACTED]"},
+                None,
+            ):
+                with self.subTest(status=status, forged=forged):
+                    r = receipt(status, gate_status)
+                    r["projection"]["gate"]["parameters"] = forged
+                    with self.assertRaisesRegex(ValueError, "gate_parameters_invalid"):
+                        present_demo_policy_result(r)
+
+    def test_gate_catalog_integer_parameters_are_strict(self):
+        # GLPI uses a bounded integer ticket_id; bool and floats must not
+        # alias a real integer or smuggle an unauthorized ticket reference.
+        r = receipt("SIMULATED_NO_RECOVERY")
+        r["projection"]["recipe_id"] = "glpi-api-ticket-note"
+        r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
+        for node in (r["projection"], r["projection"]["gate"], r["projection"]["before"],
+                     r["projection"]["after"], r["projection"]["rollback"]["projected_state"]):
+            node["target_ci"] = "ACME-GLPI-01"
+        r["projection"]["gate"].update(
+            parameters={"ticket_id": 42, "credential_ref": "[REDACTED]"},
+            planned_postchecks=["ticket_note_reconciled"],
+            compensation="append_correction_note", timeout_seconds=20,
+        )
+        self.assertEqual(present_demo_policy_result(r)["policy"]["decision"], "SIMULATE")
+        for value in (True, 42.0, 0, 1000000000, [], {"ticket": 42}):
+            with self.subTest(ticket_id=value):
+                forged = copy.deepcopy(r)
+                forged["projection"]["gate"]["parameters"]["ticket_id"] = value
+                with self.assertRaisesRegex(ValueError, "gate_parameters_invalid"):
+                    present_demo_policy_result(forged)
 
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)
