@@ -1038,7 +1038,7 @@ def hitl_command_center():
     identity = _get("/api/hitl/identity/health", CORE)
     proposals = _get("/api/proposals?status=PROPOSED&limit=100", CORE)
     identity_mode = identity.get("mode", "UNKNOWN")
-    simulator = "ENABLED" if identity.get("simulator_enabled") is True else "DISABLED"
+    simulator = "READY" if identity.get("simulator_ready") is True else ("ENABLED / KEY MISSING" if identity.get("simulator_enabled") is True else "DISABLED")
     live_ready = "YES" if identity.get("live_approval_ready") is True else "NO"
     proposal_items = proposals.get("items", []) if isinstance(proposals.get("items"), list) else []
     proposal_state = str(len(proposal_items)) if isinstance(proposals.get("items"), list) else "UNKNOWN"
