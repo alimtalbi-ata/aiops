@@ -75,6 +75,28 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(result["result"], "UNKNOWN")
         self.assertIsNone(result["run_id"])
 
+    def test_unhashable_incident_reference_fails_closed(self):
+        run, incident, detail = fixtures()
+        for bad in ([], {}, ["INC-ABC123"], {"id": "INC-ABC123"}):
+            with self.subTest(incident_id=bad):
+                run["incident_id"] = bad
+                result = locator.qualify("http://core", "http://portal",
+                                         self.make_get(run, incident, detail))
+                self.assertEqual(result, {"result": "UNKNOWN",
+                                          "reason": "REGISTRY_CONTRACT_MISMATCH",
+                                          "run_id": None})
+
+    def test_empty_or_invalid_incident_reference_fails_closed(self):
+        run, incident, detail = fixtures()
+        for bad in (None, 42, False, ""):
+            with self.subTest(incident_id=bad):
+                run["incident_id"] = bad
+                result = locator.qualify("http://core", "http://portal",
+                                         self.make_get(run, incident, detail))
+                self.assertEqual(result, {"result": "UNKNOWN",
+                                          "reason": "REGISTRY_CONTRACT_MISMATCH",
+                                          "run_id": None})
+
     def test_duplicate_incident_id_fails_closed(self):
         run, incident, detail = fixtures()
         original = self.make_get(run, incident, detail)

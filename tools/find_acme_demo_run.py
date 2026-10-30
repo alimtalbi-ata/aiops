@@ -87,7 +87,11 @@ def candidates(runs, incidents):
             continue
         if run.get("scenario_id") != SCENARIO:
             continue
-        incident = registry.get(run.get("incident_id"))
+        # A malformed JSON reference must not crash the locator or qualify a link.
+        incident_id = run.get("incident_id")
+        if not isinstance(incident_id, str) or not incident_id:
+            raise ValueError("invalid_run_incident_reference")
+        incident = registry.get(incident_id)
         if not incident or incident.get("synthetic") is not True:
             continue
         if incident.get("service_id") != SERVICE or incident.get("source") not in (

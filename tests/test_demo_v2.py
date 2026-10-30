@@ -749,5 +749,93 @@ class DemoV2Tests(unittest.TestCase):
         self.assertEqual(reads, ["/api/incidents", "/api/runs/RUN-ACME",
                                  "/api/runs/RUN-ACME/evidence"])
 
+    def test_cockpit_api_states_and_verified_run_journey(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed={"run_id":"RUN-ACME","mode":"DEMO","status":"BLOCKED",
+                "synthetic":True,"incident_id":"INC-ACME"}
+        reads=[]
+        def source(path,base=None):
+            reads.append(path)
+            if path=="/api/dashboard":
+                return {"open_incidents":2,"running":0}
+            if path=="/api/twin/summary":
+                return {"nodes":25,"edges":20}
+            if path=="/api/runs/RUN-ACME":
+                return {"run":dict(listed),"events":[]}
+            raise AssertionError(path)
+        with (patch.object(portal_main,"_get",side_effect=source),
+              patch.object(portal_main,"_runs",return_value=[
+                  {"run_id":"RUN-LIVE","mode":"LIVE","status":"RESOLVED"},listed]),
+              patch.object(portal_main,"post_json",
+                           side_effect=AssertionError("read-only"))):
+            response=TestClient(portal_main.app).get("/")
+        self.assertEqual(response.status_code,200)
+        self.assertIn("Core /api/dashboard",response.text)
+        self.assertIn("Twin /api/twin/summary",response.text)
+        self.assertGreaterEqual(response.text.count("CONNECTED"),2)
+        self.assertIn("SYNTHETIC",response.text)
+        for link in ("/demo-studio/run/RUN-ACME",
+                     "/twin?run_id=RUN-ACME",
+                     "/timeline?run_id=RUN-ACME",
+                     "/demo-studio/run/RUN-ACME#demo-ledger-output",
+                     "/demo-studio/run/RUN-ACME#demo-evidence-itsm-output",
+                     "/policy-control?run_id=RUN-ACME"):
+            self.assertIn('href="'+link+'"',response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"',response.text)
+        self.assertIn("Aucun ticket GET authentifié",response.text)
+        self.assertEqual(reads,["/api/dashboard","/api/twin/summary",
+                                "/api/runs/RUN-ACME"])
+
+    def test_cockpit_refuses_foreign_detail_and_missing_provenance(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed={"run_id":"RUN-ACME","mode":"REPLAY","status":"RESOLVED"}
+        def source(path,base=None):
+            if path=="/api/runs/RUN-ACME":
+                return {"run":{"run_id":"RUN-OTHER","mode":"REPLAY"}}
+            return {}
+        with (patch.object(portal_main,"_get",side_effect=source),
+              patch.object(portal_main,"_runs",return_value=[listed]),
+              patch.object(portal_main,"post_json",
+                           side_effect=AssertionError("read-only"))):
+            response=TestClient(portal_main.app).get("/")
+        self.assertEqual(response.status_code,200)
+        self.assertIn("Run Core sélectionné — UNKNOWN",response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-ACME"',response.text)
+        self.assertNotIn("provenance déclarée par Core",response.text)
+
+    def test_cockpit_source_errors_and_malformed_run_rows_fail_closed(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        self.assertEqual(portal_main._source_state(
+            {"status":"UNKNOWN","error_type":"HTTPStatusError","http_status":404},
+            "summary"),"UNKNOWN")
+        self.assertEqual(portal_main._source_state(
+            {"nodes":True,"edges":1},"summary"),"UNKNOWN")
+        def source(path,base=None):
+            if path=="/api/dashboard":
+                return {"status":"UNKNOWN","error_type":"HTTPStatusError",
+                        "http_status":401}
+            if path=="/api/twin/summary":
+                return {"status":"UNKNOWN","error_type":"ConnectionError"}
+            if path=="/api/runs":
+                return {"items":[None,42,"bad",
+                                 {"run_id":"RUN-LIVE","mode":"LIVE"}]}
+            return {}
+        with (patch.object(portal_main,"_get",side_effect=source),
+              patch.object(portal_main,"post_json",
+                           side_effect=AssertionError("read-only"))):
+            self.assertEqual(len(portal_main._runs()),1)
+            client=TestClient(portal_main.app)
+            home=client.get("/")
+            policy=client.get("/policy")
+        self.assertEqual(home.status_code,200)
+        self.assertEqual(policy.status_code,200)
+        self.assertIn("UNAUTHORIZED",home.text)
+        self.assertIn("UNAVAILABLE",home.text)
+        self.assertIn("Run Core sélectionné — UNKNOWN",home.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"',home.text)
+
 if __name__ == "__main__":
     unittest.main()

@@ -78,6 +78,8 @@ def _source_state(payload, kind):
         type(payload.get(field)) is int
         for field in ("open_incidents","running","blocked")):
         return "CONNECTED"
+    if kind=="summary" and type(payload.get("nodes")) is int and type(payload.get("edges")) is int:
+        return "CONNECTED"
     if kind=="graph" and isinstance(payload.get("nodes"),list) and isinstance(payload.get("edges"),list):
         return "CONNECTED"
     if kind=="impact" and payload.get("root") and isinstance(payload.get("affected"),list):
@@ -86,7 +88,8 @@ def _source_state(payload, kind):
 
 def _runs():
     response=_get("/api/runs")
-    return response.get("items",[]) if isinstance(response.get("items"),list) else []
+    rows = response.get("items") if isinstance(response, dict) else None
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
 def _run_id(r):
     return r.get("run_id","UNKNOWN")
@@ -193,8 +196,22 @@ def home():
         f'<div class="tile" style="--c:{color}"><strong>{esc("INCONNU" if v is None else v)}</strong><span>{esc(k)}</span></div>'
         for k,v,color in cards
     )
-    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("scenario_id","UNKNOWN")) for r in _runs()[:15]]
+    recent_runs=_runs()
+    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("scenario_id","UNKNOWN")) for r in recent_runs[:15]]
     content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
+    content+=panel("Sources du cockpit — état API, pas preuve métier",
+        '<p>CONNECTED = réponse API structurée uniquement ; UNAUTHORIZED = HTTP 401/403 ; '
+        'UNAVAILABLE = transport ou serveur indisponible. NOT_INSTALLED exige un inventaire '
+        'qualifié, non disponible ici ; les autres cas restent UNKNOWN.</p>'
+        +table(["Source","État","Limite"],[
+            ("Core /api/dashboard",_source_state(d,"dashboard"),
+             "REAL/SYNTHETIC à qualifier par run Core"),
+            ("Twin /api/twin/summary",_source_state(t,"summary"),
+             "Aucune corrélation SAN → Payments déduite du résumé"),
+            ("Evidence / AI Ledger","UNKNOWN","Viewer authentifié requis"),
+            ("ITSM GLPI","UNKNOWN","Aucun ticket GET authentifié"),
+            ("Policy / HITL","UNKNOWN","Aucune approbation runtime attestée"),
+        ]))
     content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
     content+=panel("Digital Twin — état courant",pretty(t))
     content+=panel("Démo ACME — valeur métier",
@@ -202,6 +219,23 @@ def home():
         '<p><a href="/demo-studio">Ouvrir le parcours opérateur Demo Studio</a> · '
         '<a href="/runs">Choisir un run Core existant</a> · '
         '<a href="/demo-studio/business-story">Voir la valeur métier hypothétique</a></p>')
+    # Prefer one terminal DEMO/REPLAY/STORY from Core, but only link its
+    # detail after the inventory and detail identities agree.
+    eligible=_qualified_demo_runs(recent_runs)
+    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
+                  eligible[0] if eligible else None)
+    if selected:
+        rid=selected["run_id"]
+        detail=_get("/api/runs/"+rid)
+        if _core_detail_matches_listed_run(detail,selected):
+            content+=_verified_operator_run_context(rid,detail,selected)
+        else:
+            content+=panel("Run Core sélectionné — UNKNOWN",
+                "<p>UNKNOWN — détail Core absent ou contradictoire ; aucun lien "
+                "Analyst/Critic, Evidence, ITSM ou HITL pour ce run.</p>")
+    else:
+        content+=panel("Run Core sélectionné — UNKNOWN",
+            "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu dans l'inventaire Core.</p>")
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
