@@ -207,4 +207,40 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
         self.assertEqual(client.calls, [])
 
 
+    def test_glpi_response_tenant_claim_never_verifies_ticket(self):
+        # Real GLPI HTTP is NOT used. An explicit ID match cannot authorize
+        # a ticket that carries an unqualified tenant/account/workspace claim.
+        for extra in (
+            {'tenant_id': 'T-1'},
+            {'metadata': {'organization_ref': None}},
+            {'metadata': {'nested': [{'workspace_id': 'W-1'}]}},
+            {'metadata': {'ｔｅｎａｎｔ＿ｉｄ': 'T-1'}},
+            {'metadata': {'tenant_acl_qualified': False}},
+        ):
+            with self.subTest(extra=extra):
+                client = MockOpener(Response({**GOOD, **extra}))
+                out = verify(opener=client)
+                self.assertEqual(len(client.calls), 1)
+                self.assertIsNone(out['ticket_id'])
+                self.assertEqual(out['ticket_verification'],
+                                 'UNKNOWN_NO_AUTHENTICATED_GLPI_LINK')
+                self.assertFalse(out['tenant_acl_qualified'])
+
+    def test_glpi_content_type_must_be_exact_json_media_type(self):
+        # Charset is legitimate; application/jsonp is not JSON media type.
+        for content_type, verified in (
+            ('application/json; charset=utf-8', True),
+            ('application/json', True),
+            ('application/jsonp', False),
+            ('application/json-malformed', False),
+            ('text/html', False),
+        ):
+            with self.subTest(content_type=content_type):
+                client = MockOpener(Response(GOOD, content_type=content_type))
+                out = verify(opener=client)
+                self.assertEqual(len(client.calls), 1)
+                self.assertEqual(out['ticket_id'], '12345' if verified else None)
+                self.assertFalse(out['tenant_acl_qualified'])
+
+
 if __name__ == '__main__': unittest.main()

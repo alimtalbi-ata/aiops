@@ -217,9 +217,6 @@ class PolicyDemoResultTests(unittest.TestCase):
             with self.subTest(snapshot=snapshot, key=key):
                 r = receipt()
                 r["projection"][snapshot][key] = value
-                if snapshot == "before":
-                    # Keep the rollback projection bound to before; test snapshot schema only.
-                    r["projection"]["rollback"]["projected_state"] = copy.deepcopy(r["projection"]["before"])
                 with self.assertRaisesRegex(ValueError, "snapshot_schema_invalid"):
                     present_demo_policy_result(r)
 
@@ -350,7 +347,6 @@ class PolicyDemoResultTests(unittest.TestCase):
                     r["projection"]["gate"]["target_ci"] = "ACME-GLPI-01"
                     for snapshot in ("before", "after"):
                         r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
-                    # Preserve the rollback-before invariant while testing reason spoofing.
                     r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
                 r["projection"]["reason"] = "RUNTIME_APPROVED"
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
@@ -450,6 +446,33 @@ class PolicyDemoResultTests(unittest.TestCase):
         r["projection"]["gate"]["proposal_id"] = "P-FORGED"
         with self.assertRaisesRegex(ValueError, "proposal_identity_binding_invalid"):
             present_demo_policy_result(r)
+
+    def test_schema_version_bool_is_not_integer_one(self):
+        r = receipt()
+        r["projection"]["schema_version"] = True  # True == 1 in Python
+        with self.assertRaisesRegex(ValueError, "projection_schema_invalid"):
+            present_demo_policy_result(r)
+
+    def test_rollback_snapshot_bool_int_alias_rejected(self):
+        for status, gate_status in (
+            ("SIMULATED_SUCCESS", "SIMULATED"),
+            ("SIMULATED_FAILURE", "SIMULATED"),
+            ("BLOCKED", "BLOCKED"),
+        ):
+            with self.subTest(status=status):
+                r = receipt(status, gate_status)
+                r["projection"]["rollback"]["projected_state"]["service_available"] = 0
+                # 0 == False, but it is not the same JSON type or state.
+                with self.assertRaisesRegex(ValueError, "rollback_effect_claim_forbidden"):
+                    present_demo_policy_result(r)
+
+    def test_catalog_timeout_bool_or_float_alias_rejected(self):
+        for forged in (90.0,):
+            with self.subTest(timeout=forged):
+                r = receipt()
+                r["projection"]["gate"]["timeout_seconds"] = forged
+                with self.assertRaisesRegex(ValueError, "gate_catalog_binding_invalid"):
+                    present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)

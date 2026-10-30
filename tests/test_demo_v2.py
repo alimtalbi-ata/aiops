@@ -684,14 +684,17 @@ class DemoV2Tests(unittest.TestCase):
             {"run_id": "RUN-OK", "mode": "REPLAY", "status": "BLOCKED"},
             {"run_id": "bad/run", "mode": "DEMO", "status": "RESOLVED"},
         ]
-        with patch.object(portal_main, "_runs", return_value=runs):
+        with (patch.object(portal_main, "_runs", return_value=runs),
+              patch.object(portal_main, "_get", side_effect=lambda path, base=None:
+                           {"run": dict(runs[2])} if path == "/api/runs/RUN-OK"
+                           else {"status": "UNKNOWN"})):
             page=portal_main.acme_stories_page()
         self.assertIn('href="/demo-studio/run/RUN-OK"', page)
         self.assertIn('href="/timeline?run_id=RUN-OK"', page)
         self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
         self.assertNotIn('href="/demo-studio/run/bad', page)
         self.assertNotIn("RUN-A4449145A6E377FF", page)
-        self.assertIn("inventaire non attesté", page)
+        self.assertIn("inventaire et détail concordants", page)
 
     def test_context_routes_preserve_verified_core_run_without_business_join(self):
         from fastapi.testclient import TestClient
@@ -971,6 +974,85 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn('href="/demo-studio/run/RUN-STALE"',response.text)
         self.assertNotIn('href="/timeline?run_id=RUN-STALE"',response.text)
         self.assertIn("Incident Core associé :</strong> UNKNOWN",response.text)
+
+    def test_acme_stories_rejects_stale_and_foreign_core_details(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = [
+            {"run_id": "RUN-STALE", "mode": "DEMO", "status": "RESOLVED"},
+            {"run_id": "RUN-FOREIGN", "mode": "REPLAY", "status": "BLOCKED"},
+        ]
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/runs/RUN-STALE":
+                return {"run": {"run_id": "RUN-STALE", "mode": "DEMO",
+                                "status": "RUNNING"}}
+            if path == "/api/runs/RUN-FOREIGN":
+                return {"run": {"run_id": "RUN-OTHER", "mode": "REPLAY",
+                                "status": "BLOCKED"}}
+            raise AssertionError(path)
+        with (patch.object(portal_main, "_runs", return_value=listed),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/acme-stories")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("non ambigu et concordant accessible", response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-STALE"', response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-FOREIGN"', response.text)
+        self.assertEqual(reads, ["/api/runs/RUN-STALE", "/api/runs/RUN-FOREIGN"])
+
+    def test_stale_run_status_hides_cross_screen_navigation_and_events(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-STALE", "mode": "DEMO",
+                  "status": "BLOCKED", "synthetic": True}
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/runs/RUN-STALE":
+                return {"run": dict(listed, status="RUNNING"),
+                        "events": [{"stage": "FOREIGN-STATE-EVENT"}]}
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            client = TestClient(portal_main.app)
+            twin = client.get("/twin?run_id=RUN-STALE")
+            detail = client.get("/demo-studio/run/RUN-STALE")
+            status = client.get("/api/demo-status/RUN-STALE")
+        self.assertEqual(twin.status_code, 200)
+        self.assertIn("Contexte run Core — UNKNOWN", twin.text)
+        self.assertNotIn('href="/timeline?run_id=RUN-STALE"', twin.text)
+        self.assertEqual(detail.status_code, 503)
+        self.assertNotIn("FOREIGN-STATE-EVENT", detail.text)
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(status.json()["status"], "UNKNOWN")
+        self.assertEqual(reads.count("/api/runs/RUN-STALE"), 3)
+        self.assertFalse(any(path.endswith("/gates") for path in reads))
+
+    def test_verified_run_window_reaches_valid_thirteenth_record(self):
+        from portal import main as portal_main
+        rows = [{"run_id": "RUN-STALE-" + str(i), "mode": "DEMO",
+                 "status": "RESOLVED"} for i in range(12)]
+        rows.append({"run_id": "RUN-VALID-13", "mode": "DEMO",
+                     "status": "RESOLVED", "synthetic": True})
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            rid = path.removeprefix("/api/runs/")
+            if rid == "RUN-VALID-13":
+                return {"run": dict(rows[-1])}
+            return {"run": {"run_id": "RUN-OTHER", "mode": "DEMO",
+                            "status": "RESOLVED"}}
+        with patch.object(portal_main, "_get", side_effect=source):
+            selected, detail = portal_main._select_verified_demo_run(rows)
+        self.assertEqual(selected["run_id"], "RUN-VALID-13")
+        self.assertEqual(detail["run"]["synthetic"], True)
+        self.assertEqual(len(reads), 13)
 
 if __name__ == "__main__":
     unittest.main()

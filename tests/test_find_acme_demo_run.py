@@ -43,6 +43,58 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(result["payments_runtime_impact"], "UNKNOWN")
         self.assertFalse(result["e2e_attested"])
 
+    def test_pinned_operator_pair_matches_only_exact_run_and_incident(self):
+        run, incident, detail = fixtures()
+        result = locator.qualify(
+            "http://core", "http://portal", self.make_get(run, incident, detail),
+            expected_run_id="RUN-ABC123", expected_incident_id="INC-ABC123")
+        self.assertEqual(result["result"], "SOURCE_VERIFIED_REGISTRY_ONLY")
+        self.assertTrue(result["operator_pair_pinned"])
+        self.assertEqual(result["incident_id"], "INC-ABC123")
+
+    def test_pinned_operator_pair_wrong_incident_fails_closed(self):
+        run, incident, detail = fixtures()
+        result = locator.qualify(
+            "http://core", "http://portal", self.make_get(run, incident, detail),
+            expected_run_id="RUN-ABC123", expected_incident_id="INC-OTHER")
+        self.assertEqual(result["reason"], "EXPECTED_PAIR_NOT_QUALIFIED_IN_REGISTRY_WINDOW")
+        self.assertIsNone(result["run_id"])
+
+    def test_pinned_operator_pair_wrong_run_fails_closed(self):
+        run, incident, detail = fixtures()
+        result = locator.qualify(
+            "http://core", "http://portal", self.make_get(run, incident, detail),
+            expected_run_id="RUN-OTHER", expected_incident_id="INC-ABC123")
+        self.assertEqual(result["reason"], "EXPECTED_PAIR_NOT_QUALIFIED_IN_REGISTRY_WINDOW")
+        self.assertIsNone(result["run_id"])
+
+    def test_pinned_operator_pair_incomplete_or_invalid_fails_closed(self):
+        run, incident, detail = fixtures()
+        get = self.make_get(run, incident, detail)
+        for expected_run_id, expected_incident_id, reason in (
+            ("RUN-ABC123", None, "EXPECTED_PAIR_INCOMPLETE"),
+            (None, "INC-ABC123", "EXPECTED_PAIR_INCOMPLETE"),
+            ("../../bad", "INC-ABC123", "EXPECTED_PAIR_INVALID"),
+            ("RUN-ABC123", ["INC-ABC123"], "EXPECTED_PAIR_INVALID"),
+            ("RUN-ABC123", "", "EXPECTED_PAIR_INVALID"),
+        ):
+            with self.subTest(run=expected_run_id, incident=expected_incident_id):
+                result = locator.qualify(
+                    "http://core", "http://portal", get,
+                    expected_run_id=expected_run_id,
+                    expected_incident_id=expected_incident_id)
+                self.assertEqual(result["reason"], reason)
+                self.assertIsNone(result["run_id"])
+
+    def test_pinned_operator_pair_rejects_stale_detail(self):
+        run, incident, detail = fixtures()
+        detail["run"]["incident_id"] = "INC-OTHER"
+        result = locator.qualify(
+            "http://core", "http://portal", self.make_get(run, incident, detail),
+            expected_run_id="RUN-ABC123", expected_incident_id="INC-ABC123")
+        self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+        self.assertIsNone(result["run_id"])
+
     def test_live_rejected(self):
         run, incident, _ = fixtures(); run["mode"] = "LIVE"
         self.assertEqual(locator.candidates({"items": [run]}, {"items": [incident]}), [])
