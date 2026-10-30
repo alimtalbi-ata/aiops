@@ -282,3 +282,9 @@ The current GitHub session can inspect and change repository source and GitHub A
 - Each checkpoint now names ITIL practice, owner role, handoff and evidence required. It covers NOC L1/L2, Service Desk N1, Incident Manager N2, Incident Commander, SRE/N3, Knowledge, Problem, Change Manager, authorized approver, simulator, independent verifier, closure and continual improvement.
 - Every checkpoint remains `MISSING`; no runtime capture, GLPI ticket, SLA breach, approval or remediation is asserted. Runtime, production and LIVE flags remain false.
 - Exact head `890977be` CI run `41081252003` failed only in the synthetic DOM test harness because its old three-step response fixture did not include the newly required ITIL metadata. The Python API/model contract test passed. The JS fixture has been updated in commit `c00ceb11`; exact-head Quality run `41081496981` is now IN_PROGRESS. Do not mark this slice qualified until that run passes.
+
+## 2026-10-30 15:36 UTC — selective convergence and CI regression
+
+- #201 `main@27deb9b1` remains the only clean-main draft integration candidate; 14 synthetic ITIL checkpoints introduced in Portal were not matched by the nine-step Chromium/qualification fixture. #201 `c00ceb11` Quality 41081496981 FAILED; 5/5 added test-only `2dafb007` with the remaining 14-step expectation and forged ITIL metadata negatives. New exact-head Quality 41082175476 pending. Do not copy old nine-step contracts or weaken `MISSING`/identity/source checks.
+- #196 `135328f5` remains stacked on stale #194 base `1fade3e5`; 1.7B and 4B Ollama artifacts show evaluator_exit=1, 0/5 cases and ReadTimeout. Push 41080394263 model jobs now FAILURE (correct fail-closed behavior). No real model metrics may be reused as a PASS. Keep selective migration/OIDC/outbox/telemetry dependency audit before port to #201.
+- #188 preferred future schedule remains unmerged; #189 duplicate, #146/#153 unauthorized, #187 deferred. No Debian or LIVE claim.

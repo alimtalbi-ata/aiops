@@ -201,3 +201,9 @@ The detailed live execution board is now `docs/planning/AIOPS2-48H-EXECUTION-CON
 4. Add a reproducible T2 synthetic customer journey and ITIL event trail before adding more observability components.
 5. Assemble one cumulative source-provenance kit only after manifest/checksum, clean install, upgrade and rollback tests.
 6. Keep T3/T4/T5 NO-GO until host attestation, isolated rollback and all LIVE gates are separately proven.
+
+## 2026-10-30 15:36 UTC — H0–H4 acceptance update
+
+The #201 14-step synthetic ITIL customer-story source is now subject to exact Chromium/HTTP qualification. Old nine-step fixture assertions caused [Quality 41081496981](https://github.com/alimtalbi-ata/aiops/actions/runs/41081496981) FAILURE; #201 `2dafb00717b572023153e2b5dd974eada8a759c5` repairs the remaining assertion and adds forged-metadata negatives, with [new Quality 41082175476](https://github.com/alimtalbi-ata/aiops/actions/runs/41082175476) pending. A synthetic storyboard is not a T2 integrated Incident/Run/evidence/GLPI receipt.
+
+#196 `135328f5` has retained both 1.7B and 4B Ollama CPU failure artifacts (each 0/5 analyzed, ReadTimeout, evaluator_exit=1). [Push 41080394263](https://github.com/alimtalbi-ata/aiops/actions/runs/41080394263) correctly fails 2/2 model jobs; Quality PR 41080407493 not yet complete. Next priority is CPU service/inference diagnostics and bounded re-test, not score promotion. Maintain clean-main #201 as only integration candidate and keep install/rollback NO_GO.
