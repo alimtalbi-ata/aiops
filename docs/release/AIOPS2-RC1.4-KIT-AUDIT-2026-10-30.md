@@ -67,3 +67,25 @@ The kit is therefore a reproducible RC candidate for the stacked #194/#196 sourc
 ## Required next package
 
 After the main-based integration PRs are accepted, rebuild the kit from one exact release-candidate SHA. Include the architecture/ITIL/benchmark docs, current configuration templates, full migration chain, scripts, tests, operator runbooks, rollback and health-smoke templates, CI evidence and checksums. Re-run clean extraction, offline repack, install/upgrade/rollback rehearsal and exact-SHA verification. Never re-label this current artifact as production-ready.
+
+
+## Second RC1.4 artifact comparison — ACME candidate 5782d6f
+
+A second kit was downloaded from PR #185 run `41053319020`, artifact `12975971501` (current ACME candidate head `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`).
+
+| Check | PR #185 ACME artifact | PR #196 HITL/AI artifact |
+|---|---:|---:|
+| Artifact ID | 12975971501 | 12974884559 |
+| Inner ZIP SHA-256 | `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d` | `4c7bd6a707fc24a308de033ee7f1b02b6df123cfd7c2615eea9cecb7b7be2646` |
+| Entries | 445 | 455 |
+| Checksums | 395 / 395 PASS | 405 / 405 PASS |
+| Migration 011 | ABSENT | PRESENT |
+| OIDC verifier | ABSENT | PRESENT |
+| AI per-call telemetry | ABSENT (older Intelligence/evaluator) | PRESENT |
+| Architecture/ITIL docs | ABSENT | ABSENT |
+
+Both packages are internally checksum-valid but represent different source trees and capabilities. The ACME package is not a superset of the HITL/AI package; the HITL/AI package does not include the new architecture docs or latest ACME candidate fixes. Neither package is the final cumulative installation kit.
+
+## Current candidate quality caveat
+
+PR #185 head `5782d6f` has Quality run `41053319020` 6/6 SUCCESS, Offline `41053318999` and Historical `41053319033` SUCCESS, but V2.8 run `41053319372` FAILED: `test_demo_live_trace_is_source_backed` expected `gates.decision`, while the current scoped reader contract returns `gates.items`. This is a test fixture contract mismatch; update the fixture to the current collection shape, do not weaken identity scoping. PR #185 remains non-mergeable to main due base divergence.
