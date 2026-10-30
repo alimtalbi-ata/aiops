@@ -11,6 +11,8 @@ from typing import Any
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _RUN = re.compile(r"^RUN-[A-Za-z0-9_-]{1,120}$")
 _SIMULATED = frozenset({"SIMULATED_SUCCESS", "SIMULATED_FAILURE", "SIMULATED_NO_RECOVERY"})
+_SNAPSHOT_KEYS = frozenset({"target_ci", "health", "service_available"})
+_ALLOWED_HEALTH = frozenset({"HEALTHY", "DEGRADED", "FAILED", "UNKNOWN"})
 
 
 def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -81,7 +83,31 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     before, after = projection.get("before"), projection.get("after")
     if not isinstance(before, dict) or not isinstance(after, dict) or before.get("target_ci") != projection["target_ci"] or after.get("target_ci") != projection["target_ci"]:
         raise ValueError("snapshot_binding_invalid")
+    if (
+        set(before) != _SNAPSHOT_KEYS or set(after) != _SNAPSHOT_KEYS
+        or before["health"] not in _ALLOWED_HEALTH
+        or after["health"] not in _ALLOWED_HEALTH
+        or type(before["service_available"]) is not bool
+        or type(after["service_available"]) is not bool
+    ):
+        raise ValueError("snapshot_schema_invalid")
     status = projection.get("status")
+    # The existing projection builder has exactly these no-effect hypotheses.
+    # Do not allow a forged receipt to turn FAILURE/BLOCKED into a recovery.
+    expected_after = (
+        {**before, "health": "HEALTHY", "service_available": True}
+        if status == "SIMULATED_SUCCESS" else before
+    )
+    expected_rollback = {
+        "SIMULATED_SUCCESS": "AVAILABLE_AS_PROJECTION",
+        "SIMULATED_FAILURE": "PROJECTED_ONLY",
+        "SIMULATED_NO_RECOVERY": "NOT_REQUIRED",
+        "BLOCKED": "NOT_REQUIRED",
+    }.get(status)
+    if expected_rollback is not None and (
+        after != expected_after or rollback["status"] != expected_rollback
+    ):
+        raise ValueError("projection_outcome_inconsistent")
     if gate.get("status") == "SIMULATED" and (
         gate.get("dry_run") is not True
         or gate.get("preconditions") != "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED"

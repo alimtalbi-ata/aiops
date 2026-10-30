@@ -19,7 +19,15 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
             "target_ci": "ACME-LNX-01", "proposal_digest": "b" * 64,
             "idempotency_key": "c" * 64,
             "effect_applied": False, "postchecks": "NOT_RUN", "before": before, "after": after,
-            "rollback": {"status": "PROJECTED_ONLY", "effect_applied": False},
+            "rollback": {
+                "status": {
+                    "SIMULATED_SUCCESS": "AVAILABLE_AS_PROJECTION",
+                    "SIMULATED_FAILURE": "PROJECTED_ONLY",
+                    "SIMULATED_NO_RECOVERY": "NOT_REQUIRED",
+                    "BLOCKED": "NOT_REQUIRED",
+                }.get(status, "NOT_REQUIRED"),
+                "effect_applied": False,
+            },
             "gate": {
                 "mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01",
                 "proposal_digest": "b" * 64, "recipe_id": "ansible-service-restart",
@@ -167,6 +175,51 @@ class PolicyDemoResultTests(unittest.TestCase):
             self.assertIsNone(result["audit"]["observed_at"])
             self.assertEqual(result["audit"]["receipt_digest"], r["receipt_digest"])
             self.assertEqual(result["audit"]["proposal_digest"], r["projection"]["proposal_digest"])
+
+    def test_snapshot_schema_and_types_fail_closed(self):
+        for snapshot, key, value in (
+            ("before", "health", "RECOVERED"),
+            ("after", "service_available", "yes"),
+            ("before", "unexpected", True),
+        ):
+            with self.subTest(snapshot=snapshot, key=key):
+                r = receipt()
+                r["projection"][snapshot][key] = value
+                with self.assertRaisesRegex(ValueError, "snapshot_schema_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_forged_success_after_hypothesis_rejected(self):
+        for key, value in (("health", "FAILED"), ("service_available", False)):
+            with self.subTest(key=key):
+                r = receipt()
+                r["projection"]["after"][key] = value
+                with self.assertRaisesRegex(ValueError, "projection_outcome_inconsistent"):
+                    present_demo_policy_result(r)
+
+    def test_failure_blocked_or_no_recovery_cannot_claim_recovery(self):
+        for status, gate_status in (
+            ("SIMULATED_FAILURE", "SIMULATED"),
+            ("SIMULATED_NO_RECOVERY", "SIMULATED"),
+            ("BLOCKED", "BLOCKED"),
+        ):
+            with self.subTest(status=status):
+                r = receipt(status, gate_status)
+                r["projection"]["after"]["health"] = "HEALTHY"
+                with self.assertRaisesRegex(ValueError, "projection_outcome_inconsistent"):
+                    present_demo_policy_result(r)
+
+    def test_rollback_status_must_match_hypothetical_outcome(self):
+        for status, gate_status, forged in (
+            ("SIMULATED_SUCCESS", "SIMULATED", "PROJECTED_ONLY"),
+            ("SIMULATED_FAILURE", "SIMULATED", "AVAILABLE_AS_PROJECTION"),
+            ("SIMULATED_NO_RECOVERY", "SIMULATED", "PROJECTED_ONLY"),
+            ("BLOCKED", "BLOCKED", "PROJECTED_ONLY"),
+        ):
+            with self.subTest(status=status):
+                r = receipt(status, gate_status)
+                r["projection"]["rollback"]["status"] = forged
+                with self.assertRaisesRegex(ValueError, "projection_outcome_inconsistent"):
+                    present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)
