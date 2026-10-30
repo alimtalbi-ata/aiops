@@ -151,7 +151,7 @@ def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
     try:
         client = opener if opener is not None else build_opener(ProxyHandler({}), _NoRedirect())
         with client.open(request, timeout=4) as response:
-            if response.status != 200 or not response.headers.get("Content-Type", "").lower().startswith("application/json"):
+            if response.status != 200 or response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
                 return result
             raw = response.read(_MAX_BYTES + 1)
         if len(raw) > _MAX_BYTES:
@@ -159,6 +159,9 @@ def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
         ticket = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs_no_duplicates)
         if not isinstance(ticket, dict):
             return result
+        # A matching ID in an unqualified tenant-scoped ticket is not a
+        # safe cross-system link. Reject nested/aliased claims as for Core.
+        reject_unqualified_tenant_scope(ticket)
         ticket_id = ticket.get("id")
         if type(ticket_id) is int:
             ticket_id = str(ticket_id)
