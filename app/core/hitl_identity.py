@@ -1,0 +1,62 @@
+"""Development-only identity simulator routes.
+
+The simulator issues short-lived signed fixture assertions. It does not
+authenticate real users and must never be used for LIVE approvals.
+"""
+import os
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from shared.hitl_identity import (
+    IdentityError,
+    issue_simulated_assertion,
+    simulator_catalog,
+    simulator_enabled,
+)
+
+router = APIRouter(tags=["HITL identity simulator"])
+
+
+class SimulatorTokenRequest(BaseModel):
+    subject: str = Field(min_length=3, max_length=100)
+    ttl_seconds: int = Field(default=300, ge=30, le=600)
+
+
+@router.get("/api/hitl/identity/health")
+def identity_health():
+    mode = os.getenv("AIOPS_HITL_IDENTITY_MODE", "DISABLED").upper()
+    enabled = simulator_enabled()
+    return {
+        "component": "hitl-identity",
+        "mode": mode,
+        "simulator_enabled": enabled,
+        "production_directory": "NOT_CONFIGURED",
+        "live_approval_ready": False,
+        "execution_allowed": False,
+    }
+
+
+@router.get("/api/hitl/identity/simulator/catalog")
+def identity_simulator_catalog():
+    if not simulator_enabled():
+        raise HTTPException(404, "identity_simulator_disabled")
+    return {"items": simulator_catalog(), "simulated": True, "execution_allowed": False}
+
+
+@router.post("/api/hitl/identity/simulator/token")
+def identity_simulator_token(request: SimulatorTokenRequest):
+    if not simulator_enabled():
+        raise HTTPException(404, "identity_simulator_disabled")
+    try:
+        token, claims = issue_simulated_assertion(request.subject, request.ttl_seconds)
+    except IdentityError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    return {
+        "access_token": token,
+        "token_type": "Bearer",
+        "expires_at": claims["exp"],
+        "identity": claims,
+        "simulated": True,
+        "execution_allowed": False,
+    }
