@@ -124,6 +124,28 @@ class RunDetailTests(unittest.TestCase):
             self.assertNotIn("PRIVATE-TENANT", response.text)
             self.assertNotIn("RUN-FOREIGN", response.text)
 
+    def test_unqualified_authority_claims_never_become_synthetic_proof(self):
+        # The four-field Core NOC identity read cannot authenticate extra
+        # source, tenant, ticket, impact or runtime claims.
+        for claim in (
+            {"synthetic": False},
+            {"runtime_authenticated": True},
+            {"tenant_acl_qualified": True},
+            {"live_remediation_authorized": True},
+            {"source_freshness": "FRESH"},
+            {"ticket_id": "GLPI-UNVERIFIED"},
+            {"evidence_id": "EVD-UNVERIFIED"},
+            {"payments_impact": "CONFIRMED"},
+        ):
+            with self.subTest(claim=claim), patch.object(
+                    acme_run_detail, "_read_core_run", return_value=run(**claim)):
+                response = self.get()
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["state"], "UNKNOWN")
+            for value in claim.values():
+                if isinstance(value, str):
+                    self.assertNotIn(value, response.text)
+
     def test_core_exception_is_redacted_unknown(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=ValueError("secret-in-upstream")):
@@ -166,6 +188,27 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
         self.assertIn("source freshness: UNKNOWN", response.text)
         self.assertNotIn("<script", response.text)
+
+    def test_html_shows_verified_and_denied_connection_states_without_evidence(self):
+        with patch.object(acme_run_detail, "_read_core_run", return_value=run()):
+            connected = self.get("/runs/" + RID)
+        self.assertEqual(connected.status_code, 200)
+        self.assertIn("connection: CONNECTED", connected.text)
+        self.assertIn("source freshness: UNKNOWN", connected.text)
+        self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", connected.text)
+        with patch.object(
+                acme_run_detail, "_read_core_run",
+                side_effect=urllib.error.HTTPError("http://core", 403, "denied", {}, None)):
+            denied = self.get("/runs/" + RID)
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn("connection: UNAUTHORIZED", denied.text)
+        self.assertIn("NOT VERIFIED", denied.text)
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=TimeoutError("sensitive-upstream")):
+            unavailable = self.get("/runs/" + RID)
+        self.assertEqual(unavailable.status_code, 503)
+        self.assertIn("connection: UNAVAILABLE", unavailable.text)
+        self.assertNotIn("sensitive-upstream", unavailable.text)
 
     def test_home_entry_and_js_asset_do_not_ship_secrets(self):
         home = self.client.get("/")

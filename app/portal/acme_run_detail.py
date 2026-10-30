@@ -47,6 +47,16 @@ FORBIDDEN_COLLECTIONS = frozenset(
      "demo_artifacts", "artifacts", "ai_ledger", "analyses", "critiques"}
 )
 
+# The current Core NOC Run endpoint returns only four identity fields.
+# Any extra authority, provenance or impact claim is unqualified by this reader.
+UNQUALIFIED_CLAIMS = frozenset({
+    "synthetic", "runtime_authenticated", "runtime_attested",
+    "tenant_acl_qualified", "live_remediation_authorized",
+    "evidence_runtime_attested", "source_observed_at", "source_freshness",
+    "connection_state", "provenance", "ticket_id", "evidence_id",
+    "payments_impact", "impact",
+})
+
 
 def _valid_run_id(value: object) -> bool:
     return (isinstance(value, str) and value.startswith("RUN-")
@@ -55,8 +65,9 @@ def _valid_run_id(value: object) -> bool:
 
 def _project(rid: str, raw: object) -> dict:
     """Project only four exact synthetic identity fields from Core, never a ledger."""
-    if not isinstance(raw, dict) or FORBIDDEN_COLLECTIONS.intersection(raw):
-        raise ValueError("Core identity contains unqualified collections")
+    if (not isinstance(raw, dict) or FORBIDDEN_COLLECTIONS.intersection(raw)
+            or UNQUALIFIED_CLAIMS.intersection(raw)):
+        raise ValueError("Core identity contains unqualified claims")
     reject_unqualified_tenant_scope(raw)
     if (raw.get("run_id") != rid or not _valid_run_id(raw.get("run_id"))
             or not isinstance(raw.get("incident_id"), str)
@@ -259,6 +270,11 @@ def run_detail_page(rid: str, request: Request,
     provenance = html.escape(data.get("provenance", "UNKNOWN"), quote=True)
     mode = html.escape(data.get("mode", "UNKNOWN"), quote=True)
     freshness = html.escape(data.get("source_freshness", "UNKNOWN"), quote=True)
+    connection = html.escape(
+        data.get("connection_state", data["state"] if data["state"] in
+                 ("UNAUTHORIZED", "UNAVAILABLE", "NOT_INSTALLED") else "UNKNOWN"),
+        quote=True,
+    )
     # Requested ID is NOT presented as an authenticated Run unless Core matched it.
     heading = "Core-verified Run" if status == 200 else "Requested Run — NOT VERIFIED"
     page = (
@@ -273,7 +289,7 @@ def run_detail_page(rid: str, request: Request,
         '<header><a href="/">← Cockpit NOC / portail unique</a></header>'
         f'<h1>{heading}: <code>{safe_rid}</code></h1>'
         f'<p role="status">State: {safe_state} · provenance: {provenance} · '
-        f'mode: {mode} · source: {source} · source freshness: {freshness}</p>'
+        f'mode: {mode} · connection: {connection} · source: {source} · source freshness: {freshness}</p>'
         '<p class="muted">Tenant ACL: NOT QUALIFIED. No Evidence bytes, AI decision, '
         'HITL approval, Payments impact or verification is attested here.</p>'
         f'<nav aria-label="ACME journey">{nav}</nav>{"".join(rows)}'

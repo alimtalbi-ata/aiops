@@ -68,7 +68,28 @@ test('missing read token and failed session exchange do not navigate', async () 
   await nodes.click();
   assert.equal(calls, 1);
   assert.equal(paths.length, 0);
-  assert.equal(nodes['run-detail-error'].textContent, 'UNKNOWN — jeton lecture invalide');
+  assert.equal(nodes['run-detail-error'].textContent, 'UNAUTHORIZED (HTTP 401) — jeton lecture invalide');
+});
+
+test('HTTP 403 and 503 remain visible and never navigate', async () => {
+  for (const [status, expected] of [
+    [403, 'UNAUTHORIZED (HTTP 403) — session lecture seule refusée'],
+    [503, 'UNKNOWN (HTTP 503) — service de session indisponible']
+  ]) {
+    const nodes = {
+      'run-detail-id': { value: 'RUN-ACME-001' },
+      'portal-read-token': { value: 'one-time-token' },
+      'run-detail-open': { addEventListener: (event, cb) => { nodes.click = cb; } },
+      'run-detail-error': { textContent: '' }
+    };
+    const paths = [];
+    mount({ getElementById: id => nodes[id] }, path => paths.push(path),
+          async () => ({ ok: false, status }));
+    await nodes.click();
+    assert.equal(nodes['run-detail-error'].textContent, expected);
+    assert.equal(nodes['portal-read-token'].value, '');
+    assert.deepEqual(paths, []);
+  }
 });
 
 test('no credential persistence or browser cookie access is used', () => {
