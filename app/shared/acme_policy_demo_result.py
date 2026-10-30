@@ -5,11 +5,14 @@ GLPI, Temporal, a remediation adapter, or a database. Not a Policy authorization
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from typing import Any
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _RUN = re.compile(r"^RUN-[A-Za-z0-9_-]{1,120}$")
+_SAFE_REF = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _SIMULATED = frozenset({"SIMULATED_SUCCESS", "SIMULATED_FAILURE", "SIMULATED_NO_RECOVERY"})
 _SNAPSHOT_KEYS = frozenset({"target_ci", "health", "service_available"})
 _ALLOWED_HEALTH = frozenset({"HEALTHY", "DEGRADED", "FAILED", "UNKNOWN"})
@@ -19,6 +22,7 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     """Summarize a *synthetic, unverified* receipt without elevating its claims.
 
     The caller must build the receipt with the existing offline receipt builder.
+    The local SHA-256 binding is not a signature or runtime attestation.
     Neither a matching evidence ID nor a fixture's authenticated=True proves
     a Core record, a tenant-scoped read, or a real human approval.
     """
@@ -31,10 +35,14 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("receipt_attestation_claim_forbidden")
     if not isinstance(receipt.get("run_id"), str) or not _RUN.fullmatch(receipt["run_id"]):
         raise ValueError("run_identity_invalid")
-    if not isinstance(receipt.get("scenario_id"), str) or not receipt["scenario_id"]:
+    if not isinstance(receipt.get("scenario_id"), str) or not _SAFE_REF.fullmatch(receipt["scenario_id"]):
         raise ValueError("scenario_identity_invalid")
     ids = receipt.get("evidence_ids")
-    if not isinstance(ids, list) or not ids or any(not isinstance(x, str) or not x for x in ids) or len(set(ids)) != len(ids):
+    if (
+        not isinstance(ids, list) or not 1 <= len(ids) <= 32
+        or any(not isinstance(x, str) or not _SAFE_REF.fullmatch(x) for x in ids)
+        or len(set(ids)) != len(ids) or ids != sorted(ids)
+    ):
         raise ValueError("evidence_refs_invalid")
     digest = receipt.get("receipt_digest")
     if not isinstance(digest, str) or not _HEX64.fullmatch(digest):
@@ -43,6 +51,8 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(projection, dict) or not isinstance(projection.get("gate"), dict):
         raise ValueError("projection_missing")
     gate = projection["gate"]
+    if projection.get("schema_version") != 1:
+        raise ValueError("projection_schema_invalid")
     if projection.get("synthetic") is not True or projection.get("provenance") != "WHAT_IF_FIXTURE_NOT_OBSERVED":
         raise ValueError("projection_provenance_invalid")
     if projection.get("mode") not in ("DEMO", "REPLAY", "STORY") or gate.get("mode") != projection["mode"]:
@@ -108,6 +118,31 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         after != expected_after or rollback["status"] != expected_rollback
     ):
         raise ValueError("projection_outcome_inconsistent")
+    if (
+        (status == "SIMULATED_SUCCESS" and projection.get("recipe_id") != "ansible-service-restart")
+        or (status == "SIMULATED_NO_RECOVERY" and projection.get("recipe_id") == "ansible-service-restart")
+    ):
+        raise ValueError("projection_recipe_outcome_inconsistent")
+    # Recompute the existing receipt builder's deterministic binding. This is
+    # local tamper detection, NOT a signature, persisted audit, or Core evidence.
+    outcomes = ("SUCCESS", "FAILURE") if status == "BLOCKED" else (
+        ("FAILURE",) if status == "SIMULATED_FAILURE" else ("SUCCESS",)
+    )
+    valid_digests = set()
+    for outcome in outcomes:
+        binding = {
+            "run_id": receipt["run_id"],
+            "scenario_id": receipt["scenario_id"],
+            "mode": projection["mode"],
+            "proposal_digest": projection["proposal_digest"],
+            "evidence_ids": ids,
+            "outcome": outcome,
+        }
+        valid_digests.add(hashlib.sha256(
+            json.dumps(binding, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+        ).hexdigest())
+    if digest not in valid_digests:
+        raise ValueError("receipt_binding_digest_mismatch")
     if gate.get("status") == "SIMULATED" and (
         gate.get("dry_run") is not True
         or gate.get("preconditions") != "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED"
