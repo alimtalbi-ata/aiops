@@ -56,6 +56,12 @@ def simulator_enabled() -> bool:
     )
 
 
+def simulator_ready() -> bool:
+    return simulator_enabled() and len(
+        os.getenv("AIOPS_HITL_SIMULATOR_SIGNING_KEY", "").encode("utf-8")
+    ) >= 32
+
+
 def _signing_key() -> bytes:
     value = os.getenv("AIOPS_HITL_SIMULATOR_SIGNING_KEY", "")
     if len(value.encode("utf-8")) < 32:
