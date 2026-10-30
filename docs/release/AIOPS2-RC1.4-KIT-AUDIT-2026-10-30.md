@@ -169,3 +169,8 @@ Historical #185 and #196 ZIPs are individually checksum-valid but neither cumula
 ### 2026-10-30 19:16 UTC — artifact member audit and SHA distinction
 
 Actual downloaded #201 artifact `13005150615` from [Quality 41113172965](https://github.com/alimtalbi-ata/aiops/actions/runs/41113172965): ZIP size **237618**, SHA256 `6fdaab4220604c401c531999907df55e0a54d713920537ca22f5dfac2886bf69` (matches GitHub digest), **2/2 CRC PASS**. Only `capture-metadata.json` and `explore-story-ci-simulated.png` exist; screenshot digest `8a1720c3851833525d0e817a157d24826ff431fc84ce1d9d9742fd5595ebcaca` matches metadata. `git_sha=43f3b5bd...` is a temporary PR merge checkout, **not** source `7e4cbe9d...`. No migration, install, upgrade, rollback, or cumulative manifest in this artifact. #201 `cee6a834` now emits distinct source/base/checkout SHA fields (exact-head CI pending). **T4 NO_GO**, Debian T3 NOT_ATTESTED, LIVE T5 NO_GO.
+
+
+### 2026-10-30 19:20 UTC — new exact-head synthetic artifact audited
+
+#201 `cee6a834befbee47275e83651e7c0955528c51a0`, [Quality 41113479815](https://github.com/alimtalbi-ata/aiops/actions/runs/41113479815) SUCCESS 3/3. Artifact `13004397285` downloaded: **237689 bytes**, SHA256 **`7f1821aefdbc687601bc2ae62163a7e777df03e8d6d939031880cead20b6ab93`**, **2/2 CRC PASS**, screenshot checksum PASS. Members only `capture-metadata.json` and `explore-story-ci-simulated.png`; metadata source HEAD `cee6a834...`, base `27deb9b1...`, merge checkout `73a71c76...` are separately recorded and verified. This is **not** a cumulative kit. Migration 011/OIDC/telemetry/install/upgrade/rollback still unqualified. **T4 NO_GO**.
