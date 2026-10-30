@@ -950,6 +950,7 @@ def policy_control_center(run_id:str|None=None):
             +'<p>'+str(len(proposal_rows))+' proposition(s). Les détails hashés et preuves sont disponibles via l’API Core authentifiée.</p>'
             +'<p><strong>Validation :</strong> aucune approbation depuis le navigateur n’est activée tant qu’une identité humaine vérifiée (SSO/IdP) n’est pas liée au rôle d’approbateur. Les runs DEMO/REPLAY/STORY restent non approuvables.</p>'
             +pretty({"authority":proposals.get("authority","UNKNOWN"),"execution_allowed":False}))
+        body+=panel("Détails, empreintes, preuves et conditions",pretty(proposal_items))
     body+=panel("Maturité et limites",
         '<p>Le registre et les API nécessitent déploiement et qualification. '
         'Le mode STOP_AUTO par défaut n’équivaut pas à une interposition déjà déployée chez les exécuteurs.</p>')
