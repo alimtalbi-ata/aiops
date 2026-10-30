@@ -194,17 +194,13 @@ def _maybe_create_synthetic_hitl_proposal(rid, mode, scenario, analysis_event,
 def _sync_glpi_run_best_effort(run_id, stage):
     """Publish a current Core snapshot without changing the Temporal result."""
     last_error = None
-    for attempt in range(2):
-        try:
-            return post_json(
-                PORTAL, f"/api/internal/glpi/runs/{run_id}/sync",
-                {"stage": str(stage)}, timeout=20, token=ADMIN
-            )
-        except Exception as exc:
-            last_error = type(exc).__name__
-            if attempt == 0:
-                import time
-                time.sleep(1)
+    try:
+        return post_json(
+            PORTAL, f"/api/internal/glpi/runs/{run_id}/sync",
+            {"stage": str(stage)}, timeout=20, token=ADMIN
+        )
+    except Exception as exc:
+        last_error = type(exc).__name__
     log.warning("GLPI report sync failed for %s at %s: %s", run_id, stage, last_error)
     return {"status": "SYNC_FAILED", "run_id": run_id,
             "sync_stage": str(stage), "reason": last_error}
@@ -224,7 +220,8 @@ async def start_run(a):
 @activity.defn
 async def execute_stage(a):
     result = await asyncio.to_thread(_execute_stage_blocking, a, activity.info().attempt)
-    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], a["stage"])
+    if a["stage"] in {"OBSERVE", "DGX_ANALYST", "DGX_CRITIC", "POLICY", "HITL", "VERIFY"} or result.get("status") == "BLOCKED":
+        await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], a["stage"])
     return result
 
 def recover_committed_critic_block(rid):
