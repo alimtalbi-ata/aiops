@@ -124,6 +124,28 @@ class RunDetailTests(unittest.TestCase):
             self.assertNotIn("PRIVATE-TENANT", response.text)
             self.assertNotIn("RUN-FOREIGN", response.text)
 
+    def test_unqualified_authority_claims_never_become_synthetic_proof(self):
+        # The four-field Core NOC identity read cannot authenticate extra
+        # source, tenant, ticket, impact or runtime claims.
+        for claim in (
+            {"synthetic": False},
+            {"runtime_authenticated": True},
+            {"tenant_acl_qualified": True},
+            {"live_remediation_authorized": True},
+            {"source_freshness": "FRESH"},
+            {"ticket_id": "GLPI-UNVERIFIED"},
+            {"evidence_id": "EVD-UNVERIFIED"},
+            {"payments_impact": "CONFIRMED"},
+        ):
+            with self.subTest(claim=claim), patch.object(
+                    acme_run_detail, "_read_core_run", return_value=run(**claim)):
+                response = self.get()
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["state"], "UNKNOWN")
+            for value in claim.values():
+                if isinstance(value, str):
+                    self.assertNotIn(value, response.text)
+
     def test_core_exception_is_redacted_unknown(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=ValueError("secret-in-upstream")):
@@ -166,6 +188,27 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
         self.assertIn("source freshness: UNKNOWN", response.text)
         self.assertNotIn("<script", response.text)
+
+    def test_html_shows_verified_and_denied_connection_states_without_evidence(self):
+        with patch.object(acme_run_detail, "_read_core_run", return_value=run()):
+            connected = self.get("/runs/" + RID)
+        self.assertEqual(connected.status_code, 200)
+        self.assertIn("connection: CONNECTED", connected.text)
+        self.assertIn("source freshness: UNKNOWN", connected.text)
+        self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", connected.text)
+        with patch.object(
+                acme_run_detail, "_read_core_run",
+                side_effect=urllib.error.HTTPError("http://core", 403, "denied", {}, None)):
+            denied = self.get("/runs/" + RID)
+        self.assertEqual(denied.status_code, 403)
+        self.assertIn("connection: UNAUTHORIZED", denied.text)
+        self.assertIn("NOT VERIFIED", denied.text)
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=TimeoutError("sensitive-upstream")):
+            unavailable = self.get("/runs/" + RID)
+        self.assertEqual(unavailable.status_code, 503)
+        self.assertIn("connection: UNAVAILABLE", unavailable.text)
+        self.assertNotIn("sensitive-upstream", unavailable.text)
 
     def test_home_entry_and_js_asset_do_not_ship_secrets(self):
         home = self.client.get("/")
@@ -315,6 +358,36 @@ class RunDetailTests(unittest.TestCase):
                 response = self.client.get("/runs/" + RID)
             self.assertEqual(response.status_code, 401)
             core.assert_not_called()
+
+    def test_existing_home_cockpit_is_no_store_and_anti_framing(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["pragma"], "no-cache")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertEqual(response.headers["referrer-policy"], "no-referrer")
+        policy = response.headers["content-security-policy"]
+        for directive in ("default-src 'none'", "connect-src 'self'",
+                          "frame-ancestors 'none'", "base-uri 'none'",
+                          "object-src 'none'"):
+            self.assertIn(directive, policy)
+        # Legacy inline event handlers stay functional; no parallel shell.
+        self.assertIn("script-src 'self' 'unsafe-inline'", policy)
+        self.assertIn('id="run-detail-open"', response.text)
+        self.assertIn('id="portal-runs"', response.text)
+
+    def test_unverified_run_html_stays_no_store_with_security_headers(self):
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=ValueError("unqualified Core payload")):
+            response = self.get("/runs/" + RID)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("UNKNOWN", response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'",
+                      response.headers["content-security-policy"])
+        self.assertNotIn("unqualified Core payload", response.text)
 
     def test_no_new_write_endpoint(self):
         self.assertEqual(self.client.post("/api/portal/runs/" + RID).status_code, 405)

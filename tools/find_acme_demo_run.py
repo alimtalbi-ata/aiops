@@ -15,6 +15,8 @@ RUN_ID = re.compile(r"RUN-[A-Za-z0-9_-]{1,120}\Z")
 INCIDENT_ID = re.compile(r"INC-[A-Za-z0-9_-]{1,120}\Z")
 EVIDENCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
+TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z")
+MIN_EVIDENCE_UTC = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -98,12 +100,14 @@ def _metadata_valid(items, refs, rid):
                 or eid not in refs or eid in seen or not isinstance(source, str)
                 or not SOURCE.fullmatch(source) or not isinstance(digest, str)
                 or re.fullmatch(r"[a-f0-9]{64}", digest) is None
-                or not isinstance(stamp, str) or item.get("tenant_id") is not None
+                or not isinstance(stamp, str) or len(stamp) > 48
+                or TIMESTAMP.fullmatch(stamp) is None or item.get("tenant_id") is not None
                 or ("run_id" in item and item["run_id"] != rid)):
             return False
         try:
             at = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-            if at.tzinfo is None or at.utcoffset() is None or at.astimezone(timezone.utc) > now + timedelta(minutes=5):
+            if (at.utcoffset() is None or at.astimezone(timezone.utc) < MIN_EVIDENCE_UTC
+                    or at.astimezone(timezone.utc) > now + timedelta(minutes=5)):
                 return False
         except (ValueError, OverflowError):
             return False

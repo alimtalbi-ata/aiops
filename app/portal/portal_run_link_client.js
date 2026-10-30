@@ -48,8 +48,12 @@
         } else {
           const status = response && response.status;
           output.textContent = status === 401
-            ? 'UNKNOWN — jeton lecture invalide'
-            : 'UNKNOWN — session lecture seule refusée';
+            ? 'UNAUTHORIZED (HTTP 401) — jeton lecture invalide'
+            : status === 403
+              ? 'UNAUTHORIZED (HTTP 403) — session lecture seule refusée'
+              : status === 503
+                ? 'UNKNOWN (HTTP 503) — service de session indisponible'
+                : 'UNKNOWN — session lecture seule refusée';
         }
       } catch (_) {
         output.textContent = 'UNKNOWN — service de session indisponible';
