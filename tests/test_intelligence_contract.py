@@ -95,6 +95,48 @@ class IntelligenceContractTests(unittest.TestCase):
         self.assertIsNone(telemetry["pricing_source"])
         self.assertEqual(post.call_args_list[0].kwargs["json"]["max_tokens"], MODULE.MAX_OUTPUT_TOKENS)
 
+    def test_failed_timeout_exposes_latency_and_error_class_without_raw_exception(self):
+        MODULE.BASE = "https://llm.example.invalid/v1"
+        MODULE.MODEL = "benchmark-fixture"
+        with patch.object(MODULE.requests, "post", side_effect=requests.Timeout("private endpoint detail")):
+            with self.assertRaises(HTTPException) as caught:
+                MODULE.call_model("analyst", {"incident": {}}, MODULE.Analyst)
+        self.assertEqual(caught.exception.status_code, 502)
+        self.assertEqual(caught.exception.detail, "model_unavailable_or_invalid_output")
+        headers = caught.exception.headers
+        self.assertEqual(headers["X-AIOPS-Model-Status"], "failed")
+        self.assertEqual(headers["X-AIOPS-Model-Error"], "Timeout")
+        self.assertEqual(headers["X-AIOPS-Request-Count"], "1")
+        self.assertEqual(headers["X-AIOPS-Usage-Source"], "unavailable")
+        self.assertTrue(headers["X-AIOPS-Invocation-Id"])
+        self.assertGreater(float(headers["X-AIOPS-Latency-Ms"]), 0)
+        self.assertNotIn("private endpoint detail", str(headers))
+        self.assertEqual(MODULE.model_call_telemetry()["status"], "failed")
+
+    def test_failed_schema_validation_preserves_provider_reported_usage(self):
+        MODULE.BASE = "https://llm.example.invalid/v1"
+        MODULE.MODEL = "benchmark-fixture"
+
+        class FakeResponse:
+            status_code = 200
+            def raise_for_status(self):
+                return None
+            def json(self):
+                return {
+                    "choices": [{"message": {"content": json.dumps({"unexpected": True})}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                }
+
+        with patch.object(MODULE.requests, "post", return_value=FakeResponse()):
+            with self.assertRaises(HTTPException) as caught:
+                MODULE.call_model("analyst", {"incident": {}}, MODULE.Analyst)
+        headers = caught.exception.headers
+        self.assertEqual(headers["X-AIOPS-Model-Error"], "ValidationError")
+        self.assertEqual(headers["X-AIOPS-Usage-Source"], "provider_reported")
+        self.assertEqual(headers["X-AIOPS-Prompt-Tokens"], "10")
+        self.assertEqual(headers["X-AIOPS-Completion-Tokens"], "5")
+        self.assertEqual(headers["X-AIOPS-Total-Tokens"], "15")
+
     def test_request_context_budget_fails_before_model_call(self):
         original = MODULE.MAX_REQUEST_BYTES
         MODULE.MAX_REQUEST_BYTES = 1
