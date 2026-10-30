@@ -89,7 +89,7 @@ class GLPIClient:
         if len(query)<2:
             raise ValueError("query_must_have_at_least_2_characters")
         params={
-            "criteria[0][field]":"1",
+            "criteria[0][field]":"2",
             "criteria[0][searchtype]":"contains",
             "criteria[0][value]":query,
             "forcedisplay[0]":"2",
