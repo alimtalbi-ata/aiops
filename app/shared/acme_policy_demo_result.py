@@ -121,17 +121,6 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("gate_binding_invalid")
     if projection.get("effect_applied") is not False or projection.get("postchecks") != "NOT_RUN":
         raise ValueError("projection_effect_claim_forbidden")
-    rollback = projection.get("rollback")
-    if (
-        not isinstance(rollback, dict)
-        or rollback.get("effect_applied") is not False
-        or rollback.get("status") not in {"NOT_REQUIRED", "PROJECTED_ONLY", "AVAILABLE_AS_PROJECTION"}
-        or rollback.get("executed", False) is not False
-        # The existing projection builder always supplies a no-effect
-        # projected rollback state; absence must not be called "available".
-        or not _same_snapshot_exact(rollback.get("projected_state"), projection.get("before"))
-    ):
-        raise ValueError("rollback_effect_claim_forbidden")
     before, after = projection.get("before"), projection.get("after")
     if not isinstance(before, dict) or not isinstance(after, dict) or before.get("target_ci") != projection["target_ci"] or after.get("target_ci") != projection["target_ci"]:
         raise ValueError("snapshot_binding_invalid")
@@ -143,6 +132,17 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         or type(after["service_available"]) is not bool
     ):
         raise ValueError("snapshot_schema_invalid")
+    rollback = projection.get("rollback")
+    if (
+        not isinstance(rollback, dict)
+        or rollback.get("effect_applied") is not False
+        or rollback.get("status") not in {"NOT_REQUIRED", "PROJECTED_ONLY", "AVAILABLE_AS_PROJECTION"}
+        or rollback.get("executed", False) is not False
+        # The existing projection builder always supplies a no-effect
+        # projected rollback state; absence must not be called "available".
+        or not _same_snapshot_exact(rollback.get("projected_state"), projection.get("before"))
+    ):
+        raise ValueError("rollback_effect_claim_forbidden")
     status = projection.get("status")
     # The existing projection builder has exactly these no-effect hypotheses.
     # Do not allow a forged receipt to turn FAILURE/BLOCKED into a recovery.
