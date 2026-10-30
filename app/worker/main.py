@@ -547,45 +547,53 @@ async def worker_main():
    log.exception('Temporal polling worker unavailable; retrying in 5s')
    await asyncio.sleep(5)
 async def reconcile_hitl_decisions_loop():
- """At-least-once Core-to-Temporal decision delivery.
+ """Lease Core's transactional outbox and signal Temporal at least once.
 
- Core proposal status is authoritative. Repeated identical Temporal signals are
- idempotent; a workflow rejects conflicting payloads. This poller is a delivery
- bridge, not an execution authorization mechanism.
+ The Core approval transaction is the source of truth. A lease is acknowledged
+ only after Temporal accepts the exact immutable decision binding. If the
+ acknowledgement fails, the lease expires and the same idempotent signal is
+ retried. A signal is never execution authorization.
  """
  client=None
  while True:
   try:
    if client is None:
     client=await Client.connect(TEMP)
-   snapshot=get_json(CORE,'/api/proposals?status=ALL&limit=200',token=ADMIN)
+   snapshot=post_json(CORE,'/api/hitl/decision-outbox/claim',{
+    'owner':DENIAL_WORKER_OWNER,'limit':20,'lease_seconds':45,
+   },token=ADMIN)
    items=snapshot.get('items',[]) if isinstance(snapshot,dict) else []
    for item in items:
-    status=item.get('status')
-    if status not in ('APPROVED','REJECTED','REVOKED'):
-     continue
     rid=item.get('run_id')
     pid=item.get('proposal_id')
     digest=item.get('proposal_hash')
-    revision=item.get('revision')
-    if not all(isinstance(v,str) and v for v in (rid,pid,digest)) or type(revision) is not int:
+    revision=item.get('proposal_revision')
+    event_id=item.get('event_id')
+    lease_token=item.get('lease_token')
+    decision=item.get('decision')
+    if (not all(isinstance(v,str) and v for v in
+                (rid,pid,digest,event_id,lease_token))
+            or type(revision) is not int
+            or decision not in ('APPROVE','REJECT')):
      continue
-    decision='APPROVE' if status=='APPROVED' else 'REJECT'
     payload={
      'proposal_id':pid,
      'proposal_hash':digest,
      'proposal_revision':revision,
      'decision':decision,
-     'source_status':status,
+     'source_status':item.get('source_status'),
     }
     try:
      handle=client.get_workflow_handle(rid)
      await handle.signal(IncidentWorkflow.submit_hitl_decision,payload)
+     post_json(CORE,f'/api/hitl/decision-outbox/{event_id}/delivered',
+               {'lease_token':lease_token},token=ADMIN)
     except Exception as exc:
-     log.debug('HITL signal delivery deferred: %s',type(exc).__name__)
+     # Do not ack. The lease will expire and another poller pass retries.
+     log.debug('HITL outbox delivery deferred: %s',type(exc).__name__)
   except Exception as exc:
    client=None
-   log.warning('HITL decision reconciliation unavailable: %s',type(exc).__name__)
+   log.warning('HITL decision outbox unavailable: %s',type(exc).__name__)
   await asyncio.sleep(5)
 
 
