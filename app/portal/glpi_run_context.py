@@ -9,6 +9,7 @@ import re
 from fastapi import APIRouter, Header, HTTPException
 from shared.http import get_json, post_json
 from portal.glpi_client import GLPIClient
+from portal.glpi_report import merge_report, render_run_report
 
 router = APIRouter()
 CORE = os.getenv("CORE_URL", "http://aiops2-core:810")
@@ -242,3 +243,64 @@ def create_glpi_hitl_proposal(ticket_id: str, q: dict,
     copilot["approval_required"] = True
     copilot["execution_allowed"] = False
     return copilot
+
+
+def _authorize_internal(authorization):
+    secret = os.getenv("AIOPS_INTERNAL_TOKEN") or os.getenv("AIOPS_ADMIN_TOKEN", "")
+    supplied = (authorization or "").removeprefix("Bearer ")
+    if not secret or not supplied or not hmac.compare_digest(supplied, secret):
+        raise HTTPException(401, "invalid_internal_token")
+
+
+@router.post("/api/internal/glpi/runs/{run_id}/sync")
+def sync_glpi_run(run_id: str, q: dict,
+                  authorization: str | None = Header(default=None)):
+    """Create/update the GLPI ticket from the latest Core run and AI ledger snapshot."""
+    _authorize_internal(authorization)
+    if not _RUN.fullmatch(run_id):
+        raise HTTPException(422, "invalid_run_id")
+    client = GLPIClient()
+    if not client.configured:
+        raise HTTPException(503, "glpi_credentials_not_configured")
+    try:
+        detail = get_json(CORE, "/api/runs/" + run_id)
+        ledger = get_json(CORE, "/api/runs/" + run_id + "/ai-ledger")
+    except Exception:
+        raise HTTPException(502, "core_run_or_ledger_unavailable")
+    run = detail.get("run") if isinstance(detail, dict) else None
+    if not isinstance(run, dict) or run.get("run_id") != run_id:
+        raise HTTPException(502, "core_run_identity_mismatch")
+
+    stage = str(q.get("stage", "UPDATE"))[:80]
+    report = render_run_report(detail, ledger, sync_stage=stage)
+    try:
+        ticket_id = client.find_ticket_for_run(run_id)
+        if ticket_id:
+            current = client.get_ticket(ticket_id)
+            content = merge_report(current.get("content", ""), report)
+            client.update_ticket(ticket_id, {"content": content})
+            operation = "UPDATED"
+        else:
+            mode = str(run.get("mode", "DEMO"))
+            scenario = str(run.get("scenario_id", "AIOps2"))
+            title = f"[AIOps2][{mode}] {scenario} — {run_id}"
+            ticket_id = client.create_ticket(title, report, priority=3)
+            operation = "CREATED"
+        verified = client.get_ticket(ticket_id)
+        if not isinstance(verified, dict) or "id" not in verified:
+            raise ValueError("glpi_ticket_readback_invalid")
+        if "aiops2-ai-report" not in str(verified.get("content", "")):
+            raise ValueError("glpi_report_readback_missing")
+    except Exception:
+        raise HTTPException(502, "glpi_ticket_sync_failed")
+
+    return {
+        "status": "SYNCED",
+        "operation": operation,
+        "run_id": run_id,
+        "ticket_id": str(ticket_id),
+        "run_status": run.get("status"),
+        "sync_stage": stage,
+        "report_verified": True,
+        "execution_allowed": False,
+    }
