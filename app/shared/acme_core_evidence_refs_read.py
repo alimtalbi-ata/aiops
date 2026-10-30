@@ -101,7 +101,7 @@ def read_authenticated_core_evidence_refs(projection, *, base_url=None,
     try:
         client = opener if opener is not None else build_opener(ProxyHandler({}), _NoRedirect())
         with client.open(request, timeout=4) as response:
-            if (response.status != 200 or not response.headers.get("Content-Type", "").lower().startswith("application/json")):
+            if (response.status != 200 or not response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() == "application/json"):
                 return result
             raw = response.read(_MAX_BYTES + 1)
         if len(raw) > _MAX_BYTES:
