@@ -700,5 +700,54 @@ class DemoV2Tests(unittest.TestCase):
             self.assertIn("Ticket ITSM GLPI", journey)
             self.assertIn("aucune liaison attestée", journey)
 
+
+    def test_home_route_exposes_existing_demo_studio_entry_without_launch(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        with (patch.object(portal_main, "_get", return_value={}),
+              patch.object(portal_main, "_runs", return_value=[]),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("no business writes"))):
+            response = TestClient(portal_main.app).get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/demo-studio"', response.text)
+        self.assertIn('href="/runs"', response.text)
+        self.assertIn('href="/demo-studio/business-story"', response.text)
+
+    def test_timeline_verified_core_run_exposes_same_run_operator_journey(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-ACME", "mode": "DEMO",
+                  "status": "BLOCKED", "synthetic": True,
+                  "incident_id": "INC-ACME"}
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-ACME":
+                return {"run": dict(listed), "events": []}
+            if path == "/api/runs/RUN-ACME/evidence":
+                return {"items": []}
+            raise AssertionError("unexpected upstream read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("no business writes"))):
+            response = TestClient(portal_main.app).get("/timeline?run_id=RUN-ACME")
+        self.assertEqual(response.status_code, 200)
+        for path in ("/demo-studio/run/RUN-ACME",
+                     "/twin?run_id=RUN-ACME",
+                     "/timeline?run_id=RUN-ACME",
+                     "/demo-studio/run/RUN-ACME#demo-ledger-output",
+                     "/demo-studio/run/RUN-ACME#demo-evidence-itsm-output",
+                     "/policy-control?run_id=RUN-ACME"):
+            self.assertIn('href="' + path + '"', response.text)
+        self.assertIn("SYNTHETIC", response.text)
+        self.assertIn("aucune corrélation automatique", response.text)
+        self.assertIn("UNKNOWN", response.text)
+        self.assertEqual(reads, ["/api/incidents", "/api/runs/RUN-ACME",
+                                 "/api/runs/RUN-ACME/evidence"])
+
 if __name__ == "__main__":
     unittest.main()

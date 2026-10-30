@@ -16,6 +16,13 @@ _SAFE_REF = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _SIMULATED = frozenset({"SIMULATED_SUCCESS", "SIMULATED_FAILURE", "SIMULATED_NO_RECOVERY"})
 _SNAPSHOT_KEYS = frozenset({"target_ci", "health", "service_available"})
 _ALLOWED_HEALTH = frozenset({"HEALTHY", "DEGRADED", "FAILED", "UNKNOWN"})
+_BLOCKED_REASONS = frozenset({
+    "DECISION_FIELDS_INVALID", "HUMAN_DECISION_NOT_APPROVED",
+    "APPROVAL_BINDING_MISMATCH", "APPROVER_NOT_VERIFIED",
+    "APPROVER_ID_INVALID", "SEPARATION_OF_DUTIES_FAILED",
+    "APPROVAL_EXPIRED", "APPROVAL_EXPIRY_INVALID",
+    "PRECONDITIONS_MISSING", "PRECONDITIONS_FAILED",
+})
 
 
 def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -143,6 +150,14 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         ).hexdigest())
     if digest not in valid_digests:
         raise ValueError("receipt_binding_digest_mismatch")
+    # Match remediation_lab.canonical_digest: a matching arbitrary 64-hex key
+    # is not a valid no-effect idempotency binding.
+    expected_idempotency = hashlib.sha256(json.dumps(
+        {"proposal_digest": projection["proposal_digest"], "executor": "NO_EFFECT_SIMULATOR"},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode()).hexdigest()
+    if projection["idempotency_key"] != expected_idempotency:
+        raise ValueError("idempotency_digest_mismatch")
     if gate.get("status") == "SIMULATED" and (
         gate.get("dry_run") is not True
         or gate.get("preconditions") != "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED"
@@ -156,6 +171,22 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         decision = "BLOCKED"
     else:
         raise ValueError("projection_gate_inconsistent")
+    # Never let untrusted receipt text claim a real approval, runtime check,
+    # or recovery reason. Only reason codes emitted by the existing builders.
+    expected_reason = {
+        "SIMULATED_SUCCESS": "HYPOTHETICAL_RECOVERY_NOT_VERIFIED",
+        "SIMULATED_FAILURE": "HYPOTHETICAL_POSTCONDITION_FAILURE",
+        "SIMULATED_NO_RECOVERY": "RECIPE_NOT_RECOVERY_CAPABLE",
+    }.get(status)
+    if decision == "SIMULATE":
+        if gate.get("reason") != "NO_SIDE_EFFECTS" or projection.get("reason") != expected_reason:
+            raise ValueError("projection_reason_inconsistent")
+    elif (
+        not isinstance(gate.get("reason"), str)
+        or gate["reason"] not in _BLOCKED_REASONS
+        or projection.get("reason") != gate["reason"]
+    ):
+        raise ValueError("projection_reason_inconsistent")
     return {
         "schema": "aiops.acme-policy-demo-result.v1",
         "classification": "SIMULATED" if decision == "SIMULATE" else "UNKNOWN",

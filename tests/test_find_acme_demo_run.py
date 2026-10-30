@@ -75,6 +75,48 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(result["result"], "UNKNOWN")
         self.assertIsNone(result["run_id"])
 
+    def test_duplicate_incident_id_fails_closed(self):
+        run, incident, detail = fixtures()
+        original = self.make_get(run, incident, detail)
+
+        def get(base, path):
+            if path == "/api/incidents?limit=500":
+                return {"items": [incident, dict(incident, source="manual")]}
+            return original(base, path)
+
+        result = locator.qualify("http://core", "http://portal", get)
+        self.assertEqual(result, {"result": "UNKNOWN",
+                                  "reason": "REGISTRY_CONTRACT_MISMATCH", "run_id": None})
+
+    def test_duplicate_run_id_fails_closed(self):
+        run, incident, detail = fixtures()
+        original = self.make_get(run, incident, detail)
+
+        def get(base, path):
+            if path == "/api/runs":
+                return {"items": [run, dict(run, mode="LIVE")]}
+            return original(base, path)
+
+        result = locator.qualify("http://core", "http://portal", get)
+        self.assertEqual(result["reason"], "REGISTRY_CONTRACT_MISMATCH")
+        self.assertIsNone(result["run_id"])
+
+    def test_run_detail_status_drift_rejected(self):
+        run, incident, detail = fixtures()
+        detail["run"]["status"] = "RUNNING"
+        result = locator.qualify("http://core", "http://portal",
+                                 self.make_get(run, incident, detail))
+        self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+        self.assertIsNone(result["run_id"])
+
+    def test_run_detail_missing_status_rejected(self):
+        run, incident, detail = fixtures()
+        detail["run"].pop("status")
+        result = locator.qualify("http://core", "http://portal",
+                                 self.make_get(run, incident, detail))
+        self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+        self.assertIsNone(result["run_id"])
+
     def test_no_matching_run(self):
         run, incident, detail = fixtures(); incident["synthetic"] = None
         result = locator.qualify("http://core", "http://portal", self.make_get(run, incident, detail))

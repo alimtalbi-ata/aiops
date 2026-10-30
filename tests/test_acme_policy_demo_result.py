@@ -19,6 +19,10 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
     digest = hashlib.sha256(
         json.dumps(binding, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()
+    idempotency_key = hashlib.sha256(json.dumps(
+        {"proposal_digest": "b" * 64, "executor": "NO_EFFECT_SIMULATOR"},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode()).hexdigest()
     return {
         "schema": "aiops.acme-remediation-receipt.v1", "classification": "SYNTHETIC_UNVERIFIED",
         "run_id": "RUN-ACME-OFFLINE-001", "scenario_id": "SCN-ACME-OFFLINE",
@@ -27,8 +31,13 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
         "projection": {
             "schema_version": 1, "synthetic": True, "provenance": "WHAT_IF_FIXTURE_NOT_OBSERVED",
             "mode": "DEMO", "status": status, "recipe_id": "ansible-service-restart",
+            "reason": {
+                "SIMULATED_SUCCESS": "HYPOTHETICAL_RECOVERY_NOT_VERIFIED",
+                "SIMULATED_FAILURE": "HYPOTHETICAL_POSTCONDITION_FAILURE",
+                "SIMULATED_NO_RECOVERY": "RECIPE_NOT_RECOVERY_CAPABLE",
+            }.get(status, "APPROVAL_EXPIRED"),
             "target_ci": "ACME-LNX-01", "proposal_digest": "b" * 64,
-            "idempotency_key": "c" * 64,
+            "idempotency_key": idempotency_key,
             "effect_applied": False, "postchecks": "NOT_RUN", "before": before, "after": after,
             "rollback": {
                 "status": {
@@ -41,8 +50,9 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
             },
             "gate": {
                 "mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01",
+                "reason": "NO_SIDE_EFFECTS" if gate_status == "SIMULATED" else "APPROVAL_EXPIRED",
                 "proposal_digest": "b" * 64, "recipe_id": "ansible-service-restart",
-                "idempotency_key": "c" * 64, "executor": "NO_EFFECT_SIMULATOR",
+                "idempotency_key": idempotency_key, "executor": "NO_EFFECT_SIMULATOR",
                 "effect_applied": False, "postchecks": "NOT_RUN", "rollback": "NOT_REQUIRED",
                 "dry_run": True, "preconditions": "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED",
                 "approval_actor": "approver-fixture",
@@ -276,6 +286,42 @@ class PolicyDemoResultTests(unittest.TestCase):
                 r = receipt()
                 change(r)
                 with self.assertRaisesRegex(ValueError, error):
+                    present_demo_policy_result(r)
+
+    def test_forged_idempotency_matching_gate_still_rejected(self):
+        r = receipt()
+        r["projection"]["idempotency_key"] = "f" * 64
+        r["projection"]["gate"]["idempotency_key"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "idempotency_digest_mismatch"):
+            present_demo_policy_result(r)
+
+    def test_projection_reason_cannot_claim_runtime_success(self):
+        for status in ("SIMULATED_SUCCESS", "SIMULATED_FAILURE", "SIMULATED_NO_RECOVERY"):
+            with self.subTest(status=status):
+                r = receipt(status)
+                if status == "SIMULATED_NO_RECOVERY":
+                    r["projection"]["recipe_id"] = "glpi-api-ticket-note"
+                    r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
+                r["projection"]["reason"] = "RUNTIME_APPROVED"
+                with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
+                    present_demo_policy_result(r)
+
+    def test_gate_reason_cannot_claim_real_authorization(self):
+        r = receipt()
+        r["projection"]["gate"]["reason"] = "HUMAN_APPROVAL_VERIFIED"
+        with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
+            present_demo_policy_result(r)
+
+    def test_blocked_reason_must_match_known_local_gate(self):
+        for gate_reason, projection_reason in (
+            ("RUNTIME_APPROVED", "RUNTIME_APPROVED"),
+            ("APPROVAL_EXPIRED", "HUMAN_DECISION_NOT_APPROVED"),
+        ):
+            with self.subTest(gate_reason=gate_reason):
+                r = receipt("BLOCKED", "BLOCKED")
+                r["projection"]["gate"]["reason"] = gate_reason
+                r["projection"]["reason"] = projection_reason
+                with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):
