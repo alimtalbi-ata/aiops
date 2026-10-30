@@ -69,6 +69,10 @@ def _project(rid: str, raw: object) -> dict:
             or UNQUALIFIED_CLAIMS.intersection(raw)):
         raise ValueError("Core identity contains unqualified claims")
     reject_unqualified_tenant_scope(raw)
+    # Core /api/noc/runs/{rid} has exactly four qualified identity fields.
+    # Fail closed on any new field, even if its name is not yet denylisted.
+    if set(raw) != {"run_id", "incident_id", "mode", "status"}:
+        raise ValueError("Core Run identity has unqualified fields")
     if (raw.get("run_id") != rid or not _valid_run_id(raw.get("run_id"))
             or not isinstance(raw.get("incident_id"), str)
             or not raw["incident_id"].startswith("INC-")
