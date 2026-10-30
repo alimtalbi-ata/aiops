@@ -114,3 +114,7 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 ### 2026-10-30 19:20 UTC — final exact-head source/checkout verification
 
 #201 `cee6a834befbee47275e83651e7c0955528c51a0` [Quality 41113479815](https://github.com/alimtalbi-ata/aiops/actions/runs/41113479815) SUCCESS 3/3; Portal Python 28/28, JS 7/7, Chromium 6/6, kit gate 12/12. Artifact `13004397285` downloaded: ZIP SHA256 `7f1821aefdbc687601bc2ae62163a7e777df03e8d6d939031880cead20b6ab93`, 2/2 CRC, screenshot checksum PASS; metadata source `cee6a834`, base `27deb9b1`, checkout `73a71c76` distinct, runtime authenticated=false. **T0 GO_LIMITED; T1/T2 NOT_TESTED; T3 NOT_ATTESTED; T4/T5 NO_GO.**
+
+## 2026-10-31 5/5 exact-source security checkpoint
+
+#201 main-based `f38014c92b85763be8ac3f72042b50a48dbba95c` includes exact #202 `f3943020d0d66d60c92dbf9b0d0c3fbb7913789e` Portal/test blobs; source Quality 41142124145 SUCCESS 3/3, combined new HEAD CI NOT_OBSERVED at port. Shared-bearer Core Run reads now fail closed at 503 UNKNOWN without disclosing Run/Incident/status until server-derived actor+tenant ACL is qualified. This is a security containment fix, not authorization. T0 pending combined SHA; T1 BLOCKED on Core actor/tenant exact-Run ACL, T2 NOT_TESTED, T3 NOT_ATTESTED, T4 NO_GO, T5 NO_GO. #196 model benchmark still FAILURE; #204 stacked success not integrated. `RELEASE_STABLE=NO_GO`. No LIVE/host/GLPI write.
