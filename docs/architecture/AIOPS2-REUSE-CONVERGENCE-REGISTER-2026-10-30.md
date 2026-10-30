@@ -274,3 +274,11 @@ These changes require a fresh Actions run and artifact inspection. No model qual
 ### Explicit unavailable surfaces
 
 The current GitHub session can inspect and change repository source and GitHub Actions. It does not provide Debian SSH/Docker access or a ChatGPT Lab control surface. Therefore no Debian cron/runner/systemd/volume/image/applied-SHA change is performed or claimed. The five existing ChatGPT schedules remain the work lanes; Schedule 5/5 owns architecture/release convergence and no sixth schedule is created.
+
+
+## 2026-10-30 16:30 Europe/Paris — ITIL customer-story vertical slice
+
+- #201 was extended on its clean-main branch with 14 explicit synthetic ITIL checkpoints in `app/portal/acme_impact_read_model.py`, projected by `app/portal/acme_explore_story.py` and rendered by `app/portal/acme_explore_story_client.js`.
+- Each checkpoint now names ITIL practice, owner role, handoff and evidence required. It covers NOC L1/L2, Service Desk N1, Incident Manager N2, Incident Commander, SRE/N3, Knowledge, Problem, Change Manager, authorized approver, simulator, independent verifier, closure and continual improvement.
+- Every checkpoint remains `MISSING`; no runtime capture, GLPI ticket, SLA breach, approval or remediation is asserted. Runtime, production and LIVE flags remain false.
+- Exact head `890977be` CI run `41081252003` failed only in the synthetic DOM test harness because its old three-step response fixture did not include the newly required ITIL metadata. The Python API/model contract test passed. The JS fixture has been updated in commit `c00ceb11`; exact-head Quality run `41081496981` is now IN_PROGRESS. Do not mark this slice qualified until that run passes.
