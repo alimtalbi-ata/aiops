@@ -186,6 +186,7 @@ class OutboxFaultTests(unittest.TestCase):
         receipt = approve("ACT", payload, authorization="offline")
         self.assertIs(receipt["idempotent"], True)
         self.assertIs(receipt["execution_allowed"], False)
+        self.assertIs(receipt["effect_allowed"], False)
         self.assertFalse(any("insert into" in sql.lower() for sql in db.queries))
         db, approve, payload = check("REJECT")
         with self.assertRaises(HTTPException) as ctx:
@@ -193,6 +194,73 @@ class OutboxFaultTests(unittest.TestCase):
         self.assertEqual((ctx.exception.status_code, ctx.exception.detail),
                          (409, "approval_nonce_reuse"))
         self.assertFalse(any("insert into" in sql.lower() for sql in db.queries))
+
+
+    def test_proposal_idempotent_and_new_receipts_are_no_effect(self):
+        # Exercise both Core proposal return paths against scripted memory only.
+        # No database, authentication service, or LIVE workflow is contacted.
+        import json
+
+        class ProposalDB(DB):
+            def __init__(self, existing):
+                super().__init__()
+                self.existing = existing
+                self.current = None
+
+            def execute(self, sql, params=()):
+                self.queries.append(sql)
+                if "select mode from aiops.runs" in sql:
+                    self.current = ("DEMO",)
+                elif "select a.output" in sql:
+                    self.current = (
+                        {"recommended_actions": [{
+                            "action_id": "SRC", "advisory_only": True,
+                            "requires_human_approval": True, "risk_tier": "LOW",
+                            "target_ci_id": "CI",
+                        }]}, ["E"], "VALID", True, ["E"],
+                        {"issues": [], "unsafe_actions": []},
+                    )
+                elif "select count(*) from aiops.evidence" in sql:
+                    self.current = (1,)
+                elif "select proposal_id,proposal_revision,status" in sql:
+                    self.current = ("ACT-OFFLINE", 1, "PROPOSED") if self.existing else None
+                elif "select coalesce(max(proposal_revision)" in sql:
+                    self.current = (1,)
+                elif "insert into aiops.action_proposals" in sql:
+                    self.current = None
+                else:
+                    raise AssertionError("unexpected_scripted_sql")
+                return self
+
+            def fetchone(self):
+                return self.current
+
+        payload = {
+            "target_ci_id": "CI", "action_type": "COLLECT_DIAGNOSTICS",
+            "risk_tier": "LOW", "source_action_id": "SRC",
+            "analysis_id": "A", "critique_id": "C",
+            "evidence_ids": ["E"], "preconditions": ["pre"],
+            "expected_postconditions": ["post"],
+        }
+        for existing in (True, False):
+            with self.subTest(existing=existing):
+                db = ProposalDB(existing)
+                create = core(
+                    "create_action_proposal", db, json=json,
+                    canonical_sha256=lambda data: "hash-offline",
+                    PROPOSAL_ACTION_ALLOWLIST={"COLLECT_DIAGNOSTICS"},
+                    APPROVER_ROLES={"LOW": ("operator",)},
+                    new=lambda prefix: "ACT-OFFLINE",
+                )
+                receipt = create("RUN-OFFLINE", payload, authorization="offline")
+                self.assertEqual(receipt["status"], "PROPOSED")
+                self.assertEqual(receipt["proposal_hash"], "hash-offline")
+                self.assertIs(receipt["idempotent"], existing)
+                self.assertIs(receipt["execution_allowed"], False)
+                self.assertIs(receipt["effect_allowed"], False)
+                writes = [sql for sql in db.queries if sql.startswith("insert into")]
+                self.assertEqual(len(writes), 0 if existing else 1)
+
 
 
 if __name__ == "__main__":
