@@ -285,6 +285,36 @@ class RunDetailTests(unittest.TestCase):
             self.assertEqual(response.status_code, 401)
             core.assert_not_called()
 
+    def test_existing_home_cockpit_is_no_store_and_anti_framing(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["pragma"], "no-cache")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertEqual(response.headers["referrer-policy"], "no-referrer")
+        policy = response.headers["content-security-policy"]
+        for directive in ("default-src 'none'", "connect-src 'self'",
+                          "frame-ancestors 'none'", "base-uri 'none'",
+                          "object-src 'none'"):
+            self.assertIn(directive, policy)
+        # Legacy inline event handlers stay functional; no parallel shell.
+        self.assertIn("script-src 'self' 'unsafe-inline'", policy)
+        self.assertIn('id="run-detail-open"', response.text)
+        self.assertIn('id="portal-runs"', response.text)
+
+    def test_unverified_run_html_stays_no_store_with_security_headers(self):
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=ValueError("unqualified Core payload")):
+            response = self.get("/runs/" + RID)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("UNKNOWN", response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'",
+                      response.headers["content-security-policy"])
+        self.assertNotIn("unqualified Core payload", response.text)
+
     def test_no_new_write_endpoint(self):
         self.assertEqual(self.client.post("/api/portal/runs/" + RID).status_code, 405)
         self.assertEqual(self.client.post("/runs/" + RID).status_code, 405)
