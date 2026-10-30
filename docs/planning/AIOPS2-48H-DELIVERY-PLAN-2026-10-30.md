@@ -83,3 +83,14 @@ Stop the affected lane and mark BLOCKED if: tenant or actor identity is ambiguou
 ## 6. Release decision
 
 The 48-hour release target is a customer-demo kit at T2 synthetic E2E, plus T3 read-only checks where actually verified. It is not a production release. LIVE remains NO-GO until identity federation, real-source qualification, tenant RBAC, transactional outbox failure injection, post-approval Policy recheck, executor fencing, independent verification, GLPI lifecycle reconciliation, HA/PRA and change approval are complete.
+
+
+## Current execution status — 2026-10-30 12:25 UTC
+
+- H0–H4 architecture inventory, target architecture, ITIL 4 mapping, benchmark governance and reuse register are documented in PR #195.
+- PR #195 latest docs head has a fresh quality workflow in progress after exact-head evidence updates.
+- AI invocation telemetry PR #196 passed 6/6 AIOps quality jobs plus Offline Integrity, Historical Trace and V2.8 Core on its exact corrected head. Its synthetic benchmark artifact is documented separately.
+- The RC1.4 package artifact has been downloaded and audited: 405/405 SHA-256 checksums pass; manifest says real-model and production qualification NOT_RUN; the package lacks the new PR #195 architecture documents.
+- Schedules 1/5–4/5 have been reoriented to create clean main-based minimal PRs; immediate runs requested. Their previous branches are divergent and are not to be merged wholesale.
+- Schedule 5/5 is the architecture/release integrator; its immediate run is asynchronous.
+- The final cumulative kit is not yet complete. It must be rebuilt after main-based code integration and include the new architecture/ITIL/benchmark docs plus exact manifest/checksum and install/rollback evidence.
