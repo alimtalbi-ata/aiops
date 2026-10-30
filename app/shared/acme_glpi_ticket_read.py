@@ -55,7 +55,6 @@ def _token(value):
             and value.isascii() and not any(ch.isspace() for ch in value))
 
 
-
 def _qualified_projection(value):
     """Require the existing Core ledger projection, not arbitrary joined IDs.
 
