@@ -45,11 +45,15 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(data["provenance"], "SYNTHETIC")
         self.assertEqual(data["run_id"], RID)
         self.assertEqual(data["incident_id"], IID)
+        self.assertEqual(data["source_freshness"], "UNKNOWN")
+        self.assertIsNone(data["source_observed_at"])
         self.assertFalse(data["tenant_acl_qualified"])
         self.assertFalse(data["runtime_attested"])
         self.assertFalse(data["live_remediation_authorized"])
-        for key in ("Evidence", "AI Ledger", "Policy", "HITL", "Verification"):
+        for key in ("Evidence", "AI Ledger", "Policy", "HITL", "Verification", "GLPI"):
             self.assertEqual(data["journey"][key]["state"], "UNKNOWN")
+        self.assertEqual(data["journey"]["GLPI"]["reason"],
+                         "NO_TENANT_SCOPED_TICKET_RUN_LINK")
         self.assertEqual(data["journey"]["Evidence"]["reason"],
                          "CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING")
         self.assertNotIn("ticket_id", response.text)
@@ -147,6 +151,7 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn('href="#evidence"', response.text)
         self.assertIn('href="#ai-ledger"', response.text)
         self.assertIn('href="#verification"', response.text)
+        self.assertIn('href="#glpi"', response.text)
         self.assertEqual(response.headers["x-frame-options"], "DENY")
         self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
         self.assertEqual(response.headers["cache-control"], "no-store")
@@ -159,6 +164,7 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn("SYNTHETIC", response.text)
         self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", response.text)
         self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
+        self.assertIn("source freshness: UNKNOWN", response.text)
         self.assertNotIn("<script", response.text)
 
     def test_home_entry_and_js_asset_do_not_ship_secrets(self):
@@ -178,7 +184,8 @@ class RunDetailTests(unittest.TestCase):
     def test_same_origin_session_exchange_sets_short_lived_httponly_cookie_and_opens_page(self):
         response = self.client.post(
             "/api/portal/run-session",
-            headers={"Authorization": "Bearer " + TOKEN, "Origin": "http://testserver"},
+            headers={"Authorization": "Bearer " + TOKEN, "Origin": "http://testserver",
+                     "X-Portal-Run-ID": RID},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["state"], "READ_ONLY_SESSION_CREATED")
@@ -208,7 +215,7 @@ class RunDetailTests(unittest.TestCase):
 
     def test_expired_or_tampered_session_never_reads_core(self):
         with patch.object(acme_run_detail.time, "time", return_value=1000):
-            expired = acme_run_detail._issue_session(now=1000)
+            expired = acme_run_detail._issue_session(RID, now=1000)
         self.client.cookies.set(acme_run_detail.SESSION_COOKIE, expired, path="/runs")
         with patch.object(acme_run_detail.time, "time", return_value=1400), patch.object(
             acme_run_detail, "_read_core_run", side_effect=AssertionError("no Core read")
@@ -225,7 +232,7 @@ class RunDetailTests(unittest.TestCase):
 
     def test_json_run_api_remains_bearer_only_even_with_html_session_cookie(self):
         self.client.cookies.set(
-            acme_run_detail.SESSION_COOKIE, acme_run_detail._issue_session(), path="/runs"
+            acme_run_detail.SESSION_COOKIE, acme_run_detail._issue_session(RID), path="/runs"
         )
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
@@ -237,10 +244,46 @@ class RunDetailTests(unittest.TestCase):
         with patch.dict(os.environ, {"AIOPS_PORTAL_COOKIE_SECURE": "true"}):
             response = self.client.post(
                 "/api/portal/run-session",
-                headers={"Authorization": "Bearer " + TOKEN},
+                headers={"Authorization": "Bearer " + TOKEN, "X-Portal-Run-ID": RID},
             )
         self.assertEqual(response.status_code, 200)
         self.assertIn("; secure", response.headers["set-cookie"].lower())
+
+    def test_session_exchange_requires_valid_run_scope_before_cookie(self):
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("no Core read")) as core:
+            for rid in (None, "RUN-../foreign", "INC-123"):
+                headers = {"Authorization": "Bearer " + TOKEN}
+                if rid is not None:
+                    headers["X-Portal-Run-ID"] = rid
+                response = self.client.post("/api/portal/run-session", headers=headers)
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["state"], "UNKNOWN")
+                self.assertNotIn("set-cookie", response.headers)
+            core.assert_not_called()
+
+    def test_cookie_cannot_open_another_run_even_with_valid_signature(self):
+        cookie = acme_run_detail._issue_session(RID)
+        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("foreign Core read")) as core:
+            foreign = self.client.get("/runs/RUN-OTHER-123")
+        self.assertEqual(foreign.status_code, 401)
+        self.assertIn("NOT VERIFIED", foreign.text)
+        core.assert_not_called()
+        self.assertTrue(acme_run_detail._valid_session(cookie, RID))
+        self.assertFalse(acme_run_detail._valid_session(cookie, "RUN-OTHER-123"))
+
+    def test_rotated_read_token_revokes_existing_run_session(self):
+        cookie = acme_run_detail._issue_session(RID)
+        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "rotated-ci-only-viewer-token"}):
+            self.assertFalse(acme_run_detail._valid_session(cookie, RID))
+            with patch.object(acme_run_detail, "_read_core_run",
+                              side_effect=AssertionError("no Core read")) as core:
+                response = self.client.get("/runs/" + RID)
+            self.assertEqual(response.status_code, 401)
+            core.assert_not_called()
 
     def test_no_new_write_endpoint(self):
         self.assertEqual(self.client.post("/api/portal/runs/" + RID).status_code, 405)

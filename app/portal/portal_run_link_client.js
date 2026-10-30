@@ -16,14 +16,15 @@
       ? window.fetch.bind(window) : null);
     if (!input || !button || !output) return false;
     button.addEventListener('click', async function () {
-      const path = routeFor(input.value);
+      const runId = input.value;
+      const path = routeFor(runId);
+      const token = tokenInput && typeof tokenInput.value === 'string'
+        ? tokenInput.value : '';
+      if (tokenInput) tokenInput.value = '';
       if (!path) {
         output.textContent = 'UNKNOWN — identifiant Run invalide';
         return;
       }
-      const token = tokenInput && typeof tokenInput.value === 'string'
-        ? tokenInput.value : '';
-      if (tokenInput) tokenInput.value = '';
       if (!token) {
         output.textContent = 'UNKNOWN — jeton lecture Core requis';
         return;
@@ -36,7 +37,7 @@
       try {
         const response = await request('/api/portal/run-session', {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + token },
+          headers: { Authorization: 'Bearer ' + token, 'X-Portal-Run-ID': runId },
           credentials: 'same-origin',
           cache: 'no-store',
           redirect: 'error'

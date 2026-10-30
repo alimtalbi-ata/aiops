@@ -29,6 +29,7 @@ test('one-time bearer exchange clears input, sets same-origin cookie, then navig
   assert.equal(requests[0].url, '/api/portal/run-session');
   assert.equal(requests[0].options.method, 'POST');
   assert.equal(requests[0].options.headers.Authorization, 'Bearer one-time-token');
+  assert.equal(requests[0].options.headers['X-Portal-Run-ID'], 'RUN-ACME-001');
   assert.equal(requests[0].options.credentials, 'same-origin');
   assert.equal(requests[0].tokenInputAtRequest, '');
   assert.deepEqual(paths, ['/runs/RUN-ACME-001']);
@@ -48,6 +49,7 @@ test('invalid Run ID never exchanges the token or navigates', async () => {
   assert.equal(calls, 0);
   assert.equal(paths.length, 0);
   assert.equal(nodes['run-detail-error'].textContent, 'UNKNOWN — identifiant Run invalide');
+  assert.equal(nodes['portal-read-token'].value, '');
 });
 
 test('missing read token and failed session exchange do not navigate', async () => {

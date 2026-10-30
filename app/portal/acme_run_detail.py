@@ -41,7 +41,7 @@ SESSION_COOKIE = "aiops_portal_run_session"
 SESSION_TTL_SECONDS = 300
 SESSION_AUDIENCE = "portal-run-detail-read-only"
 
-JOURNEY = ("Incident", "Run", "Evidence", "AI Ledger", "Policy", "HITL", "Verification")
+JOURNEY = ("Incident", "Run", "Evidence", "AI Ledger", "Policy", "HITL", "Verification", "GLPI")
 FORBIDDEN_COLLECTIONS = frozenset(
     {"events", "gates", "stages", "evidence", "evidence_refs",
      "demo_artifacts", "artifacts", "ai_ledger", "analyses", "critiques"}
@@ -72,6 +72,8 @@ def _project(rid: str, raw: object) -> dict:
         "connection_state": "CONNECTED",
         "provenance": "SYNTHETIC",
         "source": "CORE_INTERNAL_BEARER_NOC_RUN_READ",
+        "source_observed_at": None,
+        "source_freshness": "UNKNOWN",
         "run_id": rid,
         "incident_id": raw["incident_id"],
         "mode": raw["mode"],
@@ -87,6 +89,7 @@ def _project(rid: str, raw: object) -> dict:
             "Policy": {"state": "UNKNOWN", "reason": "TENANT_ACL_NOT_QUALIFIED"},
             "HITL": {"state": "UNKNOWN", "reason": "NO_PORTAL_APPROVAL_AUTHORITY"},
             "Verification": {"state": "UNKNOWN", "reason": "NO_RUNTIME_ATTESTATION"},
+            "GLPI": {"state": "UNKNOWN", "reason": "NO_TENANT_SCOPED_TICKET_RUN_LINK"},
         },
     }
 
@@ -103,9 +106,11 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def _issue_session(now: int | None = None) -> str:
+def _issue_session(run_id: str, now: int | None = None) -> str:
+    if not _valid_run_id(run_id):
+        raise ValueError("invalid run session scope")
     issued = int(time.time()) if now is None else int(now)
-    payload = {"aud": SESSION_AUDIENCE, "iat": issued,
+    payload = {"aud": SESSION_AUDIENCE, "rid": run_id, "iat": issued,
                "exp": issued + SESSION_TTL_SECONDS,
                "nonce": secrets.token_urlsafe(16)}
     encoded = _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
@@ -114,8 +119,9 @@ def _issue_session(now: int | None = None) -> str:
     return encoded + "." + signature
 
 
-def _valid_session(value: object, now: int | None = None) -> bool:
-    if not isinstance(value, str) or len(value) > 1024 or value.count(".") != 1:
+def _valid_session(value: object, run_id: str, now: int | None = None) -> bool:
+    if (not _valid_run_id(run_id) or not isinstance(value, str)
+            or len(value) > 1024 or value.count(".") != 1):
         return False
     try:
         encoded, supplied = value.split(".", 1)
@@ -127,8 +133,9 @@ def _valid_session(value: object, now: int | None = None) -> bool:
         payload = json.loads(raw.decode("utf-8"))
         clock = int(time.time()) if now is None else int(now)
         if (not isinstance(payload, dict)
-                or set(payload) != {"aud", "iat", "exp", "nonce"}
+                or set(payload) != {"aud", "rid", "iat", "exp", "nonce"}
                 or payload.get("aud") != SESSION_AUDIENCE
+                or payload.get("rid") != run_id
                 or type(payload.get("iat")) is not int
                 or type(payload.get("exp")) is not int
                 or not isinstance(payload.get("nonce"), str)
@@ -151,7 +158,8 @@ def _cookie_secure() -> bool:
 
 
 @router.post("/api/portal/run-session", name="portal_create_short_lived_run_session")
-def create_run_session(request: Request, authorization: str | None = Header(default=None)):
+def create_run_session(request: Request, authorization: str | None = Header(default=None),
+                       x_portal_run_id: str | None = Header(default=None)):
     # A same-origin POST with a one-time bearer token exchanges it for a
     # short-lived HttpOnly capability. The Core token is never placed in a cookie.
     origin = request.headers.get("origin")
@@ -167,7 +175,10 @@ def create_run_session(request: Request, authorization: str | None = Header(defa
             raise HTTPException(403, "same_origin_required") from exc
     try:
         _require_portal_read_auth(authorization)
-        cookie = _issue_session()
+        if not _valid_run_id(x_portal_run_id):
+            return JSONResponse({"state": "UNKNOWN", "reason": "INVALID_RUN_ID"},
+                                status_code=422, headers=SECURITY)
+        cookie = _issue_session(x_portal_run_id)
         secure = _cookie_secure()
     except HTTPException:
         raise
@@ -216,7 +227,7 @@ def run_detail_api(rid: str, authorization: str | None = Header(default=None)):
 def run_detail_page(rid: str, request: Request,
                      authorization: str | None = Header(default=None)):
     page_authorization = authorization
-    if not page_authorization and _valid_session(request.cookies.get(SESSION_COOKIE)):
+    if not page_authorization and _valid_session(request.cookies.get(SESSION_COOKIE), rid):
         page_authorization = "Bearer " + os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
     status, data = _read(rid, page_authorization)
     safe_rid = html.escape(rid if _valid_run_id(rid) else "UNKNOWN", quote=True)
@@ -238,6 +249,7 @@ def run_detail_page(rid: str, request: Request,
     source = html.escape(data.get("source", "UNKNOWN"), quote=True)
     provenance = html.escape(data.get("provenance", "UNKNOWN"), quote=True)
     mode = html.escape(data.get("mode", "UNKNOWN"), quote=True)
+    freshness = html.escape(data.get("source_freshness", "UNKNOWN"), quote=True)
     # Requested ID is NOT presented as an authenticated Run unless Core matched it.
     heading = "Core-verified Run" if status == 200 else "Requested Run — NOT VERIFIED"
     page = (
@@ -252,7 +264,7 @@ def run_detail_page(rid: str, request: Request,
         '<header><a href="/">← Cockpit NOC / portail unique</a></header>'
         f'<h1>{heading}: <code>{safe_rid}</code></h1>'
         f'<p role="status">State: {safe_state} · provenance: {provenance} · '
-        f'mode: {mode} · source: {source}</p>'
+        f'mode: {mode} · source: {source} · source freshness: {freshness}</p>'
         '<p class="muted">Tenant ACL: NOT QUALIFIED. No Evidence bytes, AI decision, '
         'HITL approval, Payments impact or verification is attested here.</p>'
         f'<nav aria-label="ACME journey">{nav}</nav>{"".join(rows)}'
