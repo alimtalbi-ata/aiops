@@ -9,7 +9,9 @@ from core.critic_denial_block import block_with_denial
 from core.critic_denial_resume import resume_critic_denial
 from shared.ids import new
 from shared.domain import transition,STAGES,initial_stage_state
+from core.hitl_identity import router as hitl_identity_router
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
+app.include_router(hitl_identity_router)
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or ADMIN_TOKEN must be configured')
