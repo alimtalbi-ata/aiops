@@ -72,6 +72,12 @@ def aggregate_reports(paths: list[Path]) -> dict[str, Any]:
         costs = [r["metrics"].get("cost_usd") for r in group]
         costs_complete = bool(costs) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in costs)
         token_values = [r["metrics"]["total_tokens"] for r in complete]
+        coverage_values = [
+            float(r["metrics"]["usage_coverage"])
+            for r in group
+            if isinstance(r["metrics"].get("usage_coverage"), (int, float))
+            and not isinstance(r["metrics"].get("usage_coverage"), bool)
+        ]
         model_results.append({
             "provider": provider,
             "model": model,
@@ -81,9 +87,8 @@ def aggregate_reports(paths: list[Path]) -> dict[str, Any]:
             "quality_pass_rate": round(sum(r.get("result") == "PASS" for r in group) / len(group), 4),
             "metrics_median": metrics,
             "usage_complete_repeats": len(complete),
-            "usage_coverage_mean": round(statistics.mean(
-                float(r["metrics"].get("usage_coverage", 0)) for r in group
-            ), 4),
+            "usage_coverage_mean": round(statistics.mean(coverage_values), 4)
+                if len(coverage_values) == len(group) else None,
             "total_tokens_mean": round(statistics.mean(token_values), 2) if len(complete) == len(group) else None,
             "prompt_tokens_mean": round(statistics.mean(
                 r["metrics"]["prompt_tokens_total"] for r in complete
