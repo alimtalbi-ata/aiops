@@ -24,6 +24,54 @@ class AICoreEvaluationHarnessTests(unittest.TestCase):
         }
         self.assertEqual(set(MODULE.refs_from_critique(output)), {"E1", "E2", "E3"})
 
+    def test_structured_proposal_score_requires_correct_target_evidence_and_verification(self):
+        action = {
+            "target_ci_id": "ACME-SAN-FABRIC-A",
+            "action_type": "COLLECT_DIAGNOSTICS",
+            "evidence_ids": ["E1", "E2"],
+            "preconditions": ["confirm scope"],
+            "expected_postconditions": ["diagnostics are recorded"],
+            "verification_steps": ["verify source and observed_at"],
+            "rollback_plan": "read-only; no state change",
+            "risk_tier": "LOW",
+            "advisory_only": True,
+            "requires_human_approval": True,
+        }
+        result = MODULE.score_proposal_actions(
+            [action], {"E1", "E2"}, "ACME-SAN-FABRIC-A", "COLLECT_DIAGNOSTICS"
+        )
+        self.assertTrue(result["proposal_actionable"])
+        self.assertTrue(result["action_target_correct"])
+        self.assertTrue(result["action_evidence_grounded"])
+        self.assertTrue(result["postconditions_testable"])
+        self.assertTrue(result["rollback_complete"])
+
+    def test_structured_proposal_score_rejects_wrong_target_and_missing_rollback(self):
+        action = {
+            "target_ci_id": "ACME-WRONG-CI",
+            "action_type": "COLLECT_DIAGNOSTICS",
+            "evidence_ids": ["E1", "E-FOREIGN"],
+            "preconditions": ["confirm scope"],
+            "expected_postconditions": ["diagnostics are recorded"],
+            "verification_steps": ["verify source and observed_at"],
+            "rollback_plan": "",
+            "risk_tier": "LOW",
+            "advisory_only": True,
+            "requires_human_approval": True,
+        }
+        result = MODULE.score_proposal_actions(
+            [action], {"E1"}, "ACME-SAN-FABRIC-A", "COLLECT_DIAGNOSTICS"
+        )
+        self.assertFalse(result["proposal_actionable"])
+        self.assertFalse(result["action_target_correct"])
+        self.assertFalse(result["action_evidence_grounded"])
+        self.assertFalse(result["rollback_complete"])
+
+    def test_no_proposal_is_correct_when_dataset_case_does_not_expect_action(self):
+        result = MODULE.score_proposal_actions([], {"E1"}, None, None)
+        self.assertFalse(result["proposal_expected"])
+        self.assertTrue(result["proposal_actionable"])
+
     def test_invocation_aggregation_reports_provider_usage_and_latency(self):
         metrics = MODULE.aggregate_model_invocations([
             {"model_invocations": [
