@@ -293,6 +293,7 @@ def _execute_stage_blocking(a,attempt):
                     'synthetic': True,
                     'approval_required': False,
                     'execution_allowed': False,
+                    'effect_allowed': False,
                 }
                 event = call('POST', f'{CORE}/api/runs/{rid}/events', {
                     'expected_version': v,
