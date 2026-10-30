@@ -49,10 +49,22 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn("/proposals", source)
         self.assertIn("'execution_allowed': False", source)
 
-    def test_synthetic_proposal_never_waits_for_live_approval(self):
-        source = pathlib.Path("app/worker/main.py").read_text()
-        self.assertIn("'status': 'WAITING' if mode == 'LIVE' else 'BLOCKED'", source)
-        self.assertIn("synthetic_proposal_cannot_authorize_live_execution", source)
+    def test_synthetic_modes_skip_hitl_without_creating_approval_or_execution_authority(self):
+        worker = pathlib.Path("app/worker/main.py").read_text()
+        workflow = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn("if mode != 'LIVE':", worker)
+        self.assertIn("HITL_SIMULATION_SKIPPED", worker)
+        self.assertIn("'approval_required': False", worker)
+        self.assertIn("'execution_allowed': False", worker)
+        self.assertIn('if stage == "HITL" and args["mode"] != "LIVE":', workflow)
+        self.assertIn('"synthetic_hitl_bypass_contract_invalid"', workflow)
+
+    def test_live_hitl_requires_persisted_proposal_and_human_decision(self):
+        workflow = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn('if stage == "HITL" and args["mode"] == "LIVE" and not (', workflow)
+        self.assertIn('"hitl_proposal_not_persisted"', workflow)
+        self.assertIn('"hitl_proposal_binding_missing"', workflow)
+        self.assertIn('"human_decision_recorded_execution_gate_closed"', workflow)
 
 
 if __name__ == "__main__":
