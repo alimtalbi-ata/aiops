@@ -50,6 +50,7 @@ The active convergence baseline is documented in:
 - [48-hour delivery plan](docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md)
 - [AI benchmark and token/cost governance](docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md)
 - [Deterministic CI AI benchmark baseline](docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md)
+- [RC1.4 release-kit audit](docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md)
 - [Reuse and PR convergence register](docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md)
 - [Schedules and Debian cron safety](docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md)
 - [ACME P1 SAN→Payments customer story](docs/customer-story/ACME-P1-SAN-PAYMENTS-ITIL-DEMO-2026-10-30.md)
