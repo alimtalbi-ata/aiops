@@ -213,6 +213,37 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(cross.status_code, 403)
         self.assertNotIn("set-cookie", cross.headers)
 
+    def test_session_exchange_failure_responses_keep_security_headers(self):
+        # Failed credential exchanges must never be cached or framed either.
+        cases = (
+            ("missing", {}, 401),
+            ("wrong", {"Authorization": "Bearer invalid", "X-Portal-Run-ID": RID}, 401),
+            ("cross_origin", {"Authorization": "Bearer " + TOKEN,
+                              "Origin": "https://untrusted.example", "X-Portal-Run-ID": RID}, 403),
+            ("invalid_run", {"Authorization": "Bearer " + TOKEN,
+                             "X-Portal-Run-ID": "RUN-../foreign"}, 422),
+        )
+        for label, headers, expected in cases:
+            with self.subTest(label=label):
+                response = self.client.post("/api/portal/run-session", headers=headers)
+                self.assertEqual(response.status_code, expected)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertEqual(response.headers["x-frame-options"], "DENY")
+                self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+                self.assertIn("frame-ancestors 'none'",
+                              response.headers["content-security-policy"])
+                self.assertNotIn("set-cookie", response.headers)
+                self.assertNotIn(TOKEN, response.text)
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}):
+            unconfigured = self.client.post(
+                "/api/portal/run-session",
+                headers={"Authorization": "Bearer " + TOKEN, "X-Portal-Run-ID": RID},
+            )
+        self.assertEqual(unconfigured.status_code, 503)
+        self.assertEqual(unconfigured.headers["cache-control"], "no-store")
+        self.assertEqual(unconfigured.headers["x-frame-options"], "DENY")
+        self.assertNotIn("set-cookie", unconfigured.headers)
+
     def test_expired_or_tampered_session_never_reads_core(self):
         with patch.object(acme_run_detail.time, "time", return_value=1000):
             expired = acme_run_detail._issue_session(RID, now=1000)
