@@ -333,6 +333,41 @@ def _execute_stage_blocking(a,attempt):
                             'observed_at':observed},
                         'payload':{**payload,'mode':mode,'run_id':rid,'synthetic':True}
                     },token=ADMIN)
+                scenario_extra = []
+                if scenario == 'SCN-ACME-TEST-HITL-CHANGE':
+                    scenario_extra = [
+                        ('change-window', 'Synthetic change calendar: maintenance window is not confirmed; approval state UNKNOWN.',
+                         {'node_id':'ACME-APP-PORTAL','change_window':'UNKNOWN','change_approved':False}),
+                    ]
+                elif scenario == 'SCN-ACME-TEST-HITL-STORAGE':
+                    scenario_extra = [
+                        ('storage-path-ownership', 'Synthetic storage snapshot: one degraded path has no verified owner-to-target mapping.',
+                         {'node_id':'ACME-SRV-RHEL01','path_mapping_verified':False,'degraded_paths':1}),
+                    ]
+                elif scenario == 'SCN-ACME-TEST-HITL-CRITICAL':
+                    scenario_extra = [
+                        ('payment-impact', 'Synthetic business impact: 78% of payment attempts are reported affected; impact requires human validation.',
+                         {'node_id':'ACME-SVC-PAYMENTS','affected_transactions_percent':78,'severity':'P1'}),
+                    ]
+                elif scenario == 'SCN-ACME-TEST-BLOCK-EVIDENCE':
+                    scenario_extra = [
+                        ('contradictory-fc-errors', 'Synthetic monitoring source reports 0 FC errors/min, conflicting with the Twin observation of 184 errors/min.',
+                         {'node_id':'ACME-SAN-FABRIC-A','metric':'fc_errors','value':0,'unit':'errors/min','status':'HEALTHY'}),
+                    ]
+                for suffix, claim, payload in scenario_extra:
+                    post_json(EVID, '/api/evidence', {
+                        'source': 'acme-scenario-fixture',
+                        'external_id': f'{rid}:{suffix}',
+                        'observed_at': observed,
+                        'claim': claim,
+                        'confidence': 0.65,
+                        'provenance': {
+                            'synthetic': True, 'run_id': rid, 'stage': 'OBSERVE',
+                            'adapter': 'acme-scenario-fixture', 'scenario_id': scenario,
+                            'observed_at': observed,
+                        },
+                        'payload': {**payload, 'mode': mode, 'run_id': rid, 'synthetic': True},
+                    }, token=ADMIN)
         if stage in ('DGX_ANALYST','DGX_CRITIC'):
             try:
                 detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
