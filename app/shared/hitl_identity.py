@@ -217,6 +217,9 @@ def verify_oidc_assertion(token: str) -> dict[str, Any]:
         )
     except Exception as exc:
         raise IdentityError("oidc_assertion_verification_failed") from exc
+    aud_claim = claims.get("aud")
+    if isinstance(aud_claim, list) and len(aud_claim) > 1 and claims.get("azp") != audience:
+        raise IdentityError("oidc_authorized_party_mismatch")
     now = int(time.time())
     issued = claims.get("iat")
     expires = claims.get("exp")
@@ -237,7 +240,10 @@ def verify_oidc_assertion(token: str) -> dict[str, Any]:
         amr = claims.get("amr")
         if not isinstance(amr, list) or required_amr not in amr:
             raise IdentityError("oidc_mfa_assurance_required")
-    max_auth_age = int(os.getenv("AIOPS_HITL_OIDC_MAX_AUTH_AGE_SECONDS", "300"))
+    try:
+        max_auth_age = int(os.getenv("AIOPS_HITL_OIDC_MAX_AUTH_AGE_SECONDS", "300"))
+    except (TypeError, ValueError) as exc:
+        raise IdentityError("oidc_auth_age_configuration_invalid") from exc
     auth_time = claims.get("auth_time")
     if (type(auth_time) is not int or max_auth_age < 60
             or max_auth_age > 3600 or now - auth_time > max_auth_age
