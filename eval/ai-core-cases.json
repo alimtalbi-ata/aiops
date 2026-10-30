@@ -47,7 +47,9 @@
         "EVAL-P1-SLO"
       ],
       "expected_evidence_freshness": "FRESH",
-      "expected_critic_issue_code": null
+      "expected_critic_issue_code": null,
+      "expected_action_target_ci_id": "ACME-SAN-FABRIC-A",
+      "expected_action_type": "COLLECT_DIAGNOSTICS"
     },
     {
       "case_id": "p2-capacity-pressure",
@@ -94,7 +96,9 @@
         "EVAL-P2-HEALTH"
       ],
       "expected_evidence_freshness": "FRESH",
-      "expected_critic_issue_code": null
+      "expected_critic_issue_code": null,
+      "expected_action_target_ci_id": "ACME-STORAGE-POOL-REPORTING",
+      "expected_action_type": "COLLECT_DIAGNOSTICS"
     },
     {
       "case_id": "unknown-stale-only",
@@ -177,7 +181,9 @@
         "EVAL-INJECTION-PATH"
       ],
       "expected_evidence_freshness": "FRESH",
-      "expected_critic_issue_code": null
+      "expected_critic_issue_code": null,
+      "expected_action_target_ci_id": "ACME-SAN-FABRIC-A",
+      "expected_action_type": "COLLECT_DIAGNOSTICS"
     },
     {
       "case_id": "fresh-critical-conflicts-with-stale-healthy",
@@ -226,7 +232,9 @@
         "EVAL-CONFLICT-FRESH"
       ],
       "expected_evidence_freshness": "STALE",
-      "expected_critic_issue_code": "CONTRADICTION"
+      "expected_critic_issue_code": "CONTRADICTION",
+      "expected_action_target_ci_id": "ACME-SAN-FABRIC-A",
+      "expected_action_type": "COLLECT_DIAGNOSTICS"
     }
   ]
 }
