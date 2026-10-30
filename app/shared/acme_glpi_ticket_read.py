@@ -57,9 +57,9 @@ def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
                             app_token=None, opener=None):
     """GET one claimed Ticket; fail closed on unavailable/ambiguous linkage.
 
-    \`opener\` is injectable for offline HTTP mocks. In production, credentials
+    `opener` is injectable for offline HTTP mocks. In production, credentials
     must come from a server-side secret provider, never from browser input.
-    The GLPI ticket must expose canonical \`incident_id\` and \`run_id\` fields;
+    The GLPI ticket must expose canonical `incident_id` and `run_id` fields;
     no inference from title, comments, or free text is permitted.
     """
     if not isinstance(correlation, dict):
