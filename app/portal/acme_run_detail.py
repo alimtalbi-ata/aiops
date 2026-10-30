@@ -6,11 +6,19 @@ a scoped, authenticated Core read contract is available on main.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import html
+import json
+import os
+import secrets
+import time
 import urllib.error
+import urllib.parse
 from pathlib import Path
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from portal.noc_correlation import _read_core_run
@@ -29,6 +37,10 @@ SECURITY = {
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     ),
 }
+SESSION_COOKIE = "aiops_portal_run_session"
+SESSION_TTL_SECONDS = 300
+SESSION_AUDIENCE = "portal-run-detail-read-only"
+
 JOURNEY = ("Incident", "Run", "Evidence", "AI Ledger", "Policy", "HITL", "Verification")
 FORBIDDEN_COLLECTIONS = frozenset(
     {"events", "gates", "stages", "evidence", "evidence_refs",
@@ -79,6 +91,98 @@ def _project(rid: str, raw: object) -> dict:
     }
 
 
+def _session_key() -> bytes:
+    expected = os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
+    if not expected:
+        raise ValueError("portal_read_auth_not_configured")
+    return hmac.new(expected.encode("utf-8"), b"aiops2-portal-run-session-v1",
+                    hashlib.sha256).digest()
+
+
+def _b64(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+
+def _issue_session(now: int | None = None) -> str:
+    issued = int(time.time()) if now is None else int(now)
+    payload = {"aud": SESSION_AUDIENCE, "iat": issued,
+               "exp": issued + SESSION_TTL_SECONDS,
+               "nonce": secrets.token_urlsafe(16)}
+    encoded = _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    signature = _b64(hmac.new(_session_key(), encoded.encode("ascii"),
+                              hashlib.sha256).digest())
+    return encoded + "." + signature
+
+
+def _valid_session(value: object, now: int | None = None) -> bool:
+    if not isinstance(value, str) or len(value) > 1024 or value.count(".") != 1:
+        return False
+    try:
+        encoded, supplied = value.split(".", 1)
+        expected = _b64(hmac.new(_session_key(), encoded.encode("ascii"),
+                                 hashlib.sha256).digest())
+        if not hmac.compare_digest(expected, supplied):
+            return False
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        payload = json.loads(raw.decode("utf-8"))
+        clock = int(time.time()) if now is None else int(now)
+        if (not isinstance(payload, dict)
+                or set(payload) != {"aud", "iat", "exp", "nonce"}
+                or payload.get("aud") != SESSION_AUDIENCE
+                or type(payload.get("iat")) is not int
+                or type(payload.get("exp")) is not int
+                or not isinstance(payload.get("nonce"), str)
+                or not payload["nonce"]
+                or payload["exp"] <= clock
+                or payload["iat"] > clock + 30
+                or payload["exp"] - payload["iat"] != SESSION_TTL_SECONDS
+                or clock - payload["iat"] > SESSION_TTL_SECONDS):
+            return False
+        return True
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
+        return False
+
+
+def _cookie_secure() -> bool:
+    value = os.getenv("AIOPS_PORTAL_COOKIE_SECURE", "true").strip().lower()
+    if value not in ("true", "false"):
+        raise ValueError("portal_cookie_secure_must_be_boolean")
+    return value == "true"
+
+
+@router.post("/api/portal/run-session", name="portal_create_short_lived_run_session")
+def create_run_session(request: Request, authorization: str | None = Header(default=None)):
+    # A same-origin POST with a one-time bearer token exchanges it for a
+    # short-lived HttpOnly capability. The Core token is never placed in a cookie.
+    origin = request.headers.get("origin")
+    if origin:
+        try:
+            parsed = urllib.parse.urlsplit(origin)
+            host = request.headers.get("host", "")
+            if (parsed.scheme not in ("http", "https") or not parsed.netloc
+                    or parsed.netloc.lower() != host.lower()
+                    or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+                raise HTTPException(403, "same_origin_required")
+        except ValueError as exc:
+            raise HTTPException(403, "same_origin_required") from exc
+    try:
+        _require_portal_read_auth(authorization)
+        cookie = _issue_session()
+        secure = _cookie_secure()
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(503, "portal_session_not_configured") from exc
+    response = JSONResponse({"state": "READ_ONLY_SESSION_CREATED",
+                             "expires_in_seconds": SESSION_TTL_SECONDS},
+                            headers=SECURITY)
+    response.set_cookie(
+        SESSION_COOKIE, cookie, max_age=SESSION_TTL_SECONDS, path="/runs",
+        httponly=True, secure=secure, samesite="strict",
+    )
+    return response
+
+
 def _read(rid: str, authorization: str | None) -> tuple[int, dict]:
     # Authenticate before path validation or Core I/O; no browser token is requested.
     try:
@@ -109,8 +213,12 @@ def run_detail_api(rid: str, authorization: str | None = Header(default=None)):
 
 
 @router.get("/runs/{rid}", response_class=HTMLResponse, name="portal_run_detail_page")
-def run_detail_page(rid: str, authorization: str | None = Header(default=None)):
-    status, data = _read(rid, authorization)
+def run_detail_page(rid: str, request: Request,
+                     authorization: str | None = Header(default=None)):
+    page_authorization = authorization
+    if not page_authorization and _valid_session(request.cookies.get(SESSION_COOKIE)):
+        page_authorization = "Bearer " + os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
+    status, data = _read(rid, page_authorization)
     safe_rid = html.escape(rid if _valid_run_id(rid) else "UNKNOWN", quote=True)
     safe_state = html.escape(data["state"], quote=True)
     nav = " · ".join(
