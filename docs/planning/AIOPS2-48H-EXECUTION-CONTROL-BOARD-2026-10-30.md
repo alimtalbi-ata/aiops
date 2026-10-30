@@ -273,3 +273,7 @@ Six exact source Git blobs selectively transported in **one commit**, no `main.p
 
 Downloaded #201 [artifact 12995044690](https://github.com/alimtalbi-ata/aiops/actions/runs/41096370024): ZIP CRC PASS, 2 entries, ZIP SHA256 `c1a5fcb6ed4819d67c1a06e252541674bfbcdf4db8332d2b88e529cd30fa6cbf`; screenshot SHA256 matches manifest `8a1720c3851833525d0e817a157d24826ff431fc84ce1d9d9742fd5595ebcaca`. **Metadata `git_sha=55b02788...` differs from PR head `1d3a9028...`**, because the capture uses GitHub `GITHUB_SHA` on a PR workflow (merge checkout). Require explicit `pr_head_sha`, `pr_base_sha`, `checkout_sha` and source-fixture digest in the next receipt contract. No runtime authentication or production qualification; this is only a synthetic browser capture, not a cumulative kit.
 
+### Ollama artifact diagnostic refinement — 2026-10-30 17:14 UTC
+
+Real #196 artifacts audited at member level: 1.7b **14/15 provider usage reports** across three failed repeats, token diagnostic sums 11875 (partial), 15195, 15241; all 0/5 cases analyzed per repeat because ValidationError/ReadTimeout. 4b **0/15 provider usage reports**, 15/15 ReadTimeout, token totals UNKNOWN. Both artifacts ZIP CRC PASS. Do not conflate provider-reported usage in failed calls with successful-model token economics or quality; no cost provenance. Exact details and ZIP hashes in AI benchmark baseline. #201 remains T0 GO only, not T2.
+
