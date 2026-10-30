@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime, timedelta
 from typing import Any
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -49,6 +50,21 @@ _ALLOWED_GATE_FIELDS = frozenset({
 _ALLOWED_ROLLBACK_FIELDS = frozenset({
     "status", "projected_state", "effect_applied", "executed",
 })
+
+
+def _canonical_utc_fixture_timestamp(value: Any) -> bool:
+    """Require the offline gate builder's canonical UTC timestamp, not an audit attestation."""
+    if type(value) is not str:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return False
+    return (
+        parsed.tzinfo is not None
+        and parsed.utcoffset() == timedelta(0)
+        and parsed.isoformat() == value
+    )
 
 
 def _same_snapshot_exact(left: Any, right: Any) -> bool:
@@ -121,6 +137,8 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(projection, dict) or not isinstance(projection.get("gate"), dict):
         raise ValueError("projection_missing")
     gate = projection["gate"]
+    if not _canonical_utc_fixture_timestamp(gate.get("timestamp")):
+        raise ValueError("gate_fixture_timestamp_invalid")
     if type(projection.get("schema_version")) is not int or projection["schema_version"] != 1:
         raise ValueError("projection_schema_invalid")
     if projection.get("synthetic") is not True or projection.get("provenance") != "WHAT_IF_FIXTURE_NOT_OBSERVED":
@@ -259,8 +277,8 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if gate.get("status") == "SIMULATED" and (
         gate.get("dry_run") is not True
         or gate.get("preconditions") != "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED"
-        or not isinstance(gate.get("approval_actor"), str)
-        or not gate["approval_actor"]
+        or type(gate.get("approval_actor")) is not str
+        or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", gate["approval_actor"])
     ):
         raise ValueError("gate_fixture_invalid")
     if status in _SIMULATED and gate.get("status") == "SIMULATED":
