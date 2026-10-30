@@ -284,6 +284,33 @@ def _execute_stage_blocking(a,attempt):
     v=started['version']
     try:
         if stage == 'HITL':
+            if mode != 'LIVE':
+                # DEMO/REPLAY/STORY are explicitly synthetic. Record that the
+                # approval gate is not exercised; never mint a synthetic
+                # approval or let a synthetic identity authorize remediation.
+                payload = {
+                    'reason': 'synthetic_mode_no_live_approval',
+                    'synthetic': True,
+                    'approval_required': False,
+                    'execution_allowed': False,
+                }
+                event = call('POST', f'{CORE}/api/runs/{rid}/events', {
+                    'expected_version': v,
+                    'stage': stage,
+                    'event_type': 'HITL_SIMULATION_SKIPPED',
+                    'event_key': f'{stage}:SIMULATION-SKIPPED',
+                    'status': 'PASS',
+                    'decision': 'SIMULATE',
+                    'confidence': 0,
+                    'payload': payload,
+                })
+                post_json(CORE, f'/api/runs/{rid}/checkpoint',
+                          {'stage': stage, 'version': event['version']}, token=ADMIN)
+                return {
+                    'run_id': rid, 'stage': stage, 'status': 'PASS',
+                    'version': event['version'], **payload,
+                }
+
             result = create_hitl_proposal(rid, mode, v)
             proposal_id = result.get('proposal_id')
             payload = {
@@ -292,7 +319,7 @@ def _execute_stage_blocking(a,attempt):
                 'proposal_hash': result.get('proposal_hash'),
                 'proposal_revision': result.get('proposal_revision'),
                 'proposal_status': result.get('proposal_status'),
-                'synthetic': mode != 'LIVE',
+                'synthetic': False,
                 'execution_allowed': False,
             }
             event = call('POST', f'{CORE}/api/runs/{rid}/events', {
