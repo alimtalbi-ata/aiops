@@ -32,7 +32,7 @@ def core(name, db, **extra):
     node.decorator_list = []
     env = dict(Header=lambda default=None: default, HTTPException=HTTPException,
                db=lambda: db, auth=lambda token: None,
-               bearer=lambda value: value, hmac=hmac)
+               bearer=lambda value: value, hmac=hmac, datetime=datetime)
     env.update(extra)
     exec(compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])),
                  path, "exec"), env)
