@@ -335,3 +335,23 @@ Fresh stacked sources: #204 HEAD `1d030724` (four workflows SUCCESS, still stack
 #202 HEAD `d623c173b1414649298a31bc87e1948dde775395`, main-based, [Quality 41117705285](https://github.com/alimtalbi-ata/aiops/actions/runs/41117705285) SUCCESS 3/3, contains one additional two-file delta since `2e8e9037`: validate Core Run `status` against `shared.domain.STATUSES`, with negative tests for forged strings, malformed values and seven canonical statuses. Main/#201 already have `app/shared/domain.py` blob `aa7401ac12ec185a138aeaa526da7cb1b9aa06fb`; no new dependency required. Ported **exact blobs** to #201: `app/portal/acme_run_detail.py` source `28a7604ede814664c101e7748878060aed4ce7e6` (commit `81f9645d646e3c838450402ef84031391cff8c5d`); `tests/test_portal_run_detail.py` source `b1f51b1d0b613da88a7e5e980ca3c17465f7cf7b` (commit `8236c93460a160914247aaca8141253ebddf3aac`). New #201 HEAD `8236c93460a160914247aaca8141253ebddf3aac`, base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, 37 ahead/0 behind; [Quality 41120972224](https://github.com/alimtalbi-ata/aiops/actions/runs/41120972224) QUEUED at posting. No identity/tenant/GLPI/Evidence authority granted.
 
 #204 `b17f8a5c` stacked on #194 `40d38705`: [Quality 41118324370](https://github.com/alimtalbi-ata/aiops/actions/runs/41118324370) SUCCESS and 36/36 offline HITL/outbox/contract tests, but source changes to Core overlap #201 and must be reviewed contract-by-contract before any port. #196 `747f0df4` still stacked on older #194 `1fade3e5`; Quality FAILURE and no qualified real-model benchmark. #185 remains divergent story-only. Do not mass-merge.
+
+## 2026-10-30 21:10 UTC — exact source collision checkpoint (5/5)
+
+Candidate [#201](https://github.com/alimtalbi-ata/aiops/pull/201) `8236c93460a160914247aaca8141253ebddf3aac` on `main@27deb9b1`: Quality [41120972224](https://github.com/alimtalbi-ata/aiops/actions/runs/41120972224) **SUCCESS 3/3**, 37 ahead/0 behind. The Chromium artifact [13007279749](https://github.com/alimtalbi-ata/aiops/actions/runs/41120972224/artifacts/13007279749) is a synthetic screenshot ZIP (SHA256 `083ec62ececcbb11e2c47ef777619e86c7c5d9bfa11d9ff67713e4502d5718dc`), not a cumulative package.
+
+**Git blob dependency comparison (read-only):**
+
+| Path | #201 | #194 / #204 or #196 | Port decision |
+|---|---|---|---|
+| `app/core/main.py` | `ef5cb542c637` | #194 `fedf63c07557`; #204 `a04001ae34ff` | collision; reconcile API/ledger first |
+| `app/worker/workflow.py` | ABSENT | #194 `aa53a808e965`; #204 `3039f0b63922` | needs orchestration dependency graph and tests |
+| `db/migrations/011_hitl_decision_outbox.sql` | ABSENT | #194/#204 `b096af57cb19` | migration ordering and sandbox upgrade/rollback gate |
+| `app/core/hitl_identity.py` | ABSENT | #194/#204 `f22edf6b3feb` | identity provider and tenant/actor proof required |
+| `app/shared/hitl_identity.py` | ABSENT | #194/#204 `fbdba0138ce5` | no unverified approval authority |
+| `app/intelligence/main.py` | ABSENT | #196 `e5568c4af6bf` | requires full Intelligence contract/dependencies |
+| `tools/evaluate_ai_core.py` | ABSENT | #196 `d8dbdec23f75` | preserve deterministic vs real-model separation |
+| `compose.yml` | `679fca072bb5` | #196 `7682e9edb4d0`; #204 `926dfdc4bfae` | manual selective service reconciliation |
+| `.github/workflows/quality.yml` | `c67429b3e1ae` | #196 `5de1992a445f`; #204 `456d38453b7b` | do not overwrite exact-head quality gates |
+
+[#204](https://github.com/alimtalbi-ata/aiops/pull/204) new HEAD `7372be2098ef955db9a4e14f2b94340ac447d509` has four exact-head workflows SUCCESS, but remains stacked on #194. [#196](https://github.com/alimtalbi-ata/aiops/pull/196) `747f0df4b8bae0fa0265b6dc568558a6a9057ad1` Quality FAILURE due to Ollama; no model PASS. Do not mass-merge #185/#194/#196/#204. Port exact blobs only after dependency and collision review, with test command, N/N and new combined-SHA CI.
