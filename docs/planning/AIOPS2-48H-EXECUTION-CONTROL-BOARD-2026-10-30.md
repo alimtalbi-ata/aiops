@@ -265,3 +265,7 @@ Six exact source Git blobs selectively transported in **one commit**, no `main.p
 - **Real-model benchmark #196** head `747f0df4b8bae0fa0265b6dc568558a6a9057ad1`: [Quality 41083049858](https://github.com/alimtalbi-ata/aiops/actions/runs/41083049858) **6/8 jobs SUCCESS, 2 Ollama FAILED**. Actual logs show qwen3:1.7b ValidationError and qwen3:4b ReadTimeout, each 3/3 repeats `evaluator_exit=1`; no qualified model results/tokens/cost. Artifact-first failure propagation now works. Do not promote deterministic fixture metrics as real usage.
 - **T0 PENDING** new exact-head CI; **T1 NOT_TESTED**, **T2 NOT_TESTED** (14 ITIL checkpoints synthetic/MISSING), **T3 NOT_ATTESTED**, **T4 NO_GO**, **T5 NO_GO**. No cumulative kit, migration 011/OIDC/outbox/telemetry integration, Debian smoke, sandbox install/rollback or LIVE. #188 preferred unmerged; #189 duplicate; #146/#153 unauthorized; #187 deferred.
 
+### Exact-head CI qualification — 2026-10-30 17:11 UTC
+
+[#201 Quality 41096370024](https://github.com/alimtalbi-ata/aiops/actions/runs/41096370024) on **`1d3a902877d556549425a95cd4cef792c5c000c8` completed SUCCESS 3/3**. Inspected policy-and-static logs: Portal Python **26/26**, Portal JS **7/7**, ACME locator **16/16**, SAN→Payments fixture **6/6**, Chromium synthetic **6/6**, kit inventory guard **12/12**; all PASS. This supersedes the PENDING T0 snapshot above. **T0=GO limited to exact-source CI; T1/T2 NOT_TESTED, T3 NOT_ATTESTED, T4/T5 NO_GO.** Chromium is an ephemeral Portal/fixture test, not the full Core→Temporal→Evidence→GLPI synthetic E2E.
+
