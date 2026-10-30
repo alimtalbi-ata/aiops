@@ -86,6 +86,8 @@ jobs:
       - name: Explore Story real Chromium to ephemeral portal E2E (SIMULATED only)
         env:
           AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/acme-browser
+          AIOPS_SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AIOPS_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: python -m unittest discover -s tests -p "test_explore_story_playwright_e2e.py" -v
       - name: Upload unreviewed CI-simulated portal browser observation
         if: success()
