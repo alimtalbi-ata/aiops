@@ -300,7 +300,7 @@ def _execute_stage_blocking(a,attempt):
                 'stage': stage,
                 'event_type': 'HITL_PROPOSAL_CREATED' if proposal_id else 'HITL_PROPOSAL_BLOCKED',
                 'event_key': f'{stage}:PROPOSAL',
-                'status': 'WAITING' if result.get('status') == 'WAITING' else 'BLOCKED',
+                'status': 'RUNNING' if result.get('status') == 'WAITING' else 'BLOCKED',
                 'decision': 'HUMAN_APPROVAL',
                 'confidence': 0,
                 'payload': payload,
