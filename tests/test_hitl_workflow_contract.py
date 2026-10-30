@@ -1,8 +1,6 @@
 import ast
 import pathlib
 import unittest
-from test_hitl_failure_injection import OfflineFailureInjection  # offline, no runtime effects
-from test_hitl_outbox_failure_injection import OutboxFaultTests  # offline mocks; no I/O
 
 
 class TemporalHitlWorkflowContractTests(unittest.TestCase):
