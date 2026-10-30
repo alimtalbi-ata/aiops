@@ -402,11 +402,13 @@ async def reconcile_hitl_decisions_loop():
  idempotent; a workflow rejects conflicting payloads. This poller is a delivery
  bridge, not an execution authorization mechanism.
  """
+ client=None
  while True:
   try:
-   snapshot=get_json(CORE,'/api/proposals?status=ALL',token=ADMIN)
+   if client is None:
+    client=await Client.connect(TEMP)
+   snapshot=get_json(CORE,'/api/proposals?status=ALL&limit=200',token=ADMIN)
    items=snapshot.get('items',[]) if isinstance(snapshot,dict) else []
-   client=await Client.connect(TEMP)
    for item in items:
     status=item.get('status')
     if status not in ('APPROVED','REJECTED','REVOKED'):
@@ -425,9 +427,13 @@ async def reconcile_hitl_decisions_loop():
      'decision':decision,
      'source_status':status,
     }
-    handle=client.get_workflow_handle(rid)
-    await handle.signal(IncidentWorkflow.submit_hitl_decision,payload)
+    try:
+     handle=client.get_workflow_handle(rid)
+     await handle.signal(IncidentWorkflow.submit_hitl_decision,payload)
+    except Exception as exc:
+     log.debug('HITL signal delivery deferred: %s',type(exc).__name__)
   except Exception as exc:
+   client=None
    log.warning('HITL decision reconciliation unavailable: %s',type(exc).__name__)
   await asyncio.sleep(5)
 
