@@ -157,3 +157,48 @@ Exact-head Quality SUCCESS separately: #190 `2aa1e89` (41019332417), #192 `8488e
 | 5/5 Architecture | #195 `f9617b09` | 14 README/docs exact blobs, one new release note | benchmark/model and cumulative kit unqualified |
 
 Quality workflow from #199 extended with 1/5 and 3/5 offline test steps. [Combined CI 41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) was **IN_PROGRESS**, not yet a green gate. #185 (741 ahead/43 behind main) remains scenario source only; #194/#196 (divergent) need dependency-aware selective port. #188 preferred cron, #189 duplicate, #146/#153 disabled, #187 deferred.
+
+
+## 8. Architecture-led reorientation — 2026-10-30 14:46 Europe/Paris
+
+### Exact-head convergence status
+
+| PR / lane | Base → head | Latest verified result | Architectural disposition |
+|---|---|---|---|
+| #195 architecture | `main` → previous `f9617b09` | Quality 41061315909 SUCCESS (3/3); current documentation commits have triggered a new exact-head run | Canonical architecture/ITIL/48h baseline; keep as the single architecture ADR/documentation PR |
+| #196 AI telemetry + real-model benchmark | `feat/temporal-hitl-v1` → current benchmark branch (newer than `6b6a3b39`) | Previous head `6b6a3b39`: Quality 41055287795, Offline 41055287588, Historical 41055287726, V2.8 41055287705 all SUCCESS; new Ollama benchmark files/tests/workflow are awaiting fresh CI | Reuse existing Intelligence, evaluator, telemetry and dataset; new Qwen3 4B/8B CPU experiment is not yet executed |
+| #197 NOC/Evidence preflight | `main` → `571943714` | Quality 41066639506 SUCCESS | UTC fail-closed preflight only; not a GLPI connector, Evidence attestation or tenant ACL |
+| #198 ACME Run locator | `main` → `8f48b1b5` | Quality 41054868177 SUCCESS | Read-only synthetic source locator; missing authenticated Core Evidence-refs endpoint keeps Evidence attestation UNKNOWN |
+| #199 Policy SIMULATE fixture | `main` → `e0fc68f7` | Quality 41055154260 SUCCESS | UTC/actor validation for SIMULATE only; no approval or execution authority |
+| #194 HITL/OIDC/outbox | `feat/glpi-hitl-proposal-fastpath` → `1fade3e5` | Quality 41050718293, Offline 41050718284, Historical 41050718256, V2.8 41050718393 SUCCESS | Valuable source for selective port; stacked base and overlapping Core/Portal/Compose prevent blind merge |
+| #185 ACME integrated candidate | `feat/cron-stable-reconciled-20261028` → `2b2af9cd` | Quality 41055650123, V2.8 41055650146, Offline 41055650247, Historical 41055650640 SUCCESS | Scenario/story and test source only; branch is about 741 ahead/43 behind main and its ZIP is not cumulative |
+| #44 Ollama adapter | old main `92108b3b` → `2d3157e0` | Quality 40571362224 SUCCESS; branch comparison diverged 8 ahead/42 behind main | Reuse the Ollama/Qwen3 4B/8B experiment pattern, not the old branch wholesale. PR #196 now calls the actual existing Analyst/Critic evaluator through Ollama instead of a standalone READY smoke. |
+
+### Current deterministic AI evidence
+
+Exact runtime report artifact #12976497171 from #196 Quality run 41055287795:
+- Dataset SHA `fdf45a4f89b6867bd172116648f53194d460c832cb2d133f2dc4fdbf30d1493a`; 5 synthetic cases / 10 model calls.
+- Severity, grounding, freshness, safety, injection, contradiction, stale detection and Critic disposition each 1.00 on defined denominators.
+- Proposal actionability and target/action/evidence/precondition/postcondition/rollback scores each 1.00 over four proposal cases.
+- Provider usage coverage 10/10; 20 fixed placeholder tokens; latency P50 3.01 ms / P95 4.54 ms; zero retries.
+- Cost UNKNOWN; fixed deterministic usage and latency are not real-model economics.
+- Temporal run `RUN-6A6924688ABCD0B4`: DEMO RESOLVED, 12 Evidence, Policy PASS/SIMULATE, HITL_SIMULATION_SKIPPED, zero effect receipts.
+
+### New benchmark work
+
+PR #196 adds:
+- `tools/summarize_ai_benchmark.py` and tests that require matching dataset/prompt identity, reject LIVE/effect-enabled reports, and preserve null usage/cost.
+- `.github/compose.ollama-benchmark.yml` for isolated local Ollama access to the existing Intelligence service.
+- `.github/workflows/ollama-ai-benchmark.yml` plus a quality-workflow call restricted to PR #196, with Qwen3 4B and 8B and three repeats by default.
+- The workflow is an experiment runner, not a model-promotion gate: it preserves model evaluation PASS/FAIL in artifacts while requiring a valid report. It has not yet produced real-model results at this update.
+
+### Schedule redirection
+
+All five existing ChatGPT schedules have been reoriented to the architecture/48h plan and immediate runs have been requested. 2/5 Portal was re-enabled after being paused. Exclusive ownership is ACME/Twin, Portal, NOC/Evidence/GLPI, Policy/HITL, and architecture/benchmark/release. No sixth schedule was created.
+
+### Release and host constraints
+
+- #188 remains the single preferred scheduled full-quality + read-only runtime-smoke proposal; #189 remains duplicate. Neither is enabled on main.
+- #146/#153 Debian auto-deploy remain disabled; #187 observability expansion remains deferred in favor of existing Prometheus/Grafana.
+- No Debian cron, runner, Docker service, `applied.sha`, stable branch, live DB, GLPI record, SSH or sudo operation was performed. Host access is not available through this GitHub session.
+- No direct main/stable push, merge, LIVE approval or production claim. Cumulative kit and Debian runtime remain NO-GO until a single main-based source SHA and clean install/upgrade/rollback evidence exist.
