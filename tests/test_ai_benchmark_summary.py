@@ -8,6 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from summarize_ai_benchmark import aggregate_reports
 
+
 def report(model="qwen3:4b", dataset="abc", total=20, complete=True, result="PASS"):
     return {
         "evaluation_id": "EVAL-" + str(total) + model,
@@ -49,6 +50,7 @@ def report(model="qwen3:4b", dataset="abc", total=20, complete=True, result="PAS
             "cases_analyzed": 5,
         },
     }
+
 
 class BenchmarkSummaryTests(unittest.TestCase):
     def write(self, directory, name, value):
@@ -124,23 +126,7 @@ class BenchmarkSummaryTests(unittest.TestCase):
             ]
             with self.assertRaisesRegex(ValueError, "prompt versions differ"):
                 aggregate_reports(paths)
-if __name__ == "__main__":
-    unittest.main()
-", workflow)
-        self.assertIn("AIOPS_LLM_MAX_OUTPUT_TOKENS:", compose)
-        self.assertIn("AIOPS_LLM_MAX_REQUEST_BYTES:", compose)
 
-    def test_prompt_version_must_match_for_comparison(self):
-        with tempfile.TemporaryDirectory() as directory:
-            first = report()
-            second = report()
-            second["prompt_version"] = "different"
-            paths = [
-                self.write(directory, "a-repeat-1.json", first),
-                self.write(directory, "a-repeat-2.json", second),
-            ]
-            with self.assertRaisesRegex(ValueError, "prompt versions differ"):
-                aggregate_reports(paths)
 
 if __name__ == "__main__":
     unittest.main()
