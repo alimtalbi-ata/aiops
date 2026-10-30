@@ -633,7 +633,10 @@ def demo_run_detail(rid:str):
     body+=panel("Timeline canonique des événements",
       table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
-    artifact_response=_get("/api/runs/"+key+"/demo-artifacts")
+    try:
+        artifact_response=_get("/api/runs/"+key+"/demo-artifacts")
+    except Exception:
+        artifact_response={"status":"UNKNOWN"}
     artifact_items=artifact_response.get("items") if isinstance(artifact_response,dict) else None
     artifact_items=[item for item in artifact_items if isinstance(item,dict)] if isinstance(artifact_items,list) else []
     artifact_rows=[(
