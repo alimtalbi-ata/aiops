@@ -225,5 +225,35 @@ class OfflineFailureInjection(unittest.TestCase):
         self.assertNotIn("finish_run", fake.calls)
 
 
+    def test_synthetic_blocked_stage_has_explicit_no_effect_receipt(self):
+        # Offline AST/fake Temporal only: no network, executor or real activity.
+        result, calls, _ = simulate(synthetic=True)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertNotIn("finish_run", calls)
+
+    def test_synthetic_completed_run_has_explicit_no_effect_receipt(self):
+        # A successful synthetic stage chain must not imply execution authority.
+        class CompletedSyntheticTemporal(FakeTemporal):
+            async def execute_activity(self, name, args, **kw):
+                if name == "execute_stage" and args["stage"] == "REMEDIATE":
+                    self.calls.append(name)
+                    return {"version": 3, "status": "PASS", "execution_allowed": False}
+                if name == "finish_run":
+                    self.calls.append(name)
+                    return {"version": 4, "status": "COMPLETED"}
+                return await super().execute_activity(name, args, **kw)
+
+        fake = CompletedSyntheticTemporal(synthetic=True)
+        obj = workflow_class(fake)()
+        result = asyncio.run(obj.run({
+            "run_id": "RUN-OFFLINE", "mode": "DEMO",
+            "scenario_id": "SCENARIO-OFFLINE",
+        }))
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertEqual(fake.calls, ["start_run", "execute_stage", "execute_stage", "finish_run"])
+
+
 if __name__ == "__main__":
     unittest.main()
