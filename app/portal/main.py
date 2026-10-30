@@ -163,8 +163,19 @@ def _verified_demo_run_rows(rows, *, max_results=12):
     return verified
 
 
-def _select_verified_demo_run(rows):
-    """Select one existing Core run, never an unverified inventory-only link."""
+def _select_verified_demo_run(rows, requested_run_id=None):
+    """Select a verified Core run; an explicit selection never falls back."""
+    if requested_run_id is not None:
+        if (not isinstance(requested_run_id, str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", requested_run_id)):
+            return (None, None)
+        listed = next((row for row in _qualified_demo_runs(rows)
+                       if row["run_id"] == requested_run_id), None)
+        if listed is None:
+            return (None, None)
+        detail = _get("/api/runs/" + requested_run_id)
+        return ((listed, detail) if _core_detail_matches_listed_run(detail, listed)
+                else (None, None))
     verified = _verified_demo_run_rows(rows, max_results=1)
     return verified[0] if verified else (None, None)
 
@@ -198,6 +209,7 @@ def _verified_operator_run_context(run_id, detail, listed):
         + esc(listed["mode"]) + ' · provenance déclarée par Core : <strong>'
         + esc(provenance) + '</strong> (non attestée indépendamment).</p>'
         '<nav aria-label="Navigation Core du même run">'
+        '<a href="/demo-studio?run_id=' + rid + '">Demo Studio (même run)</a> · '
         '<a href="/demo-studio/run/' + rid + '">Analyst / Critic</a> · '
         '<a href="/twin?run_id=' + rid + '">Twin</a> · '
         '<a href="/timeline?run_id=' + rid + '">Timeline</a> · '
@@ -270,6 +282,7 @@ def runs_page():
     links="".join(
         '<li><a href="/demo-studio/run/'+quote(row["run_id"],safe="")+'">'+esc(row["run_id"])+'</a>'
         ' · <a href="/timeline?run_id='+quote(row["run_id"],safe="")+'">Timeline</a>'
+        ' · <a href="/demo-studio?run_id='+quote(row["run_id"],safe="")+'">Studio (même run)</a>'
         ' · '+esc(row.get("status") or "UNKNOWN")+'</li>'
         for row, detail in verified
     )
@@ -400,8 +413,8 @@ def copilot_page():
     return shell("/copilot","Copilot","Conversation contextualisée ; une réponse non étayée ne constitue pas une preuve.",body)
 
 @app.get("/demo-studio",response_class=HTMLResponse)
-def demo_studio():
-    """Safe read-only ACME storyboard: no launch, effects, or credentials in browser."""
+def demo_studio(run_id: str | None = None):
+    """Safe read-only storyboard; an explicit run_id is never substituted."""
     dashboard=_get("/api/dashboard")
     graph=_get("/api/twin/graph",TWIN)
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
@@ -456,7 +469,7 @@ def demo_studio():
           '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
     # Navigate a real Core inventory entry; never substitute a fixture or LIVE run.
     import urllib.parse
-    selected, selected_detail=_select_verified_demo_run(runs)
+    selected, selected_detail=_select_verified_demo_run(runs, requested_run_id=run_id)
     if selected:
         rid=urllib.parse.quote(selected["run_id"],safe="")
         run_entry=('<p><strong>Run Core concordant (inventaire + détail, sans preuve métier) :</strong> '
@@ -466,6 +479,8 @@ def demo_studio():
                    +' (non attestée indépendamment)'
                    +' · <a href="/demo-studio/run/'+rid+'">Détail Analyst/Critic</a>'
                    +' · <a href="/timeline?run_id='+rid+'">Timeline du même run</a></p>')
+    elif run_id is not None:
+        run_entry='<p><strong>UNKNOWN</strong> — run Core demandé non qualifié ou contradictoire ; aucun autre run substitué.</p>'
     else:
         run_entry='<p><strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY valide et concordant accessible depuis Core.</p>'
     # Only correlate the incident explicitly referenced by this Core run inventory row.
@@ -596,6 +611,7 @@ def demo_run_detail(rid:str):
     body=panel("Parcours opérateur — même run Core",
       '<nav aria-label="Parcours opérateur ACME">'
       '<a href="/">Cockpit NOC</a> · <a href="/runs">Runs Core</a> · '
+      '<a href="/demo-studio?run_id='+key+'">Studio du même run</a> · '
       '<a href="/twin?run_id='+key+'">Digital Twin</a> · '
       '<a href="/timeline?run_id='+key+'">Timeline / Analyst / Critic</a> · '
       '<a href="/evidence?run_id='+key+'">Evidence</a> · '

@@ -1054,5 +1054,89 @@ class DemoV2Tests(unittest.TestCase):
         self.assertEqual(detail["run"]["synthetic"], True)
         self.assertEqual(len(reads), 13)
 
+
+    def test_studio_explicit_run_preserves_verified_selection(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [
+            {"run_id": "RUN-FIRST", "mode": "DEMO", "status": "RESOLVED", "synthetic": True},
+            {"run_id": "RUN-PINNED", "mode": "DEMO", "status": "BLOCKED", "synthetic": True},
+        ]
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/runs/RUN-PINNED":
+                return {"run": dict(rows[1]), "events": []}
+            if path == "/api/runs/RUN-FIRST":
+                raise AssertionError("must not substitute the first run")
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=rows),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/demo-studio?run_id=RUN-PINNED")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/demo-studio/run/RUN-PINNED"', response.text)
+        self.assertIn('href="/timeline?run_id=RUN-PINNED"', response.text)
+        self.assertIn('href="/policy-control?run_id=RUN-PINNED"', response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-FIRST"', response.text)
+        self.assertEqual(reads.count("/api/runs/RUN-PINNED"), 1)
+        self.assertNotIn("/api/runs/RUN-FIRST", reads)
+
+    def test_studio_explicit_unqualified_run_does_not_fall_back(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [
+            {"run_id": "RUN-VALID", "mode": "DEMO", "status": "RESOLVED"},
+            {"run_id": "RUN-FOREIGN", "mode": "DEMO", "status": "RESOLVED"},
+            {"run_id": "RUN-STALE", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-DUP", "mode": "DEMO", "status": "RESOLVED"},
+            {"run_id": "RUN-DUP", "mode": "STORY", "status": "BLOCKED"},
+        ]
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/runs/RUN-FOREIGN":
+                return {"run": {"run_id": "RUN-OTHER", "mode": "DEMO", "status": "RESOLVED"}}
+            if path == "/api/runs/RUN-STALE":
+                return {"run": {"run_id": "RUN-STALE", "mode": "DEMO", "status": "RUNNING"}}
+            if path == "/api/runs/RUN-VALID":
+                raise AssertionError("explicit selection must not fall back")
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=rows),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("read-only"))):
+            client = TestClient(portal_main.app)
+            for requested in ("RUN-FOREIGN", "RUN-STALE", "RUN-LIVE",
+                              "RUN-DUP", "RUN-MISSING", "bad/run"):
+                with self.subTest(requested=requested):
+                    response = client.get("/demo-studio", params={"run_id": requested})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("aucun autre run substitué", response.text)
+                    self.assertNotIn('href="/demo-studio/run/RUN-VALID"', response.text)
+                    self.assertNotIn('href="/timeline?run_id=RUN-VALID"', response.text)
+        self.assertNotIn("/api/runs/RUN-VALID", reads)
+
+    def test_runs_page_exposes_pinned_studio_link_only_for_verified_run(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [{"run_id": "RUN-OK", "mode": "DEMO", "status": "BLOCKED"},
+                {"run_id": "RUN-STALE", "mode": "DEMO", "status": "RESOLVED"}]
+        def source(path, base=None):
+            if path == "/api/runs/RUN-OK":
+                return {"run": dict(rows[0])}
+            if path == "/api/runs/RUN-STALE":
+                return {"run": dict(rows[1], status="RUNNING")}
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=rows),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/runs")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/demo-studio?run_id=RUN-OK"', response.text)
+        self.assertNotIn('href="/demo-studio?run_id=RUN-STALE"', response.text)
+
 if __name__ == "__main__":
     unittest.main()
