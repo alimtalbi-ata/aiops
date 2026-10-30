@@ -126,3 +126,7 @@ These were source-reviewed on the HITL candidate branch. Quality metrics exist; 
 ## 2026-10-30 14:00 UTC — clean-main exact-blob reuse boundary
 
 Draft [#201](https://github.com/alimtalbi-ata/aiops/pull/201) reuses (not reimplements) #198 `tools/find_acme_demo_run.py` (synthetic locator), #197 `app/shared/acme_evidence_utc_preflight.py` (timestamp preflight, not GLPI client), #199 `app/policy/simulate_fixture.py` (Policy evaluate() adapter, `execution_allowed=false`) and #195 architecture/docs. It adds **no** new Incident/Run store, AI engine, executor, GLPI connector or Portal. #194 OIDC/outbox and #196 AI telemetry are not included; #185 scenario UI not included. Source-verified synthetic != authenticated tenant/Evidence/GLPI/production.
+
+### 2026-10-30 14:16 UTC — release verification component
+
+Reuse `tools/check_cumulative_release_kit.py` from draft #201 (HEAD `03a5b0cce44e56d7ae315ee7df16e850a5e35b11`) as a **read-only package/source inventory gate**, not as a new packager or deployment engine. Inputs: ZIP, expected exact commit SHA, clean source checkout; outputs: JSON PASS/FAIL, checksum and source-file counts, explicit missing/unsafe members. Tests: `python3 -m unittest discover -s tests -p 'test_cumulative_release_kit_gate.py' -v` → 10/10 PASS locally. CI for new head pending. Mandatory files are a convergence acceptance contract, not evidence that #194 OIDC, #196 telemetry or rollback are already integrated. Continue to reuse existing `deploy/package.sh` and release scripts; T1–T5 remain unqualified.
