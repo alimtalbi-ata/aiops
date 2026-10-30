@@ -1,6 +1,6 @@
 """Proposed Core-owned ITSM cross-reference *read contract*, not a connector.
 
-This is a fail-closed projection for issue #203. The injectable \`\`core_get\`\`
+This is a fail-closed projection for issue #203. The injectable ``core_get``
 MUST be implemented by a trusted, tenant-scoped, authenticated Core client.
 Nothing in this module opens sockets, reads GLPI, or authenticates a caller.
 An ID in ticket text is never a link. This module is not wired into Portal.
@@ -69,8 +69,8 @@ def resolve_ticket_run(*, tenant_id: str, tenant_authenticated: bool,
                        now: datetime | None = None) -> dict:
     """Validate caller identity and Core read-back; expose Run only if VERIFIED.
 
-    \`\`tenant_*\`\` MUST come from trusted server auth middleware, never request
-    JSON. \`\`core_get\`\` MUST pin Core origin, use a scoped service credential,
+    ``tenant_*`` MUST come from trusted server auth middleware, never request
+    JSON. ``core_get`` MUST pin Core origin, use a scoped service credential,
     enforce GET/no redirects/response bounds, and return its own auth/ACL flags.
     The endpoint is a *proposal*, not implemented on main as of 2026-10-30.
     No GLPI call, ticket-text search, DB access or Evidence promotion occurs.
