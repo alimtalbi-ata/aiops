@@ -97,6 +97,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_simulation_policy_contract.py" -v
       - name: Secret preflight unit tests
         run: bash tests/test_preflight_secrets.sh
+      - name: Cumulative release kit inventory gate (offline negative paths)
+        run: python -m unittest discover -s tests -p "test_cumulative_release_kit_gate.py" -v
       - name: Static repository audit
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
