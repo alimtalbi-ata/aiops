@@ -253,7 +253,7 @@ def verify_oidc_assertion(token: str) -> dict[str, Any]:
     if not roles:
         raise IdentityError("oidc_subject_has_no_mapped_approval_role")
     subject_id = "oidc:" + hashlib.sha256(
-        (issuer + "\\0" + subject).encode("utf-8")
+        json.dumps([issuer, subject], separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     return {
         "issuer": issuer,
