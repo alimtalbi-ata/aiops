@@ -11,7 +11,7 @@ app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 log=logging.getLogger('aiops2.worker')
 worker_state={'polling':False,'last_error':None,'attempts':0}
 DENIAL_WORKER_OWNER='worker-'+uuid.uuid4().hex
-CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
+CORE=os.getenv('CORE_URL','http://aiops2-core:810');PORTAL=os.getenv('PORTAL_URL','http://aiops2-portal:777');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233');INTEL=os.getenv('INTELLIGENCE_URL','http://aiops2-intelligence:817')
 # Bounded by Temporal's 180-second activity deadline, including ledger writes.
@@ -363,6 +363,28 @@ def _execute_stage_blocking(a,attempt):
         try: call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_FAILED','event_key':f'{stage}:FAIL','status':'FAIL','confidence':0,'payload':{'error':str(exc)[:500],'attempt':attempt}})
         finally: raise
 @activity.defn
+async def sync_glpi_ticket(a):
+    """Best-effort publication; a GLPI outage must not alter the Core workflow outcome."""
+    rid = a["run_id"]
+    stage = str(a.get("stage", "UPDATE"))
+    last_error = None
+    for attempt in range(2):
+        try:
+            return await asyncio.to_thread(
+                post_json, PORTAL,
+                f"/api/internal/glpi/runs/{rid}/sync",
+                {"stage": stage}, timeout=20, token=ADMIN
+            )
+        except Exception as exc:
+            last_error = type(exc).__name__
+            if attempt == 0:
+                await asyncio.sleep(1)
+    log.warning("GLPI report sync failed for %s at %s: %s", rid, stage, last_error)
+    return {"status": "SYNC_FAILED", "run_id": rid, "sync_stage": stage,
+            "reason": last_error, "execution_allowed": False}
+
+
+@activity.defn
 async def finish_run(a):
     return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
 @app.get('/health')
@@ -386,7 +408,7 @@ async def worker_main():
   worker_state['attempts']+=1
   try:
    c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run,sync_glpi_ticket]):
     worker_state['polling']=True
     worker_state['last_error']=None
     await asyncio.Event().wait()
