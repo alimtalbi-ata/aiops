@@ -3,7 +3,7 @@
 **Author:** Abdelhalim Talbi  
 **Repository:** https://github.com/alimtalbi-ata/aiops  
 **Default branch:** `main` (protected by workflow; work on branches and propose PRs)  
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-30
 
 ## Why this document exists
 
@@ -140,3 +140,18 @@ Dedicated P0 branch from main `723ca6458c722a1aa0e57ddb5eee3374d20cc830`: shared
 ## 2026-10-28 11:15 Europe/Paris — Worker simulation/Policy fence (draft)
 
 Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current main. The Worker rejects invalid execution modes before Temporal connection or stage effects; DEMO/REPLAY/STORY send OBSERVE to Policy, not EXECUTE. LIVE continues to hit the existing emergency stop and Policy HITL refusal. The helper and AST regression tests are reused without a mass merge. This is unit/static qualification only; no Core/Temporal/Twin/Evidence integration or HITL approval claimed. See `docs/automation-runs/2026-10-28-1115-p0-worker-policy-mode.md` for exact CI status and follow-up.
+
+
+## 2026-10-30 — 48-hour architecture convergence and AI benchmark baseline
+
+- **Branch:** `architecture/48h-convergence-20261030`. This is a documentation/architecture tranche based on `main`; it does not merge application code or change a deployed environment.
+- **Reference architecture:** `docs/architecture/AIOPS2-REFERENCE-ARCHITECTURE-2026-10-30.md` establishes one control plane and data authority: Core owns Incident/Run and business transitions; Temporal owns durable orchestration; Evidence is append-only; Twin/CMDB supplies sourced topology; Analyst/Critic are advisory; Policy is deterministic; HITL binds a verified human decision to an immutable proposal; execution remains separately fenced; Portal is a read-model/API client.
+- **ITIL 4:** the customer story explicitly maps Monitoring/Event Management, Incident Management, Service Desk, Service Configuration, Problem, Knowledge, Change Enablement, Release/Deployment, Service Validation, Information Security, Service Level Management and Continual Improvement. This is process alignment, not certification.
+- **48-hour plan:** `docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md` sequences inventory, vertical-slice integration, AI benchmarking, failure injection and cumulative release-kit rehearsal.
+- **AI benchmark:** `docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md` reuses `tools/evaluate_ai_core.py`, `eval/ai-core-cases.json` and the Core evaluation ledger found on the HITL candidate branch. Source review found quality metrics but no qualified per-invocation token/cost/latency telemetry; those metrics must remain UNKNOWN until instrumented.
+- **Reuse and PR convergence:** `docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md` records current PRs #185, #187–#194 and the older schedule/deployment proposals. It directs selective reuse, not mass merge.
+- **Schedules:** `docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md` retains the five existing schedules and assigns 5/5 as architecture/release coordinator. It prefers #188's daily quality + 15-minute read-only runtime smoke design over duplicate #189 cadence, subject to merge and runner installation. Debian auto-deploy #146/#153 stays disabled.
+- **Customer story:** `docs/customer-story/ACME-P1-SAN-PAYMENTS-ITIL-DEMO-2026-10-30.md` defines one synthetic P1 journey with explicit provenance and no-effect boundaries.
+- **Observed repository state:** many open PRs overlap Core, Portal, Worker, Compose and quality workflows. #185 is a large ACME candidate whose PR body reports earlier CI/package evidence and DEMO_LOCAL=GO / RELEASE_STABLE=NO_GO; #190's latest head requires CI recheck; #192/#193/#194 are complementary but require identity and schema convergence; #187 is untested observability expansion; #188/#189 duplicate schedule intent. No PR is merged by this tranche.
+- **Operational limits:** no SSH/Debian host access, runner installation, cron modification, Docker restart, live migration, production data mutation, GLPI write, stable promotion or LIVE remediation was performed. Current source and CI findings are not host runtime proof.
+- **Next:** revalidate exact current PR heads and CI, implement a shared AI invocation telemetry contract in the existing evaluator/provider path, integrate the single ACME customer journey, then package only after clean install/upgrade/rollback and exact-SHA gates.
