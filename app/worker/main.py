@@ -191,13 +191,13 @@ def _maybe_create_synthetic_hitl_proposal(rid, mode, scenario, analysis_event,
     return None
 
 
-def _sync_glpi_run_best_effort(run_id, stage):
+def _sync_glpi_run_best_effort(run_id, stage, timeout=20):
     """Publish a current Core snapshot without changing the Temporal result."""
     last_error = None
     try:
         return post_json(
             PORTAL, f"/api/internal/glpi/runs/{run_id}/sync",
-            {"stage": str(stage)}, timeout=20, token=ADMIN
+            {"stage": str(stage)}, timeout=timeout, token=ADMIN
         )
     except Exception as exc:
         last_error = type(exc).__name__
@@ -213,14 +213,13 @@ async def start_run(a):
         call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
         {'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'}
     )
-    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], "STARTED")
     return result
 
 
 @activity.defn
 async def execute_stage(a):
     result = await asyncio.to_thread(_execute_stage_blocking, a, activity.info().attempt)
-    if a["stage"] in {"OBSERVE", "DGX_ANALYST", "DGX_CRITIC", "POLICY", "HITL", "VERIFY"} or result.get("status") == "BLOCKED":
+    if a["stage"] in {"NORMALIZE", "OBSERVE", "DGX_ANALYST", "DGX_CRITIC", "POLICY", "HITL", "VERIFY"} or result.get("status") == "BLOCKED":
         await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], a["stage"])
     return result
 
@@ -522,7 +521,7 @@ async def finish_run(a):
         call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
         {'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'}
     )
-    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], "FINAL")
+    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], "FINAL", 8)
     return result
 @app.get('/health')
 def health():
