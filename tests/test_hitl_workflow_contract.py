@@ -31,7 +31,7 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         source = pathlib.Path("app/worker/workflow.py").read_text()
         self.assertIn("hitl_proposal_not_persisted", source)
         self.assertIn('if stage == "HITL" and args["mode"] == "LIVE" and not (', source)
-        self.assertIn('if stage == "HITL":', source)
+        self.assertIn('if stage == "HITL" and args["mode"] == "LIVE":', source)
         self.assertLess(source.index("hitl_proposal_not_persisted"),
                         source.index('"finish_run"'))
         self.assertIn('"execution_allowed": False', source)
