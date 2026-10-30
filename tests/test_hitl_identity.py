@@ -7,6 +7,7 @@ from shared.hitl_identity import (
     authorize_critical_approvals,
     authorize_sudo_request,
     issue_simulated_assertion,
+    simulator_ready,
     verify_assertion,
 )
 
@@ -44,6 +45,11 @@ class HitlIdentityTests(unittest.TestCase):
         with patch.dict(os.environ, {"AIOPS_HITL_SIMULATOR_ENABLED": "false"}):
             with self.assertRaisesRegex(IdentityError, "identity_simulator_disabled"):
                 issue_simulated_assertion("operator.alex")
+
+    def test_simulator_readiness_requires_signing_key(self):
+        self.assertTrue(simulator_ready())
+        with patch.dict(os.environ, {"AIOPS_HITL_SIMULATOR_SIGNING_KEY": ""}):
+            self.assertFalse(simulator_ready())
 
     def test_critical_approval_requires_two_distinct_subjects_and_roles(self):
         self.assertFalse(authorize_critical_approvals([
