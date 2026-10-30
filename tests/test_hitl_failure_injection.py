@@ -162,6 +162,40 @@ class OfflineFailureInjection(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotIn("finish_run", calls)
 
+    def test_matching_approve_signal_is_still_no_effect(self):
+        # A matching Temporal signal is notification, never an execution grant.
+        result, calls, state = simulate(signal(decision="APPROVE"))
+        self.assertFalse(state._hitl_conflict)
+        self.assertEqual(result["reason"], "human_decision_recorded_execution_gate_closed")
+        self.assertEqual(result["human_decision"], "APPROVE")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertEqual(calls, ["start_run", "execute_stage"])
+
+    def test_stale_proposal_hash_signal_blocks_without_effect(self):
+        result, calls, _ = simulate(signal(proposal_hash="stale-hash"))
+        self.assertEqual(result["reason"], "hitl_signal_scope_mismatch")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertNotIn("finish_run", calls)
+
+    def test_offline_worker_restart_without_replayed_signal_times_out_closed(self):
+        # Fresh workflow instance with lost notification: offline timeout emulation,
+        # NOT a real Temporal replay/restart or PostgreSQL integration test.
+        class LostSignalTemporal(FakeTemporal):
+            async def wait_condition(self, predicate, **kw):
+                if predicate():
+                    raise AssertionError("unexpected_persisted_signal")
+                raise asyncio.TimeoutError
+
+        fake = LostSignalTemporal()
+        restarted = workflow_class(fake)()
+        result = asyncio.run(restarted.run({
+            "run_id": "RUN-OFFLINE", "mode": "LIVE",
+            "scenario_id": "SCENARIO-OFFLINE",
+        }))
+        self.assertEqual(result["reason"], "hitl_timeout_or_conflicting_signal")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertEqual(fake.calls, ["start_run", "execute_stage"])
+
     def test_synthetic_human_signal_is_not_authority(self):
         result, calls, _ = simulate(signal(decision="APPROVE"), synthetic=True)
         self.assertEqual(result["status"], "BLOCKED")
