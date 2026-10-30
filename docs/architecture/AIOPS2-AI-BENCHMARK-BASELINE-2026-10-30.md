@@ -58,3 +58,7 @@ Fresh-extraction `#185@2b2af9c` AI harness `python3 -m unittest discover -s test
 ## 2026-10-30 14:00 UTC — benchmark boundary after main-based staging
 
 Draft #201 `2ceda14c` **does not** integrate #196 per-call telemetry or invoke a model. The existing CI deterministic five-case/ten-placeholder-call/twenty-placeholder-token exercise is a wiring test only; its latency numbers are not model p50/p95 and its quality 1.0 is not model accuracy. Provider-reported input/output/cached/reasoning tokens, real-model retries/latency, pricing provenance, USD cost and enforced tenant/run budgets remain **UNKNOWN / NOT_IMPLEMENTED / NOT_TESTED**. The separate #196 exact-head four workflows are green but on a divergent stacked base; selectively port only with #194 OIDC/outbox contract reconciliation and new exact combined-SHA tests. No token estimates or costs may be promoted as provider facts.
+
+## 2026-10-30 14:16 UTC — no model performance promotion
+
+#196 has advanced to `cba1c696a797bb8f3b946cb75bd9a399ec54727f`; V2.8/Offline/Historical exact-head workflows are SUCCESS, but its Quality workflow 41069509546 was IN_PROGRESS at this audit. The new #201 release inventory gate requires the telemetry implementation document and benchmark summarizer in a cumulative ZIP; it **does not** measure models or prove provider usage. The prior 5-case deterministic CI scores and 20 placeholder tokens remain synthetic wiring data, not provider-reported consumption. Real-model p50/p95, costs, pricing provenance and tenant/run enforcement remain UNKNOWN/NOT_IMPLEMENTED.
