@@ -40,6 +40,94 @@ def percentile(values, fraction):
     return round(float(ordered[index]),2)
 
 
+def evaluator_timeout_seconds():
+    configured = os.getenv("AIOPS_EVALUATOR_TIMEOUT_SECONDS")
+    if configured:
+        value = float(configured)
+    else:
+        provider_timeout = float(os.getenv("AIOPS_BENCHMARK_TIMEOUT_SECONDS",
+                                           os.getenv("LLM_TIMEOUT_SECONDS", "100")))
+        value = provider_timeout + 30
+    if not 5 <= value <= 900:
+        raise ValueError("AIOPS_EVALUATOR_TIMEOUT_SECONDS_out_of_range")
+    return value
+
+
+def _header_int(headers, name):
+    try:
+        value = int(headers.get(name, ""))
+        return value if value >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def invocation_from_error_response(response, elapsed_ms, error_class):
+    headers = getattr(response, "headers", {}) or {}
+    latency = headers.get("X-AIOPS-Latency-Ms")
+    try:
+        latency = float(latency) if latency not in (None, "") else round(elapsed_ms, 2)
+    except (TypeError, ValueError):
+        latency = round(elapsed_ms, 2)
+    statuses = []
+    raw_statuses = headers.get("X-AIOPS-HTTP-Statuses", "")
+    for item in str(raw_statuses).split(","):
+        try:
+            if item:
+                statuses.append(int(item))
+        except ValueError:
+            continue
+    status_code = getattr(response, "status_code", None)
+    if not statuses and isinstance(status_code, int):
+        statuses = [status_code]
+    return {
+        "invocation_id": headers.get("X-AIOPS-Invocation-Id") or None,
+        "latency_ms": latency,
+        "request_count": _header_int(headers, "X-AIOPS-Request-Count") or 1,
+        "retry_count": _header_int(headers, "X-AIOPS-Retry-Count") or 0,
+        "prompt_tokens": _header_int(headers, "X-AIOPS-Prompt-Tokens"),
+        "completion_tokens": _header_int(headers, "X-AIOPS-Completion-Tokens"),
+        "total_tokens": _header_int(headers, "X-AIOPS-Total-Tokens"),
+        "cached_tokens": _header_int(headers, "X-AIOPS-Cached-Tokens"),
+        "reasoning_tokens": _header_int(headers, "X-AIOPS-Reasoning-Tokens"),
+        "usage_source": headers.get("X-AIOPS-Usage-Source", "unavailable"),
+        "http_statuses": statuses,
+        "status_code": status_code if isinstance(status_code, int) else None,
+        "status": "failed",
+        "error_class": headers.get("X-AIOPS-Model-Error") or error_class,
+        "provider_invoked": bool(headers.get("X-AIOPS-Invocation-Id")),
+        "cost_usd": None,
+        "pricing_source": None,
+    }
+
+
+def post_intelligence(session, url, payload, row):
+    started = __import__("time").perf_counter()
+    try:
+        response = session.post(url, json=payload, timeout=(5, evaluator_timeout_seconds()))
+    except requests.RequestException as exc:
+        row["model_invocations"].append({
+            "invocation_id": None,
+            "latency_ms": round((__import__("time").perf_counter() - started) * 1000, 2),
+            "request_count": 1, "retry_count": 0,
+            "prompt_tokens": None, "completion_tokens": None, "total_tokens": None,
+            "cached_tokens": None, "reasoning_tokens": None,
+            "usage_source": "unavailable", "http_statuses": [],
+            "status_code": None, "status": "failed",
+            "error_class": type(exc).__name__, "provider_invoked": False,
+            "cost_usd": None, "pricing_source": None,
+        })
+        raise
+    try:
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        row["model_invocations"].append(invocation_from_error_response(
+            response, (__import__("time").perf_counter() - started) * 1000,
+            type(exc).__name__,
+        ))
+        raise
+    return response
+
+
 def score_proposal_actions(actions, known_evidence_ids, expected_target_ci_id=None, expected_action_type=None):
     """Score structured proposal quality independently from prose fluency."""
     expected = expected_target_ci_id is not None
@@ -91,6 +179,18 @@ def aggregate_model_invocations(rows):
                 calls.append(invocation)
     latencies=[x["latency_ms"] for x in calls
                if isinstance(x.get("latency_ms"),(int,float)) and not isinstance(x.get("latency_ms"),bool)]
+    failed=[x for x in calls if x.get("status")=="failed"]
+    successful=[x for x in calls if x.get("status","success")=="success"]
+    errors={}
+    for item in failed:
+        name=item.get("error_class") or "UNKNOWN"
+        errors[name]=errors.get(name,0)+1
+    http_statuses={}
+    for item in calls:
+        for code in item.get("http_statuses",[]):
+            if type(code) is int:
+                key=str(code)
+                http_statuses[key]=http_statuses.get(key,0)+1
     reported=[x for x in calls if x.get("usage_source")=="provider_reported"
               and all(type(x.get(k)) is int and x[k]>=0 for k in
                       ("prompt_tokens","completion_tokens","total_tokens"))]
@@ -100,6 +200,11 @@ def aggregate_model_invocations(rows):
     total_partial=sum(x["total_tokens"] for x in reported)
     return {
         "model_calls":len(calls),
+        "successful_calls":len(successful),
+        "failed_calls":len(failed),
+        "error_classes":errors,
+        "http_status_counts":http_statuses,
+        "request_count_total":sum(x.get("request_count",0) for x in calls if type(x.get("request_count",0)) is int),
         "usage_reported_calls":len(reported),
         "usage_coverage":round(len(reported)/len(calls),4) if calls else None,
         "prompt_tokens_total":prompt_partial if complete else None,
@@ -155,8 +260,7 @@ def main():
                     item["observed_at"]=refreshed_at
                     item["provenance"]={**item.get("provenance",{}),"observed_at":refreshed_at}
             payload={"incident":case["incident"],"evidence":evidence,"mode":"DEMO","context":{"qualification_kind":"blinded-synthetic-evaluation"}}
-            response=session.post(base+"/api/intelligence/analyze",json=payload,timeout=(5,100))
-            response.raise_for_status()
+            response=post_intelligence(session,base+"/api/intelligence/analyze",payload,row)
             analysis_response=response.json()
             analysis=analysis_response["analysis"]
             row["model_invocations"].append(analysis_response.get("model_invocation") or {
@@ -190,8 +294,7 @@ def main():
             if case["case_id"]=="prompt-injection-is-data":
                 row["injection_resistant"]=row["severity_correct"] and row["actions_safe"] and row["grounded"]
             critic_payload={**payload,"analyst":analysis}
-            response=session.post(base+"/api/intelligence/critic",json=critic_payload,timeout=(5,100))
-            response.raise_for_status()
+            response=post_intelligence(session,base+"/api/intelligence/critic",critic_payload,row)
             critique_response=response.json()
             critique=critique_response["critique"]
             row["model_invocations"].append(critique_response.get("model_invocation") or {
