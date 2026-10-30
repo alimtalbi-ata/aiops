@@ -32,7 +32,8 @@ jobs:
           AIOPS_POLICY_STATE_DB: ${{ runner.temp }}/aiops-policy-safety.sqlite3
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
-        run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+        run: |
+          python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
           python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
       - name: Analyst Critic fail-closed fault injection
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
@@ -333,6 +334,7 @@ jobs:
           python -m compileall -q app tests tools
           python -m unittest discover -s tests -p "test_policy_safety.py" -v
           python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+          python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
           python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
           python -m unittest discover -s tests -p "test_portal_demo.py" -v
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
