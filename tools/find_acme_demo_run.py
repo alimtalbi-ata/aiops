@@ -130,8 +130,8 @@ def qualify(base, portal, get=fetch_json):
 
 
 
-_EVIDENCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\\Z")
-_EVIDENCE_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\\Z")
+_EVIDENCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_EVIDENCE_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 
 
 def _qualified_evidence_items(items):
