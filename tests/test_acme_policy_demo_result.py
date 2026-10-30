@@ -279,7 +279,8 @@ class PolicyDemoResultTests(unittest.TestCase):
         r["projection"]["gate"]["target_ci"] = "ACME-GLPI-01"
         for snapshot in ("before", "after"):
             r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
-        r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
+        if "projected_state" in r["projection"]["rollback"]:
+            r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
         self.assertEqual(present_demo_policy_result(r)["policy"]["decision"], "SIMULATE")
 
     def test_recipe_catalog_and_target_scope_fail_closed(self):
@@ -328,6 +329,10 @@ class PolicyDemoResultTests(unittest.TestCase):
                 if status == "SIMULATED_NO_RECOVERY":
                     r["projection"]["recipe_id"] = "glpi-api-ticket-note"
                     r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
+                    r["projection"]["target_ci"] = "ACME-GLPI-01"
+                    r["projection"]["gate"]["target_ci"] = "ACME-GLPI-01"
+                    for snapshot in ("before", "after"):
+                        r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
                 r["projection"]["reason"] = "RUNTIME_APPROVED"
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
