@@ -173,3 +173,13 @@ Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current
 - #193 exact-head Quality [41024125286](https://github.com/alimtalbi-ata/aiops/actions/runs/41024125286) initially failed during pip download (`IncompleteRead`), not a test assertion; the targeted rerun finished six jobs SUCCESS. #196 [388b7c4](https://github.com/alimtalbi-ata/aiops/pull/196) now implements provider usage/latency telemetry on top of #194 and its four exact-head workflows succeeded; not yet integrated into #185 or validated on a deployed model.
 - The existing evaluator dataset contains five synthetic cases; local archive harness unit tests were **3/3 PASS**, with dataset SHA256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`. No model inference was executed; p50/p95, provider tokens and cost remain UNKNOWN. See `docs/architecture/AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md`.
 - `deploy/aiops2-stable` still matches `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`. The stable portal deployer copies only `demo_v2.py` and its test and patches `main.py` locally; the candidate poller enforces stable-only and refuses untransported paths. Actual installed Debian cron, `applied.sha`, four-image transport, GLPI/Evidence read and rollback are not attested. **Single release decision: NO-GO.**
+
+
+### 2026-10-30 12:20 UTC — artifact-level AI benchmark inspection
+
+- Downloaded and inspected exact CI runtime report artifact `12974854416` from AIOps quality run `41053026110`.
+- Evaluation `EVAL-d7fd00c3b558414e82df074c02502ddc`, dataset `aiops-core-qualification-1.0.0`, SHA-256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`, provider/model `openai-compatible / ci-deterministic`.
+- Five cases passed all current quality metrics (1.00 each). Ten model calls had 100% fixture usage coverage, 20 fixed placeholder tokens total, P50 1.69 ms, P95 3.24 ms, zero retries; cost UNKNOWN.
+- **Interpretation:** the CI provider reports fixed 1+1 token placeholders per call. This verifies token/latency telemetry wiring and evaluator aggregation only; it is not a real DGX/model benchmark or cost estimate.
+- Synthetic Runtime E2E Run `RUN-FB8DDB7C6B22B5F4`: RESOLVED, 12 evidence records, P1, Critic validated, Policy PASS/SIMULATE, zero effect receipts, LIVE disabled.
+- Detailed report: `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`.
