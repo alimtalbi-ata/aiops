@@ -99,5 +99,23 @@ class PolicySimulateFixtureTests(unittest.TestCase):
             self.assertIs(result["execution_allowed"], False)
 
 
+    def test_simulate_fixture_effect_fence_with_forged_approval_claim(self):
+        # A sample actor and an advisory human_approved boolean are not authority.
+        # All synthetic modes must explicitly deny both effect and execution.
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for approved in (False, True):
+                with self.subTest(mode=mode, approved=approved):
+                    receipt = present_simulate_fixture(
+                        decision(mode=mode, human_approved=approved),
+                        timestamp="2026-10-29T12:00:00+00:00",
+                        fixture_actor_id="oidc:forged-admin",
+                    )
+                    self.assertIs(receipt["execution_allowed"], False)
+                    self.assertIs(receipt["effect_allowed"], False)
+                    self.assertIs(receipt["human"]["authenticated_runtime"], False)
+                    self.assertIs(receipt["human"]["approval_valid_now"], False)
+                    self.assertIs(receipt["audit"]["runtime_verified"], False)
+
+
 if __name__ == "__main__":
     unittest.main()
