@@ -13,6 +13,7 @@ import json
 import os
 import time
 import hashlib
+from functools import lru_cache
 from typing import Any
 
 ISSUER = "aiops2-identity-simulator"
@@ -180,6 +181,12 @@ def _oidc_group_role_map() -> dict[str, tuple[str, ...]]:
     return result
 
 
+@lru_cache(maxsize=4)
+def _oidc_jwks_client(jwks_url: str):
+    from jwt import PyJWKClient
+    return PyJWKClient(jwks_url, cache_keys=True, lifespan=300, timeout=5)
+
+
 def verify_oidc_assertion(token: str) -> dict[str, Any]:
     """Verify a short-lived RS256 OIDC JWT and derive roles from immutable group IDs.
 
@@ -191,17 +198,16 @@ def verify_oidc_assertion(token: str) -> dict[str, Any]:
         raise IdentityError("oidc_identity_provider_not_configured")
     if not isinstance(token, str) or not token or len(token) > 16384:
         raise IdentityError("invalid_oidc_assertion")
-    issuer = os.environ["AIOPS_HITL_OIDC_ISSUER"].rstrip("/")
+    issuer = os.environ["AIOPS_HITL_OIDC_ISSUER"].strip()
     audience = os.environ["AIOPS_HITL_OIDC_AUDIENCE"].strip()
     jwks_url = os.environ["AIOPS_HITL_OIDC_JWKS_URL"].strip()
     group_claim = os.getenv("AIOPS_HITL_OIDC_GROUP_CLAIM", "groups").strip()
     try:
         import jwt
-        from jwt import PyJWKClient
     except ImportError as exc:
         raise IdentityError("oidc_jwt_verifier_dependency_missing") from exc
     try:
-        client = PyJWKClient(jwks_url, cache_keys=True, lifespan=300, timeout=5)
+        client = _oidc_jwks_client(jwks_url)
         signing_key = client.get_signing_key_from_jwt(token)
         claims = jwt.decode(
             token, signing_key.key, algorithms=["RS256"],
@@ -223,6 +229,20 @@ def verify_oidc_assertion(token: str) -> dict[str, Any]:
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject.strip() or len(subject) > 512:
         raise IdentityError("oidc_subject_invalid")
+    jti = claims.get("jti")
+    if not isinstance(jti, str) or not jti.strip() or len(jti) > 512:
+        raise IdentityError("oidc_jti_invalid")
+    required_amr = os.getenv("AIOPS_HITL_OIDC_REQUIRED_AMR", "mfa").strip()
+    if required_amr:
+        amr = claims.get("amr")
+        if not isinstance(amr, list) or required_amr not in amr:
+            raise IdentityError("oidc_mfa_assurance_required")
+    max_auth_age = int(os.getenv("AIOPS_HITL_OIDC_MAX_AUTH_AGE_SECONDS", "300"))
+    auth_time = claims.get("auth_time")
+    if (type(auth_time) is not int or max_auth_age < 60
+            or max_auth_age > 3600 or now - auth_time > max_auth_age
+            or auth_time > now + 30):
+        raise IdentityError("oidc_recent_authentication_required")
     groups = claims.get(group_claim)
     if not isinstance(groups, list) or not groups or any(
         not isinstance(group, str) or not group.strip() for group in groups
@@ -241,7 +261,7 @@ def verify_oidc_assertion(token: str) -> dict[str, Any]:
         "display_name": str(claims.get("name") or claims.get("preferred_username") or subject)[:200],
         "groups": sorted(set(groups)),
         "roles": roles,
-        "jti": str(claims["jti"]),
+        "jti": jti,
         "issued_at": issued,
         "expires_at": expires,
         "mapping_version": os.getenv("AIOPS_HITL_OIDC_MAPPING_VERSION", "unversioned"),
