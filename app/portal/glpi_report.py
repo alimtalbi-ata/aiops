@@ -128,6 +128,27 @@ def render_run_report(detail, ledger=None, *, sync_stage="UPDATE"):
     else:
         out.append("<p>Critique indisponible.</p>")
 
+    hitl_events = [
+        event for event in events
+        if event.get("event_type") == "HITL_PROPOSAL_CREATED"
+        and isinstance(event.get("payload"), dict)
+    ]
+    out.append("<h3>Proposition HITL</h3>")
+    if hitl_events:
+        out.append("<ul>")
+        for event in hitl_events:
+            payload = event["payload"]
+            out.append("<li><strong>Proposition :</strong> " +
+                       esc(payload.get("proposal_id")) +
+                       "<br><strong>Empreinte :</strong> " +
+                       esc(payload.get("proposal_hash")) +
+                       "<br><strong>Statut :</strong> " +
+                       esc(payload.get("proposal_status")) +
+                       "<br><strong>Exécution :</strong> NON AUTORISÉE</li>")
+        out.append("</ul>")
+    else:
+        out.append("<p>Aucune proposition HITL créée pour ce Run.</p>")
+
     out.append("<h3>Décisions Policy</h3>")
     if policies:
         out.append("<ul>")
@@ -151,7 +172,7 @@ def render_run_report(detail, ledger=None, *, sync_stage="UPDATE"):
     out.append(_list_section("Références de preuves", evidence))
     final_status = run.get("status")
     if final_status == "RESOLVED":
-        closing = "Run déclaré RESOLVED par Core. Vérification métier externe à confirmer si aucun résultat VERIFY explicite n'est présent."
+        closing = "Run déclaré RESOLVED par Core. En DEMO, ce statut décrit le résultat du workflow synthétique ; il ne prouve pas un rétablissement en production. Le stage VERIFY doit être accompagné de mesures explicites pour constituer une vérification métier."
     elif final_status == "BLOCKED":
         closing = "Run bloqué. Une intervention humaine ou des éléments complémentaires sont nécessaires."
     else:
