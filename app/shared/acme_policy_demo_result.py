@@ -72,6 +72,15 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("proposal_binding_invalid")
     if projection.get("target_ci") != gate.get("target_ci") or not projection.get("target_ci"):
         raise ValueError("target_binding_invalid")
+    # The receipt digest binds the proposal digest, but the presentation must
+    # also refuse a mixed projection/gate proposal identity. No runtime proof.
+    proposal_id = projection.get("proposal_id")
+    if (
+        not isinstance(proposal_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", proposal_id)
+        or gate.get("proposal_id") != proposal_id
+    ):
+        raise ValueError("proposal_identity_binding_invalid")
     # Reuse the existing remediation_lab catalog instead of inventing a second
     # policy engine. A syntactically valid receipt digest does not authorize
     # a recipe on a different CI family (e.g. GLPI on a Linux target).
@@ -109,7 +118,9 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         or rollback.get("effect_applied") is not False
         or rollback.get("status") not in {"NOT_REQUIRED", "PROJECTED_ONLY", "AVAILABLE_AS_PROJECTION"}
         or rollback.get("executed", False) is not False
-        or ("projected_state" in rollback and rollback["projected_state"] != projection.get("before"))
+        # The existing projection builder always supplies a no-effect
+        # projected rollback state; absence must not be called "available".
+        or rollback.get("projected_state") != projection.get("before")
     ):
         raise ValueError("rollback_effect_claim_forbidden")
     before, after = projection.get("before"), projection.get("after")
