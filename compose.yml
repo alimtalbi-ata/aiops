@@ -28,6 +28,9 @@ services:
       WORKER_URL: http://aiops2-worker:815
       ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_HITL_IDENTITY_MODE: ${AIOPS_HITL_IDENTITY_MODE:-DISABLED}
+      AIOPS_HITL_SIMULATOR_ENABLED: ${AIOPS_HITL_SIMULATOR_ENABLED:-false}
+      AIOPS_HITL_SIMULATOR_SIGNING_KEY: ${AIOPS_HITL_SIMULATOR_SIGNING_KEY:-}
     expose: ["810"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
