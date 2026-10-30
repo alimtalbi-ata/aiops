@@ -191,14 +191,41 @@ def _maybe_create_synthetic_hitl_proposal(rid, mode, scenario, analysis_event,
     return None
 
 
+def _sync_glpi_run_best_effort(run_id, stage):
+    """Publish a current Core snapshot without changing the Temporal result."""
+    last_error = None
+    for attempt in range(2):
+        try:
+            return post_json(
+                PORTAL, f"/api/internal/glpi/runs/{run_id}/sync",
+                {"stage": str(stage)}, timeout=20, token=ADMIN
+            )
+        except Exception as exc:
+            last_error = type(exc).__name__
+            if attempt == 0:
+                import time
+                time.sleep(1)
+    log.warning("GLPI report sync failed for %s at %s: %s", run_id, stage, last_error)
+    return {"status": "SYNC_FAILED", "run_id": run_id,
+            "sync_stage": str(stage), "reason": last_error}
+
+
 @activity.defn
 async def start_run(a):
     # Requests are blocking I/O. Run them off the shared FastAPI/Temporal event loop.
-    return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
+    result = await asyncio.to_thread(
+        call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+        {'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'}
+    )
+    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], "STARTED")
+    return result
+
 
 @activity.defn
 async def execute_stage(a):
-    return await asyncio.to_thread(_execute_stage_blocking,a,activity.info().attempt)
+    result = await asyncio.to_thread(_execute_stage_blocking, a, activity.info().attempt)
+    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], a["stage"])
+    return result
 
 def recover_committed_critic_block(rid):
     detail=get_json(CORE,f'/api/runs/{rid}',token=ADMIN)
@@ -493,30 +520,13 @@ def _execute_stage_blocking(a,attempt):
         try: call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_FAILED','event_key':f'{stage}:FAIL','status':'FAIL','confidence':0,'payload':{'error':str(exc)[:500],'attempt':attempt}})
         finally: raise
 @activity.defn
-async def sync_glpi_ticket(a):
-    """Best-effort publication; a GLPI outage must not alter the Core workflow outcome."""
-    rid = a["run_id"]
-    stage = str(a.get("stage", "UPDATE"))
-    last_error = None
-    for attempt in range(2):
-        try:
-            return await asyncio.to_thread(
-                post_json, PORTAL,
-                f"/api/internal/glpi/runs/{rid}/sync",
-                {"stage": stage}, timeout=20, token=ADMIN
-            )
-        except Exception as exc:
-            last_error = type(exc).__name__
-            if attempt == 0:
-                await asyncio.sleep(1)
-    log.warning("GLPI report sync failed for %s at %s: %s", rid, stage, last_error)
-    return {"status": "SYNC_FAILED", "run_id": rid, "sync_stage": stage,
-            "reason": last_error, "execution_allowed": False}
-
-
-@activity.defn
 async def finish_run(a):
-    return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
+    result = await asyncio.to_thread(
+        call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+        {'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'}
+    )
+    await asyncio.to_thread(_sync_glpi_run_best_effort, a["run_id"], "FINAL")
+    return result
 @app.get('/health')
 def health():
  if not worker_state['polling']:
@@ -538,7 +548,7 @@ async def worker_main():
   worker_state['attempts']+=1
   try:
    c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run,sync_glpi_ticket]):
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):
     worker_state['polling']=True
     worker_state['last_error']=None
     await asyncio.Event().wait()
