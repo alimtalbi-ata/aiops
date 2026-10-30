@@ -180,6 +180,32 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.json()["state"], "UNAVAILABLE")
         self.assertNotIn("sensitive host", response.text)
 
+    def test_acme_story_marker_remains_synthetic_on_all_run_read_states(self):
+        # The fixed ACME story label is not an assertion about the requested
+        # Run; even a 401/403/503 page must not look like a real Payments impact.
+        with patch.object(acme_run_detail, "_read_core_run", return_value=run()):
+            verified = self.get("/runs/" + RID)
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=urllib.error.HTTPError(
+                              "http://core", 403, "denied", {}, None)):
+            denied = self.get("/runs/" + RID)
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=TimeoutError("upstream")):
+            unavailable = self.get("/runs/" + RID)
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("anonymous Core read")) as core:
+            anonymous = self.get("/runs/" + RID, authorized=False)
+        core.assert_not_called()
+        for page, expected in ((verified, 200), (denied, 403),
+                               (unavailable, 503), (anonymous, 401)):
+            with self.subTest(status=expected):
+                self.assertEqual(page.status_code, expected)
+                self.assertIn('data-story-provenance="SYNTHETIC"', page.text)
+                self.assertIn("ACME P1 SAN→Payments", page.text)
+                self.assertIn("not linked to this Run or runtime-attested", page.text)
+                self.assertEqual(page.headers["cache-control"], "no-store")
+        self.assertIn("provenance: UNKNOWN", anonymous.text)
+
     def test_html_page_is_same_portal_route_and_fail_closed_without_auth(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no anonymous read")):
