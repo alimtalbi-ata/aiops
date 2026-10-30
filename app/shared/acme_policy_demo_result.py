@@ -72,6 +72,21 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("proposal_binding_invalid")
     if projection.get("target_ci") != gate.get("target_ci") or not projection.get("target_ci"):
         raise ValueError("target_binding_invalid")
+    # Reuse the existing remediation_lab catalog instead of inventing a second
+    # policy engine. A syntactically valid receipt digest does not authorize
+    # a recipe on a different CI family (e.g. GLPI on a Linux target).
+    target = projection["target_ci"]
+    if not isinstance(target, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", target):
+        raise ValueError("target_identity_invalid")
+    from .remediation_lab import load_catalog
+    recipe_id, recipe_version = projection.get("recipe_id"), gate.get("recipe_version")
+    if not isinstance(recipe_id, str) or not isinstance(recipe_version, str):
+        raise ValueError("recipe_not_allowlisted")
+    recipe = load_catalog().get((recipe_id, recipe_version))
+    if recipe is None or recipe.get("implementation") != "SIMULATOR_ONLY":
+        raise ValueError("recipe_not_allowlisted")
+    if not target.startswith(recipe["target_prefix"]):
+        raise ValueError("recipe_target_scope_invalid")
     if (
         gate.get("executor") != "NO_EFFECT_SIMULATOR"
         or gate.get("effect_applied") is not False
