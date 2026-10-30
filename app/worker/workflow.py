@@ -107,7 +107,7 @@ class IncidentWorkflow:
 
             # A durable wait is allowed only with a persisted proposal binding.
             # A browser signal alone is never execution authority.
-            if stage == "HITL":
+            if stage == "HITL" and args["mode"] == "LIVE":
                 proposal_id = receipt.get("proposal_id")
                 proposal_hash = receipt.get("proposal_hash")
                 revision = receipt.get("proposal_revision")
