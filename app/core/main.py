@@ -1,4 +1,4 @@
-import os,json,requests,datetime,hashlib,hmac
+import os,json,requests,datetime,hashlib,hmac,uuid
 from shared.safety import canonical_sha256, gold_set_eligible, critical_approval_complete
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
@@ -633,9 +633,9 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
     if decision=='REVOKE' and not requested_revoke_id:
         raise HTTPException(422,'approval_id_to_revoke_required')
     with db() as c:
-        p=c.execute('select p.run_id,r.mode,p.target_ci_id,p.action_type,p.risk_tier,p.proposal_hash,p.status,p.expires_at from aiops.action_proposals p join aiops.runs r on r.run_id=p.run_id where p.proposal_id=%s for update of p',(proposal_id,)).fetchone()
+        p=c.execute('select p.run_id,r.mode,p.target_ci_id,p.action_type,p.risk_tier,p.proposal_hash,p.status,p.expires_at,p.proposal_revision from aiops.action_proposals p join aiops.runs r on r.run_id=p.run_id where p.proposal_id=%s for update of p',(proposal_id,)).fetchone()
         if not p:raise HTTPException(404,'proposal not found')
-        rid,run_mode,target,action,risk,digest,status,expires=p
+        rid,run_mode,target,action,risk,digest,status,expires,proposal_revision=p
         if run_mode!='LIVE':raise HTTPException(403,'synthetic_mode_cannot_authorize_real_approval')
         if not hmac.compare_digest(supplied_hash,digest):raise HTTPException(409,'proposal_hash_mismatch')
         expected_scope={'proposal_hash':digest,'target_ci_id':target,'action_type':action}
@@ -667,7 +667,94 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
         next_status=('REJECTED' if decision=='REJECT' else ('REVOKED' if decision=='REVOKE' else ('APPROVED' if approval_complete else 'PROPOSED')))
         if next_status!=status:
             c.execute('update aiops.action_proposals set status=%s where proposal_id=%s',(next_status,proposal_id))
+        if next_status in ('APPROVED','REJECTED','REVOKED'):
+            delivery_decision='APPROVE' if next_status=='APPROVED' else 'REJECT'
+            c.execute(
+                'insert into aiops.hitl_decision_outbox '
+                '(event_id,proposal_id,run_id,proposal_hash,proposal_revision,decision,source_status,approval_id) '
+                'values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict '
+                '(proposal_id,proposal_hash,proposal_revision,decision) do nothing',
+                (new('HDO'),proposal_id,rid,digest,proposal_revision,
+                 delivery_decision,next_status,approval_id)
+            )
     return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'approval_count':approval_count,'approval_complete':approval_complete,'status':next_status,'execution_allowed':False,'idempotent':False}
+
+@app.post('/api/hitl/decision-outbox/claim')
+def claim_hitl_decision_outbox(x:dict,authorization:str|None=Header(default=None)):
+    """Lease committed Core decisions for at-least-once Temporal notification."""
+    auth(bearer(authorization))
+    owner=str(x.get('owner','')).strip()
+    limit=x.get('limit',20)
+    lease_seconds=x.get('lease_seconds',45)
+    if not owner or len(owner)>128 or type(limit) is not int or not 1<=limit<=100:
+        raise HTTPException(422,'invalid_outbox_claim_owner_or_limit')
+    if type(lease_seconds) is not int or not 15<=lease_seconds<=300:
+        raise HTTPException(422,'invalid_outbox_lease_duration')
+    with db() as c:
+        candidates=c.execute(
+            "select event_id from aiops.hitl_decision_outbox "
+            "where attempts<20 and ((status='PENDING' and available_at<=now()) "
+            "or (status='LEASED' and lease_until<=now())) "
+            "order by created_at for update skip locked limit %s",
+            (limit,)
+        ).fetchall()
+        items=[]
+        for (event_id,) in candidates:
+            lease_token=uuid.uuid4().hex
+            row=c.execute(
+                "update aiops.hitl_decision_outbox set status='LEASED',"
+                "lease_owner=%s,lease_token=%s,"
+                "lease_until=now()+(%s * interval '1 second'),attempts=attempts+1 "
+                "where event_id=%s returning event_id,proposal_id,run_id,"
+                "proposal_hash,proposal_revision,decision,source_status,lease_token,attempts",
+                (owner,lease_token,lease_seconds,event_id)
+            ).fetchone()
+            if row:
+                items.append(dict(zip(
+                    ('event_id','proposal_id','run_id','proposal_hash',
+                     'proposal_revision','decision','source_status','lease_token','attempts'),
+                    row
+                )))
+    return {'items':items,'count':len(items),'delivery':'at-least-once',
+            'execution_allowed':False}
+
+
+@app.post('/api/hitl/decision-outbox/{event_id}/delivered')
+def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=Header(default=None)):
+    """Acknowledge only the active lease after Temporal accepted the signal."""
+    auth(bearer(authorization))
+    token=str(x.get('lease_token','')).strip()
+    if not token:
+        raise HTTPException(422,'outbox_lease_token_required')
+    with db() as c:
+        row=c.execute(
+            'select status,lease_token from aiops.hitl_decision_outbox '
+            'where event_id=%s for update',(event_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404,'outbox_event_not_found')
+        if row[0]=='DELIVERED':
+            return {'event_id':event_id,'status':'DELIVERED','idempotent':True}
+        if row[0]!='LEASED' or not row[1] or not hmac.compare_digest(str(row[1]),token):
+            raise HTTPException(409,'outbox_lease_lost_or_invalid')
+        c.execute(
+            "update aiops.hitl_decision_outbox set status='DELIVERED',"
+            "delivered_at=now(),lease_owner=null,lease_token=null,lease_until=null,last_error=null "
+            "where event_id=%s",(event_id,)
+        )
+    return {'event_id':event_id,'status':'DELIVERED','idempotent':False}
+
+
+@app.get('/api/hitl/decision-outbox/status')
+def hitl_decision_outbox_status(authorization:str|None=Header(default=None)):
+    auth(bearer(authorization))
+    with db() as c:
+        rows=c.execute(
+            'select status,count(*) from aiops.hitl_decision_outbox group by status order by status'
+        ).fetchall()
+    return {'counts':{status:count for status,count in rows},
+            'delivery':'at-least-once','execution_allowed':False}
+
 
 @app.post('/api/runs/{rid}/learning-cases')
 def create_learning_case(rid:str,x:dict,authorization:str|None=Header(default=None)):
