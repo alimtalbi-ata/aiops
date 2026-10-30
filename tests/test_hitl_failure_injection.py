@@ -167,11 +167,28 @@ class OfflineFailureInjection(unittest.TestCase):
         self.assertEqual(result["status"], "BLOCKED")
         self.assertEqual(calls, ["start_run", "execute_stage", "execute_stage"])
 
-    @unittest.expectedFailure
-    def test_bool_revision_must_not_match_integer_one(self):
-        # Known gap: Python True == 1; no execution occurs, but binding is weak.
-        result, _, _ = simulate(signal(proposal_revision=True))
+    def test_invalid_revision_types_and_values_fail_closed(self):
+        # Python True == 1 and 1.0 == 1 must not bind to a persisted revision.
+        for invalid in (True, 1.0, "1", None, 0, -1):
+            with self.subTest(revision=repr(invalid)):
+                result, calls, state = simulate(signal(proposal_revision=invalid))
+                self.assertTrue(state._hitl_conflict)
+                self.assertEqual(result["reason"], "hitl_timeout_or_conflicting_signal")
+                self.assertIs(result["execution_allowed"], False)
+                self.assertNotIn("finish_run", calls)
+
+    def test_replayed_boolean_revision_fails_binding_even_if_signal_gate_bypassed(self):
+        fake = FakeTemporal()
+        obj = workflow_class(fake)()
+        # Simulate stale/replayed state loaded without the current signal validator.
+        obj._hitl_decision = signal(proposal_revision=True)
+        result = asyncio.run(obj.run({
+            "run_id": "RUN-OFFLINE", "mode": "LIVE",
+            "scenario_id": "SCENARIO-OFFLINE",
+        }))
         self.assertEqual(result["reason"], "hitl_signal_scope_mismatch")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertNotIn("finish_run", fake.calls)
 
 
 if __name__ == "__main__":
