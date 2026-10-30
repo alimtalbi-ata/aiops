@@ -58,6 +58,33 @@ class DeployAcmeP0Tests(unittest.TestCase):
             self.assertEqual(module.classify(path, "M"), "BLOCKED")
         self.assertEqual(module.classify("app/core/main.py", "D"), "BLOCKED")
 
+    def test_cross_lot_transport_matrix_stays_explicit_and_fail_closed(self):
+        for path in (
+            "app/shared/acme_demo_offline.py", "app/shared/acme_glpi_ticket_read.py",
+            "app/shared/acme_itsm_evidence_link.py", "app/shared/acme_policy_demo_result.py",
+            "app/shared/acme_remediation_projection.py",
+            "app/shared/acme_remediation_receipt.py", "app/shared/remediation_lab.py",
+        ):
+            self.assertEqual(module.classify(path, "A"), "IMAGE_TRANSPORT")
+        for path in module.OPERATOR_ONLY:
+            self.assertEqual(module.classify(path, "A"), "CI_OR_OPERATOR_ONLY")
+        for path in ("app/shared/unknown_module.py", "tools/unknown.py",
+                     "config/remediation/unsafe.json"):
+            self.assertEqual(module.classify(path, "A"), "BLOCKED")
+
+        for path in (*module.OPERATOR_ONLY, "app/shared/acme_glpi_ticket_read.py"):
+            file = self.delivery / path
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("# candidate\n")
+        git(self.delivery, "add", "-A")
+        git(self.delivery, "commit", "-qm", "cross-lot")
+        candidate = git(self.delivery, "rev-parse", "HEAD")
+        result = module.plan(self.delivery, self.stable, candidate)
+        self.assertEqual(result["assessment"], "MANUAL_APPROVAL_REQUIRED")
+        self.assertEqual(result["overall"], "NO_GO")
+        self.assertEqual(result["unsupported_paths"], [])
+        self.assertEqual(result["not_image_transported"], sorted(module.OPERATOR_ONLY))
+
     def test_git_plan_never_claims_go_or_debian(self):
         candidate = self.candidate()
         result = module.plan(self.delivery, self.stable, candidate)

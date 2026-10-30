@@ -26,6 +26,16 @@ RUNTIME = frozenset({
     "app/twin/main.py", "app/policy/main.py",
     "app/portal/main.py", "app/portal/demo_v2.py",
     "app/portal/demo_ledger_read.py", "app/shared/tenant_scope.py",
+    # Exact shared modules are copied by the four application Dockerfiles.
+    "app/shared/acme_demo_offline.py", "app/shared/acme_glpi_ticket_read.py",
+    "app/shared/acme_itsm_evidence_link.py", "app/shared/acme_policy_demo_result.py",
+    "app/shared/acme_remediation_projection.py", "app/shared/acme_remediation_receipt.py",
+    "app/shared/remediation_lab.py",
+})
+# Operator diagnostics and the offline fixture catalog are NOT in the app build context.
+OPERATOR_ONLY = frozenset({
+    "tools/find_acme_demo_run.py", "tools/probe_acme_twin_path.py",
+    "config/remediation/recipes.v1.json",
 })
 CONTROL = frozenset({
     ".github/workflows/quality.yml", ".github/workflows/promote-stable.yml",
@@ -63,6 +73,8 @@ def classify(path: str, status: str) -> str:
         return "LIVE_COMPOSE_COMPATIBILITY_REQUIRED"
     if path in CONTROL:
         return "MANUAL_RELEASE_CONTROL_REVIEW"
+    if path in OPERATOR_ONLY:
+        return "CI_OR_OPERATOR_ONLY"
     if path.startswith("docs/") or path.startswith("tests/") or path.startswith("scripts/check_demo_"):
         return "CI_OR_OPERATOR_ONLY"
     if path in ("README.md", "VERSION", ".gitignore", "config/.env.example"):
@@ -99,6 +111,8 @@ def plan(delivery: Path, stable_sha: str, candidate_sha: str) -> dict:
         "assessment": "BLOCKED" if unsupported else "MANUAL_APPROVAL_REQUIRED",
         "overall": "NO_GO", "unsupported_paths": unsupported,
         "module_deployment_matrix": matrix,
+        "not_image_transported": sorted(x["path"] for x in matrix
+                                       if x["path"] in OPERATOR_ONLY),
         "image_services": list(SERVICES), "live_host": "NOT_TESTED",
         "rollback": "NOT_TESTED", "applied_sha": "NOT_ATTESTED",
         "notes": "No source files or volumes are copied; image build from approved Git checkout only.",
