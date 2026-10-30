@@ -139,11 +139,13 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertRegex(run_id, r"^SIM-ACME-[A-F0-9]{16}$")
         self.assertIn("ACME-DEMO-SAN-001", scenario)
         self.assertIn("ACME-DEMO-PAY-002", scenario)
-        self.assertEqual(self.page.locator("#timeline li").count(), 9)
+        self.assertEqual(self.page.locator("#timeline li").count(), 14)
         self.assertEqual(self.page.locator("#story-token").input_value(), "")
         self.page.locator("#advance").click()
-        expect(self.page.locator("#story-status")).to_contain_text("2/9")
+        expect(self.page.locator("#story-status")).to_contain_text("2/14")
         self.assertIn("MISSING", self.page.locator("#step-detail").inner_text())
+        self.assertIn("monitoring_event_management", self.page.locator("#step-detail").inner_text())
+        self.assertIn("noc_l1", self.page.locator("#step-title").inner_text().lower())
 
         # A different real portal route must use the same synthetic Run ID.
         self.page.goto(self.base + "/demo/acme-impact")
@@ -218,7 +220,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(report["contract_status"], "PASS")
         self.assertEqual(report["overall"], "NO_GO")
         self.assertEqual(report["scope"], "EPHEMERAL_PORTAL_SIMULATED_CONTRACT_ONLY")
-        self.assertEqual(report["checkpoint_count"], 9)
+        self.assertEqual(report["checkpoint_count"], 14)
         self.assertFalse(report["runtime_attested"])
         self.assertIn("CORE_TEMPORAL_ANALYST_CRITIC_POLICY_EVIDENCE_NOT_TESTED",
                       report["blockers"])
