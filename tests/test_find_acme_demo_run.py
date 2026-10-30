@@ -125,6 +125,35 @@ class CoreLocatorTests(unittest.TestCase):
         items.append(dict(items[0]))
         self.assertEqual(check(data)[0]["result"], "UNKNOWN")
 
+    def test_known_at_pre_epoch_and_noncanonical_fail_closed(self):
+        invalid = (
+            "0001-01-01T00:00:00Z",
+            "1969-12-31T23:59:59Z",
+            "1970-01-01T00:30:00+01:00",
+            "2026-10-29 23:00:00Z",
+            "2026-10-29T23:00:00",
+            "2026-10-29T23:00:00+25:00",
+            "2026-10-29T23:00:00Z" + " " * 60,
+        )
+        for stamp in invalid:
+            data = fixture()
+            data[f"/api/noc/runs/{RID}/evidence-refs"]["items"][0]["known_at"] = stamp
+            with self.subTest(stamp=stamp):
+                result, _ = check(data)
+                self.assertEqual(result["result"], "UNKNOWN")
+                self.assertEqual(result["reason"], "EVIDENCE_EVENT_LINK_MISMATCH")
+                self.assertIsNone(result["run_id"])
+
+    def test_known_at_utc_epoch_boundary_is_allowed_synthetic_only(self):
+        data = fixture()
+        data[f"/api/noc/runs/{RID}/evidence-refs"]["items"][0]["known_at"] = (
+            "1970-01-01T01:00:00+01:00"
+        )
+        result, _ = check(data)
+        self.assertEqual(result["result"], "SOURCE_VERIFIED_SYNTHETIC_ONLY")
+        self.assertFalse(result["runtime_attested"])
+        self.assertFalse(result["tenant_acl_qualified"])
+
     def test_missing_auth_endpoint_unknown(self):
         data = fixture()
         del data[f"/api/noc/runs/{RID}/evidence-refs"]
