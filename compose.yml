@@ -157,8 +157,11 @@ services:
       TWIN_URL: http://aiops2-twin:811
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       AIOPS_PORTAL_READ_TOKEN: ${AIOPS_PORTAL_READ_TOKEN:-}
+      GLPI_API_URL: ${GLPI_API_URL:-http://aiops2-glpi/apirest.php}
+      GLPI_APP_TOKEN: ${GLPI_APP_TOKEN:-}
+      GLPI_USER_TOKEN: ${GLPI_USER_TOKEN:-}
     ports: ["${AIOPS_BIND_IP:-127.0.0.1}:${AIOPS_PORTAL_HOST_PORT:-7777}:777"]
-    networks: [aiops2-public, aiops2-control]
+    networks: [aiops2-public, aiops2-control, aiops2-integration]
     depends_on:
       aiops2-core: {condition: service_healthy}
       aiops2-copilot: {condition: service_healthy}
