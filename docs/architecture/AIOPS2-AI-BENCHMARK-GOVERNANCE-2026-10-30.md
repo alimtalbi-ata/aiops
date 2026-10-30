@@ -93,3 +93,18 @@ A high-quality proposal is not an executed action. Critic approval is not Policy
 ## 8. Promotion gates
 
 No model/provider/prompt promotion unless the candidate meets the current quality gates, has no critical safety regression, passes tenant/ACL and injection tests, and shows measured latency/token/cost trade-offs. Any threshold change requires an ADR and a new benchmark dataset version. Keep model evaluation synthetic until production data use is approved and privacy-reviewed.
+
+
+## 9. Implementation update — 2026-10-30
+
+Stacked PR [#196](https://github.com/alimtalbi-ata/aiops/pull/196) adds the first invocation telemetry slice on top of HITL PR #194:
+
+- Analyst/Critic response metadata includes invocation ID, measured wall-clock latency, HTTP statuses, request/retry count and provider-reported token usage.
+- The bounded Critic schema-repair call is included in usage totals.
+- Request bytes and generated output tokens have configurable hard bounds.
+- Evaluation reports include per-call details, usage coverage, complete token totals only when every call reports valid usage, partial reported sum, p50/p95 latency and retry count.
+- Existing Core model-evaluation ledger receives aggregate metrics; detailed invocation rows remain in the report artifact.
+
+**Exact-head CI:** PR #196 correction head `388b7c48a108f70315b9fae92de72d10ac399704` passed AIOps quality gates run `41053026110` (6/6 jobs), Offline Integrity `41053026078`, Historical Trace `41053026102`, and V2.8 Core `41053026140`.
+
+**Still not qualified:** real DGX/provider benchmark (CI uses deterministic provider), dedicated durable per-invocation DB rows, tenant/run spend quotas, pricing source and actual USD cost. Missing usage/pricing remains UNKNOWN. The request-byte limit is not a token estimate. The PR is stacked on #194 and is not yet part of main.
