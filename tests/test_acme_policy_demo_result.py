@@ -217,6 +217,9 @@ class PolicyDemoResultTests(unittest.TestCase):
             with self.subTest(snapshot=snapshot, key=key):
                 r = receipt()
                 r["projection"][snapshot][key] = value
+                if snapshot == "before":
+                    # Keep the rollback projection bound to before; test snapshot schema only.
+                    r["projection"]["rollback"]["projected_state"] = copy.deepcopy(r["projection"]["before"])
                 with self.assertRaisesRegex(ValueError, "snapshot_schema_invalid"):
                     present_demo_policy_result(r)
 
@@ -347,6 +350,8 @@ class PolicyDemoResultTests(unittest.TestCase):
                     r["projection"]["gate"]["target_ci"] = "ACME-GLPI-01"
                     for snapshot in ("before", "after"):
                         r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
+                    # Preserve the rollback-before invariant while testing reason spoofing.
+                    r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
                 r["projection"]["reason"] = "RUNTIME_APPROVED"
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
