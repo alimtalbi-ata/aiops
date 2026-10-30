@@ -27,5 +27,15 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn("proposal_revision", source)
 
 
+    def test_missing_persisted_proposal_blocks_before_remediation(self):
+        source = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn("hitl_proposal_not_persisted", source)
+        self.assertIn('if stage == "HITL" and not (', source)
+        self.assertIn('if stage == "HITL":', source)
+        self.assertLess(source.index("hitl_proposal_not_persisted"),
+                        source.index('"finish_run"'))
+        self.assertIn('"execution_allowed": False', source)
+
+
 if __name__ == "__main__":
     unittest.main()
