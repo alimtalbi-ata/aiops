@@ -146,3 +146,14 @@ The immediate 5/5 automation run was still in progress. Schedule 5/5 was updated
 
 Exact-head Quality SUCCESS separately: #190 `2aa1e89` (41019332417), #192 `8488e64` (41022029419), #193 `e8f05d8` (41024125286), #194 `1fade3e` (41050718293), #196 `6b6a3b3` (41055287795). Overlaps from changed filenames: #185/#190/#192/#194 on Core/Portal `main.py`; #185/#192/#194/#196 on `compose.yml`; #192/#193 on `glpi_run_context.py`; #188/#189/#194/#199 on `.github/workflows/quality.yml`. Resolve contracts manually, no blind cherry-pick. #188 preferred over duplicate #189, both unmerged; #146/#153 auto-deploy prohibited, #187 deferred.
 
+## 2026-10-30 14:00 UTC — first main-based integration stage
+
+| Workstream | Exact source | Stage in #201 `2ceda14c` | Still blocked |
+|---|---|---|---|
+| 1/5 ACME | #198 `8f48b1b5` | 2 exact Git blobs (locator + tests) | protected Core Evidence-refs endpoint and tenant/runtime proof absent on main |
+| 2/5 Portal | no main-based routable run-detail handoff | **NOT_INCLUDED** | source-backed `run_id` deep link + scoped nested collection guards |
+| 3/5 NOC/Evidence | #197 `57194371` | 2 exact blobs (UTC preflight + tests) | no authenticated Core/GLPI join, source/freshness proof |
+| 4/5 Policy | #199 `e0fc68f7` | 2 exact blobs (SIMULATE fixture + tests) | no verified HITL approval/outbox/executor |
+| 5/5 Architecture | #195 `f9617b09` | 14 README/docs exact blobs, one new release note | benchmark/model and cumulative kit unqualified |
+
+Quality workflow from #199 extended with 1/5 and 3/5 offline test steps. [Combined CI 41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) was **IN_PROGRESS**, not yet a green gate. #185 (741 ahead/43 behind main) remains scenario source only; #194/#196 (divergent) need dependency-aware selective port. #188 preferred cron, #189 duplicate, #146/#153 disabled, #187 deferred.

@@ -94,3 +94,7 @@ The 48-hour release target is a customer-demo kit at T2 synthetic E2E, plus T3 r
 - Schedules 1/5–4/5 have been reoriented to create clean main-based minimal PRs; immediate runs requested. Their previous branches are divergent and are not to be merged wholesale.
 - Schedule 5/5 is the architecture/release integrator; its immediate run is asynchronous.
 - The final cumulative kit is not yet complete. It must be rebuilt after main-based code integration and include the new architecture/ITIL/benchmark docs plus exact manifest/checksum and install/rollback evidence.
+
+## 2026-10-30 14:00 UTC — actual H0–H12 integration progress and next gate
+
+5/5 opened [draft #201](https://github.com/alimtalbi-ata/aiops/pull/201) at `2ceda14c8a21fe71e88b3228879799e6c37a5387`, base `main@27deb9b1`, 22 changed paths (6 exact 1/3/4 code/test files, 14 exact docs from #195, Quality offline test wiring, one provenance report), **0 behind main**. This is the first coherent main-based *staging* SHA, not the final release/kit. T0 combined Quality [41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) PENDING at capture. Immediate sequence: inspect exact-head test steps/results; require 2/5 Portal main-based route and Core protected Evidence refs; reconcile #190/#192–#196 overlaps and migration 011/OIDC/AI telemetry; build/inspect cumulative ZIP; isolated install/upgrade/rollback/failure injection. No customer-facing real source/GLPI/model assertion yet.

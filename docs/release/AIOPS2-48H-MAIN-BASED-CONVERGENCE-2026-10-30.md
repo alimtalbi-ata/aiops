@@ -32,3 +32,9 @@ GitHub Quality `policy-and-static` must actually run `test_acme_evidence_utc_pre
 - T5 LIVE: **NO_GO / NOT_AUTHORIZED**.
 
 Next: exact-head CI; 2/5 Portal route handoff; protected Core evidence refs; selective OIDC/outbox/AI telemetry; single cumulative ZIP with migrations, source manifest, checksums, SBOM if available and isolated rollback. All handoffs in [#186](https://github.com/alimtalbi-ata/aiops/issues/186).
+
+## 2026-10-30 14:07 UTC — exact main-based Core/Portal handoffs staged
+
+New main-based draft #200 `fd04e9f6e5e505b82a00bf1e352f7d2004718aa5` contributes **exact blobs** `app/core/main.py` and `tests/test_core_ingest_initial_state.py` (INGEST PASS/completed_at on create, other stages PENDING; DB/mock-only test, not PostgreSQL integration). Draft #202 `f7cd1c301867c6780a5fb277ead338ec04958305` contributes **exact blobs** `app/portal/main.py`, `app/portal/acme_run_detail.py`, `app/portal/portal_run_link_client.js`, `tests/test_portal_run_detail.py`, `tests/test_portal_run_link_client.cjs`. Source PR #200 Quality 41068272677 SUCCESS 3/3; #202 Quality 41068460428 SUCCESS 3/3. These **separate** green runs do not qualify the combined SHA.
+
+The new Portal `/runs/{rid}` and `/api/portal/runs/{rid}` are bearer-guarded, source-verification **synthetic only**; no Core Evidence refs, AI ledger, Policy/HITL approval or tenant ACL qualification. Browser navigation without an Authorization header yields 401; **customer browser demo auth/session is not solved**. No change to LIVE, GLPI write, DB migrations, runner or cron. Quality workflow now runs offline Core INGEST and Portal Run-detail/JS tests in addition to 1/3/4 checks. Combined-SHA CI **PENDING** at this recording. T0 PENDING; T1–T4 NOT_TESTED/NOT_ATTESTED; T5 NO_GO.
