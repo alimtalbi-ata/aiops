@@ -483,7 +483,9 @@ class DemoV2Tests(unittest.TestCase):
                            side_effect=AssertionError("unexpected write"))):
             page = portal_main.demo_run_detail("RUN-ACME")
         self.assertIn('href="/timeline?run_id=RUN-ACME"', page)
-        for path in ("/runs", "/twin", "/evidence", "/policy-control"):
+        for path in ("/runs", "/twin?run_id=RUN-ACME",
+                     "/evidence?run_id=RUN-ACME",
+                     "/policy-control?run_id=RUN-ACME"):
             self.assertIn('href="' + path + '"', page)
         self.assertIn("ITSM GLPI", page)
         self.assertIn("UNKNOWN", page)
