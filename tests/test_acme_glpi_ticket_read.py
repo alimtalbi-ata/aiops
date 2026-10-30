@@ -147,6 +147,32 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
                 self.assertIsNone(result['ticket_id'])
                 self.assertEqual(client.calls, [])
 
+    def test_invalid_projection_cannot_keep_correlated_state(self):
+        client = MockOpener()
+        result = verify({**BASE, 'evidence_refs': [{**REF, 'payload_sha256': 'bad'}]},
+                        opener=client)
+        self.assertEqual(result['state'], 'UNKNOWN')
+        self.assertEqual(result['classification'], 'UNKNOWN')
+        self.assertEqual(result['ticket_verification'],
+                         'UNKNOWN_INVALID_CORE_EVIDENCE_PROJECTION')
+        self.assertIsNone(result['run_id'])
+        self.assertIsNone(result['incident_id'])
+        self.assertEqual(result['evidence_ids'], [])
+        self.assertEqual(result['evidence_refs'], [])
+        self.assertIsNone(result['ticket_id'])
+        self.assertEqual(client.calls, [])
+
+    def test_untrusted_evidence_timestamps_rejected_before_glpi_get(self):
+        for known_at in ('not-a-date', '2026-10-29T23:00:00',
+                         '2999-01-01T00:00:00+00:00', '2026-10-29'):
+            with self.subTest(known_at=known_at):
+                client = MockOpener()
+                result = verify({**BASE, 'evidence_refs': [{**REF, 'known_at': known_at}]},
+                                opener=client)
+                self.assertEqual(result['state'], 'UNKNOWN')
+                self.assertIsNone(result['ticket_id'])
+                self.assertEqual(client.calls, [])
+
     def test_forged_legacy_ids_only_cannot_trigger_glpi_get(self):
         client = MockOpener()
         result = verify({key: BASE[key] for key in ('state', 'run_id', 'incident_id',

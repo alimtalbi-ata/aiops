@@ -1,5 +1,7 @@
 """No-effect presentation contract tests; no Core, GLPI or Temporal I/O."""
 import copy
+import hashlib
+import json
 import unittest
 
 from app.shared.acme_policy_demo_result import present_demo_policy_result
@@ -8,13 +10,22 @@ from app.shared.acme_policy_demo_result import present_demo_policy_result
 def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
     before = {"target_ci": "ACME-LNX-01", "health": "DEGRADED", "service_available": False}
     after = {"target_ci": "ACME-LNX-01", "health": "HEALTHY", "service_available": True} if status == "SIMULATED_SUCCESS" else dict(before)
+    binding = {
+        "run_id": "RUN-ACME-OFFLINE-001", "scenario_id": "SCN-ACME-OFFLINE",
+        "mode": "DEMO", "proposal_digest": "b" * 64,
+        "evidence_ids": ["EVD-ACME-OFFLINE-1"],
+        "outcome": "FAILURE" if status == "SIMULATED_FAILURE" else "SUCCESS",
+    }
+    digest = hashlib.sha256(
+        json.dumps(binding, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    ).hexdigest()
     return {
         "schema": "aiops.acme-remediation-receipt.v1", "classification": "SYNTHETIC_UNVERIFIED",
         "run_id": "RUN-ACME-OFFLINE-001", "scenario_id": "SCN-ACME-OFFLINE",
-        "evidence_ids": ["EVD-ACME-OFFLINE-1"], "receipt_digest": "a" * 64,
+        "evidence_ids": ["EVD-ACME-OFFLINE-1"], "receipt_digest": digest,
         "core_run_verified": False, "evidence_verified": False, "effect_applied": False, "persisted": False,
         "projection": {
-            "synthetic": True, "provenance": "WHAT_IF_FIXTURE_NOT_OBSERVED",
+            "schema_version": 1, "synthetic": True, "provenance": "WHAT_IF_FIXTURE_NOT_OBSERVED",
             "mode": "DEMO", "status": status, "recipe_id": "ansible-service-restart",
             "target_ci": "ACME-LNX-01", "proposal_digest": "b" * 64,
             "idempotency_key": "c" * 64,
@@ -219,6 +230,52 @@ class PolicyDemoResultTests(unittest.TestCase):
                 r = receipt(status, gate_status)
                 r["projection"]["rollback"]["status"] = forged
                 with self.assertRaisesRegex(ValueError, "projection_outcome_inconsistent"):
+                    present_demo_policy_result(r)
+
+    def test_receipt_binding_tampering_fail_closed(self):
+        for path, forged in (
+            ("run_id", "RUN-OTHER"),
+            ("scenario_id", "SCN-OTHER"),
+            ("evidence_ids", ["EVD-OTHER"]),
+            ("receipt_digest", "f" * 64),
+        ):
+            with self.subTest(path=path):
+                r = receipt()
+                r[path] = forged
+                with self.assertRaisesRegex(ValueError, "receipt_binding_digest_mismatch"):
+                    present_demo_policy_result(r)
+
+    def test_receipt_mode_and_proposal_digest_tampering_fail_closed(self):
+        for path, forged in (("mode", "REPLAY"), ("proposal_digest", "d" * 64)):
+            with self.subTest(path=path):
+                r = receipt()
+                r["projection"][path] = forged
+                r["projection"]["gate"][path] = forged
+                with self.assertRaisesRegex(ValueError, "receipt_binding_digest_mismatch"):
+                    present_demo_policy_result(r)
+
+    def test_recipe_cannot_claim_unearned_recovery(self):
+        r = receipt()
+        r["projection"]["recipe_id"] = "glpi-api-ticket-note"
+        r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
+        with self.assertRaisesRegex(ValueError, "projection_recipe_outcome_inconsistent"):
+            present_demo_policy_result(r)
+        r = receipt("SIMULATED_NO_RECOVERY")
+        r["projection"]["recipe_id"] = "glpi-api-ticket-note"
+        r["projection"]["gate"]["recipe_id"] = "glpi-api-ticket-note"
+        self.assertEqual(present_demo_policy_result(r)["policy"]["decision"], "SIMULATE")
+
+    def test_receipt_builder_shape_and_ref_validation(self):
+        for change, error in (
+            (lambda r: r["projection"].update(schema_version=2), "projection_schema_invalid"),
+            (lambda r: r.update(scenario_id="bad/../path"), "scenario_identity_invalid"),
+            (lambda r: r.update(evidence_ids=["bad/../ref"]), "evidence_refs_invalid"),
+            (lambda r: r.update(evidence_ids=["EVD-2", "EVD-1"]), "evidence_refs_invalid"),
+        ):
+            with self.subTest(error=error):
+                r = receipt()
+                change(r)
+                with self.assertRaisesRegex(ValueError, error):
                     present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):

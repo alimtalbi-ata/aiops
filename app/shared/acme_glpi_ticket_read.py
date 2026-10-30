@@ -11,6 +11,7 @@ runtime/tenant ACL. No POST, side effects, redirects, proxies or raw payloads.
 """
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
@@ -90,6 +91,14 @@ def _qualified_projection(value):
                 or not item["known_at"] or len(item["known_at"]) > 48
                 or item["evidence_id"] in seen):
             return False
+        try:
+            known = datetime.fromisoformat(item["known_at"])
+        except ValueError:
+            return False
+        if (known.tzinfo is None or known.utcoffset() is None
+                or known.astimezone(timezone.utc) >
+                datetime.now(timezone.utc) + timedelta(minutes=5)):
+            return False
         seen.add(item["evidence_id"])
     return seen == set(ids)
 
@@ -109,11 +118,17 @@ def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
     result = dict(correlation)
     result["ticket_id"] = None
     result["ticket_verification"] = "UNKNOWN_NO_AUTHENTICATED_GLPI_LINK"
+    if not _qualified_projection(result):
+        # A malformed or forged projection cannot retain a correlated state.
+        result.update(state="UNKNOWN", run_id=None, incident_id=None,
+                      evidence_ids=[], evidence_refs=[], classification="UNKNOWN",
+                      glpi_ticket_claim=None,
+                      ticket_verification="UNKNOWN_INVALID_CORE_EVIDENCE_PROJECTION")
+        return result
     claim = result.get("glpi_ticket_claim")
     run_id, incident_id = result.get("run_id"), result.get("incident_id")
     origin = _configured_origin(base_url)
-    if (not _qualified_projection(result)
-            or not isinstance(claim, str) or _TICKET.fullmatch(claim) is None
+    if (not isinstance(claim, str) or _TICKET.fullmatch(claim) is None
             or not isinstance(run_id, str) or _ID.fullmatch(run_id) is None
             or not isinstance(incident_id, str) or _ID.fullmatch(incident_id) is None
             or not origin or not _token(session_token) or not _token(app_token)):
