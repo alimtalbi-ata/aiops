@@ -25,6 +25,32 @@ _BLOCKED_REASONS = frozenset({
 })
 
 
+# Versioned offline builder shapes. Unknown fields could smuggle assertions
+# such as human.approved or runtime_verified into a purported demo receipt.
+# Reject them instead of silently accepting a mixed contract.
+_ALLOWED_RECEIPT_FIELDS = frozenset({
+    "schema", "classification", "run_id", "scenario_id", "evidence_ids",
+    "evidence_verified", "core_run_verified", "receipt_digest",
+    "projection", "effect_applied", "persisted",
+})
+_ALLOWED_PROJECTION_FIELDS = frozenset({
+    "schema_version", "synthetic", "provenance", "proposal_id",
+    "proposal_digest", "target_ci", "mode", "recipe_id",
+    "idempotency_key", "effect_applied", "postchecks", "before",
+    "after", "rollback", "gate", "status", "reason",
+})
+_ALLOWED_GATE_FIELDS = frozenset({
+    "timestamp", "proposal_id", "proposal_digest", "recipe_id",
+    "recipe_version", "target_ci", "parameters", "mode", "executor",
+    "effect_applied", "postchecks", "rollback", "timeout_seconds",
+    "idempotency_key", "status", "reason", "approval_actor",
+    "preconditions", "planned_postchecks", "compensation", "dry_run",
+})
+_ALLOWED_ROLLBACK_FIELDS = frozenset({
+    "status", "projected_state", "effect_applied", "executed",
+})
+
+
 def _same_snapshot_exact(left: Any, right: Any) -> bool:
     """Avoid Python's bool == int equivalence in rollback state comparisons."""
     return (
@@ -245,6 +271,17 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         )
     ):
         raise ValueError("gate_blocked_fixture_invalid")
+    # Preserve builder compatibility while rejecting any unrecognized claim.
+    # These are allowlists (not required-field sets): existing checks above
+    # enforce mandatory fields and their semantics.
+    for node, allowed, error in (
+        (receipt, _ALLOWED_RECEIPT_FIELDS, "receipt_fields_unexpected"),
+        (projection, _ALLOWED_PROJECTION_FIELDS, "projection_fields_unexpected"),
+        (gate, _ALLOWED_GATE_FIELDS, "gate_fields_unexpected"),
+        (rollback, _ALLOWED_ROLLBACK_FIELDS, "rollback_fields_unexpected"),
+    ):
+        if set(node) - allowed:
+            raise ValueError(error)
     return {
         "schema": "aiops.acme-policy-demo-result.v1",
         "classification": "SIMULATED" if decision == "SIMULATE" else "UNKNOWN",

@@ -126,10 +126,24 @@ def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
     if not isinstance(correlation, dict):
         return {"state": "UNKNOWN", "ticket_id": None,
                 "ticket_verification": "UNKNOWN"}
-    result = dict(correlation)
+    # Only fields emitted by the existing Core/ledger projector may cross
+    # this adapter boundary. A caller must not smuggle purportedly verified
+    # Evidence/Core fields through a GLPI-only read.
+    result = {key: correlation[key] for key in (
+        "schema", "state", "run_id", "incident_id", "analysis_ids",
+        "critique_ids", "policy_decision_ids", "evidence_ids",
+        "evidence_refs", "evidence_source_contract", "glpi_ticket_claim",
+        "classification", "tenant_acl_qualified", "runtime_attested",
+        "effect_applied", "live_remediation_authorized",
+    ) if key in correlation}
+    result["verified_evidence_id"] = None
+    result["verified_evidence_ids"] = []
+    result["evidence_verification"] = "UNKNOWN_NO_AUTHENTICATED_EVIDENCE_API_READ"
+    result["core_evidence_ref_ids_verified"] = []
+    result["core_evidence_ref_verification"] = "UNKNOWN_NO_AUTHENTICATED_CORE_EVIDENCE_READ"
     result["ticket_id"] = None
     result["ticket_verification"] = "UNKNOWN_NO_AUTHENTICATED_GLPI_LINK"
-    if not _qualified_projection(result):
+    if not _qualified_projection(correlation):
         # A malformed or forged projection cannot retain a correlated state.
         result.update(state="UNKNOWN", run_id=None, incident_id=None,
                       evidence_ids=[], evidence_refs=[], classification="UNKNOWN",

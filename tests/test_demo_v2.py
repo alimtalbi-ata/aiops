@@ -1138,5 +1138,94 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn('href="/demo-studio?run_id=RUN-OK"', response.text)
         self.assertNotIn('href="/demo-studio?run_id=RUN-STALE"', response.text)
 
+    def test_timeline_default_skips_stale_core_run_for_next_verified(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [
+            {"run_id": "RUN-STALE", "mode": "DEMO", "status": "RESOLVED"},
+            {"run_id": "RUN-VALID", "mode": "DEMO", "status": "BLOCKED",
+             "synthetic": True},
+        ]
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-STALE":
+                return {"run": {"run_id": "RUN-STALE", "mode": "DEMO",
+                                "status": "RUNNING"},
+                        "events": [{"stage": "STALE-EVENT"}]}
+            if path == "/api/runs/RUN-VALID":
+                return {"run": {"run_id": "RUN-VALID", "mode": "DEMO",
+                                "status": "BLOCKED", "synthetic": True},
+                        "events": []}
+            if path == "/api/runs/RUN-VALID/evidence":
+                return {"items": []}
+            raise AssertionError("unexpected read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=rows),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/timeline")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Run sélectionné : RUN-VALID", response.text)
+        self.assertIn('href="/timeline?run_id=RUN-VALID"', response.text)
+        self.assertIn("SYNTHETIC", response.text)
+        self.assertNotIn("STALE-EVENT", response.text)
+        self.assertNotIn("Timeline Core — UNKNOWN", response.text)
+        self.assertEqual(reads.count("/api/runs/RUN-VALID"), 1)
+        self.assertNotIn("/api/runs/RUN-STALE/evidence", reads)
+
+    def test_timeline_default_with_only_stale_details_stays_unknown(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-STALE":
+                return {"run": {"run_id": "RUN-OTHER", "mode": "DEMO",
+                                "status": "RESOLVED"},
+                        "events": [{"stage": "FOREIGN-EVENT"}]}
+            raise AssertionError("unexpected read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-STALE", "mode": "DEMO",
+                   "status": "RESOLVED"}]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/timeline")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("non ambigu et concordant", response.text)
+        self.assertNotIn("FOREIGN-EVENT", response.text)
+        self.assertNotIn("Run sélectionné : RUN-STALE", response.text)
+        self.assertEqual(reads, ["/api/incidents", "/api/runs/RUN-STALE"])
+
+    def test_timeline_explicit_stale_run_never_falls_back(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-STALE":
+                return {"run": {"run_id": "RUN-STALE", "mode": "DEMO",
+                                "status": "RUNNING"}}
+            raise AssertionError("unexpected read: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-STALE", "mode": "DEMO", "status": "RESOLVED"},
+                  {"run_id": "RUN-VALID", "mode": "DEMO", "status": "BLOCKED"}]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get(
+                "/timeline?run_id=RUN-STALE")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Timeline Core — UNKNOWN", response.text)
+        self.assertNotIn("Run sélectionné : RUN-VALID", response.text)
+        self.assertEqual(reads, ["/api/incidents", "/api/runs/RUN-STALE"])
+
 if __name__ == "__main__":
     unittest.main()

@@ -105,6 +105,26 @@ def candidates(runs, incidents):
     return sorted(matches, key=lambda pair: pair[0].get("status") not in ("RESOLVED", "BLOCKED"))
 
 
+def _event_sequences_valid(events):
+    """Core persists one ordered, gap-free, 1-based event sequence per run."""
+    return (isinstance(events, list) and bool(events)
+            and all(isinstance(event, dict) and type(event.get("sequence")) is int
+                    for event in events)
+            and [event["sequence"] for event in events] == list(range(1, len(events) + 1)))
+
+
+def _ingest_stage_state(stages):
+    """Report stage metadata conservatively; it is not an E2E attestation."""
+    if not isinstance(stages, list):
+        return "UNKNOWN"
+    matching = [stage for stage in stages
+                if isinstance(stage, dict) and stage.get("stage") == "INGEST"]
+    if len(matching) != 1 or not isinstance(matching[0].get("state"), str):
+        return "UNKNOWN"
+    state = matching[0]["state"]
+    return state if state in ("PENDING", "RUNNING", "PASS", "BLOCKED", "FAIL") else "UNKNOWN"
+
+
 def qualify(base, portal, get=fetch_json, expected_run_id=None, expected_incident_id=None):
     # Optional operator-pinned pair prevents silently selecting another DEMO run.
     if (expected_run_id is None) != (expected_incident_id is None):
@@ -141,7 +161,7 @@ def qualify(base, portal, get=fetch_json, expected_run_id=None, expected_inciden
         detail = get(base, "/api/runs/" + quote(rid, safe=""))
         canonical = detail.get("run")
         events = detail.get("events")
-        if not isinstance(canonical, dict) or not isinstance(events, list):
+        if not isinstance(canonical, dict) or not _event_sequences_valid(events):
             continue
         if any(canonical.get(k) != run.get(k) for k in ("run_id", "incident_id", "scenario_id", "mode", "status")):
             continue
@@ -158,8 +178,13 @@ def qualify(base, portal, get=fetch_json, expected_run_id=None, expected_inciden
         types = sorted({e.get("event_type") for e in events if isinstance(e, dict) and isinstance(e.get("event_type"), str)})
         evidence_refs = sorted({eid for e in events if isinstance(e, dict) and isinstance(e.get("evidence_ids"), list)
                                 for eid in e["evidence_ids"] if isinstance(eid, str) and eid})
+        ingest_state = _ingest_stage_state(detail.get("stages"))
         return {
             "result": "SOURCE_VERIFIED_REGISTRY_ONLY", "run_id": rid,
+            "core_event_sequence_verified": True, "core_event_count": len(events),
+            "ingest_stage_state": ingest_state,
+            "ingest_pending_on_resolved_run": (
+                canonical.get("status") == "RESOLVED" and ingest_state == "PENDING"),
             "incident_id": incident["incident_id"], "scenario_id": SCENARIO,
             "operator_pair_pinned": expected_run_id is not None,
             "mode": canonical["mode"], "status": canonical.get("status", "UNKNOWN"),

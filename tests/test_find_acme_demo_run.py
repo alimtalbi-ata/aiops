@@ -16,10 +16,10 @@ def fixtures():
     incident = {"incident_id": "INC-ABC123", "synthetic": True,
                 "service_id": locator.SERVICE, "source": "synthetic-simulator"}
     detail = {"run": dict(run), "events": [
-        {"stage": "INGEST", "event_type": "RUN_CREATED", "status": "CREATED",
+        {"sequence": 1, "stage": "INGEST", "event_type": "RUN_CREATED", "status": "CREATED",
          "payload": {"scenario_id": locator.SCENARIO, "mode": "DEMO"}},
-        {"event_type": "ANALYST_COMPLETED", "evidence_ids": ["EVD-1"]},
-        {"event_type": "CRITIC_COMPLETED", "evidence_ids": ["EVD-1", "EVD-2"]}]}
+        {"sequence": 2, "event_type": "ANALYST_COMPLETED", "evidence_ids": ["EVD-1"]},
+        {"sequence": 3, "event_type": "CRITIC_COMPLETED", "evidence_ids": ["EVD-1", "EVD-2"]}]}
     return run, incident, detail
 
 
@@ -42,6 +42,9 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(result["timeline_url"], "http://portal/timeline?run_id=RUN-ABC123")
         self.assertEqual(result["payments_runtime_impact"], "UNKNOWN")
         self.assertFalse(result["e2e_attested"])
+        self.assertTrue(result["core_event_sequence_verified"])
+        self.assertEqual(result["core_event_count"], 3)
+        self.assertEqual(result["ingest_stage_state"], "UNKNOWN")
 
     def test_pinned_operator_pair_matches_only_exact_run_and_incident(self):
         run, incident, detail = fixtures()
@@ -253,6 +256,38 @@ class LocatorTests(unittest.TestCase):
                                          self.make_get(run, incident, detail))
                 self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
                 self.assertIsNone(result["run_id"])
+
+    def test_event_sequence_gap_duplicate_reorder_or_invalid_fails_closed(self):
+        for mutation in ("gap", "duplicate", "reordered", "bool", "string", "missing"):
+            with self.subTest(mutation=mutation):
+                run, incident, detail = fixtures()
+                events = detail["events"]
+                if mutation == "gap":
+                    events[1]["sequence"] = 4
+                elif mutation == "duplicate":
+                    events[1]["sequence"] = 1
+                elif mutation == "reordered":
+                    events[0], events[1] = events[1], events[0]
+                elif mutation == "bool":
+                    events[1]["sequence"] = True
+                elif mutation == "string":
+                    events[1]["sequence"] = "2"
+                else:
+                    events[1].pop("sequence")
+                result = locator.qualify(
+                    "http://core", "http://portal", self.make_get(run, incident, detail))
+                self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+                self.assertIsNone(result["run_id"])
+
+    def test_resolved_run_with_pending_ingest_is_flagged_not_attested(self):
+        run, incident, detail = fixtures()
+        detail["stages"] = [{"stage": "INGEST", "state": "PENDING", "attempt": 0}]
+        result = locator.qualify(
+            "http://core", "http://portal", self.make_get(run, incident, detail))
+        self.assertEqual(result["result"], "SOURCE_VERIFIED_REGISTRY_ONLY")
+        self.assertEqual(result["ingest_stage_state"], "PENDING")
+        self.assertTrue(result["ingest_pending_on_resolved_run"])
+        self.assertFalse(result["e2e_attested"])
 
     def test_missing_events_fails_closed(self):
         run, incident, detail = fixtures(); detail.pop("events")
