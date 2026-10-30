@@ -108,7 +108,13 @@ class BenchmarkSummaryTests(unittest.TestCase):
         self.assertIn('AIOPS_BENCHMARK_MAX_OUTPUT_TOKENS: "2048"', workflow)
         self.assertIn('default: "1"', workflow)
         self.assertIn("Fail benchmark job when any evaluator repeat fails", workflow)
-        self.assertIn("grep -Ev 'evaluator_exit=0        with tempfile.TemporaryDirectory() as directory:
+        self.assertIn("grep -Ev", workflow)
+        self.assertIn("evaluator_exit=0", workflow)
+        self.assertIn("AIOPS_LLM_MAX_OUTPUT_TOKENS:", compose)
+        self.assertIn("AIOPS_LLM_MAX_REQUEST_BYTES:", compose)
+
+    def test_prompt_version_must_match_for_comparison(self):
+        with tempfile.TemporaryDirectory() as directory:
             first = report()
             second = report()
             second["prompt_version"] = "different"
@@ -118,7 +124,6 @@ class BenchmarkSummaryTests(unittest.TestCase):
             ]
             with self.assertRaisesRegex(ValueError, "prompt versions differ"):
                 aggregate_reports(paths)
-
 if __name__ == "__main__":
     unittest.main()
 ", workflow)
