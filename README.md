@@ -48,6 +48,7 @@ See `docs/` for architecture, data contracts, network boundaries, deployment, de
 The active convergence baseline is documented in:
 - [Reference architecture and ITIL 4 operating model](docs/architecture/AIOPS2-REFERENCE-ARCHITECTURE-2026-10-30.md)
 - [48-hour delivery plan](docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md)
+- [48-hour execution control board](docs/planning/AIOPS2-48H-EXECUTION-CONTROL-BOARD-2026-10-30.md)
 - [AI benchmark and token/cost governance](docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md)
 - [Deterministic CI AI benchmark baseline](docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md)
 - [RC1.4 release-kit audit](docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md)
