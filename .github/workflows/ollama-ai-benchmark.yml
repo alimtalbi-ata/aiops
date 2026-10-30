@@ -59,6 +59,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Normalize artifact-safe model identifier
+        id: model
+        run: echo "safe=${AIOPS_BENCHMARK_MODEL//:/-}" >> "$GITHUB_OUTPUT"
+
       - name: Install isolated Ollama runtime
         run: |
           set -Eeuo pipefail
@@ -104,6 +108,10 @@ jobs:
             test -s "reports/${model_safe}-repeat-${repeat}.json"
           done
 
+      - name: Capture bounded Intelligence diagnostics
+        if: always()
+        run: docker compose logs --no-color --tail=160 aiops2-intelligence || true
+
       - name: Aggregate comparable runs without estimating tokens or cost
         if: always()
         run: |
@@ -119,7 +127,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aiops-ollama-benchmark-${{ matrix.model }}-${{ github.run_id }}
+          name: aiops-ollama-benchmark-${{ steps.model.outputs.safe }}-${{ github.run_id }}
           path: |
             reports/*-repeat-*.json
             reports/ai-benchmark-summary.json
