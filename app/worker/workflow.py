@@ -91,6 +91,7 @@ class IncidentWorkflow:
                     receipt.get("status") == "PASS"
                     and receipt.get("synthetic") is True
                     and receipt.get("execution_allowed") is False
+                    and receipt.get("effect_allowed") is False
                 ):
                     return {
                         "run_id": run_id, "status": "BLOCKED",
