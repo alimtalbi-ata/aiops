@@ -157,6 +157,15 @@ def _cookie_secure() -> bool:
     return value == "true"
 
 
+def _session_failure(status: int, detail: str, headers: dict | None = None) -> JSONResponse:
+    # Preserve HTTP auth status while applying the same response protections as
+    # the read-only Run page and JSON projection, including rejected exchanges.
+    return JSONResponse({"detail": detail}, status_code=status, headers={
+        **(headers or {}), **SECURITY,
+        **({"WWW-Authenticate": "Bearer"} if status == 401 else {}),
+    })
+
+
 @router.post("/api/portal/run-session", name="portal_create_short_lived_run_session")
 def create_run_session(request: Request, authorization: str | None = Header(default=None),
                        x_portal_run_id: str | None = Header(default=None)):
@@ -170,9 +179,9 @@ def create_run_session(request: Request, authorization: str | None = Header(defa
             if (parsed.scheme not in ("http", "https") or not parsed.netloc
                     or parsed.netloc.lower() != host.lower()
                     or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
-                raise HTTPException(403, "same_origin_required")
-        except ValueError as exc:
-            raise HTTPException(403, "same_origin_required") from exc
+                return _session_failure(403, "same_origin_required")
+        except ValueError:
+            return _session_failure(403, "same_origin_required")
     try:
         _require_portal_read_auth(authorization)
         if not _valid_run_id(x_portal_run_id):
@@ -180,10 +189,10 @@ def create_run_session(request: Request, authorization: str | None = Header(defa
                                 status_code=422, headers=SECURITY)
         cookie = _issue_session(x_portal_run_id)
         secure = _cookie_secure()
-    except HTTPException:
-        raise
-    except ValueError as exc:
-        raise HTTPException(503, "portal_session_not_configured") from exc
+    except HTTPException as exc:
+        return _session_failure(exc.status_code, str(exc.detail), exc.headers)
+    except ValueError:
+        return _session_failure(503, "portal_session_not_configured")
     response = JSONResponse({"state": "READ_ONLY_SESSION_CREATED",
                              "expires_in_seconds": SESSION_TTL_SECONDS},
                             headers=SECURITY)
