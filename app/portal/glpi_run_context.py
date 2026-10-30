@@ -289,7 +289,7 @@ def sync_glpi_run(run_id: str, q: dict,
         verified = client.get_ticket(ticket_id)
         if not isinstance(verified, dict) or "id" not in verified:
             raise ValueError("glpi_ticket_readback_invalid")
-        if "aiops2-ai-report" not in str(verified.get("content", "")):
+        if "AIOPS2-AI-REPORT:START" not in str(verified.get("content", "")):
             raise ValueError("glpi_report_readback_missing")
     except Exception:
         raise HTTPException(502, "glpi_ticket_sync_failed")
