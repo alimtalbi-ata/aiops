@@ -115,3 +115,17 @@ Stacked PR [#196](https://github.com/alimtalbi-ata/aiops/pull/196) adds the firs
 The reproducible local dataset/harness audit is recorded in [AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md](AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md): five synthetic cases, dataset SHA256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`, harness 3/3 PASS, **zero model invocations**. This is a structural baseline, not a measured quality, latency or cost benchmark.
 
 Reuse [PR #196](https://github.com/alimtalbi-ata/aiops/pull/196) on top of #194 for provider usage and latency instrumentation; its exact-head four workflows succeeded. Do not duplicate its provider client, assume provider usage is available, or publish estimated spend as billed cost. An isolated synthetic Analyst/Critic run on a pinned provider/model/prompt/dataset is still required before reporting p50/p95, token counts or cost.
+
+
+## 10. Exact CI baseline — 2026-10-30
+
+The exact deterministic CI report is published at `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`.
+
+- Dataset: `aiops-core-qualification-1.0.0`, SHA-256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`.
+- Provider/model: `openai-compatible / ci-deterministic`.
+- Quality: all eight current quality metrics 1.00 over five synthetic cases.
+- Telemetry: 10 calls, usage coverage 100%, reported 20 total tokens, P50 1.69 ms, P95 3.24 ms, zero retries.
+- Cost: UNKNOWN; pricing source absent.
+- Runtime E2E: synthetic Run `RUN-FB8DDB7C6B22B5F4` RESOLVED, 12 evidence records, Policy PASS/SIMULATE, zero effect receipts.
+
+The CI provider emits fixed placeholder token counts; token/latency numbers are proof of telemetry plumbing, not real-model consumption or performance. No customer SLA, GPU capacity or provider cost conclusion may be drawn from this baseline.
