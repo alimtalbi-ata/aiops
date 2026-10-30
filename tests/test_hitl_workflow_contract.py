@@ -67,5 +67,28 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn('"human_decision_recorded_execution_gate_closed"', workflow)
 
 
+    def test_terminal_approval_writes_transactional_outbox_in_same_core_transaction(self):
+        core = pathlib.Path("app/core/main.py").read_text()
+        migration = pathlib.Path("db/migrations/011_hitl_decision_outbox.sql").read_text()
+        start = core.index("def record_proposal_approval(")
+        end = core.index("@app.post('/api/hitl/decision-outbox/claim')", start)
+        approval = core[start:end]
+        self.assertIn("with db() as c:", approval)
+        self.assertIn("insert into aiops.hitl_decision_outbox", approval)
+        self.assertIn("if next_status in ('APPROVED','REJECTED','REVOKED'):", approval)
+        self.assertIn("unique (proposal_id, proposal_hash, proposal_revision, decision)", migration)
+        self.assertIn("status in ('PENDING','LEASED','DELIVERED','DEAD')", migration)
+
+    def test_outbox_claim_uses_skip_locked_and_ack_requires_active_lease_token(self):
+        core = pathlib.Path("app/core/main.py").read_text()
+        worker = pathlib.Path("app/worker/main.py").read_text()
+        self.assertIn("for update skip locked limit %s", core)
+        self.assertIn("lease_until<=now()", core)
+        self.assertIn("outbox_lease_lost_or_invalid", core)
+        self.assertIn("/api/hitl/decision-outbox/claim", worker)
+        self.assertIn("/api/hitl/decision-outbox/{event_id}/delivered", worker)
+        self.assertIn("Do not ack. The lease will expire", worker)
+
+
 if __name__ == "__main__":
     unittest.main()
