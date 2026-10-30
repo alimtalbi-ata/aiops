@@ -520,6 +520,45 @@ APPROVER_ROLES={
  'CRITICAL':{'security_admin','incident_commander'},
 }
 
+@app.get('/api/proposals')
+def list_action_proposals(status:str='PROPOSED',limit:int=50,authorization:str|None=Header(default=None)):
+    """Authenticated read-only HITL inbox. Never grants execution authority."""
+    auth(bearer(authorization))
+    allowed={'PROPOSED','APPROVED','REJECTED','REVOKED','ALL'}
+    if status not in allowed or not 1<=limit<=200:
+        raise HTTPException(422,'invalid_proposal_filter')
+    where='' if status=='ALL' else 'where p.status=%s'
+    params=(limit,) if status=='ALL' else (status,limit)
+    with db() as c:
+        rows=c.execute(
+            'select p.proposal_id,p.run_id,p.analysis_id,p.critique_id,p.source_action_id,'
+            'p.proposal_revision,p.target_ci_id,p.action_type,p.risk_tier,p.parameters,'
+            'p.evidence_ids,p.preconditions,p.expected_postconditions,p.rollback_plan,'
+            'p.proposal_hash,p.status,p.expires_at '
+            'from aiops.action_proposals p '+where+
+            ' order by p.expires_at asc limit %s',params
+        ).fetchall()
+        items=[]
+        for row in rows:
+            keys=('proposal_id','run_id','analysis_id','critique_id','source_action_id',
+                  'revision','target_ci_id','action_type','risk_tier','parameters',
+                  'evidence_ids','preconditions','expected_postconditions','rollback_plan',
+                  'proposal_hash','status','expires_at')
+            item=dict(zip(keys,row))
+            approvals=c.execute(
+                'select approval_id,actor_id,actor_role,decision,decided_at,expires_at '
+                'from aiops.approval_records where proposal_id=%s '
+                'order by decided_at',(item['proposal_id'],)
+            ).fetchall()
+            item['approvals']=[dict(zip(
+                ('approval_id','actor_id','actor_role','decision','decided_at','expires_at'),a
+            )) for a in approvals]
+            item['execution_allowed']=False
+            items.append(item)
+    return {'items':items,'count':len(items),'status_filter':status,
+            'execution_allowed':False,'authority':'read-only-hitl-inbox'}
+
+
 @app.post('/api/runs/{rid}/proposals')
 def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
