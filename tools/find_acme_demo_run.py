@@ -128,6 +128,16 @@ def qualify(base, portal, get=fetch_json):
             continue
         if any(canonical.get(k) != run.get(k) for k in ("run_id", "incident_id", "scenario_id", "mode", "status")):
             continue
+        # Core creates exactly one INGEST/RUN_CREATED event carrying the run's
+        # scenario and mode. A registry/detail match alone does not establish
+        # that the recorded event belongs to the requested scenario.
+        created = [e for e in events if isinstance(e, dict) and e.get("event_type") == "RUN_CREATED"]
+        if (len(created) != 1 or created[0].get("stage") != "INGEST"
+                or created[0].get("status") != "CREATED"
+                or not isinstance(created[0].get("payload"), dict)
+                or created[0]["payload"].get("scenario_id") != SCENARIO
+                or created[0]["payload"].get("mode") != canonical["mode"]):
+            continue
         types = sorted({e.get("event_type") for e in events if isinstance(e, dict) and isinstance(e.get("event_type"), str)})
         evidence_refs = sorted({eid for e in events if isinstance(e, dict) and isinstance(e.get("evidence_ids"), list)
                                 for eid in e["evidence_ids"] if isinstance(eid, str) and eid})
