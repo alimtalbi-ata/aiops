@@ -124,8 +124,6 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
         self.assertEqual(out['state'], 'UNKNOWN')
         self.assertIsNone(out['ticket_id'])
 
-
-
     def test_unqualified_provenance_cannot_trigger_glpi_get(self):
         for field, value in (('schema', 'other'), ('classification', 'REAL'),
                              ('evidence_source_contract', 'UNVERIFIED'),
