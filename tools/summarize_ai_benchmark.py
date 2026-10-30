@@ -72,11 +72,15 @@ def aggregate_reports(paths: list[Path]) -> dict[str, Any]:
         costs = [r["metrics"].get("cost_usd") for r in group]
         costs_complete = bool(costs) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in costs)
         token_values = [r["metrics"]["total_tokens"] for r in complete]
+        # A zero coverage value means no provider usage was observed, not a
+        # measured zero-token result. Keep it UNKNOWN; positive ratios remain
+        # useful for partially reported usage even when total token sums are incomplete.
         coverage_values = [
             float(r["metrics"]["usage_coverage"])
             for r in group
             if isinstance(r["metrics"].get("usage_coverage"), (int, float))
             and not isinstance(r["metrics"].get("usage_coverage"), bool)
+            and r["metrics"]["usage_coverage"] > 0
         ]
         model_results.append({
             "provider": provider,
