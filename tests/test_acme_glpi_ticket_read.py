@@ -226,6 +226,41 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
                                  'UNKNOWN_NO_AUTHENTICATED_GLPI_LINK')
                 self.assertFalse(out['tenant_acl_qualified'])
 
+    def test_forged_evidence_claims_are_not_passed_through_glpi(self):
+        # HTTP GLPI is mocked. Even a matching ticket cannot independently
+        # attest Evidence or Core refs supplied by an untrusted caller.
+        forged = {**BASE, 'verified_evidence_id': 'EVD-FAKE',
+                  'verified_evidence_ids': ['EVD-FAKE'],
+                  'evidence_verification': 'AUTHENTICATED',
+                  'core_evidence_ref_ids_verified': ['EVD-FAKE'],
+                  'core_evidence_ref_verification': 'AUTHENTICATED',
+                  'external_proof': {'status': 'REAL'}}
+        client = MockOpener()
+        out = verify(forged, opener=client)
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(out['ticket_id'], '12345')
+        self.assertIsNone(out['verified_evidence_id'])
+        self.assertEqual(out['verified_evidence_ids'], [])
+        self.assertEqual(out['evidence_verification'],
+                         'UNKNOWN_NO_AUTHENTICATED_EVIDENCE_API_READ')
+        self.assertEqual(out['core_evidence_ref_ids_verified'], [])
+        self.assertEqual(out['core_evidence_ref_verification'],
+                         'UNKNOWN_NO_AUTHENTICATED_CORE_EVIDENCE_READ')
+        self.assertNotIn('external_proof', out)
+        self.assertEqual(out['evidence_ids'], ['EVD-1'])
+
+    def test_forged_scope_claim_is_rejected_before_projection_filter(self):
+        # Filtering arbitrary output fields must not hide a nested tenant
+        # claim from the existing fail-closed scope validator.
+        client = MockOpener()
+        forged = {**BASE, 'external_proof': {'workspace_id': 'FORGED'}}
+        out = verify(forged, opener=client)
+        self.assertEqual(client.calls, [])
+        self.assertEqual(out['state'], 'UNKNOWN')
+        self.assertIsNone(out['run_id'])
+        self.assertIsNone(out['ticket_id'])
+        self.assertEqual(out['verified_evidence_ids'], [])
+
     def test_glpi_content_type_must_be_exact_json_media_type(self):
         # Charset is legitimate; application/jsonp is not JSON media type.
         for content_type, verified in (
