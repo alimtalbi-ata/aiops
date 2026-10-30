@@ -65,12 +65,21 @@ def candidates(runs, incidents):
         raise ValueError("invalid_runs_contract")
     if not isinstance(incidents, dict) or not isinstance(incidents.get("items"), list):
         raise ValueError("invalid_incidents_contract")
-    registry = {
-        i["incident_id"]: i for i in incidents["items"]
-        if isinstance(i, dict) and isinstance(i.get("incident_id"), str)
-    }
+    # A duplicate identifier makes the registry ambiguous even if one row matches.
+    registry = {}
+    for incident in incidents["items"]:
+        if isinstance(incident, dict) and isinstance(incident.get("incident_id"), str):
+            iid = incident["incident_id"]
+            if iid in registry:
+                raise ValueError("duplicate_incident_id")
+            registry[iid] = incident
+    seen_runs = set()
     matches = []
     for run in runs["items"]:
+        if isinstance(run, dict) and isinstance(run.get("run_id"), str):
+            if run["run_id"] in seen_runs:
+                raise ValueError("duplicate_run_id")
+            seen_runs.add(run["run_id"])
         if not isinstance(run, dict) or run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
             continue
         rid = run.get("run_id")
@@ -93,7 +102,10 @@ def candidates(runs, incidents):
 def qualify(base, portal, get=fetch_json):
     runs = get(base, "/api/runs")
     incidents = get(base, "/api/incidents?limit=500")
-    matches = candidates(runs, incidents)
+    try:
+        matches = candidates(runs, incidents)
+    except ValueError:
+        return {"result": "UNKNOWN", "reason": "REGISTRY_CONTRACT_MISMATCH", "run_id": None}
     if not matches:
         # A full window cannot rule out older matching runs or incidents.
         limited = (len(runs["items"]) >= RUN_REGISTRY_LIMIT
@@ -110,7 +122,7 @@ def qualify(base, portal, get=fetch_json):
         events = detail.get("events")
         if not isinstance(canonical, dict) or not isinstance(events, list):
             continue
-        if any(canonical.get(k) != run.get(k) for k in ("run_id", "incident_id", "scenario_id", "mode")):
+        if any(canonical.get(k) != run.get(k) for k in ("run_id", "incident_id", "scenario_id", "mode", "status")):
             continue
         types = sorted({e.get("event_type") for e in events if isinstance(e, dict) and isinstance(e.get("event_type"), str)})
         evidence_refs = sorted({eid for e in events if isinstance(e, dict) and isinstance(e.get("evidence_ids"), list)
