@@ -213,3 +213,26 @@ Each handoff or completion record must include:
 - Status vocabulary: `PLANNED`, `IN_PROGRESS`, `PASS_SOURCE`, `PASS_INTEGRATION`, `PASS_SYNTHETIC_E2E`, `PASS_RUNTIME_ATTESTED`, `BLOCKED`, `NO_GO`.
 
 Never use one generic PASS for all tiers.
+
+
+## 2026-10-30 16:25 Europe/Paris — customer-story implementation delta
+
+The clean-main integration candidate #201 has a new 14-checkpoint ACME Explore/Story vertical slice at source HEAD `890977be741269a864f991a37ecf3208e82ecd34`; Quality run `41081252003` was queued at the time of this update.
+
+The Portal now presents synthetic owner roles, ITIL practice, handoff and evidence requirements for:
+1. Monitoring/Event → NOC L1 detection.
+2. CMDB/Twin → NOC L2 dependency correlation.
+3. Service Desk N1 acknowledgement and SLA start.
+4. N2 impact/urgency/P1 assessment.
+5. Incident commander and customer communications.
+6. N3/SRE evidence collection.
+7. ACL/versioned Knowledge retrieval.
+8. Problem Manager N3 analysis and Critic challenge.
+9. Change proposal, risk and rollback.
+10. Authorized approver (simulation-only).
+11. Temporal/automation no-effect simulation.
+12. Independent service/SLO verification.
+13. Service Desk incident closure.
+14. Problem review and Continual Improvement.
+
+All checkpoints deliberately remain `MISSING`; they specify required evidence, not captured events. No actual ticket, runtime timestamp, approver, SLA breach, recovery or live impact is inferred. This is the 48-hour customer story spine, not a connector qualification.
