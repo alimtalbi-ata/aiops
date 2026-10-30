@@ -66,10 +66,16 @@ def qualify(payload):
     if not isinstance(edges, list) or not isinstance(affected, list):
         return unknown
     actual = set()
+    seen_edge_ids = set()
     for edge in edges:
         if not isinstance(edge, dict) or not all(isinstance(edge.get(k), str)
                  for k in ("edge_id", "source_id", "target_id", "relation_type")):
             return unknown
+        # A set of tuples alone silently hides duplicate/conflicting edge IDs.
+        # One edge ID must denote exactly one edge in the Twin API response.
+        if not edge["edge_id"] or edge["edge_id"] in seen_edge_ids:
+            return unknown
+        seen_edge_ids.add(edge["edge_id"])
         actual.add((edge["edge_id"], edge["source_id"], edge["target_id"], edge["relation_type"]))
     depths = {}
     for item in affected:
@@ -78,7 +84,8 @@ def qualify(payload):
         depth = item.get("depth")
         if type(depth) is not int or depth < 0 or depth > 8:
             return unknown
-        if item["node_id"] in depths and depths[item["node_id"]] != depth:
+        # Even identical duplicate affected nodes make the response ambiguous.
+        if not item["node_id"] or item["node_id"] in depths:
             return unknown
         depths[item["node_id"]] = depth
     if not set(EXPECTED).issubset(actual):
