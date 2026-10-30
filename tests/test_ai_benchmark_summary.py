@@ -100,6 +100,31 @@ class BenchmarkSummaryTests(unittest.TestCase):
             self.assertEqual(model["usage_complete_repeats"], 0)
             self.assertIsNone(model["usage_coverage_mean"])
 
+    def test_ollama_cpu_workflow_fails_closed_and_uses_bounded_baseline(self):
+        workflow = (ROOT / ".github" / "workflows" / "ollama-ai-benchmark.yml").read_text(encoding="utf-8")
+        compose = (ROOT / ".github" / "compose.ollama-benchmark.yml").read_text(encoding="utf-8")
+        self.assertIn('model: ["qwen3:1.7b", "qwen3:4b"]', workflow)
+        self.assertIn('AIOPS_BENCHMARK_TIMEOUT_SECONDS: "300"', workflow)
+        self.assertIn('AIOPS_BENCHMARK_MAX_OUTPUT_TOKENS: "2048"', workflow)
+        self.assertIn('default: "1"', workflow)
+        self.assertIn("Fail benchmark job when any evaluator repeat fails", workflow)
+        self.assertIn("grep -Ev 'evaluator_exit=0        with tempfile.TemporaryDirectory() as directory:
+            first = report()
+            second = report()
+            second["prompt_version"] = "different"
+            paths = [
+                self.write(directory, "a-repeat-1.json", first),
+                self.write(directory, "a-repeat-2.json", second),
+            ]
+            with self.assertRaisesRegex(ValueError, "prompt versions differ"):
+                aggregate_reports(paths)
+
+if __name__ == "__main__":
+    unittest.main()
+", workflow)
+        self.assertIn("AIOPS_LLM_MAX_OUTPUT_TOKENS:", compose)
+        self.assertIn("AIOPS_LLM_MAX_REQUEST_BYTES:", compose)
+
     def test_prompt_version_must_match_for_comparison(self):
         with tempfile.TemporaryDirectory() as directory:
             first = report()
