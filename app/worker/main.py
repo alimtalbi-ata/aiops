@@ -395,7 +395,45 @@ async def worker_main():
    worker_state['last_error']=type(exc).__name__
    log.exception('Temporal polling worker unavailable; retrying in 5s')
    await asyncio.sleep(5)
+async def reconcile_hitl_decisions_loop():
+ """At-least-once Core-to-Temporal decision delivery.
+
+ Core proposal status is authoritative. Repeated identical Temporal signals are
+ idempotent; a workflow rejects conflicting payloads. This poller is a delivery
+ bridge, not an execution authorization mechanism.
+ """
+ while True:
+  try:
+   snapshot=get_json(CORE,'/api/proposals?status=ALL',token=ADMIN)
+   items=snapshot.get('items',[]) if isinstance(snapshot,dict) else []
+   client=await Client.connect(TEMP)
+   for item in items:
+    status=item.get('status')
+    if status not in ('APPROVED','REJECTED','REVOKED'):
+     continue
+    rid=item.get('run_id')
+    pid=item.get('proposal_id')
+    digest=item.get('proposal_hash')
+    revision=item.get('revision')
+    if not all(isinstance(v,str) and v for v in (rid,pid,digest)) or type(revision) is not int:
+     continue
+    decision='APPROVE' if status=='APPROVED' else 'REJECT'
+    payload={
+     'proposal_id':pid,
+     'proposal_hash':digest,
+     'proposal_revision':revision,
+     'decision':decision,
+     'source_status':status,
+    }
+    handle=client.get_workflow_handle(rid)
+    await handle.signal(IncidentWorkflow.submit_hitl_decision,payload)
+  except Exception as exc:
+   log.warning('HITL decision reconciliation unavailable: %s',type(exc).__name__)
+  await asyncio.sleep(5)
+
+
 @app.on_event('startup')
 async def startup():
  asyncio.create_task(worker_main())
  asyncio.create_task(reconcile_denial_loop())
+ asyncio.create_task(reconcile_hitl_decisions_loop())
