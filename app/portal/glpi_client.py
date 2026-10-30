@@ -99,14 +99,14 @@ class GLPIClient:
         }
         return self._call("GET","search/Ticket",params=params)
 
-    def create_ticket(self, name, content, *, priority=3):
+    def create_ticket(self, name, content, *, priority=3, status=1):
         """Create one GLPI incident ticket and return its numeric identifier."""
         payload = {
             "input": {
                 "name": str(name)[:250],
                 "content": str(content),
                 "type": 1,
-                "status": 1,
+                "status": max(1, min(int(status), 6)),
                 "priority": max(1, min(int(priority), 6)),
             }
         }
