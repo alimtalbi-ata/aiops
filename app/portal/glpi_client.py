@@ -132,7 +132,8 @@ class GLPIClient:
         if not isinstance(run_id, str) or not run_id.startswith("RUN-"):
             raise ValueError("invalid_run_id")
         result = self.search_tickets(run_id, limit=100)
-        rows = result.get("data", []) if isinstance(result, dict) else []
+        data = result.get("data", []) if isinstance(result, dict) else []
+        rows = list(data.values()) if isinstance(data, dict) else data
         matches = []
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
