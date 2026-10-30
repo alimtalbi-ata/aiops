@@ -14,6 +14,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from shared.tenant_scope import reject_unqualified_tenant_scope
 
 _TICKET = re.compile(r"[1-9][0-9]{0,17}\Z")
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
@@ -62,6 +63,16 @@ def _qualified_projection(value):
     These checks establish internal referential consistency only. A Core
     evidence reference is NOT an authenticated capture or a tenant ACL proof.
     """
+    # The projector rejects nested tenant claims; enforce the same boundary
+    # when this adapter receives a direct or altered projection. The one
+    # top-level false flag is a declared non-attestation, not a scope claim.
+    try:
+        reject_unqualified_tenant_scope({
+            key: item for key, item in value.items()
+            if key != "tenant_acl_qualified"
+        })
+    except (ValueError, TypeError):
+        return False
     if (value.get("schema") != "aiops.acme-itsm-evidence-link.v1"
             or value.get("state") != "CORRELATED_UNATTESTED"
             or value.get("classification") != "SYNTHETIC_ONLY"
