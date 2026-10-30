@@ -237,7 +237,7 @@ def call_model(system, payload, schema):
     headers = {'Content-Type': 'application/json'}
     if KEY:
         headers['Authorization'] = 'Bearer ' + KEY
-    body = {'model': MODEL, 'temperature': 0, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
+    body = {'model': MODEL, 'temperature': 0, 'max_tokens': MAX_OUTPUT_TOKENS, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
     started = time.perf_counter()
     invocation_id = uuid.uuid4().hex
     request_count = 0
@@ -309,11 +309,8 @@ def call_model(system, payload, schema):
                         'schema_errors': errors,
                     }, ensure_ascii=False)},
                 ]
-                repaired_response = requests.post(
-                    url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
-                )
-                repaired_response.raise_for_status()
-                repaired = decode_model_json(repaired_response.json()['choices'][0]['message']['content'])
+                repaired_payload = post_completion(repair_body)
+                repaired = decode_model_json(repaired_payload['choices'][0]['message']['content'])
                 if schema is Critique:
                     repaired = downgrade_inconsistent_critic(repaired)
                 # The retry cannot discard the critique's adverse findings.
