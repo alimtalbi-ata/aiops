@@ -155,3 +155,12 @@ Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current
 - **Observed repository state:** many open PRs overlap Core, Portal, Worker, Compose and quality workflows. #185 is a large ACME candidate whose PR body reports earlier CI/package evidence and DEMO_LOCAL=GO / RELEASE_STABLE=NO_GO; #190's latest head requires CI recheck; #192/#193/#194 are complementary but require identity and schema convergence; #187 is untested observability expansion; #188/#189 duplicate schedule intent. No PR is merged by this tranche.
 - **Operational limits:** no SSH/Debian host access, runner installation, cron modification, Docker restart, live migration, production data mutation, GLPI write, stable promotion or LIVE remediation was performed. Current source and CI findings are not host runtime proof.
 - **Next:** revalidate exact current PR heads and CI, implement a shared AI invocation telemetry contract in the existing evaluator/provider path, integrate the single ACME customer journey, then package only after clean install/upgrade/rollback and exact-SHA gates.
+
+
+### 2026-10-30 12:15 UTC — AI invocation telemetry and candidate dependency revalidation
+
+- PR #196 (`feat/ai-benchmark-telemetry-20261030`, stacked on #194) adds per-call provider usage, measured latency, retries, bounded request bytes/output tokens, and evaluator aggregation. Corrected head `388b7c48a108f70315b9fae92de72d10ac399704` passed AIOps quality run `41053026110` (6/6 jobs), Offline Integrity `41053026078`, Historical Trace `41053026102`, V2.8 Core `41053026140`. This is CI using the deterministic provider, not a real DGX/model benchmark.
+- Missing token usage remains UNKNOWN; cost remains UNKNOWN until pricing is pinned. Detailed invocation rows are report artifacts, not yet a dedicated DB ledger; per-tenant/run quotas remain unimplemented.
+- PR #185 current head `02dd3aa45a4adc0d3f7613f04288a71f77d9061e` has 6/6 quality jobs and a deployment-kit artifact, but its base is `feat/cron-stable-reconciled-20261028`, not main. That base diverges from main (672 commits ahead, 43 behind). Use as scenario/package source; do not merge its full branch into main.
+- PR #195 architecture docs were updated with these exact findings; new docs-only CI run `41053331399` is in progress at this update.
+- Existing Schedule 5/5 has been reoriented as architect/release coordinator and an immediate run was requested. The run was in progress; no completion is claimed.
