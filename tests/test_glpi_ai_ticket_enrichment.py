@@ -43,10 +43,10 @@ class FakeGLPI:
         return next((tid for tid, ticket in self.tickets.items()
                      if run_id in ticket.get("name", "")), None)
 
-    def create_ticket(self, name, content, priority=3):
+    def create_ticket(self, name, content, priority=3, status=1):
         ticket_id = str(self.next_id)
         type(self).next_id += 1
-        self.tickets[ticket_id] = {"id": ticket_id, "name": name, "content": content}
+        self.tickets[ticket_id] = {"id": ticket_id, "name": name, "content": content, "status": status}
         return ticket_id
 
     def get_ticket(self, ticket_id):
@@ -100,6 +100,8 @@ def test_internal_sync_creates_and_reads_back_ticket(monkeypatch):
     assert body["operation"] == "CREATED"
     assert body["ticket_id"] == "50"
     assert body["report_verified"] is True
+    assert body["glpi_status"] == 2
+    assert ticket_status := FakeGLPI.tickets["50"]["status"] == 2
     ticket = FakeGLPI.tickets["50"]
     assert RUN_ID in ticket["name"]
     assert "Faits observés" in ticket["content"]
