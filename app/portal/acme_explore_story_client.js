@@ -61,11 +61,12 @@
         !/^ACME-DEMO-[A-Z0-9-]+$/.test(data.scenario.impact_incident_id)) return false;
     for (const step of data.timeline) {
       if (!step || typeof step !== "object" || step.status !== "MISSING" ||
-          !["cue", "service", "view"].every(k => typeof step[k] === "string" &&
-          /^[a-z][a-z0-9_]{1,49}$/.test(step[k]))) return false;
+          !["cue", "service", "view", "itil_practice", "owner_role", "handoff", "evidence_required"]
+            .every(k => typeof step[k] === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(step[k]))) return false;
     }
     const expected = data.timeline[data.cursor];
-    if (!data.step || !["cue", "service", "view", "status"].every(k => data.step[k] === expected[k])) return false;
+    if (!data.step || !["cue", "service", "view", "itil_practice", "owner_role",
+      "handoff", "evidence_required", "status"].every(k => data.step[k] === expected[k])) return false;
     const identity = JSON.stringify([data.source_sha256, data.scenario, data.timeline]);
     return sessionIdentity === null || identity === sessionIdentity;
   }
@@ -84,14 +85,18 @@
     byId("source").textContent = "Fixture SHA-256 : " + data.source_sha256 +
       " · ticket GLPI réel : ABSENT";
     byId("step-title").textContent = data.step.cue.toUpperCase() +
-      " · " + data.step.service.toUpperCase();
-    byId("step-detail").textContent = data.step.view + " · preuve MISSING" +
-      " · runtime UNKNOWN";
+      " · " + data.step.owner_role.toUpperCase();
+    byId("step-detail").textContent = data.step.view +
+      " · pratique ITIL : " + data.step.itil_practice +
+      " · transfert : " + data.step.handoff +
+      " · preuve attendue : " + data.step.evidence_required +
+      " · preuve MISSING · runtime UNKNOWN";
     const list = byId("timeline");
     list.replaceChildren();
     data.timeline.forEach((step, i) => {
       const li = document.createElement("li");
       li.textContent = (i + 1) + ". " + step.cue + " / " + step.service +
+        " · " + step.owner_role + " · " + step.itil_practice +
         " — MISSING (simulation)";
       if (i === cursor) {
         li.className = "current";
