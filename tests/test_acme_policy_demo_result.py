@@ -500,6 +500,37 @@ class PolicyDemoResultTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "projection_status_invalid"):
                     present_demo_policy_result(r)
 
+    def test_unrecognized_receipt_or_projection_claims_rejected(self):
+        for status, gate_status in (
+            ("SIMULATED_SUCCESS", "SIMULATED"),
+            ("BLOCKED", "BLOCKED"),
+        ):
+            for location, key, forged, error in (
+                ("receipt", "human", {"approval_valid_now": True}, "receipt_fields_unexpected"),
+                ("projection", "runtime_verified", True, "projection_fields_unexpected"),
+            ):
+                with self.subTest(status=status, location=location):
+                    r = receipt(status, gate_status)
+                    node = r if location == "receipt" else r["projection"]
+                    node[key] = forged
+                    with self.assertRaisesRegex(ValueError, error):
+                        present_demo_policy_result(r)
+
+    def test_unrecognized_gate_or_rollback_claims_rejected(self):
+        for status, gate_status in (
+            ("SIMULATED_SUCCESS", "SIMULATED"),
+            ("BLOCKED", "BLOCKED"),
+        ):
+            for location, key, forged, error in (
+                ("gate", "approval_valid_now", True, "gate_fields_unexpected"),
+                ("rollback", "actual_rollback_success", True, "rollback_fields_unexpected"),
+            ):
+                with self.subTest(status=status, location=location):
+                    r = receipt(status, gate_status)
+                    r["projection"][location][key] = forged
+                    with self.assertRaisesRegex(ValueError, error):
+                        present_demo_policy_result(r)
+
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)
         present_demo_policy_result(r)
