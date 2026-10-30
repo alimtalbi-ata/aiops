@@ -118,3 +118,8 @@ These were source-reviewed on the HITL candidate branch. Quality metrics exist; 
 - [#197](https://github.com/alimtalbi-ata/aiops/pull/197) is a fail-closed UTC Evidence preflight adapter (5/5 local tests, Quality SUCCESS); not a GLPI client or proof of authenticated reconciliation.
 - [#199](https://github.com/alimtalbi-ata/aiops/pull/199) is a SIMULATE-only Policy fixture adapter (22/22 local Policy tests, Quality SUCCESS); it does not create approval authority or execution rights.
 - The main Portal lacks the divergent Demo Studio run-detail routes; 2/5 must not import the old Portal tree. The integration owner must supply a reviewed main-based route before the foreign-run guard can be ported. Reuse Core, Temporal, Evidence, Twin, GLPI, Portal and evaluation harness; do not duplicate engines.
+
+### 2026-10-30 13:12 UTC — source completeness boundary
+
+#185 `2b2af9c` scenario/evaluator source and 395/395 archive checks do not include #194 migration `011_hitl_decision_outbox.sql` or OIDC modules, #196 AI telemetry implementation or #195 architecture/story docs. Main-based #197 Evidence UTC preflight is not GLPI authority; #198 Run locator is not tenant ACL; #199 Policy SIMULATE fixture is not approval/execution. #192/#193 share `glpi_run_context.py`; #185/#190/#192/#194 overlap Core/Portal main modules and #185/#192/#194/#196 overlap Compose. Reuse Core/Temporal/Evidence/Twin/Policy/GLPI/Portal/evaluator, do not duplicate engines. Prometheus/Grafana remain observability baseline; #187 deferred.
+
