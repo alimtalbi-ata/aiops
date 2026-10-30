@@ -4,8 +4,9 @@ The simulator issues short-lived signed fixture assertions. It does not
 authenticate real users and must never be used for LIVE approvals.
 """
 import os
+import hmac
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from shared.hitl_identity import (
@@ -16,6 +17,13 @@ from shared.hitl_identity import (
 )
 
 router = APIRouter(tags=["HITL identity simulator"])
+
+
+def _require_internal(authorization: str | None) -> None:
+    expected = os.getenv("AIOPS_INTERNAL_TOKEN", "")
+    supplied = (authorization or "").removeprefix("Bearer ")
+    if not expected or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(401, "invalid_internal_token")
 
 
 class SimulatorTokenRequest(BaseModel):
@@ -38,14 +46,16 @@ def identity_health():
 
 
 @router.get("/api/hitl/identity/simulator/catalog")
-def identity_simulator_catalog():
+def identity_simulator_catalog(authorization: str | None = Header(default=None)):
+    _require_internal(authorization)
     if not simulator_enabled():
         raise HTTPException(404, "identity_simulator_disabled")
     return {"items": simulator_catalog(), "simulated": True, "execution_allowed": False}
 
 
 @router.post("/api/hitl/identity/simulator/token")
-def identity_simulator_token(request: SimulatorTokenRequest):
+def identity_simulator_token(request: SimulatorTokenRequest, authorization: str | None = Header(default=None)):
+    _require_internal(authorization)
     if not simulator_enabled():
         raise HTTPException(404, "identity_simulator_disabled")
     try:
