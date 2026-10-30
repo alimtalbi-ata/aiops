@@ -32,6 +32,47 @@ def refs_from_critique(critique):
         refs += check.get("supporting_evidence_ids",[]) + check.get("contradicting_evidence_ids",[])
     return refs
 
+def percentile(values, fraction):
+    ordered=sorted(value for value in values if isinstance(value,(int,float)) and not isinstance(value,bool))
+    if not ordered:
+        return None
+    index=max(0,min(len(ordered)-1,int(__import__("math").ceil(fraction*len(ordered))-1)))
+    return round(float(ordered[index]),2)
+
+
+def aggregate_model_invocations(rows):
+    calls=[]
+    for row in rows:
+        for invocation in row.get("model_invocations",[]):
+            if isinstance(invocation,dict):
+                calls.append(invocation)
+    latencies=[x["latency_ms"] for x in calls
+               if isinstance(x.get("latency_ms"),(int,float)) and not isinstance(x.get("latency_ms"),bool)]
+    reported=[x for x in calls if x.get("usage_source")=="provider_reported"
+              and all(type(x.get(k)) is int and x[k]>=0 for k in
+                      ("prompt_tokens","completion_tokens","total_tokens"))]
+    complete=bool(calls) and len(reported)==len(calls)
+    prompt_partial=sum(x["prompt_tokens"] for x in reported)
+    completion_partial=sum(x["completion_tokens"] for x in reported)
+    total_partial=sum(x["total_tokens"] for x in reported)
+    return {
+        "model_calls":len(calls),
+        "usage_reported_calls":len(reported),
+        "usage_coverage":round(len(reported)/len(calls),4) if calls else None,
+        "prompt_tokens_total":prompt_partial if complete else None,
+        "completion_tokens_total":completion_partial if complete else None,
+        "total_tokens":total_partial if complete else None,
+        "reported_tokens_partial_sum":total_partial,
+        "token_totals_complete":complete,
+        "latency_ms_p50":percentile(latencies,0.50),
+        "latency_ms_p95":percentile(latencies,0.95),
+        "retry_count":sum(x.get("retry_count",0) for x in calls
+                          if type(x.get("retry_count",0)) is int),
+        "cost_usd":None,
+        "cost_status":"UNKNOWN_PRICING_NOT_CONFIGURED",
+    }
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset",default=os.getenv("AIOPS_EVAL_DATASET","eval/ai-core-cases.json"))
@@ -55,7 +96,7 @@ def main():
     rows=[]
     for case in dataset["cases"]:
         known={x["evidence_id"] for x in case["evidence"]}
-        row={"case_id":case["case_id"],"expected_severity":case["expected_severity"],"analysis_ok":False,"critic_ok":False,"grounded":False,"actions_safe":False,"severity_correct":False,"critic_disposition_correct":False,"injection_resistant":None,"contradiction_detected":None,"stale_detected":None}
+        row={"case_id":case["case_id"],"expected_severity":case["expected_severity"],"analysis_ok":False,"critic_ok":False,"grounded":False,"actions_safe":False,"severity_correct":False,"critic_disposition_correct":False,"injection_resistant":None,"contradiction_detected":None,"stale_detected":None,"model_invocations":[]}
         try:
             evidence=[dict(item) for item in case["evidence"]]
             refresh_ids=set(case.get("refresh_evidence_ids",[]))
@@ -69,6 +110,10 @@ def main():
             response.raise_for_status()
             analysis_response=response.json()
             analysis=analysis_response["analysis"]
+            row["model_invocations"].append(analysis_response.get("model_invocation") or {
+                "usage_source":"unavailable","latency_ms":None,"retry_count":0,
+                "prompt_tokens":None,"completion_tokens":None,"total_tokens":None,
+            })
             row["provider"]=analysis_response.get("provider")
             row["model"]=analysis_response.get("model")
             row["analyst_prompt_version"]=analysis_response.get("prompt_version")
@@ -95,6 +140,10 @@ def main():
             response.raise_for_status()
             critique_response=response.json()
             critique=critique_response["critique"]
+            row["model_invocations"].append(critique_response.get("model_invocation") or {
+                "usage_source":"unavailable","latency_ms":None,"retry_count":0,
+                "prompt_tokens":None,"completion_tokens":None,"total_tokens":None,
+            })
             row["critic_prompt_version"]=critique_response.get("prompt_version")
             row["critic_evidence_freshness"]=critique_response.get("evidence_freshness",{}).get("status","UNKNOWN")
             row["freshness_correct"]=row["freshness_correct"] and row["critic_evidence_freshness"]==case.get("expected_evidence_freshness")
@@ -128,7 +177,8 @@ def main():
     stale=[r for r in rows if r["stale_detected"] is not None]
     stale_score=sum(r["stale_detected"] for r in stale)/max(1,len(stale))
     thresholds={"severity_accuracy":args.min_severity_accuracy,"grounding":args.min_grounding,"freshness_accuracy":args.min_freshness_accuracy,"action_safety":args.min_action_safety,"injection_resistance":args.min_injection_resistance,"contradiction_detection":args.min_contradiction_detection,"stale_detection":args.min_stale_detection,"critic_disposition":args.min_critic_disposition}
-    metrics={"severity_accuracy":severity_accuracy,"grounding":grounding,"freshness_accuracy":freshness_accuracy,"action_safety":safety,"injection_resistance":injection_score,"contradiction_detection":conflict_score,"stale_detection":stale_score,"critic_disposition":critic_disposition,"cases_total":n,"cases_analyzed":len(scored),"actions_checked":sum(r.get("actions_checked",0) for r in scored)}
+    invocation_metrics=aggregate_model_invocations(rows)
+    metrics={"severity_accuracy":severity_accuracy,"grounding":grounding,"freshness_accuracy":freshness_accuracy,"action_safety":safety,"injection_resistance":injection_score,"contradiction_detection":conflict_score,"stale_detection":stale_score,"critic_disposition":critic_disposition,"cases_total":n,"cases_analyzed":len(scored),"actions_checked":sum(r.get("actions_checked",0) for r in scored),**invocation_metrics}
     # A metric is not considered proven if its target case is missing or did not execute.
     coverage_ok=(n>=5 and all(r["analysis_ok"] and r["critic_ok"] for r in rows)
                  and len(injection)==1 and len(conflict)==1 and len(stale)==1
@@ -152,6 +202,13 @@ def main():
             "qualification_kind":qualification_kind,
             "provider_configured_service":base,"mode":"DEMO","execution_allowed":False,
             "thresholds":thresholds,"metrics":metrics,"gates":gates,
+            "model_invocation_telemetry":{
+                "status":"PASS" if invocation_metrics["token_totals_complete"] else "PARTIAL",
+                "usage_source":"provider_reported_only",
+                "latency_source":"measured_wall_clock",
+                "cost_status":invocation_metrics["cost_status"],
+                "calls": [call for row in rows for call in row.get("model_invocations",[])],
+            },
             "result":"PASS" if all(gates.values()) else "FAIL","cases":rows,
             "limitations":["Synthetic fixture data only.","Deterministic fake provider qualifies contracts, not real-model accuracy.","All metrics must be re-evaluated for each model, prompt, retrieval and dataset version."]}
     core_url=os.getenv("AIOPS_CORE_URL","").rstrip("/")
