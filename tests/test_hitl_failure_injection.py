@@ -5,11 +5,12 @@ import datetime
 import pathlib
 import sys
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from policy.main import Decision, evaluate
+from policy import main as policy_module
 
 
 def extract(path, name, env):
@@ -83,6 +84,12 @@ def simulate(*signals, synthetic=False):
 
 
 class OfflineFailureInjection(unittest.TestCase):
+    def setUp(self):
+        guard = patch.object(policy_module.autonomy_store, "status",
+                             return_value={"mode": "NORMAL", "healthy": True})
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def policy_input(self, **kw):
         data = dict(mode="DEMO", command="EXECUTE", severity="P2",
                     confidence=0.99, evidence_count=1, critic_validated=True,
@@ -101,8 +108,10 @@ class OfflineFailureInjection(unittest.TestCase):
         self.assertEqual((result["state"], result["decision"]), ("BLOCKED", "ESCALATE"))
 
     def test_policy_synthetic_never_live_allow(self):
-        result = evaluate(self.policy_input(critic_validated=False))
-        self.assertEqual((result["state"], result["decision"]), ("PASS", "SIMULATE"))
+        rejected = evaluate(self.policy_input(critic_validated=False))
+        self.assertEqual((rejected["state"], rejected["decision"]), ("BLOCKED", "HUMAN_APPROVAL"))
+        qualified = evaluate(self.policy_input())
+        self.assertEqual((qualified["state"], qualified["decision"]), ("PASS", "SIMULATE"))
 
     def test_critic_reject_prevents_proposal(self):
         for critique in ({"validated": False}, {"validated": True, "issues": ["unsafe"]}):
