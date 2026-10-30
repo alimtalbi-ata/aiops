@@ -34,7 +34,7 @@ class FakeTemporal:
         if name == "execute_stage" and args["stage"] == "HITL":
             if self.synthetic:
                 return {"version": 2, "status": "PASS", "synthetic": True,
-                        "execution_allowed": False}
+                        "execution_allowed": False, "effect_allowed": False}
             return {"version": 2, "status": "WAITING", "hitl_required": True,
                     "proposal_id": "ACT-OFFLINE", "proposal_hash": "hash-offline",
                     "proposal_revision": 1, "execution_allowed": False}
@@ -298,6 +298,48 @@ class OfflineFailureInjection(unittest.TestCase):
                 self.assertIn(flag, fields)
                 self.assertIsInstance(fields[flag], ast.Constant)
                 self.assertIs(fields[flag].value, False)
+
+
+    def test_synthetic_hitl_forged_effect_flag_blocks_before_remediation(self):
+        # Synthetic HITL receipts cannot claim effects, even with PASS status.
+        class ForgedEffectTemporal(FakeTemporal):
+            async def execute_activity(self, name, args, **kw):
+                if name == "execute_stage" and args["stage"] == "HITL":
+                    self.calls.append(name)
+                    return {"version": 2, "status": "PASS", "synthetic": True,
+                            "execution_allowed": False, "effect_allowed": True}
+                return await super().execute_activity(name, args, **kw)
+
+        fake = ForgedEffectTemporal(synthetic=True)
+        result = asyncio.run(workflow_class(fake)().run({
+            "run_id": "RUN-OFFLINE", "mode": "DEMO",
+            "scenario_id": "SCENARIO-OFFLINE",
+        }))
+        self.assertEqual(result["reason"], "synthetic_hitl_bypass_contract_invalid")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertIs(result["effect_allowed"], False)
+        self.assertEqual(fake.calls, ["start_run", "execute_stage"])
+
+    def test_synthetic_hitl_missing_effect_flag_fails_closed(self):
+        # Missing provenance is not a false value; reject absent effect fence.
+        class MissingEffectTemporal(FakeTemporal):
+            async def execute_activity(self, name, args, **kw):
+                if name == "execute_stage" and args["stage"] == "HITL":
+                    self.calls.append(name)
+                    return {"version": 2, "status": "PASS", "synthetic": True,
+                            "execution_allowed": False}
+                return await super().execute_activity(name, args, **kw)
+
+        fake = MissingEffectTemporal(synthetic=True)
+        result = asyncio.run(workflow_class(fake)().run({
+            "run_id": "RUN-OFFLINE", "mode": "DEMO",
+            "scenario_id": "SCENARIO-OFFLINE",
+        }))
+        self.assertEqual(result["reason"], "synthetic_hitl_bypass_contract_invalid")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertIs(result["effect_allowed"], False)
+        self.assertEqual(fake.calls, ["start_run", "execute_stage"])
+
 
 
 if __name__ == "__main__":
