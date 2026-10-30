@@ -1,0 +1,74 @@
+import os
+import unittest
+from unittest.mock import patch
+
+from shared.hitl_identity import (
+    IdentityError,
+    authorize_critical_approvals,
+    authorize_sudo_request,
+    issue_simulated_assertion,
+    verify_assertion,
+)
+
+
+class HitlIdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.env = patch.dict(os.environ, {
+            "AIOPS_HITL_IDENTITY_MODE": "SIMULATOR",
+            "AIOPS_HITL_SIMULATOR_ENABLED": "true",
+            "AIOPS_HITL_SIMULATOR_SIGNING_KEY": "test-only-signing-key-32-bytes-minimum!!",
+        })
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_simulator_assertion_is_explicitly_simulated(self):
+        token, claims = issue_simulated_assertion("security.sara")
+        verified = verify_assertion(token, allow_simulated=True)
+        self.assertTrue(verified["simulated"])
+        self.assertEqual(verified["sub"], "sim:security.sara")
+        self.assertIn("security_admin", claims["roles"])
+
+    def test_simulator_assertion_cannot_authorize_live(self):
+        token, _ = issue_simulated_assertion("security.sara")
+        with self.assertRaisesRegex(IdentityError, "simulated_identity_forbidden_for_live"):
+            verify_assertion(token, allow_simulated=False)
+
+    def test_signature_tampering_is_rejected(self):
+        token, _ = issue_simulated_assertion("operator.alex")
+        with self.assertRaises(IdentityError):
+            verify_assertion(token + "x", allow_simulated=True)
+
+    def test_disabled_simulator_fails_closed(self):
+        with patch.dict(os.environ, {"AIOPS_HITL_SIMULATOR_ENABLED": "false"}):
+            with self.assertRaisesRegex(IdentityError, "identity_simulator_disabled"):
+                issue_simulated_assertion("operator.alex")
+
+    def test_critical_approval_requires_two_distinct_subjects_and_roles(self):
+        self.assertFalse(authorize_critical_approvals([
+            {"subject_id": "sim:sara", "role": "security_admin"},
+            {"subject_id": "sim:sara", "role": "incident_commander"},
+        ]))
+        self.assertTrue(authorize_critical_approvals([
+            {"subject_id": "ad:sara-guid", "role": "security_admin"},
+            {"subject_id": "ad:ian-guid", "role": "incident_commander"},
+        ]))
+
+    def test_sudo_catalog_is_precheck_only(self):
+        allowed = authorize_sudo_request(
+            action_id="linux.collect_diagnostics",
+            subject_roles=["operator"], host_id="rhel01",
+            allowed_hosts={"rhel01"}, simulated=False,
+        )
+        self.assertTrue(allowed["allowed"])
+        self.assertFalse(allowed["execution_allowed"])
+        denied = authorize_sudo_request(
+            action_id="bash.anything", subject_roles=["platform_admin"],
+            host_id="rhel01", allowed_hosts={"rhel01"}, simulated=False,
+        )
+        self.assertFalse(denied["allowed"])
+
+
+if __name__ == "__main__":
+    unittest.main()
