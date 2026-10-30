@@ -155,6 +155,11 @@ def _operator_run_context(run_id):
     detail = _get("/api/runs/" + run_id)
     if not _core_detail_matches_listed_run(detail, listed):
         return unknown
+    return _verified_operator_run_context(run_id, detail, listed)
+
+
+def _verified_operator_run_context(run_id, detail, listed):
+    """Read-only navigation for an identity already checked against Core."""
     from urllib.parse import quote
     rid = quote(run_id, safe="")
     provenance = _core_run_provenance(detail, listed)
@@ -193,8 +198,10 @@ def home():
     content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
     content+=panel("Digital Twin — état courant",pretty(t))
     content+=panel("Démo ACME — valeur métier",
-        '<p>Parcours guidé ACME SAN → Payments en six écrans, entièrement illustratif et sans effet LIVE.</p>'
-        '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
+        '<p>Parcours guidé ACME SAN → Payments dans le portail existant, sans effet LIVE.</p>'
+        '<p><a href="/demo-studio">Ouvrir le parcours opérateur Demo Studio</a> · '
+        '<a href="/runs">Choisir un run Core existant</a> · '
+        '<a href="/demo-studio/business-story">Voir la valeur métier hypothétique</a></p>')
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
@@ -258,7 +265,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
 
     content+=panel("Périmètre et transparence",
         "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
-        "Les listes sont limitées aux enregistrements renvoyés par Core. Les observations DEMO sont SYNTHETIC ; les décisions IA éventuellement enregistrées exigent une vérification de provenance. Aucune approbation ou remédiation LIVE n’est attestée.</p>")
+        "Les listes sont limitées aux enregistrements renvoyés par Core. La provenance REAL/SYNTHETIC est déclarée par Core uniquement si l'identité du run concorde ; sinon UNKNOWN. Les décisions IA exigent une vérification indépendante. Aucune approbation ou remédiation LIVE n’est attestée.</p>")
     if not selected:
         content+=panel("Timeline","<p>UNKNOWN — aucun run DEMO / REPLAY / STORY non ambigu accessible depuis Core.</p>")
         return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
@@ -275,6 +282,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
             "Aucun événement, diagnostic ou Evidence n'est présenté.</p>")
         return shell("/timeline", "Timeline des incidents",
                      "Identité Core non qualifiée — lecture seule.", content, mode="UNKNOWN")
+    content+=_verified_operator_run_context(selected, detail, match)
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     evidence_response=_get("/api/runs/"+key+"/evidence")
     evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
