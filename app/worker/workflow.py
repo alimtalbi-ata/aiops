@@ -39,7 +39,7 @@ class IncidentWorkflow:
         if any(key not in decision for key in required):
             self._hitl_conflict = True
             return
-        if decision.get("decision") not in ("APPROVE", "REJECT"):
+        # Python bool/float compare equal to int revisions; never accept them.\n        if type(decision.get("proposal_revision")) is not int or decision["proposal_revision"] < 1:\n            self._hitl_conflict = True\n            return\n        if decision.get("decision") not in ("APPROVE", "REJECT"):
             self._hitl_conflict = True
             return
         if self._hitl_decision is None:
@@ -111,7 +111,7 @@ class IncidentWorkflow:
                 proposal_id = receipt.get("proposal_id")
                 proposal_hash = receipt.get("proposal_hash")
                 revision = receipt.get("proposal_revision")
-                if not proposal_id or not proposal_hash or type(revision) is not int:
+                if not proposal_id or not proposal_hash or type(revision) is not int or revision < 1:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version, "reason": "hitl_proposal_binding_missing",
@@ -143,7 +143,7 @@ class IncidentWorkflow:
                 if (
                     decision.get("proposal_id") != proposal_id
                     or decision.get("proposal_hash") != proposal_hash
-                    or decision.get("proposal_revision") != revision
+                    or type(decision.get("proposal_revision")) is not int\n                    or decision.get("proposal_revision") != revision
                 ):
                     return {
                         "run_id": run_id, "status": "BLOCKED",
