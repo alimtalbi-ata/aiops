@@ -91,22 +91,23 @@ def demo(authorization: str | None = Header(default=None)):
                          'live_remediation_authorized': False},
                         status_code=202, headers=NO_STORE)
 @app.get('/',response_class=HTMLResponse)
-def home(response: Response):
-    # Keep the existing inline-script cockpit functional while restricting
-    # framing, cross-origin loads and caching of the anonymous operator shell.
-    response.headers.update({
-        'Cache-Control': 'no-store',
-        'Pragma': 'no-cache',
-        'X-Content-Type-Options': 'nosniff',
-        'Referrer-Policy': 'no-referrer',
-        'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': (
-            "default-src 'none'; script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; connect-src 'self'; "
-            "img-src 'self' data:; base-uri 'none'; object-src 'none'; "
-            "form-action 'self'; frame-ancestors 'none'"
-        ),
-    })
+def home(response: Response = None):
+    # Keep direct callers of the existing home() renderer compatible.
+    # FastAPI injects Response on HTTP requests; only then attach headers.
+    if response is not None:
+        response.headers.update({
+            'Cache-Control': 'no-store',
+            'Pragma': 'no-cache',
+            'X-Content-Type-Options': 'nosniff',
+            'Referrer-Policy': 'no-referrer',
+            'X-Frame-Options': 'DENY',
+            'Content-Security-Policy': (
+                "default-src 'none'; script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline'; connect-src 'self'; "
+                "img-src 'self' data:; base-uri 'none'; object-src 'none'; "
+                "form-action 'self'; frame-ancestors 'none'"
+            ),
+        })
     # Anonymous shell: no Core/Twin calls and no unverified incident/run data.
     snapshot={'dashboard':None,'runs':None,'twin':None,
               'states':{'dashboard':'UNKNOWN','runs':'UNKNOWN','twin':'UNKNOWN'}}
