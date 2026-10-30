@@ -1044,7 +1044,7 @@ def hitl_command_center():
         '<a href="/evidence">Evidence Ledger</a> · '
         '<a href="/twin">Digital Twin / CMDB</a> · '
         '<a href="/policy-control">Policy / Gates</a> · '
-        '<a href="/glpi">GLPI / ITSM</a> · '
+        'GLPI / ITSM API · '
         '<a href="/copilot">Copilot</a>'
         '</nav>'
         '<p>Temporal conserve l’état durable du workflow. Core reste l’autorité des propositions et décisions ; '
