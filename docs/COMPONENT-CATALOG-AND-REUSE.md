@@ -110,3 +110,11 @@ These were source-reviewed on the HITL candidate branch. Quality metrics exist; 
 - **AI evaluator:** #196 reuses `tools/evaluate_ai_core.py` and `tests/test_ai_eval_harness.py` for provider-reported token/latency accounting. Its exact-head workflows succeeded; no live invocation, pricing source or actual cost has been qualified. Baseline local harness: 3/3 PASS, five synthetic cases, no inference.
 - **Scheduling:** #188 daily full quality + 15-minute read-only runtime smoke is preferred, but both #188 and #189 remain unmerged. #189's actual YAML is `23 */2 * * *`, despite its stale PR description mentioning six hours. Never activate both.
 - **Release/deployer:** stable SHA `e54c4e9a` is unchanged; stable deployer is portal-only and cannot transport the four-service candidate. #187 Loki/Tempo/OTel is deferred; #146/#153 auto-deploy is not authorized.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — main-based adapter boundaries
+
+- [#198](https://github.com/alimtalbi-ata/aiops/pull/198) reuses the existing Core read-only Run locator; its bearer Evidence-refs endpoint is absent on `main`, so evidence attestation remains UNKNOWN. 14/14 local locator tests reported; exact-head Quality SUCCESS. No new Core engine.
+- [#197](https://github.com/alimtalbi-ata/aiops/pull/197) is a fail-closed UTC Evidence preflight adapter (5/5 local tests, Quality SUCCESS); not a GLPI client or proof of authenticated reconciliation.
+- [#199](https://github.com/alimtalbi-ata/aiops/pull/199) is a SIMULATE-only Policy fixture adapter (22/22 local Policy tests, Quality SUCCESS); it does not create approval authority or execution rights.
+- The main Portal lacks the divergent Demo Studio run-detail routes; 2/5 must not import the old Portal tree. The integration owner must supply a reviewed main-based route before the foreign-run guard can be ported. Reuse Core, Temporal, Evidence, Twin, GLPI, Portal and evaluation harness; do not duplicate engines.

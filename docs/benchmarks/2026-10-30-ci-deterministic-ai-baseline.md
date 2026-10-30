@@ -84,3 +84,8 @@ The CI report explicitly identifies synthetic provider and Twin evidence. This i
 - Runtime report artifact: `12974854416`
 - Deployment-kit artifact from the same run: `12974884559`
 - Source PR: [#196](https://github.com/alimtalbi-ata/aiops/pull/196)
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — qualification boundary unchanged
+
+Latest [#196](https://github.com/alimtalbi-ata/aiops/pull/196) head `6b6a3b3991e8a4b5b83ff4c6534dfa4b34f72932` has exact-head [Quality #41055287795](https://github.com/alimtalbi-ata/aiops/actions/runs/41055287795), [V2.8 #41055287705](https://github.com/alimtalbi-ata/aiops/actions/runs/41055287705), [Offline #41055287588](https://github.com/alimtalbi-ata/aiops/actions/runs/41055287588), and [Historical #41055287726](https://github.com/alimtalbi-ata/aiops/actions/runs/41055287726) **SUCCESS**. These workflow results do not add a real-provider benchmark. The 5-case, 10-call, 20-placeholder-token, P50 1.69 ms/P95 3.24 ms values remain **CI deterministic plumbing only**. Cost UNKNOWN, tenant/run budget enforcement NOT_IMPLEMENTED, real-model retries/latency/usage NOT_MEASURED. No new numerical benchmark result was generated in this 5/5 pass.

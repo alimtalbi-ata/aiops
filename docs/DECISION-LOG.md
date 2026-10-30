@@ -160,3 +160,10 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Evidence:** #185 candidate `5782d6f` V2.8 [41053319372](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319372) failed one of 59 tests because a legacy mock returned `{"decision":"BLOCKED"}` rather than a scoped `{"items":[...]}` gates response. Quality [41053319020](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319020) was pending when recorded. Do not infer a runtime regression or a green gate from this single test.
 - **Ownership:** 2/5 owns Portal fixtures and UI contract; 5/5 integrates only verified fixes. #196 owns the existing Analyst/Critic telemetry implementation; 5/5 owns benchmark interpretation and release evidence, not a duplicate provider client.
 - **Consequences:** One draft release candidate, no main/stable merge, no cron activation or Debian changes; explicit UNKNOWN for unverified business links, costs, approvals and rollback.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — release governance decision
+
+**Decision:** repair the V2.8 contract fixture in the existing #185 candidate without weakening the Core run/gate identity guard; do not merge the diverged release branch. Favor clean-main selective integration of #197/#198/#199 and the architecture docs before rebuilding a cumulative kit. Keep #188 as the *single preferred* daily full-quality + 15-minute read-only runtime-smoke design; do not activate duplicate #189. #146/#153 Debian auto-deploy remain disabled and #187 Loki/Tempo/OTel remains deferred. CI PASS on an isolated PR is not an install/rollback/production approval; synthetic HITL cannot authorize LIVE.
+
+**Evidence:** #185 `2b2af9c` V2.8 run 41055650146 SUCCESS, local V2.8 59/59 and selected 253/253; Quality 41055650123 pending at recording. #196 `6b6a3b3` four workflows SUCCESS. Two RC1.4 artifacts have mutually missing features and no full architecture docs. **Release verdict: NO-GO.**

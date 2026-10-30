@@ -123,3 +123,19 @@ The immediate 5/5 automation run was still in progress. Schedule 5/5 was updated
 - Failure is `test_demo_live_trace_is_source_backed` expecting `response["gates"]["decision"]`; new portal contract uses `gates.items`. Fix the test fixture, not the fail-closed code.
 - Package artifact `12975971501` inner SHA `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d`: 445 entries, 395/395 checksums valid, but no migration 011, no OIDC verifier, no AI per-call telemetry.
 - The separate #196 package `12974884559` contains migration 011, OIDC and telemetry but lacks the new architecture docs and the latest ACME fixes. Both packages are valid individually but not cumulative. Build one final kit only from a clean integrated source SHA and verify actual contents, not artifact label.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — exact-head overlaps and integration order
+
+| Slice | Exact head | Verified CI and disposition |
+|---|---|---|
+| #185 scenario spine | `2b2af9cd21e48be741a3906b7a12cfffa3371f7b` | V2.8 41055650146 SUCCESS; Offline/Historical SUCCESS; Quality 41055650123 pending at snapshot; 741 ahead / 43 behind main — **do not merge** |
+| #197 Evidence UTC preflight | `d9d09813b822a1e4bfd33f139eafc882be85bd49` | Quality 41054823119 SUCCESS; main-based, isolated adapter only |
+| #198 Core Run locator | `8f48b1b5a94960ce4ddcc1ca35bf206302543e94` | Quality 41054868177 SUCCESS; main-based; bearer Evidence refs endpoint absent |
+| #199 Policy SIMULATE fixture | `e0fc68f7b2f947c75d4eed035d682a45c88a78a0` | Quality 41055154260 SUCCESS; main-based, no LIVE authority |
+| #195 architecture docs | `f1bd3ee90b01ea627a3adba4d74f153fc88d93d1` (before this update) | Quality 41054940809 SUCCESS; main-based |
+| #196 AI telemetry | `6b6a3b3991e8a4b5b83ff4c6534dfa4b34f72932` | Quality 41055287795, V2.8 41055287705, Offline 41055287588, Historical 41055287726 all SUCCESS; stacked on #194, not main-based |
+
+**Diff conflict hotspots (changed-path intersections, not proof of semantic compatibility):** #185/#190 five files (`app/core/main.py`, `app/portal/main.py`, `app/shared/domain.py`, `tests/test_demo_v2.py`, `tests/test_initial_stage_state.py`); #185/#194 four (`quality.yml`, Core/Portal main, `compose.yml`); #192/#193 two (`app/portal/glpi_run_context.py`, its test); #194/#196 three (Intelligence main, Compose, intelligence contract test); #188/#189 one (`quality.yml`). Keep one integration owner for Core/Portal/Compose and a single schedule. #188 preferred; #189 duplicate inactive. #187 deferred; #146/#153 disabled.
+
+**Next candidate gate:** build from a **single clean main-based SHA** after selective conflict resolution, including ACME + migration 011/OIDC/HITL + AI per-call telemetry + architecture/ITIL/benchmark docs + configs/migrations/tests/rollback. Audit inner ZIP members, SHA256 and exact source blobs; test install/upgrade/rollback in isolation. Neither existing RC1.4 artifact is cumulative. `applied.sha` and Debian runtime remain NOT_ATTESTED; stable NO-GO.

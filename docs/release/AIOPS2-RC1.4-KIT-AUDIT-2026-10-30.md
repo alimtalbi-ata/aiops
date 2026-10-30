@@ -89,3 +89,8 @@ Both packages are internally checksum-valid but represent different source trees
 ## Current candidate quality caveat
 
 PR #185 head `5782d6f` has Quality run `41053319020` 6/6 SUCCESS, Offline `41053318999` and Historical `41053319033` SUCCESS, but V2.8 run `41053319372` FAILED: `test_demo_live_trace_is_source_backed` expected `gates.decision`, while the current scoped reader contract returns `gates.items`. This is a test fixture contract mismatch; update the fixture to the current collection shape, do not weaken identity scoping. PR #185 remains non-mergeable to main due base divergence.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — post-fixture kit gate
+
+#185 has a new **test-only** commit `2b2af9cd21e48be741a3906b7a12cfffa3371f7b` (scoped `gates.items` fixture). V2.8 exact-head run 41055650146 SUCCESS; prior 58/59 error is fixed in CI. This **does not create or qualify a new cumulative ZIP**. The previously inspected #185 artifact `12975971501` still lacks migration 011, OIDC verifier and AI telemetry; #196 artifact `12974884559` lacks the architecture docs and latest ACME. Quality run 41055650123 is pending at this snapshot; no packaging claim for the new head. A cumulative kit must be built from a clean integrated SHA and inspected for actual files, manifest, hashes, migrations, rollback and smoke, not inferred from the artifact label. Stable/production NO-GO.
