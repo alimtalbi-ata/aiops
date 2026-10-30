@@ -1,8 +1,8 @@
-"""Main-based, read-only synthetic Core Run detail; no tenant or approval authority.
+"""Main-based read-only Run journey, with no tenant or approval authority.
 
-Only the already-existing internal-bearer Core NOC Run read is consumed.
-Events, Evidence refs, AI Ledger and HITL are deliberately UNKNOWN until
-a scoped, authenticated Core read contract is available on main.
+The internal-bearer Core NOC read does NOT establish a viewer's tenant ACL.
+Never disclose its Run/Incident identity or status through the Portal until
+Core supplies a server-authorized, exact-Run, tenant-scoped read contract.
 """
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def _valid_run_id(value: object) -> bool:
 
 
 def _project(rid: str, raw: object) -> dict:
-    """Project only four exact synthetic identity fields from Core, never a ledger."""
+    """Validate Core's four-field envelope; expose no tenant data to viewers."""
     if (not isinstance(raw, dict) or FORBIDDEN_COLLECTIONS.intersection(raw)
             or UNQUALIFIED_CLAIMS.intersection(raw)):
         raise ValueError("Core identity contains unqualified claims")
@@ -82,24 +82,24 @@ def _project(rid: str, raw: object) -> dict:
             or not isinstance(raw.get("status"), str)
             or raw["status"] not in STATUSES):
         raise ValueError("Core Run identity mismatch")
+    # CONNECTED describes only the internal Core transport, NOT tenant access.
+    # Do not include even a synthetic Run ID, incident ID, mode or status:
+    # they are tenant data until an independent server-side ACL is enforced.
     return {
-        "schema": "aiops.portal.synthetic-run-detail.v1",
-        "state": "SOURCE_VERIFIED_SYNTHETIC_ONLY",
+        "schema": "aiops.portal.run-detail.v1",
+        "state": "UNKNOWN",
+        "reason": "TENANT_ACL_NOT_QUALIFIED",
         "connection_state": "CONNECTED",
-        "provenance": "SYNTHETIC",
+        "provenance": "UNKNOWN",
         "source": "CORE_INTERNAL_BEARER_NOC_RUN_READ",
         "source_observed_at": None,
         "source_freshness": "UNKNOWN",
-        "run_id": rid,
-        "incident_id": raw["incident_id"],
-        "mode": raw["mode"],
-        "run_status": raw["status"],
         "tenant_acl_qualified": False,
         "runtime_attested": False,
         "live_remediation_authorized": False,
         "journey": {
-            "Incident": {"state": "SYNTHETIC_REFERENCE_ONLY"},
-            "Run": {"state": "SOURCE_VERIFIED_SYNTHETIC_ONLY"},
+            "Incident": {"state": "UNKNOWN", "reason": "TENANT_ACL_NOT_QUALIFIED"},
+            "Run": {"state": "UNKNOWN", "reason": "TENANT_ACL_NOT_QUALIFIED"},
             "Evidence": {"state": "UNKNOWN", "reason": "CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING"},
             "AI Ledger": {"state": "UNKNOWN", "reason": "CORE_BEARER_LEDGER_READ_NOT_QUALIFIED"},
             "Policy": {"state": "UNKNOWN", "reason": "TENANT_ACL_NOT_QUALIFIED"},
@@ -229,7 +229,9 @@ def _read(rid: str, authorization: str | None) -> tuple[int, dict]:
     if not _valid_run_id(rid):
         return 422, {"state": "UNKNOWN", "reason": "INVALID_RUN_ID"}
     try:
-        return 200, _project(rid, _read_core_run(rid))
+        # The internal bearer is service authentication, not actor/tenant ACL.
+        # Preserve upstream 401/403, but fail closed even on valid Core identity.
+        return 503, _project(rid, _read_core_run(rid))
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
             return exc.code, {"state": "UNAUTHORIZED", "reason": "CORE_READ_DENIED"}
@@ -281,7 +283,7 @@ def run_detail_page(rid: str, request: Request,
         quote=True,
     )
     # Requested ID is NOT presented as an authenticated Run unless Core matched it.
-    heading = "Core-verified Run" if status == 200 else "Requested Run — NOT VERIFIED"
+    heading = "Tenant-authorized Run" if status == 200 and data.get("tenant_acl_qualified") is True else "Requested Run — NOT VERIFIED"
     page = (
         '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
