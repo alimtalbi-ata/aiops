@@ -1013,6 +1013,25 @@ def policy_story():
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
 
 
+@app.post("/api/portal/hitl/simulator/token")
+def portal_hitl_simulator_token(request: dict):
+    """Proxy a development-only fixture identity request; never an approval."""
+    subject = request.get("subject")
+    if not isinstance(subject, str) or len(subject) > 100:
+        raise HTTPException(422, "invalid_simulator_subject")
+    token = os.getenv("AIOPS_INTERNAL_TOKEN", "")
+    if not token:
+        raise HTTPException(503, "portal_internal_auth_not_configured")
+    try:
+        return post_json(
+            CORE, "/api/hitl/identity/simulator/token",
+            {"subject": subject, "ttl_seconds": 300},
+            timeout=10, token=token,
+        )
+    except Exception:
+        raise HTTPException(503, "identity_simulator_unavailable")
+
+
 @app.get("/hitl", response_class=HTMLResponse)
 def hitl_command_center():
     """Cross-platform HITL status view. Deliberately read-only; no approval controls."""
@@ -1049,6 +1068,29 @@ def hitl_command_center():
         '</nav>'
         '<p>Temporal conserve l’état durable du workflow. Core reste l’autorité des propositions et décisions ; '
         'Policy et l’exécuteur restent les autorités de contrôle avant tout effet.</p>'
+    )
+    body += panel("Banc de simulation IAM — sans effet",
+        '<p>Choisir un compte fictif pour obtenir une assertion de test de courte durée. '
+        'Cette identité porte toujours simulated=true et ne peut jamais approuver un run LIVE.</p>'
+        '<label for="hitl-sim-subject">Identité fictive</label>'
+        '<select id="hitl-sim-subject">'
+        '<option value="operator.alex">Alex Operator</option>'
+        '<option value="senior.sam">Sam Senior</option>'
+        '<option value="storage.stella">Stella Storage</option>'
+        '<option value="security.sara">Sara Security</option>'
+        '<option value="incident.ian">Ian Incident Commander</option>'
+        '<option value="platform.pat">Pat Platform Admin</option>'
+        '</select> <button type="button" id="hitl-sim-issue">Émettre une identité simulée</button>'
+        '<pre id="hitl-sim-result" role="status" aria-live="polite">Aucune identité émise.</pre>'
+        '<script>(function(){const b=document.getElementById("hitl-sim-issue");'
+        'const o=document.getElementById("hitl-sim-result");if(!b||!o)return;'
+        'b.addEventListener("click",async()=>{o.textContent="Émission…";try{'
+        'const r=await fetch("/api/portal/hitl/simulator/token",{method:"POST",'
+        'headers:{"Content-Type":"application/json"},body:JSON.stringify({'
+        'subject:document.getElementById("hitl-sim-subject").value})});'
+        'const d=await r.json();o.textContent=JSON.stringify(d,null,2);'
+        'if(!r.ok)o.textContent="HTTP "+r.status+" — "+o.textContent;'
+        '}catch(e){o.textContent="Simulateur indisponible";}});})();</script>'
     )
     body += panel("Barrières de sécurité",
         '<ul><li>Nemotron Analyst / Critic : avis et contre-expertise, jamais une identité ni un droit.</li>'
