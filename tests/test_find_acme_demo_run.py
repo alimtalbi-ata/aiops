@@ -16,6 +16,8 @@ def fixtures():
     incident = {"incident_id": "INC-ABC123", "synthetic": True,
                 "service_id": locator.SERVICE, "source": "synthetic-simulator"}
     detail = {"run": dict(run), "events": [
+        {"stage": "INGEST", "event_type": "RUN_CREATED", "status": "CREATED",
+         "payload": {"scenario_id": locator.SCENARIO, "mode": "DEMO"}},
         {"event_type": "ANALYST_COMPLETED", "evidence_ids": ["EVD-1"]},
         {"event_type": "CRITIC_COMPLETED", "evidence_ids": ["EVD-1", "EVD-2"]}]}
     return run, incident, detail
@@ -146,6 +148,43 @@ class LocatorTests(unittest.TestCase):
 
     def test_missing_contract_fails_closed(self):
         with self.assertRaises(ValueError): locator.candidates({"runs": []}, {"items": []})
+
+    def test_missing_run_created_event_fails_closed(self):
+        run, incident, detail = fixtures()
+        detail["events"] = [e for e in detail["events"]
+                            if e.get("event_type") != "RUN_CREATED"]
+        result = locator.qualify("http://core", "http://portal",
+                                 self.make_get(run, incident, detail))
+        self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+        self.assertIsNone(result["run_id"])
+
+    def test_run_created_wrong_scenario_or_mode_fails_closed(self):
+        for key, bad in (("scenario_id", "OTHER"), ("mode", "LIVE")):
+            with self.subTest(key=key):
+                run, incident, detail = fixtures()
+                detail["events"][0]["payload"][key] = bad
+                result = locator.qualify("http://core", "http://portal",
+                                         self.make_get(run, incident, detail))
+                self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+                self.assertIsNone(result["run_id"])
+
+    def test_duplicate_or_malformed_run_created_event_fails_closed(self):
+        for mutation in ("duplicate", "missing_payload", "wrong_stage", "wrong_status"):
+            with self.subTest(mutation=mutation):
+                run, incident, detail = fixtures()
+                event = detail["events"][0]
+                if mutation == "duplicate":
+                    detail["events"].append(dict(event))
+                elif mutation == "missing_payload":
+                    event.pop("payload")
+                elif mutation == "wrong_stage":
+                    event["stage"] = "RUN"
+                else:
+                    event["status"] = "RESOLVED"
+                result = locator.qualify("http://core", "http://portal",
+                                         self.make_get(run, incident, detail))
+                self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+                self.assertIsNone(result["run_id"])
 
     def test_missing_events_fails_closed(self):
         run, incident, detail = fixtures(); detail.pop("events")
