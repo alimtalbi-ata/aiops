@@ -1,5 +1,11 @@
 import os
+import json
+import time
 import unittest
+from types import SimpleNamespace
+
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
 from unittest.mock import patch
 
 from shared.hitl_identity import (
@@ -11,6 +17,7 @@ from shared.hitl_identity import (
     verify_assertion,
     oidc_configured,
     require_live_assertion,
+    verify_oidc_assertion,
 )
 
 
@@ -86,6 +93,72 @@ class HitlIdentityTests(unittest.TestCase):
         config["AIOPS_HITL_OIDC_JWKS_URL"] = "http://id.example.invalid/keys"
         with patch.dict(os.environ, config):
             self.assertFalse(oidc_configured())
+
+    def test_oidc_jwks_assertion_derives_role_from_immutable_group_mapping(self):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        now = int(time.time())
+        claims = {
+            "iss": "https://id.example.invalid/tenant",
+            "aud": "aiops2-hitl",
+            "sub": "00u-immutable-subject",
+            "iat": now,
+            "nbf": now,
+            "exp": now + 240,
+            "jti": "jwt-id-unique-001",
+            "auth_time": now - 30,
+            "amr": ["pwd", "mfa"],
+            "groups": ["00ab-stable-group-sid"],
+            "name": "Verified Operator",
+        }
+        token = jwt.encode(claims, private_key, algorithm="RS256")
+        config = {
+            "AIOPS_HITL_OIDC_ISSUER": claims["iss"],
+            "AIOPS_HITL_OIDC_AUDIENCE": claims["aud"],
+            "AIOPS_HITL_OIDC_JWKS_URL": "https://id.example.invalid/tenant/keys",
+            "AIOPS_HITL_OIDC_GROUP_ROLE_MAP": json.dumps({
+                "00ab-stable-group-sid": ["security_admin"]
+            }),
+            "AIOPS_HITL_OIDC_REQUIRED_AMR": "mfa",
+            "AIOPS_HITL_OIDC_MAX_AUTH_AGE_SECONDS": "300",
+        }
+        fake_client = SimpleNamespace(
+            get_signing_key_from_jwt=lambda supplied: SimpleNamespace(key=private_key.public_key())
+        )
+        with patch.dict(os.environ, config), patch(
+            "shared.hitl_identity._oidc_jwks_client", return_value=fake_client
+        ):
+            identity = verify_oidc_assertion(token)
+        self.assertEqual(identity["roles"], ["security_admin"])
+        self.assertTrue(identity["subject_id"].startswith("oidc:"))
+        self.assertFalse(identity["simulated"])
+
+    def test_oidc_assertion_requires_recent_mfa_authentication(self):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        now = int(time.time())
+        claims = {
+            "iss": "https://id.example.invalid/tenant", "aud": "aiops2-hitl",
+            "sub": "immutable-subject", "iat": now, "nbf": now,
+            "exp": now + 240, "jti": "jwt-id-unique-002",
+            "auth_time": now - 900, "amr": ["pwd"],
+            "groups": ["00ab-stable-group-sid"],
+        }
+        token = jwt.encode(claims, private_key, algorithm="RS256")
+        config = {
+            "AIOPS_HITL_OIDC_ISSUER": claims["iss"],
+            "AIOPS_HITL_OIDC_AUDIENCE": claims["aud"],
+            "AIOPS_HITL_OIDC_JWKS_URL": "https://id.example.invalid/tenant/keys",
+            "AIOPS_HITL_OIDC_GROUP_ROLE_MAP": json.dumps({
+                "00ab-stable-group-sid": ["security_admin"]
+            }),
+        }
+        fake_client = SimpleNamespace(
+            get_signing_key_from_jwt=lambda supplied: SimpleNamespace(key=private_key.public_key())
+        )
+        with patch.dict(os.environ, config), patch(
+            "shared.hitl_identity._oidc_jwks_client", return_value=fake_client
+        ):
+            with self.assertRaisesRegex(IdentityError, "oidc_mfa_assurance_required"):
+                verify_oidc_assertion(token)
 
     def test_sudo_catalog_is_precheck_only(self):
         allowed = authorize_sudo_request(
