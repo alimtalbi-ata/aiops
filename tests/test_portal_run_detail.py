@@ -35,22 +35,25 @@ class RunDetailTests(unittest.TestCase):
         return self.client.get(path or "/api/portal/runs/" + RID, headers=(
             {"Authorization": "Bearer " + TOKEN} if authorized else {}))
 
-    def test_verified_synthetic_identity_only_never_claims_evidence_or_hitl(self):
+    def test_authenticated_unscoped_identity_never_claims_evidence_or_hitl(self):
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()) as core:
             response = self.get()
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
         core.assert_called_once_with(RID)
         data = response.json()
+        self.assertEqual(data["state"], "UNKNOWN")
+        self.assertEqual(data["reason"], "TENANT_ACL_NOT_QUALIFIED")
         self.assertEqual(data["connection_state"], "CONNECTED")
-        self.assertEqual(data["provenance"], "SYNTHETIC")
-        self.assertEqual(data["run_id"], RID)
-        self.assertEqual(data["incident_id"], IID)
+        self.assertEqual(data["provenance"], "UNKNOWN")
+        for private_field in ("run_id", "incident_id", "mode", "run_status"):
+            self.assertNotIn(private_field, data)
+        self.assertNotIn(IID, response.text)
         self.assertEqual(data["source_freshness"], "UNKNOWN")
         self.assertIsNone(data["source_observed_at"])
         self.assertFalse(data["tenant_acl_qualified"])
         self.assertFalse(data["runtime_attested"])
         self.assertFalse(data["live_remediation_authorized"])
-        for key in ("Evidence", "AI Ledger", "Policy", "HITL", "Verification", "GLPI"):
+        for key in ("Incident", "Run", "Evidence", "AI Ledger", "Policy", "HITL", "Verification", "GLPI"):
             self.assertEqual(data["journey"][key]["state"], "UNKNOWN")
         self.assertEqual(data["journey"]["GLPI"]["reason"],
                          "NO_TENANT_SCOPED_TICKET_RUN_LINK")
@@ -60,6 +63,29 @@ class RunDetailTests(unittest.TestCase):
         self.assertNotIn("evidence_id", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(response.headers["x-frame-options"], "DENY")
+
+
+    def test_valid_core_identity_is_not_disclosed_without_tenant_acl(self):
+        # Internal bearer authenticates Portal->Core, not the human/tenant.
+        private_incident = "INC-PRIVATE-CUSTOMER"
+        with patch.object(acme_run_detail, "_read_core_run",
+                          return_value=run(incident_id=private_incident, status="FAILED")):
+            api = self.get()
+            page = self.get("/runs/" + RID)
+        self.assertEqual(api.status_code, 503)
+        self.assertEqual(page.status_code, 503)
+        self.assertEqual(api.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(api.json()["connection_state"], "CONNECTED")
+        for response in (api, page):
+            self.assertNotIn(private_incident, response.text)
+            self.assertNotIn("FAILED", response.text)
+            self.assertNotIn("Core-verified Run", response.text)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertNotIn("run_id", api.json())
+        self.assertNotIn("incident_id", api.json())
+        self.assertNotIn("run_status", api.json())
+        self.assertIn('data-story-provenance="SYNTHETIC"', page.text)
 
     def test_auth_missing_and_wrong_never_touch_core(self):
         with patch.object(acme_run_detail, "_read_core_run",
@@ -101,13 +127,10 @@ class RunDetailTests(unittest.TestCase):
             with self.subTest(invalid=invalid), patch.object(
                     acme_run_detail, "_read_core_run", return_value=invalid):
                 response = self.get()
-            # An independently valid foreign incident ID is NOT an asserted match.
-            if invalid.get("incident_id") == "INC-FOREIGN":
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json()["incident_id"], "INC-FOREIGN")
-            else:
-                self.assertEqual(response.status_code, 503)
-                self.assertEqual(response.json()["state"], "UNKNOWN")
+            # Even syntactically valid foreign identity is tenant data.
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["state"], "UNKNOWN")
+            self.assertNotIn("INC-FOREIGN", response.text)
 
     def test_core_status_must_match_canonical_domain_enum(self):
         # An arbitrary Core string must not be displayed as an approved,
@@ -128,8 +151,9 @@ class RunDetailTests(unittest.TestCase):
                     acme_run_detail, "_read_core_run",
                     return_value=run(status=status)):
                 response = self.get()
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["run_status"], status)
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+            self.assertNotIn("run_status", response.json())
             self.assertFalse(response.json()["runtime_attested"])
 
     def test_unqualified_collections_and_tenant_claims_rejected(self):
@@ -219,7 +243,7 @@ class RunDetailTests(unittest.TestCase):
                           side_effect=AssertionError("anonymous Core read")) as core:
             anonymous = self.get("/runs/" + RID, authorized=False)
         core.assert_not_called()
-        for page, expected in ((verified, 200), (denied, 403),
+        for page, expected in ((verified, 503), (denied, 403),
                                (unavailable, 503), (anonymous, 401)):
             with self.subTest(status=expected):
                 self.assertEqual(page.status_code, expected)
@@ -248,8 +272,8 @@ class RunDetailTests(unittest.TestCase):
     def test_authenticated_html_is_escaped_and_still_unknown_for_evidence(self):
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()):
             response = self.get("/runs/" + RID)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Core-verified Run", response.text)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("Requested Run — NOT VERIFIED", response.text)
         self.assertIn("SYNTHETIC", response.text)
         self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", response.text)
         self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
@@ -259,7 +283,7 @@ class RunDetailTests(unittest.TestCase):
     def test_html_shows_verified_and_denied_connection_states_without_evidence(self):
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()):
             connected = self.get("/runs/" + RID)
-        self.assertEqual(connected.status_code, 200)
+        self.assertEqual(connected.status_code, 503)
         self.assertIn("connection: CONNECTED", connected.text)
         self.assertIn("source freshness: UNKNOWN", connected.text)
         self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", connected.text)
@@ -308,8 +332,8 @@ class RunDetailTests(unittest.TestCase):
         self.assertNotIn("; secure", cookie.lower())
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()) as core:
             page = self.client.get("/runs/" + RID)
-        self.assertEqual(page.status_code, 200)
-        self.assertIn("Core-verified Run", page.text)
+        self.assertEqual(page.status_code, 503)
+        self.assertIn("Requested Run — NOT VERIFIED", page.text)
         core.assert_called_once_with(RID)
 
     def test_session_exchange_rejects_missing_token_and_cross_origin(self):
