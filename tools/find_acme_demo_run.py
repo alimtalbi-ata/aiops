@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -129,6 +130,39 @@ def qualify(base, portal, get=fetch_json):
 
 
 
+_EVIDENCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\\Z")
+_EVIDENCE_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\\Z")
+
+
+def _qualified_evidence_items(items):
+    """Validate the bounded, deduplicated metadata contract without emitting values."""
+    if not isinstance(items, list) or not 1 <= len(items) <= 80:
+        return False
+    seen = set()
+    now = datetime.now(timezone.utc)
+    for item in items:
+        if not isinstance(item, dict):
+            return False
+        eid, source = item.get("evidence_id"), item.get("source")
+        known_at, digest = item.get("known_at"), item.get("payload_sha256")
+        if (not isinstance(eid, str) or not _EVIDENCE_ID.fullmatch(eid)
+                or eid in seen or not isinstance(source, str)
+                or not _EVIDENCE_SOURCE.fullmatch(source)
+                or not isinstance(digest, str)
+                or re.fullmatch(r"[a-f0-9]{64}", digest) is None
+                or not isinstance(known_at, str)):
+            return False
+        try:
+            stamp = datetime.fromisoformat(known_at.replace("Z", "+00:00"))
+            if (stamp.tzinfo is None or stamp.utcoffset() is None
+                    or stamp.astimezone(timezone.utc) > now + timedelta(minutes=5)):
+                return False
+        except (ValueError, OverflowError):
+            return False
+        seen.add(eid)
+    return True
+
+
 def probe_authenticated_evidence(base, rid, token, get=fetch_json):
     """Probe Core's bearer-protected evidence refs, without attesting tenant or runtime.
 
@@ -153,17 +187,7 @@ def probe_authenticated_evidence(base, rid, token, get=fetch_json):
             or response.get("event_link_verified") is not True
             or response.get("tenant_acl_qualified") is not False
             or response.get("runtime_attested") is not False
-            or not isinstance(items, list) or not items
-            or any(not isinstance(item, dict)
-                   or not isinstance(item.get("evidence_id"), str)
-                   or not item["evidence_id"]
-                   or not isinstance(item.get("source"), str)
-                   or not item["source"]
-                   or not isinstance(item.get("known_at"), str)
-                   or not item["known_at"]
-                   or not isinstance(item.get("payload_sha256"), str)
-                   or re.fullmatch(r"[a-f0-9]{64}", item["payload_sha256"]) is None
-                   for item in items)):
+            or not _qualified_evidence_items(items)):
         return {"status": "UNKNOWN", "reason": "EVIDENCE_CONTRACT_MISMATCH"}
     return {"status": "SOURCE_VERIFIED_SYNTHETIC_ONLY", "reference_count": len(items),
             "tenant_acl_qualified": False, "runtime_attested": False}
