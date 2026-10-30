@@ -118,3 +118,7 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 ## 2026-10-31 5/5 exact-source security checkpoint
 
 #201 main-based `f38014c92b85763be8ac3f72042b50a48dbba95c` includes exact #202 `f3943020d0d66d60c92dbf9b0d0c3fbb7913789e` Portal/test blobs; source Quality 41142124145 SUCCESS 3/3, combined new HEAD CI NOT_OBSERVED at port. Shared-bearer Core Run reads now fail closed at 503 UNKNOWN without disclosing Run/Incident/status until server-derived actor+tenant ACL is qualified. This is a security containment fix, not authorization. T0 pending combined SHA; T1 BLOCKED on Core actor/tenant exact-Run ACL, T2 NOT_TESTED, T3 NOT_ATTESTED, T4 NO_GO, T5 NO_GO. #196 model benchmark still FAILURE; #204 stacked success not integrated. `RELEASE_STABLE=NO_GO`. No LIVE/host/GLPI write.
+
+### 2026-10-31 exact-head CI release decision
+
+#201 `f38014c92b85763be8ac3f72042b50a48dbba95c` [Quality 41145124544](https://github.com/alimtalbi-ata/aiops/actions/runs/41145124544) SUCCESS 3/3; Portal fail-closed tests 30/30, JS 7/7, Chromium synthetic 6/6, kit guard 12/12. **T0 GO_LIMITED**, not T1 authorization. T1 BLOCKED (Core actor+tenant ACL missing), T2 NOT_TESTED, T3 NOT_ATTESTED, T4 NO_GO, T5 NO_GO; `RELEASE_STABLE=NO_GO`. Artifact `13020710411` listed, not inspected. No deployment or LIVE.
