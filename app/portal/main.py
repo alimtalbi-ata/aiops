@@ -163,6 +163,25 @@ def _verified_demo_run_rows(rows, *, max_results=12):
     return verified
 
 
+def _core_evidence_items_for_run(payload, run_id):
+    """Fail closed on foreign or unscoped Core Evidence records.
+
+    The Core run-specific endpoint is not independent Evidence attestation.
+    Every displayed record must explicitly identify the selected run.
+    """
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        return None
+    if payload.get("status") in ("UNKNOWN", "UNAUTHORIZED", "UNAVAILABLE"):
+        return None
+    if "run_id" in payload and payload["run_id"] != run_id:
+        return None
+    items = payload["items"]
+    if any(not isinstance(item, dict) or item.get("run_id") != run_id
+           for item in items):
+        return None
+    return items
+
+
 def _select_verified_demo_run(rows, requested_run_id=None):
     """Select a verified Core run; an explicit selection never falls back."""
     if requested_run_id is not None:
@@ -354,7 +373,7 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     content+=_verified_operator_run_context(selected, detail, match)
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
     evidence_response=_get("/api/runs/"+key+"/evidence")
-    evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
+    evidence_items=_core_evidence_items_for_run(evidence_response, selected)
     events=detail.get("events") if isinstance(detail.get("events"),list) else []
     cards="".join(event_box(e,i) for i,e in enumerate(events,1))
     if not cards:
@@ -370,7 +389,13 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
             '<p>Core déclare ce run en cours ; fraîcheur UNKNOWN sans horodatage vérifié. '
             'Actualisation en lecture seule toutes les 10 secondes ; aucune action n’est déclenchée.</p>'
             '<script>setTimeout(function(){window.location.reload()},10000)</script>')
-    content+=panel("Registre des preuves liées — provenance vérifiable",evidence_catalog(evidence_items))
+    if evidence_items is None:
+        content+=panel("Registre des preuves liées — UNKNOWN",
+            "<p>UNKNOWN — réponse Evidence Core non qualifiée ou enregistrements "
+            "non attribuables au run sélectionné. Aucune preuve affichée.</p>")
+    else:
+        content+=panel("Registre des preuves liées — provenance Core à qualifier",
+            evidence_catalog(evidence_items))
     content+=panel("Raisonnement observable — Analyst / Critic",render_critic_explanation(ledger))
     content+=panel("Registres IA et Policy complets",pretty(ledger))
     return shell("/timeline","Timeline des incidents",
