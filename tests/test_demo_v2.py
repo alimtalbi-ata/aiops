@@ -237,7 +237,14 @@ class DemoV2Tests(unittest.TestCase):
             {"run_id": "RUN-DUP", "mode": "STORY", "status": "BLOCKED"},
             {"run_id": "RUN-DUP", "mode": "STORY", "status": "RESOLVED"},
         ]
-        with patch.object(portal_main, "_runs", return_value=records):
+        def source(path, base=None):
+            rid = path.removeprefix("/api/runs/")
+            if path.startswith("/api/runs/") and rid in ("RUN-OK", "RUN-REPLAY"):
+                row = next(r for r in records if r["run_id"] == rid)
+                return {"run": dict(row)}
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=records),
+              patch.object(portal_main, "_get", side_effect=source)):
             page = portal_main.runs_page()
         self.assertIn('href="/demo-studio/run/RUN-OK"', page)
         self.assertIn('href="/timeline?run_id=RUN-OK"', page)
@@ -248,6 +255,58 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn('bad/&lt;id&gt;', page)  # Registry row is escaped, never linked.
         self.assertNotIn('bad/<id>', page)
         self.assertIn("RUN-LIVE", page)  # Inventory remains visible, not a DEMO deep link.
+
+    def test_runs_page_only_links_core_detail_verified_runs(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [
+            {"run_id": "RUN-FOREIGN", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-STALE", "mode": "REPLAY", "status": "RESOLVED"},
+            {"run_id": "RUN-OK", "mode": "STORY", "status": "BLOCKED"},
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+        ]
+        def source(path, base=None):
+            if path == "/api/runs/RUN-FOREIGN":
+                return {"run": {"run_id": "RUN-OTHER", "mode": "DEMO", "status": "BLOCKED"}}
+            if path == "/api/runs/RUN-STALE":
+                return {"run": {"run_id": "RUN-STALE", "mode": "REPLAY", "status": "RUNNING"}}
+            if path == "/api/runs/RUN-OK":
+                return {"run": {"run_id": "RUN-OK", "mode": "STORY", "status": "BLOCKED"}}
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=rows),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("no writes"))):
+            response = TestClient(portal_main.app).get("/runs")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/demo-studio/run/RUN-OK"', response.text)
+        self.assertIn('href="/timeline?run_id=RUN-OK"', response.text)
+        for rid in ("RUN-FOREIGN", "RUN-STALE", "RUN-LIVE"):
+            self.assertNotIn('href="/demo-studio/run/' + rid + '"', response.text)
+            self.assertNotIn('href="/timeline?run_id=' + rid + '"', response.text)
+        self.assertIn("RUN-FOREIGN", response.text)  # Inventory remains visible.
+
+    def test_cockpit_skips_foreign_core_detail_for_next_verified_run(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [
+            {"run_id": "RUN-FOREIGN", "mode": "DEMO", "status": "BLOCKED"},
+            {"run_id": "RUN-OK", "mode": "REPLAY", "status": "RESOLVED", "synthetic": True},
+        ]
+        def source(path, base=None):
+            if path == "/api/runs/RUN-FOREIGN":
+                return {"run": {"run_id": "RUN-OTHER", "mode": "DEMO", "status": "BLOCKED"}}
+            if path == "/api/runs/RUN-OK":
+                return {"run": dict(rows[1])}
+            return {}
+        with (patch.object(portal_main, "_runs", return_value=rows),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("no writes"))):
+            response = TestClient(portal_main.app).get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/demo-studio/run/RUN-OK"', response.text)
+        self.assertIn('href="/timeline?run_id=RUN-OK"', response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-FOREIGN"', response.text)
+        self.assertIn("SYNTHETIC", response.text)
 
     def test_runs_page_without_qualified_demo_link_is_explicit_unknown(self):
         from portal import main as portal_main
