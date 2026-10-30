@@ -3,8 +3,8 @@ import html
 import json
 
 
-_START = '<section id="aiops2-ai-report">'
-_END = '</section>'
+_START = '<p>[AIOPS2-AI-REPORT:START]</p>'
+_END = '<p>[AIOPS2-AI-REPORT:END]</p>'
 
 
 def _object(value):
@@ -47,7 +47,7 @@ def render_run_report(detail, ledger=None, *, sync_stage="UPDATE"):
     esc = lambda value: html.escape(_text(value))
     out = [
         _START,
-        "<h2>Compte rendu AIOps2 — mise à jour automatique</h2>",
+        "<h2>Compte rendu AioOps2 — mise à jour automatique</h2>",
         "<p><strong>Run :</strong> " + esc(run.get("run_id")) +
         " &nbsp; <strong>Incident :</strong> " + esc(run.get("incident_id")) + "</p>",
         "<p><strong>Scénario :</strong> " + esc(run.get("scenario_id")) +
