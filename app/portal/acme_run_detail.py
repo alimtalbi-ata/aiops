@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from portal.noc_correlation import _read_core_run
 from portal.noc_runtime import IDENTIFIER, _require_portal_read_auth
+from shared.domain import STATUSES
 from shared.tenant_scope import reject_unqualified_tenant_scope
 
 router = APIRouter()
@@ -79,7 +80,7 @@ def _project(rid: str, raw: object) -> dict:
             or IDENTIFIER.fullmatch(raw["incident_id"]) is None
             or raw.get("mode") not in ("DEMO", "REPLAY", "STORY")
             or not isinstance(raw.get("status"), str)
-            or not 1 <= len(raw["status"]) <= 64):
+            or raw["status"] not in STATUSES):
         raise ValueError("Core Run identity mismatch")
     return {
         "schema": "aiops.portal.synthetic-run-detail.v1",
