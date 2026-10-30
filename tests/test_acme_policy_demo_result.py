@@ -347,6 +347,7 @@ class PolicyDemoResultTests(unittest.TestCase):
                     r["projection"]["gate"]["target_ci"] = "ACME-GLPI-01"
                     for snapshot in ("before", "after"):
                         r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
+                    r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
                 r["projection"]["reason"] = "RUNTIME_APPROVED"
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
