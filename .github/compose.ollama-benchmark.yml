@@ -1,9 +1,30 @@
 services:
+  aiops2-ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    container_name: ${AIOPS_STACK_ID:-aiops2}-ollama
+    restart: "no"
+    environment:
+      OLLAMA_NUM_PARALLEL: "1"
+    volumes:
+      - aiops2-ollama-models:/root/.ollama
+    expose: ["11434"]
+    networks: [aiops2-public, aiops2-control]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
   aiops2-intelligence:
     environment:
-      LLM_BASE_URL: http://host.docker.internal:11434/v1
+      LLM_BASE_URL: http://aiops2-ollama:11434/v1
       LLM_MODEL: ${AIOPS_BENCHMARK_MODEL:?AIOPS_BENCHMARK_MODEL_required}
       LLM_API_KEY: ""
       LLM_TIMEOUT_SECONDS: ${AIOPS_BENCHMARK_TIMEOUT_SECONDS:-100}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      aiops2-ollama:
+        condition: service_healthy
+
+volumes:
+  aiops2-ollama-models:
+    name: ${AIOPS_STACK_ID:-aiops2}-ollama-models
