@@ -1055,6 +1055,24 @@ def hitl_command_center():
         + '<p>Cette vue est volontairement en lecture seule. Le simulateur émet des identités fictives ; '
           'elles ne sont jamais recevables pour une approbation LIVE.</p>'
     )
+    proposal_rows = [
+        (
+            html.escape(str(item.get("proposal_id", "UNKNOWN"))),
+            html.escape(str(item.get("risk_tier", "UNKNOWN"))),
+            html.escape(str(item.get("action_type", "UNKNOWN"))),
+            html.escape(str(item.get("target_ci_id", "UNKNOWN"))),
+            html.escape(str(item.get("status", "UNKNOWN"))),
+            html.escape(str(len(item.get("evidence_ids", [])))),
+        )
+        for item in proposal_items[:100] if isinstance(item, dict)
+    ]
+    body += panel(
+        "Inbox HITL — propositions en attente (lecture seule)",
+        table(["Proposal", "Risque", "Action", "CI cible", "État", "Preuves"],
+              proposal_rows)
+        if proposal_rows else
+        "<p>Aucune proposition PROPOSED disponible, ou registre non accessible.</p>"
+    )
     body += panel("Intégration AIOps2 — navigation",
         '<nav aria-label="AIOps2 platform integration">'
         '<a href="/runs">Core / Runs</a> · '
