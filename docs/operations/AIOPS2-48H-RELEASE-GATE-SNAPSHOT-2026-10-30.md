@@ -99,3 +99,8 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 - Candidate #201 base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, new HEAD `7e4cbe9d75aedccf2078ca50d052e6d0796c284e` (33 ahead/0 behind). Ported only two exact source/test blobs from #202 to mark ACME story SYNTHETIC on 200/401/403/503. Source #202 Quality 41109683748 SUCCESS; previous #201 HEAD `7bc825b3` Quality 41104533241 SUCCESS 3/3. **New candidate exact-head CI PENDING / NOT_OBSERVED**.
 - #196 real-model benchmark FAILURE; #204 stacked failure-injection CI green but no runtime identity/ACK/restart proof. #201 synthetic story artifact `12999887492` is not a cumulative kit; no new archive member audit.
 - **T0 PENDING** on new head; **T1 NOT_TESTED**, **T2 NOT_TESTED** full Core/Temporal/Evidence E2E, **T3 NOT_ATTESTED**, **T4 NO_GO**, **T5 NO_GO**. No stable/main push, merge, Debian change, GLPI write, or LIVE. Next: exact-head Quality; ephemeral authenticated E2E; cumulative ZIP member/checksum/manifest audit and sandbox install/rollback.
+
+
+### 2026-10-30 19:13 UTC — T0 closeout
+
+#201 `7e4cbe9d75aedccf2078ca50d052e6d0796c284e` [Quality 41113172965](https://github.com/alimtalbi-ata/aiops/actions/runs/41113172965) **SUCCESS 3/3**; inspected logs: Portal Python 28/28, JS 7/7, Chromium 6/6, kit gate 12/12. Synthetic artifact `13005150615` digest `sha256:6fdaab4220604c401c531999907df55e0a54d713920537ca22f5dfac2886bf69` listed only, contents NOT_AUDITED. **T0 GO_LIMITED; T1 NOT_TESTED; T2 NOT_TESTED; T3 NOT_ATTESTED; T4 NO_GO; T5 NO_GO.**
