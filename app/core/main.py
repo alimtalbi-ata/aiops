@@ -738,7 +738,7 @@ def claim_hitl_decision_outbox(x:dict,authorization:str|None=Header(default=None
                     row
                 )))
     return {'items':items,'count':len(items),'delivery':'at-least-once',
-            'execution_allowed':False}
+            'execution_allowed':False,'effect_allowed':False}
 
 
 @app.post('/api/hitl/decision-outbox/{event_id}/delivered')
@@ -756,7 +756,8 @@ def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=
         if not row:
             raise HTTPException(404,'outbox_event_not_found')
         if row[0]=='DELIVERED':
-            return {'event_id':event_id,'status':'DELIVERED','idempotent':True}
+            return {'event_id':event_id,'status':'DELIVERED','idempotent':True,
+                    'execution_allowed':False,'effect_allowed':False}
         if (row[0]!='LEASED' or not row[1] or row[2] is not True
                 or not hmac.compare_digest(str(row[1]),token)):
             raise HTTPException(409,'outbox_lease_lost_or_invalid')
@@ -765,7 +766,8 @@ def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=
             "delivered_at=now(),lease_owner=null,lease_token=null,lease_until=null,last_error=null "
             "where event_id=%s",(event_id,)
         )
-    return {'event_id':event_id,'status':'DELIVERED','idempotent':False}
+    return {'event_id':event_id,'status':'DELIVERED','idempotent':False,
+            'execution_allowed':False,'effect_allowed':False}
 
 
 @app.get('/api/hitl/decision-outbox/status')
@@ -776,7 +778,7 @@ def hitl_decision_outbox_status(authorization:str|None=Header(default=None)):
             'select status,count(*) from aiops.hitl_decision_outbox group by status order by status'
         ).fetchall()
     return {'counts':{status:count for status,count in rows},
-            'delivery':'at-least-once','execution_allowed':False}
+            'delivery':'at-least-once','execution_allowed':False,'effect_allowed':False}
 
 
 @app.post('/api/runs/{rid}/learning-cases')
