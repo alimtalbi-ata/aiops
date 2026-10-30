@@ -2,6 +2,7 @@
 import importlib.util
 import io
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError
 import unittest
@@ -119,6 +120,54 @@ class AuthEvidenceProbeTests(unittest.TestCase):
         def get(*args, **kwargs):
             raise AssertionError("must not call")
         self.assertEqual(locator.probe_authenticated_evidence("https://core.example", "../../escape", "secret", get)["reason"], "RUN_ID_UNQUALIFIED")
+
+
+    def test_unqualified_known_at_is_unknown(self):
+        for known_at in ("not-a-timestamp", "2026-10-29T23:00:00",
+                         "2026-10-29T23:00:00+99:00"):
+            with self.subTest(known_at=known_at):
+                value = response()
+                value["items"][0]["known_at"] = known_at
+                result = locator.probe_authenticated_evidence(
+                    "https://core.example", RID, "secret", lambda *a, **k: value)
+                self.assertEqual(result["reason"], "EVIDENCE_CONTRACT_MISMATCH")
+
+    def test_future_known_at_is_unknown(self):
+        value = response()
+        value["items"][0]["known_at"] = (
+            datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        result = locator.probe_authenticated_evidence(
+            "https://core.example", RID, "secret", lambda *a, **k: value)
+        self.assertEqual(result["status"], "UNKNOWN")
+
+    def test_bad_id_source_and_duplicate_evidence_rejected(self):
+        for field, bad in (("evidence_id", "../bad"), ("source", "bad source")):
+            with self.subTest(field=field):
+                value = response()
+                value["items"][0][field] = bad
+                result = locator.probe_authenticated_evidence(
+                    "https://core.example", RID, "secret", lambda *a, **k: value)
+                self.assertEqual(result["reason"], "EVIDENCE_CONTRACT_MISMATCH")
+        value = response()
+        value["items"].append(dict(value["items"][0]))
+        result = locator.probe_authenticated_evidence(
+            "https://core.example", RID, "secret", lambda *a, **k: value)
+        self.assertEqual(result["status"], "UNKNOWN")
+
+    def test_evidence_item_limit_enforced(self):
+        value = response()
+        value["items"] = [dict(value["items"][0], evidence_id=f"EVD-{i}")
+                          for i in range(81)]
+        result = locator.probe_authenticated_evidence(
+            "https://core.example", RID, "secret", lambda *a, **k: value)
+        self.assertEqual(result["reason"], "EVIDENCE_CONTRACT_MISMATCH")
+
+    def test_valid_zulu_timestamp_accepted(self):
+        value = response()
+        value["items"][0]["known_at"] = "2026-10-29T23:00:00Z"
+        result = locator.probe_authenticated_evidence(
+            "https://core.example", RID, "secret", lambda *a, **k: value)
+        self.assertEqual(result["status"], "SOURCE_VERIFIED_SYNTHETIC_ONLY")
 
 
 if __name__ == "__main__":
