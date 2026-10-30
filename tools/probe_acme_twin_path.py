@@ -10,7 +10,17 @@ import os
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+class _RejectRedirects(HTTPRedirectHandler):
+    """Never forward Twin's internal bearer token to a redirect destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_NO_REDIRECT = build_opener(_RejectRedirects())
+
 
 ROOT = "ACME-SAN-FABRIC-A"
 # Source: db/migrations/005_seed_acme.sql. Stored direction: consumer -> dependency.
@@ -26,7 +36,7 @@ EXPECTED = (
 def fetch_impact(base, token):
     request = Request(base.rstrip("/") + "/api/twin/impact/" + quote(ROOT, safe=""),
                       headers={"Accept": "application/json", "Authorization": "Bearer " + token})
-    with urlopen(request, timeout=8) as response:
+    with _NO_REDIRECT.open(request, timeout=8) as response:
         if response.status != 200:
             raise ValueError("unexpected_http_status")
         payload = json.load(response)
