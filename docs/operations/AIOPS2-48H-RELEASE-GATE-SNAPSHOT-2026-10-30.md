@@ -80,3 +80,11 @@ Main-based #197/#198/#199 are small and individually Quality-green; 2/5's main-b
 | T5 LIVE | NO-GO | Explicit separate authorization and all gates absent |
 
 #188 daily quality + 15-minute read-only runtime smoke remains preferred but unmerged; #189 duplicate. No runner, cron, Debian, GLPI, main/stable, deployment or LIVE action.
+
+## Gate refresh — 2026-10-30 17:08 UTC
+
+- Candidate #201: `main@27deb9b1a66faf27df8d69b137a63451f7649d80` → `1d3a902877d556549425a95cd4cef792c5c000c8` (29/0 ahead/behind). Portal exact source blob from #202 restored; prior Quality 41088096834 FAILURE 2/3, new [Quality 41096370024](https://github.com/alimtalbi-ata/aiops/actions/runs/41096370024) IN_PROGRESS. **T0=PENDING**.
+- #195 previous [Quality 41088268202](https://github.com/alimtalbi-ata/aiops/actions/runs/41088268202) 3/3 SUCCESS at `38e3edc0`; new documentation head requires its own CI.
+- #196 [Quality 41083049858](https://github.com/alimtalbi-ata/aiops/actions/runs/41083049858) 6/8 SUCCESS, 2 Ollama FAIL, no qualified model inference. #198 [Quality 41093598267](https://github.com/alimtalbi-ata/aiops/actions/runs/41093598267) 3/3 SUCCESS on synthetic fixture tests.
+- **T1=NOT_TESTED; T2=NOT_TESTED; T3=NOT_ATTESTED; T4=NO_GO; T5=NO_GO. RELEASE_STABLE=NO_GO.** No cumulative ZIP, migration 011/OIDC/outbox/AI telemetry, authenticated tenant Evidence/GLPI links, sandbox rollback or host attestation. #188 remains preferred unmerged, #189 duplicate, #146/#153 disabled, #187 deferred.
+
