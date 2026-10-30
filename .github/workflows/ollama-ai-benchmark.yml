@@ -147,11 +147,3 @@ jobs:
       - name: Tear down isolated benchmark environment
         if: always()
         run: docker compose down -v --remove-orphans || true
- reports/experiment-exit-codes.txt; then
-            echo "One or more real-model evaluations failed; inspect the uploaded report and diagnostics."
-            exit 1
-          fi
-
-      - name: Tear down isolated benchmark environment
-        if: always()
-        run: docker compose down -v --remove-orphans || true
