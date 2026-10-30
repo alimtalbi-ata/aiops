@@ -123,6 +123,9 @@ def _core_detail_matches_listed_run(detail, listed):
         return False
     if run.get("mode") != listed.get("mode") or run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
         return False
+    # A stale inventory status cannot authorize another version of this run.
+    if isinstance(listed.get("status"), str) and run.get("status") != listed["status"]:
+        return False
     for field in ("incident_id", "scenario_id"):
         expected = listed.get(field)
         if expected is not None and run.get(field) != expected:
@@ -148,7 +151,8 @@ def _verified_demo_run_rows(rows, *, max_results=12):
     terminal = [r for r in eligible if r.get("status") in ("RESOLVED", "BLOCKED")]
     other = [r for r in eligible if r.get("status") not in ("RESOLVED", "BLOCKED")]
     verified = []
-    for row in (terminal + other)[:12]:
+    # Inspect a bounded window beyond the first stale entries; keep at most 12 links.
+    for row in (terminal + other)[:32]:
         detail = _get("/api/runs/" + row["run_id"])
         if (_core_detail_matches_listed_run(detail, row)
                 and (not isinstance(row.get("status"), str)
@@ -796,15 +800,13 @@ def acme_stories_page():
         body+=panel(story["title"],table(["Rubrique","Scénario ACME"],lines))
     # Historical run IDs are not proof that the current Core inventory has them.
     from urllib.parse import quote
-    eligible=_qualified_demo_runs(_runs())
-    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
-                  eligible[0] if eligible else None)
+    selected, _detail = _select_verified_demo_run(_runs())
     if selected:
         rid=quote(selected["run_id"],safe="")
-        core_link=('<a href="/demo-studio/run/'+rid+'">Run Core (inventaire non attesté)</a> · '
+        core_link=('<a href="/demo-studio/run/'+rid+'">Run Core (inventaire et détail concordants ; provenance non attestée)</a> · '
                    '<a href="/timeline?run_id='+rid+'">Timeline du même run</a> · ')
     else:
-        core_link='<strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY non ambigu accessible · '
+        core_link='<strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY non ambigu et concordant accessible · '
     body+=panel("Explorer les runs Core — provenance à vérifier",
         '<p>'+core_link
         +'<a href="/qualification-lab">Laboratoire de scénarios (SIMULATED)</a> · '
