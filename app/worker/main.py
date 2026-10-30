@@ -255,6 +255,18 @@ def recover_committed_critic_block(rid):
                     'critic_durable_resume_unconfirmed'
                 ) from exc
         return None
+    hitl_event = next((
+        event for event in reversed(detail.get('events', []))
+        if event.get('event_type') == 'HITL_PROPOSAL_CREATED'
+        and isinstance(event.get('payload'), dict)
+    ), None)
+    if hitl_event:
+        return {
+            'run_id': rid, 'stage': 'HITL', 'status': 'BLOCKED',
+            'version': detail['run'].get('version'),
+            'hitl_proposal_id': hitl_event['payload'].get('proposal_id'),
+            'execution_allowed': False, 'recovered_from_event': True,
+        }
     receipt=get_json(
         CORE,f'/api/runs/{rid}/critic-denial-block/receipt',
         token=ADMIN
