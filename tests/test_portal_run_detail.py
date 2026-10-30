@@ -274,6 +274,17 @@ class RunDetailTests(unittest.TestCase):
         self.assertTrue(acme_run_detail._valid_session(cookie, RID))
         self.assertFalse(acme_run_detail._valid_session(cookie, "RUN-OTHER-123"))
 
+    def test_rotated_read_token_revokes_existing_run_session(self):
+        cookie = acme_run_detail._issue_session(RID)
+        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "rotated-ci-only-viewer-token"}):
+            self.assertFalse(acme_run_detail._valid_session(cookie, RID))
+            with patch.object(acme_run_detail, "_read_core_run",
+                              side_effect=AssertionError("no Core read")) as core:
+                response = self.client.get("/runs/" + RID)
+            self.assertEqual(response.status_code, 401)
+            core.assert_not_called()
+
     def test_no_new_write_endpoint(self):
         self.assertEqual(self.client.post("/api/portal/runs/" + RID).status_code, 405)
         self.assertEqual(self.client.post("/runs/" + RID).status_code, 405)
