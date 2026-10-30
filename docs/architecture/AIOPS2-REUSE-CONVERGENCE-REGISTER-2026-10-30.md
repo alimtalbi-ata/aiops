@@ -226,3 +226,51 @@ The gate checks ZIP CRC, all file SHA256 entries, duplicate/unsafe/symlink paths
 
 - Single main-based [#201](https://github.com/alimtalbi-ata/aiops/pull/201): selectively ported only `tests/test_acme_san_payments_fixture_contract.py` from [#198](https://github.com/alimtalbi-ata/aiops/pull/198) blob `675a0af6cd240549d1af92fbcf7a06ec2d2bd638` in commit `5043622ac976da67f83292acb50716a4010d4bb6`; pinned seed `db/migrations/005_seed_acme.sql` matched blob `67f0124a2c3b450e5249165e719a5d943fdd7237`. CI step added in `7474c74c9e6a79c5d28d6624f7b9be2100a792ac` to actually run six offline tests. #198 source reported 6/6 PASS; #201 exact-head CI must be observed separately. Reverse traversal is **synthetic fixture only**, not live Payments impact, tenant scope or authenticated Core/Evidence proof.
 - [#196](https://github.com/alimtalbi-ata/aiops/pull/196) exact HEAD `48b353b1f674f4e952d34d92d072fe4202f1989e`, [Quality 41070920303](https://github.com/alimtalbi-ata/aiops/actions/runs/41070920303) completed SUCCESS **8/8 jobs**, **but both Ollama benchmark jobs recorded evaluator_exit=1 on all three repeats each**. qwen3:4b and qwen3:8b each produced `MODEL=unavailable|PASS=0/3|P50=None|P95=None|TOKENS=None|COST=None`; Intelligence logs show `ReadTimeout`. Workflow currently captures evaluator exit without failing the job. Thus workflow green **must not** be interpreted as real-model benchmark success. Require a fail-closed exit-code gate after artifact upload, a bounded timeout/resource diagnostic, then re-run isolated benchmark. No cost/tenant budget claim.
+
+
+## 2026-10-30 16:11 Europe/Paris — architect's exact-head re-audit and work redirection
+
+This section supersedes earlier status notes where the same PR has since advanced. The live 48-hour task board is `docs/planning/AIOPS2-48H-EXECUTION-CONTROL-BOARD-2026-10-30.md`.
+
+### Exact source/CI observations
+
+| PR | Exact head / base | Observed Actions | Current architectural disposition |
+|---|---|---|---|
+| #195 | `65842ed2` / main | Quality `41078216626` SUCCESS | Architecture/ITIL/benchmark/reuse baseline; addenda are docs-only and must keep current release caveats |
+| #201 | `7474c74c` / main | Quality `41077972849` SUCCESS | Primary clean-main selective integration candidate; T0 only, not a full T1/T2 release |
+| #185 | `2b2af9cd` / `feat/cron-stable-reconciled-20261028` | Quality `41055650123`, V2.8 `41055650146`, Offline `41055650247`, Historical `41055650640` all SUCCESS | Scenario/story and exact-blob source only; 741 ahead / 43 behind main; never merge wholesale |
+| #194 | `40d38705` / `feat/glpi-hitl-proposal-fastpath` | Quality `41070849469`, V2.8 `41070849246`, Offline `41070849257`, Historical `41070849437` all SUCCESS | Stacked HITL/OIDC/outbox implementation; selective contract reuse only |
+| #204 | `dabfeb6f` / #194 `40d38705` | Quality `41074914860`, V2.8 `41074914892`, Offline `41074914893`, Historical `41074914877` all SUCCESS | Stacked Temporal positive-revision fence and offline failure-injection tests; runtime Temporal restart/lost-ACK qualification remains separate |
+| #196 | `48b353b1` / #194 `1fade3e5` | Quality `41070920303` SUCCESS (8/8 jobs) | Telemetry/evaluator source is reusable; **real-model experiment failed all six repeats** (qwen3:4b and qwen3:8b, ReadTimeout, zero scored calls, no usage/latency/cost). Green workflow previously masked evaluator exits |
+| #202 | `922aed2b` / main | Quality `41074573704` SUCCESS | Portal read-only Run detail and nested Run-scope tests; session capability is not OIDC or tenant ACL |
+| #205 | `7f2d2bea` / main | Quality `41075269257` SUCCESS | Core ITSM↔Run xref is a pure mock-only contract; no socket, Core GET, GLPI connector or Portal wiring |
+| #188 | `7512fdd1` / main | Quality `40974112404` SUCCESS | Preferred daily full-quality + 15-minute read-only runtime-smoke proposal; runner not attested |
+| #189 | `233f4ed4` / main | Quality `40975318062` SUCCESS | Duplicate two-hour full-quality cron; do not enable alongside #188 |
+
+### AI benchmark correction
+
+The prior #196 experiment ran qwen3:4b and qwen3:8b for three repeats each. All six evaluator runs exited non-zero due to `ReadTimeout`; the workflow incorrectly ended green because it captured exit codes but never failed after artifact upload. The reports had no usable model score, provider token usage, latency or cost.
+
+The architecture owner has applied a corrective change on #196 branch:
+- CPU comparison becomes qwen3:1.7b and qwen3:4b.
+- Default first diagnostic run is one repeat per model; 3/5 repeats only after the baseline completes.
+- Per-call timeout is 300 seconds; workflow timeout is 120 minutes.
+- Experimental output cap is 2,048 tokens and request cap is 65,536 bytes.
+- Reports and exit codes are uploaded before the final gate; missing repeats or any non-zero evaluator exit fail the job.
+- Tests pin the fail-closed workflow behavior.
+
+These changes require a fresh Actions run and artifact inspection. No model quality, token efficiency, cost or production throughput claim is made until the new run produces evidence. A failed model gate is a benchmark result, not a successful model.
+
+### Integration order now enforced
+
+1. Treat #201 as the one clean-main source integration candidate; do not add the entire #185/#194/#196 branch histories.
+2. Keep #197/#198/#199/#200/#202 as narrowly scoped main-based contracts; verify exact current heads before selecting blobs.
+3. Port #194/#204 HITL and #196 AI telemetry only after dependency, migration, Compose, Core/Portal/Worker conflict and security review. Preserve immutable Core ownership and no-effect synthetic mode.
+4. Implement one T2 customer journey over the clean-main candidate; no more parallel story or Portal prototypes.
+5. Add ITIL lifecycle evidence (N1/N2/N3, P1 rationale, SLA/OLA, incident commander, Problem/PIR/Change/Knowledge) only where backed by explicit synthetic records and clearly labelled.
+6. Build one cumulative package from a clean source tree with exact commit, manifest, migration inventory, image references, checksums, clean install/upgrade/rollback tests.
+7. Keep #188 as the only future schedule candidate; do not activate #189. Keep #146/#153 disabled and #187 deferred.
+
+### Explicit unavailable surfaces
+
+The current GitHub session can inspect and change repository source and GitHub Actions. It does not provide Debian SSH/Docker access or a ChatGPT Lab control surface. Therefore no Debian cron/runner/systemd/volume/image/applied-SHA change is performed or claimed. The five existing ChatGPT schedules remain the work lanes; Schedule 5/5 owns architecture/release convergence and no sixth schedule is created.
