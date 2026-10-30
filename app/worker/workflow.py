@@ -78,7 +78,7 @@ class IncidentWorkflow:
             )
             version = receipt["version"]
             if receipt.get("status") == "BLOCKED":
-                return {"run_id": run_id, "status": "BLOCKED", "final_version": version}
+                return {"run_id": run_id, "status": "BLOCKED", "final_version": version, "execution_allowed": False}
 
             # HITL is a mandatory barrier before every remediation stage.
             # A generic PASS from an unimplemented/failed proposal activity must
@@ -171,4 +171,4 @@ class IncidentWorkflow:
             retry_policy=RETRY,
             result_type=dict,
         )
-        return {"run_id": run_id, "status": result["status"], "final_version": result["version"]}
+        return {"run_id": run_id, "status": result["status"], "final_version": result["version"], "execution_allowed": False}
