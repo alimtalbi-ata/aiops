@@ -86,14 +86,6 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         or gate["idempotency_key"] != projection.get("idempotency_key")
     ):
         raise ValueError("gate_binding_invalid")
-    # Match remediation_lab.canonical_digest: a matching arbitrary 64-hex key
-    # is not a valid no-effect idempotency binding.
-    expected_idempotency = hashlib.sha256(json.dumps(
-        {"proposal_digest": projection["proposal_digest"], "executor": "NO_EFFECT_SIMULATOR"},
-        sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-    ).encode()).hexdigest()
-    if projection["idempotency_key"] != expected_idempotency:
-        raise ValueError("idempotency_digest_mismatch")
     if projection.get("effect_applied") is not False or projection.get("postchecks") != "NOT_RUN":
         raise ValueError("projection_effect_claim_forbidden")
     rollback = projection.get("rollback")
@@ -158,6 +150,14 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         ).hexdigest())
     if digest not in valid_digests:
         raise ValueError("receipt_binding_digest_mismatch")
+    # Match remediation_lab.canonical_digest: a matching arbitrary 64-hex key
+    # is not a valid no-effect idempotency binding.
+    expected_idempotency = hashlib.sha256(json.dumps(
+        {"proposal_digest": projection["proposal_digest"], "executor": "NO_EFFECT_SIMULATOR"},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode()).hexdigest()
+    if projection["idempotency_key"] != expected_idempotency:
+        raise ValueError("idempotency_digest_mismatch")
     if gate.get("status") == "SIMULATED" and (
         gate.get("dry_run") is not True
         or gate.get("preconditions") != "FIXTURE_ASSERTED_NOT_RUNTIME_VERIFIED"
