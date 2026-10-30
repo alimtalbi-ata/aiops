@@ -79,7 +79,23 @@ class IncidentWorkflow:
             # HITL is a mandatory barrier before every remediation stage.
             # A generic PASS from an unimplemented/failed proposal activity must
             # never let the workflow fall through to REMEDIATE.
-            if stage == "HITL" and not (
+            if stage == "HITL" and args["mode"] != "LIVE":
+                # Synthetic runs are simulations, not human approvals. They may
+                # traverse the remaining no-effect stages, but cannot authorize
+                # a LIVE workflow or create execution authority.
+                if not (
+                    receipt.get("status") == "PASS"
+                    and receipt.get("synthetic") is True
+                    and receipt.get("execution_allowed") is False
+                ):
+                    return {
+                        "run_id": run_id, "status": "BLOCKED",
+                        "final_version": version,
+                        "reason": "synthetic_hitl_bypass_contract_invalid",
+                        "execution_allowed": False,
+                    }
+
+            if stage == "HITL" and args["mode"] == "LIVE" and not (
                 receipt.get("status") == "WAITING" or receipt.get("hitl_required") is True
             ):
                 return {
