@@ -18,14 +18,14 @@ on:
         description: "Repeated evaluations per model (1, 3 or 5)"
         type: choice
         options: ["1", "3", "5"]
-        default: "3"
+        default: "1"
         required: true
   workflow_call:
     inputs:
       repeats:
         description: "Repeated evaluations per model"
         type: string
-        default: "3"
+        default: "1"
         required: false
 
 permissions:
@@ -35,16 +35,18 @@ jobs:
   ollama-benchmark:
     name: "Ollama CPU — ${{ matrix.model }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        model: ["qwen3:4b", "qwen3:8b"]
+        model: ["qwen3:1.7b", "qwen3:4b"]
     env:
       COMPOSE_FILE: compose.yml:.github/compose.ollama-benchmark.yml
       AIOPS_BENCHMARK_MODEL: ${{ matrix.model }}
       LLM_API_KEY: ""
-      AIOPS_BENCHMARK_TIMEOUT_SECONDS: "100"
+      AIOPS_BENCHMARK_TIMEOUT_SECONDS: "300"
+      AIOPS_BENCHMARK_MAX_OUTPUT_TOKENS: "2048"
+      AIOPS_BENCHMARK_MAX_REQUEST_BYTES: "65536"
       AIOPS_EVAL_UID: "1001"
       AIOPS_EVAL_GID: "1001"
       REPEATS: ${{ inputs.repeats || '3' }}
@@ -130,6 +132,22 @@ jobs:
             reports/experiment-exit-codes.txt
           if-no-files-found: error
           retention-days: 30
+      - name: Fail benchmark job when any evaluator repeat fails
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          test -s reports/experiment-exit-codes.txt
+          expected="$REPEATS"
+          actual="$(grep -c 'evaluator_exit=' reports/experiment-exit-codes.txt)"
+          test "$actual" -eq "$expected"
+          if grep -Ev 'evaluator_exit=0
+      - name: Tear down isolated benchmark environment
+        if: always()
+        run: docker compose down -v --remove-orphans || true
+ reports/experiment-exit-codes.txt; then
+            echo "One or more real-model evaluations failed; inspect the uploaded report and diagnostics."
+            exit 1
+          fi
 
       - name: Tear down isolated benchmark environment
         if: always()
