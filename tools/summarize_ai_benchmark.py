@@ -170,10 +170,11 @@ def markdown(summary: dict[str, Any]) -> str:
         lines.append(
             f"| {item['model']} | {item['repeats']} | "
             f"{item['evaluation_passes']}/{item['repeats']} | "
-            f"{fmt(m['severity_accuracy'])} | {fmt(m['grounding'])} | "
-            f"{fmt(m['critic_disposition'])} | {fmt(m['latency_ms_p50'])} | "
-            f"{fmt(m['latency_ms_p95'])} | {fmt(item['total_tokens_mean'])} | "
-            f"{fmt(item['cost_usd_mean'])} |"
+            f"{fmt(m['successful_calls'])}/{fmt(m['failed_calls'])} | "
+            f"{fmt(m['usage_coverage'])} | {fmt(m['severity_accuracy'])} | "
+            f"{fmt(m['grounding'])} | {fmt(m['critic_disposition'])} | "
+            f"{fmt(m['latency_ms_p50'])} | {fmt(m['latency_ms_p95'])} | "
+            f"{fmt(item['total_tokens_mean'])} | {fmt(item['cost_usd_mean'])} |"
         )
     lines += ["", "Cost is not estimated. UNKNOWN means no complete, pinned pricing evidence."]
     return "\n".join(lines) + "\n"
