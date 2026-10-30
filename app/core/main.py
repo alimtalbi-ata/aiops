@@ -691,6 +691,12 @@ def claim_hitl_decision_outbox(x:dict,authorization:str|None=Header(default=None
     if type(lease_seconds) is not int or not 15<=lease_seconds<=300:
         raise HTTPException(422,'invalid_outbox_lease_duration')
     with db() as c:
+        c.execute(
+            "update aiops.hitl_decision_outbox set status='DEAD',"
+            "lease_owner=null,lease_token=null,lease_until=null,"
+            "last_error='delivery_attempt_limit_exceeded' "
+            "where status='LEASED' and lease_until<=now() and attempts>=20"
+        )
         candidates=c.execute(
             "select event_id from aiops.hitl_decision_outbox "
             "where attempts<20 and ((status='PENDING' and available_at<=now()) "
