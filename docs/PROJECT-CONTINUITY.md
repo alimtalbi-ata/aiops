@@ -209,3 +209,11 @@ Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current
 - Manifest explicitly states `real_model_qualification=NOT_RUN`, `production_qualification=NOT_RUN`. Its `git_commit=6273ad48...` is the temporary packaging tree SHA, not PR head or Debian `applied.sha`.
 - The package does **not** contain the new architecture/ITIL/48h docs from PR #195. It is a reproducible RC candidate from the stacked #194/#196 tree, not the final cumulative kit for the main-based architecture.
 - Audit report: `docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md`.
+
+
+### 2026-10-30 12:27 UTC — second RC1.4 kit and V2.8 candidate failure
+
+- Latest PR #185 head `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`: Quality 6/6 PASS, Offline and Historical PASS, V2.8 FAILED (58 PASS / 1 ERROR). Failing test expects the old `gates.decision` response while the new scoped reader returns `gates.items`; correct the test fixture, preserve fail-closed identity validation.
+- Downloaded PR #185 artifact `12975971501`: inner SHA-256 `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d`, 445 entries, 395/395 file checksums verified. It lacks migration 011, OIDC verifier and AI per-call telemetry.
+- Compared with #196 artifact `12974884559` (inner SHA `4c7bd6a...`, 455 entries, 405/405 checksums) which includes migration 011/OIDC/telemetry but not the latest ACME branch fixes or architecture docs.
+- These two RC1.4 packages are valid but non-cumulative and built from different divergent trees. Final kit must be rebuilt from a single clean integrated source SHA.
