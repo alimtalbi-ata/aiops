@@ -63,20 +63,6 @@ jobs:
         id: model
         run: echo "safe=${AIOPS_BENCHMARK_MODEL//:/-}" >> "$GITHUB_OUTPUT"
 
-      - name: Install isolated Ollama runtime
-        run: |
-          set -Eeuo pipefail
-          curl -fsSL https://ollama.com/install.sh | sh
-          ollama --version
-          OLLAMA_HOST=0.0.0.0:11434 nohup ollama serve >/tmp/ollama-benchmark.log 2>&1 &
-          for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
-            sleep 2
-          done
-          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
-          ollama pull "$AIOPS_BENCHMARK_MODEL"
-          ollama list
-
       - name: Prepare isolated AIOps environment
         run: |
           set -Eeuo pipefail
@@ -84,11 +70,20 @@ jobs:
           mkdir -p reports
           docker compose config --quiet
 
+      - name: Start isolated Ollama service and pull the selected model
+        run: |
+          set -Eeuo pipefail
+          docker compose up -d --wait --wait-timeout 300 aiops2-ollama
+          docker compose exec -T aiops2-ollama ollama --version
+          docker compose exec -T aiops2-ollama ollama pull "$AIOPS_BENCHMARK_MODEL"
+          docker compose exec -T aiops2-ollama ollama show "$AIOPS_BENCHMARK_MODEL"
+
       - name: Start Core and real-model Intelligence service
         run: |
           set -Eeuo pipefail
           docker compose up -d --build --wait --wait-timeout 300 aiops2-core aiops2-intelligence
           bash deploy/migrate.sh
+          docker compose exec -T aiops2-intelligence python -c "import urllib.request; urllib.request.urlopen('http://aiops2-ollama:11434/api/tags', timeout=10)"
           docker compose ps
 
       - name: Run repeated evidence-grounded Analyst/Critic evaluations
