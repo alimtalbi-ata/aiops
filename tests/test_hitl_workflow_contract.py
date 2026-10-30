@@ -1,0 +1,108 @@
+import ast
+import pathlib
+import unittest
+
+
+class TemporalHitlWorkflowContractTests(unittest.TestCase):
+    def test_workflow_has_signal_and_durable_wait(self):
+        source = pathlib.Path("app/worker/workflow.py").read_text()
+        tree = ast.parse(source)
+        decorators = []
+        calls = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                decorators.extend(
+                    ast.unparse(item) for item in node.decorator_list
+                )
+            if isinstance(node, ast.Call):
+                calls.append(ast.unparse(node.func))
+        self.assertIn("workflow.signal", decorators)
+        self.assertIn("workflow.wait_condition", calls)
+
+    def test_workflow_never_turns_approval_into_execution_authority(self):
+        source = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn('"execution_allowed": False', source)
+        self.assertIn("human_decision_recorded_execution_gate_closed", source)
+        self.assertIn("proposal_hash", source)
+        self.assertIn("proposal_revision", source)
+
+
+    def test_missing_persisted_proposal_blocks_before_remediation(self):
+        source = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn("hitl_proposal_not_persisted", source)
+        self.assertIn('if stage == "HITL" and args["mode"] == "LIVE" and not (', source)
+        self.assertIn('if stage == "HITL" and args["mode"] == "LIVE":', source)
+        self.assertLess(source.index("hitl_proposal_not_persisted"),
+                        source.index('"finish_run"'))
+        self.assertIn('"execution_allowed": False', source)
+
+
+    def test_proposal_builder_requires_clean_critic_and_explicit_action_contract(self):
+        source = pathlib.Path("app/worker/main.py").read_text()
+        self.assertIn("def create_hitl_proposal(", source)
+        self.assertIn("critique.get('validated') is not True", source)
+        self.assertIn("critique.get('issues')", source)
+        self.assertIn("critique.get('unsafe_actions')", source)
+        self.assertIn("action.get('action_type')", source)
+        self.assertIn("action.get('target_ci_id')", source)
+        self.assertIn("action.get('expected_postconditions')", source)
+        self.assertIn("/proposals", source)
+        self.assertIn("'execution_allowed': False", source)
+
+    def test_synthetic_modes_skip_hitl_without_creating_approval_or_execution_authority(self):
+        worker = pathlib.Path("app/worker/main.py").read_text()
+        workflow = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn("if mode != 'LIVE':", worker)
+        self.assertIn("HITL_SIMULATION_SKIPPED", worker)
+        self.assertIn("'approval_required': False", worker)
+        self.assertIn("'execution_allowed': False", worker)
+        self.assertIn('if stage == "HITL" and args["mode"] != "LIVE":', workflow)
+        self.assertIn('"synthetic_hitl_bypass_contract_invalid"', workflow)
+
+    def test_live_hitl_requires_persisted_proposal_and_human_decision(self):
+        workflow = pathlib.Path("app/worker/workflow.py").read_text()
+        self.assertIn('if stage == "HITL" and args["mode"] == "LIVE" and not (', workflow)
+        self.assertIn('"hitl_proposal_not_persisted"', workflow)
+        self.assertIn('"hitl_proposal_binding_missing"', workflow)
+        self.assertIn('"human_decision_recorded_execution_gate_closed"', workflow)
+
+
+    def test_core_approval_uses_verified_oidc_subject_and_role_not_browser_actor_fields(self):
+        core = pathlib.Path("app/core/main.py").read_text()
+        start = core.index("def record_proposal_approval(")
+        end = core.index("@app.post('/api/hitl/decision-outbox/claim')", start)
+        approval = core[start:end]
+        self.assertIn("identity=require_live_assertion(bearer(authorization))", approval)
+        self.assertIn("actor=identity['subject_id']", approval)
+        self.assertIn("role not in identity.get('roles',[])", approval)
+        self.assertNotIn("actor=str(x.get('actor_id'", approval)
+        self.assertIn("'source':'verified-oidc-human-approval'", approval)
+
+    def test_terminal_approval_writes_transactional_outbox_in_same_core_transaction(self):
+        core = pathlib.Path("app/core/main.py").read_text()
+        migration = pathlib.Path("db/migrations/011_hitl_decision_outbox.sql").read_text()
+        start = core.index("def record_proposal_approval(")
+        end = core.index("@app.post('/api/hitl/decision-outbox/claim')", start)
+        approval = core[start:end]
+        self.assertIn("with db() as c:", approval)
+        self.assertIn("insert into aiops.hitl_decision_outbox", approval)
+        self.assertIn("if next_status in ('APPROVED','REJECTED','REVOKED'):", approval)
+        self.assertIn("unique (proposal_id, proposal_hash, proposal_revision, decision)", migration)
+        self.assertIn("status in ('PENDING','LEASED','DELIVERED','DEAD')", migration)
+
+    def test_outbox_claim_uses_skip_locked_and_ack_requires_active_lease_token(self):
+        core = pathlib.Path("app/core/main.py").read_text()
+        worker = pathlib.Path("app/worker/main.py").read_text()
+        self.assertIn("for update skip locked limit %s", core)
+        self.assertIn("lease_until<=now()", core)
+        self.assertIn("outbox_lease_lost_or_invalid", core)
+        self.assertIn("select status,lease_token,(lease_until>now())", core)
+        self.assertIn("row[2] is not True", core)
+        self.assertIn("delivery_attempt_limit_exceeded", core)
+        self.assertIn("/api/hitl/decision-outbox/claim", worker)
+        self.assertIn("/api/hitl/decision-outbox/{event_id}/delivered", worker)
+        self.assertIn("Do not ack. The lease will expire", worker)
+
+
+if __name__ == "__main__":
+    unittest.main()

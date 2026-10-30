@@ -31,6 +31,28 @@ class IntelligenceContractTests(unittest.TestCase):
         with self.assertRaises(Exception):
             MODULE.Action(action_id='A1', intent='restart', risk_tier='HIGH', expected_effect='restart', advisory_only=False)
 
+    def test_action_supports_explicit_allowlisted_hitl_proposal_fields(self):
+        action = MODULE.Action(
+            action_id='A1', intent='collect diagnostics', risk_tier='LOW',
+            target_ci_id='CI-123', action_type='COLLECT_DIAGNOSTICS',
+            parameters={'scope': 'read-only'}, evidence_ids=['E1'],
+            preconditions=['CI-123 is reachable'],
+            expected_effect='Collect read-only diagnostic bundle',
+            expected_postconditions=['Diagnostic bundle is recorded'],
+            verification_steps=['Check evidence ledger entry'],
+        )
+        self.assertEqual(action.action_type, 'COLLECT_DIAGNOSTICS')
+        self.assertEqual(action.target_ci_id, 'CI-123')
+        self.assertFalse(hasattr(action, 'execution_allowed'))
+
+    def test_action_rejects_unlisted_execution_action_type(self):
+        with self.assertRaises(Exception):
+            MODULE.Action(
+                action_id='A1', intent='arbitrary shell', risk_tier='CRITICAL',
+                expected_effect='run arbitrary shell',
+                action_type='RUN_SHELL',
+            )
+
     def test_hypothesis_requires_evidence_or_explicit_assumption(self):
         with self.assertRaises(Exception):
             MODULE.Hypothesis(id='H1', statement='unsupported', confidence=0.5)

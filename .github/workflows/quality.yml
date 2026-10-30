@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "httpx==0.28.1" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "httpx==0.28.1" "temporalio==1.17.0" "psycopg[binary]==3.2.9" "PyJWT[crypto]==2.10.1"
       - name: Compile Python source
         run: python -m compileall -q app tests tools
       - name: Policy safety unit tests
@@ -32,7 +32,10 @@ jobs:
           AIOPS_POLICY_STATE_DB: ${{ runner.temp }}/aiops-policy-safety.sqlite3
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
-        run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+        run: |
+          python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+          python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
+          python -m unittest discover -s tests -p "test_hitl_identity.py" -v
       - name: Analyst Critic fail-closed fault injection
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
       - name: Portal demo launch contract tests
@@ -160,6 +163,7 @@ jobs:
           PGPASSWORD: ci-only-password
         run: |
           psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from information_schema.tables where table_schema='aiops' and table_name in ('analysis_records','critique_records','policy_decisions','action_proposals','approval_records','effect_receipts','verification_records','reconciliation_records','learning_cases','model_evaluation_runs')" | grep -x 10
+          psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from information_schema.tables where table_schema='aiops' and table_name='hitl_decision_outbox'" | grep -x 1
           psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -Atc "select count(*) from pg_trigger where not tgisinternal and tgname like 'trg_immutable_%'" | grep -x 9
       - name: Verify immutable ledger and gold-set safety invariants
         env:
@@ -202,6 +206,10 @@ jobs:
         env:
           PGPASSWORD: ci-only-password
         run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f db/migrations/009_ai_decision_ledger.sql
+      - name: Reapply HITL decision outbox migration to prove idempotency
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f db/migrations/011_hitl_decision_outbox.sql
 
   mariadb-dr-rehearsal:
     runs-on: ubuntu-latest
@@ -323,7 +331,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "httpx==0.28.1" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "httpx==0.28.1" "temporalio==1.17.0" "psycopg[binary]==3.2.9" "PyJWT[crypto]==2.10.1"
       - name: Re-run release-blocking unit and contract tests
         env:
           PYTHONPATH: app
@@ -332,6 +340,8 @@ jobs:
           python -m compileall -q app tests tools
           python -m unittest discover -s tests -p "test_policy_safety.py" -v
           python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+          python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
+          python -m unittest discover -s tests -p "test_hitl_identity.py" -v
           python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
           python -m unittest discover -s tests -p "test_portal_demo.py" -v
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
