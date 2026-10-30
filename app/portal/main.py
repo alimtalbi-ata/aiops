@@ -130,6 +130,18 @@ def _core_detail_matches_listed_run(detail, listed):
         expected = listed.get(field)
         if expected is not None and run.get(field) != expected:
             return False
+    # Core's run-specific detail normally omits run_id on nested records.
+    # Reject explicit foreign identities and malformed collections rather than
+    # displaying another run's events, gates or stages as canonical evidence.
+    for field in ("events", "gates", "stages"):
+        if field in detail:
+            records = detail[field]
+            if not isinstance(records, list) or any(
+                not isinstance(record, dict) or
+                ("run_id" in record and record["run_id"] != run["run_id"])
+                for record in records
+            ):
+                return False
     return True
 
 def _core_run_provenance(detail, listed):
@@ -177,6 +189,26 @@ def _core_evidence_items_for_run(payload, run_id):
         return None
     items = payload["items"]
     if any(not isinstance(item, dict) or item.get("run_id") != run_id
+           for item in items):
+        return None
+    return items
+
+
+def _core_scoped_items(payload, run_id):
+    """Validate optional run identities on Core's run-specific item endpoints.
+
+    Core gates/demo-artifacts currently omit run_id in their rows. Absence is
+    not independent attestation; an explicit conflicting identity is a veto.
+    """
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        return None
+    if payload.get("status") in ("UNKNOWN", "UNAUTHORIZED", "UNAVAILABLE"):
+        return None
+    if "run_id" in payload and payload["run_id"] != run_id:
+        return None
+    items = payload["items"]
+    if any(not isinstance(item, dict) or
+           ("run_id" in item and item["run_id"] != run_id)
            for item in items):
         return None
     return items
@@ -635,7 +667,8 @@ def demo_run_detail(rid:str):
                   "identité Core absente ou contradictoire.</p>"),
             mode="UNKNOWN / READ-ONLY"), status_code=503)
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
-    gate=_get("/api/runs/"+key+"/gates")
+    gate_items=_core_scoped_items(_get("/api/runs/"+key+"/gates"),rid)
+    gate={"items":gate_items} if gate_items is not None else {"status":"UNKNOWN"}
     body=panel("Parcours opérateur — même run Core",
       '<nav aria-label="Parcours opérateur ACME">'
       '<a href="/">Cockpit NOC</a> · <a href="/runs">Runs Core</a> · '
@@ -682,8 +715,10 @@ def demo_run_detail(rid:str):
         artifact_response=_get("/api/runs/"+key+"/demo-artifacts")
     except Exception:
         artifact_response={"status":"UNKNOWN"}
-    artifact_items=artifact_response.get("items") if isinstance(artifact_response,dict) else None
-    artifact_items=[item for item in artifact_items if isinstance(item,dict)] if isinstance(artifact_items,list) else []
+    artifact_items=_core_scoped_items(artifact_response,rid)
+    if artifact_items is None:
+        artifact_response={"status":"UNKNOWN"}
+        artifact_items=[]
     artifact_rows=[(
         esc(item.get("sequence_no","?")), esc(item.get("artifact_id","UNKNOWN")),
         esc(item.get("artifact_type","UNKNOWN")), esc(item.get("title","")),
@@ -781,7 +816,8 @@ def demo_status(rid:str):
                 "events":"INCONNU","gates":{"status":"UNKNOWN"}}
     run=detail["run"]
     ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
-    gates=_get("/api/runs/"+rid+"/gates")
+    gate_items=_core_scoped_items(_get("/api/runs/"+rid+"/gates"),rid)
+    gates={"items":gate_items} if gate_items is not None else {"status":"UNKNOWN"}
     events=detail.get("events",None)
     if not isinstance(events,list):
         events="INCONNU"
