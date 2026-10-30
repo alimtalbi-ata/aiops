@@ -25,6 +25,15 @@ _BLOCKED_REASONS = frozenset({
 })
 
 
+def _same_snapshot_exact(left: Any, right: Any) -> bool:
+    """Avoid Python's bool == int equivalence in rollback state comparisons."""
+    return (
+        isinstance(left, dict) and isinstance(right, dict)
+        and left.keys() == right.keys()
+        and all(type(left[key]) is type(right[key]) and left[key] == right[key] for key in left)
+    )
+
+
 def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     """Summarize a *synthetic, unverified* receipt without elevating its claims.
 
@@ -58,7 +67,7 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(projection, dict) or not isinstance(projection.get("gate"), dict):
         raise ValueError("projection_missing")
     gate = projection["gate"]
-    if projection.get("schema_version") != 1:
+    if type(projection.get("schema_version")) is not int or projection["schema_version"] != 1:
         raise ValueError("projection_schema_invalid")
     if projection.get("synthetic") is not True or projection.get("provenance") != "WHAT_IF_FIXTURE_NOT_OBSERVED":
         raise ValueError("projection_provenance_invalid")
@@ -120,7 +129,7 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         or rollback.get("executed", False) is not False
         # The existing projection builder always supplies a no-effect
         # projected rollback state; absence must not be called "available".
-        or rollback.get("projected_state") != projection.get("before")
+        or not _same_snapshot_exact(rollback.get("projected_state"), projection.get("before"))
     ):
         raise ValueError("rollback_effect_claim_forbidden")
     before, after = projection.get("before"), projection.get("after")
@@ -216,7 +225,7 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     # Gate metadata is a catalog-bound *plan*, never a completed postcheck.
     # A BLOCKED gate emitted by evaluate_simulation contains no approval actor
     # or dry-run assertion; reject forged mixed-state receipts fail-closed.
-    if gate.get("timeout_seconds") != recipe["timeout_seconds"]:
+    if type(gate.get("timeout_seconds")) is not int or gate["timeout_seconds"] != recipe["timeout_seconds"]:
         raise ValueError("gate_catalog_binding_invalid")
     if decision == "SIMULATE":
         if (
