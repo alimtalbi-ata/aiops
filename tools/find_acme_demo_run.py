@@ -81,7 +81,8 @@ def candidates(runs, incidents):
             if run["run_id"] in seen_runs:
                 raise ValueError("duplicate_run_id")
             seen_runs.add(run["run_id"])
-        if not isinstance(run, dict) or run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
+        # This locator certifies DEMO only; REPLAY/STORY are not DEMO executions.
+        if not isinstance(run, dict) or run.get("mode") != "DEMO":
             continue
         rid = run.get("run_id")
         if not isinstance(rid, str) or not RUN_ID.fullmatch(rid):
