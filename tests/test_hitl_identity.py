@@ -2,7 +2,11 @@ import os
 import json
 import time
 import unittest
+import pathlib
+import sys
 from types import SimpleNamespace
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app"))
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
