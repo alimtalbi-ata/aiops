@@ -202,6 +202,24 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         or projection.get("reason") != gate["reason"]
     ):
         raise ValueError("projection_reason_inconsistent")
+    # Gate metadata is a catalog-bound *plan*, never a completed postcheck.
+    # A BLOCKED gate emitted by evaluate_simulation contains no approval actor
+    # or dry-run assertion; reject forged mixed-state receipts fail-closed.
+    if gate.get("timeout_seconds") != recipe["timeout_seconds"]:
+        raise ValueError("gate_catalog_binding_invalid")
+    if decision == "SIMULATE":
+        if (
+            gate.get("planned_postchecks") != recipe["postchecks"]
+            or gate.get("compensation") != recipe["compensation"]
+        ):
+            raise ValueError("gate_catalog_binding_invalid")
+    elif any(
+        key in gate for key in (
+            "approval_actor", "preconditions", "dry_run",
+            "planned_postchecks", "compensation",
+        )
+    ):
+        raise ValueError("gate_blocked_fixture_invalid")
     return {
         "schema": "aiops.acme-policy-demo-result.v1",
         "classification": "SIMULATED" if decision == "SIMULATE" else "UNKNOWN",
