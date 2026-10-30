@@ -126,8 +126,20 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         text=True, stderr=subprocess.DEVNULL).strip()
                     if actual_sha != expected_sha:
                         errors.append("SOURCE_HEAD_MISMATCH")
+                    # Matching HEAD alone is insufficient: modified tracked files
+                    # can be repackaged with matching checksums but not that commit.
+                    top = subprocess.check_output(
+                        ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                        text=True, stderr=subprocess.DEVNULL).strip()
+                    if Path(top).resolve() != root:
+                        errors.append("SOURCE_NOT_REPOSITORY_ROOT")
+                    dirty = subprocess.check_output(
+                        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+                        text=True, stderr=subprocess.DEVNULL)
+                    if dirty.strip():
+                        errors.append("SOURCE_TREE_DIRTY")
                 except (OSError, subprocess.CalledProcessError):
-                    errors.append("SOURCE_HEAD_UNAVAILABLE")
+                    errors.append("SOURCE_HEAD_OR_STATUS_UNAVAILABLE")
                 for path in required_paths:
                     if path not in files or path == "RELEASE-MANIFEST.txt":
                         continue
