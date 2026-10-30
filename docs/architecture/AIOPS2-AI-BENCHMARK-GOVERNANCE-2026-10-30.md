@@ -129,3 +129,40 @@ The exact deterministic CI report is published at `docs/benchmarks/2026-10-30-ci
 - Runtime E2E: synthetic Run `RUN-FB8DDB7C6B22B5F4` RESOLVED, 12 evidence records, Policy PASS/SIMULATE, zero effect receipts.
 
 The CI provider emits fixed placeholder token counts; token/latency numbers are proof of telemetry plumbing, not real-model consumption or performance. No customer SLA, GPU capacity or provider cost conclusion may be drawn from this baseline.
+
+
+## 11. Exact artifact update and real local-model experiment — 2026-10-30 14:xx Europe/Paris
+
+The latest deterministic CI report is artifact `12976497171` from Quality run `41055287795`, exact #196 head `6b6a3b3991e8a4b5b83ff4c6534dfa4b34f72932`.
+
+- Dataset SHA-256: `fdf45a4f89b6867bd172116648f53194d460c832cb2d133f2dc4fdbf30d1493a`.
+- Five synthetic cases; ten Analyst/Critic calls; all aggregate quality gates 1.00 on their defined denominators.
+- Four proposal cases; actionability, target, action type, evidence, preconditions, postconditions and rollback metrics each 1.00.
+- Provider usage coverage 10/10; 20 placeholder tokens (10 prompt + 10 completion); P50 3.01 ms; P95 4.54 ms; zero retries.
+- Cost remains null/UNKNOWN. The CI provider returns fixed one-input/one-output-token placeholders; these values qualify instrumentation only.
+- Matching Temporal run `RUN-6A6924688ABCD0B4`: RESOLVED DEMO, 12 Evidence records, Policy PASS/SIMULATE, `HITL_SIMULATION_SKIPPED`, zero effect receipts.
+
+The exact report and case-level results are documented in `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`. Its dataset SHA differs from the earlier 12:09 baseline; comparisons must pin the same dataset hash and prompt version.
+
+### Local-model benchmark execution design
+
+A reusable GitHub Actions workflow is being added on the existing Intelligence/evaluator stack in PR #196. It uses the existing five-case evaluator, not a second scoring engine, and runs Ollama `qwen3:4b` and `qwen3:8b` on isolated ephemeral CPU runners with three repeats per model. It records model ID, dataset hash, prompt version, provider-reported token usage, measured wall-clock latency, retry count, quality gates and per-case results. The aggregation script refuses mixed dataset/prompt versions, refuses LIVE/effect-enabled reports, and never estimates tokens or cost.
+
+This experiment is intended to expose real model weaknesses, not to force a green quality score. A workflow can successfully complete an experiment while a model's evaluation result is FAIL; the report must preserve that failure. Missing usage stays null. Ollama CPU results do not qualify DGX/NIM, production throughput, tenant isolation or customer SLA.
+
+### Usage-control status
+
+| Control | Current status |
+|---|---|
+| Request context byte cap | Implemented in Intelligence |
+| Generated output token cap | Implemented in Intelligence |
+| Provider-reported input/output token capture | Implemented for OpenAI-compatible response usage; provider-specific completeness still to verify |
+| Per-invocation latency and retry count | Implemented and included in report |
+| Critic schema-repair usage accounting | Implemented |
+| Per-run durable token budget | NOT_IMPLEMENTED |
+| Per-tenant spend/token budget | NOT_IMPLEMENTED; tenant identity/ACL not qualified |
+| Hard tokenizer-accurate input-token cap | NOT_IMPLEMENTED; byte cap is not a token cap |
+| Durable per-invocation database table | NOT_IMPLEMENTED; detailed rows remain in report artifact |
+| Pinned pricing/invoice source and actual USD cost | NOT_CONFIGURED; cost UNKNOWN |
+
+No model promotion decision should be made until repeated real-model runs, independent review of proposal quality, usage coverage, and operational failure tests are complete.
