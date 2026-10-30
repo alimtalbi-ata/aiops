@@ -14,6 +14,7 @@ from shared.hitl_identity import (
     issue_simulated_assertion,
     simulator_catalog,
     simulator_enabled,
+    simulator_ready,
 )
 
 router = APIRouter(tags=["HITL identity simulator"])
@@ -39,6 +40,7 @@ def identity_health():
         "component": "hitl-identity",
         "mode": mode,
         "simulator_enabled": enabled,
+        "simulator_ready": simulator_ready(),
         "production_directory": "NOT_CONFIGURED",
         "live_approval_ready": False,
         "execution_allowed": False,
