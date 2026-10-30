@@ -40,6 +40,10 @@ def report(model="qwen3:4b", dataset="abc", total=20, complete=True, result="PAS
             "latency_ms_p95": 300.0,
             "usage_coverage": 1.0 if complete else 0.0,
             "retry_count": 0,
+            "successful_calls": 10 if result == "PASS" else 0,
+            "failed_calls": 0 if result == "PASS" else 10,
+            "request_count_total": 10,
+            "error_classes": {} if result == "PASS" else {"ReadTimeout": 10},
             "token_totals_complete": complete,
             "total_tokens": total if complete else None,
             "prompt_tokens_total": total // 2 if complete else None,
@@ -115,6 +119,20 @@ class BenchmarkSummaryTests(unittest.TestCase):
         self.assertIn("evaluator_exit=0", workflow)
         self.assertIn("AIOPS_LLM_MAX_OUTPUT_TOKENS:", compose)
         self.assertIn("AIOPS_LLM_MAX_REQUEST_BYTES:", compose)
+
+    def test_failed_call_counts_and_error_classes_survive_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = [
+                self.write(directory, "qwen3-4b-repeat-1.json", report(result="FAIL")),
+            ]
+            result = aggregate_reports(paths)
+            model = result["model_results"][0]
+            self.assertEqual(model["metrics_median"]["failed_calls"], 10)
+            self.assertEqual(model["metrics_median"]["successful_calls"], 0)
+            self.assertEqual(model["error_classes"], {"ReadTimeout": 10})
+            rendered = __import__("summarize_ai_benchmark").markdown(result)
+            self.assertIn("Calls OK/failed", rendered)
+            self.assertIn("0/10", rendered)
 
     def test_prompt_version_must_match_for_comparison(self):
         with tempfile.TemporaryDirectory() as directory:
