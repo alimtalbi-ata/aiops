@@ -201,7 +201,7 @@ class PortalPageContractTests(unittest.TestCase):
             if path=="/api/runs":return {"items":[{"run_id":"RUN-DEMO","mode":"DEMO"}]}
             if path=="/api/runs/RUN-DEMO":return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED"},"events":[{"event_type":"CRITIC_COMPLETED"}]}
             if path.endswith("/ai-ledger"):return {"critic":"REJECTED"}
-            if path.endswith("/gates"):return {"decision":"BLOCKED"}
+            if path.endswith("/gates"):return {"items":[{"stage":"POLICY","decision":"BLOCKED"}]}
             raise AssertionError(path)
         with patch.object(self.portal,"get_json",side_effect=get):
             response=self.portal.demo_status("RUN-DEMO")
@@ -209,7 +209,7 @@ class PortalPageContractTests(unittest.TestCase):
         self.assertEqual(response["events"][0]["event_type"],"CRITIC_COMPLETED")
         self.assertEqual(response["ledger"],{"status":"UNKNOWN",
                                              "reason":"viewer_authorization_required"})
-        self.assertEqual(response["gates"]["decision"],"BLOCKED")
+        self.assertEqual(response["gates"]["items"][0]["decision"],"BLOCKED")
         self.assertFalse(any(path.endswith("/ai-ledger") for path in seen),
                          "polling must not read protected Core ledger anonymously")
 
