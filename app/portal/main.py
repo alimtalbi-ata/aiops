@@ -126,6 +126,53 @@ def _core_detail_matches_listed_run(detail, listed):
             return False
     return True
 
+def _core_run_provenance(detail, listed):
+    """Core-declared provenance, never independent evidence of a real-world event."""
+    if not _core_detail_matches_listed_run(detail, listed):
+        return "UNKNOWN"
+    synthetic = detail["run"].get("synthetic")
+    inventory_flag = listed.get("synthetic")
+    if type(synthetic) is not bool or (
+        type(inventory_flag) is bool and inventory_flag is not synthetic
+    ):
+        return "UNKNOWN"
+    return "SYNTHETIC" if synthetic else "REAL"
+
+
+def _operator_run_context(run_id):
+    """Read-only cross-screen navigation; no implicit Twin/GLPI/Policy join."""
+    if run_id is None:
+        return ""
+    unknown = panel("Contexte run Core — UNKNOWN",
+                    "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu et "
+                    "concordant n'est attesté pour cette sélection.</p>")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", run_id):
+        return unknown
+    listed = next((r for r in _qualified_demo_runs(_runs())
+                   if r["run_id"] == run_id), None)
+    if listed is None:
+        return unknown
+    detail = _get("/api/runs/" + run_id)
+    if not _core_detail_matches_listed_run(detail, listed):
+        return unknown
+    from urllib.parse import quote
+    rid = quote(run_id, safe="")
+    provenance = _core_run_provenance(detail, listed)
+    return panel("Contexte opérateur — run Core sélectionné",
+        '<p>Run <strong>' + esc(run_id) + '</strong> · mode '
+        + esc(listed["mode"]) + ' · provenance déclarée par Core : <strong>'
+        + esc(provenance) + '</strong> (non attestée indépendamment).</p>'
+        '<nav aria-label="Navigation Core du même run">'
+        '<a href="/demo-studio/run/' + rid + '">Analyst / Critic</a> · '
+        '<a href="/twin?run_id=' + rid + '">Twin</a> · '
+        '<a href="/timeline?run_id=' + rid + '">Timeline</a> · '
+        '<a href="/demo-studio/run/' + rid + '#demo-ledger-output">Evidence viewer</a> · '
+        '<a href="/demo-studio/run/' + rid + '#demo-evidence-itsm-output">ITSM viewer</a> · '
+        '<a href="/policy-control?run_id=' + rid + '">Policy / HITL</a></nav>'
+        '<p>UNKNOWN — aucune corrélation automatique entre ce run, la topologie Twin, '
+        'un ticket GLPI ou une approbation HITL. Aucune action LIVE.</p>')
+
+
 @app.get("/",response_class=HTMLResponse)
 def home():
     d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
@@ -254,12 +301,12 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         content,mode=match.get("mode","INCONNU"))
 
 @app.get("/twin",response_class=HTMLResponse)
-def twin_page():
+def twin_page(run_id:str|None=None):
     summary=_get("/api/twin/summary",TWIN)
     graph=_get("/api/twin/graph",TWIN)
     nodes=graph.get("nodes",[]) if isinstance(graph.get("nodes"),list) else []
     edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
-    body=panel("Résumé Digital Twin",pretty(summary))
+    body=_operator_run_context(run_id)+panel("Résumé Digital Twin",pretty(summary))
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
     body+=graph_panel(graph,impact=impact)
     body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
@@ -270,8 +317,8 @@ def twin_page():
     return shell("/twin","Digital Twin ACME","Topologie et dépendances observables, distinctes des injections de simulation.",body)
 
 @app.get("/evidence",response_class=HTMLResponse)
-def evidence_page():
-    body=panel("Traçabilité des preuves",'<p>Les preuves doivent porter provenance, fraîcheur, lien au run et mode SYNTHETIC/LIVE. Aucun indicateur de confiance artificiel n’est produit par cette vue.</p>')
+def evidence_page(run_id:str|None=None):
+    body=_operator_run_context(run_id)+panel("Traçabilité des preuves",'<p>Les preuves doivent porter provenance, fraîcheur, lien au run et mode SYNTHETIC/LIVE. Aucun indicateur de confiance artificiel n’est produit par cette vue.</p>')
     body+=panel("Point de contrôle",'<p>Consulter les identifiants de preuves dans les événements Core. La liste transversale Evidence exige un adaptateur et un contrôle de droits complémentaires.</p>')
     return shell("/evidence","Preuves & Observabilité","Evidence ledger, liens de causalité et limites d’acquisition.",body)
 
@@ -378,11 +425,15 @@ def demo_studio():
     # Deep links stay on the same unambiguous Core run; no fixture fallback.
     if selected:
         run_path="/demo-studio/run/"+rid
+        twin_href="/twin?run_id="+rid
+        policy_href="/policy-control?run_id="+rid
         timeline_link='<a href="/timeline?run_id='+rid+'">Timeline du même run</a>'
         analyst_link='<a href="'+run_path+'">Analyst / Critic du même run</a>'
         evidence_link='<a href="'+run_path+'#demo-ledger-output">Evidence du même run (viewer)</a>'
         itsm_link='<a href="'+run_path+'#demo-evidence-itsm-output">ITSM du même run (viewer)</a>'
     else:
+        twin_href="/twin"
+        policy_href="/policy-control"
         timeline_link='<a href="/timeline">Timeline (sélection Core requise)</a>'
         analyst_link='UNKNOWN — aucun run Core qualifié'
         evidence_link='UNKNOWN — registre viewer sans run qualifié'
@@ -390,12 +441,12 @@ def demo_studio():
     body+=panel("Parcours opérationnel ACME — navigation guidée",
         '<ol><li><a href="/">Cockpit NOC / enjeu Payments</a></li>'
         '<li><a href="/runs">Registre Core des runs</a></li>'
-        '<li><a href="/twin">SAN et dépendances Twin</a> — impact Payments à confirmer</li>'
+        '<li><a href="'+twin_href+'">SAN et dépendances Twin</a> — impact Payments à confirmer</li>'
         '<li>'+timeline_link+'</li>'
         '<li>'+analyst_link+'</li>'
         '<li>'+evidence_link+' — provenance SYNTHETIC/REAL à vérifier</li>'
         '<li>Ticket ITSM GLPI : '+itsm_link+' — aucune liaison attestée</li>'
-        '<li><a href="/policy-control">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li></ol>'
+        '<li><a href="'+policy_href+'">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li></ol>'
         +run_entry+incident_entry)
     body+=graph_panel(graph,impact=impact)
     body+=panel("Exécutions de démonstration déjà enregistrées",
@@ -483,13 +534,14 @@ def demo_run_detail(rid:str):
     body=panel("Parcours opérateur — même run Core",
       '<nav aria-label="Parcours opérateur ACME">'
       '<a href="/">Cockpit NOC</a> · <a href="/runs">Runs Core</a> · '
-      '<a href="/twin">Digital Twin</a> · '
+      '<a href="/twin?run_id='+key+'">Digital Twin</a> · '
       '<a href="/timeline?run_id='+key+'">Timeline / Analyst / Critic</a> · '
-      '<a href="/evidence">Evidence</a> · '
+      '<a href="/evidence?run_id='+key+'">Evidence</a> · '
       '<a href="#demo-evidence-itsm-output">ITSM GLPI (UNKNOWN)</a> · '
-      '<a href="/policy-control">Policy SIMULATE / HITL</a></nav>'
+      '<a href="/policy-control?run_id='+key+'">Policy SIMULATE / HITL</a></nav>'
       '<p>ITSM GLPI : <strong>UNKNOWN</strong> — aucun ticket connecté à ce run n’est attesté. '
-      'Mode DEMO/REPLAY/STORY : <strong>SYNTHETIC</strong> ; aucun effet LIVE.</p>')
+      'Provenance run déclarée par Core : <strong>'+esc(_core_run_provenance(detail, matched))+
+      '</strong> (non attestée indépendamment) ; aucun effet LIVE.</p>')
     body+=panel("Suivi de l'exécution",
       '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
       '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
@@ -688,7 +740,7 @@ def acme_stories_page():
 
 
 @app.get("/policy-control",response_class=HTMLResponse)
-def policy_control_center():
+def policy_control_center(run_id:str|None=None):
     """Read-only control center; changes are deliberately not available here."""
     url=os.getenv("POLICY_URL","http://aiops2-policy:813")
     state=_get("/api/policy/autonomy",url)
@@ -700,7 +752,7 @@ def policy_control_center():
     rows=[(str(e.get("revision","?")),str(e.get("mode","?")),
            str(e.get("actor","?")),str(e.get("reason","?")),str(e.get("changed_at","?")))
           for e in entries if isinstance(e,dict)]
-    body=panel("Mode opérationnel actuel",
+    body=_operator_run_context(run_id)+panel("Mode opérationnel actuel",
         '<p><strong>'+esc(status)+'</strong> — '+esc(state.get("source","source indisponible"))+'</p>'+
         '<p>Affichage en lecture seule. Aucun bouton de réactivation n’est disponible. '
         'Une autorisation indépendante et un contrôle au point d’exécution sont nécessaires avant toute remédiation.</p>')

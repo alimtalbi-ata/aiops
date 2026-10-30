@@ -159,8 +159,8 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn('href="/timeline?run_id=RUN-BLOCKED"', page)
         self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
         self.assertNotIn('href="/demo-studio/run/%3Cinvalid%3E"', page)
-        for path in ('href="/"', 'href="/twin"', 'href="/timeline"',
-                     'href="/policy-control"', 'href="/evidence"'):
+        for path in ('href="/"', 'href="/twin?run_id=RUN-BLOCKED"', 'href="/timeline"',
+                     'href="/policy-control?run_id=RUN-BLOCKED"', 'href="/evidence"'):
             self.assertIn(path, page)
         self.assertIn("Ticket ITSM GLPI", page)
         self.assertIn("UNKNOWN", page)
@@ -614,6 +614,59 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn("RUN-A4449145A6E377FF", page)
         self.assertIn("inventaire non attesté", page)
 
+    def test_context_routes_preserve_verified_core_run_without_business_join(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OK", "mode": "DEMO", "synthetic": True}
+        def source(path, base=None):
+            return {"run": dict(listed), "events": []} if path == "/api/runs/RUN-OK" else {}
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "graph_panel", return_value=""),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            client = TestClient(portal_main.app)
+            for path in ("/twin", "/evidence", "/policy-control"):
+                with self.subTest(path=path):
+                    response = client.get(path + "?run_id=RUN-OK")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn('href="/demo-studio/run/RUN-OK"', response.text)
+                    self.assertIn('href="/timeline?run_id=RUN-OK"', response.text)
+                    self.assertIn('href="/policy-control?run_id=RUN-OK"', response.text)
+                    self.assertIn("SYNTHETIC", response.text)
+                    self.assertIn("aucune corrélation automatique", response.text)
+
+    def test_context_routes_refuse_live_ambiguous_or_foreign_run(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = [{"run_id": "RUN-LIVE", "mode": "LIVE"},
+                  {"run_id": "RUN-DUP", "mode": "DEMO"},
+                  {"run_id": "RUN-DUP", "mode": "STORY"},
+                  {"run_id": "RUN-OK", "mode": "DEMO"}]
+        with (patch.object(portal_main, "_runs", return_value=listed),
+              patch.object(portal_main, "_get",
+                           return_value={"run": {"run_id": "RUN-FOREIGN", "mode": "DEMO"}}),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            client = TestClient(portal_main.app)
+            for rid in ("RUN-LIVE", "RUN-DUP", "RUN-OK", "bad%2Frun"):
+                with self.subTest(rid=rid):
+                    response = client.get("/evidence?run_id=" + rid)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("Contexte run Core — UNKNOWN", response.text)
+                    self.assertNotIn('href="/demo-studio/run/' + rid + '"', response.text)
+
+    def test_core_provenance_requires_explicit_consistent_flag(self):
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OK", "mode": "DEMO"}
+        detail = {"run": dict(listed, synthetic=False)}
+        self.assertEqual(portal_main._core_run_provenance(detail, listed), "REAL")
+        self.assertEqual(portal_main._core_run_provenance({"run": listed}, listed), "UNKNOWN")
+        self.assertEqual(portal_main._core_run_provenance(
+            detail, dict(listed, synthetic=True)), "UNKNOWN")
+        self.assertEqual(portal_main._core_run_provenance(
+            {"run": dict(listed, synthetic=True)}, listed), "SYNTHETIC")
+
     def test_demo_studio_journey_preserves_run_and_unknown_without_one(self):
         from portal import main as portal_main
         for runs, selected in [
@@ -634,7 +687,7 @@ class DemoV2Tests(unittest.TestCase):
                     'href="/demo-studio/run/RUN-OK"',
                     'href="/demo-studio/run/RUN-OK#demo-ledger-output"',
                     'href="/demo-studio/run/RUN-OK#demo-evidence-itsm-output"',
-                    'href="/policy-control"',
+                    'href="/policy-control?run_id=RUN-OK"',
                 ]
                 positions=[journey.index(link) for link in links]
                 self.assertEqual(positions, sorted(positions))
