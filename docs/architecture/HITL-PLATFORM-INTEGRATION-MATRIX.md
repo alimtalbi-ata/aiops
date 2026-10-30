@@ -80,6 +80,21 @@ Enable only in an isolated development stack:
 
 Never commit the signing key. Do not enable the simulator on an internet-facing or production LIVE Core. Simulator assertions carry `simulated=true` and are categorically rejected for LIVE.
 
+## Production OIDC verifier configuration
+
+Core LIVE approval verification is implemented but disabled by default. Configure these deployment-owned values only after the enterprise IdP application and claim release policy are approved:
+
+- `AIOPS_HITL_OIDC_ISSUER`: exact HTTPS issuer URL from discovery metadata.
+- `AIOPS_HITL_OIDC_AUDIENCE`: exact API audience.
+- `AIOPS_HITL_OIDC_JWKS_URL`: HTTPS JWKS URI from the same trusted issuer.
+- `AIOPS_HITL_OIDC_GROUP_ROLE_MAP`: JSON object mapping immutable directory group IDs/SIDs to the allowlisted application roles; do not map mutable display names.
+- `AIOPS_HITL_OIDC_GROUP_CLAIM`: group claim name (defaults to `groups`).
+- `AIOPS_HITL_OIDC_MAPPING_VERSION`: reviewed mapping version for audit.
+- `AIOPS_HITL_OIDC_REQUIRED_AMR`: required MFA authentication-method reference (defaults to `mfa`).
+- `AIOPS_HITL_OIDC_MAX_AUTH_AGE_SECONDS`: recent-authentication window (defaults to 300 seconds; allowed 60–3600).
+
+The verifier accepts RS256 only, checks issuer/audience/JWKS signature, requires short-lived `iat/nbf/exp` and `jti`, enforces a maximum 10-minute token lifetime, requires MFA `amr` and recent `auth_time`, and derives roles only from the configured group-ID map. JWKS keys are cached for five minutes. Portal OIDC login/session handling, provider claim-release configuration, group mapping review, revocation/session tests and tenant-specific qualification remain outstanding. Health reports configuration presence separately and continues to report `live_approval_ready=false`.
+
 ## Production AD / LDAP design constraints
 
 - Prefer enterprise OIDC/SAML federation for Portal authentication; AD/LDAP supplies authoritative groups and immutable subject IDs.
