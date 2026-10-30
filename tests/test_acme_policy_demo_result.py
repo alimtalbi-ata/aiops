@@ -50,6 +50,7 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
             },
             "gate": {
                 "mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01",
+                "timestamp": "2026-10-29T12:00:00+00:00",
                 "proposal_id": "P-ACME-OFFLINE-001",
                 "reason": "NO_SIDE_EFFECTS" if gate_status == "SIMULATED" else "APPROVAL_EXPIRED",
                 "proposal_digest": "b" * 64, "recipe_id": "ansible-service-restart",
@@ -570,6 +571,29 @@ class PolicyDemoResultTests(unittest.TestCase):
                 forged["projection"]["gate"]["parameters"]["ticket_id"] = value
                 with self.assertRaisesRegex(ValueError, "gate_parameters_invalid"):
                     present_demo_policy_result(forged)
+
+    def test_gate_timestamp_must_be_canonical_utc_fixture(self):
+        for status, gate_status in (("SIMULATED_SUCCESS", "SIMULATED"), ("BLOCKED", "BLOCKED")):
+            for forged in (None, [], {"runtime_verified": True}, "LIVE_APPROVED",
+                           "2026-10-29T13:00:00+01:00", "2026-10-29T12:00:00Z"):
+                with self.subTest(status=status, forged=forged):
+                    r = receipt(status, gate_status)
+                    r["projection"]["gate"]["timestamp"] = forged
+                    with self.assertRaisesRegex(ValueError, "gate_fixture_timestamp_invalid"):
+                        present_demo_policy_result(r)
+            r = receipt(status, gate_status)
+            r["projection"]["gate"].pop("timestamp")
+            with self.assertRaisesRegex(ValueError, "gate_fixture_timestamp_invalid"):
+                present_demo_policy_result(r)
+
+    def test_fixture_approval_actor_must_be_safe_identifier(self):
+        for forged in ("", "<script>", "x" * 65, [], {"authenticated": True},
+                       "runtime approved"):
+            with self.subTest(actor=forged):
+                r = receipt()
+                r["projection"]["gate"]["approval_actor"] = forged
+                with self.assertRaisesRegex(ValueError, "gate_fixture_invalid"):
+                    present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)

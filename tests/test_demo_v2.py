@@ -1294,5 +1294,103 @@ class DemoV2Tests(unittest.TestCase):
         self.assertNotIn("Registre des preuves liées — UNKNOWN", response.text)
 
 
+    def test_foreign_core_event_identity_hides_operator_journey(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OWN", "mode": "DEMO", "status": "BLOCKED"}
+        reads = []
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/incidents":
+                return {"items": []}
+            if path == "/api/runs/RUN-OWN":
+                return {"run": dict(listed), "events": [
+                    {"run_id": "RUN-FOREIGN", "stage": "FOREIGN-CORE-EVENT"}]}
+            raise AssertionError("unqualified run must not fetch gates/evidence: " + path)
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            client = TestClient(portal_main.app)
+            timeline = client.get("/timeline?run_id=RUN-OWN")
+            detail = client.get("/demo-studio/run/RUN-OWN")
+            status = client.get("/api/demo-status/RUN-OWN")
+        self.assertEqual(timeline.status_code, 200)
+        self.assertIn("Timeline Core — UNKNOWN", timeline.text)
+        self.assertEqual(detail.status_code, 503)
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(status.json()["status"], "UNKNOWN")
+        self.assertNotIn("FOREIGN-CORE-EVENT", timeline.text + detail.text + status.text)
+        self.assertEqual(reads.count("/api/runs/RUN-OWN"), 3)
+        self.assertFalse(any(path.endswith(("/gates", "/evidence", "/demo-artifacts"))
+                             for path in reads))
+
+    def test_core_detail_rejects_foreign_gates_stages_and_malformed_events(self):
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OWN", "mode": "DEMO", "status": "BLOCKED"}
+        for field, value in (("gates", [{"run_id": "RUN-OTHER", "decision": "PASS"}]),
+                             ("stages", [{"run_id": "RUN-OTHER", "state": "PASS"}]),
+                             ("events", [{"stage": "NORMALIZE"}, None]),
+                             ("events", "not-an-event-list")):
+            with self.subTest(field=field, value=value):
+                self.assertFalse(portal_main._core_detail_matches_listed_run(
+                    {"run": dict(listed), field: value}, listed))
+        self.assertTrue(portal_main._core_detail_matches_listed_run(
+            {"run": dict(listed), "events": [{"stage": "NORMALIZE"}],
+             "gates": [{"decision": "SIMULATE"}], "stages": []}, listed))
+
+    def test_run_detail_and_poll_reject_foreign_auxiliary_core_records(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OWN", "mode": "DEMO", "status": "BLOCKED"}
+        def source(path, base=None):
+            if path == "/api/runs/RUN-OWN":
+                return {"run": dict(listed), "events": []}
+            if path == "/api/runs/RUN-OWN/gates":
+                return {"items": [{"run_id": "RUN-FOREIGN",
+                                   "decision": "FOREIGN-APPROVAL"}]}
+            if path == "/api/runs/RUN-OWN/demo-artifacts":
+                return {"items": [{"run_id": "RUN-OWN", "artifact_id": "ART-OWN"},
+                                  {"run_id": "RUN-FOREIGN", "artifact_id": "ART-FOREIGN"}]}
+            raise AssertionError(path)
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            client = TestClient(portal_main.app)
+            detail = client.get("/demo-studio/run/RUN-OWN")
+            poll = client.get("/api/demo-status/RUN-OWN")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(poll.status_code, 200)
+        self.assertEqual(poll.json()["gates"], {"status": "UNKNOWN"})
+        self.assertIn("Gates et décisions", detail.text)
+        self.assertIn("Aucun artefact DEMO disponible depuis Core (UNKNOWN)", detail.text)
+        for forbidden in ("FOREIGN-APPROVAL", "ART-FOREIGN", "ART-OWN"):
+            self.assertNotIn(forbidden, detail.text + poll.text)
+
+    def test_core_auxiliary_explicit_matching_run_remains_readable(self):
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-OWN", "mode": "DEMO", "status": "BLOCKED"}
+        def source(path, base=None):
+            if path == "/api/runs/RUN-OWN":
+                return {"run": dict(listed), "events": []}
+            if path == "/api/runs/RUN-OWN/gates":
+                return {"run_id": "RUN-OWN", "items": [
+                    {"run_id": "RUN-OWN", "decision": "SIMULATE"}]}
+            if path == "/api/runs/RUN-OWN/demo-artifacts":
+                return {"run_id": "RUN-OWN", "items": [
+                    {"run_id": "RUN-OWN", "artifact_id": "ART-SCOPED",
+                     "artifact_type": "story", "title": "Synthetic story"}]}
+            raise AssertionError(path)
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", side_effect=source),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only"))):
+            page = portal_main.demo_run_detail("RUN-OWN")
+        self.assertIn("ART-SCOPED", page)
+        self.assertIn("SIMULATE", page)
+        self.assertNotIn("ART-FOREIGN", page)
+
+
 if __name__ == "__main__":
     unittest.main()

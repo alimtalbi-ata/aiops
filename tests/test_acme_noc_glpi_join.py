@@ -135,6 +135,29 @@ class ReadOnlyJoinMockIntegrationTests(unittest.TestCase):
         self.assertEqual(out['evidence_ids'], ['EVD-1'])
         self.assertEqual(client.calls, [])
 
+    def test_extreme_ledger_timezone_never_triggers_glpi_or_core_get(self):
+        # Integration of the actual projector and join; HTTP clients mocked.
+        # The projector previously raised OverflowError before either reader.
+        for known_at in ('0001-01-01T00:00:00+14:00',
+                         '9999-12-31T23:59:59-14:00'):
+            with self.subTest(known_at=known_at):
+                ledger = copy.deepcopy(LEDGER)
+                ledger['evidence_refs'][0]['known_at'] = known_at
+                glpi, core = MockGLPI(), MockGLPI()
+                out = join(ledger=ledger, client=glpi,
+                           core_evidence_base_url='http://aiops2-core:810',
+                           core_evidence_token='c' * 32,
+                           core_evidence_opener=core)
+                self.assertEqual(out['state'], 'UNKNOWN')
+                self.assertIsNone(out['incident_id'])
+                self.assertIsNone(out['run_id'])
+                self.assertIsNone(out['ticket_id'])
+                self.assertEqual(out['evidence_ids'], [])
+                self.assertEqual(out['core_evidence_ref_ids_verified'], [])
+                self.assertEqual(out['verified_evidence_ids'], [])
+                self.assertEqual(glpi.calls, [])
+                self.assertEqual(core.calls, [])
+
     def test_input_snapshots_not_mutated(self):
         core, ledger, noc = copy.deepcopy(CORE), copy.deepcopy(LEDGER), copy.deepcopy(NOC)
         before = copy.deepcopy((core, ledger, noc))

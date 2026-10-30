@@ -92,11 +92,13 @@ def project_itsm_evidence(core_detail, ledger, signed_noc=None):
                 return result
             try:
                 known = datetime.fromisoformat(item["known_at"])
-            except ValueError:
-                return result
-            if (known.tzinfo is None or known.utcoffset() is None
-                    or known.astimezone(timezone.utc) >
-                    datetime.now(timezone.utc) + timedelta(minutes=5)):
+                if (known.tzinfo is None or known.utcoffset() is None
+                        or known.astimezone(timezone.utc) >
+                        datetime.now(timezone.utc) + timedelta(minutes=5)):
+                    return result
+            except (ValueError, OverflowError):
+                # UTC normalization can overflow at year 1/9999 with offsets.
+                # An unnormalizable ledger reference cannot be correlated.
                 return result
             evidence[item["evidence_id"]] = item
         analysis_map = {}
