@@ -109,6 +109,29 @@ class RunDetailTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 503)
                 self.assertEqual(response.json()["state"], "UNKNOWN")
 
+    def test_core_status_must_match_canonical_domain_enum(self):
+        # An arbitrary Core string must not be displayed as an approved,
+        # connected or runtime-verified Run state.
+        for invalid in ("APPROVED", "CONNECTED", "PASS", "LIVE",
+                        "RESOLVED ", "<script>approved</script>", None, [], 42):
+            with self.subTest(status=invalid), patch.object(
+                    acme_run_detail, "_read_core_run",
+                    return_value=run(status=invalid)):
+                response = self.get()
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json(), {
+                "state": "UNKNOWN", "reason": "CORE_RUN_UNVERIFIED"})
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertEqual(response.headers["x-frame-options"], "DENY")
+        for status in sorted(acme_run_detail.STATUSES):
+            with self.subTest(accepted=status), patch.object(
+                    acme_run_detail, "_read_core_run",
+                    return_value=run(status=status)):
+                response = self.get()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["run_status"], status)
+            self.assertFalse(response.json()["runtime_attested"])
+
     def test_unqualified_collections_and_tenant_claims_rejected(self):
         for change in ({"events": [{"run_id": "RUN-FOREIGN"}]},
                        {"gates": "malformed"},
