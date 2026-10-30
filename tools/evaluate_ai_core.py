@@ -12,6 +12,7 @@ import os
 import uuid
 from pathlib import Path
 import sys
+import time
 import requests
 
 def refs_from_analysis(analysis):
@@ -101,7 +102,7 @@ def invocation_from_error_response(response, elapsed_ms, error_class):
 
 
 def post_intelligence(session, url, payload, row):
-    started = __import__("time").perf_counter()
+    started = time.perf_counter()
     try:
         response = session.post(url, json=payload, timeout=(5, evaluator_timeout_seconds()))
     except requests.RequestException as exc:
