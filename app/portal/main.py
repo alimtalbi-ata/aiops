@@ -1011,3 +1011,52 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+
+@app.get("/hitl", response_class=HTMLResponse)
+def hitl_command_center():
+    """Cross-platform HITL status view. Deliberately read-only; no approval controls."""
+    identity = _get("/api/hitl/identity/health", CORE)
+    proposals = _get("/api/proposals?status=PROPOSED&limit=100", CORE)
+    identity_mode = identity.get("mode", "UNKNOWN")
+    simulator = "ENABLED" if identity.get("simulator_enabled") is True else "DISABLED"
+    live_ready = "YES" if identity.get("live_approval_ready") is True else "NO"
+    proposal_items = proposals.get("items", []) if isinstance(proposals.get("items"), list) else []
+    proposal_state = str(len(proposal_items)) if isinstance(proposals.get("items"), list) else "UNKNOWN"
+    body = panel(
+        "HITL v1 — Identity & approval status",
+        table(["Control", "Observed state"], [
+            ("Identity provider mode", identity_mode),
+            ("IAM simulator", simulator),
+            ("Production AD / LDAP", identity.get("production_directory", "UNKNOWN")),
+            ("LIVE human approval ready", live_ready),
+            ("Open proposals", proposal_state),
+            ("Execution authority", "CLOSED — execution_allowed=false"),
+        ])
+        + '<p>Cette vue est volontairement en lecture seule. Le simulateur émet des identités fictives ; '
+          'elles ne sont jamais recevables pour une approbation LIVE.</p>'
+    )
+    body += panel("Intégration AIOps2 — navigation",
+        '<nav aria-label="AIOps2 platform integration">'
+        '<a href="/runs">Core / Runs</a> · '
+        '<a href="/timeline">Timeline / événements</a> · '
+        '<a href="/demo-studio">Analyst / Critic / DGX</a> · '
+        '<a href="/evidence">Evidence Ledger</a> · '
+        '<a href="/twin">Digital Twin / CMDB</a> · '
+        '<a href="/policy-control">Policy / Gates</a> · '
+        '<a href="/glpi">GLPI / ITSM</a> · '
+        '<a href="/copilot">Copilot</a>'
+        '</nav>'
+        '<p>Temporal conserve l’état durable du workflow. Core reste l’autorité des propositions et décisions ; '
+        'Policy et l’exécuteur restent les autorités de contrôle avant tout effet.</p>'
+    )
+    body += panel("Barrières de sécurité",
+        '<ul><li>Nemotron Analyst / Critic : avis et contre-expertise, jamais une identité ni un droit.</li>'
+        '<li>AD / LDAP : futur fournisseur de groupes et identifiants immuables, aucun annuaire supposé présent.</li>'
+        '<li>CRITICAL : deux sujets distincts et les rôles security_admin + incident_commander.</li>'
+        '<li>Linux / Unix : catalogue d’actions et wrappers sudo bornés ; aucune commande shell libre.</li>'
+        '<li>GLPI, Evidence, Twin, CMDB, Policy et audit restent corrélés au même run et à la même empreinte de proposition.</li>'
+        '<li>Simulation et qualification : aucune exécution réelle.</li></ul>'
+    )
+    return shell("/hitl", "Human-in-the-Loop Command Center",
+                 "Vue transversale de l’identité, des décisions et des contrôles AIOps2.", body)
