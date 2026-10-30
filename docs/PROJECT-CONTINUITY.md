@@ -238,3 +238,7 @@ One ITIL4-aligned synthetic ACME SAN→Payments P1 path; source-verified Inciden
 ## 2026-10-30 14:00 UTC — 5/5 main-based integration staging
 
 Draft [#201](https://github.com/alimtalbi-ata/aiops/pull/201) at `2ceda14c8a21fe71e88b3228879799e6c37a5387` is a clean `main@27deb9b1` one-commit staging integration, **not a release**. It selects six exact code/test blobs from #197/#198/#199 and fourteen architecture/ITIL/benchmark/release docs from this PR #195; the Quality workflow adds isolated tests for 1/5 and 3/5 to the existing 4/5 test. No Portal, Core API, Worker, Compose, DB, cron or Debian mutation. CI run [41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) was **IN_PROGRESS** at this snapshot; no PASS claimed. #185 remains historical divergent scenario source; #201 is the sole clean-main integration staging candidate, not a cumulative kit. T0 PENDING; T1/T2 NOT_TESTED; T3 NOT_ATTESTED; T4 NOT_TESTED; T5 NO_GO.
+
+### 2026-10-30 14:16 UTC — 5/5 release inventory guard
+
+Main-based integration draft #201 advanced to `03a5b0cce44e56d7ae315ee7df16e850a5e35b11`: added fail-closed cumulative ZIP inventory/source gate, 10/10 local offline tests and Quality test step. New exact-head CI pending; prior #201 `0bd8b4c` Quality SUCCESS 3/3 does not qualify this head. Historical #185 ZIP remains integrity-valid (395/395 checksums) but feature-incomplete; source checkout/manifest SHA mismatch and install/rollback proof block release. No host, cron, GLPI, LIVE, main/stable or merge action.
