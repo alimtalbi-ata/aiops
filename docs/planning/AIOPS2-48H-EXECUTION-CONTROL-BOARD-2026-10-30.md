@@ -269,3 +269,7 @@ Six exact source Git blobs selectively transported in **one commit**, no `main.p
 
 [#201 Quality 41096370024](https://github.com/alimtalbi-ata/aiops/actions/runs/41096370024) on **`1d3a902877d556549425a95cd4cef792c5c000c8` completed SUCCESS 3/3**. Inspected policy-and-static logs: Portal Python **26/26**, Portal JS **7/7**, ACME locator **16/16**, SAN→Payments fixture **6/6**, Chromium synthetic **6/6**, kit inventory guard **12/12**; all PASS. This supersedes the PENDING T0 snapshot above. **T0=GO limited to exact-source CI; T1/T2 NOT_TESTED, T3 NOT_ATTESTED, T4/T5 NO_GO.** Chromium is an ephemeral Portal/fixture test, not the full Core→Temporal→Evidence→GLPI synthetic E2E.
 
+### Artifact provenance exception — 2026-10-30 17:12 UTC
+
+Downloaded #201 [artifact 12995044690](https://github.com/alimtalbi-ata/aiops/actions/runs/41096370024): ZIP CRC PASS, 2 entries, ZIP SHA256 `c1a5fcb6ed4819d67c1a06e252541674bfbcdf4db8332d2b88e529cd30fa6cbf`; screenshot SHA256 matches manifest `8a1720c3851833525d0e817a157d24826ff431fc84ce1d9d9742fd5595ebcaca`. **Metadata `git_sha=55b02788...` differs from PR head `1d3a9028...`**, because the capture uses GitHub `GITHUB_SHA` on a PR workflow (merge checkout). Require explicit `pr_head_sha`, `pr_base_sha`, `checkout_sha` and source-fixture digest in the next receipt contract. No runtime authentication or production qualification; this is only a synthetic browser capture, not a cumulative kit.
+
