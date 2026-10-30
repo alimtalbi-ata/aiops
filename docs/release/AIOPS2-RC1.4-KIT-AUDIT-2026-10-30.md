@@ -1,0 +1,69 @@
+# Release-kit audit — AIOps 2.1.0-core-rc1.4
+
+**Audit date:** 2026-10-30 12:20 UTC  
+**Source workflow:** [AIOps quality run 41053026110](https://github.com/alimtalbi-ata/aiops/actions/runs/41053026110)  
+**Artifact:** `aiops2-core-deployment-kit`, ID `12974884559`  
+**Result:** archive integrity PASS; release/production readiness NOT QUALIFIED.
+
+## Exact artifact integrity
+
+| Check | Result |
+|---|---|
+| Outer ZIP size | 705,587 bytes |
+| Inner kit | `AIOps-2.1.0-core-rc1.4-Core-Deployment-Kit-20261030T120953Z.zip` |
+| Inner ZIP size | 763,130 bytes |
+| Inner ZIP SHA-256 | `4c7bd6a707fc24a308de033ee7f1b02b6df123cfd7c2615eea9cecb7b7be2646` |
+| ZIP entries | 455 |
+| `FILES-SHA256SUMS` entries | 405 |
+| Verified file hashes | 405 / 405 PASS |
+| Missing/mismatched hashes | 0 |
+| Migration 011 HITL outbox | Present |
+| Intelligence service + evaluator | Present |
+| OIDC/HITL code and tests | Present |
+
+## Manifest
+
+```
+product=AIOps 2.0
+version=2.1.0-core-rc1.4
+source_packaging_mode=versioned_git_tree
+built_utc=20261030T120953Z
+git_commit=6273ad48a027595c9115d0f229cc3df38c95b124
+qualification=CI-runtime-e2e-PASS
+synthetic_analyst_critic_quality=PASS
+real_model_qualification=NOT_RUN
+production_qualification=NOT_RUN
+ci_evidence_carried=yes
+```
+
+The manifest's `git_commit` is the packaging workflow's temporary merge/tree SHA. It is not the PR head SHA and not Debian `applied.sha`.
+
+## Contents relevant to current work
+
+Present:
+- `app/intelligence/main.py`
+- `tools/evaluate_ai_core.py`
+- `tests/test_ai_eval_harness.py`
+- `db/migrations/011_hitl_decision_outbox.sql`
+- `config/.env.example`
+- `09-Qualification/ai-core-evaluation.json`
+- `09-Qualification/runtime-e2e-RUN-FB8DDB7C6B22B5F4.json`
+
+Absent:
+- The new architecture/ITIL/48h documents from PR #195.
+- The benchmark governance and deterministic baseline documents from the architecture branch.
+
+The kit is therefore a reproducible RC candidate for the stacked #194/#196 source tree, not yet the cumulative reinstallation kit for the new main-based architecture baseline.
+
+## Qualification boundary
+
+- CI synthetic Runtime E2E: PASS.
+- Synthetic Analyst/Critic evaluation: PASS.
+- Real DGX/model qualification: NOT_RUN.
+- Production qualification: NOT_RUN.
+- Debian host `applied.sha`, deployed image equivalence, install/upgrade/rollback rehearsal on the target host: NOT_ATTESTED / NOT_RUN.
+- LIVE remediation: disabled.
+
+## Required next package
+
+After the main-based integration PRs are accepted, rebuild the kit from one exact release-candidate SHA. Include the architecture/ITIL/benchmark docs, current configuration templates, full migration chain, scripts, tests, operator runbooks, rollback and health-smoke templates, CI evidence and checksums. Re-run clean extraction, offline repack, install/upgrade/rollback rehearsal and exact-SHA verification. Never re-label this current artifact as production-ready.
