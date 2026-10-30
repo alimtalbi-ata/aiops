@@ -55,3 +55,19 @@
 5. Add AI usage/latency telemetry to the existing evaluation harness.
 6. Converge schedule #188 vs #189; leave Debian auto-deploy #146/#153 disabled.
 7. Produce one cumulative package only after exact-head CI, artifact checksum and install/rollback gates.
+
+
+## 5. Exact-head revalidation update — 2026-10-30 12:10 UTC
+
+### PR #185 — strong scenario artifact, unsafe direct merge base
+
+- Current PR head is `02dd3aa45a4adc0d3f7613f04288a71f77d9061e`; PR body still names the earlier `14b4e8b...` head and must be refreshed by its release owner.
+- Current PR base is `feat/cron-stable-reconciled-20261028` at `e5c6b030c374e47f64678f425df78cd147335eec`, **not `main`**.
+- Comparing that base branch with `main` reports `diverged`, 672 commits ahead and 43 behind. This is a material dependency and makes direct merge/promotion into `main` unsafe without a selective rebase/convergence plan.
+- Exact current candidate CI run `41046204073`: 6/6 jobs SUCCESS; companion V2.8, Historical Trace and Offline Integrity runs also SUCCESS. The run has a `aiops2-core-deployment-kit` artifact (ID `12973100494`) plus runtime and DR reports.
+- **Disposition:** keep #185 as the scenario/story and package evidence source; do not merge its 72-file branch into main as-is. Port the verified small commits into a clean main-based integration branch after mapping their dependencies. The candidate remains DEMO-local evidence, not Debian applied-sha or production release proof.
+
+### PR #195 / #196 — architecture and benchmark slices
+
+- #195 architecture/ITIL/48h documentation branch passed its exact quality workflow `41052336091` (3/3 jobs success: Policy/static, Core/PostgreSQL NOC integration, Grafana real integration).
+- #196 is stacked on #194 and implements per-invocation provider usage/latency telemetry and request/output caps. First run exposed two outdated HTTP test doubles without `status_code`; fixtures were corrected in commit `388b7c48a108f70315b9fae92de72d10ac399704`. Corrected quality tests for Intelligence contracts and AI evaluation passed; full Runtime E2E/release-kit remained in progress at this update.
