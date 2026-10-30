@@ -144,8 +144,9 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.page.locator("#advance").click()
         expect(self.page.locator("#story-status")).to_contain_text("2/14")
         self.assertIn("MISSING", self.page.locator("#step-detail").inner_text())
-        self.assertIn("monitoring_event_management", self.page.locator("#step-detail").inner_text())
-        self.assertIn("noc_l1", self.page.locator("#step-title").inner_text().lower())
+        # After advancing, the active step is the SECOND checkpoint (NOC L2).
+        self.assertIn("service_configuration_management", self.page.locator("#step-detail").inner_text())
+        self.assertIn("noc_l2", self.page.locator("#step-title").inner_text().lower())
 
         # A different real portal route must use the same synthetic Run ID.
         self.page.goto(self.base + "/demo/acme-impact")
