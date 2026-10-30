@@ -273,18 +273,19 @@ def sync_glpi_run(run_id: str, q: dict,
 
     stage = str(q.get("stage", "UPDATE"))[:80]
     report = render_run_report(detail, ledger, sync_stage=stage)
+    glpi_status = {"RUNNING": 2, "BLOCKED": 4, "RESOLVED": 5}.get(run.get("status"), 1)
     try:
         ticket_id = client.find_ticket_for_run(run_id)
         if ticket_id:
             current = client.get_ticket(ticket_id)
             content = merge_report(current.get("content", ""), report)
-            client.update_ticket(ticket_id, {"content": content})
+            client.update_ticket(ticket_id, {"content": content, "status": glpi_status})
             operation = "UPDATED"
         else:
             mode = str(run.get("mode", "DEMO"))
             scenario = str(run.get("scenario_id", "AIOps2"))
             title = f"[AIOps2][{mode}] {scenario} — {run_id}"
-            ticket_id = client.create_ticket(title, report, priority=3)
+            ticket_id = client.create_ticket(title, report, priority=3, status=glpi_status)
             operation = "CREATED"
         verified = client.get_ticket(ticket_id)
         if not isinstance(verified, dict) or "id" not in verified:
@@ -301,6 +302,7 @@ def sync_glpi_run(run_id: str, q: dict,
         "ticket_id": str(ticket_id),
         "run_status": run.get("status"),
         "sync_stage": stage,
+        "glpi_status": glpi_status,
         "report_verified": True,
         "execution_allowed": False,
     }
