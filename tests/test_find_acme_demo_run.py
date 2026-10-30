@@ -257,6 +257,20 @@ class LocatorTests(unittest.TestCase):
                 self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
                 self.assertIsNone(result["run_id"])
 
+    def test_run_created_must_be_first_persisted_event(self):
+        # Core creates RUN_CREATED as sequence 1. A later synthetic event
+        # with matching scenario/mode cannot replace that origin evidence.
+        run, incident, detail = fixtures()
+        detail["events"][0]["sequence"] = 2
+        detail["events"][1]["sequence"] = 1
+        detail["events"][0], detail["events"][1] = detail["events"][1], detail["events"][0]
+        result = locator.qualify(
+            "http://core", "http://portal", self.make_get(run, incident, detail),
+            expected_run_id="RUN-ABC123", expected_incident_id="INC-ABC123")
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["reason"], "RUN_DETAIL_MISMATCH")
+        self.assertIsNone(result["run_id"])
+
     def test_event_sequence_gap_duplicate_reorder_or_invalid_fails_closed(self):
         for mutation in ("gap", "duplicate", "reordered", "bool", "string", "missing"):
             with self.subTest(mutation=mutation):
