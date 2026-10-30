@@ -8,7 +8,7 @@ from core.denial_routes import register_denial_routes
 from core.critic_denial_block import block_with_denial
 from core.critic_denial_resume import resume_critic_denial
 from shared.ids import new
-from shared.domain import transition,STAGES
+from shared.domain import transition,STAGES,initial_stage_state
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -99,7 +99,7 @@ def create(x:RunIn,authorization:str|None=Header(default=None)):
         row=c.execute('select run_id,mode,scenario_id,status,version from aiops.runs where idempotency_key=%s',(x.idempotency_key,)).fetchone()
         if row:return dict(zip(['run_id','mode','scenario_id','status','version'],row))
         rid=new('RUN'); c.execute('insert into aiops.runs(run_id,incident_id,mode,scenario_id,status,idempotency_key) values(%s,%s,%s,%s,%s,%s)',(rid,x.incident_id,x.mode,x.scenario_id,'CREATED',x.idempotency_key))
-        for stage in STAGES:c.execute('insert into aiops.run_stage_state(run_id,stage,state) values(%s,%s,\'PENDING\')',(rid,stage))
+        for stage in STAGES:\n            initial=initial_stage_state(stage)\n            c.execute('insert into aiops.run_stage_state(run_id,stage,state,completed_at) values(%s,%s,%s,case when %s=\'PASS\' then now() else null end)',(rid,stage,initial,initial))
         append_event(c,rid,'INGEST','RUN_CREATED','CREATED',payload={'mode':x.mode,'scenario_id':x.scenario_id},event_key='run-created')
         return {'run_id':rid,'status':'CREATED','version':1,'mode':x.mode,'scenario_id':x.scenario_id}
 @app.post('/api/runs/{rid}/command')
