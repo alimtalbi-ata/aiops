@@ -183,3 +183,12 @@ Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current
 - **Interpretation:** the CI provider reports fixed 1+1 token placeholders per call. This verifies token/latency telemetry wiring and evaluator aggregation only; it is not a real DGX/model benchmark or cost estimate.
 - Synthetic Runtime E2E Run `RUN-FB8DDB7C6B22B5F4`: RESOLVED, 12 evidence records, P1, Critic validated, Policy PASS/SIMULATE, zero effect receipts, LIVE disabled.
 - Detailed report: `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`.
+
+
+### 2026-10-30 12:22 UTC — five-schedule handoff and ancestry audit
+
+- Schedules 1/5–4/5 delivered new source commits: `f50d3dac` (ACME), `ca6feab` (Portal), `18ff72e` (NOC/Evidence/GLPI), `901c5bb` (Policy/HITL). Their schedules report targeted suites 70/70, 62/62, NOC UTC fail-closed corrections, and 48/48 plus 195/195 respectively.
+- Exact commit Actions runs were not found at this check. Treat these as schedule-reported targeted test results, not GitHub CI qualification.
+- Each branch is divergent from main (711/43, 740/43, 736/43, 739/43). The compare operation reports large ancestry/file differences; do not copy complete branch trees. 5/5 has been instructed to obtain exact commit diffs and port only minimal source/test changes to a clean main-based integration branch.
+- PR #185 current head 02dd3aa also remains based on a divergent stable branch. It is a demo/package source, not directly mergeable.
+- AI benchmark artifact baseline is documented at `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`; the 20 tokens and P95 3.24 ms are deterministic placeholders and not real model metrics.
