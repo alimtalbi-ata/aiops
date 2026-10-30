@@ -60,8 +60,9 @@ class GLPIClient:
         if not self.configured:
             return {"status":"UNCONFIGURED","configured":False,
                     "reason":"GLPI_APP_TOKEN and GLPI_USER_TOKEN are required"}
+        token=None
         try:
-            self._session()
+            token=self._session()
             return {"status":"CONNECTED","configured":True,"authenticated":True}
         except requests.RequestException as exc:
             code=exc.response.status_code if exc.response is not None else None
@@ -70,6 +71,13 @@ class GLPIClient:
         except GLPIError as exc:
             return {"status":"UNAVAILABLE","configured":True,
                     "authenticated":False,"reason":str(exc)}
+        finally:
+            if token:
+                try:
+                    requests.get(self.base+"/killSession",
+                        headers={**self._headers(),"Session-Token":token},timeout=5)
+                except requests.RequestException:
+                    pass
 
     def get_ticket(self,ticket_id):
         if not str(ticket_id).isdigit():
