@@ -20,15 +20,20 @@ MAX_RESPONSE_BYTES = 512 * 1024
 # Canonical checkpoint targets reused from the ACME scenario contract (PR #133).
 # These are storyboard expectations, NOT observed application states.
 TARGETS = (
-    ("detect", "grafana", "alert_dashboard", "firing"),
-    ("correlate", "n8n", "ingress_execution", "completed"),
-    ("enrich", "n8n", "context_execution", "completed"),
-    ("analyze", "n8n", "analyst_critic_execution", "completed"),
-    ("ticket", "glpi", "incident_ticket", "open"),
-    ("approve", "glpi", "hitl_decision", "approved_simulation_only"),
-    ("simulate", "n8n", "simulation_execution", "completed"),
-    ("verify", "grafana", "recovery_dashboard", "recovered"),
-    ("close", "glpi", "incident_followups", "closed"),
+    ("detect", "prometheus", "source_alert", "firing", "monitoring_event_management", "noc_l1", "monitoring_to_noc_l1", "source_event_id_observed_at_dedupe_key"),
+    ("correlate", "twin", "service_dependency_path", "source_backed", "service_configuration_management", "noc_l2", "noc_l1_to_noc_l2", "ci_service_edge_source_and_freshness"),
+    ("acknowledge", "service_desk", "incident_intake", "acknowledged", "incident_management", "service_desk_n1", "noc_l1_to_service_desk_n1", "actor_timestamp_assignment_and_sla_start"),
+    ("assess_impact", "core", "impact_urgency_priority", "assessed", "incident_management", "incident_manager_n2", "n1_to_incident_manager_n2", "impact_urgency_policy_version_and_rationale"),
+    ("declare_major", "major_incident", "command_and_communications", "declared", "incident_management", "incident_commander", "n2_to_incident_commander", "commander_assignment_and_customer_update"),
+    ("collect_evidence", "evidence", "evidence_bundle", "collected", "monitoring_event_management", "sre_n3", "incident_commander_to_sre_n3", "evidence_id_hash_source_observed_at_known_at"),
+    ("retrieve_knowledge", "rag", "runbook_and_known_error", "retrieved", "knowledge_management", "knowledge_manager", "sre_n3_to_knowledge_manager", "document_version_acl_owner_and_citations"),
+    ("analyze_root_cause", "analyst_critic", "hypothesis_and_challenge", "reviewed", "problem_management", "problem_manager_n3", "knowledge_manager_to_problem_manager_n3", "hypothesis_evidence_contradictions_and_critic_disposition"),
+    ("propose_change", "policy", "risk_and_rollback_plan", "proposed", "change_enablement", "change_manager", "problem_manager_to_change_manager", "risk_scope_preconditions_postconditions_and_rollback"),
+    ("approve_change", "hitl", "human_decision", "approved_simulation_only", "change_enablement", "authorized_approver", "change_manager_to_authorized_approver", "verified_identity_role_scope_nonce_expiry_and_proposal_hash"),
+    ("simulate_action", "temporal", "sandbox_simulation", "simulated_no_effect", "deployment_management", "automation_operator", "approver_to_automation_operator", "simulation_receipt_execution_allowed_false"),
+    ("verify_recovery", "verification", "service_health_and_slo", "verified", "service_validation_testing", "independent_verifier", "automation_operator_to_independent_verifier", "independent_postcondition_evidence_and_before_after"),
+    ("close_incident", "service_desk", "incident_closure", "resolved", "incident_management", "service_desk_n1", "independent_verifier_to_service_desk_n1", "resolution_code_customer_confirmation_and_timeline"),
+    ("problem_review", "continual_improvement", "pir_known_error_and_actions", "reviewed", "continual_improvement", "service_owner", "service_desk_to_service_owner", "verified_cause_action_owner_due_date_and_knowledge_review"),
 )
 CUES = tuple(target[0] for target in TARGETS)
 PATH = ("SAN-FABRIC-A", "HOST-ESX-01", "VM-PAY-01", "APP-PAY-01")
@@ -114,18 +119,23 @@ def validate_pair(impact: object, story: object) -> dict:
             and len(checkpoints) == len(timeline) == len(CUES),
             "checkpoint_count_mismatch")
     for index, (checkpoint, event) in enumerate(zip(checkpoints, timeline)):
-        cue, service, view, expected_state = TARGETS[index]
+        (cue, service, view, expected_state, practice, owner_role,
+         handoff, evidence_required) = TARGETS[index]
         require(type(checkpoint) is dict and type(event) is dict
                 and checkpoint.get("cue") == event.get("cue") == cue
                 and checkpoint.get("service") == event.get("service") == service
                 and checkpoint.get("view") == event.get("view") == view
-                and checkpoint.get("required_state") == expected_state,
+                and checkpoint.get("required_state") == expected_state
+                and checkpoint.get("itil_practice") == event.get("itil_practice") == practice
+                and checkpoint.get("owner_role") == event.get("owner_role") == owner_role
+                and checkpoint.get("handoff") == event.get("handoff") == handoff
+                and checkpoint.get("evidence_required") == event.get("evidence_required") == evidence_required,
                 "checkpoint_target_mismatch")
         require(checkpoint.get("status") == event.get("status") == "MISSING"
                 and checkpoint.get("screenshot_sha256") is None
                 and checkpoint.get("event_timestamp_utc") is None
                 and checkpoint.get("runtime_authenticated") is False
-                and checkpoint.get("source") == "CHECKPOINT_CONTRACT_ONLY_NO_CAPTURE",
+                and checkpoint.get("source") == "SYNTHETIC_ITIL_CHECKPOINT_CONTRACT_ONLY_NO_CAPTURE",
                 "checkpoint_falsely_attested")
     require(story.get("step") == timeline[0], "story_step_mismatch")
     return {
@@ -138,7 +148,7 @@ def validate_pair(impact: object, story: object) -> dict:
         "incident_id": impact["incident_id"],
         "impact_incident_id": impact["impact_incident_id"],
         "source_sha256": digest,
-        "checkpoint_count": len(CUES),
+        "checkpoint_count": len(TARGETS),
         "runtime_attested": False,
         "blockers": list(BLOCKERS),
     }
