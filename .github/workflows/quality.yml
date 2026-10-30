@@ -59,6 +59,7 @@ jobs:
           python -m unittest discover -s tests -p "test_acme_noc_glpi_join.py" -v
       - name: AI evaluation harness tests
         run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
+          python -m unittest discover -s tests -p "test_ai_benchmark_summary.py" -v
       - name: Model evaluation API unit tests
         run: python -m unittest discover -s tests -p "test_model_evaluation_api.py" -v
       - name: Deterministic inference provider contract tests
@@ -345,6 +346,7 @@ jobs:
           python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
           python -m unittest discover -s tests -p "test_portal_demo.py" -v
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
+          python -m unittest discover -s tests -p "test_ai_benchmark_summary.py" -v
           python -m unittest discover -s tests -p "test_model_evaluation_api.py" -v
           python -m unittest discover -s tests -p "test_fake_provider_quality.py" -v
           python -m unittest discover -s tests -p "test_stage_persistence.py" -v
