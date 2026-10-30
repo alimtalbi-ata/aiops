@@ -45,6 +45,23 @@ class TwinProbeTests(TestCase):
         p = payload(); p["shortest_path_edges"][0]["source_id"] = probe.ROOT
         self.assertEqual(probe.qualify(p)["result"], "UNKNOWN")
 
+    def test_duplicate_edge_id_conflicting_target_rejected(self):
+        p = payload()
+        conflict = dict(p["shortest_path_edges"][0])
+        conflict["target_id"] = "ACME-SAN-FABRIC-B"
+        p["shortest_path_edges"].append(conflict)
+        self.assertEqual(probe.qualify(p)["result"], "UNKNOWN")
+
+    def test_duplicate_edge_id_identical_rejected(self):
+        p = payload()
+        p["shortest_path_edges"].append(dict(p["shortest_path_edges"][0]))
+        self.assertEqual(probe.qualify(p)["result"], "UNKNOWN")
+
+    def test_duplicate_affected_node_identical_rejected(self):
+        p = payload()
+        p["affected"].append(dict(p["affected"][-1]))
+        self.assertEqual(probe.qualify(p)["result"], "UNKNOWN")
+
     def test_wrong_depth_rejected(self):
         p = payload(); p["affected"][-2]["depth"] = 2
         self.assertEqual(probe.qualify(p)["result"], "UNKNOWN")

@@ -150,7 +150,7 @@ class DemoV2Tests(unittest.TestCase):
             {"run_id": "RUN-BLOCKED", "mode": "DEMO", "status": "BLOCKED"},
             {"run_id": "<invalid>", "mode": "DEMO", "status": "RESOLVED"},
         ]
-        with (patch.object(portal_main, "_get", return_value={}),
+        with (patch.object(portal_main, "_get", side_effect=lambda path, base=None: {"run":{"run_id":"RUN-BLOCKED","mode":"DEMO","status":"BLOCKED"}} if path == "/api/runs/RUN-BLOCKED" else {}),
               patch.object(portal_main, "_runs", return_value=runs),
               patch.object(portal_main, "graph_panel", return_value=""),
               patch.object(portal_main, "post_json", side_effect=AssertionError("unexpected write"))):
@@ -185,6 +185,8 @@ class DemoV2Tests(unittest.TestCase):
         runs = [{"run_id": "RUN-ACME", "incident_id": "INC-ACME",
                  "mode": "DEMO", "status": "BLOCKED"}]
         def source(path, base=None):
+            if path == "/api/runs/RUN-ACME":
+                return {"run":{"run_id":"RUN-ACME","mode":"DEMO","status":"BLOCKED","incident_id":"INC-ACME"}}
             if path == "/api/incidents":
                 return {"items": [{"incident_id": "INC-ACME",
                     "title": "SAN & Payments <test>", "severity": "P1",
@@ -209,6 +211,8 @@ class DemoV2Tests(unittest.TestCase):
         runs = [{"run_id": "RUN-ACME", "incident_id": "INC-ACME",
                  "mode": "DEMO", "status": "RESOLVED"}]
         def source(path, base=None):
+            if path == "/api/runs/RUN-ACME":
+                return {"run":{"run_id":"RUN-ACME","mode":"DEMO","status":"RESOLVED","incident_id":"INC-ACME"}}
             if path == "/api/incidents":
                 return {"items": [{"incident_id": "INC-OTHER",
                                    "title": "Secret unrelated incident",
@@ -312,7 +316,7 @@ class DemoV2Tests(unittest.TestCase):
             {"run_id": "RUN-OK", "mode": "STORY", "status": "RESOLVED"},
         ]
         with (patch.object(portal_main, "_runs", return_value=records),
-              patch.object(portal_main, "_get", return_value={}),
+              patch.object(portal_main, "_get", side_effect=lambda path, base=None: {"run":{"run_id":"RUN-OK","mode":"STORY","status":"RESOLVED"}} if path == "/api/runs/RUN-OK" else {}),
               patch.object(portal_main, "graph_panel", return_value="")):
             page = portal_main.demo_studio()
         self.assertIn('href="/demo-studio/run/RUN-OK"', page)
@@ -449,6 +453,8 @@ class DemoV2Tests(unittest.TestCase):
                 return {"status": "UNKNOWN", "error_type": "ConnectionError"}
             if path == "/api/twin/impact/ACME-SAN-FABRIC-A":
                 return {"root": "ACME-SAN-FABRIC-A", "affected": []}
+            if path == "/api/runs/RUN-DEMO":
+                return {"run":{"run_id":"RUN-DEMO","mode":"DEMO","status":"BLOCKED"}}
             if path == "/api/incidents":
                 return {"items": []}
             return {}
@@ -677,7 +683,7 @@ class DemoV2Tests(unittest.TestCase):
         ]:
             with (self.subTest(selected=selected),
                   patch.object(portal_main, "_runs", return_value=runs),
-                  patch.object(portal_main, "_get", return_value={}),
+                  patch.object(portal_main, "_get", side_effect=lambda path, base=None: {"run":{"run_id":"RUN-OK","mode":"DEMO","status":"BLOCKED"}} if path == "/api/runs/RUN-OK" else {}),
                   patch.object(portal_main, "graph_panel", return_value=""),
                   patch.object(portal_main, "post_json",
                                side_effect=AssertionError("no writes"))):
@@ -836,6 +842,64 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("UNAVAILABLE",home.text)
         self.assertIn("Run Core sélectionné — UNKNOWN",home.text)
         self.assertNotIn('href="/demo-studio/run/RUN-LIVE"',home.text)
+
+
+    def test_demo_studio_skips_foreign_detail_and_selects_next_verified_run(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [
+            {"run_id":"RUN-FOREIGN","mode":"DEMO","status":"BLOCKED"},
+            {"run_id":"RUN-VALID","mode":"REPLAY","status":"RESOLVED","synthetic":True},
+            {"run_id":"RUN-LIVE","mode":"LIVE","status":"RESOLVED"},
+        ]
+        reads=[]
+        def source(path, base=None):
+            reads.append(path)
+            if path == "/api/runs/RUN-FOREIGN":
+                return {"run":{"run_id":"RUN-OTHER","mode":"DEMO","status":"BLOCKED"}}
+            if path == "/api/runs/RUN-VALID":
+                return {"run":{"run_id":"RUN-VALID","mode":"REPLAY",
+                               "status":"RESOLVED","synthetic":True}}
+            if path == "/api/incidents":
+                raise AssertionError("no incident ID in selected Core run")
+            return {}
+        with (patch.object(portal_main,"_runs",return_value=rows),
+              patch.object(portal_main,"_get",side_effect=source),
+              patch.object(portal_main,"graph_panel",return_value=""),
+              patch.object(portal_main,"post_json",side_effect=AssertionError("no writes"))):
+            response=TestClient(portal_main.app).get("/demo-studio")
+        self.assertEqual(response.status_code,200)
+        self.assertIn('href="/demo-studio/run/RUN-VALID"',response.text)
+        self.assertIn('href="/timeline?run_id=RUN-VALID"',response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-FOREIGN"',response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"',response.text)
+        self.assertIn("provenance déclarée par Core",response.text)
+        self.assertIn("SYNTHETIC",response.text)
+        self.assertEqual(reads.count("/api/runs/RUN-FOREIGN"),1)
+        self.assertEqual(reads.count("/api/runs/RUN-VALID"),1)
+
+    def test_demo_studio_no_link_for_status_mismatch_or_missing_detail(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        rows = [{"run_id":"RUN-STALE","mode":"DEMO","status":"BLOCKED",
+                 "incident_id":"INC-ACME"}]
+        def source(path, base=None):
+            if path == "/api/runs/RUN-STALE":
+                return {"run":{"run_id":"RUN-STALE","mode":"DEMO",
+                               "status":"RUNNING","incident_id":"INC-ACME"}}
+            if path == "/api/incidents":
+                raise AssertionError("unverified incident must not be read")
+            return {}
+        with (patch.object(portal_main,"_runs",return_value=rows),
+              patch.object(portal_main,"_get",side_effect=source),
+              patch.object(portal_main,"graph_panel",return_value=""),
+              patch.object(portal_main,"post_json",side_effect=AssertionError("no writes"))):
+            response=TestClient(portal_main.app).get("/demo-studio")
+        self.assertEqual(response.status_code,200)
+        self.assertIn("aucun run DEMO/REPLAY/STORY valide et concordant",response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-STALE"',response.text)
+        self.assertNotIn('href="/timeline?run_id=RUN-STALE"',response.text)
+        self.assertIn("Incident Core associé :</strong> UNKNOWN",response.text)
 
 if __name__ == "__main__":
     unittest.main()

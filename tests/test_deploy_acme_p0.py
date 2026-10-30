@@ -61,6 +61,7 @@ class DeployAcmeP0Tests(unittest.TestCase):
     def test_cross_lot_transport_matrix_stays_explicit_and_fail_closed(self):
         for path in (
             "app/shared/acme_demo_offline.py", "app/shared/acme_glpi_ticket_read.py",
+            "app/shared/acme_noc_glpi_join.py",
             "app/shared/acme_itsm_evidence_link.py", "app/shared/acme_policy_demo_result.py",
             "app/shared/acme_remediation_projection.py",
             "app/shared/acme_remediation_receipt.py", "app/shared/remediation_lab.py",

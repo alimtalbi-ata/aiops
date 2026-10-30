@@ -23,7 +23,7 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
         {"proposal_digest": "b" * 64, "executor": "NO_EFFECT_SIMULATOR"},
         sort_keys=True, separators=(",", ":"), ensure_ascii=True,
     ).encode()).hexdigest()
-    return {
+    result = {
         "schema": "aiops.acme-remediation-receipt.v1", "classification": "SYNTHETIC_UNVERIFIED",
         "run_id": "RUN-ACME-OFFLINE-001", "scenario_id": "SCN-ACME-OFFLINE",
         "evidence_ids": ["EVD-ACME-OFFLINE-1"], "receipt_digest": digest,
@@ -60,6 +60,15 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
             },
         },
     }
+    gate = result["projection"]["gate"]
+    gate["timeout_seconds"] = 90
+    if gate_status == "SIMULATED":
+        gate["planned_postchecks"] = ["service_active", "business_slo_ok"]
+        gate["compensation"] = "restore_prior_service_state"
+    else:
+        for field in ("dry_run", "preconditions", "approval_actor"):
+            gate.pop(field, None)
+    return result
 
 
 class PolicyDemoResultTests(unittest.TestCase):
@@ -281,6 +290,10 @@ class PolicyDemoResultTests(unittest.TestCase):
             r["projection"][snapshot]["target_ci"] = "ACME-GLPI-01"
         if "projected_state" in r["projection"]["rollback"]:
             r["projection"]["rollback"]["projected_state"]["target_ci"] = "ACME-GLPI-01"
+        r["projection"]["gate"].update(
+            planned_postchecks=["ticket_note_reconciled"],
+            compensation="append_correction_note", timeout_seconds=20,
+        )
         self.assertEqual(present_demo_policy_result(r)["policy"]["decision"], "SIMULATE")
 
     def test_recipe_catalog_and_target_scope_fail_closed(self):
@@ -354,6 +367,38 @@ class PolicyDemoResultTests(unittest.TestCase):
                 r["projection"]["reason"] = projection_reason
                 with self.assertRaisesRegex(ValueError, "projection_reason_inconsistent"):
                     present_demo_policy_result(r)
+
+    def test_simulated_gate_catalog_plan_cannot_be_forged(self):
+        for key, forged in (
+            ("planned_postchecks", ["RUNTIME_POSTCHECK_PASSED"]),
+            ("compensation", "ROLLBACK_EXECUTED"),
+            ("timeout_seconds", 1),
+        ):
+            with self.subTest(key=key):
+                r = receipt()
+                r["projection"]["gate"][key] = forged
+                with self.assertRaisesRegex(ValueError, "gate_catalog_binding_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_blocked_gate_cannot_smuggle_approval_metadata(self):
+        for key, forged in (
+            ("approval_actor", "operator-verified"),
+            ("dry_run", True),
+            ("preconditions", "RUNTIME_VERIFIED"),
+            ("planned_postchecks", ["PASS"]),
+            ("compensation", "ROLLBACK_EXECUTED"),
+        ):
+            with self.subTest(key=key):
+                r = receipt("BLOCKED", "BLOCKED")
+                r["projection"]["gate"][key] = forged
+                with self.assertRaisesRegex(ValueError, "gate_blocked_fixture_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_blocked_gate_catalog_timeout_cannot_be_forged(self):
+        r = receipt("BLOCKED", "BLOCKED")
+        r["projection"]["gate"]["timeout_seconds"] = 0
+        with self.assertRaisesRegex(ValueError, "gate_catalog_binding_invalid"):
+            present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)

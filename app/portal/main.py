@@ -142,6 +142,24 @@ def _core_run_provenance(detail, listed):
     return "SYNTHETIC" if synthetic else "REAL"
 
 
+def _select_verified_demo_run(rows):
+    """Pick a bounded Core DEMO run only after inventory/detail agreement.
+
+    An inventory entry is not evidence that its detail is still the same run.
+    Fail closed when the API is missing, inconsistent or unauthorized.
+    """
+    eligible = _qualified_demo_runs(rows)
+    terminal = [r for r in eligible if r.get("status") in ("RESOLVED", "BLOCKED")]
+    other = [r for r in eligible if r.get("status") not in ("RESOLVED", "BLOCKED")]
+    for row in (terminal + other)[:12]:
+        detail = _get("/api/runs/" + row["run_id"])
+        if (_core_detail_matches_listed_run(detail, row)
+                and (not isinstance(row.get("status"), str)
+                     or detail["run"].get("status") == row["status"])):
+            return row, detail
+    return None, None
+
+
 def _operator_run_context(run_id):
     """Read-only cross-screen navigation; no implicit Twin/GLPI/Policy join."""
     if run_id is None:
@@ -437,17 +455,18 @@ def demo_studio():
           '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
     # Navigate a real Core inventory entry; never substitute a fixture or LIVE run.
     import urllib.parse
-    eligible=_qualified_demo_runs(runs)
-    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
-                  eligible[0] if eligible else None)
+    selected, selected_detail=_select_verified_demo_run(runs)
     if selected:
         rid=urllib.parse.quote(selected["run_id"],safe="")
-        run_entry=('<p><strong>Run Core proposé (non attesté) :</strong> '
+        run_entry=('<p><strong>Run Core concordant (inventaire + détail, sans preuve métier) :</strong> '
                    +esc(selected["run_id"])+' · '+esc(selected.get("status","UNKNOWN"))
+                   +' · provenance déclarée par Core : <strong>'
+                   +esc(_core_run_provenance(selected_detail, selected))+'</strong>'
+                   +' (non attestée indépendamment)'
                    +' · <a href="/demo-studio/run/'+rid+'">Détail Analyst/Critic</a>'
                    +' · <a href="/timeline?run_id='+rid+'">Timeline du même run</a></p>')
     else:
-        run_entry='<p><strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY valide accessible depuis Core.</p>'
+        run_entry='<p><strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY valide et concordant accessible depuis Core.</p>'
     # Only correlate the incident explicitly referenced by this Core run inventory row.
     # A missing or ambiguous incident must not become a fabricated Payments impact.
     incident_entry='<p><strong>Incident Core associé :</strong> UNKNOWN — identité ou état non qualifié.</p>'
@@ -496,8 +515,8 @@ def demo_studio():
        (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
         r.get("status","INCONNU"),r.get("scenario_id","INCONNU")) for r in demo_runs[:30]]))
     import urllib.parse
-    if eligible:
-        links="".join('<li><a href="/demo-studio/run/'+urllib.parse.quote(r["run_id"],safe="")+'">'+esc(r["run_id"])+'</a></li>' for r in eligible[:30])
+    if selected:
+        links='<li><a href="/demo-studio/run/'+rid+'">'+esc(selected["run_id"])+'</a></li>'
         body+=panel("Ouvrir les traces Analyst/Critic/Policy","<ul>"+links+"</ul>")
     body+=panel("Qualification et prochaines étapes",
       '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
