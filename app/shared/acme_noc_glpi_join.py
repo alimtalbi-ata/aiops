@@ -5,30 +5,29 @@ server-side authorized Core readers. This module does not authenticate Core,
 verify evidence payloads or authorize tenant access. An internal ledger
 reference is never an independently verified evidence capture.
 
-Only the existing GLPI adapter may perform I/O: one bounded HTTPS GET using
-server-supplied credentials. A signed NOC ticket is a *claim*, never a
-verified GLPI ticket. No writes, no LIVE or remediation actions.
+Only the existing GLPI and Core Evidence-ref readers perform I/O: bounded
+GETs using server-supplied credentials. A signed NOC ticket is a *claim*,
+never a verified GLPI ticket. No writes, LIVE or remediation actions.
 """
 from shared.acme_itsm_evidence_link import project_itsm_evidence
 from shared.acme_glpi_ticket_read import read_verified_glpi_link
+from shared.acme_core_evidence_refs_read import read_authenticated_core_evidence_refs
 
 
 def join_incident_run_ticket_evidence(core_detail, ledger, signed_noc=None, *,
                                       glpi_base_url=None, glpi_session_token=None,
-                                      glpi_app_token=None, glpi_opener=None):
-    """Compose qualified Core references and optional authenticated GLPI GET.
+                                      glpi_app_token=None, glpi_opener=None,
+                                      core_evidence_base_url=None,
+                                      core_evidence_token=None,
+                                      core_evidence_opener=None):
+    """Compose qualified Core refs with optional authenticated GLPI/Core GETs.
 
-    Returns the existing ``aiops.acme-itsm-evidence-link.v1`` projection.
-    ``ticket_id`` is non-null only after GLPI explicitly matches both IDs;
-    ``evidence_refs`` remain SYNTHETIC_ONLY, not authenticated evidence.
-    ``verified_evidence_ids`` stays empty: this join does not perform an
-    independent authenticated Evidence API read. Do not render ledger refs
-    as verified captures, even when GLPI confirms a ticket.
-    Any invalid input yields UNKNOWN/null; no GLPI call is made for an
-    unqualified Core projection or an absent signed NOC ticket claim.
-
-    The injectable opener is for tests. Never forward user/browser-supplied
-    GLPI credentials or treat this pure join as an authorization boundary.
+    ``ticket_id`` is non-null only after GLPI explicitly matches both IDs.
+    ``core_evidence_ref_ids_verified`` is a *synthetic Core reference* match
+    from the authenticated read-only Core evidence-refs endpoint, not a
+    runtime/tenant/evidence-capture attestation. Independently verified
+    evidence remains UNKNOWN. Credentials must be server-owned, never from
+    the browser; injected openers are for offline tests only.
     """
     projection = project_itsm_evidence(core_detail, ledger, signed_noc)
     result = read_verified_glpi_link(
@@ -36,9 +35,12 @@ def join_incident_run_ticket_evidence(core_detail, ledger, signed_noc=None, *,
         session_token=glpi_session_token, app_token=glpi_app_token,
         opener=glpi_opener,
     )
-    # Internal Core AI Ledger references (even hashed and timestamped) are
-    # not authenticated Evidence API records. A confirmed GLPI ticket does
-    # not upgrade them. Keep source references distinct from verified IDs.
+    result.update(read_authenticated_core_evidence_refs(
+        result, base_url=core_evidence_base_url,
+        bearer_token=core_evidence_token, opener=core_evidence_opener,
+    ))
+    # Core's authenticated evidence-refs GET confirms only synthetic database
+    # and run-event references. It cannot verify a real capture or tenant ACL.
     result["verified_evidence_id"] = None
     result["verified_evidence_ids"] = []
     result["evidence_verification"] = "UNKNOWN_NO_AUTHENTICATED_EVIDENCE_API_READ"

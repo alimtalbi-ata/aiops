@@ -29,6 +29,7 @@ RUNTIME = frozenset({
     # Exact shared modules are copied by the four application Dockerfiles.
     "app/shared/acme_demo_offline.py", "app/shared/acme_glpi_ticket_read.py",
     "app/shared/acme_noc_glpi_join.py",
+    "app/shared/acme_core_evidence_refs_read.py",
     "app/shared/acme_itsm_evidence_link.py", "app/shared/acme_policy_demo_result.py",
     "app/shared/acme_remediation_projection.py", "app/shared/acme_remediation_receipt.py",
     "app/shared/remediation_lab.py",

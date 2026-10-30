@@ -30,7 +30,7 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
         "core_run_verified": False, "evidence_verified": False, "effect_applied": False, "persisted": False,
         "projection": {
             "schema_version": 1, "synthetic": True, "provenance": "WHAT_IF_FIXTURE_NOT_OBSERVED",
-            "mode": "DEMO", "status": status, "recipe_id": "ansible-service-restart",
+            "mode": "DEMO", "status": status, "proposal_id": "P-ACME-OFFLINE-001", "recipe_id": "ansible-service-restart",
             "reason": {
                 "SIMULATED_SUCCESS": "HYPOTHETICAL_RECOVERY_NOT_VERIFIED",
                 "SIMULATED_FAILURE": "HYPOTHETICAL_POSTCONDITION_FAILURE",
@@ -46,10 +46,11 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
                     "SIMULATED_NO_RECOVERY": "NOT_REQUIRED",
                     "BLOCKED": "NOT_REQUIRED",
                 }.get(status, "NOT_REQUIRED"),
-                "effect_applied": False,
+                "effect_applied": False, "projected_state": dict(before),
             },
             "gate": {
                 "mode": "DEMO", "status": gate_status, "target_ci": "ACME-LNX-01",
+                "proposal_id": "P-ACME-OFFLINE-001",
                 "reason": "NO_SIDE_EFFECTS" if gate_status == "SIMULATED" else "APPROVAL_EXPIRED",
                 "proposal_digest": "b" * 64, "recipe_id": "ansible-service-restart",
                 "recipe_version": "1.0.0",
@@ -398,6 +399,51 @@ class PolicyDemoResultTests(unittest.TestCase):
         r = receipt("BLOCKED", "BLOCKED")
         r["projection"]["gate"]["timeout_seconds"] = 0
         with self.assertRaisesRegex(ValueError, "gate_catalog_binding_invalid"):
+            present_demo_policy_result(r)
+
+    def test_proposal_identity_mismatch_or_unsafe_rejected(self):
+        for location, value in (
+            ("projection", "P-OTHER"),
+            ("gate", "P-OTHER"),
+            ("projection", "<script>"),
+            ("gate", None),
+        ):
+            with self.subTest(location=location, value=value):
+                r = receipt()
+                if location == "projection":
+                    r["projection"]["proposal_id"] = value
+                else:
+                    r["projection"]["gate"]["proposal_id"] = value
+                with self.assertRaisesRegex(ValueError, "proposal_identity_binding_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_rollback_projection_must_exist_and_equal_before(self):
+        for status, gate_status in (
+            ("SIMULATED_SUCCESS", "SIMULATED"),
+            ("SIMULATED_FAILURE", "SIMULATED"),
+            ("BLOCKED", "BLOCKED"),
+        ):
+            for tamper in ("missing", "different", "null"):
+                with self.subTest(status=status, tamper=tamper):
+                    r = receipt(status, gate_status)
+                    rollback = r["projection"]["rollback"]
+                    if tamper == "missing":
+                        rollback.pop("projected_state")
+                    elif tamper == "null":
+                        rollback["projected_state"] = None
+                    else:
+                        rollback["projected_state"]["health"] = "HEALTHY"
+                    with self.assertRaisesRegex(ValueError, "rollback_effect_claim_forbidden"):
+                        present_demo_policy_result(r)
+
+    def test_real_builder_proposal_identity_and_rollback_binding(self):
+        from app.shared.acme_demo_offline import demo_receipt
+        r = demo_receipt("SUCCESS")
+        self.assertEqual(r["projection"]["proposal_id"], r["projection"]["gate"]["proposal_id"])
+        self.assertEqual(r["projection"]["rollback"]["projected_state"], r["projection"]["before"])
+        self.assertEqual(present_demo_policy_result(r)["rollback"]["executed"], False)
+        r["projection"]["gate"]["proposal_id"] = "P-FORGED"
+        with self.assertRaisesRegex(ValueError, "proposal_identity_binding_invalid"):
             present_demo_policy_result(r)
 
     def test_does_not_mutate_input(self):

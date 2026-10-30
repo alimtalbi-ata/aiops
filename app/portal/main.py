@@ -142,22 +142,27 @@ def _core_run_provenance(detail, listed):
     return "SYNTHETIC" if synthetic else "REAL"
 
 
-def _select_verified_demo_run(rows):
-    """Pick a bounded Core DEMO run only after inventory/detail agreement.
-
-    An inventory entry is not evidence that its detail is still the same run.
-    Fail closed when the API is missing, inconsistent or unauthorized.
-    """
+def _verified_demo_run_rows(rows, *, max_results=12):
+    """Bounded read-only Core inventory/detail checks for operator deep links."""
     eligible = _qualified_demo_runs(rows)
     terminal = [r for r in eligible if r.get("status") in ("RESOLVED", "BLOCKED")]
     other = [r for r in eligible if r.get("status") not in ("RESOLVED", "BLOCKED")]
+    verified = []
     for row in (terminal + other)[:12]:
         detail = _get("/api/runs/" + row["run_id"])
         if (_core_detail_matches_listed_run(detail, row)
                 and (not isinstance(row.get("status"), str)
                      or detail["run"].get("status") == row["status"])):
-            return row, detail
-    return None, None
+            verified.append((row, detail))
+            if len(verified) >= max_results:
+                break
+    return verified
+
+
+def _select_verified_demo_run(rows):
+    """Select one existing Core run, never an unverified inventory-only link."""
+    verified = _verified_demo_run_rows(rows, max_results=1)
+    return verified[0] if verified else (None, None)
 
 
 def _operator_run_context(run_id):
@@ -239,21 +244,13 @@ def home():
         '<a href="/demo-studio/business-story">Voir la valeur métier hypothétique</a></p>')
     # Prefer one terminal DEMO/REPLAY/STORY from Core, but only link its
     # detail after the inventory and detail identities agree.
-    eligible=_qualified_demo_runs(recent_runs)
-    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
-                  eligible[0] if eligible else None)
+    selected, detail=_select_verified_demo_run(recent_runs)
     if selected:
-        rid=selected["run_id"]
-        detail=_get("/api/runs/"+rid)
-        if _core_detail_matches_listed_run(detail,selected):
-            content+=_verified_operator_run_context(rid,detail,selected)
-        else:
-            content+=panel("Run Core sélectionné — UNKNOWN",
-                "<p>UNKNOWN — détail Core absent ou contradictoire ; aucun lien "
-                "Analyst/Critic, Evidence, ITSM ou HITL pour ce run.</p>")
+        content+=_verified_operator_run_context(selected["run_id"],detail,selected)
     else:
         content+=panel("Run Core sélectionné — UNKNOWN",
-            "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu dans l'inventaire Core.</p>")
+            "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY concordant entre inventaire "
+            "et détail Core ; aucun lien vers un run non qualifié.</p>")
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
@@ -262,18 +259,18 @@ def home():
 def runs_page():
     runs=_runs()
     rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("overall_confidence","INCONNU"),r.get("scenario_id","UNKNOWN")) for r in runs if isinstance(r,dict)]
-    # The registry table is escaped by table(); deep links need validated IDs.
-    # Never link LIVE, invalid or ambiguous run identities into a DEMO detail.
+    # Inventory rows remain visible, but only inventory/detail agreement creates
+    # an operator deep link. Never link LIVE, ambiguous or stale Core identities.
     from urllib.parse import quote
-    eligible=_qualified_demo_runs(runs)
+    verified=_verified_demo_run_rows(runs)
     links="".join(
         '<li><a href="/demo-studio/run/'+quote(row["run_id"],safe="")+'">'+esc(row["run_id"])+'</a>'
         ' · <a href="/timeline?run_id='+quote(row["run_id"],safe="")+'">Timeline</a>'
         ' · '+esc(row.get("status") or "UNKNOWN")+'</li>'
-        for row in eligible
+        for row, detail in verified
     )
     body=panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows))
-    body+=panel("Explorer un run DEMO / REPLAY / STORY — inventaire Core, non attesté",
+    body+=panel("Explorer un run DEMO / REPLAY / STORY — identité Core concordante, sans preuve métier",
         "<ul>"+links+"</ul>" if links else "<p>UNKNOWN — aucun run DEMO non ambigu accessible.</p>")
     return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",body)
 
