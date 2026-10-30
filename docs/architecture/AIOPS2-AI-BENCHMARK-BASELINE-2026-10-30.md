@@ -45,3 +45,8 @@
 3. Save the JSON report hash and every case outcome; measure p50/p95, retries, usage coverage and missing counts. Use a pinned pricing source before calculating any cost. Repeat nondeterministic runs at least three times and score proposals independently.
 
 No approval, GLPI write, remediation, Docker restart, or LIVE effect is implied by this baseline.
+
+
+## 2026-10-30 12:20 UTC — exact candidate artifact cross-check
+
+The same dataset SHA256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e` and evaluator SHA256 `affeb783274ffc3ff37238ea124eb915a5e4257d8ddaa78d81919a0c40f997da` were independently verified inside the **new #185 head `5782d6f`** deployment kit, artifact `12975971501` (inner ZIP SHA256 `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d`). `python3 -m unittest discover -s tests -p 'test_ai_eval_harness.py' -q` → **3/3 PASS** on that exact package as well. **No Intelligence endpoint was called**; all model-quality, p50/p95, provider-token, pricing and budget figures remain UNKNOWN. This confirms source/dataset identity, not benchmark performance.

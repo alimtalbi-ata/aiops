@@ -107,3 +107,10 @@ The four focused schedules delivered additional commits after the initial candid
 These are schedule-reported targeted tests, not GitHub Actions qualification. No Actions run was found for the exact four commits at this update. The compare operation reports up to 300 changed paths due the divergent ancestry; do not copy complete branch trees or workflow files. Request commit-level/file-level diffs and port only the intended lot's minimal source + tests into a fresh main-based integration branch, then run full CI.
 
 The immediate 5/5 automation run was still in progress. Schedule 5/5 was updated to enforce base-branch checks, prohibit direct merge of divergent branches and coordinate a clean main-based selective integration.
+
+
+## 7. CI/package completion addendum — 2026-10-30 12:20 UTC
+
+- #185 `5782d6f` Quality **6/6 SUCCESS**, Offline/Historical SUCCESS, but V2.8 **FAILED** (legacy gates fixture, one error in 59). Exact deployment-kit artifact `12975971501`: sidecar SHA256, 445 CRC, 395 file checksums and eight source blobs all verified; **253/253** selected tests PASS on extracted archive; **14/14** isolated read-only Portal GET 200, POST 405, missing run 404. Source/packaging qualification does **not** override V2.8 or runtime gates.
+- `main` versus #185 base `feat/cron-stable-reconciled-20261028`: **diverged**, 672 ahead / 43 behind. #185 is not safe for direct merge into main.
+- #196 is the existing telemetry implementation; no separate provider usage engine will be created by 5/5. Model invocations, cost and budget enforcement are still NOT_TESTED.

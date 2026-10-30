@@ -192,3 +192,9 @@ Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current
 - Each branch is divergent from main (711/43, 740/43, 736/43, 739/43). The compare operation reports large ancestry/file differences; do not copy complete branch trees. 5/5 has been instructed to obtain exact commit diffs and port only minimal source/test changes to a clean main-based integration branch.
 - PR #185 current head 02dd3aa also remains based on a divergent stable branch. It is a demo/package source, not directly mergeable.
 - AI benchmark artifact baseline is documented at `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`; the 20 tokens and P95 3.24 ms are deterministic placeholders and not real model metrics.
+
+
+### 2026-10-30 12:20 UTC — package completion after initial gate snapshot
+
+- New #185 HEAD `5782d6f` Quality completed **6/6 SUCCESS**, but V2.8 remained **FAILED** (58/59 PASS, legacy gates fixture error). Exact CI artifact `12975971501` verified (445 CRC, 395 SHA256, eight source blobs), extracted archive **253/253** targeted tests PASS, isolated Portal **14/14** GET 200, POST 405 and unknown run 404. The same package's evaluator harness passed **3/3** without model calls.
+- The PR #185 base branch is **672 commits ahead / 43 behind** `main`; do not merge the 72-file PR directly. Preserve a clean-main selective integration plan. `RELEASE_STABLE=NO_GO` until all exact-head CI and Debian/runtime/rollback gates pass.
