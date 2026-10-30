@@ -104,3 +104,8 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 ### 2026-10-30 19:13 UTC — T0 closeout
 
 #201 `7e4cbe9d75aedccf2078ca50d052e6d0796c284e` [Quality 41113172965](https://github.com/alimtalbi-ata/aiops/actions/runs/41113172965) **SUCCESS 3/3**; inspected logs: Portal Python 28/28, JS 7/7, Chromium 6/6, kit gate 12/12. Synthetic artifact `13005150615` digest `sha256:6fdaab4220604c401c531999907df55e0a54d713920537ca22f5dfac2886bf69` listed only, contents NOT_AUDITED. **T0 GO_LIMITED; T1 NOT_TESTED; T2 NOT_TESTED; T3 NOT_ATTESTED; T4 NO_GO; T5 NO_GO.**
+
+
+### 2026-10-30 19:16 UTC — new provenance-contract commit
+
+#201 advanced from CI-green `7e4cbe9d` to **`cee6a834befbee47275e83651e7c0955528c51a0`** (base `main@27deb9b1`, 35 ahead/0 behind). Two narrow changes in `.github/workflows/quality.yml` and `tests/test_explore_story_playwright_e2e.py` separate PR source/base SHAs from merge checkout SHA in synthetic capture metadata. Previous artifact `13005150615` independently inspected (2/2 CRC, screenshot hash PASS), but its `git_sha` was merge checkout, not source. **New exact-head Quality NOT_OBSERVED**; T0 PENDING until CI. T1/T2 NOT_TESTED, T3 NOT_ATTESTED, T4/T5 NO_GO.
