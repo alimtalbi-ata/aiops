@@ -99,7 +99,9 @@ def create(x:RunIn,authorization:str|None=Header(default=None)):
         row=c.execute('select run_id,mode,scenario_id,status,version from aiops.runs where idempotency_key=%s',(x.idempotency_key,)).fetchone()
         if row:return dict(zip(['run_id','mode','scenario_id','status','version'],row))
         rid=new('RUN'); c.execute('insert into aiops.runs(run_id,incident_id,mode,scenario_id,status,idempotency_key) values(%s,%s,%s,%s,%s,%s)',(rid,x.incident_id,x.mode,x.scenario_id,'CREATED',x.idempotency_key))
-        for stage in STAGES:\n            initial=initial_stage_state(stage)\n            c.execute('insert into aiops.run_stage_state(run_id,stage,state,completed_at) values(%s,%s,%s,case when %s=\'PASS\' then now() else null end)',(rid,stage,initial,initial))
+        for stage in STAGES:
+            initial=initial_stage_state(stage)
+            c.execute('insert into aiops.run_stage_state(run_id,stage,state,completed_at) values(%s,%s,%s,case when %s=\'PASS\' then now() else null end)',(rid,stage,initial,initial))
         append_event(c,rid,'INGEST','RUN_CREATED','CREATED',payload={'mode':x.mode,'scenario_id':x.scenario_id},event_key='run-created')
         return {'run_id':rid,'status':'CREATED','version':1,'mode':x.mode,'scenario_id':x.scenario_id}
 @app.post('/api/runs/{rid}/command')
