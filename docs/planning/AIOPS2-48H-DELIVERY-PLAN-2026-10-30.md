@@ -157,3 +157,7 @@ The 48-hour release target is a customer-demo kit at T2 synthetic E2E, plus T3 r
 ### Stop conditions
 
 A missing endpoint, tenant ACL, provider usage field, price source, OIDC identity, outbox recovery test, package member or rollback proof is a BLOCKED/UNKNOWN result, not a reason to invent a fallback. If a model fails quality gates, retain the failure and select/adjust the model or prompt only through a new versioned benchmark.
+
+## 2026-10-30 14:16 UTC — release-path incremental gate
+
+The 5/5 staging [#201](https://github.com/alimtalbi-ata/aiops/pull/201) added a stdlib-only cumulative ZIP inventory/source correspondence guard at HEAD `03a5b0cce44e56d7ae315ee7df16e850a5e35b11`, with 10/10 offline negative-path tests PASS and a new Quality job step (new exact-head CI not yet confirmed). This is a **precondition**, not a substitute for the missing cumulative kit. Next: selectively reconcile #194 migration/OIDC/outbox and #196 telemetry on a clean main-based tree; generate one exact-SHA package; require `python3 tools/check_cumulative_release_kit.py --kit <zip> --expected-source-sha <40hex> --source-dir <exact-clean-checkout>` to PASS; then separately exercise clean install/upgrade/rollback, synthetic E2E and read-only smoke. Do not claim T1–T4 from archive integrity.
