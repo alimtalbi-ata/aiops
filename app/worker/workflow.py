@@ -4,6 +4,7 @@ No FastAPI, HTTP client, database, OS IO or provider integration imports are
 allowed here. All side effects are executed by separately registered activities
 inside worker.main. The sandbox re-imports *this module*, not worker.main.
 """
+import asyncio
 import datetime
 
 from temporalio import workflow
@@ -49,8 +50,6 @@ class IncidentWorkflow:
     @workflow.run
     async def run(self, args: dict) -> dict:
         run_id = args["run_id"]
-        self._hitl_decision = None
-        self._hitl_conflict = False
         receipt = await workflow.execute_activity(
             "start_run",
             args,
@@ -95,11 +94,19 @@ class IncidentWorkflow:
                 timeout_seconds = args.get("hitl_timeout_seconds", 86400)
                 if type(timeout_seconds) is not int or not 60 <= timeout_seconds <= 604800:
                     timeout_seconds = 86400
-                signalled = await workflow.wait_condition(
-                    lambda: self._hitl_decision is not None or self._hitl_conflict,
-                    timeout=datetime.timedelta(seconds=timeout_seconds),
-                )
-                if not signalled or self._hitl_conflict:
+                try:
+                    await workflow.wait_condition(
+                        lambda: self._hitl_decision is not None or self._hitl_conflict,
+                        timeout=datetime.timedelta(seconds=timeout_seconds),
+                    )
+                except asyncio.TimeoutError:
+                    return {
+                        "run_id": run_id, "status": "BLOCKED",
+                        "final_version": version,
+                        "reason": "hitl_timeout_or_conflicting_signal",
+                        "execution_allowed": False,
+                    }
+                if self._hitl_conflict or self._hitl_decision is None:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
