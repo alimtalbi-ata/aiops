@@ -816,6 +816,14 @@ def acme_stories_page():
                  "Parcours clients, sécurité, limites et preuves réellement disponibles.",body)
 
 
+@app.get("/api/hitl/proposals")
+def hitl_proposals(status:str="PROPOSED",limit:int=50):
+    """Portal proxy for the authenticated Core proposal inbox."""
+    if status not in ("PROPOSED","APPROVED","REJECTED","REVOKED","ALL"):
+        raise HTTPException(422,"invalid_proposal_filter")
+    return get_json(CORE,"/api/proposals?status="+status+"&limit="+str(max(1,min(limit,200))))
+
+
 @app.get("/policy-control",response_class=HTMLResponse)
 def policy_control_center(run_id:str|None=None):
     """Read-only control center; changes are deliberately not available here."""
@@ -824,6 +832,7 @@ def policy_control_center(run_id:str|None=None):
     history=_get("/api/policy/autonomy/history",url)
     simulation=_get("/api/policy/simulation/summary",url)
     decisions=_get("/api/policy/simulation/decisions",url)
+    proposals=_get("/api/proposals?status=PROPOSED&limit=100",CORE)
     status=state.get("mode","UNKNOWN")
     entries=history.get("items",[]) if isinstance(history.get("items"),list) else []
     rows=[(str(e.get("revision","?")),str(e.get("mode","?")),
@@ -851,6 +860,20 @@ def policy_control_center(run_id:str|None=None):
               (str(e.get("operation_id","?")),str(e.get("revision","?")),
                str(e.get("operation_class","?")),str(e.get("reason","?")),
                str(e.get("recorded_at","?"))) for e in audit if isinstance(e,dict)]))
+    proposal_items=proposals.get("items",[]) if isinstance(proposals,dict) and isinstance(proposals.get("items"),list) else []
+    if proposals.get("status")=="UNKNOWN":
+        body+=panel("File HITL — indisponible",'<p>Le registre Core des propositions ne répond pas. Aucune approbation ne peut être supposée.</p>')
+    else:
+        proposal_rows=[(
+            str(p.get("proposal_id","?")),str(p.get("run_id","?")),
+            str(p.get("action_type","?")),str(p.get("risk_tier","?")),
+            str(p.get("status","?")),str(p.get("expires_at","?"))
+        ) for p in proposal_items if isinstance(p,dict)]
+        body+=panel("File HITL — propositions en attente",
+            table(["Proposition","Run","Action","Risque","État","Expiration"],proposal_rows)
+            +'<p>'+str(len(proposal_rows))+' proposition(s). Les détails hashés et preuves sont disponibles via l’API Core authentifiée.</p>'
+            +'<p><strong>Validation :</strong> aucune approbation depuis le navigateur n’est activée tant qu’une identité humaine vérifiée (SSO/IdP) n’est pas liée au rôle d’approbateur. Les runs DEMO/REPLAY/STORY restent non approuvables.</p>'
+            +pretty({"authority":proposals.get("authority","UNKNOWN"),"execution_allowed":False}))
     body+=panel("Maturité et limites",
         '<p>Le registre et les API nécessitent déploiement et qualification. '
         'Le mode STOP_AUTO par défaut n’équivaut pas à une interposition déjà déployée chez les exécuteurs.</p>')
