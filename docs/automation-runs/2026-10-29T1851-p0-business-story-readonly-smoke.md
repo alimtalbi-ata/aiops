@@ -1,0 +1,9 @@
+# 2026-10-29 18:51 CET — P0: smoke du parcours ACME dans le portail existant
+
+- Owner 5/5, candidate unique PR #185, parent qualifié CI `af82785da803079482caeadde9e1d5c3d2fb8c12`, stable `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3` non modifié. Le SHA du présent commit est celui de ce fichier dans la PR; ne pas attribuer les checks du parent à ce nouveau commit.
+- Défaillance concrète: `scripts/check_demo_field_readonly.py` ne contrôlait que `/demo-studio` et pouvait annoncer `READONLY_PREFLIGHT_PASS` même si la route métier `/demo-studio/business-story` était absente ou cassée.
+- Adaptation REUSE-FIRST: même vérificateur HTTP GET loopback, no redirect/proxy/secret, même limite de taille, ajout du check `portal_acme_business_story_navigable` (HTTP 200 HTML, six ancres et marqueurs, liens Twin/Policy/Evidence). Pas de nouvelle route, HTML, dépendance ou workflow.
+- Tests: 3 nouveaux tests négatifs/positifs dans `tests/test_demo_field_readonly.py`; CI `quality.yml` du SHA final à vérifier, pas de test Debian ni de navigateur exécuté ici. La lecture du récit ne valide ni run Core, ni Payments, ni HITL/GLPI, ni provenance Evidence, ni rollback. Le reçu conserve `overall=NO_GO`.
+- Contrat de déploiement inchangé: `deploy/poll-approved-deploy.sh` reste portail-only, refuse `app/portal/main.py` et tout changement Core/Twin/Policy. `deploy/deploy-acme-p0.py` est candidat manuel, non câblé au cron. Aucun `--apply`, aucune promotion stable.
+- Opérateur autorisé: après qualification séparée de la version effectivement déployée, lancer le vérificateur existant avec les quatre ports loopback et `--expected-sha`/`--applied-sha-file` ; collecter JSON horodaté. Un PASS ne prouve que le rendu du parcours, jamais E2E.
+- READY_FOR_STABLE=BLOCKED, DEMO_READY Debian=NOT_TESTED pour ce commit. Blocage principal: transport réel du code Portal/Core/Twin/Policy et rollback non qualifiés sur SRV-DEB-05.

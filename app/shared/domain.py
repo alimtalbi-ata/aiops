@@ -5,6 +5,10 @@ ALLOWED={
  'WAITING':{'RUNNING','BLOCKED','CANCELLED'},'BLOCKED':{'WAITING','FAILED','CANCELLED'},
  'RESOLVED':set(),'FAILED':set(),'CANCELLED':set()}
 STAGES=['INGEST','NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC','POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN']
+def initial_stage_state(stage):
+    """A run-created receipt completes INGEST; worker stages start pending."""
+    return 'PASS' if stage == 'INGEST' else 'PENDING'
+
 def transition(a,b):
     if b not in ALLOWED.get(a,set()): raise ValueError(f'illegal transition {a}->{b}')
 def impact_from_paths(direct_impact:float, redundant_paths:int, total_paths:int):

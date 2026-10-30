@@ -1,0 +1,8 @@
+# 2026-10-29 21:12 CET — P0 Portail : registre Core cliquable sans nouveau prototype
+
+- Owner 2/5, candidate unique PR #185, branche `release/p0-acme-integrated-candidate-20261029-1100`, parent `1208a79a667d68b368a7523d74afe2164f59c85d`. Correctif limité à `app/portal/main.py` et `tests/test_demo_v2.py`; aucun nouveau HTML autonome, workflow, dépendance ou changement de Core/Twin/Policy.
+- Défaut source confirmé : `/runs` affichait une table de run_id en texte sans lien direct vers les écrans Analyst/Critic et timeline ; le parcours guidé `/demo-studio` conduisait à un registre sans sortie cliquable par run.
+- Correctif : panneau de liens profonds `/demo-studio/run/{rid}` et `/timeline?run_id={rid}` depuis `/runs`, uniquement pour identités DEMO/REPLAY/STORY valides et uniques. Inventaire LIVE conservé en tableau mais jamais présenté comme lien DEMO. Identités absentes, invalides ou dupliquées => aucun lien ; UNKNOWN explicite si aucun run éligible. Aucun accès supplémentaire aux gates, Evidence, GLPI ni écriture.
+- Tests ajoutés : liens positifs DEMO/REPLAY, refus LIVE, run_id invalide et ambigu, fallback UNKNOWN. `quality.yml` existant à vérifier sur SHA final ; aucun test Debian, navigateur ni E2E revendiqué.
+- Packaging : `app/portal/main.py` relève de IMAGE_TRANSPORT dans `deploy/deploy-acme-p0.py`. Cron Debian stable-only installé portal-only : transport complet, rollback, applied.sha et smoke terrain du SHA final NOT_TESTED. Ne pas pousser stable ; coordination 5/5 uniquement.
+- READY_FOR_STABLE=BLOCKED ; DEMO_READY terrain=NOT_READY. Prochaine action 5/5 : requalifier la CI exacte et le préflight opérateur `--inspect-host` avant toute promotion.

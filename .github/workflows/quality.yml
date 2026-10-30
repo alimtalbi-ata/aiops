@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "httpx==0.28.1" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
       - name: Compile Python source
         run: python -m compileall -q app tests tools
       - name: Policy safety unit tests
@@ -37,6 +37,23 @@ jobs:
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
+      - name: Demo Studio V2 synthetic stage-marker presentation contract
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_demo_v2.py" -v
+          python -m unittest discover -s tests -p "test_portal_preview_readonly.py" -v
+      - name: ACME P0 cross-lot fail-closed contracts (1-4/5)
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_find_acme_demo_run.py" -v
+          python -m unittest discover -s tests -p "test_acme_core_authenticated_probe.py" -v
+          python -m unittest discover -s tests -p "test_acme_itsm_evidence*.py" -v
+          python -m unittest discover -s tests -p "test_acme_policy_demo_result.py" -v
+          python -m unittest discover -s tests -p "test_probe_acme_twin_path.py" -v
+          python -m unittest discover -s tests -p "test_acme_glpi_ticket_read.py" -v
+          python -m unittest discover -s tests -p "test_acme_noc_glpi_join.py" -v
       - name: AI evaluation harness tests
         run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
       - name: Model evaluation API unit tests
@@ -79,6 +96,14 @@ jobs:
           python -m unittest discover -s tests -p "test_poll_approved_deploy.py" -v
           python -m unittest discover -s tests -p "test_install_approved_cron.py" -v
           python -m unittest discover -s tests -p "test_demo_stable_rollback_name.py" -v
+          python -m unittest discover -s tests -p "test_deploy_acme_p0.py" -v
+      - name: Release P0 integrated ledger and Evidence offline contracts
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_demo_ledger_read.py" -v
+          python -m unittest discover -s tests -p "test_demo_evidence_receipts.py" -v
+          python -m unittest discover -s tests -p "test_demo_field_readonly.py" -v
       - name: Secret preflight tests
         run: bash tests/test_preflight_secrets.sh
       - name: Isolated deployment identity contract
@@ -298,7 +323,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "httpx==0.28.1" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
       - name: Re-run release-blocking unit and contract tests
         env:
           PYTHONPATH: app

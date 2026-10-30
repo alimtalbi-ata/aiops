@@ -1,0 +1,9 @@
+# 2/5 Portail — identité Core fail-closed avant événements (30/10/2026)
+
+- **Candidate unique :** PR #185, branche `release/p0-acme-integrated-candidate-20261029-1100`, parent `4858cdfea747b5b08e006b403a03c242ae5b624b`. SHA de livraison : commit contenant ce journal.
+- **Défaut P0 démontré sur le parent :** `/demo-studio/run/{rid}`, `/api/demo-status/{rid}` et `/timeline?run_id=` validaient le run dans l'inventaire, mais affichaient ensuite événements, gates et Evidence d'une réponse de détail Core sans vérifier `detail.run.run_id` et `detail.run.mode`. Une réponse étrangère ou LIVE pouvait donc être présentée comme le run DEMO sélectionné.
+- **Correctif :** `app/portal/main.py` vérifie identité du détail `run_id/mode` et, lorsqu'ils sont présents dans l'inventaire, `incident_id/scenario_id`. Échec = UNKNOWN, pas d'événements/gates/Evidence, pas d'appel de preuve supplémentaire. Pas de nouveau endpoint ni de dépendance, aucun POST ajouté.
+- **Tests ciblés :** 3 tests `tests/test_demo_v2.py` (détail/polling, timeline, identité incident/scénario). **Tests locaux Python et Debian : NOT_TESTED au commit ; CI quality.yml à vérifier sur SHA exact.** Contrôle statique de 4 points d'insertion exécuté avant commit.
+- **Packaging :** `app/portal/main.py` = IMAGE_TRANSPORT pour le déployeur candidat ; le poller Debian installé portal-only ne transporte pas ce code complet. Aucune modification de `demo_v2.py` local non suivi.
+- **Contrats/limites :** inventaire Core = source non attestée, pas de RBAC tenant nouveau ; SAN→Payments, GLPI, HITL et Evidence restent UNKNOWN sans provenance réelle. Aucune action LIVE.
+- **Verdict :** READY_FOR_STABLE=BLOCKED ; DEMO_READY_DEBIAN=NOT_READY. `applied.sha`, rollback, smoke Debian et navigateur sur le SHA : NOT_TESTED. Remise au coordinateur 5/5, pas de promotion stable.
