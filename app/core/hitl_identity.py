@@ -37,15 +37,18 @@ class SimulatorTokenRequest(BaseModel):
 def identity_health():
     mode = os.getenv("AIOPS_HITL_IDENTITY_MODE", "DISABLED").upper()
     enabled = simulator_enabled()
+    oidc_ready = oidc_configured()
+    if not enabled and oidc_ready:
+        mode = "OIDC"
     return {
         "component": "hitl-identity",
         "mode": mode,
         "simulator_enabled": enabled,
         "simulator_ready": simulator_ready(),
         "production_directory": (
-            "OIDC_CONFIGURED_NOT_QUALIFIED" if oidc_configured() else "NOT_CONFIGURED"
+            "OIDC_CONFIGURED_NOT_QUALIFIED" if oidc_ready else "NOT_CONFIGURED"
         ),
-        "oidc_configured": oidc_configured(),
+        "oidc_configured": oidc_ready,
         "live_approval_ready": False,
         "execution_allowed": False,
     }
