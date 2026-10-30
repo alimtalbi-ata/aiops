@@ -104,11 +104,13 @@ def _qualified_projection(value):
             return False
         try:
             known = datetime.fromisoformat(item["known_at"])
-        except ValueError:
-            return False
-        if (known.tzinfo is None or known.utcoffset() is None
-                or known.astimezone(timezone.utc) >
-                datetime.now(timezone.utc) + timedelta(minutes=5)):
+            if (known.tzinfo is None or known.utcoffset() is None
+                    or known.astimezone(timezone.utc) >
+                    datetime.now(timezone.utc) + timedelta(minutes=5)):
+                return False
+        except (ValueError, OverflowError):
+            # Extreme timezone offsets can overflow UTC normalization.
+            # Reject before any authenticated GLPI request.
             return False
         seen.add(item["evidence_id"])
     return seen == set(ids)
