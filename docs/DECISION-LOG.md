@@ -136,3 +136,17 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Add a dedicated internal-token authenticated, synthetic-only, allowlisted Core Run identity endpoint for the signed NOC join. Reuse the existing NOC tenant-scope refusal in a shared helper rather than silently accepting tenant claims. Require an actual synthetic Incident record in PostgreSQL. Keep the older Core endpoints unchanged in this small lot.
 - **Qualification gate:** Existing GitHub quality workflow with real ephemeral Core HTTP and PostgreSQL 16, plus negative and non-regression tests. An internal token is service authentication, **not** tenant-bound actor identity. No A/B authorized reads or LIVE evidence until Core-owned tenant RBAC is implemented.
 - **Rollback:** Revert the small Core/portal/shared/test/workflow patch together; do not restore anonymous NOC correlation or weaken the LIVE fence.
+
+
+## ADR-0017 — One enterprise control plane and 48-hour vertical-slice convergence
+
+- **Date:** 2026-10-30
+- **Status:** Proposed on `architecture/48h-convergence-20261030`; architecture review required before implementation promotion.
+- **Decision:** Converge all active AIOps work on one Core-owned Incident/Run lifecycle, Temporal-owned orchestration, append-only Evidence, sourced Twin/CMDB, advisory Analyst/Critic, deterministic Policy, Core-owned HITL ledger, separately fenced execution and Portal read models. Use the ACME SAN→Payments P1 synthetic journey as the single 48-hour customer demonstration.
+- **Reason:** The repository contains many overlapping open PRs and feature branches. A single vertical slice with immutable identifiers and evidence is more demonstrable and maintainable than multiple disconnected feature demos or a parallel rewrite.
+- **ITIL 4 alignment:** Map Monitoring/Event Management, Incident Management, Service Desk, Service Configuration, Problem, Knowledge, Change Enablement, Release/Deployment, Service Validation, Information Security, Service Level Management and Continual Improvement to observable states and evidence. This is not a certification claim.
+- **AI governance:** Reuse the existing Analyst/Critic evaluation harness and dataset. Extend the shared invocation path to measure provider-reported tokens, latency, retries and cost only with a pinned pricing source. Missing usage remains UNKNOWN; no model is promoted on cost alone.
+- **Schedule decision:** Retain the five existing ChatGPT schedules and assign 5/5 architecture/release integration. Prefer one daily full GitHub quality schedule plus a 15-minute read-only deployed smoke only after runner installation; do not activate duplicate #189 cadence. Debian auto-deploy #146/#153 remains disabled.
+- **Qualification:** exact-head CI, real ephemeral integration, synthetic E2E, failure injection, package checksums and install/rollback are separate gates. Green CI does not qualify Debian or LIVE.
+- **Safety:** no mass merge, direct main push, production change, cron installation, Docker restart, live migration or LIVE remediation. Any execution requires separate approval, policy recheck, identity, ownership/fencing, preconditions, idempotency, independent verification and rollback.
+- **Rollback:** documentation branch can be reverted as one PR; no runtime or data migration is introduced by this ADR.
