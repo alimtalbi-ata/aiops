@@ -124,14 +124,18 @@ def build_output(system,payload):
     refs=fresh_ids[:5] if severity!="UNKNOWN" else known[:2]
     actions=[]
     if severity!="UNKNOWN":
+        target_ci = "ACME-SAN-FABRIC-A" if snapshots else "ACME-STORAGE-POOL-REPORTING"
         actions=[{"action_id":"CI-COLLECT-READONLY",
                   "intent":"Collect additional read-only diagnostics on the synthetic impacted CI.",
-                  "risk_tier":"LOW","target_ci_id":"ACME-SYNTHETIC",
+                  "risk_tier":"LOW","target_ci_id":target_ci,
+                  "action_type":"COLLECT_DIAGNOSTICS",
+                  "parameters":{"read_only":True,"include_current_state":True},
                   "evidence_ids":refs[:2],
-                  "preconditions":["Confirm scope","No infrastructure state change"],
+                  "preconditions":["Confirm the target CI belongs to the selected incident scope","No infrastructure state change"],
                   "expected_effect":"New read-only observations",
-                  "verification_steps":["Check observed time and independent provenance"],
-                  "rollback_plan":"No side effects; none required.",
+                  "expected_postconditions":["Diagnostics are collected for the declared CI and each observation includes source, observed_at and provenance."],
+                  "verification_steps":["Confirm each diagnostic observation references the target CI and a current source timestamp."],
+                  "rollback_plan":"No state change is made; no rollback is required.",
                   "requires_human_approval":True,"advisory_only":True}]
     return {
         "contract_version":"2.0",
