@@ -183,12 +183,12 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["state"], "READ_ONLY_SESSION_CREATED")
         cookie = response.headers["set-cookie"]
-        self.assertIn("HttpOnly", cookie)
-        self.assertIn("SameSite=strict", cookie)
-        self.assertIn("Path=/runs", cookie)
-        self.assertIn("Max-Age=300", cookie)
+        self.assertIn("httponly", cookie.lower())
+        self.assertIn("samesite=strict", cookie.lower())
+        self.assertIn("path=/runs", cookie.lower())
+        self.assertIn("max-age=300", cookie.lower())
         self.assertNotIn(TOKEN, cookie)
-        self.assertNotIn("Secure", cookie)
+        self.assertNotIn("; secure", cookie.lower())
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()) as core:
             page = self.client.get("/runs/" + RID)
         self.assertEqual(page.status_code, 200)
@@ -240,7 +240,7 @@ class RunDetailTests(unittest.TestCase):
                 headers={"Authorization": "Bearer " + TOKEN},
             )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Secure", response.headers["set-cookie"])
+        self.assertIn("; secure", response.headers["set-cookie"].lower())
 
     def test_no_new_write_endpoint(self):
         self.assertEqual(self.client.post("/api/portal/runs/" + RID).status_code, 405)
