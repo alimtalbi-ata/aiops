@@ -474,6 +474,32 @@ class PolicyDemoResultTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "gate_catalog_binding_invalid"):
                     present_demo_policy_result(r)
 
+    def test_unhashable_snapshot_health_fails_closed(self):
+        # JSON arrays/objects are valid inputs but invalid health enums.
+        for side in ("before", "after"):
+            for invalid in ([], {"forged": "HEALTHY"}):
+                with self.subTest(side=side, invalid=invalid):
+                    r = receipt()
+                    r["projection"][side]["health"] = invalid
+                    with self.assertRaisesRegex(ValueError, "snapshot_schema_invalid"):
+                        present_demo_policy_result(r)
+
+    def test_unhashable_rollback_status_fails_closed(self):
+        for invalid in ([], {"status": "EXECUTED"}):
+            with self.subTest(invalid=invalid):
+                r = receipt()
+                r["projection"]["rollback"]["status"] = invalid
+                with self.assertRaisesRegex(ValueError, "rollback_effect_claim_forbidden"):
+                    present_demo_policy_result(r)
+
+    def test_unhashable_projection_status_fails_closed(self):
+        for invalid in ([], {"status": "SIMULATED_SUCCESS"}):
+            with self.subTest(invalid=invalid):
+                r = receipt()
+                r["projection"]["status"] = invalid
+                with self.assertRaisesRegex(ValueError, "projection_status_invalid"):
+                    present_demo_policy_result(r)
+
     def test_does_not_mutate_input(self):
         r = receipt(); before = copy.deepcopy(r)
         present_demo_policy_result(r)

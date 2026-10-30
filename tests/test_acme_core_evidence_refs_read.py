@@ -108,6 +108,31 @@ class AuthenticatedCoreRefsMockIntegrationTests(unittest.TestCase):
             with self.subTest(kw=kw):
                 self.assertEqual(join(MockCore(**kw))['core_evidence_ref_ids_verified'], [])
 
+    def test_core_content_type_requires_exact_json_media_type(self):
+        # HTTP is mocked. A JSON-shaped body with JSONP MIME must never
+        # confirm even synthetic Core refs; a JSON charset is permitted.
+        for media_type, accepted in (
+            ('application/json', True),
+            ('application/json; charset=utf-8', True),
+            ('APPLICATION/JSON; charset=utf-8', True),
+            ('application/jsonp', False),
+            ('application/json-malformed', False),
+            ('application/json-seq', False),
+            ('text/html', False),
+            ('', False),
+        ):
+            with self.subTest(media_type=media_type):
+                client = MockCore(content_type=media_type)
+                out = join(client)
+                self.assertEqual(len(client.calls), 1)
+                self.assertEqual(out['core_evidence_ref_ids_verified'],
+                                 ['EVD-1'] if accepted else [])
+                self.assertEqual(out['verified_evidence_ids'], [])
+                self.assertIsNone(out['verified_evidence_id'])
+                self.assertIsNone(out['ticket_id'])
+                if not accepted:
+                    self.assertIn('UNKNOWN', out['core_evidence_ref_verification'])
+
     def test_core_tenant_claim_unknown(self):
         bad = {**CORE_RESPONSE, 'organization_id': 'unqualified'}
         self.assertEqual(join(MockCore(bad))['core_evidence_ref_ids_verified'], [])

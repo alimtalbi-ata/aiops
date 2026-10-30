@@ -99,6 +99,22 @@ class LocatorTests(unittest.TestCase):
         run, incident, _ = fixtures(); run["mode"] = "LIVE"
         self.assertEqual(locator.candidates({"items": [run]}, {"items": [incident]}), [])
 
+    def test_replay_and_story_not_mislabeled_as_demo(self):
+        for mode in ("REPLAY", "STORY"):
+            with self.subTest(mode=mode):
+                run, incident, detail = fixtures()
+                run["mode"] = mode
+                detail["run"]["mode"] = mode
+                detail["events"][0]["payload"]["mode"] = mode
+                self.assertEqual(
+                    locator.candidates({"items": [run]}, {"items": [incident]}), [])
+                result = locator.qualify(
+                    "http://core", "http://portal", self.make_get(run, incident, detail),
+                    expected_run_id="RUN-ABC123", expected_incident_id="INC-ABC123")
+                self.assertEqual(result["result"], "UNKNOWN")
+                self.assertEqual(result["reason"], "EXPECTED_PAIR_NOT_QUALIFIED_IN_REGISTRY_WINDOW")
+                self.assertIsNone(result["run_id"])
+
     def test_fixture_not_core_incident(self):
         run, incident, _ = fixtures(); incident["incident_id"] = "INC-OTHER"
         self.assertEqual(locator.candidates({"items": [run]}, {"items": [incident]}), [])
