@@ -1,7 +1,9 @@
 import importlib.util
 import json
+import os
 import pathlib
 import unittest
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("aiops_eval_harness", ROOT / "tools" / "evaluate_ai_core.py")
@@ -107,6 +109,60 @@ class AICoreEvaluationHarnessTests(unittest.TestCase):
         self.assertEqual(metrics["reported_tokens_partial_sum"], 15)
         self.assertFalse(metrics["token_totals_complete"])
         self.assertEqual(metrics["cost_status"], "UNKNOWN_PRICING_NOT_CONFIGURED")
+
+    def test_failed_invocations_keep_latency_error_and_partial_usage_coverage(self):
+        metrics = MODULE.aggregate_model_invocations([
+            {"model_invocations": [
+                {"status": "success", "usage_source": "provider_reported",
+                 "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+                 "latency_ms": 100, "retry_count": 0, "request_count": 1},
+                {"status": "failed", "error_class": "ReadTimeout",
+                 "usage_source": "unavailable", "prompt_tokens": None,
+                 "completion_tokens": None, "total_tokens": None,
+                 "latency_ms": 300000, "retry_count": 0, "request_count": 1},
+            ]}
+        ])
+        self.assertEqual(metrics["model_calls"], 2)
+        self.assertEqual(metrics["successful_calls"], 1)
+        self.assertEqual(metrics["failed_calls"], 1)
+        self.assertEqual(metrics["error_classes"], {"ReadTimeout": 1})
+        self.assertEqual(metrics["usage_coverage"], 0.5)
+        self.assertIsNone(metrics["total_tokens"])
+        self.assertEqual(metrics["reported_tokens_partial_sum"], 15)
+        self.assertEqual(metrics["latency_ms_p50"], 100)
+        self.assertEqual(metrics["latency_ms_p95"], 300000)
+
+    def test_error_response_headers_preserve_provider_invocation_telemetry(self):
+        class Response:
+            status_code = 502
+            headers = {
+                "X-AIOPS-Invocation-Id": "invocation-001",
+                "X-AIOPS-Model-Status": "failed",
+                "X-AIOPS-Model-Error": "ValidationError",
+                "X-AIOPS-Latency-Ms": "1250.5",
+                "X-AIOPS-Request-Count": "2",
+                "X-AIOPS-Retry-Count": "1",
+                "X-AIOPS-Usage-Source": "provider_reported",
+                "X-AIOPS-Prompt-Tokens": "1200",
+                "X-AIOPS-Completion-Tokens": "400",
+                "X-AIOPS-Total-Tokens": "1600",
+                "X-AIOPS-HTTP-Statuses": "200",
+            }
+        invocation = MODULE.invocation_from_error_response(Response(), 1300, "HTTPError")
+        self.assertEqual(invocation["invocation_id"], "invocation-001")
+        self.assertEqual(invocation["error_class"], "ValidationError")
+        self.assertEqual(invocation["latency_ms"], 1250.5)
+        self.assertEqual(invocation["request_count"], 2)
+        self.assertEqual(invocation["retry_count"], 1)
+        self.assertEqual(invocation["total_tokens"], 1600)
+        self.assertEqual(invocation["usage_source"], "provider_reported")
+        self.assertTrue(invocation["provider_invoked"])
+
+    def test_evaluator_timeout_has_buffer_beyond_provider_timeout(self):
+        with patch.dict(os.environ, {
+            "AIOPS_BENCHMARK_TIMEOUT_SECONDS": "300",
+        }, clear=True):
+            self.assertEqual(MODULE.evaluator_timeout_seconds(), 330)
 
     def test_dataset_has_unique_ids_and_required_adversarial_cases(self):
         data = json.loads((ROOT / "eval" / "ai-core-cases.json").read_text(encoding="utf-8"))
