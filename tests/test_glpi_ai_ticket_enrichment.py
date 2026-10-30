@@ -79,11 +79,11 @@ def test_report_contains_human_readable_facts_hypotheses_and_limits():
 
 
 def test_merge_report_preserves_original_and_replaces_owned_section():
-    old = '<section id="aiops2-ai-report">old</section>'
+    old = '<p>[AIOPS2-AI-REPORT:START]</p>old<p>[AIOPS2-AI-REPORT:END]</p>'
     merged = merge_report("Description initiale" + old, "<section id=\"aiops2-ai-report\">new</section>")
     assert merged.startswith("Description initiale")
     assert "old" not in merged
-    assert merged.count('id="aiops2-ai-report"') == 1
+    assert merged.count("[AIOPS2-AI-REPORT:START]") == 1
     assert ">new</section>" in merged
 
 
@@ -122,4 +122,4 @@ def test_internal_sync_updates_existing_ticket_without_duplicate_report(monkeypa
     content = FakeGLPI.tickets["9"]["content"]
     assert content.startswith("Description opérateur d'origine")
     assert "ancienne version" not in content
-    assert content.count('id="aiops2-ai-report"') == 1
+    assert content.count("[AIOPS2-AI-REPORT:START]") == 1
