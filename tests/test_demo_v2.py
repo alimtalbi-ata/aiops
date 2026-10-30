@@ -582,5 +582,68 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("approbation HITL et rollback réels", page)
         self.assertIn("UNKNOWN", page)
 
+    def test_acme_stories_route_never_links_unverified_historical_run(self):
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        with (patch.object(portal_main, "_runs", return_value=[
+                  {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+                  {"run_id": "RUN-DUP", "mode": "DEMO", "status": "BLOCKED"},
+                  {"run_id": "RUN-DUP", "mode": "STORY", "status": "RESOLVED"}]),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("no writes"))):
+            response=TestClient(portal_main.app).get("/acme-stories")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("aucun run DEMO/REPLAY/STORY non ambigu", response.text)
+        self.assertNotIn('href="/demo-studio/run/', response.text)
+        self.assertNotIn("RUN-A4449145A6E377FF", response.text)
+
+    def test_acme_stories_links_only_current_unique_core_run(self):
+        from portal import main as portal_main
+        runs=[
+            {"run_id": "RUN-OLD", "mode": "DEMO", "status": "RUNNING"},
+            {"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"},
+            {"run_id": "RUN-OK", "mode": "REPLAY", "status": "BLOCKED"},
+            {"run_id": "bad/run", "mode": "DEMO", "status": "RESOLVED"},
+        ]
+        with patch.object(portal_main, "_runs", return_value=runs):
+            page=portal_main.acme_stories_page()
+        self.assertIn('href="/demo-studio/run/RUN-OK"', page)
+        self.assertIn('href="/timeline?run_id=RUN-OK"', page)
+        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
+        self.assertNotIn('href="/demo-studio/run/bad', page)
+        self.assertNotIn("RUN-A4449145A6E377FF", page)
+        self.assertIn("inventaire non attesté", page)
+
+    def test_demo_studio_journey_preserves_run_and_unknown_without_one(self):
+        from portal import main as portal_main
+        for runs, selected in [
+            ([{"run_id": "RUN-OK", "mode": "DEMO", "status": "BLOCKED"}], True),
+            ([{"run_id": "RUN-LIVE", "mode": "LIVE", "status": "RESOLVED"}], False),
+        ]:
+            with (self.subTest(selected=selected),
+                  patch.object(portal_main, "_runs", return_value=runs),
+                  patch.object(portal_main, "_get", return_value={}),
+                  patch.object(portal_main, "graph_panel", return_value=""),
+                  patch.object(portal_main, "post_json",
+                               side_effect=AssertionError("no writes"))):
+                page=portal_main.demo_studio()
+            journey=page.split("Parcours opérationnel ACME — navigation guidée",1)[1]
+            if selected:
+                links=[
+                    'href="/timeline?run_id=RUN-OK"',
+                    'href="/demo-studio/run/RUN-OK"',
+                    'href="/demo-studio/run/RUN-OK#demo-ledger-output"',
+                    'href="/demo-studio/run/RUN-OK#demo-evidence-itsm-output"',
+                    'href="/policy-control"',
+                ]
+                positions=[journey.index(link) for link in links]
+                self.assertEqual(positions, sorted(positions))
+            else:
+                self.assertIn("UNKNOWN — aucun run Core qualifié", journey)
+                self.assertNotIn('href="/demo-studio/run/RUN-LIVE"', page)
+                self.assertNotIn('href="/timeline?run_id=RUN-LIVE"', page)
+            self.assertIn("Ticket ITSM GLPI", journey)
+            self.assertIn("aucune liaison attestée", journey)
+
 if __name__ == "__main__":
     unittest.main()

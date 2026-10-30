@@ -76,6 +76,10 @@ class TwinProbeTests(TestCase):
             self.assertEqual(probe.main(["--twin-url", "https://twin.example"], fail), 2)
         self.assertEqual(json.loads(out.getvalue())["reason"], "TWIN_AUTH_READ_FAILED")
 
+    def test_redirect_does_not_forward_twin_bearer(self):
+        self.assertIsNone(probe._RejectRedirects().redirect_request(
+            None, None, 307, "Temporary Redirect", {}, "https://other.example"))
+
     def test_remote_http_refused(self):
         with self.assertRaises(SystemExit) as ctx:
             probe.main(["--twin-url", "http://twin.example"], lambda *a: self.fail("unexpected call"))

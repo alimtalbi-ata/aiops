@@ -375,15 +375,27 @@ def demo_studio():
                     +' · sévérité '+esc(incident.get("severity") or "UNKNOWN")
                     +' · état incident '+esc(incident.get("state") or "UNKNOWN")
                     +'. Corrélation SAN → Payments : UNKNOWN sans arêtes sourcées.</p>')
+    # Deep links stay on the same unambiguous Core run; no fixture fallback.
+    if selected:
+        run_path="/demo-studio/run/"+rid
+        timeline_link='<a href="/timeline?run_id='+rid+'">Timeline du même run</a>'
+        analyst_link='<a href="'+run_path+'">Analyst / Critic du même run</a>'
+        evidence_link='<a href="'+run_path+'#demo-ledger-output">Evidence du même run (viewer)</a>'
+        itsm_link='<a href="'+run_path+'#demo-evidence-itsm-output">ITSM du même run (viewer)</a>'
+    else:
+        timeline_link='<a href="/timeline">Timeline (sélection Core requise)</a>'
+        analyst_link='UNKNOWN — aucun run Core qualifié'
+        evidence_link='UNKNOWN — registre viewer sans run qualifié'
+        itsm_link='UNKNOWN — aucun ticket GLPI attesté'
     body+=panel("Parcours opérationnel ACME — navigation guidée",
         '<ol><li><a href="/">Cockpit NOC / enjeu Payments</a></li>'
         '<li><a href="/runs">Registre Core des runs</a></li>'
         '<li><a href="/twin">SAN et dépendances Twin</a> — impact Payments à confirmer</li>'
-        '<li><a href="/timeline">Investigation Core et Analyst/Critic</a></li>'
-        '<li>Ticket ITSM GLPI : <strong>UNKNOWN</strong> — aucune liaison de ticket attestée '
-        '(<a href="/acme-stories">contexte métier</a>)</li>'
-        '<li><a href="/policy-control">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li>'
-        '<li><a href="/evidence">Evidence et provenance</a> — aucune remédiation LIVE</li></ol>'
+        '<li>'+timeline_link+'</li>'
+        '<li>'+analyst_link+'</li>'
+        '<li>'+evidence_link+' — provenance SYNTHETIC/REAL à vérifier</li>'
+        '<li>Ticket ITSM GLPI : '+itsm_link+' — aucune liaison attestée</li>'
+        '<li><a href="/policy-control">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li></ol>'
         +run_entry+incident_entry)
     body+=graph_panel(graph,impact=impact)
     body+=panel("Exécutions de démonstration déjà enregistrées",
@@ -656,9 +668,20 @@ def acme_stories_page():
             ("Maturité",maturity[story["status"]]),
         ]
         body+=panel(story["title"],table(["Rubrique","Scénario ACME"],lines))
-    body+=panel("Démonstrations vérifiables",
-        '<p><a href="/demo-studio/run/RUN-A4449145A6E377FF">Analyse DGX historique et Critic</a> · '
-        '<a href="/qualification-lab">Laboratoire de scénarios</a> · '
+    # Historical run IDs are not proof that the current Core inventory has them.
+    from urllib.parse import quote
+    eligible=_qualified_demo_runs(_runs())
+    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
+                  eligible[0] if eligible else None)
+    if selected:
+        rid=quote(selected["run_id"],safe="")
+        core_link=('<a href="/demo-studio/run/'+rid+'">Run Core (inventaire non attesté)</a> · '
+                   '<a href="/timeline?run_id='+rid+'">Timeline du même run</a> · ')
+    else:
+        core_link='<strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY non ambigu accessible · '
+    body+=panel("Explorer les runs Core — provenance à vérifier",
+        '<p>'+core_link
+        +'<a href="/qualification-lab">Laboratoire de scénarios (SIMULATED)</a> · '
         '<a href="/copilot">Copilot ACME</a></p>')
     return shell("/demo-studio","Histoires métier ACME",
                  "Parcours clients, sécurité, limites et preuves réellement disponibles.",body)

@@ -16,6 +16,8 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 _TICKET = re.compile(r"[1-9][0-9]{0,17}\Z")
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+_SHA = re.compile(r"[a-f0-9]{64}\Z")
+_SOURCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _MAX_BYTES = 65536
 
 
@@ -53,6 +55,45 @@ def _token(value):
             and value.isascii() and not any(ch.isspace() for ch in value))
 
 
+def _qualified_projection(value):
+    """Require the existing Core ledger projection, not arbitrary joined IDs.
+
+    These checks establish internal referential consistency only. A Core
+    evidence reference is NOT an authenticated capture or a tenant ACL proof.
+    """
+    if (value.get("schema") != "aiops.acme-itsm-evidence-link.v1"
+            or value.get("state") != "CORRELATED_UNATTESTED"
+            or value.get("classification") != "SYNTHETIC_ONLY"
+            or value.get("evidence_source_contract") != "CORE_AI_LEDGER_INTERNAL_READ"
+            or value.get("tenant_acl_qualified") is not False
+            or value.get("runtime_attested") is not False
+            or value.get("effect_applied") is not False
+            or value.get("live_remediation_authorized") is not False):
+        return False
+    ids, refs = value.get("evidence_ids"), value.get("evidence_refs")
+    if (not isinstance(ids, list) or not 1 <= len(ids) <= 80
+            or not isinstance(refs, list) or len(refs) != len(ids)
+            or any(not isinstance(x, str) or _ID.fullmatch(x) is None for x in ids)
+            or len(set(ids)) != len(ids)):
+        return False
+    seen = set()
+    for item in refs:
+        if (not isinstance(item, dict)
+                or set(item) != {"evidence_id", "source", "payload_sha256", "known_at"}
+                or not isinstance(item["evidence_id"], str)
+                or _ID.fullmatch(item["evidence_id"]) is None
+                or not isinstance(item["source"], str)
+                or _SOURCE.fullmatch(item["source"]) is None
+                or not isinstance(item["payload_sha256"], str)
+                or _SHA.fullmatch(item["payload_sha256"]) is None
+                or not isinstance(item["known_at"], str)
+                or not item["known_at"] or len(item["known_at"]) > 48
+                or item["evidence_id"] in seen):
+            return False
+        seen.add(item["evidence_id"])
+    return seen == set(ids)
+
+
 def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
                             app_token=None, opener=None):
     """GET one claimed Ticket; fail closed on unavailable/ambiguous linkage.
@@ -71,7 +112,7 @@ def read_verified_glpi_link(correlation, *, base_url=None, session_token=None,
     claim = result.get("glpi_ticket_claim")
     run_id, incident_id = result.get("run_id"), result.get("incident_id")
     origin = _configured_origin(base_url)
-    if (result.get("state") != "CORRELATED_UNATTESTED"
+    if (not _qualified_projection(result)
             or not isinstance(claim, str) or _TICKET.fullmatch(claim) is None
             or not isinstance(run_id, str) or _ID.fullmatch(run_id) is None
             or not isinstance(incident_id, str) or _ID.fullmatch(incident_id) is None

@@ -1,8 +1,11 @@
 """Offline negative contracts for bearer-protected ACME evidence probe."""
 import importlib.util
+import io
+import os
 from pathlib import Path
 from urllib.error import HTTPError
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     "find_acme_demo_run", Path(__file__).resolve().parents[1] / "tools/find_acme_demo_run.py"
@@ -27,7 +30,7 @@ class AuthEvidenceProbeTests(unittest.TestCase):
         def get(base, path, token=None):
             calls.append((path, token))
             return response()
-        result = locator.probe_authenticated_evidence("http://core", RID, "secret", get)
+        result = locator.probe_authenticated_evidence("https://core.example", RID, "secret", get)
         self.assertEqual(result, {"status": "SOURCE_VERIFIED_SYNTHETIC_ONLY",
                                   "reference_count": 1, "tenant_acl_qualified": False,
                                   "runtime_attested": False})
@@ -38,40 +41,84 @@ class AuthEvidenceProbeTests(unittest.TestCase):
     def test_no_token_makes_no_call(self):
         def get(*args, **kwargs):
             raise AssertionError("must not call")
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "", get)["reason"], "TOKEN_NOT_CONFIGURED")
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "", get)["reason"], "TOKEN_NOT_CONFIGURED")
 
     def test_unauthorized_fails_closed(self):
         def get(*args, **kwargs):
-            raise HTTPError("http://core", 401, "unauthorized", {}, None)
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "secret", get)["reason"], "AUTH_EVIDENCE_READ_FAILED")
+            raise HTTPError("https://core.example", 401, "unauthorized", {}, None)
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "secret", get)["reason"], "AUTH_EVIDENCE_READ_FAILED")
 
     def test_missing_analysis_fails_closed(self):
         def get(*args, **kwargs):
-            raise HTTPError("http://core", 503, "unqualified", {}, None)
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "secret", get)["status"], "UNKNOWN")
+            raise HTTPError("https://core.example", 503, "unqualified", {}, None)
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "secret", get)["status"], "UNKNOWN")
 
     def test_mismatched_run_fails_closed(self):
         value = response(); value["run_id"] = "RUN-OTHER"
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "secret", lambda *a, **k: value)["reason"], "EVIDENCE_CONTRACT_MISMATCH")
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "secret", lambda *a, **k: value)["reason"], "EVIDENCE_CONTRACT_MISMATCH")
 
     def test_claimed_runtime_or_tenant_attestation_rejected(self):
         for field in ("tenant_acl_qualified", "runtime_attested"):
             value = response(); value[field] = True
             with self.subTest(field=field):
-                self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "secret", lambda *a, **k: value)["status"], "UNKNOWN")
+                self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "secret", lambda *a, **k: value)["status"], "UNKNOWN")
 
     def test_bad_hash_fails_closed(self):
         value = response(); value["items"][0]["payload_sha256"] = "not-a-hash"
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "secret", lambda *a, **k: value)["reason"], "EVIDENCE_CONTRACT_MISMATCH")
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "secret", lambda *a, **k: value)["reason"], "EVIDENCE_CONTRACT_MISMATCH")
 
     def test_no_evidence_items_fails_closed(self):
         value = response(); value["items"] = []
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", RID, "secret", lambda *a, **k: value)["status"], "UNKNOWN")
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", RID, "secret", lambda *a, **k: value)["status"], "UNKNOWN")
+
+    def test_nonloopback_http_rejected_before_bearer_request(self):
+        def get(*args, **kwargs):
+            raise AssertionError("bearer must never be sent over remote HTTP")
+        result = locator.probe_authenticated_evidence(
+            "http://core.example", RID, "secret", get)
+        self.assertEqual(result["reason"], "AUTH_TRANSPORT_UNSAFE")
+
+    def test_loopback_http_remains_usable_for_operator(self):
+        result = locator.probe_authenticated_evidence(
+            "http://127.0.0.1:810", RID, "secret",
+            lambda *args, **kwargs: response())
+        self.assertEqual(result["status"], "SOURCE_VERIFIED_SYNTHETIC_ONLY")
+
+    def test_redirects_are_refused_without_forwarding_credentials(self):
+        self.assertIsNone(locator._RejectRedirects().redirect_request(
+            None, None, 302, "Found", {}, "https://other.example"))
+
+    def test_main_auth_failure_is_nonzero_even_with_registry_match(self):
+        verified = {"result": "SOURCE_VERIFIED_REGISTRY_ONLY", "run_id": RID}
+        with mock.patch.object(locator, "qualify", return_value=verified), \
+             mock.patch.object(locator, "probe_authenticated_evidence",
+                               return_value={"status": "UNKNOWN", "reason": "AUTH_EVIDENCE_READ_FAILED"}), \
+             mock.patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "secret"}), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            code = locator.main(["--core-url", "https://core.example",
+                                 "--portal-url", "https://portal.example",
+                                 "--probe-auth-evidence"])
+        self.assertEqual(code, 2)
+        self.assertNotIn("secret", out.getvalue())
+
+    def test_main_auth_success_preserves_registry_only_classification(self):
+        verified = {"result": "SOURCE_VERIFIED_REGISTRY_ONLY", "run_id": RID}
+        with mock.patch.object(locator, "qualify", return_value=verified), \
+             mock.patch.object(locator, "probe_authenticated_evidence",
+                               return_value={"status": "SOURCE_VERIFIED_SYNTHETIC_ONLY"}), \
+             mock.patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "secret"}), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            code = locator.main(["--core-url", "https://core.example",
+                                 "--portal-url", "https://portal.example",
+                                 "--probe-auth-evidence"])
+        self.assertEqual(code, 0)
+        self.assertIn("SOURCE_VERIFIED_REGISTRY_ONLY", out.getvalue())
+        self.assertNotIn("secret", out.getvalue())
 
     def test_invalid_run_id_makes_no_call(self):
         def get(*args, **kwargs):
             raise AssertionError("must not call")
-        self.assertEqual(locator.probe_authenticated_evidence("http://core", "../../escape", "secret", get)["reason"], "RUN_ID_UNQUALIFIED")
+        self.assertEqual(locator.probe_authenticated_evidence("https://core.example", "../../escape", "secret", get)["reason"], "RUN_ID_UNQUALIFIED")
 
 
 if __name__ == "__main__":

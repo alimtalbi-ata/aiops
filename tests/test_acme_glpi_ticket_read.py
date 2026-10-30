@@ -7,11 +7,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 from shared.acme_glpi_ticket_read import read_verified_glpi_link
 
+REF = {'evidence_id': 'EVD-1', 'source': 'CORE', 'payload_sha256': 'a'*64,
+       'known_at': '2026-10-29T23:00:00+00:00'}
 BASE = {'schema': 'aiops.acme-itsm-evidence-link.v1', 'state': 'CORRELATED_UNATTESTED',
         'run_id': 'RUN-1', 'incident_id': 'INC-1', 'glpi_ticket_claim': '12345',
         'ticket_id': None, 'ticket_verification': 'NOT_TESTED_NO_GLPI_API_READ',
         'classification': 'SYNTHETIC_ONLY', 'runtime_attested': False,
-        'tenant_acl_qualified': False, 'evidence_ids': ['EVD-1']}
+        'tenant_acl_qualified': False, 'effect_applied': False,
+        'live_remediation_authorized': False,
+        'evidence_source_contract': 'CORE_AI_LEDGER_INTERNAL_READ',
+        'evidence_refs': [REF], 'evidence_ids': ['EVD-1']}
 GOOD = {'id': 12345, 'run_id': 'RUN-1', 'incident_id': 'INC-1', 'is_deleted': 0}
 
 
@@ -118,6 +123,36 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
         out = read_verified_glpi_link(None)
         self.assertEqual(out['state'], 'UNKNOWN')
         self.assertIsNone(out['ticket_id'])
+
+    def test_unqualified_provenance_cannot_trigger_glpi_get(self):
+        for field, value in (('schema', 'other'), ('classification', 'REAL'),
+                             ('evidence_source_contract', 'UNVERIFIED'),
+                             ('tenant_acl_qualified', True), ('runtime_attested', True),
+                             ('effect_applied', True), ('live_remediation_authorized', True)):
+            with self.subTest(field=field):
+                client = MockOpener()
+                result = verify({**BASE, field: value}, opener=client)
+                self.assertIsNone(result['ticket_id'])
+                self.assertEqual(client.calls, [])
+
+    def test_unlinked_evidence_cannot_trigger_glpi_get(self):
+        for refs, ids in (([], ['EVD-1']), ([REF], ['EVD-2']),
+                          ([REF, REF], ['EVD-1', 'EVD-2']),
+                          ([{**REF, 'payload_sha256': 'bad'}], ['EVD-1']),
+                          ([{**REF, 'source': 'x/y'}], ['EVD-1']),
+                          ([{**REF, 'known_at': ''}], ['EVD-1'])):
+            with self.subTest(refs=refs, ids=ids):
+                client = MockOpener()
+                result = verify({**BASE, 'evidence_refs': refs, 'evidence_ids': ids}, opener=client)
+                self.assertIsNone(result['ticket_id'])
+                self.assertEqual(client.calls, [])
+
+    def test_forged_legacy_ids_only_cannot_trigger_glpi_get(self):
+        client = MockOpener()
+        result = verify({key: BASE[key] for key in ('state', 'run_id', 'incident_id',
+                         'glpi_ticket_claim', 'evidence_ids')}, opener=client)
+        self.assertIsNone(result['ticket_id'])
+        self.assertEqual(client.calls, [])
 
 
 if __name__ == '__main__': unittest.main()
