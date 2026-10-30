@@ -14,6 +14,7 @@ def receipt(status="SIMULATED_SUCCESS", gate_status="SIMULATED"):
         "evidence_ids": ["EVD-ACME-OFFLINE-1"], "receipt_digest": "a" * 64,
         "core_run_verified": False, "evidence_verified": False, "effect_applied": False, "persisted": False,
         "projection": {
+            "synthetic": True, "provenance": "WHAT_IF_FIXTURE_NOT_OBSERVED",
             "mode": "DEMO", "status": status, "recipe_id": "ansible-service-restart",
             "target_ci": "ACME-LNX-01", "proposal_digest": "b" * 64,
             "idempotency_key": "c" * 64,
@@ -79,6 +80,23 @@ class PolicyDemoResultTests(unittest.TestCase):
         r = receipt(); r["projection"]["rollback"]["effect_applied"] = True
         with self.assertRaisesRegex(ValueError, "rollback_effect_claim_forbidden"):
             present_demo_policy_result(r)
+
+    def test_forged_projection_provenance_rejected(self):
+        for key, value in (("synthetic", False), ("provenance", "OBSERVED")):
+            with self.subTest(key=key):
+                r = receipt(); r["projection"][key] = value
+                with self.assertRaisesRegex(ValueError, "projection_provenance_invalid"):
+                    present_demo_policy_result(r)
+
+    def test_forged_rollback_status_or_state_rejected(self):
+        for key, value in (
+            ("status", "EXECUTED"), ("executed", True),
+            ("projected_state", {"target_ci": "ACME-LNX-01", "health": "HEALTHY", "service_available": True}),
+        ):
+            with self.subTest(key=key):
+                r = receipt(); r["projection"]["rollback"][key] = value
+                with self.assertRaisesRegex(ValueError, "rollback_effect_claim_forbidden"):
+                    present_demo_policy_result(r)
 
     def test_real_receipt_builder_success_and_failure(self):
         """Exercise the existing receipt -> projection -> local gate -> presentation chain."""

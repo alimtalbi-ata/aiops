@@ -41,6 +41,8 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(projection, dict) or not isinstance(projection.get("gate"), dict):
         raise ValueError("projection_missing")
     gate = projection["gate"]
+    if projection.get("synthetic") is not True or projection.get("provenance") != "WHAT_IF_FIXTURE_NOT_OBSERVED":
+        raise ValueError("projection_provenance_invalid")
     if projection.get("mode") not in ("DEMO", "REPLAY", "STORY") or gate.get("mode") != projection["mode"]:
         raise ValueError("mode_not_demo")
     if (
@@ -68,7 +70,13 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if projection.get("effect_applied") is not False or projection.get("postchecks") != "NOT_RUN":
         raise ValueError("projection_effect_claim_forbidden")
     rollback = projection.get("rollback")
-    if not isinstance(rollback, dict) or rollback.get("effect_applied") is not False:
+    if (
+        not isinstance(rollback, dict)
+        or rollback.get("effect_applied") is not False
+        or rollback.get("status") not in {"NOT_REQUIRED", "PROJECTED_ONLY", "AVAILABLE_AS_PROJECTION"}
+        or rollback.get("executed", False) is not False
+        or ("projected_state" in rollback and rollback["projected_state"] != projection.get("before"))
+    ):
         raise ValueError("rollback_effect_claim_forbidden")
     before, after = projection.get("before"), projection.get("after")
     if not isinstance(before, dict) or not isinstance(after, dict) or before.get("target_ci") != projection["target_ci"] or after.get("target_ci") != projection["target_ci"]:
