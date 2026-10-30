@@ -98,3 +98,50 @@ class GLPIClient:
             "range":f"0-{max(1,min(int(limit),100))-1}",
         }
         return self._call("GET","search/Ticket",params=params)
+
+    def create_ticket(self, name, content, *, priority=3):
+        """Create one GLPI incident ticket and return its numeric identifier."""
+        payload = {
+            "input": {
+                "name": str(name)[:250],
+                "content": str(content),
+                "type": 1,
+                "status": 1,
+                "priority": max(1, min(int(priority), 6)),
+            }
+        }
+        result = self._call("POST", "Ticket", json=payload)
+        ticket_id = result.get("id") if isinstance(result, dict) else None
+        if isinstance(ticket_id, int):
+            ticket_id = str(ticket_id)
+        if not isinstance(ticket_id, str) or not ticket_id.isdigit():
+            raise GLPIError("glpi_ticket_create_id_missing")
+        return ticket_id
+
+    def update_ticket(self, ticket_id, fields):
+        """Update a GLPI ticket using the REST API input envelope."""
+        if not str(ticket_id).isdigit():
+            raise ValueError("invalid_glpi_ticket_id")
+        if not isinstance(fields, dict) or not fields:
+            raise ValueError("ticket_fields_required")
+        return self._call("PUT", "Ticket/" + str(ticket_id),
+                          json={"input": fields})
+
+    def find_ticket_for_run(self, run_id):
+        """Return the unique ticket whose title explicitly contains this Run ID."""
+        if not isinstance(run_id, str) or not run_id.startswith("RUN-"):
+            raise ValueError("invalid_run_id")
+        result = self.search_tickets(run_id, limit=100)
+        rows = result.get("data", []) if isinstance(result, dict) else []
+        matches = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("2", row.get("name", "")))
+            ticket_id = row.get("1", row.get("id"))
+            if run_id in name and str(ticket_id).isdigit():
+                matches.append(str(ticket_id))
+        matches = sorted(set(matches))
+        if len(matches) > 1:
+            raise GLPIError("multiple_glpi_tickets_for_run")
+        return matches[0] if matches else None
