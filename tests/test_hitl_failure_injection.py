@@ -255,5 +255,50 @@ class OfflineFailureInjection(unittest.TestCase):
         self.assertEqual(fake.calls, ["start_run", "execute_stage", "execute_stage", "finish_run"])
 
 
+    def test_revoked_approval_signal_conflict_stays_blocked(self):
+        # A subsequent committed revoke is a REJECT notification, not a grant.
+        result, calls, state = simulate(
+            signal(decision="APPROVE", source_status="APPROVED"),
+            signal(decision="REJECT", source_status="REVOKED"),
+        )
+        self.assertTrue(state._hitl_conflict)
+        self.assertEqual(result["reason"], "hitl_timeout_or_conflicting_signal")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertIs(result["effect_allowed"], False)
+        self.assertEqual(calls, ["start_run", "execute_stage"])
+
+    def test_forged_temporal_actor_tenant_mfa_cannot_authorize(self):
+        # A signal may carry untrusted identity/scope claims; none authorize.
+        forged = signal(
+            decision="APPROVE", actor_id="oidc:synthetic-fixture",
+            tenant_id="OTHER-TENANT", target_ci_id="OTHER-CI",
+            mfa=True, execution_allowed=True, effect_allowed=True,
+        )
+        result, calls, _ = simulate(forged)
+        self.assertEqual(result["reason"], "human_decision_recorded_execution_gate_closed")
+        self.assertIs(result["execution_allowed"], False)
+        self.assertIs(result["effect_allowed"], False)
+        self.assertNotIn("REMEDIATE", calls)
+        self.assertNotIn("finish_run", calls)
+
+    def test_every_temporal_workflow_return_explicitly_fences_effects(self):
+        # Static contract: all final return paths deny both execution and effects.
+        tree = ast.parse((ROOT / "app/worker/workflow.py").read_text())
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef)
+                   and n.name == "IncidentWorkflow")
+        run = next(n for n in cls.body if isinstance(n, ast.AsyncFunctionDef)
+                   and n.name == "run")
+        returns = [n.value for n in ast.walk(run) if isinstance(n, ast.Return)]
+        self.assertGreaterEqual(len(returns), 9)
+        for receipt in returns:
+            self.assertIsInstance(receipt, ast.Dict)
+            fields = {key.value: value for key, value in zip(receipt.keys, receipt.values)
+                      if isinstance(key, ast.Constant) and isinstance(key.value, str)}
+            for flag in ("execution_allowed", "effect_allowed"):
+                self.assertIn(flag, fields)
+                self.assertIsInstance(fields[flag], ast.Constant)
+                self.assertIs(fields[flag].value, False)
+
+
 if __name__ == "__main__":
     unittest.main()
