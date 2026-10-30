@@ -84,5 +84,104 @@ class OutboxFaultTests(unittest.TestCase):
         self.assertFalse(any("insert into" in s.lower() for s in db.queries))
 
 
+    def test_oidc_role_escalation_rejected_before_db(self):
+        # The browser-supplied role cannot exceed verified OIDC entitlements.
+        db = DB()
+        approve = core("record_proposal_approval", db, IdentityError=ValueError,
+                       require_live_assertion=lambda token: {
+                           "subject_id": "oidc:offline", "roles": ["operator"]})
+        with self.assertRaises(HTTPException) as ctx:
+            approve("ACT", {"proposal_hash": "hash", "actor_role": "security_admin",
+                            "decision": "APPROVE", "nonce": "offline-role", "scope": {}},
+                    authorization="offline")
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail),
+                         (403, "requested_approval_role_not_in_verified_oidc_entitlements"))
+        self.assertEqual(db.queries, [])
+
+    def test_proposal_hash_and_scope_mismatch_never_write(self):
+        # In-memory LIVE-labelled row exercises a denial branch; no real LIVE call.
+        future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10)
+        row = ("RUN", "LIVE", "CI", "COLLECT_DIAGNOSTICS", "LOW",
+               "hash", "PROPOSED", future, 1)
+        exact = {"proposal_hash": "hash", "target_ci_id": "CI",
+                 "action_type": "COLLECT_DIAGNOSTICS"}
+        for digest, scope, detail in (
+            ("stale-hash", exact, "proposal_hash_mismatch"),
+            ("hash", {"proposal_hash": "hash", "target_ci_id": "OTHER",
+                      "action_type": "COLLECT_DIAGNOSTICS"},
+             "approval_scope_must_match_exact_proposal"),
+        ):
+            with self.subTest(detail=detail):
+                db = DB(row)
+                approve = core("record_proposal_approval", db, IdentityError=ValueError,
+                               require_live_assertion=lambda token: {
+                                   "subject_id": "oidc:offline", "roles": ["operator"]})
+                with self.assertRaises(HTTPException) as ctx:
+                    approve("ACT", {"proposal_hash": digest, "actor_role": "operator",
+                                    "decision": "APPROVE", "nonce": "offline-scope",
+                                    "scope": scope}, authorization="offline")
+                self.assertEqual((ctx.exception.status_code, ctx.exception.detail), (409 if detail == "proposal_hash_mismatch" else 422, detail))
+                self.assertFalse(any("insert into" in sql.lower() for sql in db.queries))
+
+    def test_expired_proposal_rejected_without_decision_write(self):
+        # Scripted DB responses: proposal row then no nonce collision.
+        class ScriptedDB(DB):
+            def __init__(self, rows):
+                super().__init__()
+                self.rows = list(rows)
+            def fetchone(self):
+                return self.rows.pop(0) if self.rows else None
+        expired = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+        db = ScriptedDB([("RUN", "LIVE", "CI", "COLLECT_DIAGNOSTICS",
+                          "LOW", "hash", "PROPOSED", expired, 1), None])
+        approve = core("record_proposal_approval", db, IdentityError=ValueError,
+                       require_live_assertion=lambda token: {
+                           "subject_id": "oidc:offline", "roles": ["operator"]})
+        with self.assertRaises(HTTPException) as ctx:
+            approve("ACT", {"proposal_hash": "hash", "actor_role": "operator",
+                            "decision": "APPROVE", "nonce": "offline-expired",
+                            "scope": {"proposal_hash": "hash", "target_ci_id": "CI",
+                                      "action_type": "COLLECT_DIAGNOSTICS"}},
+                    authorization="offline")
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail),
+                         (409, "proposal_expired"))
+        self.assertFalse(any("insert into" in sql.lower() for sql in db.queries))
+
+    def test_nonce_replay_is_idempotent_only_for_identical_decision(self):
+        import json
+        class ScriptedDB(DB):
+            def __init__(self, rows):
+                super().__init__()
+                self.rows = list(rows)
+            def fetchone(self):
+                return self.rows.pop(0) if self.rows else None
+        future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10)
+        proposal = ("RUN", "LIVE", "CI", "COLLECT_DIAGNOSTICS",
+                    "LOW", "hash", "PROPOSED", future, 1)
+        scope = {"proposal_hash": "hash", "target_ci_id": "CI",
+                 "action_type": "COLLECT_DIAGNOSTICS"}
+        prior = ("APR-OFFLINE", "ACT", "hash", "APPROVE", "oidc:offline",
+                 "operator", json.dumps(scope), json.dumps({}))
+        def check(decision):
+            db = ScriptedDB([proposal, prior])
+            approve = core("record_proposal_approval", db, IdentityError=ValueError,
+                           json=json, require_live_assertion=lambda token: {
+                               "subject_id": "oidc:offline", "roles": ["operator"]})
+            payload = {"proposal_hash": "hash", "actor_role": "operator",
+                       "decision": decision, "nonce": "offline-replay", "scope": scope}
+            return db, approve, payload
+        db, approve, payload = check("APPROVE")
+        receipt = approve("ACT", payload, authorization="offline")
+        self.assertIs(receipt["idempotent"], True)
+        self.assertIs(receipt["execution_allowed"], False)
+        self.assertFalse(any("insert into" in sql.lower() for sql in db.queries))
+        db, approve, payload = check("REJECT")
+        with self.assertRaises(HTTPException) as ctx:
+            approve("ACT", payload, authorization="offline")
+        self.assertEqual((ctx.exception.status_code, ctx.exception.detail),
+                         (409, "approval_nonce_reuse"))
+        self.assertFalse(any("insert into" in sql.lower() for sql in db.queries))
+
+
 if __name__ == "__main__":
     unittest.main()
