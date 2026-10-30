@@ -14,6 +14,144 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 class IntelligenceContractTests(unittest.TestCase):
+    def test_provider_usage_is_extracted_without_estimation(self):
+        usage = MODULE.extract_provider_usage({
+            "usage": {
+                "prompt_tokens": 120,
+                "completion_tokens": 35,
+                "total_tokens": 155,
+                "prompt_tokens_details": {"cached_tokens": 20},
+                "completion_tokens_details": {"reasoning_tokens": 8},
+            }
+        })
+        self.assertEqual(usage["usage_source"], "provider_reported")
+        self.assertEqual(usage["prompt_tokens"], 120)
+        self.assertEqual(usage["completion_tokens"], 35)
+        self.assertEqual(usage["total_tokens"], 155)
+        self.assertEqual(usage["cached_tokens"], 20)
+        self.assertEqual(usage["reasoning_tokens"], 8)
+
+    def test_missing_or_malformed_provider_usage_remains_unknown(self):
+        missing = MODULE.extract_provider_usage({"choices": []})
+        malformed = MODULE.extract_provider_usage({"usage": {"prompt_tokens": "120"}})
+        self.assertEqual(missing["usage_source"], "unavailable")
+        self.assertIsNone(missing["total_tokens"])
+        self.assertEqual(malformed["usage_source"], "unavailable")
+        self.assertIsNone(malformed["prompt_tokens"])
+
+    def test_critic_schema_repair_aggregates_both_provider_usage_records(self):
+        MODULE.BASE = "https://llm.example.invalid/v1"
+        MODULE.MODEL = "benchmark-fixture"
+        first = {
+            "choices": [{"message": {"content": json.dumps({
+                "validated": False,
+                "claim_checks": [{
+                    "claim": "path health is unknown", "supported": False,
+                    "supporting_evidence_ids": [], "contradicting_evidence_ids": [],
+                }],
+                "diagnostic_confidence": 0.2,
+                "final_recommendation": "HUMAN_APPROVAL",
+                "unexpected": "must trigger one schema repair",
+            })}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        }
+        second = {
+            "choices": [{"message": {"content": json.dumps({
+                "validated": False, "issues": [], "unsafe_actions": [],
+                "additional_evidence_needed": [], "limitations": [],
+                "claim_checks": [{
+                    "claim": "path health is unknown", "supported": False,
+                    "supporting_evidence_ids": [], "contradicting_evidence_ids": [],
+                }],
+                "diagnostic_confidence": 0.2,
+                "final_recommendation": "HUMAN_APPROVAL",
+            })}}],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 6, "total_tokens": 18},
+        }
+
+        class FakeResponse:
+            status_code = 200
+            def __init__(self, payload):
+                self.payload = payload
+            def raise_for_status(self):
+                return None
+            def json(self):
+                return self.payload
+
+        with patch.object(MODULE.requests, "post", side_effect=[
+            FakeResponse(first), FakeResponse(second)
+        ]) as post:
+            result = MODULE.call_model("critic", {"incident": {}}, MODULE.Critique)
+        telemetry = MODULE.model_call_telemetry()
+        self.assertFalse(result.validated)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(telemetry["request_count"], 2)
+        self.assertEqual(telemetry["retry_count"], 1)
+        self.assertEqual(telemetry["prompt_tokens"], 22)
+        self.assertEqual(telemetry["completion_tokens"], 11)
+        self.assertEqual(telemetry["total_tokens"], 33)
+        self.assertEqual(telemetry["usage_source"], "provider_reported")
+        self.assertIsNone(telemetry["cost_usd"])
+        self.assertIsNone(telemetry["pricing_source"])
+        self.assertEqual(post.call_args_list[0].kwargs["json"]["max_tokens"], MODULE.MAX_OUTPUT_TOKENS)
+
+    def test_failed_timeout_exposes_latency_and_error_class_without_raw_exception(self):
+        MODULE.BASE = "https://llm.example.invalid/v1"
+        MODULE.MODEL = "benchmark-fixture"
+        with patch.object(MODULE.requests, "post", side_effect=requests.Timeout("private endpoint detail")):
+            with self.assertRaises(HTTPException) as caught:
+                MODULE.call_model("analyst", {"incident": {}}, MODULE.Analyst)
+        self.assertEqual(caught.exception.status_code, 502)
+        self.assertEqual(caught.exception.detail, "model_unavailable_or_invalid_output")
+        headers = caught.exception.headers
+        self.assertEqual(headers["X-AIOPS-Model-Status"], "failed")
+        self.assertEqual(headers["X-AIOPS-Model-Error"], "Timeout")
+        self.assertEqual(headers["X-AIOPS-Request-Count"], "1")
+        self.assertEqual(headers["X-AIOPS-Usage-Source"], "unavailable")
+        self.assertTrue(headers["X-AIOPS-Invocation-Id"])
+        self.assertGreater(float(headers["X-AIOPS-Latency-Ms"]), 0)
+        self.assertNotIn("private endpoint detail", str(headers))
+        self.assertEqual(MODULE.model_call_telemetry()["status"], "failed")
+
+    def test_failed_schema_validation_preserves_provider_reported_usage(self):
+        MODULE.BASE = "https://llm.example.invalid/v1"
+        MODULE.MODEL = "benchmark-fixture"
+
+        class FakeResponse:
+            status_code = 200
+            def raise_for_status(self):
+                return None
+            def json(self):
+                return {
+                    "choices": [{"message": {"content": json.dumps({"unexpected": True})}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                }
+
+        with patch.object(MODULE.requests, "post", return_value=FakeResponse()):
+            with self.assertRaises(HTTPException) as caught:
+                MODULE.call_model("analyst", {"incident": {}}, MODULE.Analyst)
+        headers = caught.exception.headers
+        self.assertEqual(headers["X-AIOPS-Model-Error"], "ValidationError")
+        self.assertEqual(headers["X-AIOPS-Usage-Source"], "provider_reported")
+        self.assertEqual(headers["X-AIOPS-Prompt-Tokens"], "10")
+        self.assertEqual(headers["X-AIOPS-Completion-Tokens"], "5")
+        self.assertEqual(headers["X-AIOPS-Total-Tokens"], "15")
+
+    def test_request_context_budget_fails_before_model_call(self):
+        original = MODULE.MAX_REQUEST_BYTES
+        MODULE.MAX_REQUEST_BYTES = 1
+        try:
+            request = MODULE.Request(
+                incident={"title": "too large"},
+                evidence=[{"evidence_id": "E1"}],
+                mode="DEMO",
+            )
+            with self.assertRaises(HTTPException) as error:
+                MODULE.enforce_request_budget(request)
+            self.assertEqual(error.exception.status_code, 413)
+        finally:
+            MODULE.MAX_REQUEST_BYTES = original
+
     def test_unknown_analyst_evidence_reference_is_detected(self):
         output = MODULE.Analyst(contract_version='2.0', classification='storage-path', severity='P1', severity_rationale='fixture', hypotheses=[{'id':'H1','statement':'path down','confidence':0.9,'supporting_evidence_ids':['E1','E-NOT-PRESENT']}], confidence=0.8, confidence_basis='fixture')
         self.assertEqual(MODULE.bad_refs(output, [{'evidence_id':'E1'}]), ['E-NOT-PRESENT'])
@@ -89,6 +227,7 @@ class IntelligenceContractTests(unittest.TestCase):
 
     def test_malformed_provider_json_returns_gateway_error(self):
         class FakeResponse:
+            status_code = 200
             def raise_for_status(self):
                 return None
             def json(self):
@@ -107,6 +246,7 @@ class IntelligenceContractTests(unittest.TestCase):
     def test_provider_request_uses_schema_and_deterministic_temperature(self):
         output = {'contract_version':'2.0','classification':'storage-path','severity':'P1','severity_rationale':'fixture evidence','hypotheses':[{'id':'H1','statement':'fabric path degradation','confidence':0.9,'supporting_evidence_ids':['E1']}],'confidence':0.9,'confidence_basis':'synthetic fixture'}
         class FakeResponse:
+            status_code = 200
             def raise_for_status(self):
                 return None
             def json(self):
@@ -116,6 +256,7 @@ class IntelligenceContractTests(unittest.TestCase):
         self.assertEqual(result.severity, 'P1')
         body = mocked.call_args.kwargs['json']
         self.assertEqual(body['temperature'], 0)
+        self.assertEqual(body['max_tokens'], MODULE.MAX_OUTPUT_TOKENS)
         self.assertIn('JSON Schema', body['messages'][0]['content'])
         self.assertIn('not instructions', body['messages'][0]['content'])
 

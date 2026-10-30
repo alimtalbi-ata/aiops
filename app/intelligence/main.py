@@ -1,4 +1,4 @@
-import json, os, hmac, logging
+import json, os, hmac, logging, time, uuid, contextvars
 import requests
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -13,6 +13,59 @@ MODEL = os.getenv('LLM_MODEL', '')
 KEY = os.getenv('LLM_API_KEY', '')
 TOKEN = os.getenv('AIOPS_INTERNAL_TOKEN', '')
 TIMEOUT = float(os.getenv('LLM_TIMEOUT_SECONDS', '45'))
+MAX_OUTPUT_TOKENS = int(os.getenv('AIOPS_LLM_MAX_OUTPUT_TOKENS', '4096'))
+MAX_REQUEST_BYTES = int(os.getenv('AIOPS_LLM_MAX_REQUEST_BYTES', '262144'))
+_MODEL_CALL_TELEMETRY = contextvars.ContextVar('aiops_model_call_telemetry', default=None)
+
+
+def extract_provider_usage(response_payload):
+    """Extract provider-reported usage only; never estimate missing token counts."""
+    usage = response_payload.get('usage') if isinstance(response_payload, dict) else None
+    if not isinstance(usage, dict):
+        return {
+            'prompt_tokens': None, 'completion_tokens': None, 'total_tokens': None,
+            'cached_tokens': None, 'reasoning_tokens': None,
+            'usage_source': 'unavailable',
+        }
+
+    def count(value):
+        return value if type(value) is int and value >= 0 else None
+
+    prompt = count(usage.get('prompt_tokens', usage.get('input_tokens')))
+    completion = count(usage.get('completion_tokens', usage.get('output_tokens')))
+    total = count(usage.get('total_tokens'))
+    if total is None and prompt is not None and completion is not None:
+        total = prompt + completion
+    prompt_details = usage.get('prompt_tokens_details') or usage.get('input_tokens_details') or {}
+    completion_details = usage.get('completion_tokens_details') or usage.get('output_tokens_details') or {}
+    cached = count(prompt_details.get('cached_tokens')) if isinstance(prompt_details, dict) else None
+    reasoning = count(completion_details.get('reasoning_tokens')) if isinstance(completion_details, dict) else None
+    available = prompt is not None and completion is not None and total is not None
+    return {
+        'prompt_tokens': prompt, 'completion_tokens': completion, 'total_tokens': total,
+        'cached_tokens': cached, 'reasoning_tokens': reasoning,
+        'usage_source': 'provider_reported' if available else 'unavailable',
+    }
+
+
+def model_call_telemetry():
+    value = _MODEL_CALL_TELEMETRY.get()
+    if isinstance(value, dict):
+        return dict(value)
+    return {
+        'invocation_id': None, 'latency_ms': None, 'request_count': 0, 'retry_count': 0,
+        'prompt_tokens': None, 'completion_tokens': None, 'total_tokens': None,
+        'cached_tokens': None, 'reasoning_tokens': None, 'usage_source': 'unavailable',
+        'status': 'unavailable', 'error_class': None,
+        'cost_usd': None, 'pricing_source': None,
+    }
+
+
+def enforce_request_budget(request):
+    size = len(json.dumps(request.model_dump(mode='json'), ensure_ascii=False).encode('utf-8'))
+    if size > MAX_REQUEST_BYTES:
+        raise HTTPException(413, 'llm_request_context_budget_exceeded')
+
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -185,11 +238,52 @@ def call_model(system, payload, schema):
     headers = {'Content-Type': 'application/json'}
     if KEY:
         headers['Authorization'] = 'Bearer ' + KEY
-    body = {'model': MODEL, 'temperature': 0, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
+    body = {'model': MODEL, 'temperature': 0, 'max_tokens': MAX_OUTPUT_TOKENS, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
+    started = time.perf_counter()
+    invocation_id = uuid.uuid4().hex
+    request_count = 0
+    usage_samples = []
+    status_codes = []
+
+    def post_completion(request_body):
+        nonlocal request_count
+        request_count += 1
+        response = requests.post(url, headers=headers, json=request_body, timeout=(3, TIMEOUT))
+        status_codes.append(response.status_code)
+        response.raise_for_status()
+        payload = response.json()
+        usage_samples.append(extract_provider_usage(payload))
+        return payload
+
+    def publish_telemetry(status='success', error_class=None):
+        usage_complete = bool(usage_samples) and len(usage_samples) == request_count and all(
+            sample['usage_source'] == 'provider_reported' for sample in usage_samples
+        )
+        fields = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens', 'reasoning_tokens')
+        aggregate = {
+            field: sum(sample[field] for sample in usage_samples)
+            if usage_complete and all(sample[field] is not None for sample in usage_samples)
+            else None
+            for field in fields
+        }
+        _MODEL_CALL_TELEMETRY.set({
+            'invocation_id': invocation_id,
+            'latency_ms': round((time.perf_counter() - started) * 1000, 2),
+            'request_count': request_count,
+            'retry_count': max(0, request_count - 1),
+            **aggregate,
+            'usage_source': 'provider_reported' if usage_complete else 'unavailable',
+            'http_statuses': status_codes,
+            'status': status,
+            'error_class': error_class,
+            'cost_usd': None,
+            'pricing_source': None,
+        })
+
+    _MODEL_CALL_TELEMETRY.set(None)
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
-        r.raise_for_status()
-        raw = r.json()['choices'][0]['message']['content']
+        response_payload = post_completion(body)
+        raw = response_payload['choices'][0]['message']['content']
         decoded = decode_model_json(raw)
         if schema is Critique:
             decoded = downgrade_inconsistent_critic(decoded)
@@ -218,11 +312,8 @@ def call_model(system, payload, schema):
                         'schema_errors': errors,
                     }, ensure_ascii=False)},
                 ]
-                repaired_response = requests.post(
-                    url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
-                )
-                repaired_response.raise_for_status()
-                repaired = decode_model_json(repaired_response.json()['choices'][0]['message']['content'])
+                repaired_payload = post_completion(repair_body)
+                repaired = decode_model_json(repaired_payload['choices'][0]['message']['content'])
                 if schema is Critique:
                     repaired = downgrade_inconsistent_critic(repaired)
                 # The retry cannot discard the critique's adverse findings.
@@ -263,8 +354,35 @@ def call_model(system, payload, schema):
                 return schema.model_validate(repaired)
         return schema.model_validate(decoded)
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError, ValidationError) as exc:
-        LOG.warning('model call or contract validation failed: %s', type(exc).__name__)
-        raise HTTPException(502, 'model_unavailable_or_invalid_output') from exc
+        error_class = type(exc).__name__
+        LOG.warning('model call or contract validation failed: %s', error_class)
+        publish_telemetry(status='failed', error_class=error_class)
+        telemetry = model_call_telemetry()
+        headers = {
+            'Cache-Control': 'no-store',
+            'X-AIOPS-Invocation-Id': str(telemetry.get('invocation_id') or ''),
+            'X-AIOPS-Model-Status': 'failed',
+            'X-AIOPS-Model-Error': error_class,
+            'X-AIOPS-Latency-Ms': str(telemetry.get('latency_ms') or ''),
+            'X-AIOPS-Request-Count': str(telemetry.get('request_count') or 0),
+            'X-AIOPS-Retry-Count': str(telemetry.get('retry_count') or 0),
+            'X-AIOPS-Usage-Source': str(telemetry.get('usage_source') or 'unavailable'),
+            'X-AIOPS-HTTP-Statuses': ','.join(str(x) for x in telemetry.get('http_statuses', [])),
+        }
+        for field, header in (
+            ('prompt_tokens', 'X-AIOPS-Prompt-Tokens'),
+            ('completion_tokens', 'X-AIOPS-Completion-Tokens'),
+            ('total_tokens', 'X-AIOPS-Total-Tokens'),
+            ('cached_tokens', 'X-AIOPS-Cached-Tokens'),
+            ('reasoning_tokens', 'X-AIOPS-Reasoning-Tokens'),
+        ):
+            value = telemetry.get(field)
+            if type(value) is int and value >= 0:
+                headers[header] = str(value)
+        raise HTTPException(502, 'model_unavailable_or_invalid_output', headers=headers) from exc
+    finally:
+        if _MODEL_CALL_TELEMETRY.get() is None:
+            publish_telemetry()
 
 def known_ids(evidence):
     return {x.get('evidence_id') for x in evidence if isinstance(x.get('evidence_id'), str)}
@@ -309,7 +427,7 @@ def analyze(x: Request, authorization: str | None = Header(default=None)):
     quality_errors=analysis_quality_errors(result.model_dump(mode='json'), x.evidence)
     if quality_errors:
         raise HTTPException(502, detail={'code':'ungrounded_or_inconsistent_analysis','reasons':quality_errors})
-    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'analyst-v2.2','evidence_freshness':freshness,'execution_allowed':False}
+    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'analyst-v2.2','evidence_freshness':freshness,'model_invocation':model_call_telemetry(),'execution_allowed':False}
 
 @app.post('/api/intelligence/critic')
 def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
@@ -360,5 +478,5 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
             result.issues.append(Issue(code=('CONTRADICTION' if reason=='divergent_snapshots_not_challenged' else 'SCHEMA_OR_COVERAGE'),
                                        description='Deterministic evidence guard: '+reason, evidence_ids=[]))
         result.final_recommendation='HUMAN_APPROVAL'
-    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.4','evidence_freshness':freshness,'execution_allowed':False}
+    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.4','evidence_freshness':freshness,'model_invocation':model_call_telemetry(),'execution_allowed':False}
 
