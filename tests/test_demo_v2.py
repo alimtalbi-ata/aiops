@@ -489,5 +489,98 @@ class DemoV2Tests(unittest.TestCase):
         self.assertIn("UNKNOWN", page)
         self.assertNotIn("ticket connecté</a>", page)
 
+    def test_evidence_itsm_route_rejects_unauthorized_before_core(self):
+        from fastapi.responses import JSONResponse
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        with (patch("portal.demo_ledger_read.read_demo_ledger",
+                    return_value=JSONResponse({"status": "UNKNOWN"}, status_code=401)) as viewer,
+              patch.object(portal_main, "_runs",
+                           side_effect=AssertionError("no Core inventory before auth")),
+              patch.object(portal_main, "_get",
+                           side_effect=AssertionError("no Core detail before auth"))):
+            response = TestClient(portal_main.app).get(
+                "/api/demo-studio/runs/RUN-ACME/evidence-itsm")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers.get("cache-control"), "no-store")
+        viewer.assert_called_once_with("RUN-ACME", None)
+
+    def test_evidence_itsm_route_uses_existing_projection_without_glpi_claim(self):
+        from fastapi.responses import JSONResponse
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        ledger = {
+            "schema": "aiops.demo-ledger-read.v1", "run_id": "RUN-ACME",
+            "mode": "DEMO", "classification": "DEMO_CORE_RECORDED_NOT_LIVE",
+            "source": "CORE_AI_LEDGER_INTERNAL_READ",
+            "evidence_classification": "SYNTHETIC_ONLY",
+            "tenant_acl_qualified": False, "runtime_attested": False,
+            "event_link_verified": True,
+            "evidence_refs": [{"evidence_id": "EVD-1", "source": "CORE",
+                               "payload_sha256": "a" * 64,
+                               "known_at": "2026-10-29T12:00:00+00:00"}],
+            "analyses": [{"analysis_id": "ANA-1", "evidence_ids": ["EVD-1"]}],
+            "critiques": [{"critique_id": "CRT-1", "analysis_id": "ANA-1",
+                           "evidence_ids": ["EVD-1"]}],
+            "policy_decisions": [{"policy_decision_id": "POL-1",
+                                  "analysis_id": "ANA-1", "critique_id": "CRT-1"}],
+        }
+        listed = {"run_id": "RUN-ACME", "mode": "DEMO", "incident_id": "INC-1"}
+        detail = {"run": listed, "events": []}
+        with (patch("portal.demo_ledger_read.read_demo_ledger",
+                    return_value=JSONResponse(ledger)),
+              patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get", return_value=detail),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("read-only route"))):
+            response = TestClient(portal_main.app).get(
+                "/api/demo-studio/runs/RUN-ACME/evidence-itsm")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["state"], "CORRELATED_UNATTESTED")
+        self.assertEqual(payload["classification"], "SYNTHETIC_ONLY")
+        self.assertEqual(payload["evidence_refs"][0]["evidence_id"], "EVD-1")
+        self.assertEqual(payload["policy_decision_ids"], ["POL-1"])
+        self.assertIsNone(payload["ticket_id"])
+        self.assertFalse(payload["tenant_acl_qualified"])
+        self.assertFalse(payload["runtime_attested"])
+        self.assertFalse(payload["effect_applied"])
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_evidence_itsm_route_rejects_foreign_ledger_identity(self):
+        from fastapi.responses import JSONResponse
+        from fastapi.testclient import TestClient
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-ACME", "mode": "DEMO", "incident_id": "INC-1"}
+        with (patch("portal.demo_ledger_read.read_demo_ledger",
+                    return_value=JSONResponse({"run_id": "RUN-FOREIGN"})),
+              patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get",
+                           return_value={"run": listed, "events": []}),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("no writes"))):
+            response = TestClient(portal_main.app).get(
+                "/api/demo-studio/runs/RUN-ACME/evidence-itsm")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["status"], "UNKNOWN")
+        self.assertNotIn("evidence_refs", response.json())
+
+    def test_run_detail_links_viewer_evidence_itsm_without_claiming_hitl(self):
+        from portal import main as portal_main
+        listed = {"run_id": "RUN-ACME", "mode": "DEMO"}
+        with (patch.object(portal_main, "_runs", return_value=[listed]),
+              patch.object(portal_main, "_get",
+                           side_effect=lambda path, base=None:
+                           {"run": listed, "events": []}
+                           if path == "/api/runs/RUN-ACME"
+                           else {"status": "UNKNOWN"})):
+            page = portal_main.demo_run_detail("RUN-ACME")
+        self.assertIn("/api/demo-studio/runs/", page)
+        self.assertIn("/evidence-itsm", page)
+        self.assertIn('href="#demo-evidence-itsm-output"', page)
+        self.assertIn("SYNTHETIC_ONLY", page)
+        self.assertIn("approbation HITL et rollback réels", page)
+        self.assertIn("UNKNOWN", page)
+
 if __name__ == "__main__":
     unittest.main()

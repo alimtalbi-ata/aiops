@@ -474,6 +474,7 @@ def demo_run_detail(rid:str):
       '<a href="/twin">Digital Twin</a> · '
       '<a href="/timeline?run_id='+key+'">Timeline / Analyst / Critic</a> · '
       '<a href="/evidence">Evidence</a> · '
+      '<a href="#demo-evidence-itsm-output">ITSM GLPI (UNKNOWN)</a> · '
       '<a href="/policy-control">Policy SIMULATE / HITL</a></nav>'
       '<p>ITSM GLPI : <strong>UNKNOWN</strong> — aucun ticket connecté à ce run n’est attesté. '
       'Mode DEMO/REPLAY/STORY : <strong>SYNTHETIC</strong> ; aucun effet LIVE.</p>')
@@ -509,33 +510,76 @@ def demo_run_detail(rid:str):
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
     from portal.demo_explain import render_critic_explanation
     body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
-    body+=panel("Registre IA autorisé — lecture seule",
-      '<p>Le registre Core est protégé. Jeton viewer distinct du jeton interne ; '
-      'aucune décision ni métrique LIVE n’est attestée ici.</p>'
-      '<label for="demo-ledger-viewer">Jeton viewer (jamais conservé)</label>'
-      '<input id="demo-ledger-viewer" type="password" autocomplete="off">'
-      '<button id="demo-ledger-read" type="button">Lire le registre IA</button>'
-      '<pre id="demo-ledger-output" class="log" role="status">INCONNU — autorisation requise.</pre>'
-      '<script>(function(){const rid='+json.dumps(rid)+
-      ';const input=document.getElementById("demo-ledger-viewer");'
-      'const output=document.getElementById("demo-ledger-output");'
-      'document.getElementById("demo-ledger-read").addEventListener("click",async function(){'
-      'const token=input.value;input.value="";output.textContent="Lecture en cours…";'
-      'if(!token){output.textContent="INCONNU — jeton viewer requis.";return;}'
-      'try{const response=await fetch("/api/demo-studio/runs/"+encodeURIComponent(rid)+"/ai-ledger",'
-      '{headers:{"Authorization":"Bearer "+token},cache:"no-store",credentials:"omit"});'
-      'if(!response.ok){output.textContent="INCONNU — lecture refusée (HTTP "+response.status+").";return;}'
-      'const data=await response.json();'
-      'if(data.schema!=="aiops.demo-ledger-read.v1"||data.run_id!==rid||data.runtime_attested!==false)'
-      '{output.textContent="INCONNU — contrat invalide.";return;}'
-      'output.textContent=JSON.stringify(data,null,2);'
-      '}catch(e){output.textContent="INCONNU — registre indisponible.";}});})();</script>')
+    body+=panel("Registre IA et Evidence/ITSM — lecture viewer",
+       '<p>Core / AI Ledger : références <strong>SYNTHETIC_ONLY</strong> après autorisation viewer, '
+       'sans attestation tenant ni runtime. La projection Evidence/ITSM ne vérifie aucun ticket GLPI. '
+       'Le contrat Policy what-if reste offline, non raccordé à ce run ; '
+       'approbation HITL et rollback réels : <strong>UNKNOWN</strong>.</p>'
+       '<label for="demo-ledger-viewer">Jeton viewer (jamais conservé)</label>'
+       '<input id="demo-ledger-viewer" type="password" autocomplete="off">'
+       '<button id="demo-ledger-read" type="button">Lire le registre et les références</button>'
+       '<pre id="demo-ledger-output" class="log" role="status">UNKNOWN — autorisation requise.</pre>'
+       '<pre id="demo-evidence-itsm-output" class="log" role="status">UNKNOWN — projection non lue.</pre>'
+       '<script>(function(){const rid='+json.dumps(rid)+
+       ';const input=document.getElementById("demo-ledger-viewer");'
+       'const output=document.getElementById("demo-ledger-output");'
+       'const joined=document.getElementById("demo-evidence-itsm-output");'
+       'document.getElementById("demo-ledger-read").addEventListener("click",async function(){'
+       'const token=input.value;input.value="";output.textContent="Lecture en cours…";'
+       'joined.textContent="UNKNOWN — en attente du registre viewer.";'
+       'if(!token){output.textContent="UNKNOWN — jeton viewer requis.";return;}'
+       'try{const response=await fetch("/api/demo-studio/runs/"+encodeURIComponent(rid)+"/ai-ledger",'
+       '{headers:{"Authorization":"Bearer "+token},cache:"no-store",credentials:"omit"});'
+       'if(!response.ok){output.textContent=(response.status===401||response.status===403?"UNAUTHORIZED":response.status>=500?"UNAVAILABLE":"UNKNOWN")+" — registre viewer HTTP "+response.status;return;}'
+       'const data=await response.json();'
+       'if(data.schema!=="aiops.demo-ledger-read.v1"||data.run_id!==rid||data.runtime_attested!==false||data.tenant_acl_qualified!==false||data.evidence_classification!=="SYNTHETIC_ONLY")'
+       '{output.textContent="UNKNOWN — contrat invalide.";return;}'
+       'output.textContent=JSON.stringify(data,null,2);'
+       'const linked=await fetch("/api/demo-studio/runs/"+encodeURIComponent(rid)+"/evidence-itsm",'
+       '{headers:{"Authorization":"Bearer "+token},cache:"no-store",credentials:"omit"});'
+       'if(!linked.ok){joined.textContent=(linked.status===401||linked.status===403?"UNAUTHORIZED":linked.status>=500?"UNAVAILABLE":"UNKNOWN")+" — projection Evidence/ITSM indisponible.";return;}'
+       'const projection=await linked.json();'
+       'if(projection.schema!=="aiops.acme-itsm-evidence-link.v1"||projection.run_id!==rid||projection.state!=="CORRELATED_UNATTESTED"||projection.classification!=="SYNTHETIC_ONLY"||projection.ticket_id!==null||projection.runtime_attested!==false||projection.tenant_acl_qualified!==false||projection.effect_applied!==false)'
+       '{joined.textContent="UNKNOWN — projection non qualifiée.";return;}'
+       'joined.textContent=JSON.stringify({state:projection.state,provenance:projection.classification,evidence_refs:projection.evidence_refs,policy_decision_ids:projection.policy_decision_ids,glpi_ticket_id:null,glpi_verification:projection.ticket_verification,hitl_runtime:"UNKNOWN",rollback_runtime:"UNKNOWN"},null,2);'
+       '}catch(e){output.textContent="UNAVAILABLE — registre ou projection indisponible.";'
+       'joined.textContent="UNKNOWN — aucune attestation.";}'
+       '});})();</script>')
     body+=panel("Gates et décisions",pretty(gate))
     body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
       'Aucune remédiation, ré-exécution ni approbation n’est disponible ici.</p>')
     return shell("/demo-studio","Démonstration · "+rid,
       "Parcours incident, analyse et décisions depuis le registre Core.",
       body,mode=matched.get("mode","DEMO"))
+
+@app.get("/api/demo-studio/runs/{rid}/evidence-itsm")
+def demo_evidence_itsm(rid: str, authorization: str | None = Header(default=None)):
+    """Viewer-gated read-only join; never attests GLPI, tenant ACL or runtime."""
+    from portal.demo_ledger_read import read_demo_ledger
+    from shared.acme_itsm_evidence_link import project_itsm_evidence
+    from urllib.parse import quote
+    headers={"Cache-Control":"no-store","Pragma":"no-cache","X-Content-Type-Options":"nosniff"}
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+        return JSONResponse({"status":"UNKNOWN","reason":"invalid_run_id"},status_code=404,headers=headers)
+    authorized=read_demo_ledger(rid,authorization)
+    for name,value in headers.items():
+        authorized.headers[name]=value
+    if authorized.status_code != 200:
+        return authorized
+    try:
+        ledger=json.loads(authorized.body)
+        listed=next((r for r in _qualified_demo_runs(_runs()) if r["run_id"]==rid),None)
+        if listed is None:
+            raise ValueError("run_not_listed")
+        detail=_get("/api/runs/"+quote(rid,safe=""))
+        if not _core_detail_matches_listed_run(detail,listed):
+            raise ValueError("run_identity_unqualified")
+        projection=project_itsm_evidence(detail,ledger)
+        if projection["state"]!="CORRELATED_UNATTESTED":
+            raise ValueError("ledger_correlation_unqualified")
+    except (ValueError,TypeError,KeyError):
+        return JSONResponse({"status":"UNKNOWN","reason":"correlation_unavailable"},status_code=503,headers=headers)
+    return JSONResponse(projection,headers=headers)
 
 @app.get("/api/demo-status/{rid}")
 def demo_status(rid:str):
