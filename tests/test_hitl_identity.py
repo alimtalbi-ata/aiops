@@ -9,6 +9,8 @@ from shared.hitl_identity import (
     issue_simulated_assertion,
     simulator_ready,
     verify_assertion,
+    oidc_configured,
+    require_live_assertion,
 )
 
 
@@ -60,6 +62,30 @@ class HitlIdentityTests(unittest.TestCase):
             {"subject_id": "ad:sara-guid", "role": "security_admin"},
             {"subject_id": "ad:ian-guid", "role": "incident_commander"},
         ]))
+
+    def test_live_identity_fails_closed_when_oidc_is_not_configured(self):
+        with patch.dict(os.environ, {
+            "AIOPS_HITL_OIDC_ISSUER": "",
+            "AIOPS_HITL_OIDC_AUDIENCE": "",
+            "AIOPS_HITL_OIDC_JWKS_URL": "",
+            "AIOPS_HITL_OIDC_GROUP_ROLE_MAP": "",
+        }):
+            self.assertFalse(oidc_configured())
+            with self.assertRaisesRegex(IdentityError, "oidc_identity_provider_not_configured"):
+                require_live_assertion("not-a-token")
+
+    def test_oidc_configuration_requires_https_and_group_role_map(self):
+        config = {
+            "AIOPS_HITL_OIDC_ISSUER": "https://id.example.invalid/tenant",
+            "AIOPS_HITL_OIDC_AUDIENCE": "aiops2-hitl",
+            "AIOPS_HITL_OIDC_JWKS_URL": "https://id.example.invalid/tenant/keys",
+            "AIOPS_HITL_OIDC_GROUP_ROLE_MAP": '{"00ab-group-sid":["security_admin"]}',
+        }
+        with patch.dict(os.environ, config):
+            self.assertTrue(oidc_configured())
+        config["AIOPS_HITL_OIDC_JWKS_URL"] = "http://id.example.invalid/keys"
+        with patch.dict(os.environ, config):
+            self.assertFalse(oidc_configured())
 
     def test_sudo_catalog_is_precheck_only(self):
         allowed = authorize_sudo_request(
