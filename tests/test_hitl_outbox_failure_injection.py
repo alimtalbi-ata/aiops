@@ -55,9 +55,14 @@ class OutboxFaultTests(unittest.TestCase):
 
     def test_lost_ack_retry(self):
         first = core("acknowledge_hitl_decision_outbox", DB(("LEASED", "lease", True)))
-        self.assertFalse(first("HDO", {"lease_token": "lease"})["idempotent"])
+        first_receipt = first("HDO", {"lease_token": "lease"})
+        self.assertFalse(first_receipt["idempotent"])
         retry = core("acknowledge_hitl_decision_outbox", DB(("DELIVERED", None, None)))
-        self.assertTrue(retry("HDO", {"lease_token": "lease"})["idempotent"])
+        retry_receipt = retry("HDO", {"lease_token": "lease"})
+        self.assertTrue(retry_receipt["idempotent"])
+        for receipt in (first_receipt, retry_receipt):
+            self.assertIs(receipt["execution_allowed"], False)
+            self.assertIs(receipt["effect_allowed"], False)
 
     def test_dead_letter_claim_sql(self):
         db = DB()
@@ -67,6 +72,13 @@ class OutboxFaultTests(unittest.TestCase):
         for required in ("attempts>=20", "lease_until<=now()", "for update skip locked"):
             self.assertIn(required, sql)
         self.assertIs(result["execution_allowed"], False)
+        self.assertIs(result["effect_allowed"], False)
+
+    def test_outbox_status_is_not_an_authorization(self):
+        receipt = core("hitl_decision_outbox_status", DB())(authorization="offline")
+        self.assertEqual(receipt["counts"], {})
+        self.assertIs(receipt["execution_allowed"], False)
+        self.assertIs(receipt["effect_allowed"], False)
 
     def test_synthetic_approval_forbidden(self):
         db = DB(("RUN", "DEMO", "CI", "COLLECT_DIAGNOSTICS", "LOW",
