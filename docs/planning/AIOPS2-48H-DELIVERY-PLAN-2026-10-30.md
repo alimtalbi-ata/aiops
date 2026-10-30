@@ -178,3 +178,26 @@ Single staging [#201](https://github.com/alimtalbi-ata/aiops/pull/201) at `84f6c
 - #201 main-based incremental commits `5043622a` (exact #198 fixture test, pinned 005 seed blob) and `7474c74c` (explicit Quality step for `python -m unittest discover -s tests -p "test_acme_san_payments_fixture_contract.py" -v`). Expected suite is six offline tests; **new exact-head CI pending** at documentation time. This closes only a missing CI coverage gap, not a runtime impact proof.
 - #196 Quality [41070920303](https://github.com/alimtalbi-ata/aiops/actions/runs/41070920303) finished SUCCESS 8/8, yet both real Ollama CPU jobs have **3/3 evaluator repeats FAILED per model** (ReadTimeout, zero analyzed cases, missing usage/latency). Next 5/5 benchmark task: make job fail after uploading reports if any evaluator exit is nonzero, distinguish infrastructure timeout from model quality, re-run only in isolated approved CI. No promotion of qwen3:4b/8b or token/cost estimates.
 - Continue #202 latest security headers and #205 mock-only xref as separate contract reviews; do not overwrite Portal/Core main.py or mislabel mock xrefs as authenticated GLPI. #204 HITL negative tests remain stacked and require selective main-based dependency review. T0 only when exact new #201 CI succeeds; T1/T2 NOT_TESTED, T3 NOT_ATTESTED, T4/T5 NO_GO.
+
+
+## 2026-10-30 16:11 Europe/Paris — execution steering reset
+
+The detailed live execution board is now `docs/planning/AIOPS2-48H-EXECUTION-CONTROL-BOARD-2026-10-30.md`. The 48-hour clock is anchored to 2026-10-30 16:11 Europe/Paris; target is 2026-11-01 16:11 Europe/Paris.
+
+### Architecture / delivery reorientation
+
+- Keep #201 as the clean-main selective integration candidate; its current exact head is `7474c74c9e6a79c5d28d6624f7b9be2100a792ac`, Quality run `41077972849` SUCCESS. This is source/contract T0 evidence only; no integrated T1/T2, Debian, sandbox rollback or LIVE claim.
+- Keep #185 as a source/story archive only. Its head `2b2af9c` has green observed workflows but its base is 741 commits ahead / 43 behind main. No wholesale merge.
+- #194 HEAD `40d3870` has all four observed workflows green. #204 HEAD `dabfeb6` adds the strict positive revision fence and offline failure-injection tests; all four observed workflows are green. Both remain stacked; port contracts selectively after dependency and migration review.
+- #196 HEAD `48b353b` has a green Quality workflow but all six actual Ollama evaluator repeats failed with ReadTimeout. The experiment is a failure, not a model benchmark. A follow-up branch update now makes benchmark failures fail the job after artifact upload, reduces the CPU comparison to Qwen3 1.7B/4B, defaults to one repeat and applies explicit timeout/context/output budgets. Fresh exact-head Actions evidence is required.
+- #202 and #205 remain read-only/contract slices; neither proves OIDC tenant authorization or a real GLPI/Core xref.
+- Use the five existing ChatGPT schedules; Schedule 5/5 owns this control board. Do not create a sixth schedule. Use #188 as the only preferred future GitHub quality/runtime schedule; #189 is redundant. Debian runner installation and cron are not accessible from this session.
+
+### Immediate priorities
+
+1. Re-run the corrected #196 Ollama benchmark and inspect artifacts, evaluator exits, per-call usage coverage, p50/p95 and model quality. No cost without pinned pricing.
+2. Finish exact-head checks on #201 and #204; preserve their clean-main versus stacked distinction.
+3. Make the Portal journey coherent on the main-based contracts, with authenticated read-only Run detail and explicit UNKNOWN for unverified Evidence/GLPI relations.
+4. Add a reproducible T2 synthetic customer journey and ITIL event trail before adding more observability components.
+5. Assemble one cumulative source-provenance kit only after manifest/checksum, clean install, upgrade and rollback tests.
+6. Keep T3/T4/T5 NO-GO until host attestation, isolated rollback and all LIVE gates are separately proven.
