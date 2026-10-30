@@ -4,9 +4,11 @@ from fastapi.responses import HTMLResponse,JSONResponse
 from shared.http import get_json,post_json
 from portal.demo_ledger_read import router as demo_ledger_router
 from portal.glpi_client import GLPIClient, GLPIError
+from portal.glpi_run_context import router as glpi_run_context_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 app.include_router(demo_ledger_router)
+app.include_router(glpi_run_context_router)
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
 @app.get('/api/portal/bootstrap')
