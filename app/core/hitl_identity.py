@@ -15,6 +15,7 @@ from shared.hitl_identity import (
     simulator_catalog,
     simulator_enabled,
     simulator_ready,
+    oidc_configured,
 )
 
 router = APIRouter(tags=["HITL identity simulator"])
@@ -41,7 +42,10 @@ def identity_health():
         "mode": mode,
         "simulator_enabled": enabled,
         "simulator_ready": simulator_ready(),
-        "production_directory": "NOT_CONFIGURED",
+        "production_directory": (
+            "OIDC_CONFIGURED_NOT_QUALIFIED" if oidc_configured() else "NOT_CONFIGURED"
+        ),
+        "oidc_configured": oidc_configured(),
         "live_approval_ready": False,
         "execution_allowed": False,
     }
