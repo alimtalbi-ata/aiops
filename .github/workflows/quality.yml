@@ -417,3 +417,9 @@ jobs:
             dist/*.sha256
           if-no-files-found: error
           retention-days: 30
+
+  ollama-real-model-benchmark:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 196 && github.event.action == 'synchronize'
+    uses: ./.github/workflows/ollama-ai-benchmark.yml
+    with:
+      repeats: "3"
