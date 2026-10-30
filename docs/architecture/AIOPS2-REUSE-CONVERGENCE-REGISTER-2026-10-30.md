@@ -114,3 +114,12 @@ The immediate 5/5 automation run was still in progress. Schedule 5/5 was updated
 - #185 `5782d6f` Quality **6/6 SUCCESS**, Offline/Historical SUCCESS, but V2.8 **FAILED** (legacy gates fixture, one error in 59). Exact deployment-kit artifact `12975971501`: sidecar SHA256, 445 CRC, 395 file checksums and eight source blobs all verified; **253/253** selected tests PASS on extracted archive; **14/14** isolated read-only Portal GET 200, POST 405, missing run 404. Source/packaging qualification does **not** override V2.8 or runtime gates.
 - `main` versus #185 base `feat/cron-stable-reconciled-20261028`: **diverged**, 672 ahead / 43 behind. #185 is not safe for direct merge into main.
 - #196 is the existing telemetry implementation; no separate provider usage engine will be created by 5/5. Model invocations, cost and budget enforcement are still NOT_TESTED.
+
+
+## 7. PR #185 latest candidate and package divergence — 2026-10-30 12:25 UTC
+
+- Current head `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`; base remains `feat/cron-stable-reconciled-20261028`, 672 ahead / 43 behind main.
+- Quality `41053319020`: 6/6 SUCCESS; Offline `41053318999`: SUCCESS; Historical `41053319033`: SUCCESS; V2.8 `41053319372`: FAILED (58 pass / 1 error).
+- Failure is `test_demo_live_trace_is_source_backed` expecting `response["gates"]["decision"]`; new portal contract uses `gates.items`. Fix the test fixture, not the fail-closed code.
+- Package artifact `12975971501` inner SHA `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d`: 445 entries, 395/395 checksums valid, but no migration 011, no OIDC verifier, no AI per-call telemetry.
+- The separate #196 package `12974884559` contains migration 011, OIDC and telemetry but lacks the new architecture docs and the latest ACME fixes. Both packages are valid individually but not cumulative. Build one final kit only from a clean integrated source SHA and verify actual contents, not artifact label.
