@@ -13,14 +13,18 @@ from typing import Callable
 _TIMESTAMP = re.compile(
     r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})\Z"
 )
+# Evidence timestamps before the Unix epoch are not plausible runtime records.
+# Refuse them before any authenticated GET, including year-0001 values that
+# Python can convert to UTC without raising OverflowError.
+_MIN_EVIDENCE_UTC = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def evidence_timestamps_valid(ledger: object, *, now: datetime | None = None) -> bool:
     """Validate every Core ai-ledger reference before allowing any I/O.
 
-    Reject malformed/naive/future timestamps and UTC conversion overflow at
-    the datetime year boundaries. This is a *syntax and time* check only;
-    passing it does not authenticate the ledger or any Evidence bytes.
+    Reject malformed/naive/pre-epoch/future timestamps and UTC conversion
+    overflow at the datetime year boundaries. This is a *syntax and time*
+    check only; passing it does not authenticate the ledger or Evidence bytes.
     """
     if not isinstance(ledger, dict) or ledger.get("schema") != "aiops.demo-ledger-read.v1":
         return False
@@ -41,7 +45,8 @@ def evidence_timestamps_valid(ledger: object, *, now: datetime | None = None) ->
             if not isinstance(value, str) or len(value) > 48 or _TIMESTAMP.fullmatch(value) is None:
                 return False
             stamp = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
-            if stamp.utcoffset() is None or stamp.astimezone(timezone.utc) > latest:
+            stamp_utc = stamp.astimezone(timezone.utc)
+            if stamp.utcoffset() is None or stamp_utc < _MIN_EVIDENCE_UTC or stamp_utc > latest:
                 return False
     except (ValueError, OverflowError, TypeError):
         return False
