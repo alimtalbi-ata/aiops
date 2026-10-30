@@ -198,3 +198,14 @@ Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current
 
 - New #185 HEAD `5782d6f` Quality completed **6/6 SUCCESS**, but V2.8 remained **FAILED** (58/59 PASS, legacy gates fixture error). Exact CI artifact `12975971501` verified (445 CRC, 395 SHA256, eight source blobs), extracted archive **253/253** targeted tests PASS, isolated Portal **14/14** GET 200, POST 405 and unknown run 404. The same package's evaluator harness passed **3/3** without model calls.
 - The PR #185 base branch is **672 commits ahead / 43 behind** `main`; do not merge the 72-file PR directly. Preserve a clean-main selective integration plan. `RELEASE_STABLE=NO_GO` until all exact-head CI and Debian/runtime/rollback gates pass.
+
+
+### 2026-10-30 12:25 UTC — RC1.4 deployment-kit archive audit
+
+- Downloaded artifact `aiops2-core-deployment-kit` ID `12974884559` from exact CI run `41053026110`.
+- Outer artifact contains inner `AIOps-2.1.0-core-rc1.4-Core-Deployment-Kit-20261030T120953Z.zip`, 763,130 bytes, SHA-256 `4c7bd6a707fc24a308de033ee7f1b02b6df123cfd7c2615eea9cecb7b7be2646`.
+- Inner archive: 455 entries; `FILES-SHA256SUMS` lists 405 files; all 405 hashes verified, zero missing/mismatch.
+- Contains migration 011, Intelligence service, AI evaluation harness, OIDC/HITL code and qualification JSON reports.
+- Manifest explicitly states `real_model_qualification=NOT_RUN`, `production_qualification=NOT_RUN`. Its `git_commit=6273ad48...` is the temporary packaging tree SHA, not PR head or Debian `applied.sha`.
+- The package does **not** contain the new architecture/ITIL/48h docs from PR #195. It is a reproducible RC candidate from the stacked #194/#196 tree, not the final cumulative kit for the main-based architecture.
+- Audit report: `docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md`.
