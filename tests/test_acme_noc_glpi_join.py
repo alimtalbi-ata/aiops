@@ -142,4 +142,41 @@ class ReadOnlyJoinMockIntegrationTests(unittest.TestCase):
         self.assertEqual((core, ledger, noc), before)
 
 
+    def test_glpi_confirmation_never_authenticates_ledger_evidence(self):
+        # HTTP transport is mocked; no independent Evidence API read occurs.
+        client = MockGLPI()
+        out = join(client=client)
+        self.assertEqual(out['ticket_id'], '12345')
+        self.assertEqual(out['evidence_ids'], ['EVD-1'])
+        self.assertIsNone(out['verified_evidence_id'])
+        self.assertEqual(out['verified_evidence_ids'], [])
+        self.assertEqual(out['evidence_verification'],
+                         'UNKNOWN_NO_AUTHENTICATED_EVIDENCE_API_READ')
+        self.assertEqual(len(client.calls), 1)
+
+    def test_unavailable_glpi_cannot_promote_evidence_reference(self):
+        client = MockGLPI()
+        out = join_incident_run_ticket_evidence(CORE, LEDGER, NOC,
+                                                 glpi_opener=client)
+        self.assertIsNone(out['ticket_id'])
+        self.assertEqual(out['evidence_ids'], ['EVD-1'])
+        self.assertIsNone(out['verified_evidence_id'])
+        self.assertEqual(out['verified_evidence_ids'], [])
+        self.assertEqual(out['evidence_verification'],
+                         'UNKNOWN_NO_AUTHENTICATED_EVIDENCE_API_READ')
+        self.assertEqual(client.calls, [])
+
+    def test_invalid_core_has_no_verified_evidence(self):
+        client = MockGLPI()
+        out = join(core={'run': {'run_id': 'RUN-2', 'incident_id': 'INC-1',
+                                'mode': 'DEMO'}}, client=client)
+        self.assertEqual(out['state'], 'UNKNOWN')
+        self.assertEqual(out['evidence_ids'], [])
+        self.assertIsNone(out['verified_evidence_id'])
+        self.assertEqual(out['verified_evidence_ids'], [])
+        self.assertEqual(out['evidence_verification'],
+                         'UNKNOWN_NO_AUTHENTICATED_EVIDENCE_API_READ')
+        self.assertEqual(client.calls, [])
+
+
 if __name__ == '__main__': unittest.main()
