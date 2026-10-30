@@ -311,3 +311,9 @@ All six blobs were inserted into #201's existing tree, preserving its Portal sto
 
 Latest #198 `0091cc56` has offline fixture Quality 3/3, locator 16/16, fixture 6/6; #196 `747f0df4` has 2/8 Ollama job failures, qwen3:1.7b ValidationError / qwen3:4b ReadTimeout (3/3 evaluator failures each). #194/#204 migration 011, OIDC/HITL/outbox and #196 telemetry remain **not ported** to #201; #193 title-derived GLPI links remain unsafe. No parallel engine or duplicated module work.
 
+### Source collision review and CI resolution — 2026-10-30 17:11 UTC
+
+#201 head `1d3a902877d556549425a95cd4cef792c5c000c8` [Quality 41096370024](https://github.com/alimtalbi-ata/aiops/actions/runs/41096370024) **SUCCESS 3/3**; Portal 26/26 Python, 7/7 JS. Exact `app/portal/main.py` source blob matches #202.
+
+Selective port must first reconcile **#194 ↔ #201** overlaps `.github/workflows/quality.yml`, `app/core/main.py`, `app/portal/main.py`, `compose.yml`; **#196 ↔ #201** overlaps `.github/workflows/quality.yml`, `compose.yml`, `config/.env.example`; **#204 ↔ #201** overlaps `.github/workflows/quality.yml`. #194 and #196 also both modify `app/intelligence/main.py` and `tests/test_intelligence_contract.py`. Treat these as contract/implementation collisions, not cherry-pick-ready files. Require dependency-aware minimal diff, migration 011 ordering, identity/tenant/outbox failure tests, no LIVE and exact-head CI before adding to #201.
+
