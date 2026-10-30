@@ -173,6 +173,32 @@ class GLPIReadOnlyHTTPMockTests(unittest.TestCase):
                 self.assertIsNone(result['ticket_id'])
                 self.assertEqual(client.calls, [])
 
+    def test_nested_tenant_scope_in_projection_refused_before_get(self):
+        # A caller may bypass the pure projector and submit a modified dict.
+        # No scope claim, even null or NFKC-aliased, can become a GLPI link.
+        for extra in (
+            {'tenant_id': 'TENANT-1'},
+            {'metadata': {'workspace_id': None}},
+            {'metadata': {'organization_ref': 'ORG-1'}},
+            {'metadata': {'details': [{'account_id': 'ACC-1'}]}},
+            {'metadata': {'ｔｅｎａｎｔ＿ｉｄ': 'TENANT-1'}},
+            {'metadata': {'tenant_acl_qualified': False}},
+            {'metadata': list(range(4100))},
+        ):
+            with self.subTest(extra=next(iter(extra))):
+                client = MockOpener()
+                projection = {**BASE, **extra}
+                out = verify(projection, opener=client)
+                self.assertEqual(out['state'], 'UNKNOWN')
+                self.assertEqual(out['ticket_verification'],
+                                 'UNKNOWN_INVALID_CORE_EVIDENCE_PROJECTION')
+                self.assertIsNone(out['incident_id'])
+                self.assertIsNone(out['run_id'])
+                self.assertIsNone(out['ticket_id'])
+                self.assertEqual(out['evidence_ids'], [])
+                self.assertEqual(client.calls, [])
+                self.assertEqual(projection['run_id'], 'RUN-1')
+
     def test_forged_legacy_ids_only_cannot_trigger_glpi_get(self):
         client = MockOpener()
         result = verify({key: BASE[key] for key in ('state', 'run_id', 'incident_id',
