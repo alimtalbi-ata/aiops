@@ -233,11 +233,13 @@ def _qualified_evidence_items(items):
     return True
 
 
-def probe_authenticated_evidence(base, rid, token, get=fetch_json):
-    """Probe Core's bearer-protected evidence refs, without attesting tenant or runtime.
+def probe_authenticated_evidence(base, rid, token, get=fetch_json,
+                                 expected_event_evidence_ids=None):
+    """Probe bearer-protected refs and optionally cross-check the Core event list.
 
-    Core registry GETs are NOT auth-enforced; only this evidence endpoint
-    checks the bearer token. Never expose tokens or raw evidence in output.
+    Core registry GETs are NOT auth-enforced. A matching response run_id alone
+    does not prove that every returned evidence ID occurs in the run's events.
+    This is synthetic-source consistency, NOT tenant or runtime attestation.
     """
     if not token:
         return {"status": "UNKNOWN", "reason": "TOKEN_NOT_CONFIGURED"}
@@ -245,6 +247,14 @@ def probe_authenticated_evidence(base, rid, token, get=fetch_json):
         return {"status": "UNKNOWN", "reason": "RUN_ID_UNQUALIFIED"}
     if not _auth_transport_safe(base):
         return {"status": "UNKNOWN", "reason": "AUTH_TRANSPORT_UNSAFE"}
+    if expected_event_evidence_ids is not None and (
+        not isinstance(expected_event_evidence_ids, list)
+        or not 1 <= len(expected_event_evidence_ids) <= 1000
+        or any(not isinstance(eid, str) or not _EVIDENCE_ID.fullmatch(eid)
+               for eid in expected_event_evidence_ids)
+        or len(set(expected_event_evidence_ids)) != len(expected_event_evidence_ids)
+    ):
+        return {"status": "UNKNOWN", "reason": "EVENT_EVIDENCE_REFS_UNQUALIFIED"}
     try:
         response = get(base, "/api/noc/runs/" + quote(rid, safe="") + "/evidence-refs", token=token)
     except (HTTPError, URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError):
@@ -259,6 +269,10 @@ def probe_authenticated_evidence(base, rid, token, get=fetch_json):
             or response.get("runtime_attested") is not False
             or not _qualified_evidence_items(items)):
         return {"status": "UNKNOWN", "reason": "EVIDENCE_CONTRACT_MISMATCH"}
+    if (expected_event_evidence_ids is not None
+            and not {item["evidence_id"] for item in items}.issubset(
+                set(expected_event_evidence_ids))):
+        return {"status": "UNKNOWN", "reason": "EVIDENCE_EVENT_LINK_MISMATCH"}
     return {"status": "SOURCE_VERIFIED_SYNTHETIC_ONLY", "reference_count": len(items),
             "tenant_acl_qualified": False, "runtime_attested": False}
 
@@ -289,7 +303,9 @@ def main(argv=None):
     if args.probe_auth_evidence:
         token = os.getenv("AIOPS_INTERNAL_TOKEN") or os.getenv("AIOPS_ADMIN_TOKEN")
         output["authenticated_evidence_probe"] = (
-            probe_authenticated_evidence(args.core_url, output["run_id"], token)
+            probe_authenticated_evidence(
+                args.core_url, output["run_id"], token,
+                expected_event_evidence_ids=output.get("evidence_refs_unattested"))
             if output.get("run_id") else {"status": "UNKNOWN", "reason": "NO_QUALIFIED_RUN"}
         )
         output["registry_auth_enforced"] = False
