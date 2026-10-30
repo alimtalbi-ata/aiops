@@ -96,6 +96,8 @@ class TemporalHitlWorkflowContractTests(unittest.TestCase):
         self.assertIn("for update skip locked limit %s", core)
         self.assertIn("lease_until<=now()", core)
         self.assertIn("outbox_lease_lost_or_invalid", core)
+        self.assertIn("select status,lease_token,(lease_until>now())", core)
+        self.assertIn("row[2] is not True", core)
         self.assertIn("delivery_attempt_limit_exceeded", core)
         self.assertIn("/api/hitl/decision-outbox/claim", worker)
         self.assertIn("/api/hitl/decision-outbox/{event_id}/delivered", worker)
