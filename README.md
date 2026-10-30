@@ -43,6 +43,20 @@ The Simulator is isolated on `aiops2-execution`; it does not have direct access 
 
 See `docs/` for architecture, data contracts, network boundaries, deployment, demo and resilience strategy.
 
+## 48-hour enterprise convergence
+
+The active convergence baseline is documented in:
+- [Reference architecture and ITIL 4 operating model](docs/architecture/AIOPS2-REFERENCE-ARCHITECTURE-2026-10-30.md)
+- [48-hour delivery plan](docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md)
+- [AI benchmark and token/cost governance](docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md)
+- [Deterministic CI AI benchmark baseline](docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md)
+- [RC1.4 release-kit audit](docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md)
+- [Reuse and PR convergence register](docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md)
+- [Schedules and Debian cron safety](docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md)
+- [ACME P1 SAN→Payments customer story](docs/customer-story/ACME-P1-SAN-PAYMENTS-ITIL-DEMO-2026-10-30.md)
+
+These documents are a target and execution baseline, not evidence that unmerged PRs, real integrations, Debian cron or production services are deployed. Keep the five existing work schedules; Schedule 5/5 owns architecture/release convergence.
+
 ## Project continuity and historical reuse
 
 Before resuming work in a new session, read these documents in order:

@@ -136,3 +136,39 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 - **Decision:** Add a dedicated internal-token authenticated, synthetic-only, allowlisted Core Run identity endpoint for the signed NOC join. Reuse the existing NOC tenant-scope refusal in a shared helper rather than silently accepting tenant claims. Require an actual synthetic Incident record in PostgreSQL. Keep the older Core endpoints unchanged in this small lot.
 - **Qualification gate:** Existing GitHub quality workflow with real ephemeral Core HTTP and PostgreSQL 16, plus negative and non-regression tests. An internal token is service authentication, **not** tenant-bound actor identity. No A/B authorized reads or LIVE evidence until Core-owned tenant RBAC is implemented.
 - **Rollback:** Revert the small Core/portal/shared/test/workflow patch together; do not restore anonymous NOC correlation or weaken the LIVE fence.
+
+
+## ADR-0017 — One enterprise control plane and 48-hour vertical-slice convergence
+
+- **Date:** 2026-10-30
+- **Status:** Proposed on `architecture/48h-convergence-20261030`; architecture review required before implementation promotion.
+- **Decision:** Converge all active AIOps work on one Core-owned Incident/Run lifecycle, Temporal-owned orchestration, append-only Evidence, sourced Twin/CMDB, advisory Analyst/Critic, deterministic Policy, Core-owned HITL ledger, separately fenced execution and Portal read models. Use the ACME SAN→Payments P1 synthetic journey as the single 48-hour customer demonstration.
+- **Reason:** The repository contains many overlapping open PRs and feature branches. A single vertical slice with immutable identifiers and evidence is more demonstrable and maintainable than multiple disconnected feature demos or a parallel rewrite.
+- **ITIL 4 alignment:** Map Monitoring/Event Management, Incident Management, Service Desk, Service Configuration, Problem, Knowledge, Change Enablement, Release/Deployment, Service Validation, Information Security, Service Level Management and Continual Improvement to observable states and evidence. This is not a certification claim.
+- **AI governance:** Reuse the existing Analyst/Critic evaluation harness and dataset. Extend the shared invocation path to measure provider-reported tokens, latency, retries and cost only with a pinned pricing source. Missing usage remains UNKNOWN; no model is promoted on cost alone.
+- **Schedule decision:** Retain the five existing ChatGPT schedules and assign 5/5 architecture/release integration. Prefer one daily full GitHub quality schedule plus a 15-minute read-only deployed smoke only after runner installation; do not activate duplicate #189 cadence. Debian auto-deploy #146/#153 remains disabled.
+- **Qualification:** exact-head CI, real ephemeral integration, synthetic E2E, failure injection, package checksums and install/rollback are separate gates. Green CI does not qualify Debian or LIVE.
+- **Safety:** no mass merge, direct main push, production change, cron installation, Docker restart, live migration or LIVE remediation. Any execution requires separate approval, policy recheck, identity, ownership/fencing, preconditions, idempotency, independent verification and rollback.
+- **Rollback:** documentation branch can be reverted as one PR; no runtime or data migration is introduced by this ADR.
+
+
+## ADR-0018 — Preserve scoped read-model contracts and exact-head release stop
+
+- **Date:** 2026-10-30 12:15 UTC
+- **Status:** Proposed; subject to review on PR #195.
+- **Decision:** Never change a fail-closed Core Run/GLPI/Evidence/Policy response contract merely to satisfy an outdated test double. A failing exact-head CI gate stops the integrated release even when earlier heads passed. Repair mocks/fixtures to match the authoritative endpoint schema, add negative tests for foreign `run_id`, and rerun the exact SHA.
+- **Evidence:** #185 candidate `5782d6f` V2.8 [41053319372](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319372) failed one of 59 tests because a legacy mock returned `{"decision":"BLOCKED"}` rather than a scoped `{"items":[...]}` gates response. Quality [41053319020](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319020) was pending when recorded. Do not infer a runtime regression or a green gate from this single test.
+- **Ownership:** 2/5 owns Portal fixtures and UI contract; 5/5 integrates only verified fixes. #196 owns the existing Analyst/Critic telemetry implementation; 5/5 owns benchmark interpretation and release evidence, not a duplicate provider client.
+- **Consequences:** One draft release candidate, no main/stable merge, no cron activation or Debian changes; explicit UNKNOWN for unverified business links, costs, approvals and rollback.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — release governance decision
+
+**Decision:** repair the V2.8 contract fixture in the existing #185 candidate without weakening the Core run/gate identity guard; do not merge the diverged release branch. Favor clean-main selective integration of #197/#198/#199 and the architecture docs before rebuilding a cumulative kit. Keep #188 as the *single preferred* daily full-quality + 15-minute read-only runtime-smoke design; do not activate duplicate #189. #146/#153 Debian auto-deploy remain disabled and #187 Loki/Tempo/OTel remains deferred. CI PASS on an isolated PR is not an install/rollback/production approval; synthetic HITL cannot authorize LIVE.
+
+**Evidence:** #185 `2b2af9c` V2.8 run 41055650146 SUCCESS, local V2.8 59/59 and selected 253/253; Quality 41055650123 pending at recording. #196 `6b6a3b3` four workflows SUCCESS. Two RC1.4 artifacts have mutually missing features and no full architecture docs. **Release verdict: NO-GO.**
+
+### ADR-2026-10-30-48H-KIT — Cumulative release must be main-based (2026-10-30 13:12 UTC)
+
+**Status:** proposed, no deployment authorization. **Decision:** #185 `2b2af9c` remains sole synthetic demo candidate, but direct merge is unsafe (741 ahead/43 behind main) and its 395/395-integrity ZIP is **not cumulative**: migration 011, OIDC identity modules, AI telemetry and architecture/story docs absent. Reuse #197/#198/#199 main-based adapters, selectively port #190/#185 story, #192/#193 GLPI/proposals, #194 HITL/OIDC/outbox, #196 provider telemetry and #195 docs; reconcile Core/Portal `main.py`, `compose.yml`, Quality YAML with tests and one exact SHA. #188 preferred nightly Quality/15-min read-only smoke after runner approval; #189 duplicate inactive; #146/#153 auto-deploy disabled and #187 deferred. No merge, stable push, host operation, GLPI write or LIVE approval implied.
+
