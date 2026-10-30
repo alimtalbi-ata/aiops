@@ -126,8 +126,8 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("snapshot_binding_invalid")
     if (
         set(before) != _SNAPSHOT_KEYS or set(after) != _SNAPSHOT_KEYS
-        or before["health"] not in _ALLOWED_HEALTH
-        or after["health"] not in _ALLOWED_HEALTH
+        or type(before["health"]) is not str or before["health"] not in _ALLOWED_HEALTH
+        or type(after["health"]) is not str or after["health"] not in _ALLOWED_HEALTH
         or type(before["service_available"]) is not bool
         or type(after["service_available"]) is not bool
     ):
@@ -136,7 +136,8 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     if (
         not isinstance(rollback, dict)
         or rollback.get("effect_applied") is not False
-        or rollback.get("status") not in {"NOT_REQUIRED", "PROJECTED_ONLY", "AVAILABLE_AS_PROJECTION"}
+        or type(rollback.get("status")) is not str
+        or rollback["status"] not in {"NOT_REQUIRED", "PROJECTED_ONLY", "AVAILABLE_AS_PROJECTION"}
         or rollback.get("executed", False) is not False
         # The existing projection builder always supplies a no-effect
         # projected rollback state; absence must not be called "available".
@@ -144,6 +145,10 @@ def present_demo_policy_result(receipt: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("rollback_effect_claim_forbidden")
     status = projection.get("status")
+    # Malformed JSON arrays/objects must fail closed with a stable contract
+    # error, not raise TypeError during the status-to-rollback lookup.
+    if type(status) is not str or status not in (_SIMULATED | {"BLOCKED"}):
+        raise ValueError("projection_status_invalid")
     # The existing projection builder has exactly these no-effect hypotheses.
     # Do not allow a forged receipt to turn FAILURE/BLOCKED into a recovery.
     expected_after = (
