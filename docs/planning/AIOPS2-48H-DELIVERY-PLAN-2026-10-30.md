@@ -98,3 +98,62 @@ The 48-hour release target is a customer-demo kit at T2 synthetic E2E, plus T3 r
 ## 2026-10-30 14:00 UTC — actual H0–H12 integration progress and next gate
 
 5/5 opened [draft #201](https://github.com/alimtalbi-ata/aiops/pull/201) at `2ceda14c8a21fe71e88b3228879799e6c37a5387`, base `main@27deb9b1`, 22 changed paths (6 exact 1/3/4 code/test files, 14 exact docs from #195, Quality offline test wiring, one provenance report), **0 behind main**. This is the first coherent main-based *staging* SHA, not the final release/kit. T0 combined Quality [41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) PENDING at capture. Immediate sequence: inspect exact-head test steps/results; require 2/5 Portal main-based route and Core protected Evidence refs; reconcile #190/#192–#196 overlaps and migration 011/OIDC/AI telemetry; build/inspect cumulative ZIP; isolated install/upgrade/rollback/failure injection. No customer-facing real source/GLPI/model assertion yet.
+
+
+## 2026-10-30 14:46 Europe/Paris — active 48-hour execution clock
+
+**Target customer rehearsal deadline:** 2026-11-01 14:46 Europe/Paris.  
+**Current release posture:** synthetic customer-demo target only; cumulative installation kit and Debian runtime remain NO-GO; LIVE remains NO-GO.
+
+### Work completed / revalidated
+
+- Target architecture, ITIL 4 operating model, ADRs, reuse register, 48-hour plan, customer story, benchmark governance, schedule/cron safety and RC1.4 kit audit exist in the main-based documentation PR #195.
+- Exact prior #195 documentation head `f9617b09` passed Quality 41061315909 (3/3); subsequent evidence refreshes are awaiting their own exact-head CI.
+- Main-based scoped PRs #197 (UTC Evidence preflight), #198 (synthetic Run locator) and #199 (Policy SIMULATE fixture) each have exact-head Quality SUCCESS. Their narrow limits remain explicit; they are not a combined integration proof.
+- Existing #194 HITL/OIDC/outbox and #196 AI invocation telemetry stacks have all their previously observed exact-head workflows green, but their bases are stacked and require selective integration before a main-based release.
+- The latest deterministic AI artifact #12976497171 records five cases, ten calls, provider usage 10/10, 20 fixed placeholder tokens, P50 3.01 ms/P95 4.54 ms, and cost UNKNOWN. It is not real-model performance.
+- All five schedules were reoriented; 2/5 Portal was re-enabled; immediate runs were requested. The requests are not completion evidence.
+
+### H0–H4 — architecture / integration control
+
+- Freeze one canonical Incident/Run, service, CI, Evidence and ticket identity contract.
+- Use #195 as the sole architecture/ADR baseline; refresh exact-head CI after doc updates.
+- Review #197/#198/#199 and keep each scope honest.
+- Inspect #185, #190, #192–#194 and #196 by changed-file intersection; port minimal changes to a clean main-based branch only when dependencies and tests are understood.
+- Owner: 5/5; workstream inputs: 1/5–4/5.
+
+### H4–H12 — operator journey and source integrity
+
+- 1/5: verify SAN→Payments graph and canonical synthetic Run; never infer actual Payments impact from seed topology.
+- 2/5: implement a minimal main-based read-only Run detail route from existing Portal routers and Core APIs; show Evidence as UNKNOWN while the protected refs API is absent.
+- 3/5: preserve fail-closed UTC preflight; qualify authenticated, tenant-scoped GLPI/Evidence reads only when endpoints and test credentials exist.
+- 4/5: show Policy decision/reasons and proposal state separately; no simulated human approval or effect authority.
+- Exit: one coherent synthetic story with exact IDs and provenance or explicit UNKNOWN.
+
+### H12–H24 — real-model benchmark and token control
+
+- Run the existing evaluator through the actual Analyst/Critic Intelligence service against Ollama Qwen3 4B and 8B, three repeats each, using one dataset SHA and prompt version.
+- Preserve raw per-call provider usage, latency, retries, case-level results and failure reports.
+- Compare severity, grounding, freshness, injection, contradiction, stale detection, Critic disposition and proposal actionability.
+- Do not infer token usage from request bytes or estimate price. Cost stays UNKNOWN without approved versioned pricing/invoice evidence.
+- Add token/spend budget enforcement only after authenticated tenant identity and a reliable tokenizer/provider usage source are available.
+- Exit: reproducible model comparison artifact or explicit BLOCKED/FAIL with the reason; no forced PASS.
+
+### H24–H36 — resilience / ITIL control validation
+
+- Test duplicate/out-of-order events, replay, stale/conflicting Evidence, prompt injection, Critic reject, Policy BLOCK/UNKNOWN, HITL reject/revoke, outbox lease expiry, lost acknowledgement and Temporal/Worker restart.
+- Validate Major Incident, escalation N1/N2/N3, Incident Commander, Problem/PIR, Knowledge and Change Enablement projections against the canonical Run.
+- Keep all remediation sandbox/no-effect; independently verify pre/postconditions in the simulation only.
+
+### H36–H48 — cumulative kit and client rehearsal
+
+- Create one main-based release-candidate SHA only after the code PRs are integrated/reviewed.
+- Package the complete migration chain, config template, app services, scripts, test suite, runbooks, ITIL story, benchmark reports, manifest and checksums.
+- Audit actual ZIP members and file hashes; compare package manifest to exact Git SHA and image references.
+- Run clean extraction, offline repackage, disposable install/upgrade/rollback and synthetic E2E.
+- Rehearse the ACME P1 SAN→Payments story; clearly label synthetic, UNKNOWN and NOT_TESTED fields.
+- Exit: cumulative kit with exact checksum and a tiered GO/NO-GO. No Debian production deploy or LIVE remediation in this 48h target.
+
+### Stop conditions
+
+A missing endpoint, tenant ACL, provider usage field, price source, OIDC identity, outbox recovery test, package member or rollback proof is a BLOCKED/UNKNOWN result, not a reason to invent a fallback. If a model fails quality gates, retain the failure and select/adjust the model or prompt only through a new versioned benchmark.
