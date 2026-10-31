@@ -48,6 +48,7 @@ NAV = [
     ("/twin", "Digital Twin"),
     ("/evidence", "Preuves"),
     ("/policy", "Policy / HITL"),
+    ("/hitl", "HITL Inbox"),
     ("/copilot", "Copilot"),
     ("/itsm", "GLPI / ITSM"),
     ("/qualification", "Qualification"),
