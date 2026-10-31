@@ -36,6 +36,7 @@ The demo must be honest about this boundary.
 Generate unique secrets with `deploy/init-env.sh`. Never copy another server's `.env`.
 
 Required:
+- `AIOPS_DEMO_MODE=1` (isolated demo environment only);
 - `AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED=true`
 - a generated `AIOPS_PORTAL_OPERATOR_TOKEN` (at least 32 characters);
 - a distinct `AIOPS_PORTAL_READ_TOKEN`;
