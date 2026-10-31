@@ -9,6 +9,9 @@ const ids = ["thruk", "grafana", "n8n", "glpi", "checkmk"];
 const envelope = () => ({
   schema: "aiops-single-portal-component-registry-v1",
   navigation_mode: "EXTERNAL_BROWSER_LINKS_ONLY_NO_PROXY",
+  // Hypothetical future server-qualified envelope, not served by current Portal.
+  tenant_acl_qualified: true,
+  actor_identity_server_derived: true,
   runtime_verified: false,
   live_remediation_authorized: false,
   items: ids.map(id => ({
@@ -45,7 +48,7 @@ function links(list) {
   return list.children.flatMap(li => li.children.filter(child => child.tag === "a"));
 }
 
-test("authorized navigation clears token, excludes cookies and labels links unverified", async () => {
+test("future server-qualified fixture clears token and labels links unverified", async () => {
   let captured;
   const f = fixture(async (path, options) => {
     captured = {path, options};
@@ -65,12 +68,26 @@ test("authorized navigation clears token, excludes cookies and labels links unve
   assert.match(f.status.textContent, /aucune preuve LIVE/);
 });
 
+test("legacy bearer-only HTTP 200 cannot reveal operator-configured links", async () => {
+  const model = envelope();
+  delete model.tenant_acl_qualified;
+  delete model.actor_identity_server_derived;
+  const f = fixture(async () => ({ok: true, json: async () => model}));
+  f.token.value = "synthetic-ci-viewer-token";
+  await f.context.loadPortalNavigation();
+  assert.equal(links(f.list).length, 0);
+  assert.match(f.status.textContent, /^UNKNOWN/);
+  assert.equal(f.token.value, "");
+});
+
 test("forged LIVE claim and script URL fail closed without a partial link", async () => {
   for (const mutate of [
     model => { model.items[0].state = "OK"; },
     model => { model.items[1].external_url = "javascript:alert(1)"; },
     model => { model.items.push({...model.items[1]}); },
-    model => { model.runtime_verified = true; }
+    model => { model.runtime_verified = true; },
+    model => { model.tenant_acl_qualified = false; },
+    model => { model.actor_identity_server_derived = false; }
   ]) {
     const model = envelope();
     mutate(model);
