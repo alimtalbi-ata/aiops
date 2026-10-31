@@ -416,6 +416,8 @@ class OfflineFailureInjection(unittest.TestCase):
                "call": fake_call, "post_json": fake_post}
         env["verified_no_effect_stage_receipt"] = extract(
             "app/worker/main.py", "verified_no_effect_stage_receipt", env)
+        env["verified_no_effect_stage_started_receipt"] = extract(
+            "app/worker/main.py", "verified_no_effect_stage_started_receipt", env)
         stage = extract("app/worker/main.py", "_execute_stage_blocking", env)
         receipt = stage({
             "run_id": "RUN-OFFLINE", "version": 1,
