@@ -85,6 +85,20 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
             if errors:
                 return {"status": "FAIL", "errors": sorted(set(errors)), "checksums_verified": 0, "source_files_verified": 0}
             files = set(names)
+            # Migration order is a single repository-wide namespace. Two
+            # distinct SQL files sharing an ordinal (for example 009_*)
+            # cannot both be promoted by a checksum-valid release archive.
+            migration_ordinals = {}
+            for migration in sorted(p for p in files if p.startswith("db/migrations/") and p.endswith(".sql")):
+                match = re.fullmatch(r"db/migrations/([0-9]{3})_[^/]+\.sql", migration)
+                if match is None:
+                    errors.append("MIGRATION_NAME_INVALID:" + migration)
+                    continue
+                ordinal = match.group(1)
+                if ordinal in migration_ordinals:
+                    errors.append("MIGRATION_ORDINAL_DUPLICATE:" + ordinal)
+                else:
+                    migration_ordinals[ordinal] = migration
             for path in required_paths:
                 if path not in files:
                     errors.append("REQUIRED_MISSING:" + path)
