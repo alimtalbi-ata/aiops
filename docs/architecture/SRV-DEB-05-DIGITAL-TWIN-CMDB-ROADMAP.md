@@ -111,7 +111,7 @@ These are logical labels, not claims that all containers have already been mappe
 
 ### 4.1 Observation model
 
-The Debian agent emits a versioned, bounded JSON snapshot. Reporter v2 adds:
+The Debian agent emits a versioned, bounded JSON snapshot. Reporter v3 adds:
 
 - container state and health;
 - image reference;
@@ -120,7 +120,8 @@ The Debian agent emits a versioned, bounded JSON snapshot. Reporter v2 adds:
 - attached Docker network names;
 - published host/container port bindings;
 - Docker network name, driver and scope;
-- one-shot per-container CPU and memory usage.
+- one-shot per-container CPU and memory usage;
+- TCP probes against explicitly published, allowlisted application ports using their Docker-reported bind addresses, avoiding false negatives when services bind to the host's private interface instead of loopback.
 
 Sensitive and high-volume information remains excluded: container environment variables, mount details, logs, secrets, database contents, GLPI records and arbitrary command output.
 
@@ -310,6 +311,7 @@ The Debian reporter remains read-only. Any future operator must use typed operat
 | 2026-10-31 | Defined environment classification, canonical CI model, relationship model and reconciliation guardrails. |
 | 2026-10-31 | Defined ITIL 4 workflows and AI quality/cost benchmarking measures. |
 | 2026-10-31 | Reporter v2 topology/resource inventory implementation added to PR #214; CI outcome pending at time of writing. |
+| 2026-10-31 | Reporter v3 adds allowlisted TCP probes for Docker-published service ports using observed bind addresses; schema v3 remains read-only and avoids assuming every host service binds to loopback. |
 | 2026-10-31 | Added second-server deployment and recovery standard; corrected legacy fresh-install script to remove embedded shared credentials and use generated per-install secrets. |
 
 ## 11. Reproducible deployment on a second server
