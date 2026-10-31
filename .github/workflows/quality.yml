@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   policy-and-static:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 Chromium is qualified on Ubuntu 24.04; keep browser E2E mandatory.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -25,6 +26,24 @@ jobs:
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: ACME read-only Core Evidence locator focused tests
+        run: python -m unittest discover -s tests -p "test_find_acme_demo_run.py" -v
+      - name: ACME SAN to Payments synthetic fixture hash and edge contract
+        run: python -m unittest discover -s tests -p "test_acme_san_payments_fixture_contract.py" -v
+      - name: ACME graph-bound synthetic catalog and replay contract tests
+        run: python -m unittest discover -s tests -p "test_acme_synthetic_incident_catalog.py" -v
+      - name: Generate pinned offline ACME replay and checksum
+        run: |
+          python tools/generate_acme_incidents.py --scenario REDUNDANT_SAN_PATH_LOSS --seed 20261018 --output "$RUNNER_TEMP/acme-synthetic-replay.json"
+          sha256sum "$RUNNER_TEMP/acme-synthetic-replay.json"
+      - name: Upload offline synthetic replay (NOT Core or GLPI Evidence)
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-graph-bound-synthetic-replay
+          path: ${{ runner.temp }}/acme-synthetic-replay.json
+          retention-days: 7
+      - name: Compile ACME Core locator
+        run: python -m py_compile tools/find_acme_demo_run.py
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Portal registry and integration navigation unit tests
