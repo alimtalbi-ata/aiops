@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   policy-and-static:
-    runs-on: ubuntu-latest
+    # Keep Playwright 1.55 Chromium on a supported runner; browser E2E remains mandatory.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -22,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "psycopg[binary]==3.2.9"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "psycopg[binary]==3.2.13"
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Core ITSM xref real HTTP router adversarial unit tests (mock DB)
