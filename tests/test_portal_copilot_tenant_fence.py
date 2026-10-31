@@ -44,6 +44,30 @@ class CopilotTenantFenceTests(unittest.TestCase):
                 self._assert_security(response)
                 upstream.assert_not_called()
 
+    def test_malformed_body_never_preempts_authentication_or_calls_upstream(self):
+        # A required FastAPI dict body used to emit 422 before the 401 gate.
+        # Body syntax, client-supplied actor and tenant are never authority.
+        for raw in ('{"question":', '[]', 'null', 'not-json', ''):
+            for auth, expected in ((None, 401), ("Bearer " + TOKEN, 503)):
+                with self.subTest(raw=raw, auth=bool(auth)), \
+                     patch.object(main, "post_json", side_effect=AssertionError("Copilot called")) as upstream, \
+                     patch.object(main, "get_json", side_effect=AssertionError("Core called")) as reader:
+                    headers = {"Content-Type": "application/json",
+                               "X-Actor-ID": "forged",
+                               "X-Tenant-ID": "foreign"}
+                    if auth:
+                        headers["Authorization"] = auth
+                    response = self.client.post("/api/copilot", content=raw, headers=headers)
+                    self.assertEqual(response.status_code, expected)
+                    self._assert_security(response)
+                    if expected == 401:
+                        self.assertEqual(response.json(), {"detail": "invalid_portal_read_token"})
+                    else:
+                        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+                        self.assertEqual(response.json()["state"], "UNKNOWN")
+                    upstream.assert_not_called()
+                    reader.assert_not_called()
+
     def test_unconfigured_read_auth_returns_503_without_upstream(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}), patch.object(
             main, "post_json", side_effect=AssertionError("Copilot called")
