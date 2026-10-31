@@ -21,7 +21,7 @@ Never put the token in crontab, shell history, a repository file, a command-line
 From any directory on SRV-DEB-05, as account `aiops`, bootstrap the installer pinned to a reviewed commit (the script downloads the reporter from the PR branch):
 
 ```bash
-curl --fail --silent --show-error --location https://raw.githubusercontent.com/alimtalbi-ata/aiops/aa3e7cb9c9eb531c831a2d85c4133834a95538a9/scripts/install-debian-reporter.sh | bash
+curl --fail --silent --show-error --location https://raw.githubusercontent.com/alimtalbi-ata/aiops/1e3c937198af7e10c87af76d71cc9045e3810094/scripts/install-debian-reporter.sh | bash
 ```
 
 The installer downloads and validates the reporter, installs it under `~/.local/bin`, and adds a single `* * * * *` entry to the **aiops user crontab**. It does not require a GitHub token for local collection. To enable publication, provision a fine-grained token at `~/.config/aiops/github-token` with mode `0600` and Contents read/write on this repository.
