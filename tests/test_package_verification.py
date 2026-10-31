@@ -207,7 +207,7 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=pathlib.Path(tmp)
             (root/"manifests").mkdir()
-            (root/"compose.yml").write_text("new staged content\\n")
+            (root/"compose.yml").write_text("new staged content\n")
             (root/"manifests/MANIFEST.json").write_text(json.dumps({
                 "release":"8.0.0","name":"legacy",
                 "files":[{"path":"compose.yml","bytes":0,"sha256":"0"*64}]
@@ -222,15 +222,15 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
 
     @staticmethod
     def _repack(path,entries):
-        entries["FILES-SHA256SUMS"]=("\\n".join(
+        entries["FILES-SHA256SUMS"]=("\n".join(
             hashlib.sha256(data).hexdigest()+"  ./"+name
             for name,data in sorted(entries.items())
-        )+"\\n").encode()
+        )+"\n").encode()
         with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as target:
             for name,data in sorted(entries.items()):
                 target.writestr(name,data)
         path.with_suffix(".zip.sha256").write_text(
-            hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\\n"
+            hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\n"
         )
 
 
