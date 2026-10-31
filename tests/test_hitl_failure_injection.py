@@ -776,5 +776,111 @@ class OfflineFailureInjection(unittest.TestCase):
                      {"stage": "HITL", "version": 3})])
 
 
+    def test_synthetic_policy_verdict_fail_closed_before_core_write(self):
+        # 33 isolated mode x forged-Policy injections. No HTTP, DB or Temporal.
+        invalid = (
+            {"state": "PASS", "decision": "ALLOW", "reason": "forged"},
+            {"state": "PASS", "decision": "HUMAN_APPROVAL", "reason": "forged"},
+            {"state": "BLOCKED", "decision": "SIMULATE", "reason": "forged"},
+            {"state": "UNKNOWN", "decision": "SIMULATE", "reason": "forged"},
+            {"state": "INVALID", "decision": "SIMULATE", "reason": "forged"},
+            {"state": "PASS", "decision": "SIMULATE", "reason": ""},
+            {"state": "PASS", "decision": "SIMULATE", "reason": None},
+            {"state": "PASS", "decision": "SIMULATE", "reason": "forged",
+             "execution_allowed": True},
+            {"state": "PASS", "decision": "SIMULATE", "reason": "forged",
+             "effect_allowed": True},
+            {"state": "PASS", "decision": "SIMULATE", "reason": "forged",
+             "effect_allowed": None},
+            {"state": "PASS", "decision": "SIMULATE", "reason": "forged",
+             "execution_allowed": 0},
+        )
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for verdict in invalid:
+                with self.subTest(mode=mode, verdict=verdict):
+                    events, downstream = [], []
+
+                    def fake_call(method, url, payload):
+                        event_type = payload["event_type"]
+                        events.append(event_type)
+                        if event_type == "STAGE_STARTED":
+                            return {"run_id": "RUN-OFFLINE",
+                                    "sequence": 1, "version": 2}
+                        if event_type == "STAGE_FAILED":
+                            return {"run_id": "RUN-OFFLINE",
+                                    "sequence": 2, "version": 3}
+                        raise AssertionError("unqualified_policy_stage_event")
+
+                    def fake_post(base, path, payload, **kw):
+                        if base == "EVID" and path == "/api/evidence":
+                            return {"evidence_id": "E-MARK"}
+                        if base == "POLICY" and path == "/api/policy/check":
+                            return dict(verdict)
+                        downstream.append((base, path))
+                        raise AssertionError("unqualified_policy_core_write")
+
+                    def fake_get(base, path, **kw):
+                        if base == "CORE":
+                            return {"events": [
+                                {"stage": "DGX_ANALYST",
+                                 "event_type": "ANALYST_COMPLETED",
+                                 "payload": {
+                                     "analysis": {"severity": "P2", "confidence": .98},
+                                     "analysis_record_id": "A"}},
+                                {"stage": "DGX_CRITIC",
+                                 "event_type": "CRITIC_COMPLETED",
+                                 "payload": {
+                                     "critique": {"validated": True,
+                                                  "diagnostic_confidence": .98},
+                                     "critique_record_id": "C"}}]}
+                        if base == "EVID":
+                            return {"items": [{"evidence_id": "E-OBS",
+                                               "source": "twin-simulator"}]}
+                        raise AssertionError("unexpected_read")
+
+                    env = {
+                        "CORE": "CORE", "EVID": "EVID", "POLICY": "POLICY",
+                        "ADMIN": "offline", "call": fake_call,
+                        "post_json": fake_post, "get_json": fake_get,
+                        "assess_evidence_freshness": lambda items: {"status": "FRESH"},
+                    }
+                    for name in ("verified_no_effect_stage_started_receipt",
+                                 "verified_synthetic_policy_verdict"):
+                        env[name] = extract("app/worker/main.py", name, env)
+                    stage = extract("app/worker/main.py", "_execute_stage_blocking", env)
+                    with self.assertRaisesRegex(
+                            RuntimeError, "synthetic_policy_verdict_not_qualified"):
+                        stage({"run_id": "RUN-OFFLINE", "version": 1,
+                               "stage": "POLICY", "mode": mode,
+                               "scenario_id": "SCENARIO-OFFLINE"}, 1)
+                    self.assertEqual(events, ["STAGE_STARTED", "STAGE_FAILED"])
+                    self.assertEqual(downstream, [])
+
+    def test_synthetic_policy_verdict_normalizes_valid_no_effect_reasons(self):
+        qualify = extract("app/worker/main.py",
+                          "verified_synthetic_policy_verdict", {})
+        cases = (
+            ("PASS", "SIMULATE", "critic validated and evidence fresh"),
+            ("BLOCKED", "HUMAN_APPROVAL", "critic rejected"),
+            ("BLOCKED", "ENRICH", "stale evidence"),
+            ("UNKNOWN", "HUMAN_APPROVAL", "no evidence"),
+            ("UNKNOWN", "ENRICH", "unknown severity"),
+        )
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for state, decision, reason in cases:
+                with self.subTest(mode=mode, state=state, decision=decision):
+                    result = qualify({"state": state, "decision": decision,
+                                      "reason": reason}, mode)
+                    self.assertEqual(result["reason"], reason)
+                    self.assertEqual(result["state"], state)
+                    self.assertEqual(result["decision"], decision)
+                    self.assertIs(result["execution_allowed"], False)
+                    self.assertIs(result["effect_allowed"], False)
+        with self.assertRaisesRegex(
+                RuntimeError, "synthetic_policy_verdict_not_qualified"):
+            qualify({"state": "PASS", "decision": "SIMULATE",
+                     "reason": "not live"}, "LIVE")
+
+
 if __name__ == "__main__":
     unittest.main()
