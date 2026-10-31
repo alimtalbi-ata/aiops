@@ -284,7 +284,7 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                 forged["dataset_sha256"] = hashlib.sha256(gen._canonical(unsigned)).hexdigest()
                 with self.assertRaisesRegex(ValueError, "golden replay manifest mismatch"):
                     gen.correlate_golden_manifest_offline(forged)
-        for invalid in (None, {}, gen.replay("NETWORK_FAILURE"), {"seed": True}):
+        for invalid in (None, {}, gen.replay("NETWORK_FAILURE"), gen.replay(seed=20261019), {"seed": True}):
             with self.subTest(invalid=str(type(invalid))):
                 with self.assertRaisesRegex(ValueError, "untrusted golden replay manifest"):
                     gen.correlate_golden_manifest_offline(invalid)
