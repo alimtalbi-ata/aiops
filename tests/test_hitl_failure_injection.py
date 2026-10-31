@@ -603,5 +603,81 @@ class OfflineFailureInjection(unittest.TestCase):
                 self.assertEqual(fake.calls, ["start_run", "execute_stage", "finish_run"])
 
 
+    def test_stage_pass_ack_rejects_skipped_version_or_forged_event(self):
+        # Offline Core receipt mutations. A statusless ACK is not a
+        # free-standing PASS decision and cannot skip a committed version.
+        normalize = extract("app/worker/main.py",
+                            "verified_no_effect_stage_receipt", {})
+        base = {"run_id": "RUN-OFFLINE", "sequence": 2, "version": 3}
+        for mutation in (
+            {"version": 4}, {"version": 999},
+            {"event_type": "STAGE_FAILED"},
+            {"event_type": "HITL_PROPOSAL_CREATED"},
+            {"idempotent": "yes"}, {"idempotent": 1},
+        ):
+            with self.subTest(mutation=mutation):
+                with self.assertRaisesRegex(
+                        RuntimeError, "stage_pass_receipt_not_qualified"):
+                    normalize({**base, **mutation},
+                              "RUN-OFFLINE", "NORMALIZE", 2)
+        valid = normalize({**base, "event_type": "STAGE_COMPLETED",
+                           "idempotent": False},
+                          "RUN-OFFLINE", "NORMALIZE", 2)
+        self.assertIs(valid["execution_allowed"], False)
+        self.assertIs(valid["effect_allowed"], False)
+
+    def test_forged_stage_pass_ack_blocks_checkpoint_and_demo_artifacts(self):
+        # Exercise the real stage function with fake Core/Evidence calls.
+        # A forged completion ACK may record STAGE_FAILED but must not
+        # trigger a checkpoint or synthetic demo artifact after rejection.
+        for mutation in (
+            {"version": 4}, {"event_type": "STAGE_FAILED"},
+            {"idempotent": "forged"}, {"effect_allowed": True},
+            {"run_id": "RUN-OTHER"}, {"status": "BLOCKED"},
+        ):
+            with self.subTest(mutation=mutation):
+                calls, writes = [], []
+
+                def fake_call(method, url, payload):
+                    event = payload["event_type"]
+                    calls.append(event)
+                    if event == "STAGE_STARTED":
+                        return {"run_id": "RUN-OFFLINE",
+                                "sequence": 1, "version": 2}
+                    if event == "STAGE_COMPLETED":
+                        return {"run_id": "RUN-OFFLINE",
+                                "sequence": 2, "version": 3, **mutation}
+                    if event == "STAGE_FAILED":
+                        return {"run_id": "RUN-OFFLINE",
+                                "sequence": 3, "version": 4}
+                    raise AssertionError("unexpected_core_call")
+
+                def fake_post(base, path, payload, **kwargs):
+                    writes.append((base, path))
+                    if base == "EVID" and path == "/api/evidence":
+                        return {"evidence_id": "E-OFFLINE"}
+                    if base == "CORE" and (
+                            path.endswith("/checkpoint")
+                            or path.endswith("/demo-artifacts")):
+                        raise AssertionError("unverified_ack_promoted")
+                    raise AssertionError("unexpected_post")
+
+                env = {"CORE": "CORE", "EVID": "EVID", "ADMIN": "offline",
+                       "call": fake_call, "post_json": fake_post}
+                env["verified_no_effect_stage_receipt"] = extract(
+                    "app/worker/main.py", "verified_no_effect_stage_receipt", env)
+                env["verified_no_effect_stage_started_receipt"] = extract(
+                    "app/worker/main.py", "verified_no_effect_stage_started_receipt", env)
+                stage = extract("app/worker/main.py", "_execute_stage_blocking", env)
+                with self.assertRaisesRegex(
+                        RuntimeError, "stage_pass_receipt_not_qualified"):
+                    stage({"run_id": "RUN-OFFLINE", "version": 1,
+                           "stage": "NORMALIZE", "mode": "DEMO",
+                           "scenario_id": "SCENARIO-OFFLINE"}, 1)
+                self.assertEqual(calls,
+                                 ["STAGE_STARTED", "STAGE_COMPLETED", "STAGE_FAILED"])
+                self.assertEqual(writes, [("EVID", "/api/evidence")])
+
+
 if __name__ == "__main__":
     unittest.main()
