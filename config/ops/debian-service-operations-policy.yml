@@ -1,0 +1,117 @@
+version: 1
+scope:
+  host_label: SRV-DEB-05
+  linux_account: aiops
+  environment: aiops-lab
+  authorization: user-authorized-service-operations
+  applies_to: application_services_and_application_data_only
+
+default: deny
+
+allowed_operations:
+  docker:
+    - inspect_container
+    - read_container_health
+    - restart_allowlisted_container
+    - stop_allowlisted_container
+    - start_allowlisted_container
+    - compose_restart_allowlisted_service
+    restrictions:
+      - service_name_must_be_in_inventory_allowlist
+      - never_use_docker_exec
+      - never_use_privileged_containers
+      - never_mount_host_root
+      - never_build_or_pull_unreviewed_images
+      - no_docker_socket_exposure_to_general_agent
+      - use_restricted_docker_api_proxy_or_equivalent_narrow_control_plane
+      - restart_only_after_two_failed_health_observations_and_dependency_check
+      - one_service_at_a_time
+      - verify_health_and_rollback_or_stop_on_regression
+  postgresql:
+    - read_health_and_schema_metadata
+    - run_versioned_application_migrations
+    - modify_aiops_application_schema_and_data
+    restrictions:
+      - dedicated_least_privilege_role
+      - never_use_superuser
+      - migration_must_be_versioned_and_reviewed
+      - capture_preflight_and_postflight
+      - backup_or_verified_restore_point_before_destructive_change
+      - transactional_migration_when_supported
+      - bounded_lock_timeout_and_statement_timeout
+      - no_secret_or_personal_data_in_reports
+  mariadb:
+    - read_health_and_schema_metadata
+    - run_versioned_application_migrations
+    - modify_aiops_application_schema_and_data
+    restrictions:
+      - dedicated_least_privilege_role
+      - never_use_root_or_global_admin
+      - migration_must_be_versioned_and_reviewed
+      - backup_or_verified_restore_point_before_destructive_change
+      - bounded_lock_wait_and_statement_timeout
+      - no_secret_or_personal_data_in_reports
+  glpi:
+    - read_configuration_and_health
+    - create_or_update_lab_tickets
+    - create_or_update_lab_cmdb_items
+    - update_lab_rules_and_catalogue
+    restrictions:
+      - use_glpi_application_api_or_supported_plugin_interface
+      - use_dedicated_service_account
+      - preserve_audit_history
+      - no_mass_delete
+      - no_production_tenant_mutation
+  grafana:
+    - read_health_and_configuration
+    - create_or_update_lab_dashboards
+    - create_or_update_lab_datasources
+    - create_or_update_lab_alert_rules
+    restrictions:
+      - use_grafana_http_api
+      - use_dedicated_service_account
+      - export_before_update
+      - no_secret_values_in_reports
+  temporal:
+    - inspect_namespaces_and_workers
+    - restart_allowlisted_worker_service
+    - run_synthetic_non_live_workflows
+    restrictions:
+      - never_start_live_remediation_workflows
+      - never_change_live_execution_authorization
+      - preserve_workflow_history
+      - use_synthetic_or_demo_namespaces_for_qualification
+
+prohibited_operations:
+  - arbitrary_shell_or_remote_command_execution
+  - sudo
+  - su
+  - systemctl_or_service_manager_mutation
+  - apt_or_dpkg_mutation
+  - kernel_or_bootloader_changes
+  - user_or_group_management
+  - filesystem_permission_or_ownership_changes_outside_agent_state
+  - ssh_configuration_or_key_changes
+  - firewall_routing_dns_or_network_interface_changes
+  - cron_or_systemd_timer_mutation
+  - host_reboot_or_shutdown
+  - docker_exec
+  - unrestricted_docker_socket_access
+  - database_superuser_access
+  - destructive_production_data_changes
+  - live_ssh_or_sudo_remediation
+
+execution_controls:
+  - fixed_typed_operation_catalog_only
+  - never_accept_shell_command_strings_from_github
+  - allowlisted_resource_identifiers_only
+  - validate_job_schema_and_expiry
+  - idempotency_key_required
+  - flock_single_runner
+  - per_operation_timeout_and_output_cap
+  - record_actor_reason_target_and_result
+  - redact_secrets_and_personal_data
+  - publish_append_only_audit_event
+  - stop_on_unexpected_postcondition
+  - synthetic_and_lab_scope_only
+  - no_operation_may_modify_debian_host_configuration
