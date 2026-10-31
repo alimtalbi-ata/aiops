@@ -68,7 +68,7 @@ python3 scripts/qualify_nim_runtime.py \
   --report artifacts/nim-runtime-qualification.json
 
 # Keep a protected recovery copy of the existing environment.
-BACKUP=".env.backup-nim-$(date -u +%Y%m%dT%H%M%SZ)"
+BACKUP=".env.backup-nim-$(date -u +%Y%m%dT%H%M%SZ)-$"
 cp -p .env "$BACKUP"
 chmod 600 "$BACKUP"
 export NIM_BASE_URL MODEL_ID NIM_TIMEOUT_SECONDS="$TIMEOUT"
@@ -155,6 +155,22 @@ print(json.dumps({"intelligence_ready":ready.get("status"),
 PY
 
 docker compose --env-file .env ps
+docker compose --env-file .env ps --format json | python3 -c '
+import json,sys
+raw=sys.stdin.read().strip()
+try:
+    data=json.loads(raw)
+    rows=data if isinstance(data,list) else [data]
+except json.JSONDecodeError:
+    rows=[json.loads(line) for line in raw.splitlines() if line.strip()]
+required={"aiops2-intelligence","aiops2-worker","aiops2-copilot","aiops2-portal"}
+for service in sorted(required):
+    matches=[row for row in rows if row.get("Service")==service]
+    if len(matches)!=1 or matches[0].get("State")!="running" or matches[0].get("Health")!="healthy":
+        print("BLOCKED|service_not_healthy|"+service)
+        raise SystemExit(1)
+print("ROLLOUT_SERVICES_HEALTHY=4")
+'
 echo "NIM_RUNTIME_CONFIGURATION=PASS"
 echo "ENV_BACKUP=$BACKUP"
 echo "DATABASE_MIGRATIONS=NOT_RUN"
