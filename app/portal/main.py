@@ -1234,6 +1234,7 @@ def portal_hitl_inbox(authorization: str | None = Header(default=None)):
                     run = detail.get("run") if isinstance(detail, dict) else None
                     run_modes[run_id] = (
                         run.get("mode") if isinstance(run, dict) and run.get("run_id") == run_id
+                        and run.get("scenario_id") == "SCN-GOLDEN-PAYMENT-P1"
                         else "UNKNOWN"
                     )
             if run_modes[run_id] not in ("DEMO", "REPLAY", "STORY"):
