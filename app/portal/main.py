@@ -8,7 +8,7 @@ from portal.acme_explore_story import router as acme_explore_story_router
 from portal.acme_impact_read_model import router as acme_impact_router
 from portal.glpi_operator_view import router as glpi_operator_router
 from portal.portal_integrations import build_navigation
-from portal.noc_runtime import router as noc_runtime_router, _noc_json_response
+from portal.noc_runtime import router as noc_runtime_router, _noc_json_response, _require_portal_read_auth
 from portal.portal_command_auth import require_demo_operator
 from portal.noc_correlation import router as noc_correlation_router
 from portal.noc_demo_rag import router as noc_demo_rag_router
@@ -58,7 +58,26 @@ def portal_navigation_script():
     return FileResponse(Path(__file__).with_name('portal_navigation_client.js'), media_type='application/javascript', headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
 @app.get('/api/portal/bootstrap')
-def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
+def bootstrap(authorization: str | None = Header(default=None)):
+    # A shared viewer bearer is authentication only, not a tenant ACL.
+    # Keep the dashboard constant and fail closed until a server-derived,
+    # identity-bound tenant read contract exists.
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({'detail':exc.detail}, status_code=exc.status_code)
+    return _noc_json_response({
+        'state':'UNKNOWN', 'reason':'TENANT_ACL_NOT_QUALIFIED',
+        'connection_state':'UNKNOWN', 'source_freshness':'UNKNOWN',
+        'runtime_authenticated':False, 'live_remediation_authorized':False,
+    }, status_code=503)
+
+
+@app.get('/assets/portal-bootstrap.js')
+def portal_bootstrap_script():
+    return FileResponse(Path(__file__).with_name('portal_bootstrap_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 @app.post('/api/copilot')
 def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
 def _require_portal_read(authorization):
@@ -340,79 +359,73 @@ def _verified_operator_run_context(run_id, detail, listed):
 
 @app.get("/",response_class=HTMLResponse)
 def home():
-    d=_get("/api/dashboard"); t=_get("/api/twin/summary",TWIN)
+    # Public shell only: no unscoped Core/Twin reads before tenant ACL.
     cards=[
-        ("Incidents ouverts",d.get("open_incidents"),"#E24B4A"),
-        ("P1 ouverts",d.get("open_p1"),"#EF9F27"),
-        ("Runs actifs",d.get("running"),"#7F77DD"),
-        ("Runs bloqués",d.get("blocked"),"#378ADD"),
-        ("Nœuds Twin",t.get("nodes"),"#1D9E75"),
-        ("Équipements dégradés",d.get("degraded_nodes"),"#639922"),
+        ("Incidents ouverts","UNKNOWN"),
+        ("P1 ouverts","UNKNOWN"),
+        ("Runs actifs","UNKNOWN"),
+        ("Runs bloqués","UNKNOWN"),
+        ("Nœuds Twin","UNKNOWN"),
+        ("Équipements dégradés","UNKNOWN"),
     ]
     tiles="".join(
-        f'<div class="tile" style="--c:{color}"><strong>{esc("INCONNU" if v is None else v)}</strong><span>{esc(k)}</span></div>'
-        for k,v,color in cards
+        f'<div class="tile"><strong>{esc(value)}</strong><span>{esc(label)}</span></div>'
+        for label,value in cards
     )
-    recent_runs=_runs()
-    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("scenario_id","UNKNOWN")) for r in recent_runs[:15]]
     content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
-    content+=panel("Sources du cockpit — état API, pas preuve métier",
-        '<p>CONNECTED = réponse API structurée uniquement ; UNAUTHORIZED = HTTP 401/403 ; '
-        'UNAVAILABLE = transport ou serveur indisponible. NOT_INSTALLED exige un inventaire '
-        'qualifié, non disponible ici ; les autres cas restent UNKNOWN.</p>'
+    content+=panel("Sources du cockpit — lecture non qualifiée",
+        '<p>Les métriques restent UNKNOWN tant qu’une autorisation serveur acteur/tenant '
+        'n’est pas qualifiée. Un conteneur healthy ou une réponse API ne constitue pas '
+        'une preuve d’impact métier.</p>'
         +table(["Source","État","Limite"],[
-            ("Core /api/dashboard",_source_state(d,"dashboard"),
-             "REAL/SYNTHETIC à qualifier par run Core"),
-            ("Twin /api/twin/summary",_source_state(t,"summary"),
-             "Aucune corrélation SAN → Payments déduite du résumé"),
-            ("Evidence / AI Ledger","UNKNOWN","Viewer authentifié requis"),
-            ("ITSM GLPI","UNKNOWN","Aucun ticket GET authentifié"),
-            ("Policy / HITL","UNKNOWN","Aucune approbation runtime attestée"),
+            ("Core / incidents","UNKNOWN","Lecture tenant-scoped non qualifiée"),
+            ("Digital Twin / CMDB","UNKNOWN","Relations métier à réconcilier"),
+            ("Evidence / AI Ledger","UNKNOWN","Références synthétiques ou runtime à vérifier"),
+            ("ITSM GLPI","UNKNOWN","Aucun ticket tenant-scoped attesté"),
+            ("Policy / HITL","UNKNOWN","Aucune approbation LIVE autorisée"),
         ]))
-    content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
-    content+=panel("Digital Twin — état courant",pretty(t))
+    content+=panel("Lecture du cockpit",
+        '<p>Jeton viewer utilisé une seule fois. Le serveur refuse toute lecture '
+        'non couverte par une ACL acteur/tenant qualifiée.</p>'
+        '<label for="portal-read-token">Jeton de lecture</label> '
+        '<input id="portal-read-token" type="password" autocomplete="off"> '
+        '<button type="button" onclick="loadPortalReadModel()">Vérifier les sources</button> '
+        '<button type="button" onclick="clearPortalReadModel()">Effacer</button> '
+        '<span id="portal-read-result" role="status">UNKNOWN — aucune lecture authentifiée</span> '
+        '<span id="portal-states">UNKNOWN</span>'
+        '<script src="/assets/portal-bootstrap.js" defer></script>')
     content+=panel("Démo ACME — valeur métier",
-        '<p>Parcours guidé ACME SAN → Payments dans le portail existant, sans effet LIVE.</p>'
-        '<p><a href="/demo-studio">Ouvrir le parcours opérateur Demo Studio</a> · '
-        '<a href="/runs">Choisir un run Core existant</a> · '
-        '<a href="/demo-studio/business-story">Voir la valeur métier hypothétique</a></p>')
-    # Prefer one terminal DEMO/REPLAY/STORY from Core, but only link its
-    # detail after the inventory and detail identities agree.
-    eligible=_qualified_demo_runs(recent_runs)
-    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
-                  eligible[0] if eligible else None)
-    if selected:
-        rid=selected["run_id"]
-        detail=_get("/api/runs/"+rid)
-        if _core_detail_matches_listed_run(detail,selected):
-            content+=_verified_operator_run_context(rid,detail,selected)
-        else:
-            content+=panel("Run Core sélectionné — UNKNOWN",
-                "<p>UNKNOWN — détail Core absent ou contradictoire ; aucun lien "
-                "Analyst/Critic, Evidence, ITSM ou HITL pour ce run.</p>")
-    else:
-        content+=panel("Run Core sélectionné — UNKNOWN",
-            "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu dans l'inventaire Core.</p>")
+        '<p>Parcours synthétique SAN → Payments : incident P1, dépendances, '
+        'analyse, critique indépendante, Policy SIMULATE et vérification. '
+        'Aucun effet LIVE ni modification d’infrastructure réelle.</p>'
+        '<p><a href="/demo-studio">Ouvrir Demo Studio</a> · '
+        '<a href="/demo-studio/business-story">Voir le récit métier</a></p>')
     if _synthetic_demo_launch_enabled():
         content+=panel("Démo ACME — simulation uniquement",
-            '<p class="muted">Lance un incident et un Run ACME synthétiques via Core/Temporal. Aucun champ client n’est accepté ; aucune action LIVE n’est possible.</p>'
+            '<p class="muted">Lance un incident et un Run ACME synthétiques via Core/Temporal. '
+            'Aucun champ client n’est accepté ; aucune action LIVE n’est possible.</p>'
             '<label for="demo-token">Jeton opérateur DEMO (usage unique)</label> '
             '<input id="demo-token" type="password" autocomplete="off"> '
             '<button type="button" id="launch-demo">Lancer le scénario SAN → Payments</button> '
-            '<span id="demo-launch-status" role="status">Prêt — scénario synthétique uniquement</span>'
+            '<span id="demo-launch-status" role="status">Prêt — scénario synthétique uniquement</span> '
             '<script src="/assets/demo-launch.js" defer></script>')
     else:
         content+=panel("Démo ACME — simulation uniquement",
-            '<p class="muted">Le lancement synthétique est désactivé par configuration. Aucun Run ne sera créé depuis le portail.</p><button disabled title="AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED=false">Lancer DEMO (désactivé)</button>')
+            '<p class="muted">Le lancement synthétique est désactivé par configuration. '
+            'Aucun Run ne sera créé depuis le portail.</p>'
+            '<button disabled title="AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED=false">Lancer DEMO (désactivé)</button>')
     content+=panel("Intégrations — liens non attestés",
-        '<p class="muted">Les liens externes ne prouvent ni disponibilité ni authentification. Aucun secret ou URL configurée n’est exposé dans le HTML public.</p>'
+        '<p class="muted">Les liens externes ne prouvent ni disponibilité ni authentification. '
+        'Aucun secret ou URL configurée n’est exposé dans le HTML public.</p>'
         '<label for="portal-navigation-token">Jeton lecture des liens (usage unique)</label> '
         '<input id="portal-navigation-token" type="password" autocomplete="off"> '
         '<button type="button" onclick="loadPortalNavigation()">Afficher les liens configurés</button> '
         '<button type="button" onclick="clearPortalNavigation()">Effacer les liens</button> '
         '<span id="portal-navigation-status">UNKNOWN — liens non chargés</span>'
         '<script src="/assets/portal-navigation.js" defer></script>')
-    return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
+    return shell("/","Cockpit opérationnel",
+        "Cockpit AIOps2 — affichage fail-closed jusqu’à qualification de l’identité et des sources.",
+        content)
 
 
 @app.get("/runs",response_class=HTMLResponse)
