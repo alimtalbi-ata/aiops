@@ -6,15 +6,8 @@ Core supplies a server-authorized, exact-Run, tenant-scoped read contract.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
 import html
 import json
-import os
-import secrets
-import time
-import urllib.error
 import urllib.parse
 from pathlib import Path
 
@@ -38,9 +31,6 @@ SECURITY = {
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     ),
 }
-SESSION_COOKIE = "aiops_portal_run_session"
-SESSION_TTL_SECONDS = 300
-SESSION_AUDIENCE = "portal-run-detail-read-only"
 
 JOURNEY = ("Incident", "Run", "Evidence", "AI Ledger", "Policy", "HITL", "Verification", "GLPI")
 FORBIDDEN_COLLECTIONS = frozenset(
@@ -113,69 +103,6 @@ def _unqualified_run() -> dict:
             "GLPI": {"state": "UNKNOWN", "reason": "NO_TENANT_SCOPED_TICKET_RUN_LINK"},
         },
     }
-
-
-def _session_key() -> bytes:
-    expected = os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
-    if not expected:
-        raise ValueError("portal_read_auth_not_configured")
-    return hmac.new(expected.encode("utf-8"), b"aiops2-portal-run-session-v1",
-                    hashlib.sha256).digest()
-
-
-def _b64(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
-
-
-def _issue_session(run_id: str, now: int | None = None) -> str:
-    if not _valid_run_id(run_id):
-        raise ValueError("invalid run session scope")
-    issued = int(time.time()) if now is None else int(now)
-    payload = {"aud": SESSION_AUDIENCE, "rid": run_id, "iat": issued,
-               "exp": issued + SESSION_TTL_SECONDS,
-               "nonce": secrets.token_urlsafe(16)}
-    encoded = _b64(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
-    signature = _b64(hmac.new(_session_key(), encoded.encode("ascii"),
-                              hashlib.sha256).digest())
-    return encoded + "." + signature
-
-
-def _valid_session(value: object, run_id: str, now: int | None = None) -> bool:
-    if (not _valid_run_id(run_id) or not isinstance(value, str)
-            or len(value) > 1024 or value.count(".") != 1):
-        return False
-    try:
-        encoded, supplied = value.split(".", 1)
-        expected = _b64(hmac.new(_session_key(), encoded.encode("ascii"),
-                                 hashlib.sha256).digest())
-        if not hmac.compare_digest(expected, supplied):
-            return False
-        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
-        payload = json.loads(raw.decode("utf-8"))
-        clock = int(time.time()) if now is None else int(now)
-        if (not isinstance(payload, dict)
-                or set(payload) != {"aud", "rid", "iat", "exp", "nonce"}
-                or payload.get("aud") != SESSION_AUDIENCE
-                or payload.get("rid") != run_id
-                or type(payload.get("iat")) is not int
-                or type(payload.get("exp")) is not int
-                or not isinstance(payload.get("nonce"), str)
-                or not payload["nonce"]
-                or payload["exp"] <= clock
-                or payload["iat"] > clock + 30
-                or payload["exp"] - payload["iat"] != SESSION_TTL_SECONDS
-                or clock - payload["iat"] > SESSION_TTL_SECONDS):
-            return False
-        return True
-    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
-        return False
-
-
-def _cookie_secure() -> bool:
-    value = os.getenv("AIOPS_PORTAL_COOKIE_SECURE", "true").strip().lower()
-    if value not in ("true", "false"):
-        raise ValueError("portal_cookie_secure_must_be_boolean")
-    return value == "true"
 
 
 def _session_failure(status: int, detail: str, headers: dict | None = None) -> JSONResponse:

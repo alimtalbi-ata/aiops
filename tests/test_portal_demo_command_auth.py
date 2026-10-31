@@ -167,7 +167,8 @@ class PortalReconciliationQualityBridgeTests(unittest.TestCase):
     def test_run_glpi_copilot_python_suites(self):
         for pattern in ("test_portal_run_detail.py",
                         "test_portal_glpi_operator_view.py",
-                        "test_portal_copilot_tenant_fence.py"):
+                        "test_portal_copilot_tenant_fence.py",
+                        "test_portal_oidc_identity.py"):
             with self.subTest(pattern=pattern):
                 self._run([sys.executable, "-m", "unittest", "discover",
                            "-s", "tests", "-p", pattern, "-v"])
