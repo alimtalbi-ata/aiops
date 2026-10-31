@@ -116,7 +116,7 @@ def verify(archive: Path) -> dict:
             size=entry.get("bytes")
             digest=entry.get("sha256")
             if (not isinstance(path,str) or not path or path.startswith("/")
-                or "\\\\" in path or any(p in ("",".","..") for p in path.split("/"))
+                or "\\" in path or any(p in ("",".","..") for p in path.split("/"))
                 or path in seen or path in ("manifests/MANIFEST.json","FILES-SHA256SUMS")
                 or not isinstance(size,int) or isinstance(size,bool) or size<0
                 or not isinstance(digest,str) or not re.fullmatch(r"[0-9a-f]{64}",digest)):
