@@ -37,6 +37,11 @@ jobs:
         env:
           PYTHONPATH: app
         run: python -m unittest discover -s tests -p "test_intelligence_http_integration.py" -v
+      - name: Run-scoped NIM Copilot and audit persistence contracts
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-copilot-ephemeral-token
+        run: python -m unittest discover -s tests -p "test_copilot_run_scoped_assistant.py" -v
       - name: Guarded customer demo runner contracts
         run: |
           python -m py_compile scripts/run-acme-demo.py
