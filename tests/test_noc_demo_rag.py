@@ -90,7 +90,7 @@ class NocDemoRagTests(unittest.TestCase):
             catalog.assert_not_called()
 
     def test_missing_asset_unconfigured_auth_is_503_before_validation(self):
-        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}), \\
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}), \
              patch.object(noc_demo_rag, "load_catalog",
                           side_effect=AssertionError("fixture read before auth")) as catalog:
             response = self.client.get("/api/noc/demo-rag")
