@@ -23,9 +23,24 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1"
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: Real Intelligence Analyst/Critic contract and grounding tests
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-intelligence-ephemeral-token-only
+          LLM_BASE_URL: http://127.0.0.1:9/v1
+          LLM_MODEL: test-model
+        run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+      - name: AI evaluator and benchmark aggregation contract tests
+        run: |
+          python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
+          python -m unittest discover -s tests -p "test_ai_benchmark_summary.py" -v
+      - name: OIDC identity and Temporal HITL workflow safety contracts
+        run: |
+          python -m unittest discover -s tests -p "test_hitl_identity.py" -v
+          python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Policy SIMULATE fixture contract tests
