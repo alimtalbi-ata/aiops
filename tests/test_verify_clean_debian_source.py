@@ -24,6 +24,13 @@ class VerifyCleanDebianSourceTests(unittest.TestCase):
     def fixture(self, comparison="ahead", runs=None):
         responses = {
             "/compare/" + SHA + "...main": {"status": comparison},
+            "/commits/" + SHA + "/pulls": [{
+                "state": "closed",
+                "merged_at": "2026-10-31T19:00:00Z",
+                "draft": False,
+                "base": {"ref": "main"},
+                "head": {"repo": {"full_name": REPO}},
+            }],
             "/actions/runs?head_sha=" + SHA + "&per_page=100": {
                 "workflow_runs": runs if runs is not None else [
                     run("AIOps quality gates", ".github/workflows/quality.yml"),
@@ -44,7 +51,7 @@ class VerifyCleanDebianSourceTests(unittest.TestCase):
         get_json, calls = self.fixture()
         result = verify_source(REPO, SHA, "read-only-token", get_json)
         self.assertEqual(len(result), 2)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
 
     def test_rejects_source_not_in_main(self):
         get_json, _ = self.fixture(comparison="behind")
@@ -78,6 +85,31 @@ class VerifyCleanDebianSourceTests(unittest.TestCase):
         ])
         with self.assertRaisesRegex(ValueError, "missing_exact_head_ci"):
             verify_source(REPO, SHA, "read-only-token", get_json)
+
+
+    def test_rejects_unmerged_or_fork_pull_request(self):
+        get_json, _ = self.fixture()
+        def unmerged(repo, token, path):
+            if path == "/commits/" + SHA + "/pulls":
+                return [{
+                    "state": "open", "merged_at": None, "draft": False,
+                    "base": {"ref": "main"},
+                    "head": {"repo": {"full_name": REPO}},
+                }]
+            return get_json(repo, token, path)
+        with self.assertRaisesRegex(ValueError, "merged_same_repo_main_pr"):
+            verify_source(REPO, SHA, "read-only-token", unmerged)
+
+        def fork(repo, token, path):
+            if path == "/commits/" + SHA + "/pulls":
+                return [{
+                    "state": "closed", "merged_at": "2026-10-31T19:00:00Z",
+                    "draft": False, "base": {"ref": "main"},
+                    "head": {"repo": {"full_name": "fork/aiops"}},
+                }]
+            return get_json(repo, token, path)
+        with self.assertRaisesRegex(ValueError, "merged_same_repo_main_pr"):
+            verify_source(REPO, SHA, "read-only-token", fork)
 
     def test_rejects_malformed_sha_and_missing_token(self):
         get_json, _ = self.fixture()
