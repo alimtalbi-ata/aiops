@@ -263,6 +263,31 @@ def replay(scenario_key="REDUNDANT_SAN_PATH_LOSS", seed=20261018,
     return output
 
 
+
+def correlate_golden_manifest_offline(manifest):
+    """Verify the *entire* pinned golden replay before local correlation.
+
+    This prevents an event list with plausible SYN-EVT IDs or a forged
+    checkpoint/priority from being mistaken for the reviewed story. A matching
+    manifest is still SYNTHETIC and is never an authenticated Core/GLPI proof.
+    """
+    if (not isinstance(manifest, dict) or
+            manifest.get("scenario_category") != "REDUNDANT_SAN_PATH_LOSS" or
+            manifest.get("scenario_id") != "SCN-GOLDEN-PAYMENT-P1" or
+            manifest.get("stochastic") is not False or
+            type(manifest.get("seed")) is not int):
+        raise ValueError("untrusted golden replay manifest")
+    try:
+        expected = replay(seed=manifest["seed"])
+    except ValueError as exc:
+        raise ValueError("untrusted golden replay manifest") from exc
+    # Compare all fields, not only the self-declared dataset_sha256. Rehashing
+    # a modified payload must never turn a fabricated observation into proof.
+    if manifest != expected:
+        raise ValueError("golden replay manifest mismatch")
+    return correlate_offline(manifest["events"])
+
+
 def correlate_offline(events):
     """Dedup *fixture-only* events; reject untrusted IDs, CIs and evidence.
 
