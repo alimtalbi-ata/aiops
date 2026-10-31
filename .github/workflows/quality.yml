@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   policy-and-static:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 Chromium is unsupported on ubuntu26.04 (2026-10-31 CI failure).
+    # Pin supported image; keep real browser E2E mandatory.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
