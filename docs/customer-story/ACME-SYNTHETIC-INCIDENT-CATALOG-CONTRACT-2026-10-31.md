@@ -43,6 +43,28 @@ from authoritative APIs; `observed_at` and `known_at` in events are simulated
 fixture-clock timestamps, not LIVE observations. All six lifecycle checkpoints
 remain NOT_EXECUTED, and T1/T2 still require disposable service integration.
 
+### Strict replay contract for other supported categories
+
+The Golden Payments story remains the **only** SAN→Payments customer
+scenario. For the other three graph-bound catalog categories (network failure,
+storage capacity pressure, application degradation), consumers can call
+`correlate_catalog_manifest_offline(manifest, false_positive=False)`. This
+regenerates the complete replay from the pinned SQL/catalog, declared seed
+and stochastic flag, then compares **every field**, including lifecycle
+checkpoints, impact classification, CI, service, timestamp, and synthetic
+identities. It rejects a forged manifest even when its own checksum was
+recalculated. The Golden category delegates to the stricter canonical-seed
+validator; no alternate Golden seed or false-positive mode is accepted.
+
+A false-positive replay requires the caller to explicitly set
+`false_positive=True` **and** to supply a matching generated manifest. The
+helper never infers that mode from event payloads, never confirms priority,
+and never writes to Core or GLPI. A matching replay remains **SYNTHETIC,
+NON-PUBLISHABLE**: tenant/Incident/Run/Evidence/ticket references are UNKNOWN,
+maintenance is a simulation, and all six lifecycle checkpoints are
+NOT_EXECUTED. This is a T0 validation helper, not an API authentication,
+GLPI read-back, tenant isolation, or T1/T2 integration test.
+
 ## SAN→Payments and ITIL interpretation
 
 Stored edges point consumer→dependency. Reverse candidate path: ACME-SAN-FABRIC-A → ACME-STO-PURE01 (ACME-E08) → ACME-VM-PAY01 (ACME-E06) → ACME-APP-ORACLEPAY (ACME-E04) → ACME-SVC-PAYMENTS (ACME-E02) → ACME-BIZ-PAYMENTS (ACME-E01). Fabric B remains reachable via ACME-E09. SAN-A also has a candidate ERP dependency via ACME-E16,E15,E14. **Neither an edge nor a confidence score is observed business impact; redundancy and causality remain unqualified.**
