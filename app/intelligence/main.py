@@ -3,6 +3,7 @@ import contextvars
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 
@@ -17,6 +18,7 @@ app = FastAPI(title='AIOps Analyst and Critic Adapter', version='2.0.0')
 LOG = logging.getLogger('aiops2.intelligence')
 BASE = os.getenv('LLM_BASE_URL', '').rstrip('/')
 MODEL = os.getenv('LLM_MODEL', '')
+_MODEL_RESOLUTION_LOCK = threading.Lock()
 PROVIDER = os.getenv('LLM_PROVIDER_NAME', 'openai-compatible')
 KEY = os.getenv('LLM_API_KEY', '')
 TOKEN = os.getenv('AIOPS_INTERNAL_TOKEN', '')
@@ -24,6 +26,46 @@ TIMEOUT = float(os.getenv('LLM_TIMEOUT_SECONDS', '45'))
 MAX_OUTPUT_TOKENS = int(os.getenv('AIOPS_LLM_MAX_OUTPUT_TOKENS', '4096'))
 MAX_REQUEST_BYTES = int(os.getenv('AIOPS_LLM_MAX_REQUEST_BYTES', '262144'))
 _MODEL_CALL_TELEMETRY = contextvars.ContextVar('aiops_model_call_telemetry', default=None)
+
+
+
+def resolve_model_id():
+    """Use the configured model ID, or discover one unambiguous Nemotron 120B ID."""
+    global MODEL
+    if MODEL:
+        return MODEL
+    if not BASE:
+        raise HTTPException(503, 'llm_provider_not_configured')
+    with _MODEL_RESOLUTION_LOCK:
+        if MODEL:
+            return MODEL
+        models_url = BASE + '/models' if BASE.endswith('/v1') else BASE + '/v1/models'
+        headers = {'Accept': 'application/json'}
+        if KEY:
+            headers['Authorization'] = 'Bearer ' + KEY
+        try:
+            response = requests.get(models_url, headers=headers, timeout=(3, min(TIMEOUT, 15)))
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError) as exc:
+            LOG.warning('model_discovery_failed: %s', type(exc).__name__)
+            raise HTTPException(503, 'llm_model_discovery_unavailable') from None
+        rows = payload.get('data', []) if isinstance(payload, dict) else []
+        ids = [row.get('id') for row in rows
+               if isinstance(row, dict) and isinstance(row.get('id'), str) and row.get('id')]
+        candidates = [item for item in ids
+                      if 'nemotron' in item.lower()
+                      and ('120b' in item.lower() or '120-b' in item.lower())]
+        if len(candidates) == 1:
+            MODEL = candidates[0]
+        elif len(ids) == 1:
+            MODEL = ids[0]
+        else:
+            LOG.error('model_discovery_ambiguous: model_count=%s nemotron_120b_matches=%s',
+                      len(ids), len(candidates))
+            raise HTTPException(503, 'llm_model_selection_required')
+        LOG.info('model_discovery_selected provider=%s model=%s', PROVIDER, MODEL)
+        return MODEL
 
 
 def extract_provider_usage(response_payload):
@@ -244,8 +286,9 @@ def decode_model_json(raw):
 
 
 def call_model(system, payload, schema):
-    if not BASE or not MODEL:
+    if not BASE:
         raise HTTPException(503, 'llm_provider_not_configured')
+    model_id = resolve_model_id()
     if BASE.endswith('/chat/completions'):
         url = BASE
     elif BASE.endswith('/v1'):
@@ -255,7 +298,7 @@ def call_model(system, payload, schema):
     headers = {'Content-Type': 'application/json'}
     if KEY:
         headers['Authorization'] = 'Bearer ' + KEY
-    body = {'model': MODEL, 'temperature': 0, 'max_tokens': MAX_OUTPUT_TOKENS, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
+    body = {'model': model_id, 'temperature': 0, 'max_tokens': MAX_OUTPUT_TOKENS, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
     started = time.perf_counter()
     invocation_id = uuid.uuid4().hex
     request_count = 0
@@ -463,8 +506,8 @@ def health():
 
 @app.get('/ready')
 def ready():
-    configured = bool(BASE and MODEL and TOKEN)
-    return {'status':'ready' if configured else 'degraded','provider_configured':bool(BASE and MODEL),'provider':PROVIDER if BASE and MODEL else None,'model':MODEL or None,'internal_auth_configured':bool(TOKEN)}
+    configured = bool(BASE and TOKEN)
+    return {'status':'ready' if configured else 'degraded','provider_configured':bool(BASE),'provider':PROVIDER if BASE else None,'model':MODEL or None,'model_discovery':'automatic' if BASE and not MODEL else 'configured','internal_auth_configured':bool(TOKEN)}
 
 @app.post('/api/intelligence/analyze')
 def analyze(x: Request, authorization: str | None = Header(default=None)):
