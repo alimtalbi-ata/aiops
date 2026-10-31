@@ -208,6 +208,19 @@ class XrefHttpTests(unittest.TestCase):
         r=self.read()
         self.assertEqual(r.json()["status"],"UNKNOWN")
         self.hidden(r)
+    def test_orphan_mapping_version_two_is_conflict(self):
+        # A signed row cannot invent a missing version-one predecessor.
+        # PostgreSQL permits this shape; the read API must fail closed.
+        self.fake.events=[event(association_id="XREF-ORPHAN",
+                                source_event_id="EVT-ORPHAN",
+                                mapping_version=2,
+                                supersedes_association_id=None)]
+        r=self.read(expected_run_id="RUN-A",expected_incident_id="INC-A")
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"CONFLICT")
+        self.hidden(r)
+        self.assertEqual(len(self.fake.calls),1)
+
     def test_duplicate_and_conflicting_history(self):
         self.fake.events=[event(),event()]
         r=self.read()
