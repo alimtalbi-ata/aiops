@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import hmac
 import os
 import re
 import time
@@ -43,6 +44,7 @@ class PortalActorContext:
     audience: str
     # This is identity evidence only; Core must separately qualify exact ACL.
     tenant_acl_qualified: bool = False
+    expires_at: int = 0
 
 
 def _json_strict(raw: str | bytes) -> object:
@@ -141,7 +143,8 @@ def _verify_rs256(signing_input: bytes, signature: bytes,
 
 def verify_server_oidc_assertion(token: str, *,
                                  env: Mapping[str, str] | None = None,
-                                 now: int | None = None) -> PortalActorContext:
+                                 now: int | None = None,
+                                 expected_nonce: str | None = None) -> PortalActorContext:
     """Verify an ID token obtained by the SERVER from its trusted IdP.
 
     This function MUST NOT be called with an unverified browser bearer, proxy
@@ -172,6 +175,12 @@ def verify_server_oidc_assertion(token: str, *,
             or iat > clock + _CLOCK_SKEW or exp <= iat
             or exp - iat > _MAX_TOKEN_AGE or iat < clock - _MAX_TOKEN_AGE):
         raise IdentityRejected("OIDC issuer/audience/lifetime rejected")
+    if expected_nonce is not None:
+        nonce = payload.get("nonce")
+        if (not isinstance(expected_nonce, str) or not expected_nonce
+                or not isinstance(nonce, str)
+                or not hmac.compare_digest(nonce, expected_nonce)):
+            raise IdentityRejected("OIDC nonce rejected")
     subject, groups = payload.get("sub"), payload.get("groups")
     if (not isinstance(subject, str) or _SUBJECT.fullmatch(subject) is None
             or not isinstance(groups, list) or not groups or len(groups) > 64
@@ -182,7 +191,8 @@ def verify_server_oidc_assertion(token: str, *,
     roles = tuple(sorted({role_map[g] for g in groups if g in role_map}))
     if len(tenants) != 1 or not roles:
         raise IdentityRejected("ambiguous or unmapped tenant/role")
-    return PortalActorContext(subject, tenants.pop(), roles, issuer, audience)
+    return PortalActorContext(subject, tenants.pop(), roles, issuer, audience,
+                              expires_at=exp)
 
 
 def core_xref_preflight(identity: PortalActorContext, *, tenant_id: str,
