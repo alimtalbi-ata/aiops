@@ -149,5 +149,71 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
 
 
+    def test_read_only_audit_tool_does_not_qualify_install_or_rollback(self):
+        self.build(overrides={"deploy/aiops_release.py": b"# read-only audit\\n"})
+        result = audit_kit(self.kit, self.sha, self.source,
+                           required_paths=self.required)
+        self.assertIn("ENTRYPOINT_MISSING:install_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:upgrade_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
+
+    def test_partial_p0_transaction_does_not_qualify_cumulative_rollback(self):
+        self.build(overrides={"deploy/deploy-acme-p0.py": b"# partial P0 only\\n"})
+        result = audit_kit(self.kit, self.sha, self.source,
+                           required_paths=self.required)
+        self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
+
+    def test_install_entrypoint_without_rollback_is_blocked(self):
+        self.build(overrides={"deploy/install.sh": b"#!/bin/sh\\nexit 1\\n"})
+        result = audit_kit(self.kit, self.sha, self.source,
+                           required_paths=self.required)
+        self.assertNotIn("ENTRYPOINT_MISSING:install_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:upgrade_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
+
+
+    def _track_extra_migrations(self, names):
+        for name in names:
+            data = ("-- synthetic " + name + "\n").encode()
+            self.files[name] = data
+            path = self.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        subprocess.run(["git", "-C", str(self.source), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=CI",
+                        "-c", "user.email=ci@example.invalid",
+                        "commit", "-qm", "add synthetic migrations"], check=True)
+        self.sha = subprocess.check_output(
+            ["git", "-C", str(self.source), "rev-parse", "HEAD"], text=True).strip()
+
+    def test_duplicate_009_migrations_fail_even_with_valid_sha_and_source(self):
+        self._track_extra_migrations([
+            "db/migrations/009_ai_decision_ledger.sql",
+            "db/migrations/009_itsm_xref_read.sql",
+        ])
+        self.build()
+        result = self.audit()
+        self.assertIn("MIGRATION_ORDINAL_DUPLICATE:009", result["errors"])
+        self.assertFalse(any(e.startswith("CHECKSUM_MISMATCH:") or
+                             e.startswith("SOURCE_MEMBER_UNTRACKED:")
+                             for e in result["errors"]), result)
+
+    def test_distinct_009_010_011_migrations_pass_inventory(self):
+        self._track_extra_migrations([
+            "db/migrations/009_ai_decision_ledger.sql",
+            "db/migrations/010_evidence_identity.sql",
+        ])
+        self.build()
+        result = self.audit()
+        self.assertEqual(result["status"], "PASS", result)
+
+    def test_malformed_migration_ordinal_fails(self):
+        self._track_extra_migrations(["db/migrations/9_legacy.sql"])
+        self.build()
+        self.assertIn("MIGRATION_NAME_INVALID:db/migrations/9_legacy.sql",
+                      self.audit()["errors"])
+
+
+
 if __name__ == "__main__":
     unittest.main()
