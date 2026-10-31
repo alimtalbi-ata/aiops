@@ -79,7 +79,25 @@ def portal_bootstrap_script():
                         media_type='application/javascript',
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 @app.post('/api/copilot')
-def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
+def copilot(q:dict, authorization: str | None = Header(default=None)):
+    # Shared viewer auth is not an actor/tenant ACL. Do not forward unscoped
+    # browser context to Copilot until a server-derived tenant contract exists.
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({'detail':exc.detail}, status_code=exc.status_code)
+    return _noc_json_response({
+        'state':'UNKNOWN', 'reason':'TENANT_ACL_NOT_QUALIFIED',
+        'source':'COPILOT_NOT_TENANT_AUTHORIZED',
+        'source_freshness':'UNKNOWN', 'live_remediation_authorized':False,
+    }, status_code=503)
+
+
+@app.get('/assets/portal-copilot.js')
+def portal_copilot_script():
+    return FileResponse(Path(__file__).with_name('portal_copilot_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 def _require_portal_read(authorization):
     secret=os.getenv("AIOPS_PORTAL_READ_TOKEN","")
     bearer_token=(authorization or "").removeprefix("Bearer ")
@@ -394,6 +412,16 @@ def home():
         '<span id="portal-read-result" role="status">UNKNOWN — aucune lecture authentifiée</span> '
         '<span id="portal-states">UNKNOWN</span>'
         '<script src="/assets/portal-bootstrap.js" defer></script>')
+    content+=panel("Copilot — accès tenant non qualifié",
+        '<p>Le Copilot est désactivé pour les lectures métier tant que l’identité et le tenant '
+        'ne sont pas vérifiés côté serveur. Aucune question n’est transmise au moteur.</p>'
+        '<label for="copilot-token">Jeton viewer</label> '
+        '<input id="copilot-token" type="password" autocomplete="off"> '
+        '<label for="copilot-question">Question</label> '
+        '<input id="copilot-question" type="text" maxlength="1000"> '
+        '<button type="button" id="copilot-submit">Interroger Copilot</button> '
+        '<span id="copilot-status" role="status">UNKNOWN — ACL requise</span>'
+        '<script src="/assets/portal-copilot.js" defer></script>')
     content+=panel("Démo ACME — valeur métier",
         '<p>Parcours synthétique SAN → Payments : incident P1, dépendances, '
         'analyse, critique indépendante, Policy SIMULATE et vérification. '
