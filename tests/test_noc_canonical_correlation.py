@@ -125,6 +125,24 @@ class CorrelationTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 noc_correlation.correlate(noc_view(), {**core_run(), **change})
 
+    def test_explicit_403_is_visible_and_never_reads_noc_or_core(self):
+        from fastapi import HTTPException
+        with patch.object(noc_correlation.noc_runtime, "_require_portal_read_auth",
+                          side_effect=HTTPException(403, "forbidden_tenant")), patch.object(
+                noc_correlation.noc_runtime, "read_signed_noc_snapshot",
+                side_effect=AssertionError("NOC called")) as noc_read, patch.object(
+                noc_correlation, "_read_core_run",
+                side_effect=AssertionError("Core called")) as core_read:
+            response = self.request()
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"detail": "forbidden_tenant"})
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        noc_read.assert_not_called()
+        core_read.assert_not_called()
+
     def test_auth_denial_prevents_both_upstream_reads(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
                 noc_correlation.noc_runtime, "read_signed_noc_snapshot",
