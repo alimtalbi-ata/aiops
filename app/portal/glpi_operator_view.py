@@ -37,6 +37,7 @@ nav{display:flex;gap:18px;flex-wrap:wrap}
 .panel{background:#0c1d2d;border:1px solid #31506a;border-radius:12px;padding:18px;margin:16px 0}
 .muted{color:#b5c9d7}.status{font-weight:700;color:#ffda7a}
 dl{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:8px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #31506a;padding:10px;text-align:left}caption{text-align:left;color:#b5c9d7}
 dt{font-weight:700}dd{margin:0;color:#b5c9d7}
 @media(max-width:600px){dl{grid-template-columns:1fr}}
 </style></head><body><main>
@@ -74,6 +75,20 @@ Ce Portal ne remplace ni les pages natives ni leurs contrôles de permission.</p
 <p class="muted">Aucune action commentaire, assignation ou approbation en DEMO.
 Les profils, entités, catégories, règles métier, plugins, formulaires,
 templates et pages natives GLPI n'ont pas été inspectés sur une instance autorisée.</p>
+</section>
+<section class="panel" aria-labelledby="queue"><h2 id="queue">File opérateur P1–P4 / SLA — non chargée</h2>
+<p id="queue-unavailable" role="status">NOT_INSTALLED — aucune API GLPI authentifiée et
+tenant-scoped ne fournit la file, les délais SLA/OLA ou les fenêtres de maintenance.
+Aucun ticket ni compteur n'est déduit des fixtures SYNTHETIC.</p>
+<table aria-describedby="queue-unavailable">
+<caption>État de la file ITSM, sans enregistrement client</caption>
+<thead><tr><th scope="col">Priorité</th><th scope="col">Ticket</th>
+<th scope="col">SLA / OLA</th><th scope="col">Source / fraîcheur</th></tr></thead>
+<tbody><tr><td colspan="4">UNKNOWN — aucune ligne affichable avant ACL acteur,
+tenant et entité GLPI vérifiée côté serveur.</td></tr></tbody>
+</table>
+<p>Calendrier de maintenance : UNKNOWN. Historique et journal d'audit : UNKNOWN.
+Les permissions N1/N2/N3/manager restent celles de GLPI, non inférées ici.</p>
 </section>
 <section class="panel" aria-labelledby="source"><h2 id="source">Source et fraîcheur</h2>
 <p>Source API : UNKNOWN / non autorisée. Observé à : UNKNOWN.
