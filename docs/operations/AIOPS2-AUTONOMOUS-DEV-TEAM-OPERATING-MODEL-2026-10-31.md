@@ -33,11 +33,11 @@ Five existing ChatGPT automations are reused; no duplicate sixth schedule is cre
 
 | Sequence | Local start | Cadence |
 |---|---:|---|
-| 1/5 ACME & Twin | 22:00 | Hourly |
-| 2/5 Portal & GLPI UX | 22:10 | Hourly |
-| 3/5 Core, NOC & CMDB | 22:20 | Hourly |
-| 4/5 Policy & HITL | 22:30 | Hourly |
-| 5/5 Architect / Integrator | 22:45 | Hourly |
+| 1/5 ACME & Twin | 23:00 | Hourly |
+| 2/5 Portal & GLPI UX | 23:10 | Hourly |
+| 3/5 Core, NOC & CMDB | 23:20 | Hourly |
+| 4/5 Policy & HITL | 23:30 | Hourly |
+| 5/5 Architect / Integrator | 23:45 | Hourly |
 
 **Scheduler evidence caveat:** the automation API accepted the schedule updates and reports all five enabled, but `next_run_time` is still null at this snapshot. Therefore the hourly recurrence is configured, not yet independently proven to fire at the next scheduled time. The architect must recheck next-run/last-run and results each cycle. Do not call a configured schedule a successful heartbeat until an execution is observed.
 
