@@ -108,6 +108,14 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
           python -m unittest discover -s tests -p "test_portal_glpi_bot_ui.py" -v
+      - name: Operator-gated HITL inbox and identity simulator security regression
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-hitl-internal-ephemeral-token
+          AIOPS_PORTAL_OPERATOR_TOKEN: ci-hitl-demo-operator-token-ephemeral
+        run: |
+          node --check app/portal/portal_hitl_client.js
+          python -m unittest discover -s tests -p "test_portal_hitl_inbox.py" -v
       - name: GLPI ticket read and NOC incident join contracts
         env:
           PYTHONPATH: app
