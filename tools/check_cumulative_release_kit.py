@@ -196,11 +196,28 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         errors.append("SOURCE_TREE_DIRTY")
                 except (OSError, subprocess.CalledProcessError):
                     errors.append("SOURCE_HEAD_OR_STATUS_UNAVAILABLE")
-                for path in required_paths:
-                    if path not in files or path == "RELEASE-MANIFEST.txt":
+                # A valid sidecar does not prove that an extra packaged file
+                # belongs to Git HEAD. Check every member, not only REQUIRED_PATHS.
+                # RELEASE-MANIFEST and SHA256SUMS are generated and separately
+                # validated above. A staged JSON manifest needs a separate
+                # deterministic-provenance contract before it may differ from Git.
+                try:
+                    tracked_output = subprocess.check_output(
+                        ["git", "-C", str(root), "ls-files", "-z", "--cached"],
+                        stderr=subprocess.DEVNULL)
+                    tracked = set(tracked_output.decode(
+                        "utf-8", "surrogateescape").rstrip("\\0").split("\\0"))
+                except (OSError, subprocess.CalledProcessError):
+                    errors.append("SOURCE_TRACKED_FILES_UNAVAILABLE")
+                    tracked = set()
+                for path in sorted(files - {"RELEASE-MANIFEST.txt", "FILES-SHA256SUMS"}):
+                    if path not in tracked:
+                        errors.append("SOURCE_MEMBER_UNTRACKED:" + path)
                         continue
                     candidate = root / path
-                    if not candidate.is_file() or candidate.is_symlink():
+                    if candidate.is_symlink():
+                        errors.append("SOURCE_FILE_SYMLINK:" + path)
+                    elif not candidate.is_file():
                         errors.append("SOURCE_FILE_MISSING:" + path)
                     elif hashlib.sha256(candidate.read_bytes()).hexdigest() != hashlib.sha256(archive.read(path)).hexdigest():
                         errors.append("SOURCE_BLOB_MISMATCH:" + path)
