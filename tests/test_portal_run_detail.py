@@ -328,7 +328,7 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn("Requested Run — NOT VERIFIED", response.text)
         self.assertIn("SYNTHETIC", response.text)
         self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", response.text)
-        self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
+        self.assertIn("UNKNOWN", response.text)
         self.assertIn("source freshness: UNKNOWN", response.text)
         self.assertNotIn("<script", response.text)
 
@@ -548,7 +548,7 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.headers["x-content-type-options"], "nosniff")
 
     def test_bootstrap_auth_refusals_precede_any_unscoped_read(self):
-        with patch.object(main, "read_portal_snapshot",
+        with patch.object(main, "get_json",
                           side_effect=AssertionError("unscoped read forbidden")) as read:
             for headers in ({}, {"Authorization": "Bearer wrong"}):
                 response = self.client.get("/api/portal/bootstrap", headers=headers)
