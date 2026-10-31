@@ -10,7 +10,8 @@ from portal.glpi_operator_view import router as glpi_operator_router
 from portal.glpi_client import GLPIClient, GLPIError
 from portal.glpi_run_context import router as glpi_run_context_router
 from portal.portal_integrations import build_navigation
-from portal.noc_runtime import router as noc_runtime_router
+from portal.noc_runtime import router as noc_runtime_router, _noc_json_response
+from portal.portal_command_auth import require_demo_operator
 from portal.noc_correlation import router as noc_correlation_router
 from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.noc_grafana_health import router as noc_grafana_health_router
@@ -136,18 +137,24 @@ def copilot_ticket(ticket_id:str,q:dict,authorization:str|None=Header(default=No
 
 
 @app.post('/api/demo')
-def demo(authorization:str|None=Header(default=None)):
-    # The disabled browser button is not an authorization boundary.
-    if os.getenv('AIOPS_DEMO_LAUNCH_ENABLED')!='true':
-        raise HTTPException(403,'demo_launch_disabled')
-    secret=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
-    bearer=(authorization or '').removeprefix('Bearer ')
-    if not secret or not hmac.compare_digest(bearer,secret):
-        raise HTTPException(401,'invalid internal token')
-    demo_id=uuid.uuid4().hex
-    iid=post_json(CORE,'/api/incidents',{'external_id':f'DEMO-GOLDEN-PAYMENT-{demo_id}','title':'Payment latency following FC fabric degradation','severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo','synthetic':True,'payload':{'seed':20261018}})['incident_id']
-    run=post_json(CORE,'/api/runs',{'mode':'DEMO','scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,'idempotency_key':f'DEMO-GOLDEN-PAYMENT-{demo_id}'})
-    return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
+def demo(authorization: str | None = Header(default=None)):
+    # A browser-supplied operator bearer authenticates only a DEMO request.
+    # It cannot supply the actor/tenant/Run authorization required for Core
+    # incident creation, Run creation or execution. Refuse before any I/O.
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
+    return _noc_json_response({
+        'state': 'UNKNOWN',
+        'reason': 'TENANT_ACL_NOT_QUALIFIED',
+        'connection_state': 'UNKNOWN',
+        'source': 'DEMO_CORE_MUTATION_NOT_AUTHORIZED',
+        'source_freshness': 'UNKNOWN',
+        'live_remediation_authorized': False,
+    }, status_code=503)
 @app.post('/api/demo-enriched')
 def demo_enriched(authorization:str|None=Header(default=None)):
     """Independent DEMO B launch: evidence richer, but never pre-approve Critic."""
