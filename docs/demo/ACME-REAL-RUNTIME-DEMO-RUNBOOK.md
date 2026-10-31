@@ -89,7 +89,7 @@ This operation:
 - rebuilds/recreates only Intelligence, Worker, Copilot and Portal;
 - verifies a second real completion from inside the Intelligence container;
 - checks the Intelligence readiness response and Compose service state;
-- restores the prior `.env` and attempts to restart the four prior services if the rollout fails.
+- restores the prior `.env` and attempts to restart the four affected services with the currently built images if the rollout fails. This is a configuration rollback, not an immutable image/binary rollback; the previous image digests are not yet pinned by this helper.
 
 It does not run database migrations, modify GLPI tickets, or enable LIVE remediation. After the runtime qualification passes, an operator may explicitly launch the synthetic end-to-end ACME rehearsal with:
 
