@@ -54,3 +54,17 @@ Before resuming work in a new session, read these documents in order:
 5. [Change safety and qualification protocol](docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md)
 
 **Maintenance rule:** every significant development session must update the continuity record and all affected architecture, decision, component, qualification and release documents in the same branch/PR. Prefer adapting qualified AIOps v1/V145 capabilities over rebuilding them, but verify source, contracts, dependencies and tests before declaring a component reusable. Never treat a file listing or synthetic demo as qualification evidence.
+
+## Enterprise AIOps convergence
+
+The current development architecture, ITIL 4 operating model, ACME SAN→Payments synthetic customer journey, 48-hour execution board, reuse register, AI benchmark governance and autonomous five-schedule development team are documented here:
+- [Reference architecture](docs/architecture/AIOPS2-REFERENCE-ARCHITECTURE-2026-10-30.md)
+- [48-hour delivery plan](docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md)
+- [Execution control board](docs/planning/AIOPS2-48H-EXECUTION-CONTROL-BOARD-2026-10-30.md)
+- [Reuse and convergence register](docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md)
+- [ACME SAN→Payments ITIL demonstration](docs/customer-story/ACME-P1-SAN-PAYMENTS-ITIL-DEMO-2026-10-30.md)
+- [AI benchmark governance](docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md)
+- [Autonomous development team](docs/operations/AIOPS2-AUTONOMOUS-DEV-TEAM-OPERATING-MODEL-2026-10-31.md)
+- [Automation control plane](docs/operations/AIOPS2-AUTOMATION-CONTROL-PLANE-2026-10-31.md)
+
+These are development architecture and synthetic qualification plans; they do not claim production deployment or live connector qualification.
