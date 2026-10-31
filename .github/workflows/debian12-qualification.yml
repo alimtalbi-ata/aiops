@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Run qualification inside clean Debian 12
+      - name: Test Debian read-only reporter safety contracts\n        run: |\n          python3 -m py_compile scripts/debian-readonly-reporter.py tests/test_debian_readonly_reporter.py\n          python3 -m unittest discover -s tests -p "test_debian_readonly_reporter.py" -v\n      - name: Run qualification inside clean Debian 12
         run: |
           docker run --rm \
             --volume "$GITHUB_WORKSPACE:/workspace" \
