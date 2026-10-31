@@ -32,6 +32,10 @@ jobs:
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
+      - name: Policy synthetic HITL fixture no-effect tests
+        run: python -m unittest discover -s tests -p "test_policy_simulate_fixture.py" -v
+      - name: Policy Core xref-shaped untrusted data non-authority contract
+        run: python -m unittest discover -s tests -p "test_policy_core_xref_boundary.py" -v
       - name: Portal registry and integration navigation unit tests
         run: python -m unittest discover -s tests -p "test_portal_integrations.py" -v
       - name: Portal navigation browser JavaScript syntax
