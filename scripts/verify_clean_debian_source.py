@@ -37,6 +37,10 @@ def verify_source(repo: str, sha: str, token: str, get_json=github_get) -> list[
     if not token or any(ch.isspace() for ch in token):
         raise ValueError("github_token_missing_or_invalid")
 
+    main_branch = get_json(repo, token, "/branches/main")
+    if not isinstance(main_branch, dict) or main_branch.get("protected") is not True:
+        raise ValueError("main_branch_protection_disabled")
+
     comparison = get_json(
         repo, token, f"/compare/{sha}...{quote('main', safe='')}"
     )
