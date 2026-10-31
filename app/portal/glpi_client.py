@@ -120,7 +120,9 @@ class GLPIClient:
         existing=self.list_ticket_followups(ticket_id,100)
         for item in existing:
             if isinstance(item,dict) and marker in str(item.get("content","")):
-                return {"id":item.get("id"),"idempotent":True,"is_private":item.get("is_private") in (1,True,"1")}
+                if item.get("is_private") not in (1,True,"1"):
+                    raise GLPIError("proposal_marker_exists_on_non_private_followup")
+                return {"id":item.get("id"),"idempotent":True,"is_private":True}
         result=self._call("POST","ITILFollowup",json={"input":{
             "itemtype":"Ticket","items_id":int(ticket_id),"content":content,"is_private":1
         }})
