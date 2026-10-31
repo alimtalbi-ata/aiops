@@ -170,6 +170,12 @@ The Portal `/copilot` page provides a guarded operator workflow for the ACME syn
 - `LLM_PROVIDER_NAME=NVIDIA_NIM`, `LLM_BASE_URL=http://10.79.94.31:8000/v1`, exact discovered `LLM_MODEL`; keep `LLM_API_KEY` empty for the Debian NGX endpoint.
 - The Intelligence container must reach NIM over a private route. Never publish the NIM endpoint to the public network.
 
+### HITL operator inbox in the Portal
+
+Open `/hitl` from the Portal navigation. The page is a static shell and performs no Core reads until the operator supplies the dedicated `AIOPS_PORTAL_OPERATOR_TOKEN`. The authenticated inbox returns only proposals whose canonical Core Run is DEMO/REPLAY/STORY; LIVE proposals are filtered server-side. The same token gates the development identity simulator. The simulator identities are explicitly marked simulated and cannot approve LIVE proposals.
+
+This inbox is read-only: it displays proposal, risk, action, target CI, evidence and preconditions, but it does not approve, reject or execute. The GLPI bot at `/copilot` reads an explicitly linked synthetic ticket, calls the run-scoped Copilot, creates a validated PROPOSED record and writes a private GLPI follow-up. The private note is an audit handoff, not a decision. LIVE approval still requires a production OIDC assertion, eligible roles and a LIVE Run; the synthetic demo path cannot cross that boundary.
+
 ## 3. Preflight
 
 From the reviewed repository root:
