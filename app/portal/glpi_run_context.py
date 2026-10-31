@@ -54,7 +54,9 @@ def copilot_glpi_ticket(ticket_id: str, q: dict,
         except Exception:
             run_detail = None
         run = run_detail.get("run") if isinstance(run_detail, dict) else None
-        if not isinstance(run, dict) or run.get("run_id") != run_id:
+        if (not isinstance(run, dict) or run.get("run_id") != run_id
+                or run.get("mode") not in ("DEMO", "REPLAY", "STORY")
+                or run.get("scenario_id") != "SCN-GOLDEN-PAYMENT-P1"):
             run_id = None
             run_detail = None
 
