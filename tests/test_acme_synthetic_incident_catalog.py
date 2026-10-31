@@ -289,6 +289,65 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "untrusted golden replay manifest"):
                     gen.correlate_golden_manifest_offline(invalid)
 
+    def test_strict_catalog_manifest_accepts_all_supported_non_golden_modes(self):
+        for category in ("NETWORK_FAILURE", "CAPACITY_PRESSURE", "APPLICATION_DEGRADATION"):
+            for stochastic in (False, True):
+                with self.subTest(category=category, stochastic=stochastic):
+                    manifest = gen.replay(category, seed=37, stochastic=stochastic)
+                    grouped = gen.correlate_catalog_manifest_offline(manifest)
+                    self.assertEqual(grouped["event_count"], manifest["event_count"])
+                    self.assertFalse(grouped["publishable"])
+                    self.assertEqual(grouped["tenant_scope"], "UNKNOWN")
+                    self.assertEqual(grouped["provenance"], "SYNTHETIC_FIXTURE")
+                    self.assertIsNone(manifest["incident_id"])
+                    self.assertIsNone(manifest["run_id"])
+                    self.assertIsNone(manifest["ticket_id"])
+                    self.assertEqual(manifest["evidence_ids"], [])
+                    self.assertTrue(all(c["status"] == "NOT_EXECUTED"
+                                        for c in manifest["checkpoints"]))
+        self.assertEqual(gen.correlate_catalog_manifest_offline(gen.replay())["event_count"], 7)
+
+    def test_strict_catalog_manifest_rejects_rehashed_forged_links_and_observations(self):
+        original = gen.replay("CAPACITY_PRESSURE", seed=37, stochastic=True)
+        mutations = (
+            ("tenant", lambda m: m.__setitem__("tenant_id", "UNVERIFIED")),
+            ("incident", lambda m: m.__setitem__("incident_id", "UNVERIFIED")),
+            ("run", lambda m: m.__setitem__("run_id", "UNVERIFIED")),
+            ("ticket", lambda m: m.__setitem__("ticket_id", "UNVERIFIED")),
+            ("evidence", lambda m: m.__setitem__("evidence_ids", ["UNVERIFIED"])),
+            ("priority", lambda m: m["itil"].__setitem__("priority_confirmed", "P1")),
+            ("impact", lambda m: m["impact_estimate"].__setitem__("observed_service_impact", "HIGH")),
+            ("checkpoint", lambda m: m["checkpoints"][0].__setitem__("status", "SUCCESS")),
+            ("metric", lambda m: m["events"][1]["payload"].__setitem__("value", 0)),
+            ("source_event_id", lambda m: m["events"][0].__setitem__(
+                "source_event_id", "SYN-EVT-AAAAAAAAAAAAAAAAAAAA")),
+            ("maintenance", lambda m: m["events"][0].__setitem__("maintenance_window_active", True)),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name):
+                forged = copy.deepcopy(original)
+                mutate(forged)
+                unsigned = {k: v for k, v in forged.items() if k != "dataset_sha256"}
+                forged["dataset_sha256"] = hashlib.sha256(gen._canonical(unsigned)).hexdigest()
+                with self.assertRaisesRegex(ValueError, "catalog replay manifest mismatch"):
+                    gen.correlate_catalog_manifest_offline(forged)
+
+    def test_strict_catalog_manifest_false_positive_requires_explicit_mode(self):
+        false_alarm = gen.replay("NETWORK_FAILURE", seed=99, false_positive=True)
+        self.assertEqual(false_alarm["itil"]["priority_candidate"], "UNKNOWN")
+        with self.assertRaisesRegex(ValueError, "catalog replay manifest mismatch"):
+            gen.correlate_catalog_manifest_offline(false_alarm)
+        self.assertEqual(gen.correlate_catalog_manifest_offline(
+            false_alarm, false_positive=True)["event_count"], false_alarm["event_count"])
+        with self.assertRaisesRegex(ValueError, "golden replay cannot be a false positive"):
+            gen.correlate_catalog_manifest_offline(gen.replay(), false_positive=True)
+        for invalid in (None, {}, {"scenario_category": "CAPACITY_PRESSURE",
+                                   "seed": True, "stochastic": False},
+                        gen.replay("CAPACITY_PRESSURE", seed=37, stochastic=True)):
+            with self.subTest(invalid=str(type(invalid))):
+                with self.assertRaises(ValueError):
+                    gen.correlate_catalog_manifest_offline(invalid, false_positive="yes")
+
     def test_cli_artifact_is_reproducible_and_sha_matches(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "replay.json"
