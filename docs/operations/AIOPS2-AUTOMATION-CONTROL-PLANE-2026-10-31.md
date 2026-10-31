@@ -67,9 +67,13 @@ Owners: 1/5 ACME fixture, 2/5 Portal actor+tenant ACL, 3/5 Core xref/Evidence, 4
 
 ## 2026-10-31 21:50 Europe/Paris — Current scheduler and integration state
 
-Five ChatGPT schedules are enabled and configured hourly in Europe/Paris, staggered 22:00/22:10/22:20/22:30/22:45. Immediate runs have been requested for all five. The automation API still returns `next_run_time=null`; recurrence is configured but not yet independently attested. Each run must be inspected before calling it a heartbeat.
+Five ChatGPT schedules are enabled and configured hourly in Europe/Paris, staggered 23:00/23:10/23:20/23:30/23:45. Immediate runs have been requested for all five. The automation API still returns `next_run_time=null`; recurrence is configured but not yet independently attested. Each run must be inspected before calling it a heartbeat.
 
 GitHub daily quality workflow #221 has been merged into main at `77a9d415464c67190c428d8c1559cf22db149d0e`; post-merge quality run #41240948760 was in progress at snapshot time. The Debian cron and runtime remain NOT_ATTESTED because no host access is available. The GitHub-hosted freshness observer #222 remains Draft pending a real schema-v3 report file.
 
 The repository is DEV-only. GitHub reports `main.protected=false`, so the architect enforces exact-head checks, focused PR review and rollback manually. #195 (218 commits ahead), #201 (112), #202 (43), #198 (47), #205 (50) and #204 (900 ahead/43 behind) must not be wholesale merged; use selective integration onto a clean main-based candidate.
 \n\n## 6. Architect checkpoint — 2026-10-31 22:05 Europe/Paris\n\nMain is now `2c87bc931b170208b7c2f253218d0f939381355a`. #221 and #224 are merged; post-merge quality is 3/3 SUCCESS on both resulting main SHAs. #195 is closed as superseded; its long history was selectively ported, not merged wholesale.\n\nFive team schedules are enabled and their immediate runs completed, but `next_run_time=null` remains an explicit scheduler limitation.\n\nThe four team handoffs are #198 (3/3 but 3 new tests unexecuted), #223 (3/3, stacked on stale #201), #205 (new head no CI; CMDB provenance issue), and #204 (4 workflows green, still stacked on #194). #201 is not ready for main promotion because it is stale and 112 commits ahead.\n\nThe next architect action is to realign the integration candidate to current main, qualify the new exact SHA, and integrate only the validated deltas. No runtime/production/LIVE proof is claimed.\n
+
+## 7. Schedule DTSTART correction — 2026-10-31 22:15 Europe/Paris
+
+The five hourly ChatGPT schedules now use future local DTSTART values 23:00, 23:10, 23:20, 23:30 and 23:45 Europe/Paris. All are enabled. The scheduler still returns `next_run_time=null`, so the future firing remains unverified.
