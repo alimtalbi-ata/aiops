@@ -126,6 +126,22 @@ class XrefHttpTests(unittest.TestCase):
             self.assertEqual(r.status_code,404)
             self.hidden(r)
         self.assertEqual(self.fake.calls,[])
+    def test_stale_evidence_preflight_does_not_query_core(self):
+        stale=(NOW-timedelta(minutes=10)).isoformat()
+        r=self.read(evidence_known_at=stale)
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"STALE")
+        self.hidden(r)
+        future=(NOW+timedelta(minutes=1)).isoformat()
+        r=self.read(evidence_known_at=future)
+        self.assertEqual(r.status_code,404,r.text)
+        self.hidden(r)
+        self.assertEqual(self.fake.calls,[])
+        fresh=(NOW-timedelta(seconds=20)).isoformat()
+        r=self.read(evidence_known_at=fresh)
+        self.assertEqual(r.json()["status"],"VERIFIED")
+        self.assertEqual(len(self.fake.calls),3)
+
     def test_copied_run_or_incident_is_not_verified(self):
         for params in ({"expected_run_id":"RUN-B"},{"expected_incident_id":"INC-B"}):
             r=self.read(**params)
@@ -152,7 +168,9 @@ class XrefHttpTests(unittest.TestCase):
         self.hidden(r)
     def test_stale_conflict_no_ids(self):
         for change,status in (({"observed_at":NOW-timedelta(minutes=10)},"STALE"),
-                              ({"known_at":NOW+timedelta(minutes=10)},"CONFLICT")):
+                              ({"known_at":NOW+timedelta(minutes=10)},"CONFLICT"),
+                              ({"observed_at":NOW+timedelta(minutes=1),
+                                "known_at":NOW+timedelta(minutes=2)},"CONFLICT")):
             self.fake.events=[event(**change)]
             r=self.read()
             self.assertEqual(r.json()["status"],status)
