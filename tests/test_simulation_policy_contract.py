@@ -1,25 +1,47 @@
-"""Unit tests for PR #36's targeted simulation command mapping, plus static worker wiring guards.
-
-These tests do not invoke Temporal, Core, Policy HTTP, or any production service.
-"""
+"""Contract tests for the current Core/Temporal synthetic-mode and Policy boundary."""
 import ast
 from pathlib import Path
 import unittest
 
 from app.shared.simulation_policy_contract import policy_command_for_mode
 
+ROOT = Path(__file__).resolve().parents[1]
+WORKER = ROOT / "app" / "worker" / "main.py"
+WORKFLOW = ROOT / "app" / "worker" / "workflow.py"
+CORE = ROOT / "app" / "core" / "main.py"
 
-WORKER = Path(__file__).resolve().parents[1] / "app" / "worker" / "main.py"
+
+def parse(path):
+    return ast.parse(path.read_text(encoding="utf-8"))
 
 
-def worker_function(name):
-    module = ast.parse(WORKER.read_text(encoding="utf-8"))
-    return next(node for node in module.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name)
+def function(path, name):
+    module = parse(path)
+    return next(node for node in module.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == name)
+
+
+def class_method(path, class_name, method_name):
+    module = parse(path)
+    cls = next(node for node in module.body
+               if isinstance(node, ast.ClassDef) and node.name == class_name)
+    return next(node for node in cls.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == method_name)
 
 
 def contains_call(node, name):
     return any(isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
                and child.func.id == name for child in ast.walk(node))
+
+
+def dict_values(node):
+    return {
+        key.value: value
+        for key, value in zip(node.keys, node.values)
+        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+    }
 
 
 class SimulationPolicyContractTests(unittest.TestCase):
@@ -36,41 +58,67 @@ class SimulationPolicyContractTests(unittest.TestCase):
             with self.subTest(mode=repr(mode)), self.assertRaises(ValueError):
                 policy_command_for_mode(mode)
 
-    def test_worker_validates_mode_before_first_stage_event(self):
-        fn = worker_function("execute_stage")
-        guard = next(i for i, node in enumerate(fn.body)
-                     if isinstance(node, ast.Assign) and any(
-                         isinstance(t, ast.Name) and t.id == "policy_command" for t in node.targets))
-        first_event = next(i for i, node in enumerate(fn.body)
-                           if isinstance(node, ast.Assign) and any(
-                               isinstance(t, ast.Name) and t.id == "started" for t in node.targets))
-        self.assertLess(guard, first_event)
-        self.assertTrue(contains_call(fn.body[guard], "policy_command_for_mode"))
+    def test_core_run_contract_rejects_unknown_modes_before_persistence(self):
+        module = parse(CORE)
+        run_in = next(node for node in module.body
+                      if isinstance(node, ast.ClassDef) and node.name == "RunIn")
+        mode_field = next(node for node in run_in.body
+                          if isinstance(node, ast.AnnAssign)
+                          and isinstance(node.target, ast.Name)
+                          and node.target.id == "mode")
+        field_call = mode_field.value
+        self.assertIsInstance(field_call, ast.Call)
+        pattern = next(kw.value for kw in field_call.keywords if kw.arg == "pattern")
+        self.assertEqual(pattern.value, "^(LIVE|DEMO|REPLAY|STORY)$")
 
-    def test_policy_request_uses_mapped_command(self):
-        fn = worker_function("execute_stage")
-        policy_calls = [node for node in ast.walk(fn) if isinstance(node, ast.Call)
-                        and isinstance(node.func, ast.Name) and node.func.id == "post_json"
-                        and node.args and isinstance(node.args[0], ast.Name)
-                        and node.args[0].id == "POLICY"]
-        self.assertEqual(len(policy_calls), 1)
-        request = policy_calls[0].args[2]
-        self.assertIsInstance(request, ast.Dict)
-        command_values = [value for key, value in zip(request.keys, request.values)
-                          if isinstance(key, ast.Constant) and key.value == "command"]
-        self.assertEqual(len(command_values), 1)
-        self.assertIsInstance(command_values[0], ast.Name)
-        self.assertEqual(command_values[0].id, "policy_command")
+    def test_temporal_workflow_propagates_canonical_mode_to_every_stage(self):
+        run = class_method(WORKFLOW, "IncidentWorkflow", "run")
+        calls = [node for node in ast.walk(run)
+                 if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == "execute_activity"
+                 and node.args and isinstance(node.args[0], ast.Constant)
+                 and node.args[0].value == "execute_stage"]
+        self.assertEqual(len(calls), 1)
+        payload = calls[0].args[1]
+        self.assertIsInstance(payload, ast.Dict)
+        values = dict_values(payload)
+        self.assertIsInstance(values["mode"], ast.Subscript)
+        self.assertIsInstance(values["mode"].value, ast.Name)
+        self.assertEqual(values["mode"].value.id, "args")
+        self.assertEqual(values["mode"].slice.value, "mode")
 
-    def test_http_start_validates_mode_before_temporal_connection(self):
-        fn = worker_function("start")
-        validation = next(i for i, node in enumerate(fn.body)
-                          if contains_call(node, "policy_command_for_mode"))
-        connection = next(i for i, node in enumerate(fn.body)
-                          if contains_call(node, "Client") or any(
-                              isinstance(x, ast.Attribute) and x.attr == "connect"
-                              for x in ast.walk(node)))
-        self.assertLess(validation, connection)
+    def test_synthetic_hitl_stage_is_explicitly_skipped_without_execution(self):
+        stage = function(WORKER, "_execute_stage_blocking")
+        source = WORKER.read_text(encoding="utf-8")
+        self.assertIn("HITL_SIMULATION_SKIPPED", source)
+        self.assertIn("'execution_allowed':False", source.replace(" ", ""))
+        self.assertIn("'synthetic':True", source.replace(" ", ""))
+        self.assertTrue(contains_call(stage, "call"))
+
+    def test_policy_request_carries_mode_and_keeps_human_approval_false(self):
+        stage = function(WORKER, "_execute_stage_blocking")
+        calls = [node for node in ast.walk(stage)
+                 if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Name)
+                 and node.func.id == "post_json"
+                 and node.args and isinstance(node.args[0], ast.Name)
+                 and node.args[0].id == "POLICY"
+                 and len(node.args) >= 3
+                 and isinstance(node.args[2], ast.Name)
+                 and node.args[2].id == "policy_input"]
+        self.assertEqual(len(calls), 1)
+        assignment = next(node for node in ast.walk(stage)
+                          if isinstance(node, ast.Assign)
+                          and any(isinstance(t, ast.Name) and t.id == "policy_input"
+                                  for t in node.targets)
+                          and isinstance(node.value, ast.Dict))
+        values = dict_values(assignment.value)
+        self.assertIsInstance(values["mode"], ast.Name)
+        self.assertEqual(values["mode"].id, "mode")
+        self.assertEqual(values["command"].value, "EXECUTE")
+        self.assertIs(values["human_approved"].value, False)
+        self.assertIs(values["fencing_verified"].value, False)
 
 
 if __name__ == "__main__":

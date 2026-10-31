@@ -1,5 +1,5 @@
 "use strict";
-// Synthetic DOM contract for the existing inline Copilot handler; no browser/Core.
+// External one-shot Copilot client contract; no browser/Core/provider I/O.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,21 +7,22 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 function makeHandler(fetchImpl) {
-  const python = fs.readFileSync(path.join(__dirname, "../app/portal/main.py"), "utf8");
-  const start = python.indexOf("async function ask(){{");
-  const end = python.indexOf("async function correlateNoc(){{", start);
-  assert.ok(start >= 0 && end > start, "Copilot inline handler must be present");
-  const source = python.slice(start, end).replaceAll("{{", "{").replaceAll("}}", "}");
-  const elements = { q: { value: "sensitive question" }, a: { textContent: "" } };
+  const source = fs.readFileSync(path.join(__dirname, "../app/portal/portal_copilot_client.js"), "utf8");
+  const elements = {
+    "copilot-token": { value: "viewer-token" },
+    "copilot-question": { value: "sensitive question" },
+    "copilot-submit": { disabled: false, addEventListener: (event, fn) => { elements.handler = fn; } },
+    "copilot-status": { textContent: "" },
+  };
   const context = {
     document: { getElementById: id => elements[id] },
     fetch: fetchImpl,
     String,
     JSON,
   };
-  vm.runInNewContext(source, context, { filename: "portal-copilot-inline.js" });
-  assert.equal(typeof context.ask, "function");
-  return { ask: context.ask, elements };
+  vm.runInNewContext(source, context, { filename: "portal-copilot-client.js" });
+  assert.equal(typeof elements.handler, "function", "Copilot click handler must be registered");
+  return { ask: elements.handler, elements };
 }
 
 for (const code of [401, 403, 503]) {
@@ -35,20 +36,21 @@ for (const code of [401, 403, 503]) {
       assert.equal(options.cache, "no-store");
       assert.equal(options.redirect, "error");
       assert.equal(JSON.parse(options.body).question, "sensitive question");
-      assert.equal(options.headers.Authorization, undefined);
-      return { status: code, json: async () => ({ reason: "TENANT_ACL_NOT_QUALIFIED" }) };
+      assert.equal(options.headers.Authorization, "Bearer viewer-token");
+      assert.equal(elements["copilot-token"].value, "");
+      return { status: code, ok: false, json: async () => ({ reason: "TENANT_ACL_NOT_QUALIFIED" }) };
     });
     await ask();
     assert.equal(seen, true);
-    assert.match(elements.a.textContent, new RegExp("HTTP " + code));
-    assert.match(elements.a.textContent, /UNAUTHORIZED|UNKNOWN/);
-    assert.doesNotMatch(elements.a.textContent, /success|approved|verified/i);
+    assert.match(elements["copilot-status"].textContent, new RegExp("HTTP " + code));
+    assert.match(elements["copilot-status"].textContent, /UNAUTHORIZED|UNKNOWN/);
+    assert.doesNotMatch(elements["copilot-status"].textContent, /success|approved|verified/i);
   });
 }
 
 test("Copilot transport error remains UNKNOWN", async () => {
   const { ask, elements } = makeHandler(async () => { throw new Error("upstream secret"); });
   await ask();
-  assert.match(elements.a.textContent, /UNKNOWN/);
-  assert.doesNotMatch(elements.a.textContent, /upstream secret/);
+  assert.match(elements["copilot-status"].textContent, /Copilot indisponible/);
+  assert.doesNotMatch(elements["copilot-status"].textContent, /upstream secret/);
 });

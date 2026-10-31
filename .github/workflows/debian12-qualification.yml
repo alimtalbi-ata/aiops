@@ -1,11 +1,12 @@
-name: Debian 12 installation and runtime qualification
+name: Debian 12 and 13 installation and runtime qualification
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, test/debian12-install-runtime-qualification-20261031]
   push:
     branches:
       - "test/debian12-install-runtime-qualification-20261031"
+      - "integration/real-ai-runtime-demo-20261031"
 
 permissions:
   contents: read
@@ -19,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Debian installer shell syntax
         run: bash -n scripts/install-debian-reporter.sh
+      - name: Validate installation, migration and PostgreSQL bootstrap shell syntax
+        run: bash -n deploy/install.sh deploy/migrate.sh deploy/configure-ngx-nim-runtime.sh db/bootstrap/10-apply-baseline.sh
       - name: Test Debian read-only reporter safety contracts
         run: |
           python3 -m py_compile scripts/debian-readonly-reporter.py tests/test_debian_readonly_reporter.py
@@ -29,6 +32,28 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             debian:12-slim \
+            bash -Eeuo pipefail -c '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                bash ca-certificates curl git nodejs npm openssl \
+                python3 python3-pip python3-venv build-essential libpq-dev
+              bash scripts/qualify-debian.sh
+            '
+
+  debian-13-userspace:
+    name: Debian 13 Trixie userspace and offline regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate install and migration scripts
+        run: bash -n deploy/install.sh deploy/migrate.sh db/bootstrap/10-apply-baseline.sh
+      - name: Run qualification inside clean Debian 13
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            debian:13-slim \
             bash -Eeuo pipefail -c '
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -49,6 +74,8 @@ jobs:
         run: docker compose --env-file .env config --quiet
       - name: Build application images without starting services
         run: docker compose --env-file .env build --pull
+      - name: Build guarded customer demo runner profile
+        run: docker compose --env-file .env --profile demo build --pull aiops2-demo-runner
       - name: Remove ephemeral credentials
         if: always()
         run: rm -f .env

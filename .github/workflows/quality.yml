@@ -23,9 +23,54 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1" "temporalio==1.17.0"
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: Validate NGX Debian rollout shell syntax
+        run: bash -n deploy/configure-ngx-nim-runtime.sh
+      - name: Real Intelligence Analyst/Critic contract and grounding tests
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-intelligence-ephemeral-token-only
+          LLM_BASE_URL: http://127.0.0.1:9/v1
+          LLM_MODEL: test-model
+        run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+      - name: Direct NGX Nemotron model discovery tests (offline mocks)
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p "test_intelligence_model_discovery.py" -v
+      - name: Direct NGX NIM completion probe contract tests (offline mocks)
+        run: python -m unittest discover -s tests -p "test_nim_runtime_qualification.py" -v
+      - name: Real Intelligence HTTP adapter integration against deterministic TEST_PROVIDER
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p "test_intelligence_http_integration.py" -v
+      - name: Run-scoped NIM Copilot and audit persistence contracts
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-copilot-ephemeral-token
+        run: python -m unittest discover -s tests -p "test_copilot_run_scoped_assistant.py" -v
+      - name: Guarded customer demo runner contracts
+        run: |
+          python -m py_compile scripts/run-acme-demo.py
+          python -m unittest discover -s tests -p "test_demo_runner_contract.py" -v
+      - name: Temporal Worker real Analyst/Critic and fail-closed contracts
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_worker_boot.py" -v
+          python -m unittest discover -s tests -p "test_worker_dgx_timeout_v25.py" -v
+          python -m unittest discover -s tests -p "test_worker_critic_block_v26.py" -v
+          python -m unittest discover -s tests -p "test_v28_worker_resume_behavior.py" -v
+          python -m unittest discover -s tests -p "test_v28_denial_worker.py" -v
+      - name: AI evaluator and benchmark aggregation contract tests
+        run: |
+          python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
+          python -m unittest discover -s tests -p "test_ai_benchmark_summary.py" -v
+      - name: OIDC identity and Temporal HITL workflow safety contracts
+        run: |
+          python -m unittest discover -s tests -p "test_hitl_identity.py" -v
+          python -m unittest discover -s tests -p "test_hitl_workflow_contract.py" -v
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Policy SIMULATE fixture contract tests
@@ -56,11 +101,43 @@ jobs:
         run: node --test tests/test_portal_copilot_client.cjs
       - name: Main-based Portal Run detail API/HTML fail-closed regression
         run: python -m unittest discover -s tests -p "test_portal_run_detail.py" -v
-      - name: Portal GLPI native handoff, role and tenant denial regression
-        run: python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
+      - name: Portal GLPI handoff and AIOps bot UI regression
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-glpi-ui-internal-ephemeral-token
+        run: |
+          python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
+          python -m unittest discover -s tests -p "test_portal_glpi_bot_ui.py" -v
+      - name: Operator-gated HITL inbox and identity simulator security regression
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-hitl-internal-ephemeral-token
+          AIOPS_PORTAL_OPERATOR_TOKEN: ci-hitl-demo-operator-token-ephemeral
+        run: |
+          node --check app/portal/portal_hitl_client.js
+          python -m unittest discover -s tests -p "test_portal_hitl_inbox.py" -v
+      - name: GLPI ticket read and NOC incident join contracts
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_acme_glpi_ticket_read.py" -v
+          python -m unittest discover -s tests -p "test_acme_noc_glpi_join.py" -v
+      - name: Portal synthetic ledger and Demo Studio projection contracts
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-glpi-internal-ephemeral-token
+          AIOPS_PORTAL_READ_TOKEN: ci-glpi-viewer-ephemeral-token
+          AIOPS_PORTAL_OPERATOR_TOKEN: ci-glpi-operator-ephemeral-token
+          AIOPS_DEMO_MODE: "1"
+        run: |
+          python -m unittest discover -s tests -p "test_portal_glpi_run_context.py" -v
+          python -m unittest discover -s tests -p "test_glpi_private_followup.py" -v
+          python -m unittest discover -s tests -p "test_demo_ledger_read.py" -v
+          python -m unittest discover -s tests -p "test_demo_v2.py" -v
       - name: Portal Run deep-link JS syntax and DOM regression
         run: |
           node --check app/portal/portal_run_link_client.js
+          node --check app/portal/portal_glpi_bot_client.js
           node --test tests/test_portal_run_link_client.cjs
       - name: Portal Core Twin browser JS syntax
         run: node --check app/portal/portal_bootstrap_client.js
@@ -140,7 +217,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install real Core HTTP/PostgreSQL dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0" "PyJWT[crypto]==2.10.1"
       - name: Apply Core schema to ephemeral real PostgreSQL
         run: |
           python - <<'PY'
@@ -148,7 +225,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "002_integrity.sql", "003_seed_twin.sql", "004_operational_model.sql", "005_seed_acme.sql", "006_execution_receipts.sql", "007_runtime_hardening.sql", "008_event_idempotency.sql", "009_ai_decision_ledger.sql", "010_evidence_identity.sql", "011_hitl_decision_outbox.sql", "012_model_invocation_telemetry.sql", "090_critic_denial_outbox.sql", "091_critic_denial_fencing.sql", "092_critic_denial_resume.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness
@@ -174,6 +251,8 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Real Core PostgreSQL AI invocation ledger persistence and privacy
+        run: python -m unittest discover -s tests -p "test_core_ai_invocation_ledger_real_integration.py" -v
       - name: Start actual Policy HTTP service (ephemeral CI only)
         run: |
           PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &

@@ -33,7 +33,8 @@ A reproducible deployment is not just a Compose file. The deliverable must inclu
 | `deploy/install.sh` | Initialize env, preflight, build, start, qualification and synthetic E2E | Review side effects and target host before use. |
 | `00-Deployment/install.sh` | Copies source into a new target tree | Updated to use generated secrets rather than embedded shared credentials. |
 | `00-Deployment/start.sh` | Compose build/start | Start only after secrets and preflight pass. |
-| `db/migrations/*.sql` | PostgreSQL initialization schema/seed assets | Compose mounts these into PostgreSQL's init directory; Docker entrypoint initialization normally applies them only to a new empty data volume. This is not a general upgrade mechanism. |
+| `db/bootstrap/10-apply-baseline.sh` | Fresh PostgreSQL volume bootstrap | Applies only immutable baseline migrations 000–008 from the read-only migration mount. |
+| `db/migrations/*.sql` | Versioned baseline and post-baseline SQL | Baseline 000–008 is applied by the entrypoint only on an empty volume; migrations 009+ are applied by the checksum-journaled `deploy/migrate.sh` on both fresh and existing databases. |
 | `scripts/install-debian-reporter.sh` | Read-only Debian observation agent | Separate from platform installation; do not treat it as an application deployment mechanism. |
 
 The repo also contains legacy deployment entrypoints. For a new server, use one documented path only; do not combine legacy installers or copy a live `.env` from another host.
@@ -115,7 +116,7 @@ For a reviewed full lab deployment, the repository entrypoint is:
 bash deploy/install.sh
 ```
 
-It initializes/validates configuration, builds images, starts Compose services, then runs qualification and synthetic E2E scripts. This is an application deployment and will create/update containers and persistent resources. It must not be run against an existing customer environment without a backup, change approval and target review.
+It initializes/validates configuration, builds images, starts PostgreSQL first, applies checksum-journaled post-baseline migrations, starts the full Compose stack, then runs qualification and synthetic E2E scripts. This is an application deployment and will create/update containers and persistent resources. It must not be run against an existing customer environment without a backup, change approval and target review.
 
 Alternative source-tree staging via `00-Deployment/install.sh` copies the checkout into `/home/aiops/aiops2-v8` by default and prepares a fresh secret file; its output explicitly instructs the operator to run `00-Deployment/start.sh` separately. Do not use both paths on the same target.
 
@@ -145,7 +146,7 @@ Before a migration/restore procedure can be called supported, create and test:
 - restore into an isolated clean host with integrity checks;
 - documented RPO/RTO and data-loss limitations.
 
-The current Compose PostgreSQL service mounts `db/migrations` into `/docker-entrypoint-initdb.d`. That directory is suitable for initialization of a new empty database volume; it does not automatically apply new SQL files to an already initialized database. A separate migration runner and tested upgrade/rollback process are release blockers for reliable in-place upgrades.
+The Compose PostgreSQL service now mounts `db/bootstrap` into `/docker-entrypoint-initdb.d` and `db/migrations` read-only at `/opt/aiops/migrations`. The bootstrap script applies only baseline 000–008 on an empty volume. `deploy/migrate.sh` then adopts the verified baseline and applies 009+ transactionally with checksums. Existing database volumes do not rerun bootstrap; they use the same migration runner after the PostgreSQL service is healthy. A migration is immutable once journaled; checksum drift fails closed.
 
 Do not assume that Temporal history, GLPI document storage, n8n credentials/workflows, Grafana dashboards, Prometheus data or model artifacts are all captured by the PostgreSQL backup. Each persistent volume and external integration must be inventoried.
 

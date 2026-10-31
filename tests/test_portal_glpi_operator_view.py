@@ -7,17 +7,17 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-glpi-no-upstream-token"}):
-    from portal import main, glpi_operator_view
+    from portal import main, glpi_operator_view, glpi_run_context
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-TOKEN = "ci-glpi-viewer-token"
+TOKEN = "v" * 64
 
 
 class GlpiOperatorViewTests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN})
+        self.env = patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN, "AIOPS_PORTAL_OPERATOR_TOKEN": "o" * 64})
         self.env.start()
         self.client = TestClient(main.app)
 
@@ -153,16 +153,8 @@ class GlpiOperatorViewTests(unittest.TestCase):
             "state": "UNAUTHORIZED", "reason": "forbidden_tenant"})
         self.assert_security(response)
 
-    def test_stacked_glpi_fastpaths_remain_unmounted_without_server_acl(self):
-        # #192/#193 are stacked on another base. A viewer bearer alone must
-        # never expose GLPI ticket reads, Copilot ticket context or Core
-        # proposal writes. If a server-derived ACL is later implemented,
-        # replace this route-inventory gate with positive/negative ACL tests.
-        blocked = {
-            ("GET", "/api/glpi/health"),
-            ("GET", "/api/glpi/tickets"),
-            ("GET", "/api/glpi/tickets/{ticket_id}"),
-            ("POST", "/api/copilot/ticket/{ticket_id}"),
+    def test_glpi_fastpaths_are_mounted_but_viewer_token_cannot_use_them(self):
+        expected = {
             ("POST", "/api/copilot/glpi-ticket/{ticket_id}"),
             ("POST", "/api/hitl/glpi-ticket/{ticket_id}/proposal"),
         }
@@ -172,8 +164,17 @@ class GlpiOperatorViewTests(unittest.TestCase):
             if hasattr(route, "methods")
             for method in route.methods
         }
-        self.assertFalse(blocked & mounted,
-                         "stacked GLPI fastpath mounted before actor+tenant ACL")
+        self.assertTrue(expected.issubset(mounted))
+        with patch.object(glpi_run_context, "GLPIClient",
+                          side_effect=AssertionError("viewer token must be rejected before GLPI access")):
+            for path in ("/api/copilot/glpi-ticket/1", "/api/hitl/glpi-ticket/1/proposal"):
+                with self.subTest(path=path):
+                    response = self.client.post(
+                        path, headers={"Authorization": "Bearer " + TOKEN},
+                        json={"question": "Analyse ce ticket.", "source_action_id": "CI-COLLECT-READONLY"},
+                    )
+                    self.assertEqual(response.status_code, 401)
+                    self.assert_security(response)
 
     def test_no_glpi_mutation_routes(self):
         for method in ("post", "put", "patch", "delete"):

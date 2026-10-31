@@ -72,17 +72,22 @@ class CopilotTenantFenceTests(unittest.TestCase):
         self._assert_security(response)
         upstream.assert_not_called()
 
-    def test_home_copilot_renders_http_error_and_is_noncacheable(self):
+    def test_home_copilot_is_fail_closed_and_script_is_one_shot(self):
         with patch.object(main, "get_json", side_effect=AssertionError("Core called")) as upstream:
             response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("HTTP '+r.status", response.text)
-        self.assertIn("UNAUTHORIZED", response.text)
-        self.assertIn("credentials:'omit'", response.text)
-        self.assertIn("Copilot indisponible", response.text)
+        self.assertIn("Copilot — accès tenant non qualifié", response.text)
+        self.assertIn('/assets/portal-copilot.js', response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(response.headers["x-frame-options"], "DENY")
         self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        script = self.client.get("/assets/portal-copilot.js")
+        self.assertEqual(script.status_code, 200)
+        self.assertIn("HTTP ' + r.status", script.text)
+        self.assertIn("UNAUTHORIZED", script.text)
+        self.assertIn('credentials: "omit"', script.text)
+        self.assertIn("Copilot indisponible", script.text)
+        self.assertNotIn("localStorage", script.text)
         upstream.assert_not_called()
 
 

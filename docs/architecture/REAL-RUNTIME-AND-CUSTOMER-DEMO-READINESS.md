@@ -1,15 +1,15 @@
 # AIOps2 real runtime and customer-demo readiness — implementation priority
 
 **Decision:** Runtime truth and a reproducible customer demonstration take priority over new feature breadth.  
-**Reference PR:** #214 (Draft)  
-**Reference branch:** `test/debian12-install-runtime-qualification-20261031`  
-**Reviewed head at decision time:** `e5cda8549fad4965f0c3ff2a4335ec7076631170`  
+**Reference PR:** #215 (Draft)  
+**Reference branch:** `integration/real-ai-runtime-demo-20261031`  
+**Reviewed code head at this update:** `2e259530ce08d0ee13ecd51df443b1c5b14ef7f5`  
 **Lab host evidence:** SRV-DEB-05, Debian 13 Trixie, operator-confirmed Docker inventory.  
 **Safety:** DEMO/REPLAY/STORY only; LIVE remains blocked. No production mutation or host system commands.
 
 ## 1. Executive decision
 
-The platform has a healthy Docker runtime and a working deterministic Temporal workflow, but the current PR #214 source branch does not yet prove an end-to-end, real-model, GLPI-integrated customer journey.
+PR #215 now integrates a real OpenAI-compatible Analyst/Critic adapter into the Temporal Worker and a bounded synthetic Portal launch path. This is a material step toward a working customer demo, but it is not yet proof of a real-provider rehearsal or tenant-scoped GLPI integration. Exact-head CI and an actual configured model call remain mandatory.
 
 Do not confuse:
 - a healthy container with a qualified application integration;
@@ -26,19 +26,30 @@ The first client story remains ACME SAN degradation affecting Payments. The scen
 
 ## 2. Verified gaps found by source inspection
 
-### 2.1 Current PR #214 source branch
+### 2.1 Current PR #215 integration branch
 
-At head `e5cda8549fad4965f0c3ff2a4335ec7076631170`:
+At code head `b893a9ce3c76a19412e37745a0ccdf48f8476b7b`:
 
-- The current source tree has no `app/intelligence/` service, no `app/intelligence/Dockerfile`, and no Intelligence service in its current `compose.yml`.
-- `app/worker/main.py` advances `DGX_ANALYST` and `DGX_CRITIC` through the generic stage path: it writes a generic Evidence claim (for example, “DGX_ANALYST completed”) with hard-coded confidence values. It does not call an Analyst/Critic model endpoint.
-- `app/copilot/main.py` is an evidence-first deterministic read model over Core/Twin/Evidence. It does not call an LLM provider.
-- `app/portal/acme_explore_story.py` and `acme_impact_read_model.py` are a useful local fixture/storyboard, but their own contract correctly labels the content `SIMULATED_TARGET`, uses fixture-derived IDs and marks evidence/checkpoints `MISSING`. They do not create a canonical runtime Run or actual GLPI ticket.
-- `app/portal/glpi_operator_view.py` deliberately performs no GLPI/Core request; it displays `NOT_INSTALLED` / `UNKNOWN` until a server-derived tenant ACL and authoritative ticket↔Run mapping are qualified.
-- The active GLPI container on SRV-DEB-05 was observed running, but no authenticated API, tenant ACL, CMDB write/read reconciliation or ticket mapping has yet been demonstrated.
-- The current `runtime-e2e.sh` is a deterministic synthetic integration check. It is not a real-model evaluation and must not be presented as one.
+- `app/intelligence/` and its Dockerfile are integrated and Compose starts an internal-only service on port 817 with health/readiness endpoints and bounded provider request/output limits.
+- Temporal Worker `DGX_ANALYST` calls `/api/intelligence/analyze`; `DGX_CRITIC` independently calls `/api/intelligence/critic` with the persisted Analyst result and evidence set.
+- Actual model output, Evidence references, provider/model, prompt version, invocation ID, latency, retries and provider-reported token usage are persisted in Core records/events. Missing token usage and cost remain null/UNKNOWN.
+- Provider failure or invalid/ungrounded output blocks the Run; it does not create a fake model-success marker.
+- Critic rejection is fenced by a durable denial-intent/outbox path and the Run blocks before any subsequent stage/effect.
+- Portal now exposes a fixed ACME synthetic DEMO launcher. It accepts no browser-supplied incident, Run, tenant, actor, service, scenario, mode or command. It uses server-held internal credentials to create only the fixed `SCN-GOLDEN-PAYMENT-P1` incident/Run and start Temporal; idempotency keys make retries converge.
+- The synthetic launcher is explicitly configurable. It never grants LIVE authority; response receipts assert `effect_allowed=false` and `live_remediation_authorized=false`.
+- The Portal homepage has been changed to a public shell with no anonymous/unscoped Core or Twin reads. The bootstrap read endpoint fails closed until actor+tenant ACL is qualified.
+- Portal `/copilot` now has an operator-only synthetic GLPI bot: it requires a dedicated DEMO operator token, reads one GLPI ticket, accepts only a unique link to the fixed ACME synthetic Run, calls the run-scoped Copilot service, and creates only a LOW-risk proposal derived from persisted Analyst/Critic records. The proposal is written as a private, marker-idempotent GLPI follow-up. This is not a tenant-wide or customer LIVE authorization path.
+- The active customer story remains ACME SAN → Payments. Synthetic Twin events and Evidence are generated by the application; no real SAN, storage, payment or production system is contacted.
+- CI contract tests use deterministic TEST_PROVIDER fixtures. They prove adapter behavior, not real-model quality, customer-provider availability or actual provider cost.
+- The demo runbook is `docs/demo/ACME-REAL-RUNTIME-DEMO-RUNBOOK.md`.
 
-These are engineering gaps, not reasons to weaken the safety boundary. Until the missing adapters are integrated, the product must label those capabilities NOT_CONNECTED / NOT_QUALIFIED rather than manufacture success evidence.
+### 2.1.1 Current verification limits
+
+- NVIDIA NIM is the declared Debian reference provider (`LLM_PROVIDER_NAME=NVIDIA_NIM`) at the operator-supplied no-key endpoint `http://10.79.94.31:8000/v1`. Compose and `.env.example` now use this endpoint; Intelligence auto-discovers one unambiguous Nemotron 120B model ID from `/v1/models`. `deploy/configure-ngx-nim-runtime.sh` probes a real completion, backs up `.env`, configures the existing stack, and verifies a second completion from inside the Intelligence container. This script has been committed but has not yet been executed on SRV-DEB-05; no successful real inference is claimed.
+- No provider-reported token usage, calibrated model quality or cost may be claimed until an actual run is captured. Cost remains UNKNOWN until pricing is versioned.
+- GLPI integration code now includes authenticated server-side ticket reads and private HITL proposal follow-ups, with tests. The host's actual API credentials, GLPI permissions, ticket #1 mapping and private-note write have not yet been revalidated on SRV-DEB-05. OIDC tenant/entity scoping and customer LIVE approvals remain unqualified.
+- The portal's synthetic demo launch and the Portal run page are not a production tenant authorization mechanism. Keep the environment isolated and synthetic.
+- A successful CI run does not prove a customer-provider call or a clean second-server deployment.
 
 ### 2.2 Reusable implementation already exists in GitHub
 
@@ -50,6 +61,17 @@ Do not recreate these components. Integrate them selectively and reconcile their
 - Existing ACME fixture and customer story in this branch provide a useful deterministic scenario contract and narrative; reuse the data model but connect it to a canonical runtime Run and real stage receipts.
 
 The source branches are stacked on different bases from PR #214. Do not merge wholesale or cherry-pick blindly. Port in bounded slices with schema, Compose, worker and exact-head CI compatibility checks.
+
+## 2.3 Portal bot and GLPI HITL proposal slice (new)
+
+- Portal `/copilot` now presents a same-origin operator UI. The DEMO operator token is held in memory only and is not persisted in local/session storage or cookies.
+- GLPI ticket text is treated as untrusted input. The server requires exactly one explicit `RUN-*` reference and confirms the Core run is in the fixed ACME synthetic scenario; ambiguous, LIVE, foreign or unresolved runs are refused before a model call.
+- Copilot retrieves only the selected run's incident, evidence, Analyst and Critic ledger, then calls Intelligence `/api/intelligence/answer` using the configured provider. Assistant claims are validated against the run's evidence IDs.
+- Each answer is recorded as a Core `COPILOT_ANSWER_RECORDED` event with provider/model/prompt version, provider-reported usage, latency/retry telemetry, evidence IDs, question hash and `NO_EXECUTION`. The raw question is not stored in the event payload.
+- A proposal is created only from a unique LOW-risk advisory action already present in a valid Analyst record and clean Critic record. Core remains the proposal system of record.
+- Portal writes a private GLPI `ITILFollowup` containing the proposal marker and explicit `PROPOSED / approval required / execution disabled` semantics. The client checks existing follow-ups for the marker before insert.
+- This is a synthetic demonstration proposal, not a human approval. The private GLPI follow-up is not a GLPI validation. LIVE approval still requires verified OIDC identity and role entitlements in Core; execution remains locked.
+- Automated contract tests are being added for the Portal UI, operator scope, NIM assistant evidence citations, Core audit event, GLPI private follow-up idempotency and no-LIVE/no-execution boundaries. Exact-head CI is currently running; no PASS is asserted until completion.
 
 ## 3. Implementation order — strict priority
 
@@ -174,3 +196,105 @@ Each implementation PR updates this document with:
 - rollback, security implications and remaining blockers.
 
 Never label a container stage as Analyst/Critic PASS unless a real endpoint invocation succeeded and the persisted output passes deterministic evidence-quality checks. Never label a GLPI ticket connected unless the actual ticket has been read back from GLPI. Never label a demo simulation as a real customer remediation.
+
+
+## 8. Implementation progress — integration PR #215 (2026-10-31)
+
+A separate draft integration branch `integration/real-ai-runtime-demo-20261031` was created from the PR #214 head. This avoids rewriting the PR #214 operations/reproducibility baseline and isolates the AI/HITL runtime port.
+
+### Ported source assets
+
+- Existing Intelligence service and Dockerfile from PR #196, including strict Analyst/Critic contracts, evidence freshness/integrity guards, provider-reported usage/latency/retry telemetry and bounded model requests.
+- Existing Temporal Worker and deterministic workflow from PR #194/#196, including real calls to `/api/intelligence/analyze` and `/api/intelligence/critic`, analysis/critique ledger persistence, fail-closed model-unavailable handling and explicit DEMO HITL simulation skip.
+- Core decision ledger and denial/HITL modules plus migrations 009, 010, 011 and 090–092.
+- Compose service wiring for Intelligence, model evaluator, test provider, GLPI API configuration and Temporal schema/namespace initialization.
+- Portal authenticated GLPI read client and ticket↔Run context routes, while preserving the current ACME Explore/Impact and GLPI operator handoff routers.
+- Fixed synthetic AI evaluation dataset, evaluator, benchmark summarizer and opt-in Ollama CPU benchmark workflow.
+- CI tests for Intelligence contract, AI evaluation/summary, OIDC identity and HITL workflow contract.
+
+### Important qualification distinction
+
+This is a **source integration in a Draft PR**, not a host deployment. The PR has 58 changed files and approximately 8.5k additions. It is a selective file-level port from divergent PR #194/#196 histories, not a wholesale merge. CI has been triggered; no exact-head PASS is claimed yet.
+
+### Remaining work before a real customer demonstration
+
+1. Resolve all CI failures and migration ordering/upgrade compatibility.
+2. Run a full synthetic Temporal scenario with a configured isolated model endpoint; verify persisted Analyst/Critic outputs and provider telemetry.
+3. Configure a dedicated least-privilege GLPI API identity and verify read-only ticket/CI access with entity/tenant scope.
+4. Prove one canonical Incident ID and Run ID are linked to a real lab GLPI ticket read back from GLPI.
+5. Execute Playwright against the runtime-backed Portal journey and capture a sanitized evidence bundle.
+6. Run at least three model repeats where feasible; keep actual quality, tokens and cost UNKNOWN when no provider evidence exists.
+7. Only after exact-head CI and isolated lab qualification, plan a controlled SRV-DEB-05 deployment. No application changes have been made on that host by this integration.
+
+### CI reference
+
+- Integration PR: https://github.com/alimtalbi-ata/aiops/pull/215
+- First exact-head quality workflow: https://github.com/alimtalbi-ata/aiops/actions/runs/41221642043
+
+
+### CI integration findings and corrections
+
+The first exact-head runs exposed genuine integration conflicts; they were not suppressed:
+
+- Porting the newer Policy module changed the already-qualified synthetic decision contract (P1 DEMO/REPLAY/STORY behavior). Restored the PR #214 Policy implementation, preserving the existing synthetic simulation contract and LIVE fail-closed posture. The newer autonomy/fencing modules remain unused until separately reconciled with the existing policy tests.
+- The Core integration test exposed a missing regex import in the preserved signed NOC projection; added the import.
+- The AST-isolated Core INGEST test executes only the `create()` function body and therefore needs its shared `initial_stage_state` collaborator injected explicitly. Updated the test harness rather than changing runtime behavior.
+- The signed NOC read projection from PR #214 was appended to the newer Core main so the existing NOC read security contract remains intact.
+- The first failures from missing policy modules were fixed by porting their source files and making the execution-fence import work both as a service package and under the `app.policy` test import path.
+
+Exact-head requalification is running again after these corrections. Prior failed runs remain visible in GitHub history; they are not being relabelled as PASS.
+
+
+## 9. Real demo execution tooling and telemetry persistence
+
+### 9.1 Guarded ACME demo runner
+
+Added `scripts/run-acme-demo.py` and `deploy/Dockerfile.demo-runner`, exposed only through the opt-in Compose profile `demo` as `aiops2-demo-runner`.
+
+The runner:
+- requires explicit `--confirm-synthetic-demo`;
+- requires a configured Intelligence provider and explicit `AIOPS_DEMO_PROVIDER_KIND=REAL` (or the explicit `--allow-test-provider` override for contract testing only);
+- checks Core, Temporal Worker, Intelligence, Evidence and Policy readiness before creating anything;
+- creates a uniquely keyed synthetic P1 incident and canonical DEMO Run using Core APIs;
+- starts Temporal, waits for a terminal state, then reads the canonical Run, AI ledger and DEMO verification proof;
+- exits PASS only if the Run is RESOLVED, Analyst and Critic records exist, Policy passed with SIMULATE, HITL recorded `HITL_SIMULATION_SKIPPED`, and no effect/approval/outbox records are observed;
+- prints a sanitized JSON summary. Tokens, provider request bodies and secrets are never printed.
+
+Operator invocation (from a reviewed checkout, after the stack is qualified and provider configuration has been checked):
+
+```bash
+docker compose --env-file .env --profile demo run --rm aiops2-demo-runner --confirm-synthetic-demo
+```
+
+The runner is an explicit opt-in profile and is not started by normal `docker compose up`. It creates synthetic Incident/Run records and invokes the configured model. It does not create or update GLPI tickets, approve HITL, execute SSH/sudo, or perform LIVE remediation.
+
+### 9.2 No-effect verification endpoint
+
+Core now exposes an authenticated, read-only `GET /api/runs/{run_id}/demo-verification` for DEMO/REPLAY/STORY. It reports whether the incident and Run are synthetic, whether HITL simulation was skipped, and observed counts of effect receipts, approval records and outbox events. Its `proof_scope` explicitly says this is a database observation, not a LIVE attestation.
+
+### 9.3 Provider telemetry is now part of the immutable ledger
+
+Migration `012_model_invocation_telemetry.sql` adds a bounded `model_invocation` JSON object to Analyst and Critic ledger records. Core allowlists invocation ID, request/retry counts, provider-reported token counters, latency, usage source, status and optional priced cost metadata. It deliberately excludes API keys, headers, prompts, request bodies and model responses from the telemetry object.
+
+Temporal Worker now forwards the Intelligence adapter's `model_invocation` result into the immutable Analyst/Critic records and run event payloads. Missing usage and cost remain null/UNKNOWN; no token or cost estimates are synthesized.
+
+A real PostgreSQL/Core integration test verifies write → read-back of both invocation records and verifies the DEMO no-effect observation endpoint.
+
+### 9.4 Current verification boundary
+
+- Intelligence adapter HTTP integration against `TEST_PROVIDER` proves the HTTP/schema/usage contract, not real model quality.
+- Real provider demo requires explicit `AIOPS_DEMO_PROVIDER_KIND=REAL`, the configured NGX base URL and exact discovered model ID. The supplied Debian endpoint requires no API key; `LLM_API_KEY` remains empty.
+- Real GLPI ticket read-back and tenant/entity authorization are still separate acceptance gates. The demo runner does not invent a GLPI ticket ID or write a ticket.
+- The runner has not been executed on SRV-DEB-05. Do not run it there until exact-head CI passes, a dedicated model provider is configured and a fresh isolated backup/rollback decision is recorded.
+
+
+## 11. PR #215 runtime-demo convergence update (2026-10-31)
+
+- Integrated the existing PR #196 Intelligence adapter and telemetry implementation into the Temporal Worker path rather than creating a second AI service.
+- Integrated the existing PR #194 denial/outbox/fencing behavior; updated the offline Worker test to assert the current durable-intent contract rather than the obsolete synchronous denial hook.
+- Removed unqualified GLPI ticket/Copilot fastpaths from Portal routing until server-derived actor+tenant ACL exists.
+- Replaced the Portal's anonymous homepage Core/Twin reads with an UNKNOWN-first shell; the bootstrap endpoint now refuses unscoped reads.
+- Added a fixed, idempotent synthetic ACME DEMO launch endpoint and Portal control; no client-provided identifiers or LIVE mode are accepted.
+- Added `tests/synthetic-e2e.sh` launch/Portal-visibility checks and the customer demo rehearsal runbook.
+- Replaced static secrets in `config/.env.demo.example` with a non-secret overlay. New installs continue to generate unique credentials.
+- Exact-head CI on this integration branch is in progress; do not mark the customer demo GO until the real provider is configured and one end-to-end Run is verified.

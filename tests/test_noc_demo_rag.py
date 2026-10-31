@@ -172,21 +172,20 @@ class NocDemoRagTests(unittest.TestCase):
                 "provenance": "SYNTHETIC_SIMULATION_ONLY", "scenarios": altered})
 
     def test_portal_route_and_visible_demo_control(self):
-        # shared.http intentionally fails import without an internal token.
-        # Provide a test-only synthetic value; no real credentials or HTTP calls.
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": TOKEN}):
             from portal import main as portal_main
         self.assertIn("/api/noc/demo-rag", [route.path for route in portal_main.app.routes])
-        snapshot = {"dashboard": {}, "runs": {"items": []}, "twin": {}, "states": {}}
-        with patch.object(portal_main, "read_portal_snapshot", return_value=snapshot), \
-             patch.object(portal_main, "build_navigation", return_value={}), \
-             patch.object(portal_main, "render_navigation_html", return_value=""):
-            page = portal_main.home()
-        self.assertIn("Lire fiches RAG DEMO", page)
-        self.assertIn("synthétiques", page)
-        self.assertIn("encodeURIComponent(asset)", page)
-        self.assertIn("el.value=''", page)
-        self.assertIn("out.textContent", page)
+        page = TestClient(portal_main.app).get("/noc-rag")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Lire fiches RAG DEMO", page.text)
+        self.assertIn("synthétique", page.text)
+        self.assertIn("portal-noc-rag.js", page.text)
+        client = pathlib.Path(portal_main.__file__).with_name("portal_noc_rag_client.js").read_text()
+        self.assertIn("encodeURIComponent(id)", client)
+        self.assertIn("token.value = \"\"", client)
+        self.assertIn("output.textContent", client)
+        self.assertNotIn("localStorage", client)
+        self.assertNotIn("sessionStorage", client)
 
     def test_rejects_invalid_digest_even_if_rows_valid(self):
         rows, _ = noc_demo_rag.load_catalog()

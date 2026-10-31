@@ -1,24 +1,24 @@
-import os,json,html
+import os,json,html,uuid,hmac,re,hashlib
 from pathlib import Path
-from fastapi import FastAPI,Request,Header,HTTPException,Response
+from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse,FileResponse
 from shared.http import get_json,post_json
-from portal.portal_integrations import build_navigation, render_navigation_html
-from portal.portal_read_models import read_portal_snapshot
-from portal.portal_command_auth import require_demo_operator, require_core_identifier, NO_STORE
-from portal.noc_runtime import router as noc_runtime_router, _require_portal_read_auth, _noc_json_response
-from portal.noc_correlation import router as noc_correlation_router
-from portal.noc_demo_rag import router as noc_demo_rag_router
-from portal.noc_grafana_health import router as noc_grafana_health_router
-from portal.acme_impact_read_model import router as acme_impact_router
+from portal.demo_ledger_read import router as demo_ledger_router
 from portal.acme_explore_story import router as acme_explore_story_router
+from portal.acme_impact_read_model import router as acme_impact_router
+from portal.glpi_operator_view import router as glpi_operator_router
+from portal.glpi_run_context import router as glpi_run_context_router
+from portal.noc_demo_rag import router as noc_demo_rag_router
+from portal.portal_integrations import build_navigation
+from portal.noc_runtime import router as noc_runtime_router, _noc_json_response, _require_portal_read_auth
+from portal.portal_command_auth import require_demo_operator
+from portal.noc_correlation import router as noc_correlation_router
+from portal.noc_grafana_health import router as noc_grafana_health_router
 from portal.acme_run_detail import router as acme_run_detail_router
-from portal.glpi_operator_view import router as glpi_operator_view_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
+
 @app.middleware('http')
 async def portal_security_headers(request: Request, call_next):
-    # Cover framework-generated 404/405/422 errors as well as route responses.
-    # Preserve the stricter, route-specific CSP on HTML and authenticated APIs.
     response = await call_next(request)
     defaults = {
         'Cache-Control': 'no-store',
@@ -26,54 +26,28 @@ async def portal_security_headers(request: Request, call_next):
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
         'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+        'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
     }
     for key, value in defaults.items():
         response.headers.setdefault(key, value)
     return response
+CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
+app.include_router(demo_ledger_router)
+app.include_router(acme_explore_story_router)
+app.include_router(acme_impact_router)
+app.include_router(glpi_operator_router)
+app.include_router(glpi_run_context_router)
+app.include_router(noc_demo_rag_router)
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
-app.include_router(noc_demo_rag_router)
 app.include_router(noc_grafana_health_router)
-app.include_router(acme_impact_router)
-app.include_router(acme_explore_story_router)
 app.include_router(acme_run_detail_router)
-app.include_router(glpi_operator_view_router)
-CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
-def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
-@app.get('/api/portal/bootstrap')
-def bootstrap(authorization: str | None = Header(default=None)):
-    # Shared PR #36 NOC viewer token; deny before any Core/Twin network access.
-    try:
-        _require_portal_read_auth(authorization)
-    except HTTPException as exc:
-        return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
-    # The shared viewer bearer is not a tenant/actor authorization. Core's
-    # /api/dashboard and /api/runs and Twin's summary lack tenant-scoped
-    # contracts. Never fetch or disclose these read models to a browser.
-    # Re-enable only after Core supplies server-derived tenant authorization.
-    return _noc_json_response({
-        'state': 'UNKNOWN',
-        'reason': 'TENANT_ACL_NOT_QUALIFIED',
-        'connection_state': 'UNKNOWN',
-        'source': 'CORE_TWIN_READ_MODELS_NOT_TENANT_AUTHORIZED',
-        'source_freshness': 'UNKNOWN',
-    }, status_code=503)
-@app.get('/assets/portal-bootstrap.js')
-def portal_bootstrap_script():
-    return FileResponse(Path(__file__).with_name('portal_bootstrap_client.js'),
-                        media_type='application/javascript',
-                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
-
+def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
 @app.get('/api/portal/components')
-def components(authorization: str | None = Header(default=None)):
-    # Reuse PR #36 NOC viewer contract; reject before reading configured URLs.
-    try:
-        _require_portal_read_auth(authorization)
-    except HTTPException as exc:
-        return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
-    return _noc_json_response(build_navigation())
+def portal_components(authorization: str | None = Header(default=None)):
+    _require_portal_read(authorization)
+    return JSONResponse(build_navigation(), headers={'Cache-Control':'no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff'})
 
 @app.get('/assets/portal-navigation.js')
 def portal_navigation_script():
@@ -81,26 +55,161 @@ def portal_navigation_script():
                         media_type='application/javascript',
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
-@app.post('/api/copilot')
-def copilot(q: dict, authorization: str | None = Header(default=None)):
-    # Legacy Copilot has no tenant/run-scoped read contract. A shared viewer
-    # bearer cannot authorize sending browser questions to this upstream.
+@app.get('/api/portal/bootstrap')
+def bootstrap(authorization: str | None = Header(default=None)):
+    # A shared viewer bearer is authentication only, not a tenant ACL.
+    # Keep the dashboard constant and fail closed until a server-derived,
+    # identity-bound tenant read contract exists.
     try:
         _require_portal_read_auth(authorization)
     except HTTPException as exc:
-        return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+        return _noc_json_response({'detail':exc.detail}, status_code=exc.status_code)
     return _noc_json_response({
-        'state': 'UNKNOWN',
-        'reason': 'TENANT_ACL_NOT_QUALIFIED',
-        'connection_state': 'UNKNOWN',
-        'source': 'COPILOT_NOT_TENANT_AUTHORIZED',
-        'source_freshness': 'UNKNOWN',
+        'state':'UNKNOWN', 'reason':'TENANT_ACL_NOT_QUALIFIED',
+        'connection_state':'UNKNOWN', 'source_freshness':'UNKNOWN',
+        'runtime_authenticated':False, 'live_remediation_authorized':False,
     }, status_code=503)
+
+
+@app.get('/assets/portal-bootstrap.js')
+def portal_bootstrap_script():
+    return FileResponse(Path(__file__).with_name('portal_bootstrap_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+@app.post('/api/copilot')
+def copilot(q:dict, authorization: str | None = Header(default=None)):
+    # Shared viewer auth is not an actor/tenant ACL. Do not forward unscoped
+    # browser context to Copilot until a server-derived tenant contract exists.
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({'detail':exc.detail}, status_code=exc.status_code)
+    return _noc_json_response({
+        'state':'UNKNOWN', 'reason':'TENANT_ACL_NOT_QUALIFIED',
+        'source':'COPILOT_NOT_TENANT_AUTHORIZED',
+        'source_freshness':'UNKNOWN', 'live_remediation_authorized':False,
+    }, status_code=503)
+
+
+@app.get('/assets/portal-copilot.js')
+def portal_copilot_script():
+    return FileResponse(Path(__file__).with_name('portal_copilot_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+def _require_portal_read(authorization):
+    secret=os.getenv("AIOPS_PORTAL_READ_TOKEN","")
+    bearer_token=(authorization or "").removeprefix("Bearer ")
+    if not secret:
+        raise HTTPException(503,"portal_read_auth_not_configured")
+    if not hmac.compare_digest(bearer_token,secret):
+        raise HTTPException(401,"invalid_portal_read_token")
+
+
+# The GLPI run-context router above exposes a bounded synthetic-DEMO operator
+# path only. It requires the dedicated operator token, a unique explicit RUN
+# reference to the fixed ACME synthetic scenario, and server-side GLPI tokens.
+# It can create a PROPOSED Core record and an idempotent private GLPI follow-up;
+# it cannot approve, execute, or authorize LIVE remediation.
+
+def _demo_environment_enabled() -> bool:
+    return os.getenv('AIOPS_DEMO_MODE', '0').strip().lower() in ('1', 'true', 'yes')
+
+
+def _synthetic_demo_launch_enabled() -> bool:
+    return (_demo_environment_enabled()
+            and os.getenv('AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED', 'false').strip().lower() == 'true')
+
+
+@app.get('/assets/demo-launch.js')
+def demo_launch_script():
+    return FileResponse(Path(__file__).with_name('demo_launch_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+
+
 @app.post('/api/demo')
-def demo(authorization: str | None = Header(default=None)):
-    # A browser-supplied operator bearer authenticates only a DEMO request.
-    # It cannot supply the actor/tenant/Run authorization required for Core
-    # incident creation, Run creation or execution. Refuse before any I/O.
+async def demo(request: Request, authorization: str | None = Header(default=None),
+               idempotency_key: str | None = Header(default=None, alias='Idempotency-Key')):
+    # This endpoint launches one fixed synthetic ACME scenario only. The
+    # browser cannot supply an actor, tenant, incident, Run, service, mode,
+    # scenario or command. The operator token authorizes this bounded demo
+    # launch; it is not an identity/tenant claim and grants no LIVE authority.
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
+
+    if not _synthetic_demo_launch_enabled():
+        return _noc_json_response({
+            'state':'UNKNOWN', 'reason':'SYNTHETIC_DEMO_LAUNCH_DISABLED',
+            'live_remediation_authorized':False,
+        }, status_code=503)
+    if await request.body():
+        return _noc_json_response({'detail':'synthetic_demo_payload_not_supported'},
+                                  status_code=422)
+
+    internal = os.getenv('AIOPS_INTERNAL_TOKEN', '')
+    if not internal:
+        return _noc_json_response({'state':'UNKNOWN',
+            'reason':'internal_service_auth_not_configured',
+            'live_remediation_authorized':False}, status_code=503)
+    key = idempotency_key or uuid.uuid4().hex
+    if (not isinstance(key, str) or len(key) < 8 or len(key) > 128
+            or not re.fullmatch(r'[A-Za-z0-9._:-]+', key)):
+        return _noc_json_response({'detail':'invalid_idempotency_key'}, status_code=422)
+
+    # Hash the caller's opaque retry key; never treat it as an identity or ID.
+    stable_key = 'DEMO-GOLDEN-' + hashlib.sha256(key.encode('ascii')).hexdigest()[:32]
+    incident_payload = {
+        'external_id': stable_key,
+        'title': 'ACME DEMO — dégradation SAN affectant Payments',
+        'severity': 'P1',
+        'service_id': 'ACME-SVC-PAYMENTS',
+        'source': 'synthetic-portal-demo',
+        'synthetic': True,
+        'payload': {'scenario_id':'SCN-GOLDEN-PAYMENT-P1',
+                    'story_version':'ACME-SAN-PAYMENTS-1.0',
+                    'live_remediation_authorized':False},
+    }
+    try:
+        incident = post_json(CORE, '/api/incidents', incident_payload,
+                             timeout=10, token=internal)
+        incident_id = incident.get('incident_id') if isinstance(incident, dict) else None
+        if not isinstance(incident_id, str) or not incident_id.startswith('INC-'):
+            raise ValueError('synthetic_incident_receipt_invalid')
+        run = post_json(CORE, '/api/runs', {
+            'mode':'DEMO', 'scenario_id':'SCN-GOLDEN-PAYMENT-P1',
+            'incident_id':incident_id, 'idempotency_key':stable_key,
+        }, timeout=10, token=internal)
+        run_id = run.get('run_id') if isinstance(run, dict) else None
+        if not isinstance(run_id, str) or not run_id.startswith('RUN-'):
+            raise ValueError('synthetic_run_receipt_invalid')
+        execution = post_json(CORE, f'/api/runs/{run_id}/execute', {},
+                              timeout=10, token=internal)
+        if not isinstance(execution, dict) or execution.get('run_id') != run_id:
+            raise ValueError('synthetic_execution_receipt_invalid')
+        return _noc_json_response({
+            'state':'STARTED', 'run_id':run_id,
+            'workflow_id':execution.get('workflow_id'),
+            'incident_id':incident_id, 'scenario_id':'SCN-GOLDEN-PAYMENT-P1',
+            'mode':'DEMO', 'synthetic':True,
+            'idempotent':bool(execution.get('idempotent',False)),
+            'live_remediation_authorized':False,
+            'effect_allowed':False,
+        }, status_code=202)
+    except Exception:
+        # Keep identifiers and infrastructure details out of the public error.
+        # The same Idempotency-Key can safely retry after an ambiguous timeout.
+        return _noc_json_response({
+            'state':'UNKNOWN', 'reason':'SYNTHETIC_DEMO_LAUNCH_UNAVAILABLE',
+            'live_remediation_authorized':False, 'effect_allowed':False,
+        }, status_code=503)
+@app.post('/api/demo-enriched')
+def demo_enriched(authorization: str | None = Header(default=None)):
+    # Enriched DEMO launch remains disabled until server-derived actor/tenant
+    # authorization and canonical Run idempotency are qualified.
     try:
         require_demo_operator(authorization)
     except HTTPException as exc:
@@ -109,43 +218,1095 @@ def demo(authorization: str | None = Header(default=None)):
         return response
     return _noc_json_response({
         'state': 'UNKNOWN',
-        'reason': 'TENANT_ACL_NOT_QUALIFIED',
+        'reason': 'DEMO_ENRICHED_MUTATION_NOT_AUTHORIZED',
         'connection_state': 'UNKNOWN',
-        'source': 'DEMO_CORE_MUTATION_NOT_AUTHORIZED',
+        'source': 'DEMO_ENRICHED_CORE_MUTATION_NOT_QUALIFIED',
         'source_freshness': 'UNKNOWN',
         'live_remediation_authorized': False,
     }, status_code=503)
-@app.get('/',response_class=HTMLResponse)
-def home(response: Response = None):
-    # Keep direct callers of the existing home() renderer compatible.
-    # FastAPI injects Response on HTTP requests; only then attach headers.
-    if response is not None:
-        response.headers.update({
-            'Cache-Control': 'no-store',
-            'Pragma': 'no-cache',
-            'X-Content-Type-Options': 'nosniff',
-            'Referrer-Policy': 'no-referrer',
-            'X-Frame-Options': 'DENY',
-            'Content-Security-Policy': (
-                "default-src 'none'; script-src 'self' 'unsafe-inline'; "
-                "style-src 'self' 'unsafe-inline'; connect-src 'self'; "
-                "img-src 'self' data:; base-uri 'none'; object-src 'none'; "
-                "form-action 'self'; frame-ancestors 'none'"
-            ),
+
+from portal.ui_theme import shell, panel, table, pretty, esc
+from portal.twin_graph import graph_panel
+from portal.demo_v2 import render_stage_marker_warning
+
+def _get(path,base=CORE):
+    try:
+        return get_json(base,path)
+    except Exception as exc:
+        # UI-only classification: preserve HTTP denial without exposing URLs or tokens.
+        result={"status":"UNKNOWN","error_type":type(exc).__name__}
+        response=getattr(exc,"response",None)
+        code=getattr(response,"status_code",None)
+        if type(code) is int and 100 <= code <= 599:
+            result["http_status"]=code
+        return result
+
+def _source_state(payload, kind):
+    """API reachability, not source attestation or business impact."""
+    if not isinstance(payload,dict):
+        return "UNKNOWN"
+    if payload.get("status")=="UNKNOWN" and payload.get("error_type"):
+        if payload.get("http_status") in (401,403):
+            return "UNAUTHORIZED"
+        if (payload.get("http_status") in (502,503,504) or
+            payload.get("error_type") in ("ConnectionError","Timeout",
+                                           "ConnectTimeout","ReadTimeout")):
+            return "UNAVAILABLE"
+        # HTTP 404 does not establish that a service is NOT_INSTALLED.
+        return "UNKNOWN"
+    if kind=="dashboard" and any(
+        type(payload.get(field)) is int
+        for field in ("open_incidents","running","blocked")):
+        return "CONNECTED"
+    if kind=="summary" and type(payload.get("nodes")) is int and type(payload.get("edges")) is int:
+        return "CONNECTED"
+    if kind=="graph" and isinstance(payload.get("nodes"),list) and isinstance(payload.get("edges"),list):
+        return "CONNECTED"
+    if kind=="impact" and payload.get("root") and isinstance(payload.get("affected"),list):
+        return "CONNECTED"
+    return "UNKNOWN"
+
+def _runs():
+    response=_get("/api/runs")
+    rows = response.get("items") if isinstance(response, dict) else None
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+def _run_id(r):
+    return r.get("run_id","UNKNOWN")
+
+
+def _qualified_demo_runs(rows):
+    """Only unambiguous Core DEMO identities may become navigation targets."""
+    counts = {}
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get("run_id"), str):
+            rid = row["run_id"]
+            counts[rid] = counts.get(rid, 0) + 1
+    return [row for row in rows if isinstance(row, dict)
+            and row.get("mode") in ("DEMO", "REPLAY", "STORY")
+            and isinstance(row.get("run_id"), str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", row["run_id"])
+            and counts[row["run_id"]] == 1]
+
+def _core_detail_matches_listed_run(detail, listed):
+    """Do not display another Core run's events, gates or evidence.
+
+    Inventory identity is a navigation hint, not proof that a later Core
+    detail response belongs to the same DEMO/REPLAY/STORY run.
+    """
+    if not isinstance(detail, dict) or not isinstance(listed, dict):
+        return False
+    run = detail.get("run")
+    if not isinstance(run, dict):
+        return False
+    if run.get("run_id") != listed.get("run_id"):
+        return False
+    if run.get("mode") != listed.get("mode") or run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
+        return False
+    for field in ("incident_id", "scenario_id"):
+        expected = listed.get(field)
+        if expected is not None and run.get(field) != expected:
+            return False
+    return True
+
+def _core_run_provenance(detail, listed):
+    """Core-declared provenance, never independent evidence of a real-world event."""
+    if not _core_detail_matches_listed_run(detail, listed):
+        return "UNKNOWN"
+    synthetic = detail["run"].get("synthetic")
+    inventory_flag = listed.get("synthetic")
+    if type(synthetic) is not bool or (
+        type(inventory_flag) is bool and inventory_flag is not synthetic
+    ):
+        return "UNKNOWN"
+    return "SYNTHETIC" if synthetic else "REAL"
+
+
+def _select_verified_demo_run(rows):
+    """Pick a bounded Core DEMO run only after inventory/detail agreement.
+
+    An inventory entry is not evidence that its detail is still the same run.
+    Fail closed when the API is missing, inconsistent or unauthorized.
+    """
+    eligible = _qualified_demo_runs(rows)
+    terminal = [r for r in eligible if r.get("status") in ("RESOLVED", "BLOCKED")]
+    other = [r for r in eligible if r.get("status") not in ("RESOLVED", "BLOCKED")]
+    for row in (terminal + other)[:12]:
+        detail = _get("/api/runs/" + row["run_id"])
+        if (_core_detail_matches_listed_run(detail, row)
+                and (not isinstance(row.get("status"), str)
+                     or detail["run"].get("status") == row["status"])):
+            return row, detail
+    return None, None
+
+
+def _operator_run_context(run_id):
+    """Read-only cross-screen navigation; no implicit Twin/GLPI/Policy join."""
+    if run_id is None:
+        return ""
+    unknown = panel("Contexte run Core — UNKNOWN",
+                    "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu et "
+                    "concordant n'est attesté pour cette sélection.</p>")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", run_id):
+        return unknown
+    listed = next((r for r in _qualified_demo_runs(_runs())
+                   if r["run_id"] == run_id), None)
+    if listed is None:
+        return unknown
+    detail = _get("/api/runs/" + run_id)
+    if not _core_detail_matches_listed_run(detail, listed):
+        return unknown
+    return _verified_operator_run_context(run_id, detail, listed)
+
+
+def _verified_operator_run_context(run_id, detail, listed):
+    """Read-only navigation for an identity already checked against Core."""
+    from urllib.parse import quote
+    rid = quote(run_id, safe="")
+    provenance = _core_run_provenance(detail, listed)
+    return panel("Contexte opérateur — run Core sélectionné",
+        '<p>Run <strong>' + esc(run_id) + '</strong> · mode '
+        + esc(listed["mode"]) + ' · provenance déclarée par Core : <strong>'
+        + esc(provenance) + '</strong> (non attestée indépendamment).</p>'
+        '<nav aria-label="Navigation Core du même run">'
+        '<a href="/demo-studio/run/' + rid + '">Analyst / Critic</a> · '
+        '<a href="/twin?run_id=' + rid + '">Twin</a> · '
+        '<a href="/timeline?run_id=' + rid + '">Timeline</a> · '
+        '<a href="/demo-studio/run/' + rid + '#demo-ledger-output">Evidence viewer</a> · '
+        '<a href="/demo-studio/run/' + rid + '#demo-evidence-itsm-output">ITSM viewer</a> · '
+        '<a href="/policy-control?run_id=' + rid + '">Policy / HITL</a></nav>'
+        '<p>UNKNOWN — aucune corrélation automatique entre ce run, la topologie Twin, '
+        'un ticket GLPI ou une approbation HITL. Aucune action LIVE.</p>')
+
+
+@app.get("/",response_class=HTMLResponse)
+def home():
+    # Public shell only: no unscoped Core/Twin reads before tenant ACL.
+    cards=[
+        ("Incidents ouverts","UNKNOWN"),
+        ("P1 ouverts","UNKNOWN"),
+        ("Runs actifs","UNKNOWN"),
+        ("Runs bloqués","UNKNOWN"),
+        ("Nœuds Twin","UNKNOWN"),
+        ("Équipements dégradés","UNKNOWN"),
+    ]
+    tiles="".join(
+        f'<div class="tile"><strong>{esc(value)}</strong><span>{esc(label)}</span></div>'
+        for label,value in cards
+    )
+    content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
+    content+=panel("Sources du cockpit — lecture non qualifiée",
+        '<p>Les métriques restent UNKNOWN tant qu’une autorisation serveur acteur/tenant '
+        'n’est pas qualifiée. Un conteneur healthy ou une réponse API ne constitue pas '
+        'une preuve d’impact métier.</p>'
+        +table(["Source","État","Limite"],[
+            ("Core / incidents","UNKNOWN","Lecture tenant-scoped non qualifiée"),
+            ("Digital Twin / CMDB","UNKNOWN","Relations métier à réconcilier"),
+            ("Evidence / AI Ledger","UNKNOWN","Références synthétiques ou runtime à vérifier"),
+            ("ITSM GLPI","UNKNOWN","Aucun ticket tenant-scoped attesté"),
+            ("Policy / HITL","UNKNOWN","Aucune approbation LIVE autorisée"),
+        ]))
+    content+=panel("Lecture du cockpit",
+        '<p>Jeton viewer utilisé une seule fois. Le serveur refuse toute lecture '
+        'non couverte par une ACL acteur/tenant qualifiée.</p>'
+        '<label for="portal-read-token">Jeton de lecture</label> '
+        '<input id="portal-read-token" type="password" autocomplete="off"> '
+        '<button type="button" onclick="loadPortalReadModel()">Vérifier les sources</button> '
+        '<button type="button" onclick="clearPortalReadModel()">Effacer</button> '
+        '<span id="portal-read-result" role="status">UNKNOWN — aucune lecture authentifiée</span> '
+        '<span id="portal-states">UNKNOWN</span>'
+        '<script src="/assets/portal-bootstrap.js" defer></script>')
+    content+=panel("Copilot — accès tenant non qualifié",
+        '<p>Le Copilot est désactivé pour les lectures métier tant que l’identité et le tenant '
+        'ne sont pas vérifiés côté serveur. Aucune question n’est transmise au moteur.</p>'
+        '<label for="copilot-token">Jeton viewer</label> '
+        '<input id="copilot-token" type="password" autocomplete="off"> '
+        '<label for="copilot-question">Question</label> '
+        '<input id="copilot-question" type="text" maxlength="1000"> '
+        '<button type="button" id="copilot-submit">Interroger Copilot</button> '
+        '<span id="copilot-status" role="status">UNKNOWN — ACL requise</span>'
+        '<script src="/assets/portal-copilot.js" defer></script>')
+    content+=panel("Démo ACME — valeur métier",
+        '<p>Parcours synthétique SAN → Payments : incident P1, dépendances, '
+        'analyse, critique indépendante, Policy SIMULATE et vérification. '
+        'Aucun effet LIVE ni modification d’infrastructure réelle.</p>'
+        '<p><a href="/demo-studio">Ouvrir Demo Studio</a> · '
+        '<a href="/demo-studio/business-story">Voir le récit métier</a></p>')
+    if _synthetic_demo_launch_enabled():
+        content+=panel("Démo ACME — simulation uniquement",
+            '<p class="muted">Lance un incident et un Run ACME synthétiques via Core/Temporal. '
+            'Aucun champ client n’est accepté ; aucune action LIVE n’est possible.</p>'
+            '<label for="demo-token">Jeton opérateur DEMO (usage unique)</label> '
+            '<input id="demo-token" type="password" autocomplete="off"> '
+            '<button type="button" id="launch-demo">Lancer le scénario SAN → Payments</button> '
+            '<span id="demo-launch-status" role="status">Prêt — scénario synthétique uniquement</span> '
+            '<script src="/assets/demo-launch.js" defer></script>')
+    else:
+        content+=panel("Démo ACME — simulation uniquement",
+            '<p class="muted">Le lancement synthétique est désactivé par configuration. '
+            'Aucun Run ne sera créé depuis le portail.</p>'
+            '<button disabled title="AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED=false">Lancer DEMO (désactivé)</button>')
+    content+=panel("Intégrations — liens non attestés",
+        '<p class="muted">Les liens externes ne prouvent ni disponibilité ni authentification. '
+        'Aucun secret ou URL configurée n’est exposé dans le HTML public.</p>'
+        '<label for="portal-navigation-token">Jeton lecture des liens (usage unique)</label> '
+        '<input id="portal-navigation-token" type="password" autocomplete="off"> '
+        '<button type="button" onclick="loadPortalNavigation()">Afficher les liens configurés</button> '
+        '<button type="button" onclick="clearPortalNavigation()">Effacer les liens</button> '
+        '<span id="portal-navigation-status">UNKNOWN — liens non chargés</span>'
+        '<script src="/assets/portal-navigation.js" defer></script>')
+    return shell("/","Cockpit opérationnel",
+        "Cockpit AIOps2 — affichage fail-closed jusqu’à qualification de l’identité et des sources.",
+        content)
+
+
+@app.get("/runs",response_class=HTMLResponse)
+def runs_page():
+    runs=_runs()
+    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("overall_confidence","INCONNU"),r.get("scenario_id","UNKNOWN")) for r in runs if isinstance(r,dict)]
+    # The registry table is escaped by table(); deep links need validated IDs.
+    # Never link LIVE, invalid or ambiguous run identities into a DEMO detail.
+    from urllib.parse import quote
+    eligible=_qualified_demo_runs(runs)
+    links="".join(
+        '<li><a href="/demo-studio/run/'+quote(row["run_id"],safe="")+'">'+esc(row["run_id"])+'</a>'
+        ' · <a href="/timeline?run_id='+quote(row["run_id"],safe="")+'">Timeline</a>'
+        ' · '+esc(row.get("status") or "UNKNOWN")+'</li>'
+        for row in eligible
+    )
+    body=panel("Exécutions",table(["Run","Mode","État","Confiance","Scénario"],rows))
+    body+=panel("Explorer un run DEMO / REPLAY / STORY — inventaire Core, non attesté",
+        "<ul>"+links+"</ul>" if links else "<p>UNKNOWN — aucun run DEMO non ambigu accessible.</p>")
+    return shell("/runs","Incidents & Runs","Registre canonique et état d'exécution ; les champs absents sont signalés.",body)
+
+@app.get("/timeline",response_class=HTMLResponse)
+def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
+    """Real incident/run selector with event-by-event explanations and AI registers."""
+    from portal.timeline_explain import event_box,run_selector,incident_explorer,investigation_overview,evidence_catalog
+    from portal.demo_explain import render_critic_explanation
+    from urllib.parse import quote
+    items=_runs()
+    registry=_get("/api/incidents")
+    incidents=registry.get("items",[]) if isinstance(registry.get("items"),list) else []
+    # A default DEMO journey must not land on a stale RUNNING or LIVE row.
+    # Reject ambiguous IDs rather than selecting one of two conflicting Core rows.
+    eligible=_qualified_demo_runs(items)
+    preferred=next((r["run_id"] for r in eligible
+                    if r.get("status") in ("BLOCKED","RESOLVED")),None)
+    selected=run_id or preferred or (eligible[0]["run_id"] if eligible else None)
+    content='''<style>
+    main{max-width:1500px}
+    .timeline-ui input,.timeline-ui select{font:inherit;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;min-width:170px}
+    .timeline-ui form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px}
+    .timeline-ui label{display:flex;flex-direction:column;gap:5px;font-weight:600}
+    .timeline-ui details{margin:10px 0;padding:10px 14px;border:1px solid var(--line);border-radius:10px}
+    .timeline-ui summary{cursor:pointer;line-height:1.6}
+    .timeline-ui li{padding:4px 0}
+    .timeline-ui a[aria-current="page"]{font-weight:700;color:#6560c5}
+    .timeline .event{line-height:1.65;font-size:1rem;padding:20px 23px}
+    .timeline .event h3{font-size:1.12rem}
+    .timeline .event p{margin:8px 0}
+    .timeline .event details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+    .timeline .event pre{font-size:.85rem;max-height:400px;overflow:auto}
+    .investigation-warning{border-left:4px solid #d97706;padding:12px;background:var(--bg)}
+    .investigation-steps{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:16px}
+    .investigation-steps a{padding:6px 10px;border:1px solid var(--line);border-radius:8px;text-decoration:none}
+    .timeline .event{scroll-margin-top:90px}
+    @media(max-width:700px){.timeline{margin-left:6px;padding-left:15px}.timeline .event{padding:13px}}
+    </style>'''
+    content+=panel("Explorateur des incidents — recherche et filtres",
+        '<div class="timeline-ui">'+incident_explorer(items,selected,q,status,incidents=incidents)+'</div>')
+
+    content+=panel("Périmètre et transparence",
+        "<p>Les incidents et runs proviennent de Core, y compris les incidents sans exécution. "
+        "Les listes sont limitées aux enregistrements renvoyés par Core. La provenance REAL/SYNTHETIC est déclarée par Core uniquement si l'identité du run concorde ; sinon UNKNOWN. Les décisions IA exigent une vérification indépendante. Aucune approbation ou remédiation LIVE n’est attestée.</p>")
+    if not selected:
+        content+=panel("Timeline","<p>UNKNOWN — aucun run DEMO / REPLAY / STORY non ambigu accessible depuis Core.</p>")
+        return shell("/timeline","Timeline des incidents","Choisir un run pour suivre les événements et décisions.",content)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",selected):
+        raise HTTPException(404,"invalid_run_id")
+    match=next((x for x in eligible if x["run_id"]==selected),None)
+    if not match:
+        raise HTTPException(404,"run_not_in_registry")
+    key=quote(selected,safe="")
+    detail=_get("/api/runs/"+key)
+    if not _core_detail_matches_listed_run(detail, match):
+        content+=panel("Timeline Core — UNKNOWN",
+            "<p>Identité du détail Core non concordante avec l'inventaire DEMO. "
+            "Aucun événement, diagnostic ou Evidence n'est présenté.</p>")
+        return shell("/timeline", "Timeline des incidents",
+                     "Identité Core non qualifiée — lecture seule.", content, mode="UNKNOWN")
+    content+=_verified_operator_run_context(selected, detail, match)
+    ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
+    evidence_response=_get("/api/runs/"+key+"/evidence")
+    evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
+    events=detail.get("events") if isinstance(detail.get("events"),list) else []
+    cards="".join(event_box(e,i) for i,e in enumerate(events,1))
+    if not cards:
+        cards="<p>Aucun événement disponible depuis Core.</p>"
+    content+=panel("Diagnostic et accès rapide",investigation_overview(match,events,incidents))
+    content+=panel("Run sélectionné : "+selected,
+        '<p><strong>État :</strong> '+esc(match.get("status","INCONNU"))+
+        ' · <strong>Mode :</strong> '+esc(match.get("mode","INCONNU"))+
+        ' · <a href="/demo-studio/run/'+key+'">Détail Demo Studio (si mode DEMO)</a></p>'
+        +'<div class="timeline">'+cards+'</div>')
+    if match.get("status") in ("CREATED","RUNNING"):
+        content+=panel("Actualisation de l'investigation",
+            '<p>Core déclare ce run en cours ; fraîcheur UNKNOWN sans horodatage vérifié. '
+            'Actualisation en lecture seule toutes les 10 secondes ; aucune action n’est déclenchée.</p>'
+            '<script>setTimeout(function(){window.location.reload()},10000)</script>')
+    content+=panel("Registre des preuves liées — provenance vérifiable",evidence_catalog(evidence_items))
+    content+=panel("Raisonnement observable — Analyst / Critic",render_critic_explanation(ledger))
+    content+=panel("Registres IA et Policy complets",pretty(ledger))
+    return shell("/timeline","Timeline des incidents",
+        "Historique réel Core, explications étape par étape, succès et blocages compris.",
+        content,mode=match.get("mode","INCONNU"))
+
+@app.get("/twin",response_class=HTMLResponse)
+def twin_page(run_id:str|None=None):
+    summary=_get("/api/twin/summary",TWIN)
+    graph=_get("/api/twin/graph",TWIN)
+    nodes=graph.get("nodes",[]) if isinstance(graph.get("nodes"),list) else []
+    edges=graph.get("edges",[]) if isinstance(graph.get("edges"),list) else []
+    body=_operator_run_context(run_id)+panel("Résumé Digital Twin",pretty(summary))
+    impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    body+=graph_panel(graph,impact=impact)
+    body+=panel("Inventaire des nœuds",table(["ID","Type","Site","État","Santé"],
+        [(x.get("node_id"),x.get("type"),x.get("site"),x.get("state"),x.get("health")) for x in nodes[:200]]))
+    body+=panel("Relations de dépendance",table(["Source","Relation","Cible"],
+        [(x.get("source_id"),x.get("relation_type"),x.get("target_id")) for x in edges[:300]]))
+    body+=panel("Impact ACME-SAN-FABRIC-A",pretty(impact))
+    return shell("/twin","Digital Twin ACME","Topologie et dépendances observables, distinctes des injections de simulation.",body)
+
+@app.get("/evidence",response_class=HTMLResponse)
+def evidence_page(run_id:str|None=None):
+    body=_operator_run_context(run_id)+panel("Traçabilité des preuves",'<p>Les preuves doivent porter provenance, fraîcheur, lien au run et mode SYNTHETIC/LIVE. Aucun indicateur de confiance artificiel n’est produit par cette vue.</p>')
+    body+=panel("Point de contrôle",'<p>Consulter les identifiants de preuves dans les événements Core. La liste transversale Evidence exige un adaptateur et un contrôle de droits complémentaires.</p>')
+    return shell("/evidence","Preuves & Observabilité","Evidence ledger, liens de causalité et limites d’acquisition.",body)
+
+@app.get("/policy",response_class=HTMLResponse)
+def policy_page():
+    rows=[(_run_id(r),r.get("status","UNKNOWN"),r.get("mode","UNKNOWN")) for r in _runs() if r.get("status") in ("BLOCKED","WAITING")]
+    body=panel("Exécutions bloquées / en attente",table(["Run","État","Mode"],rows))
+    body+=panel("Contrôles d'autorisation",'<p>Critic rejeté : blocage atomique, reçu et outbox. Approbation HITL, ownership et fencing sont requis avant effet. Cette page ne crée aucune validation.</p>')
+    return shell("/policy","Policy & HITL","Décisions, approbations et barrières de sécurité — lecture seule.",body)
+
+@app.get("/assets/portal-glpi-bot.js")
+def portal_glpi_bot_script():
+    return FileResponse(Path(__file__).with_name("portal_glpi_bot_client.js"),
+                        media_type="application/javascript",
+                        headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+
+
+@app.get("/assets/portal-noc-rag.js")
+def portal_noc_rag_script():
+    return FileResponse(Path(__file__).with_name("portal_noc_rag_client.js"),
+                        media_type="application/javascript",
+                        headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+
+
+@app.get("/noc-rag",response_class=HTMLResponse)
+def noc_rag_page():
+    body=panel("NOC RAG — catalogue synthétique",
+        '<p>Drilldown documentaire synthétique uniquement. Les fiches ne sont ni des observations runtime, '
+        'ni une autorité constructeur, ni une preuve de cause racine.</p>'
+        '<label for="noc-rag-asset">Identifiant d’asset</label>'
+        '<input id="noc-rag-asset" maxlength="64" value="brocade-fc01" autocomplete="off">'
+        '<label for="noc-rag-token">Jeton lecture Portal</label>'
+        '<input id="noc-rag-token" type="password" autocomplete="off">'
+        '<button id="noc-rag-read" type="button">Lire fiches RAG DEMO</button>'
+        '<button id="noc-rag-clear" type="button" class="secondary">Effacer</button>'
+        '<p id="noc-rag-status" role="status">UNKNOWN — aucune fiche chargée</p>'
+        '<pre id="noc-rag-output" class="log">Aucune donnée.</pre>'
+        '<script src="/assets/portal-noc-rag.js" defer></script>')
+    return shell("/noc-rag","NOC RAG DEMO","Références synthétiques — aucune observation de production.",body)
+
+
+@app.get("/copilot",response_class=HTMLResponse)
+def copilot_page():
+    body=panel("Assistant AIOps — interaction GLPI / HITL",
+        '<p>Assistant opérateur limité au scénario synthétique ACME SAN → Payments. '
+        'Le bot relie un ticket GLPI à un Run DEMO explicite, consulte le registre Analyst/Critic '
+        'et peut créer une proposition HITL à risque faible si elle existe dans le ledger validé.</p>'
+        '<label for="glpi-ticket-id">Identifiant du ticket GLPI</label>'
+        '<input id="glpi-ticket-id" inputmode="numeric" maxlength="12" placeholder="Ex. 1">'
+        '<label for="demo-operator-token">Jeton opérateur DEMO (usage ponctuel)</label>'
+        '<input id="demo-operator-token" type="password" autocomplete="off">'
+        '<label for="glpi-bot-question">Votre question</label>'
+        '<textarea id="glpi-bot-question" maxlength="2000">Analyse ce ticket, distingue faits et hypothèses, cite les preuves, puis indique si une proposition corrective prudente est justifiée.</textarea>'
+        '<p><button id="glpi-bot-analyze" type="button">Interroger AIOps sur ce ticket</button> '
+        '<button id="glpi-bot-propose" type="button" class="secondary" disabled>Créer la proposition HITL</button></p>'
+        '<p id="glpi-bot-status" role="status" aria-live="polite">En attente — aucune lecture GLPI effectuée.</p>'
+        '<pre id="glpi-bot-answer" class="log" aria-live="polite">Aucune réponse.</pre>'
+        '<p class="muted">Une proposition est un objet PROPOSED, pas une approbation. Les décisions LIVE exigent une identité OIDC vérifiée et des rôles autorisés. '
+        'Aucune approbation, exécution, commande SSH/sudo ou remédiation n’est déclenchée depuis cette page.</p>'
+        '<script src="/assets/portal-glpi-bot.js" defer></script>')
+    return shell("/copilot","Assistant AIOps","Copilot contextualisé GLPI, preuves et proposition HITL — périmètre DEMO uniquement.",body)
+
+@app.get("/demo-studio",response_class=HTMLResponse)
+def demo_studio():
+    """Safe read-only ACME storyboard: no launch, effects, or credentials in browser."""
+    if not _demo_environment_enabled():
+        raise HTTPException(503, "demo_environment_disabled")
+    dashboard=_get("/api/dashboard")
+    graph=_get("/api/twin/graph",TWIN)
+    impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
+    runs=_runs()
+    demo_runs=[r for r in runs if isinstance(r,dict) and r.get("mode") in ("DEMO","REPLAY","STORY")]
+    body=panel("Démo ACME — valeur métier",
+        '<p>Six étapes dans le portail existant : enjeu Payments, incident SAN, diagnostic, décision SIMULATE/HITL et valeur hypothétique. Aucune action LIVE ni gain mesuré.</p>'
+        '<p><a href="/demo-studio/business-story">Ouvrir la démo ACME — valeur métier</a></p>')
+    body+=panel("État des sources — lecture seule",
+        '<p>CONNECTED signifie uniquement réponse API structurée, pas corrélation métier ni E2E attesté. '
+        'UNAUTHORIZED = HTTP 401/403 ; UNAVAILABLE = erreur de transport ou serveur ; '
+        'NOT_INSTALLED exige un inventaire de déploiement qualifié (non disponible ici). '
+        'UNKNOWN couvre les réponses incomplètes et les API non qualifiées.</p>'
+        +table(["Source","État","Provenance / limite"],[
+          ("Core /api/dashboard",_source_state(dashboard,"dashboard"),
+           "API Core — contenu REAL ou SYNTHETIC à qualifier"),
+          ("Twin /api/twin/graph",_source_state(graph,"graph"),
+           "API Twin — arêtes présentes ne prouvent pas SAN → Payments"),
+          ("Twin /api/twin/impact/ACME-SAN-FABRIC-A",_source_state(impact,"impact"),
+           "API Twin — impact métier UNKNOWN sans dépendance sourcée"),
+          ("ITSM GLPI","UNKNOWN","Aucun ticket_id ni lecture GLPI authentifiée"),
+          ("Evidence / AI Ledger","UNKNOWN","Accès viewer/RBAC et provenance non attestés"),
+          ("Policy / HITL","UNKNOWN","Décision et approbation à vérifier sur /policy-control"),
+        ]))
+    body+=panel("Préflight — qualification en lecture seule",
+        '<p><strong>SCÉNARIO ACME CANDIDAT</strong> — cette page n’injecte aucun incident et ne déclenche aucune remédiation. '
+        'Les données ci-dessous proviennent des API Core/Twin; les erreurs sont signalées INCONNU.</p>'
+        +table(["Contrôle","Résultat"],[
+          ("Core /api/dashboard",dashboard.get("status","DONNÉES CONSULTÉES") if dashboard.get("status")!="UNKNOWN" else "INCONNU"),
+          ("Digital Twin graph","DISPONIBLE" if isinstance(graph.get("nodes"),list) else "INCONNU"),
+          ("Impact SAN-A","DISPONIBLE" if isinstance(impact.get("affected"),list) and impact.get("root") else "INCONNU"),
+          ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)) if runs else "UNKNOWN — registre vide ou inaccessible")
+        ]))
+    if _synthetic_demo_launch_enabled():
+        body+=panel("Lancer le scénario synthétique ACME",
+          '<p>Scénario fixe SAN → Payments en mode DEMO. Le jeton opérateur est utilisé une seule fois ; '
+          'aucun identifiant ou mode fourni par le navigateur n’est accepté.</p>'
+          '<label for="demo-token">Jeton opérateur DEMO</label>'
+          '<input id="demo-token" type="password" autocomplete="off">'
+          '<p><button id="launch-demo" type="button">Lancer la démonstration ACME</button></p>'
+          '<p id="demo-launch-status" role="status" aria-live="polite">En attente.</p>'
+          '<script src="/assets/demo-launch.js" defer></script>')
+    # Navigate a real Core inventory entry; never substitute a fixture or LIVE run.
+    import urllib.parse
+    selected, selected_detail=_select_verified_demo_run(runs)
+    if selected:
+        rid=urllib.parse.quote(selected["run_id"],safe="")
+        run_entry=('<p><strong>Run Core concordant (inventaire + détail, sans preuve métier) :</strong> '
+                   +esc(selected["run_id"])+' · '+esc(selected.get("status","UNKNOWN"))
+                   +' · provenance déclarée par Core : <strong>'
+                   +esc(_core_run_provenance(selected_detail, selected))+'</strong>'
+                   +' (non attestée indépendamment)'
+                   +' · <a href="/demo-studio/run/'+rid+'">Détail Analyst/Critic</a>'
+                   +' · <a href="/timeline?run_id='+rid+'">Timeline du même run</a></p>')
+    else:
+        run_entry='<p><strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY valide et concordant accessible depuis Core.</p>'
+    # Only correlate the incident explicitly referenced by this Core run inventory row.
+    # A missing or ambiguous incident must not become a fabricated Payments impact.
+    incident_entry='<p><strong>Incident Core associé :</strong> UNKNOWN — identité ou état non qualifié.</p>'
+    if selected:
+        incident_id=selected.get("incident_id")
+        if isinstance(incident_id,str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}",incident_id):
+            incident_registry=_get("/api/incidents")
+            records=incident_registry.get("items") if isinstance(incident_registry,dict) else None
+            matches=[item for item in records if isinstance(item,dict) and item.get("incident_id")==incident_id] if isinstance(records,list) else []
+            if len(matches)==1:
+                incident=matches[0]
+                incident_entry=('<p><strong>Incident Core associé (inventaire, non attesté) :</strong> '
+                    +esc(incident_id)+' · '+esc(incident.get("title") or "UNKNOWN")
+                    +' · sévérité '+esc(incident.get("severity") or "UNKNOWN")
+                    +' · état incident '+esc(incident.get("state") or "UNKNOWN")
+                    +'. Corrélation SAN → Payments : UNKNOWN sans arêtes sourcées.</p>')
+    # Deep links stay on the same unambiguous Core run; no fixture fallback.
+    if selected:
+        run_path="/demo-studio/run/"+rid
+        twin_href="/twin?run_id="+rid
+        policy_href="/policy-control?run_id="+rid
+        timeline_link='<a href="/timeline?run_id='+rid+'">Timeline du même run</a>'
+        analyst_link='<a href="'+run_path+'">Analyst / Critic du même run</a>'
+        evidence_link='<a href="'+run_path+'#demo-ledger-output">Evidence du même run (viewer)</a>'
+        itsm_link='<a href="'+run_path+'#demo-evidence-itsm-output">ITSM du même run (viewer)</a>'
+    else:
+        twin_href="/twin"
+        policy_href="/policy-control"
+        timeline_link='<a href="/timeline">Timeline (sélection Core requise)</a>'
+        analyst_link='UNKNOWN — aucun run Core qualifié'
+        evidence_link='UNKNOWN — registre viewer sans run qualifié'
+        itsm_link='UNKNOWN — aucun ticket GLPI attesté'
+    body+=panel("Parcours opérationnel ACME — navigation guidée",
+        '<ol><li><a href="/">Cockpit NOC / enjeu Payments</a></li>'
+        '<li><a href="/runs">Registre Core des runs</a></li>'
+        '<li><a href="'+twin_href+'">SAN et dépendances Twin</a> — impact Payments à confirmer</li>'
+        '<li>'+timeline_link+'</li>'
+        '<li>'+analyst_link+'</li>'
+        '<li>'+evidence_link+' — provenance SYNTHETIC/REAL à vérifier</li>'
+        '<li>Ticket ITSM GLPI : '+itsm_link+' — aucune liaison attestée</li>'
+        '<li><a href="'+policy_href+'">Policy SIMULATE / HITL</a> — aucune approbation réelle présumée</li></ol>'
+        +run_entry+incident_entry)
+    body+=graph_panel(graph,impact=impact)
+    body+=panel("Exécutions de démonstration déjà enregistrées",
+      table(["Run","Mode","État","Scénario"],[
+       (r.get("run_id","INCONNU"),r.get("mode","INCONNU"),
+        r.get("status","INCONNU"),r.get("scenario_id","INCONNU")) for r in demo_runs[:30]]))
+    import urllib.parse
+    if selected:
+        links='<li><a href="/demo-studio/run/'+rid+'">'+esc(selected["run_id"])+'</a></li>'
+        body+=panel("Ouvrir les traces Analyst/Critic/Policy","<ul>"+links+"</ul>")
+    body+=panel("Qualification et prochaines étapes",
+      '<p>Le parcours connecté Core → Temporal → Analyst/Critic → Policy → Evidence reste à '
+      'valider en stack V2.8 isolée avant de permettre le lancement depuis ce portail.</p>'
+      '<p><a href="/timeline">Consulter la timeline</a> · <a href="/qualification">Matrice de qualification</a></p>')
+    return shell("/demo-studio","ACME Demo Studio",
+      "Démonstration intégrée ACME — lecture des sources Core/Twin et lancement optionnel en mode développement.",
+      body,mode="DEVELOPPEMENT DEMO" if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true" else "LECTURE SEULE")
+
+@app.get("/demo-studio/business-story",response_class=HTMLResponse)
+def demo_business_story():
+    """Read-only ACME story in the existing portal shell; no external requests."""
+    from portal.acme_stories import get_story
+    story = get_story("PAYMENTS_SAN")
+    if not story:
+        return HTMLResponse(shell("/demo-studio", "ACME Payments", "Catalogue indisponible",
+            panel("UNKNOWN", "<p>Scénario absent.</p>"), mode="UNKNOWN / READ-ONLY"))
+    steps = [
+        ("Risque Payments", story["business_impact"], "/", "Cockpit NOC"),
+        ("Incident SAN", story["symptom"] + " — scénario, pas une mesure observée.",
+         "/timeline", "Incidents et runs Core"),
+        ("Impact Twin", "ACME-SAN-FABRIC-A → Payments : dépendance à confirmer par des arêtes sourcées.",
+         "/twin", "Dépendances Digital Twin"),
+        ("Analyst / Critic", "Hypothèse IA et critique à lire sur le même run Core ; aucune décision IA attestée par ce récit.",
+         "/timeline", "Investigation Core"),
+        ("ITSM GLPI / Policy SIMULATE / HITL",
+         "Ticket GLPI : UNKNOWN. Décision SIMULATE et approbation HITL : UNKNOWN tant que les registres authentifiés ne sont pas consultés. Aucun LIVE.",
+         "/policy-control", "Contrôles Policy"),
+        ("Evidence et valeur",
+         "Références evidence_ids : UNKNOWN ici. Avant/après : PROJECTED_ONLY, non mesuré ; bénéfices hypothétiques et rollback non exécuté.",
+         "/evidence", "Preuves disponibles"),
+    ]
+    nav = '<nav aria-label="Étapes ACME"><ol>' + "".join(
+        f'<li><a href="#acme-step-{i}">{i}. {esc(title)}</a></li>'
+        for i, (title, _, _, _) in enumerate(steps, 1)) + "</ol></nav>"
+    body = panel("ACME SAN → Payments — scénario guidé",
+        "<p><strong>SIMULATED</strong> : récit explicatif, pas un run observé. "
+        "<strong>UNKNOWN</strong> : données non attestées. "
+        "<strong>SOURCE-VERIFIED</strong> : réservé aux références contrôlées dans les écrans opérationnels. "
+        "Aucun ticket GLPI, effet LIVE, métrique ou preuve n'est fabriqué.</p>" + nav)
+    for i, (title, description, href, label) in enumerate(steps, 1):
+        body += f'<section id="acme-step-{i}">' + panel(
+            f"{i}/6 · {title}",
+            "<p><strong>SIMULATED / UNKNOWN</strong> — " + esc(description) + "</p>"
+            + '<p><a href="' + esc(href) + '">' + esc(label)
+            + " (lecture seule, statut à vérifier)</a></p>") + "</section>"
+    body += panel("Continuer dans AIOps2",
+        '<p><a href="/demo-studio">Demo Studio V2 et runs existants</a> · '
+        '<a href="/acme-stories">Catalogue ACME</a> · '
+        '<a href="/qualification">Qualification et limites</a></p>')
+    return HTMLResponse(shell("/demo-studio", "ACME Payments — parcours métier",
+        "Six étapes explicatives reliées aux écrans opérationnels existants.",
+        body, mode="SIMULATED / READ-ONLY"))
+
+@app.get("/demo-studio/run/{rid}",response_class=HTMLResponse)
+def demo_run_detail(rid:str):
+    """Show source-backed demo evidence, never substitute fixtures for live records."""
+    if not _demo_environment_enabled():
+        raise HTTPException(503, "demo_environment_disabled")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+        raise HTTPException(404,"invalid_demo_run_id")
+    candidates=_runs()
+    matched=next((r for r in _qualified_demo_runs(candidates) if r["run_id"]==rid),None)
+    if not matched:
+        raise HTTPException(404,"demo_run_not_found")
+    from urllib.parse import quote
+    key=quote(rid,safe="")
+    detail=_get("/api/runs/"+key)
+    if not _core_detail_matches_listed_run(detail, matched):
+        return HTMLResponse(shell("/demo-studio", "Run Core — UNKNOWN",
+            "Détail Core non concordant avec l'inventaire DEMO.",
+            panel("UNKNOWN — identité non qualifiée",
+                  "<p>Événements, Analyst/Critic, Policy et Evidence masqués : "
+                  "identité Core absente ou contradictoire.</p>"),
+            mode="UNKNOWN / READ-ONLY"), status_code=503)
+    ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
+    gate=_get("/api/runs/"+key+"/gates")
+    body=panel("Parcours opérateur — même run Core",
+      '<nav aria-label="Parcours opérateur ACME">'
+      '<a href="/">Cockpit NOC</a> · <a href="/runs">Runs Core</a> · '
+      '<a href="/twin?run_id='+key+'">Digital Twin</a> · '
+      '<a href="/timeline?run_id='+key+'">Timeline / Analyst / Critic</a> · '
+      '<a href="/evidence?run_id='+key+'">Evidence</a> · '
+      '<a href="#demo-evidence-itsm-output">ITSM GLPI (UNKNOWN)</a> · '
+      '<a href="/policy-control?run_id='+key+'">Policy SIMULATE / HITL</a></nav>'
+      '<p>ITSM GLPI : <strong>UNKNOWN</strong> — aucun ticket connecté à ce run n’est attesté. '
+      'Provenance run déclarée par Core : <strong>'+esc(_core_run_provenance(detail, matched))+
+      '</strong> (non attestée indépendamment) ; aucun effet LIVE.</p>')
+    body+=panel("Suivi de l'exécution",
+      '<p id="run-watch-status" role="status" aria-live="polite">Rafraîchissement toutes les 5 secondes, jusqu’à un état terminal.</p>'
+      '<button type="button" id="run-watch-refresh">Actualiser maintenant</button>'
+      '<pre id="run-watch-state" class="log">En attente du premier rafraîchissement.</pre>'
+      '<script>(function(){const rid='+json.dumps(rid)+
+      ';const state=document.getElementById("run-watch-state");'
+      'const status=document.getElementById("run-watch-status");'
+      'let active=true;let pending=false;'
+      'async function refresh(){if(!active||pending)return;pending=true;'
+      'try{const response=await fetch("/api/demo-status/"+encodeURIComponent(rid),{cache:"no-store"});'
+      'if(!response.ok){status.textContent="Statut indisponible : HTTP "+response.status;return;}'
+      'const result=await response.json();state.textContent=JSON.stringify({run_id:result.run_id,status:result.status,mode:result.mode},null,2);'
+      'const trace=document.getElementById("run-watch-trace");'
+      'if(trace)trace.textContent=JSON.stringify({events:result.events,ledger:result.ledger,gates:result.gates},null,2);'
+      'if(["RESOLVED","BLOCKED","FAILED","CANCELLED"].includes(result.status)){active=false;status.textContent="État terminal. Recharger la page pour voir les derniers registres Analyst/Critic/Policy.";}}'
+      'catch(e){status.textContent="Suivi temporairement indisponible";}finally{pending=false;}}'
+      'document.getElementById("run-watch-refresh").addEventListener("click",()=>{active=true;refresh();});'
+      'refresh();setInterval(refresh,5000);})();</script>')
+    body+=panel("Timeline et registres en direct",
+      '<p class="muted">Données en lecture seule provenant de Core ; aucune chronologie n’est inventée.</p>'
+      '<pre id="run-watch-trace" class="log">Chargement des éléments de preuve…</pre>')
+    body+=panel("État canonique du run",pretty(detail))
+    body+=render_stage_marker_warning(detail)
+    events=detail.get("events") if isinstance(detail.get("events"),list) else []
+    rows=[(e.get("sequence","?"),e.get("occurred_at","INCONNU"),e.get("stage","INCONNU"),
+           e.get("event_type","INCONNU"),e.get("status","INCONNU"),e.get("decision","INCONNU"))
+          for e in events if isinstance(e,dict)]
+    body+=panel("Timeline canonique des événements",
+      table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
+      if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
+    try:
+        artifact_response=_get("/api/runs/"+key+"/demo-artifacts")
+    except Exception:
+        artifact_response={"status":"UNKNOWN"}
+    artifact_items=artifact_response.get("items") if isinstance(artifact_response,dict) else None
+    artifact_items=[item for item in artifact_items if isinstance(item,dict)] if isinstance(artifact_items,list) else []
+    artifact_rows=[(
+        esc(item.get("sequence_no","?")), esc(item.get("artifact_id","UNKNOWN")),
+        esc(item.get("artifact_type","UNKNOWN")), esc(item.get("title","")),
+        esc(item.get("caption","")), esc(json.dumps(item.get("payload",{}),ensure_ascii=False,sort_keys=True))
+    ) for item in artifact_items]
+    body+=panel("Artefacts DEMO persistés — lecture Core",
+      '<p>Artefacts synthétiques rattachés à ce run. Ils ne constituent pas une preuve d’action LIVE.</p>'+
+      (table(["Séq.","Artifact ID","Type","Titre","Légende","Payload"],artifact_rows)
+       if artifact_rows else '<p class="muted">Aucun artefact DEMO disponible depuis Core ('+
+       esc(artifact_response.get("status","UNKNOWN") if isinstance(artifact_response,dict) else "UNKNOWN")+').</p>'))
+    from portal.demo_explain import render_critic_explanation
+    body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
+    body+=panel("Registre IA et Evidence/ITSM — lecture viewer",
+       '<p>Core / AI Ledger : références <strong>SYNTHETIC_ONLY</strong> après autorisation viewer, '
+       'sans attestation tenant ni runtime. La projection Evidence/ITSM ne vérifie aucun ticket GLPI. '
+       'Le contrat Policy what-if reste offline, non raccordé à ce run ; '
+       'approbation HITL et rollback réels : <strong>UNKNOWN</strong>.</p>'
+       '<label for="demo-ledger-viewer">Jeton viewer (jamais conservé)</label>'
+       '<input id="demo-ledger-viewer" type="password" autocomplete="off">'
+       '<button id="demo-ledger-read" type="button">Lire le registre et les références</button>'
+       '<pre id="demo-ledger-output" class="log" role="status">UNKNOWN — autorisation requise.</pre>'
+       '<pre id="demo-evidence-itsm-output" class="log" role="status">UNKNOWN — projection non lue.</pre>'
+       '<script>(function(){const rid='+json.dumps(rid)+
+       ';const input=document.getElementById("demo-ledger-viewer");'
+       'const output=document.getElementById("demo-ledger-output");'
+       'const joined=document.getElementById("demo-evidence-itsm-output");'
+       'document.getElementById("demo-ledger-read").addEventListener("click",async function(){'
+       'const token=input.value;input.value="";output.textContent="Lecture en cours…";'
+       'joined.textContent="UNKNOWN — en attente du registre viewer.";'
+       'if(!token){output.textContent="UNKNOWN — jeton viewer requis.";return;}'
+       'try{const response=await fetch("/api/demo-studio/runs/"+encodeURIComponent(rid)+"/ai-ledger",'
+       '{headers:{"Authorization":"Bearer "+token},cache:"no-store",credentials:"omit"});'
+       'if(!response.ok){output.textContent=(response.status===401||response.status===403?"UNAUTHORIZED":response.status>=500?"UNAVAILABLE":"UNKNOWN")+" — registre viewer HTTP "+response.status;return;}'
+       'const data=await response.json();'
+       'if(data.schema!=="aiops.demo-ledger-read.v1"||data.run_id!==rid||data.runtime_attested!==false||data.tenant_acl_qualified!==false||data.evidence_classification!=="SYNTHETIC_ONLY")'
+       '{output.textContent="UNKNOWN — contrat invalide.";return;}'
+       'output.textContent=JSON.stringify(data,null,2);'
+       'const linked=await fetch("/api/demo-studio/runs/"+encodeURIComponent(rid)+"/evidence-itsm",'
+       '{headers:{"Authorization":"Bearer "+token},cache:"no-store",credentials:"omit"});'
+       'if(!linked.ok){joined.textContent=(linked.status===401||linked.status===403?"UNAUTHORIZED":linked.status>=500?"UNAVAILABLE":"UNKNOWN")+" — projection Evidence/ITSM indisponible.";return;}'
+       'const projection=await linked.json();'
+       'if(projection.schema!=="aiops.acme-itsm-evidence-link.v1"||projection.run_id!==rid||projection.state!=="CORRELATED_UNATTESTED"||projection.classification!=="SYNTHETIC_ONLY"||projection.ticket_id!==null||projection.runtime_attested!==false||projection.tenant_acl_qualified!==false||projection.effect_applied!==false)'
+       '{joined.textContent="UNKNOWN — projection non qualifiée.";return;}'
+       'joined.textContent=JSON.stringify({state:projection.state,provenance:projection.classification,evidence_refs:projection.evidence_refs,policy_decision_ids:projection.policy_decision_ids,glpi_ticket_id:null,glpi_verification:projection.ticket_verification,hitl_runtime:"UNKNOWN",rollback_runtime:"UNKNOWN"},null,2);'
+       '}catch(e){output.textContent="UNAVAILABLE — registre ou projection indisponible.";'
+       'joined.textContent="UNKNOWN — aucune attestation.";}'
+       '});})();</script>')
+    body+=panel("Gates et décisions",pretty(gate))
+    body+=panel("Traçabilité",'<p>Les données sont lues depuis Core pour le run sélectionné; un registre absent s’affiche INCONNU. '
+      'Aucune remédiation, ré-exécution ni approbation n’est disponible ici.</p>')
+    return shell("/demo-studio","Démonstration · "+rid,
+      "Parcours incident, analyse et décisions depuis le registre Core.",
+      body,mode=matched.get("mode","DEMO"))
+
+@app.get("/api/demo-studio/runs/{rid}/evidence-itsm")
+def demo_evidence_itsm(rid: str, authorization: str | None = Header(default=None)):
+    """Viewer-gated read-only join; never attests GLPI, tenant ACL or runtime."""
+    from portal.demo_ledger_read import read_demo_ledger
+    from shared.acme_itsm_evidence_link import project_itsm_evidence
+    from urllib.parse import quote
+    headers={"Cache-Control":"no-store","Pragma":"no-cache","X-Content-Type-Options":"nosniff"}
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+        return JSONResponse({"status":"UNKNOWN","reason":"invalid_run_id"},status_code=404,headers=headers)
+    authorized=read_demo_ledger(rid,authorization)
+    for name,value in headers.items():
+        authorized.headers[name]=value
+    if authorized.status_code != 200:
+        return authorized
+    try:
+        ledger=json.loads(authorized.body)
+        listed=next((r for r in _qualified_demo_runs(_runs()) if r["run_id"]==rid),None)
+        if listed is None:
+            raise ValueError("run_not_listed")
+        detail=_get("/api/runs/"+quote(rid,safe=""))
+        if not _core_detail_matches_listed_run(detail,listed):
+            raise ValueError("run_identity_unqualified")
+        projection=project_itsm_evidence(detail,ledger)
+        if projection["state"]!="CORRELATED_UNATTESTED":
+            raise ValueError("ledger_correlation_unqualified")
+    except (ValueError,TypeError,KeyError):
+        return JSONResponse({"status":"UNKNOWN","reason":"correlation_unavailable"},status_code=503,headers=headers)
+    return JSONResponse(projection,headers=headers)
+
+@app.get("/api/demo-status/{rid}")
+def demo_status(rid:str):
+    """Read-only polling endpoint with strict DEMO ownership checked against Core."""
+    if not _demo_environment_enabled():
+        raise HTTPException(503, "demo_environment_disabled")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
+        raise HTTPException(404,"invalid_run_id")
+    allowed=next((r for r in _qualified_demo_runs(_runs()) if r["run_id"]==rid),None)
+    if not allowed:
+        raise HTTPException(404,"demo_run_not_found")
+    detail=_get("/api/runs/"+rid)
+    if not _core_detail_matches_listed_run(detail, allowed):
+        return {"run_id":rid,"status":"UNKNOWN","source":"Core identity unverified",
+                "events":"INCONNU","gates":{"status":"UNKNOWN"}}
+    run=detail["run"]
+    ledger={"status":"UNKNOWN","reason":"viewer_authorization_required"}
+    gates=_get("/api/runs/"+rid+"/gates")
+    events=detail.get("events",None)
+    if not isinstance(events,list):
+        events="INCONNU"
+    return {"run_id":rid,"status":run.get("status","UNKNOWN"),"mode":allowed.get("mode"),
+            "source":"Core","events":events,"ledger":ledger,"gates":gates}
+
+@app.get("/qualification",response_class=HTMLResponse)
+def qualification_page():
+    checks=[("QF178–179","35 tests unitaires rapportés sur Debian isolée","Rapporté, non CI"),
+      ("QF187","HTTP auth 401/401/409","Rapporté sur Debian"),
+      ("QF188","Reprise HTTP et idempotence","Rapporté sur Debian"),
+      ("QF189","8 requêtes concurrentes, 1 commit","Rapporté sur Debian"),
+      ("QF190","Réponse client perdue, rejeu sans doublon","Rapporté sur Debian"),
+      ("Temporal E2E","Reprise complète / pas de double appel IA","NON QUALIFIÉ"),
+      ("Digital Twin E2E","Injection → analyse → gate → UI","NON QUALIFIÉ"),
+      ("LIVE / Production","Critères de sécurité et reprise","NO-GO")]
+    return shell("/qualification","Qualification","Provenance explicite des essais, points bloquants et gates de promotion.",
+      panel("Matrice de qualification",table(["Campagne","Périmètre","État"],checks))+
+      panel("Règle d'audit",'<p>Résultats QF issus des journaux opérateur ; ne pas les présenter comme un succès GitHub Actions sans preuve de workflow.</p>'))
+
+@app.get("/qualification-lab",response_class=HTMLResponse)
+def qualification_lab(mode:str="simple",seed:int=20261021):
+    """Read-only simulation preview: no model evaluation or privileged actions."""
+    from portal.qualification_lab import MODES,preview
+    if mode not in MODES or not 0<=seed<=2147483647:
+        raise HTTPException(422,"invalid_lab_parameters")
+    rows=preview(mode,seed)
+    form='<form method="get" action="/qualification-lab"><label>Mode <select name="mode">'
+    for option in MODES:
+        form+='<option value="'+esc(option)+'"'+(' selected' if option==mode else '')+'>'+esc(option)+'</option>'
+    form+='</select></label> <label>Graine <input type="number" min="0" max="2147483647" name="seed" value="'+str(seed)+'"></label> <button type="submit">Prévisualiser</button></form>'
+    body=panel("Pilotage des scénarios ACME — lecture seule",form+
+         '<p><strong>'+str(len(rows))+' observations de démonstration.</strong> Aucune inférence DGX, aucun score IA, aucun événement Evidence, aucune action HITL ou GLPI.</p>')
+    rendered=''.join('<tr><td>'+esc(e["timestamp"])+'</td><td>'+esc(e["ci_id"])+
+        '</td><td>'+esc(e["kind"])+'</td><td>'+esc(e["description"])+'</td></tr>' for e in rows)
+    body+=panel("Observations simulées",'<table><thead><tr><th>Horodatage</th><th>CI ACME</th><th>Type</th><th>Description</th></tr></thead><tbody>'+rendered+'</tbody></table>')
+    body+=panel("Qualification des raisonnements",
+         '<p>Le banc burn-in et ses KPI ne seront affichés ici qu’après exécution de vraies prédictions Analyst/Critic. Aucun score synthétique n’est présenté comme un résultat de modèle.</p>')
+    return shell("/qualification","Laboratoire ACME","Scénarios simples, complexes, chaos et smoke screen — prévisualisation sécurisée.",body)
+
+
+@app.get("/acme-stories",response_class=HTMLResponse)
+def acme_stories_page():
+    """Client narrative catalog; links only to previously verified running features."""
+    from portal.acme_stories import STORIES
+    maturity={
+        "TABLETOP_ONLY":"Simulation narrative uniquement",
+        "HISTORICAL_DGX":"Parcours DGX historique disponible",
+        "BENCHMARK_ONLY":"Générateur / qualification hors ligne",
+    }
+    body='<p>Choisir une histoire pour expliquer le problème métier, les preuves, les décisions IA et le contrôle humain. Aucun incident ni ticket n’est créé par cette page.</p>'
+    for story in STORIES:
+        lines=[
+            ("Demandeur",story["persona"]),("Impact métier",story["business_impact"]),
+            ("Service",story["service"]),("Signal initial",story["symptom"]),
+            ("Hypothèse à confirmer",story["hypothesis"]),
+            ("Contrôle humain",story["control"]),("Résultat à présenter",story["outcome"]),
+            ("Maturité",maturity[story["status"]]),
+        ]
+        body+=panel(story["title"],table(["Rubrique","Scénario ACME"],lines))
+    # Historical run IDs are not proof that the current Core inventory has them.
+    from urllib.parse import quote
+    eligible=_qualified_demo_runs(_runs())
+    selected=next((r for r in eligible if r.get("status") in ("RESOLVED","BLOCKED")),
+                  eligible[0] if eligible else None)
+    if selected:
+        rid=quote(selected["run_id"],safe="")
+        core_link=('<a href="/demo-studio/run/'+rid+'">Run Core (inventaire non attesté)</a> · '
+                   '<a href="/timeline?run_id='+rid+'">Timeline du même run</a> · ')
+    else:
+        core_link='<strong>UNKNOWN</strong> — aucun run DEMO/REPLAY/STORY non ambigu accessible · '
+    body+=panel("Explorer les runs Core — provenance à vérifier",
+        '<p>'+core_link
+        +'<a href="/qualification-lab">Laboratoire de scénarios (SIMULATED)</a> · '
+        '<a href="/copilot">Copilot ACME</a></p>')
+    return shell("/demo-studio","Histoires métier ACME",
+                 "Parcours clients, sécurité, limites et preuves réellement disponibles.",body)
+
+
+@app.get("/api/hitl/proposals")
+def hitl_proposals(status:str="PROPOSED",limit:int=50):
+    """Portal proxy for the authenticated Core proposal inbox."""
+    if status not in ("PROPOSED","APPROVED","REJECTED","REVOKED","ALL"):
+        raise HTTPException(422,"invalid_proposal_filter")
+    return get_json(CORE,"/api/proposals?status="+status+"&limit="+str(max(1,min(limit,200))))
+
+
+@app.get("/policy-control",response_class=HTMLResponse)
+def policy_control_center(run_id:str|None=None):
+    """Read-only control center; changes are deliberately not available here."""
+    url=os.getenv("POLICY_URL","http://aiops2-policy:813")
+    state=_get("/api/policy/autonomy",url)
+    history=_get("/api/policy/autonomy/history",url)
+    simulation=_get("/api/policy/simulation/summary",url)
+    decisions=_get("/api/policy/simulation/decisions",url)
+    proposals=_get("/api/proposals?status=PROPOSED&limit=100",CORE)
+    status=state.get("mode","UNKNOWN")
+    entries=history.get("items",[]) if isinstance(history.get("items"),list) else []
+    rows=[(str(e.get("revision","?")),str(e.get("mode","?")),
+           str(e.get("actor","?")),str(e.get("reason","?")),str(e.get("changed_at","?")))
+          for e in entries if isinstance(e,dict)]
+    body=_operator_run_context(run_id)+panel("Mode opérationnel actuel",
+        '<p><strong>'+esc(status)+'</strong> — '+esc(state.get("source","source indisponible"))+'</p>'+
+        '<p>Affichage en lecture seule. Aucun bouton de réactivation n’est disponible. '
+        'Une autorisation indépendante et un contrôle au point d’exécution sont nécessaires avant toute remédiation.</p>')
+    body+=panel("Historique audité",table(["Révision","Mode","Acteur","Motif","Date"],rows)
+          if rows else '<p>Aucun historique accessible. L’état réel ne doit pas être supposé.</p>')
+    if simulation.get("healthy") is True:
+        body+=panel("KPI de simulation",
+            table(["Mesure","Valeur"],[
+              ("Réservations simulées",str(simulation.get("reservations_recorded","INCONNU"))),
+              ("Refus enregistrés",str(simulation.get("refusals_recorded","INCONNU"))),
+              ("Effets LIVE qualifiés","NON"),
+            ]))
+    else:
+        body+=panel("KPI indisponibles",'<p>Source Policy indisponible ou qualification non déployée. Aucun chiffre supposé.</p>')
+    audit=decisions.get("items",[]) if isinstance(decisions.get("items"),list) else []
+    if audit:
+        body+=panel("Décisions de simulation récentes",table(
+            ["Opération","Révision","Classe","Décision","Horodatage"],[
+              (str(e.get("operation_id","?")),str(e.get("revision","?")),
+               str(e.get("operation_class","?")),str(e.get("reason","?")),
+               str(e.get("recorded_at","?"))) for e in audit if isinstance(e,dict)]))
+    proposal_items=proposals.get("items",[]) if isinstance(proposals,dict) and isinstance(proposals.get("items"),list) else []
+    if proposals.get("status")=="UNKNOWN":
+        body+=panel("File HITL — indisponible",'<p>Le registre Core des propositions ne répond pas. Aucune approbation ne peut être supposée.</p>')
+    else:
+        proposal_rows=[(
+            str(p.get("proposal_id","?")),str(p.get("run_id","?")),
+            str(p.get("action_type","?")),str(p.get("risk_tier","?")),
+            str(p.get("status","?")),str(p.get("expires_at","?"))
+        ) for p in proposal_items if isinstance(p,dict)]
+        body+=panel("File HITL — propositions en attente",
+            table(["Proposition","Run","Action","Risque","État","Expiration"],proposal_rows)
+            +'<p>'+str(len(proposal_rows))+' proposition(s). Les détails hashés et preuves sont disponibles via l’API Core authentifiée.</p>'
+            +'<p><strong>Validation :</strong> aucune approbation depuis le navigateur n’est activée tant qu’une identité humaine vérifiée (SSO/IdP) n’est pas liée au rôle d’approbateur. Les runs DEMO/REPLAY/STORY restent non approuvables.</p>'
+            +pretty({"authority":proposals.get("authority","UNKNOWN"),"execution_allowed":False}))
+        body+=panel("Détails, empreintes, preuves et conditions",pretty(proposal_items))
+    body+=panel("Maturité et limites",
+        '<p>Le registre et les API nécessitent déploiement et qualification. '
+        'Le mode STOP_AUTO par défaut n’équivaut pas à une interposition déjà déployée chez les exécuteurs.</p>')
+    return shell("/policy-control","Policy Control Center",
+                 "Contrôle d’autonomie AIOps — état et historique, lecture seule.",body)
+
+@app.get("/policy-story",response_class=HTMLResponse)
+def policy_story():
+    """Static, browser-driven demo: no server writes and no operational policy control."""
+    script = """
+(function(){
+ const events=[
+  ["Claire — Paie","Je ne peux pas accéder à PAYROLL-X. La clôture des salaires est prioritaire."],
+  ["AIOps","Incident qualifié. Je recherche les dépendances et les signaux techniques."],
+  ["Observabilité ACME","HTTP 503, 0/2 backends sains sur le load balancer simulé."],
+  ["Analyst — simulation","Hypothèse : pool de backends indisponible. Un redémarrage pourrait être envisagé après diagnostic."],
+  ["Policy — simulation","Freeze de fin de mois : modification non autorisée sans dérogation management et Change."],
+  ["Management — simulation","Documentez le risque, l’impact et le plan de retour arrière avant toute décision."],
+  ["AIOps — simulation","Je prépare la demande de changement ; aucune action réelle n’est déclenchée."],
+  ["Policy STOP_AUTO — simulation","Arrêt des remédiations autonomes activé dans cette histoire uniquement."],
+  ["Contrôle final — simulation","Ancienne réservation devenue invalide. Exécution refusée."],
+  ["Synthèse","Incident ouvert, approbation en attente, zéro redémarrage, aucune résolution revendiquée."]
+ ];
+ let pos=-1;
+ const output=document.getElementById("story-events");
+ const status=document.getElementById("story-progress");
+ function paint(){
+  output.replaceChildren();
+  for(let i=0;i<=pos;i++){
+   const box=document.createElement("section");box.className="card";
+   const strong=document.createElement("strong");strong.textContent=events[i][0];
+   const paragraph=document.createElement("p");paragraph.textContent=events[i][1];
+   box.append(strong,paragraph);output.appendChild(box);
+  }
+  status.textContent="Étape "+(pos+1)+" / "+events.length+" — simulation locale, aucune API d'écriture";
+  document.getElementById("story-next").disabled=pos===events.length-1;
+ }
+ document.getElementById("story-next").addEventListener("click",()=>{if(pos<events.length-1){pos++;paint();}});
+ document.getElementById("story-reset").addEventListener("click",()=>{pos=-1;paint();});
+ paint();
+})();
+"""
+    body=panel("Simulation interactive : incident Paie",
+       '<p><strong>FICTIF / SANS EFFET</strong> — ce parcours raconte une enquête AIOps et '
+       'illustre le blocage des remédiations automatiques pendant un freeze. '
+       'Ce n’est pas une réponse DGX en temps réel, un changement Policy réel ou une approbation management.</p>'
+       '<p><button id="story-next" type="button">Étape suivante</button> '
+       '<button id="story-reset" type="button">Recommencer</button></p>'
+       '<p id="story-progress" role="status" aria-live="polite"></p>'
+       '<div id="story-events"></div><script>'+script+'</script>')
+    body+=panel("Preuves et limites",
+        '<p>Données et dialogues simulés. Aucun ticket GLPI, aucune modification de CI, '
+        'aucun redémarrage, aucune approbation réelle. '
+        'Le contrôle transactionnel STOP_AUTO est testé séparément dans le banc Policy.</p>'
+        '<p><a href="/acme-stories">Autres histoires métier</a> · '
+        '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
+    return shell("/demo-studio","ACME — Freeze Button Story",
+        "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+
+@app.post("/api/portal/hitl/simulator/token")
+def portal_hitl_simulator_token(request: dict,
+                                authorization: str | None = Header(default=None)):
+    """Operator-gated development identity fixture; never a LIVE approval."""
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
+    subject = request.get("subject")
+    if not isinstance(subject, str) or len(subject) > 100:
+        raise HTTPException(422, "invalid_simulator_subject")
+    token = os.getenv("AIOPS_INTERNAL_TOKEN", "")
+    if len(token) < 32:
+        raise HTTPException(503, "portal_internal_auth_not_configured")
+    try:
+        return post_json(
+            CORE, "/api/hitl/identity/simulator/token",
+            {"subject": subject, "ttl_seconds": 300},
+            timeout=10, token=token,
+        )
+    except Exception:
+        raise HTTPException(503, "identity_simulator_unavailable")
+
+
+@app.get("/api/portal/hitl/inbox")
+def portal_hitl_inbox(authorization: str | None = Header(default=None)):
+    """Expose only synthetic proposals to the dedicated DEMO operator capability."""
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
+    if len(os.getenv("AIOPS_INTERNAL_TOKEN", "")) < 32:
+        return _noc_json_response({"state": "UNKNOWN", "reason": "internal_service_auth_not_configured"},
+                                  status_code=503)
+    try:
+        result = get_json(CORE, "/api/proposals?status=PROPOSED&limit=100", timeout=12)
+        rows = result.get("items", []) if isinstance(result, dict) else []
+        safe_items = []
+        run_modes = {}
+        for item in rows[:100]:
+            if not isinstance(item, dict):
+                continue
+            run_id = item.get("run_id")
+            if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", run_id):
+                continue
+            if run_id not in run_modes:
+                try:
+                    detail = get_json(CORE, "/api/runs/" + run_id, timeout=8)
+                except Exception:
+                    run_modes[run_id] = "UNKNOWN"
+                else:
+                    run = detail.get("run") if isinstance(detail, dict) else None
+                    run_modes[run_id] = (
+                        run.get("mode") if isinstance(run, dict) and run.get("run_id") == run_id
+                        and run.get("scenario_id") == "SCN-GOLDEN-PAYMENT-P1"
+                        else "UNKNOWN"
+                    )
+            if run_modes[run_id] not in ("DEMO", "REPLAY", "STORY"):
+                continue
+            safe_items.append({
+                "proposal_id": item.get("proposal_id"),
+                "run_id": run_id,
+                "mode": "SYNTHETIC_DEMO",
+                "revision": item.get("revision"),
+                "target_ci_id": item.get("target_ci_id"),
+                "action_type": item.get("action_type"),
+                "risk_tier": item.get("risk_tier"),
+                "status": item.get("status"),
+                "evidence_ids": item.get("evidence_ids", []),
+                "preconditions": item.get("preconditions", []),
+                "expected_postconditions": item.get("expected_postconditions", []),
+                "expires_at": item.get("expires_at"),
+                "execution_allowed": False,
+                "approval_available": False,
+            })
+        return _noc_json_response({
+            "schema": "aiops.portal.hitl-demo-inbox.v1",
+            "state": "CONNECTED" if safe_items else "EMPTY",
+            "items": safe_items,
+            "count": len(safe_items),
+            "scope": "SYNTHETIC_DEMO_ONLY",
+            "execution_allowed": False,
+            "approval_available": False,
         })
-    # Anonymous shell: no Core/Twin calls and no unverified incident/run data.
-    snapshot={'dashboard':None,'runs':None,'twin':None,
-              'states':{'dashboard':'UNKNOWN','runs':'UNKNOWN','twin':'UNKNOWN'}}
-    d=snapshot['dashboard'] or {};runs=(snapshot['runs'] or {}).get('items',[]);t=snapshot['twin'] or {'state':'UNKNOWN'}
-    read_model_status=html.escape(json.dumps(snapshot['states'],sort_keys=True))
-    # Never serialize operator-configured integration URLs in anonymous HTML.
-    integration_html=render_navigation_html(build_navigation(env={}))
-    cards=[('Open P1',d.get('open_p1','UNKNOWN')),('Incidents',d.get('open_incidents','UNKNOWN')),('Running',d.get('running','UNKNOWN')),('Blocked',d.get('blocked','UNKNOWN')),('Twin nodes',d.get('twin_nodes','UNKNOWN')),('Degraded',d.get('degraded_nodes','UNKNOWN'))]
-    cards_html=''.join(f'<div class="card"><span>{html.escape(str(k))}</span><strong data-metric="{key}">{html.escape(str(v))}</strong></div>' for (k,v),key in zip(cards,('open_p1','open_incidents','running','blocked','twin_nodes','degraded_nodes')))
-    rows=''.join(f'<tr><td><code>{html.escape(str(r["run_id"]))}</code></td><td>{html.escape(str(r.get("mode","UNKNOWN")),quote=True)}</td><td><b>{html.escape(str(r.get("status","UNKNOWN")),quote=True)}</b></td><td>{html.escape(str(r.get("overall_confidence","UNKNOWN")),quote=True)}</td><td>{html.escape(str(r.get("scenario_id","UNKNOWN")),quote=True)}</td></tr>' for r in runs[:15]) or '<tr><td colspan="5">UNKNOWN — aucun run</td></tr>'
-    return f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ACME AioOps</title><style>
-body{{margin:0;background:#07111d;color:#e9f2f8;font:14px system-ui,Segoe UI,sans-serif}}header{{position:sticky;top:0;background:#0b1c2b;border-bottom:1px solid #25445a;padding:16px 28px;display:flex;justify-content:space-between;z-index:2}}main{{max-width:1500px;margin:auto;padding:26px}}h1{{font-size:34px;margin:0 0 6px}}h2{{margin-top:30px}}.muted{{color:#8fa7b8}}.grid{{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}}.card{{background:#0d2031;border:1px solid #23445b;border-radius:14px;padding:15px;min-height:78px}}.card span{{display:block;color:#9eb5c5;font-size:12px}}.card strong{{display:block;font-size:30px;margin-top:9px}}.two{{display:grid;grid-template-columns:2fr 1fr;gap:16px}}.panel{{background:#0c1d2d;border:1px solid #23445b;border-radius:14px;padding:18px;margin-top:16px}}table{{width:100%;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid #1d394e;text-align:left}}button{{border:0;border-radius:9px;padding:11px 15px;background:#2188c7;color:#fff;cursor:pointer;margin-right:8px}}button.secondary{{background:#18384e}}textarea{{width:100%;min-height:80px;background:#07131f;color:#fff;border:1px solid #2a4b61;border-radius:9px;padding:10px;box-sizing:border-box}}pre{{white-space:pre-wrap}}code{{color:#b8d8eb}}a{{color:#8fd0ff}}nav a{{margin-left:8px}}@media(max-width:1100px){{.grid{{grid-template-columns:repeat(3,1fr)}}.two{{grid-template-columns:1fr}}}}@media(max-width:650px){{.grid{{grid-template-columns:repeat(2,1fr)}}}}
-</style></head><body><header><b>ACME AioOps 2.0</b><nav><a href="#runs">Runs</a> · <a href="/itsm">GLPI / ITSM</a> · <a href="#twin">Twin</a> · <a href="/demo/acme-impact">ACME Impact (simulation)</a> · <a href="/demo/explore-story">Explore / Story (simulation)</a> · <a href="#copilot">Copilot</a> · <a href="#noc">NOC</a> · <a href="#integrations">Intégrations</a></nav></header><main><h1>Operations Command Center</h1><div class="muted">Synthetic/demo data is explicitly labelled. Unsupported claims remain UNKNOWN.</div><p class="muted">Read models (non attestés) : <span id="portal-states">{read_model_status}</span></p><div class="panel"><label for="portal-read-token">Jeton lecture Core/Twin (usage unique)</label> <input id="portal-read-token" type="password" autocomplete="off" style="background:#07131f;color:#fff;padding:10px"> <button onclick="loadPortalReadModel()">Charger Core/Twin</button><button class="secondary" onclick="clearPortalReadModel()">Effacer</button><span id="portal-read-result" class="muted">UNKNOWN — accès non authentifié</span></div><div class="panel"><label for="run-detail-id">Run Core (identifiant explicite, sans substitution)</label> <input id="run-detail-id" autocomplete="off" placeholder="RUN-..." style="background:#07131f;color:#fff;padding:10px"> <button type="button" id="run-detail-open">Ouvrir le détail Run</button> <span id="run-detail-error" class="muted">UNKNOWN — lecture authentifiée requise; aucune preuve sans Core</span></div><div class="grid" style="margin-top:20px">{cards_html}</div><div class="panel"><label for="demo-token">Jeton opérateur DEMO (usage unique)</label><input id="demo-token" type="password" disabled aria-disabled="true" autocomplete="off" style="margin:8px;background:#07131f;color:#fff;border:1px solid #2a4b61;padding:10px"><button type="button" disabled aria-disabled="true" title="ACL acteur et tenant non qualifiée">Golden DEMO — désactivé</button><button class="secondary" onclick="location.reload()">Refresh</button><span id="demo" class="muted"></span></div><div class="two"><section class="panel" id="runs"><h2>Canonical Runs</h2><table><tr><th>Run</th><th>Mode</th><th>Status</th><th>Confidence</th><th>Scenario</th></tr><tbody id="portal-runs">{rows}</tbody></table></section><section class="panel" id="twin"><h2>Digital Twin</h2><pre id="portal-twin">{html.escape(json.dumps(t,indent=2,default=str))}</pre></section></div><section class="panel" id="copilot"><h2>AI Copilot</h2><textarea id="q" placeholder="Ex: Pourquoi le service Payment est-il à risque ? Quelles preuves avons-nous ?"></textarea><button onclick="ask()" style="margin-top:10px">Ask Copilot</button><pre id="a" class="muted"></pre></section><section class="panel" id="noc"><h2>NOC — Checkmk / Thruk</h2><p class="muted">Source runtime : UNKNOWN tant qu'aucun fournisseur de read-model signé n'est configuré et vérifié. Le flux de corrélation Incident/Run reste en lecture seule ; aucune preuve LIVE n'est déduite de cette page.</p><p>Contrat API : <code>GET /api/noc/runtime-state</code> (jeton opérateur obligatoire, HMAC SHA-256 et contrôle de fraîcheur). Les liens Thruk et Grafana configurés figurent dans les intégrations ci-dessous.</p><p><code>GET /api/noc/correlation</code> : rapprochement signé NOC / Run canonique, lecture seule et non attesté.</p><label for="noc-token">Jeton opérateur NOC (non enregistré)</label><input id="noc-token" type="password" autocomplete="off" style="margin:8px;background:#07131f;color:#fff;border:1px solid #2a4b61;padding:10px"><button onclick="correlateNoc()">Lire la corrélation</button><pre id="noc-result" class="muted">UNKNOWN — aucune corrélation vérifiée</pre><p><b>Grafana réel — contrôle HTTP uniquement</b> : ne prouve ni métriques Checkmk/Thruk ni droits tenant. <button onclick="grafanaHealth()">Tester Grafana réel (HTTP)</button><pre id="noc-grafana-result" class="muted">NOT_TESTED — service non interrogé</pre></p><p><b>RAG DEMO — fiches synthétiques de PR #36</b> : citations de référence uniquement, ni observation Checkmk, ni inférence IA, ni procédure LIVE.</p><label for="noc-asset">Équipement fictif</label><input id="noc-asset" value="brocade-fc01" autocomplete="off" style="margin:8px;background:#07131f;color:#fff;border:1px solid #2a4b61;padding:10px"><button onclick="demoRag()">Lire fiches RAG DEMO</button><pre id="noc-rag-result" class="muted">UNKNOWN — aucune fiche sélectionnée</pre></section>{integration_html}<section class="panel"><label for="portal-navigation-token">Jeton lecture des liens (usage unique)</label> <input id="portal-navigation-token" type="password" autocomplete="off" style="background:#07131f;color:#fff;padding:10px"> <button onclick="loadPortalNavigation()">Afficher les liens configurés</button><button class="secondary" onclick="clearPortalNavigation()">Effacer les liens</button><span id="portal-navigation-status" class="muted">UNKNOWN — liens non chargés</span></section></main><script src="/assets/portal-navigation.js" defer></script><script src="/assets/portal-bootstrap.js" defer></script><script src="/assets/portal-run-link.js" defer></script><script>async function demo(){{let el=document.getElementById('demo-token');let token=el.value;el.value='';let out=document.getElementById('demo');out.textContent='UNKNOWN — demande en cours';if(!token){{out.textContent='UNKNOWN — jeton opérateur requis';return}}try{{let r=await fetch('/api/demo',{{method:'POST',headers:{{Authorization:'Bearer '+token}},credentials:'omit',cache:'no-store',redirect:'error'}});out.textContent=r.status===202?'DEMO_SUBMITTED_UNVERIFIED — aucune preuve LIVE':'UNKNOWN — commande refusée';}}catch(e){{out.textContent='UNKNOWN — service indisponible'}}}}async function ask(){{let out=document.getElementById('a');out.textContent='UNKNOWN — lecture non qualifiée';try{{let r=await fetch('/api/copilot',{{method:'POST',headers:{{'Content-Type':'application/json'}},credentials:'omit',cache:'no-store',redirect:'error',body:JSON.stringify({{question:document.getElementById('q').value}})}});let data=await r.json();out.textContent='HTTP '+r.status+' — '+(r.status===401||r.status===403?'UNAUTHORIZED':'UNKNOWN')+' — '+String(data.reason||data.detail||'Copilot indisponible')}}catch(e){{out.textContent='UNKNOWN — Copilot indisponible'}}}}async function correlateNoc(){{let el=document.getElementById('noc-token');let token=el.value;el.value='';let out=document.getElementById('noc-result');out.textContent='UNKNOWN — lecture en cours';if(!token){{out.textContent='UNKNOWN — jeton opérateur requis';return}}try{{let r=await fetch('/api/noc/correlation',{{headers:{{Authorization:'Bearer '+token}},cache:'no-store',redirect:'error'}});let data=await r.json();out.textContent=r.ok?JSON.stringify(data,null,2):'UNKNOWN — '+String(data.detail||'source indisponible')}}catch(e){{out.textContent='UNKNOWN — service indisponible'}}}}
-async function grafanaHealth(){{let el=document.getElementById('noc-token');let token=el.value;el.value='';let out=document.getElementById('noc-grafana-result');out.textContent='UNKNOWN — lecture en cours';if(!token){{out.textContent='UNKNOWN — jeton opérateur requis';return}}try{{let r=await fetch('/api/noc/grafana-health',{{headers:{{Authorization:'Bearer '+token}},cache:'no-store',redirect:'error'}});let data=await r.json();out.textContent=r.ok?JSON.stringify(data,null,2):'UNKNOWN — '+String(data.detail||'Grafana indisponible')}}catch(e){{out.textContent='UNKNOWN — Grafana indisponible'}}}}
-async function demoRag(){{let el=document.getElementById('noc-token');let token=el.value;el.value='';let out=document.getElementById('noc-rag-result');let asset=document.getElementById('noc-asset').value;out.textContent='UNKNOWN — lecture en cours';if(!token){{out.textContent='UNKNOWN — jeton opérateur requis';return}}try{{let r=await fetch('/api/noc/demo-rag?asset='+encodeURIComponent(asset),{{headers:{{Authorization:'Bearer '+token}},cache:'no-store',redirect:'error'}});let data=await r.json();out.textContent=r.ok?JSON.stringify(data,null,2):'UNKNOWN — '+String(data.detail||'catalogue indisponible')}}catch(e){{out.textContent='UNKNOWN — catalogue indisponible'}}}}
-</script></body></html>'''
+    except Exception:
+        return _noc_json_response({"state": "UNKNOWN", "reason": "hitl_inbox_unavailable"},
+                                  status_code=503)
+
+
+@app.get("/assets/portal-hitl.js")
+def portal_hitl_script():
+    return FileResponse(Path(__file__).with_name("portal_hitl_client.js"),
+                        media_type="application/javascript",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/hitl", response_class=HTMLResponse)
+def hitl_command_center():
+    """Static HITL shell; proposal data is loaded only after operator authentication."""
+    body = panel("Accès opérateur DEMO",
+        '<p>Cette capacité permet uniquement de consulter les propositions synthétiques et d’émettre une identité de test. '
+        'Elle ne constitue pas une identité humaine, une approbation ou une autorisation LIVE.</p>'
+        '<label for="hitl-operator-token">Jeton opérateur DEMO</label>'
+        '<input id="hitl-operator-token" type="password" autocomplete="off">'
+        '<button type="button" id="hitl-load-inbox">Charger les propositions</button>'
+        '<span id="hitl-inbox-status" role="status">UNKNOWN — authentification requise</span>')
+    body += panel("Inbox HITL — propositions synthétiques",
+        '<pre id="hitl-inbox-output" class="log" aria-live="polite">Aucune proposition chargée.</pre>')
+    body += panel("Banc de simulation IAM — sans effet",
+        '<p>Les identités ci-dessous sont fictives, de courte durée et toujours rejetées pour les approbations LIVE.</p>'
+        '<label for="hitl-sim-subject">Identité fictive</label>'
+        '<select id="hitl-sim-subject">'
+        '<option value="operator.alex">Alex Operator</option>'
+        '<option value="senior.sam">Sam Senior</option>'
+        '<option value="storage.stella">Stella Storage</option>'
+        '<option value="security.sara">Sara Security</option>'
+        '<option value="incident.ian">Ian Incident Commander</option>'
+        '<option value="platform.pat">Pat Platform Admin</option>'
+        '</select> <button type="button" id="hitl-sim-issue">Émettre une identité simulée</button>'
+        '<pre id="hitl-sim-result" role="status" aria-live="polite">Aucune identité émise.</pre>'
+        '<script src="/assets/portal-hitl.js" defer></script>')
+    body += panel("Barrières de sécurité",
+        '<ul><li>Nemotron Analyst / Critic : avis et contre-expertise, jamais une identité ni un droit.</li>'
+        '<li>Inbox : propositions DEMO/REPLAY/STORY uniquement ; aucune proposition LIVE n’est exposée par cette route.</li>'
+        '<li>Une proposition reste PROPOSED. Cette vue ne crée aucune approbation et ne déclenche aucune exécution.</li>'
+        '<li>Les décisions LIVE exigent une identité OIDC vérifiée, un run LIVE et les rôles autorisés côté Core.</li>'
+        '<li>GLPI, Evidence, Twin, CMDB, Policy et audit restent corrélés au même run et à la même empreinte de proposition.</li>'
+        '<li>Aucune commande shell libre, SSH/sudo ou remédiation n’est disponible depuis l’assistant.</li></ul>')
+    return shell("/hitl", "Human-in-the-Loop Command Center",
+                 "Inbox opérateur, identité simulée et limites d’autorisation AIOps2.", body)
