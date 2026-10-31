@@ -212,3 +212,20 @@ The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte Z
 ### Exact #201 quality closeout — 2026-10-31 04:36 UTC
 
 [Quality 41169101273](https://github.com/alimtalbi-ata/aiops/actions/runs/41169101273) for #201 `e116d04c791b6f5a5028d6f2cc3797a547b460ec` **SUCCESS 3/3**, with **16/16** cumulative-kit guard tests PASS, **33/33** Portal Run tests PASS and **6/6** Chromium synthetic PASS. **T0 GO_LIMITED only.** The real #204 kit's embedded 30/68 mismatches are not repaired by these guard tests; T4 NO_GO until rebuilt, semantic hashes verified and sandbox rollback exercised. T1 BLOCKED actor+tenant ACL; T2 NOT_QUALIFIED; T3 NOT_ATTESTED; T5 NO_GO. `RELEASE_STABLE=NO_GO`.
+
+### 2026-10-31 07:27 Europe/Paris — exact-source gate and staged manifest port
+
+#195 previous HEAD `8aa0e9cc666e13b1ccced822e40e2af47f15945f` Quality 41173191433 SUCCESS 3/3. #201 `e116d04c791b6f5a5028d6f2cc3797a547b460ec` (main base `27deb9b1a66faf27df8d69b137a63451f7649d80`) Quality 41169101273 SUCCESS 3/3, 16/16 kit-guard negatives; no install kit. #206 `516e32b1540077ab059f651d78020c2b365b3fd4` Quality 41172956555 SUCCESS 6/6 and artifact 13031961877 semantic integrity 68/68 embedded, 407/407 sidecar, but stacked only. #196 `747f0df4` real Ollama evaluator FAILURE (0 valid repeats).
+
+[New draft #207](https://github.com/alimtalbi-ata/aiops/pull/207) exact HEAD `0d0984cd2c8cf9fd5e934a4efb455d788cd5c6af`, based on #201, selectively adds staged inventory refresh, symlink-parent refusal, 11 isolated tests and CI step. Exact-head Quality NOT_OBSERVED at initial check; this is preparatory code only, **not** a packaged cumulative release. No source/base/checkout provenance attestation, SBOM, install/upgrade/rollback receipt.
+
+| Gate | Decision |
+|---|---|
+| T0 | GO_LIMITED on exact #201 Quality; #207 PENDING |
+| T1 | BLOCKED — Core actor+tenant exact-Run authorization absent |
+| T2 | NOT_QUALIFIED — no combined 14-step single ACME Run on main-based SHA |
+| T3 | NOT_ATTESTED — no Debian read-only access |
+| T4 | NO_GO — no main-based kit with exercised install/upgrade/rollback |
+| T5 | NO_GO — no LIVE identity, execution or change authorization |
+
+`RELEASE_STABLE=NO_GO`. No main merge, Debian/runner/cron, GLPI write or LIVE effect.
