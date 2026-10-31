@@ -121,16 +121,26 @@ def resolve_ticket_run(*, tenant_id: str, tenant_authenticated: bool,
     body = response.body
     if not isinstance(body, dict) or not set(body).issubset(_ALLOWED) or body.get("schema") != SCHEMA:
         return _result(connection_state="CONNECTED", reason="CORE_XREF_CONTRACT_INVALID")
-    if body.get("tenant_id") != tenant_id:
+    status = body.get("status")
+    # Core intentionally omits all business IDs on UNKNOWN/CONFLICT/STALE.
+    # These are authenticated, tenant-scoped *negative* read-backs, not
+    # VERIFIED mappings. Never reinterpret their missing IDs as 403.
+    # Conversely, reject any explicitly contradictory scope returned by Core.
+    if body.get("tenant_id") is not None and body["tenant_id"] != tenant_id:
         return _result(link_status="UNAUTHORIZED", connection_state="UNAUTHORIZED",
                        reason="CROSS_TENANT_MAPPING_DENIED")
-    if (body.get("glpi_instance_id") != glpi_instance_id or body.get("ticket_id") != ticket_id):
+    if ((body.get("glpi_instance_id") is not None and body["glpi_instance_id"] != glpi_instance_id)
+            or (body.get("ticket_id") is not None and body["ticket_id"] != ticket_id)):
         return _result(connection_state="CONNECTED", reason="AUTHORITATIVE_ID_MISMATCH")
-    status = body.get("status")
     if status in ("CONFLICT", "STALE"):
         return _result(link_status=status, connection_state="CONNECTED", reason="CORE_MAPPING_" + status)
     if status != "VERIFIED":
         return _result(connection_state="CONNECTED", reason="CORE_MAPPING_NOT_VERIFIED")
+    # Positive links require every canonical identifier, not just an
+    # authenticated transport and a status string.
+    if body.get("tenant_id") != tenant_id:
+        return _result(link_status="UNAUTHORIZED", connection_state="UNAUTHORIZED",
+                       reason="CROSS_TENANT_MAPPING_DENIED")
     if (body.get("glpi_instance_id") != glpi_instance_id or
             body.get("ticket_id") != ticket_id or
             not isinstance(body.get("run_id"), str) or _RUN.fullmatch(body["run_id"]) is None or
