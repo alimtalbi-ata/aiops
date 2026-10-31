@@ -36,7 +36,7 @@ class CombinedXrefMigrationChain(unittest.TestCase):
             path=(SOURCE if name in PINNED else MIG)/name
             content=path.read_bytes()
             if name in PINNED:
-                blob=hashlib.sha1(b"blob "+str(len(content)).encode()+b"\\0"+content).hexdigest()
+                blob=hashlib.sha1(b"blob "+str(len(content)).encode()+b"\0"+content).hexdigest()
                 self.assertEqual(blob,PINNED[name],name+" fixture changed")
             scripts.append((name,content.decode("utf-8")))
         dbname="aiops_xref_chain_ci"
