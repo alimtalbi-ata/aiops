@@ -23,8 +23,8 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
         self.assertIn("APPROVED_SOURCE_ANCESTRY=PASS", source_gate)
         self.assertIn("EXACT_HEAD_CI=PASS", source_gate)
         self.assertIn("scripts/verify_clean_debian_source.py", WORKFLOW)
-        self.assertIn(".github/workflows/quality.yml", WORKFLOW)
-        self.assertIn(".github/workflows/debian12-qualification.yml", WORKFLOW)
+        self.assertIn(".github/workflows/quality.yml", source_gate)
+        self.assertIn(".github/workflows/debian12-qualification.yml", source_gate)
         self.assertIn("actions: read", WORKFLOW)
         push_section = QUALIFICATION_WORKFLOW.split("  push:", 1)[1].split("\n\npermissions:", 1)[0]
         self.assertIn("- main", push_section)
