@@ -41,7 +41,7 @@ Required:
 - a generated `AIOPS_PORTAL_OPERATOR_TOKEN` (at least 32 characters);
 - a distinct `AIOPS_PORTAL_READ_TOKEN`;
 - `AIOPS_INTERNAL_TOKEN` and database credentials generated per install;
-- `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` for an actual OpenAI-compatible provider;
+- `LLM_BASE_URL=http://10.79.94.31:8000/v1` for the Debian NGX/NIM service; `LLM_MODEL` may remain blank for automatic Nemotron 120B discovery; `LLM_API_KEY` remains blank for this unauthenticated endpoint;
 - `AIOPS_DEMO_PROVIDER_KIND=REAL` for a customer demonstration (never use TEST_PROVIDER for a customer claim);
 - bounded `LLM_TIMEOUT_SECONDS`, `AIOPS_LLM_MAX_OUTPUT_TOKENS` and `AIOPS_LLM_MAX_REQUEST_BYTES`.
 
@@ -60,23 +60,23 @@ Configure the protected `.env` for the Intelligence container:
 
 ```dotenv
 LLM_PROVIDER_NAME=NVIDIA_NIM
-LLM_BASE_URL=http://host.docker.internal:8000/v1
-LLM_MODEL=<exact-model-id-reported-by-NIM>
-LLM_API_KEY=<secret-if-required-by-local-NIM>
+LLM_BASE_URL=http://10.79.94.31:8000/v1
+LLM_MODEL=
+LLM_API_KEY=
 AIOPS_DEMO_PROVIDER_KIND=REAL
 LLM_TIMEOUT_SECONDS=105
 AIOPS_LLM_MAX_OUTPUT_TOKENS=4096
 AIOPS_LLM_MAX_REQUEST_BYTES=262144
 ```
 
-The host-gateway alias `host.docker.internal` is added to the Intelligence Compose service for a NIM process bound to a Docker-host-reachable interface. If NIM runs as a container, prefer its service DNS name on a deliberately shared private Docker network instead. Do not assume that `127.0.0.1` inside Intelligence points to Debian itself. The NIM listener must be reachable from the Intelligence container; do not open it to public networks.
+The Debian lab endpoint is directly configured at `10.79.94.31:8000`; the Intelligence container connects to this address over the lab network. This endpoint is configured without an API key. The Compose default and `.env.example` use this exact base URL. Do not replace it with `127.0.0.1` or `host.docker.internal`.
 
-Discover the exact model ID from the NIM OpenAI-compatible `GET /v1/models` endpoint. The `LLM_MODEL` value must match the returned ID exactly; the string “Nemotron 120B” is a human label, not a guaranteed API model identifier. Do not guess a NIM alias. If the endpoint requires authentication, supply its key through the protected secret file only. Never include the key in command history, output, issue comments or CI logs.
+Intelligence performs unauthenticated `GET http://10.79.94.31:8000/v1/models` when `LLM_MODEL` is blank. It selects a unique Nemotron 120B ID; if the model list is ambiguous, it fails closed and asks for an exact `LLM_MODEL`. No API key or bearer token is sent for this endpoint.
 
 
 ### Probe the configured NIM endpoint from the Intelligence container
 
-Run this from the Debian Compose project directory after the Intelligence image containing the NIM adapter has been deployed. It reads the configured endpoint and API key inside the container, queries `/v1/models`, and prints only the non-secret endpoint/model IDs. It never prints the API key.
+Run this from the Debian Compose project directory after the Intelligence image containing the NIM adapter has been deployed. It reads the configured endpoint inside the container, queries `/v1/models`, and prints only the non-secret endpoint/model IDs. This endpoint requires no API key.
 
 ```bash
 docker exec -i aiops2-rebuild-intelligence python - <<'PY'
@@ -91,9 +91,6 @@ if not base:
     raise SystemExit(2)
 models_url = base + "/models" if base.endswith("/v1") else base + "/v1/models"
 headers = {}
-key = os.environ.get("LLM_API_KEY", "")
-if key:
-    headers["Authorization"] = "Bearer " + key
 try:
     req = urllib.request.Request(models_url, headers=headers)
     with urllib.request.urlopen(req, timeout=8) as response:
