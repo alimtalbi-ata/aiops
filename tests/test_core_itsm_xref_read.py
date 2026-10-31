@@ -171,6 +171,24 @@ class CoreXrefReadContractTests(unittest.TestCase):
                 self.assertEqual(out["link_status"], status)
                 self.assert_hidden(out)
 
+    def test_evidence_freshness_fails_closed_before_core_get(self):
+        # The injectable transport receives only the path, not the Evidence
+        # timestamp. An otherwise VERIFIED response cannot launder stale or
+        # future Evidence through this client.
+        for delta, status, reason in ((-301, "STALE", "EVIDENCE_STALE"),
+                                      (1, "UNKNOWN", "UTC_PREFLIGHT_INVALID")):
+            with self.subTest(delta=delta):
+                get = Mock(return_value=CoreRead(200, fixture(), True, True))
+                out = call(get, evidence_known_at=stamp(delta))
+                self.assertEqual(out["link_status"], status)
+                self.assertEqual(out["reason"], reason)
+                self.assert_hidden(out)
+                get.assert_not_called()
+        get = Mock(return_value=CoreRead(200, fixture(), True, True))
+        out = call(get, evidence_known_at=stamp(-300))
+        self.assertEqual(out["link_status"], "VERIFIED")
+        get.assert_called_once()
+
     def test_real_core_negative_readback_has_no_business_identifiers(self):
         # Core's actual 200 negative response is only {schema, status}.
         # It is not an authorization failure and must never expose a Run.
