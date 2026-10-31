@@ -676,8 +676,16 @@ async def reconcile_hitl_decisions_loop():
    snapshot=post_json(CORE,'/api/hitl/decision-outbox/claim',{
     'owner':DENIAL_WORKER_OWNER,'limit':20,'lease_seconds':45,
    },token=ADMIN)
-   items=snapshot.get('items',[]) if isinstance(snapshot,dict) else []
+   if (not isinstance(snapshot,dict)
+       or snapshot.get('execution_allowed') is not False
+       or snapshot.get('effect_allowed') is not False):
+    raise RuntimeError('outbox_claim_receipt_not_qualified')
+   items=snapshot.get('items',[])
+   if not isinstance(items,list):
+    raise RuntimeError('outbox_claim_items_invalid')
    for item in items:
+    if not isinstance(item,dict):
+     continue
     rid=item.get('run_id')
     pid=item.get('proposal_id')
     digest=item.get('proposal_hash')
@@ -685,17 +693,23 @@ async def reconcile_hitl_decisions_loop():
     event_id=item.get('event_id')
     lease_token=item.get('lease_token')
     decision=item.get('decision')
+    source_status=item.get('source_status')
     if (not all(isinstance(v,str) and v for v in
                 (rid,pid,digest,event_id,lease_token))
-            or type(revision) is not int
-            or decision not in ('APPROVE','REJECT')):
+            or type(revision) is not int or revision < 1
+            or (decision,source_status) not in (
+                ('APPROVE','APPROVED'),
+                ('REJECT','REJECTED'),
+                ('REJECT','REVOKED'))
+            or any(item.get(k) is not None and item.get(k) is not False
+                   for k in ('execution_allowed','effect_allowed'))):
      continue
     payload={
      'proposal_id':pid,
      'proposal_hash':digest,
      'proposal_revision':revision,
      'decision':decision,
-     'source_status':item.get('source_status'),
+     'source_status':source_status,
     }
     try:
      handle=client.get_workflow_handle(rid)
