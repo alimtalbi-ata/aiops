@@ -190,8 +190,9 @@ def _session_failure(status: int, detail: str, headers: dict | None = None) -> J
 @router.post("/api/portal/run-session", name="portal_create_short_lived_run_session")
 def create_run_session(request: Request, authorization: str | None = Header(default=None),
                        x_portal_run_id: str | None = Header(default=None)):
-    # A same-origin POST with a one-time bearer token exchanges it for a
-    # short-lived HttpOnly capability. The Core token is never placed in a cookie.
+    # A shared viewer bearer proves authentication, not exact-Run authorization.
+    # Refuse session issuance until a server-derived actor+tenant ACL exists.
+    # Even a valid/forged Run ID must not produce a browser capability.
     origin = request.headers.get("origin")
     if origin:
         try:
@@ -208,20 +209,11 @@ def create_run_session(request: Request, authorization: str | None = Header(defa
         if not _valid_run_id(x_portal_run_id):
             return JSONResponse({"state": "UNKNOWN", "reason": "INVALID_RUN_ID"},
                                 status_code=422, headers=SECURITY)
-        cookie = _issue_session(x_portal_run_id)
-        secure = _cookie_secure()
     except HTTPException as exc:
         return _session_failure(exc.status_code, str(exc.detail), exc.headers)
-    except ValueError:
-        return _session_failure(503, "portal_session_not_configured")
-    response = JSONResponse({"state": "READ_ONLY_SESSION_CREATED",
-                             "expires_in_seconds": SESSION_TTL_SECONDS},
-                            headers=SECURITY)
-    response.set_cookie(
-        SESSION_COOKIE, cookie, max_age=SESSION_TTL_SECONDS, path="/runs",
-        httponly=True, secure=secure, samesite="strict",
-    )
-    return response
+    # No Core/GLPI request and no Set-Cookie: a shared bearer cannot issue
+    # a capability for an unverified or foreign Run.
+    return JSONResponse(_unqualified_run(), status_code=503, headers=SECURITY)
 
 
 def _read(rid: str, authorization: str | None) -> tuple[int, dict]:
@@ -249,10 +241,9 @@ def run_detail_api(rid: str, authorization: str | None = Header(default=None)):
 @router.get("/runs/{rid}", response_class=HTMLResponse, name="portal_run_detail_page")
 def run_detail_page(rid: str, request: Request,
                      authorization: str | None = Header(default=None)):
-    page_authorization = authorization
-    if not page_authorization and _valid_session(request.cookies.get(SESSION_COOKIE), rid):
-        page_authorization = "Bearer " + os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
-    status, data = _read(rid, page_authorization)
+    # Previously minted viewer cookies are not actor+tenant authority.
+    # Do not upgrade them into a bearer identity, even during their TTL.
+    status, data = _read(rid, authorization)
     safe_rid = html.escape(rid if _valid_run_id(rid) else "UNKNOWN", quote=True)
     safe_state = html.escape(data["state"], quote=True)
     nav = " · ".join(
