@@ -27,12 +27,17 @@ value() {
   if [[ -n "$fallback" ]]; then printf '%s' "$fallback"; else env_value "$name"; fi
 }
 
+DEMO_MODE="$(value AIOPS_DEMO_MODE || true)"
 ENABLED="$(value AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED || true)"
 PROVIDER_KIND="$(value AIOPS_DEMO_PROVIDER_KIND || true)"
 LLM_URL="$(value LLM_BASE_URL || true)"
 LLM_MODEL_VALUE="$(value LLM_MODEL || true)"
 LLM_KEY="$(value LLM_API_KEY || true)"
 DEMO_TOKEN="$(value AIOPS_PORTAL_OPERATOR_TOKEN || true)"
+if [[ "$DEMO_MODE" != "1" && "${DEMO_MODE,,}" != "true" && "${DEMO_MODE,,}" != "yes" ]]; then
+  echo "SYNTHETIC_E2E=BLOCKED|AIOPS_DEMO_MODE_not_enabled" >&2
+  exit 1
+fi
 if [[ "${ENABLED,,}" != "true" ]]; then
   echo "SYNTHETIC_E2E=BLOCKED|synthetic_demo_launch_disabled" >&2
   exit 1
