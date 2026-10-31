@@ -102,6 +102,39 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.build(extra=[("untracked.txt", b"unverified")])
         self.assertIn("UNCHECKSUMMED_MEMBER:untracked.txt", self.audit()["errors"])
 
+    def test_checksummed_untracked_member_fails_source_provenance(self):
+        # Sidecar integrity alone does not prove that the member belongs to HEAD.
+        self.build(overrides={"foreign.txt": b"not in git HEAD"})
+        result = self.audit()
+        self.assertIn("SOURCE_MEMBER_UNTRACKED:foreign.txt", result["errors"])
+
+    def test_non_required_tracked_member_must_match_head(self):
+        path = self.source / "notes.txt"
+        path.write_bytes(b"tracked source\\n")
+        subprocess.run(["git", "-C", str(self.source), "add", "notes.txt"], check=True)
+        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=CI",
+                        "-c", "user.email=ci@example.invalid",
+                        "commit", "-qm", "add non-required source"], check=True)
+        self.sha = subprocess.check_output(
+            ["git", "-C", str(self.source), "rev-parse", "HEAD"], text=True).strip()
+        self.build(overrides={"notes.txt": b"modified in package\\n"})
+        result = self.audit()
+        self.assertIn("SOURCE_BLOB_MISMATCH:notes.txt", result["errors"])
+
+    def test_non_required_tracked_member_matching_head_passes(self):
+        path = self.source / "notes.txt"
+        path.write_bytes(b"tracked source\\n")
+        subprocess.run(["git", "-C", str(self.source), "add", "notes.txt"], check=True)
+        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=CI",
+                        "-c", "user.email=ci@example.invalid",
+                        "commit", "-qm", "add non-required source"], check=True)
+        self.sha = subprocess.check_output(
+            ["git", "-C", str(self.source), "rev-parse", "HEAD"], text=True).strip()
+        self.build(overrides={"notes.txt": b"tracked source\\n"})
+        result = self.audit()
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertEqual(result["source_files_verified"], 4)
+
     def test_zip_slip_member_fails(self):
         self.build(extra=[("../escape.txt", b"bad")])
         self.assertIn("UNSAFE_MEMBER_PATH:../escape.txt", self.audit()["errors"])
