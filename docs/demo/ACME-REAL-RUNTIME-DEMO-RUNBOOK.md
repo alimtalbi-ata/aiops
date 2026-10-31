@@ -51,6 +51,32 @@ If the provider variables are blank or `AIOPS_DEMO_PROVIDER_KIND` is not `REAL`,
 
 Cost remains `UNKNOWN` unless provider pricing is explicitly versioned. Token totals remain `UNKNOWN` unless the provider returns usage. Do not substitute estimates for provider-reported values.
 
+
+## 2.1 NVIDIA NIM / Nemotron 120B provider profile
+
+The reference inference target is the NVIDIA NIM endpoint serving the Nemotron 120B model on the Debian lab. The Intelligence adapter uses the OpenAI-compatible Chat Completions API; no separate model-serving implementation is required.
+
+Configure the protected `.env` for the Intelligence container:
+
+```dotenv
+LLM_PROVIDER_NAME=NVIDIA_NIM
+LLM_BASE_URL=http://host.docker.internal:8000/v1
+LLM_MODEL=<exact-model-id-reported-by-NIM>
+LLM_API_KEY=<secret-if-required-by-local-NIM>
+AIOPS_DEMO_PROVIDER_KIND=REAL
+LLM_TIMEOUT_SECONDS=105
+AIOPS_LLM_MAX_OUTPUT_TOKENS=4096
+AIOPS_LLM_MAX_REQUEST_BYTES=262144
+```
+
+The host-gateway alias `host.docker.internal` is added to the Intelligence Compose service for a NIM process bound to a Docker-host-reachable interface. If NIM runs as a container, prefer its service DNS name on a deliberately shared private Docker network instead. Do not assume that `127.0.0.1` inside Intelligence points to Debian itself. The NIM listener must be reachable from the Intelligence container; do not open it to public networks.
+
+Discover the exact model ID from the NIM OpenAI-compatible `GET /v1/models` endpoint. The `LLM_MODEL` value must match the returned ID exactly; the string “Nemotron 120B” is a human label, not a guaranteed API model identifier. Do not guess a NIM alias. If the endpoint requires authentication, supply its key through the protected secret file only. Never include the key in command history, output, issue comments or CI logs.
+
+The Intelligence `/ready` response reports the configured provider label and model ID (never the API key). The actual qualification is stronger than readiness: run the fixed evidence-grounded Analyst/Critic evaluation and then the canonical synthetic Temporal scenario. The provider must return structured JSON accepted by the strict contracts. Both invocations must persist invocation ID, model/provider, prompt version, latency and provider-reported usage. If NIM omits usage, token fields remain UNKNOWN; do not estimate them.
+
+A 105-second inference timeout leaves time inside the Worker activity deadline for Core ledger persistence and retry handling. Tune only from measured p95 latency; keep the Worker activity's outer timeout larger than the provider timeout. Never disable fail-closed behavior to make a slow model appear successful.
+
 ## 3. Preflight
 
 From the reviewed repository root:
