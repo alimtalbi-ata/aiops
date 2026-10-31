@@ -112,6 +112,8 @@ jobs:
         run: bash tests/test_preflight_secrets.sh
       - name: Cumulative release kit inventory gate (offline negative paths)
         run: python -m unittest discover -s tests -p "test_cumulative_release_kit_gate.py" -v
+      - name: Staged release manifest inventory refresh negative tests (offline)
+        run: python -m unittest discover -s tests -p "test_release_inventory_refresh.py" -v
       - name: Static repository audit
         run: bash tests/static-audit.sh
       - name: Validate Compose configuration with generated secrets
