@@ -49,6 +49,8 @@ jobs:
         run: docker compose --env-file .env config --quiet
       - name: Build application images without starting services
         run: docker compose --env-file .env build --pull
+      - name: Build guarded customer demo runner profile
+        run: docker compose --env-file .env --profile demo build --pull aiops2-demo-runner
       - name: Remove ephemeral credentials
         if: always()
         run: rm -f .env
