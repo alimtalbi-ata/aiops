@@ -110,13 +110,25 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
     if not core or core!=(e["incident_id"],e["incident_id"]): return "UNKNOWN",None
     resources=(("incident",e["incident_id"]),("run",e["run_id"]),("glpi_instance",instance),
                ("glpi_ticket",instance+":"+ticket),("glpi_entity",instance+":"+e["glpi_entity_id"]))
-    owned=c.execute("select resource_kind,resource_id,tenant_id,verified from aiops.tenant_resource_ownership "
+    owned=c.execute("select resource_kind,resource_id,tenant_id,verified,source_event_id,observed_at,known_at "
+                    "from aiops.tenant_resource_ownership "
                     "where (resource_kind,resource_id) in ((%s,%s),(%s,%s),(%s,%s),(%s,%s),(%s,%s))",
                     tuple(x for pair in resources for x in pair)).fetchall()
-    found={(kind,rid):(t,verified) for kind,rid,t,verified in owned}
+    found={(kind,rid):(t,verified,source_event_id,observed_at,known_at)
+           for kind,rid,t,verified,source_event_id,observed_at,known_at in owned}
     if len(found)!=len(resources): return "UNKNOWN",None
     if any(found[r][0]!=tenant for r in resources): return "UNAUTHORIZED",None
     if any(found[r][1] is not True for r in resources): return "UNKNOWN",None
+    # Ownership is an independent, immutable attestation. Validate its source
+    # identity and temporal integrity, but do not apply the short-lived xref
+    # freshness window: immutable ownership rows cannot be refreshed in place.
+    for r in resources:
+        _,_,source_id,owner_observed,owner_known=found[r]
+        observed,known=_utc(owner_observed),_utc(owner_known)
+        if not _valid(source_id) or observed is None or known is None:
+            return "UNKNOWN",None
+        if observed>known or known>now:
+            return "CONFLICT",None
     return "VERIFIED",e
 
 @router.get("/api/tenants/{tenant_id}/itsm/glpi/{instance_id}/tickets/{ticket_id}/xref")
