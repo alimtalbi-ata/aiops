@@ -17,7 +17,9 @@ class FakeGLPI:
 
 
 def test_glpi_ticket_fastpath_links_only_verified_run(monkeypatch):
-    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "q" * 64)
+    monkeypatch.setenv("AIOPS_INTERNAL_TOKEN", "i" * 64)
     monkeypatch.setattr(module, "GLPIClient", FakeGLPI)
     monkeypatch.setattr(module, "get_json", lambda base, path: {
         "run": {"run_id": "RUN-ABCDEF123456", "mode": "DEMO"}
@@ -43,7 +45,9 @@ def test_glpi_ticket_fastpath_links_only_verified_run(monkeypatch):
 
 
 def test_glpi_ticket_fastpath_does_not_guess_ambiguous_run(monkeypatch):
-    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "q" * 64)
+    monkeypatch.setenv("AIOPS_INTERNAL_TOKEN", "i" * 64)
 
     class AmbiguousGLPI:
         configured = True
@@ -69,7 +73,9 @@ def test_glpi_ticket_fastpath_does_not_guess_ambiguous_run(monkeypatch):
 
 
 def test_glpi_hitl_fastpath_creates_only_guarded_proposal(monkeypatch):
-    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "q" * 64)
+    monkeypatch.setenv("AIOPS_INTERNAL_TOKEN", "i" * 64)
     monkeypatch.setattr(module, "GLPIClient", FakeGLPI)
 
     run_id = "RUN-ABCDEF123456"
@@ -102,7 +108,7 @@ def test_glpi_hitl_fastpath_creates_only_guarded_proposal(monkeypatch):
 
     def read_core(base, path):
         if path == "/api/runs/" + run_id:
-            return {"run": {"run_id": run_id, "mode": "DEMO"}}
+            return {"run": {"run_id": run_id, "mode": "DEMO", "scenario_id": "SCN-GOLDEN-PAYMENT-P1"}}
         if path == "/api/runs/" + run_id + "/ai-ledger":
             return {"analyses": [analysis], "critiques": [critique]}
         raise AssertionError("unexpected Core read: " + path)
@@ -143,7 +149,9 @@ def test_glpi_hitl_fastpath_creates_only_guarded_proposal(monkeypatch):
 
 
 def test_glpi_hitl_fastpath_rejects_unmapped_action_without_writes(monkeypatch):
-    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "p" * 64)
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "q" * 64)
+    monkeypatch.setenv("AIOPS_INTERNAL_TOKEN", "i" * 64)
     response = TestClient(app).post(
         "/api/hitl/glpi-ticket/1/proposal",
         headers={"Authorization": "Bearer " + "p" * 64},
