@@ -140,7 +140,7 @@ def main() -> int:
     print("DEBIAN_RUNTIME=" + result["runtime_observation"])
     for warning in result["warnings"]:
         print("DEBIAN_RUNTIME_WARNING=" + warning)
-    return 0
+    return 1 if result["warnings"] else 0
 
 
 if __name__ == "__main__":
