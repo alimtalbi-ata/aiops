@@ -126,6 +126,28 @@ class GlpiOperatorViewTests(unittest.TestCase):
             "state": "UNAUTHORIZED", "reason": "forbidden_tenant"})
         self.assert_security(response)
 
+    def test_stacked_glpi_fastpaths_remain_unmounted_without_server_acl(self):
+        # #192/#193 are stacked on another base. A viewer bearer alone must
+        # never expose GLPI ticket reads, Copilot ticket context or Core
+        # proposal writes. If a server-derived ACL is later implemented,
+        # replace this route-inventory gate with positive/negative ACL tests.
+        blocked = {
+            ("GET", "/api/glpi/health"),
+            ("GET", "/api/glpi/tickets"),
+            ("GET", "/api/glpi/tickets/{ticket_id}"),
+            ("POST", "/api/copilot/ticket/{ticket_id}"),
+            ("POST", "/api/copilot/glpi-ticket/{ticket_id}"),
+            ("POST", "/api/hitl/glpi-ticket/{ticket_id}/proposal"),
+        }
+        mounted = {
+            (method, route.path)
+            for route in main.app.routes
+            if hasattr(route, "methods")
+            for method in route.methods
+        }
+        self.assertFalse(blocked & mounted,
+                         "stacked GLPI fastpath mounted before actor+tenant ACL")
+
     def test_no_glpi_mutation_routes(self):
         for method in ("post", "put", "patch", "delete"):
             with self.subTest(method=method):
