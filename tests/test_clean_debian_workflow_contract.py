@@ -5,6 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/deploy-clean-debian.yml").read_text()
 DOCS = (ROOT / "docs/operations/APPROVED-CLEAN-DEBIAN-DEPLOYMENT.md").read_text()
+QUALIFICATION_WORKFLOW = (ROOT / ".github/workflows/debian12-qualification.yml").read_text()
 
 
 class CleanDebianWorkflowContractTests(unittest.TestCase):
@@ -23,6 +24,8 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
         self.assertIn(".github/workflows/quality.yml", WORKFLOW)
         self.assertIn(".github/workflows/debian12-qualification.yml", WORKFLOW)
         self.assertIn("actions: read", WORKFLOW)
+        push_section = QUALIFICATION_WORKFLOW.split("  push:", 1)[1].split("\n\npermissions:", 1)[0]
+        self.assertIn("- main", push_section)
 
     def test_target_path_is_restricted_to_dedicated_aiops_directory(self):
         self.assertIn("^/home/aiops/aiops2-clean-[A-Za-z0-9_-]+$", WORKFLOW)
