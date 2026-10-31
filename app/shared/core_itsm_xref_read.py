@@ -94,8 +94,14 @@ def resolve_ticket_run(*, tenant_id: str, tenant_authenticated: bool,
             raise ValueError("out-of-range clock")
         if evidence_known_at is not None:
             evidence_stamp = _utc(evidence_known_at)
-            if evidence_stamp is None or evidence_stamp > clock + timedelta(minutes=5):
+            # Core rejects future Evidence and refuses to verify a stale
+            # Evidence binding. The consumer must apply the same fence even
+            # when the injected core_get does not forward query parameters.
+            if evidence_stamp is None or evidence_stamp > clock:
                 raise ValueError("invalid Evidence time")
+            if clock - evidence_stamp > timedelta(minutes=5):
+                return _result(link_status="STALE", connection_state="UNKNOWN",
+                               reason="EVIDENCE_STALE")
     except (OverflowError, TypeError, ValueError):
         return _result(reason="UTC_PREFLIGHT_INVALID")
     if core_get is None:
