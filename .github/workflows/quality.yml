@@ -44,6 +44,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_hitl_failure_injection.py" -v
           python -m unittest discover -s tests -p "test_hitl_outbox_failure_injection.py" -v
+          python -m unittest discover -s tests -p "test_hitl_stage_start_ack_failure_injection.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
       - name: Demo Studio V2 synthetic stage-marker presentation contract
