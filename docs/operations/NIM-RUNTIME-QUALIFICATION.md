@@ -42,7 +42,7 @@ The report intentionally omits the prompt body and full model response. A PASS p
 
 ## CI
 
-GitHub Actions runs offline unit tests for URL validation, exact model matching, completion marker enforcement and credential non-disclosure. CI does not require NIM, GPU access, or the Debian server.
+GitHub Actions runs offline unit tests for URL validation, exact model matching, completion marker enforcement and report minimization and model selection. CI does not require NIM, GPU access, or the Debian server.
 
 ## Next application-level gate
 
