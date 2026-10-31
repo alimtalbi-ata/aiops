@@ -111,10 +111,11 @@ def _require_portal_read(authorization):
         raise HTTPException(401,"invalid_portal_read_token")
 
 
-# Direct GLPI ticket and Copilot fastpaths are intentionally not mounted.
-# A Portal viewer bearer is not a server-derived actor/tenant ACL. Keep the
-# GLPI handoff read model visible, but do not expose ticket reads or proposal
-# creation until the authoritative tenant-scoped contract is qualified.
+# The GLPI run-context router above exposes a bounded synthetic-DEM0 operator
+# path only. It requires the dedicated operator token, a unique explicit RUN
+# reference to the fixed ACME synthetic scenario, and server-side GLPI tokens.
+# It can create a PROPOSED Core record and an idempotent private GLPI follow-up;
+# it cannot approve, execute, or authorize LIVE remediation.
 
 def _demo_environment_enabled() -> bool:
     return os.getenv('AIOPS_DEMO_MODE', '0').strip().lower() in ('1', 'true', 'yes')
