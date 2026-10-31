@@ -56,6 +56,8 @@ jobs:
         run: node --test tests/test_portal_copilot_client.cjs
       - name: Main-based Portal Run detail API/HTML fail-closed regression
         run: python -m unittest discover -s tests -p "test_portal_run_detail.py" -v
+      - name: Portal GLPI native handoff, role and tenant denial regression
+        run: python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
       - name: Portal Run deep-link JS syntax and DOM regression
         run: |
           node --check app/portal/portal_run_link_client.js
