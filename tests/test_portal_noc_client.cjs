@@ -82,7 +82,9 @@ test("synthetic RAG stays visibly SYNTHETIC, never runtime-attested", async () =
     ok: true, status: 200,
     json: async () => ({ state: "SYNTHETIC_REFERENCE_ONLY",
                           data_classification: "SYNTHETIC_SIMULATION_ONLY",
-                          runtime_authenticated: false, citations: [] }),
+                          tenant_acl_qualified: false, source_runtime_observed: false,
+                          runtime_authenticated: false, live_remediation_authorized: false,
+                          citations: [] }),
   }));
   await handlers.demoRag();
   assert.match(elements["noc-rag-result"].textContent, /^SYNTHETIC — /);
@@ -93,7 +95,9 @@ test("RAG rejects forged 200 runtime-attested data", async () => {
   const { handlers, elements } = makeNocHandlers(async () => ({
     ok: true, status: 200,
     json: async () => ({ state: "CONNECTED", data_classification: "SYNTHETIC_SIMULATION_ONLY",
-                          runtime_authenticated: true, ticket_id: "SECRET" }),
+                          tenant_acl_qualified: false, source_runtime_observed: false,
+                          runtime_authenticated: false, live_remediation_authorized: false,
+                          ticket_id: "SECRET" }),
   }));
   await handlers.demoRag();
   assert.match(elements["noc-rag-result"].textContent, /UNKNOWN \(HTTP 200\)/);
