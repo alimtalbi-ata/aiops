@@ -244,6 +244,22 @@ class XrefHttpTests(unittest.TestCase):
         # No historical event can have a later known_at than its successor.
         self.assertTrue(all("from aiops.runs" not in sql for sql,_ in self.fake.calls))
 
+    def test_signed_supersession_observation_cannot_go_backwards(self):
+        # Both rows have valid HMAC, recent observed_at and increasing known_at.
+        # A backdated successor must not silently become an authoritative link.
+        self.fake.events=[
+            event(observed_at=NOW-timedelta(seconds=20),
+                  known_at=NOW-timedelta(seconds=15)),
+            event(association_id="XREF-B",source_event_id="EVT-B",
+                  mapping_version=2,supersedes_association_id="XREF-A",
+                  observed_at=NOW-timedelta(seconds=25),
+                  known_at=NOW-timedelta(seconds=5))]
+        r=self.read(expected_run_id="RUN-A",expected_incident_id="INC-A")
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"CONFLICT")
+        self.hidden(r)
+        self.assertEqual(len(self.fake.calls),1)
+
     def test_duplicate_and_conflicting_history(self):
         self.fake.events=[event(),event()]
         r=self.read()
