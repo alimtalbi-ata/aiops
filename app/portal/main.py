@@ -38,7 +38,7 @@ def bootstrap(authorization: str | None = Header(default=None)):
     return _noc_json_response({
         'state': 'UNKNOWN',
         'reason': 'TENANT_ACL_NOT_QUALIFIED',
-        'connection_state': 'UNAVAILABLE',
+        'connection_state': 'UNKNOWN',
         'source': 'CORE_TWIN_READ_MODELS_NOT_TENANT_AUTHORIZED',
         'source_freshness': 'UNKNOWN',
     }, status_code=503)
