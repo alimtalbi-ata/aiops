@@ -111,7 +111,7 @@ def _require_portal_read(authorization):
         raise HTTPException(401,"invalid_portal_read_token")
 
 
-# The GLPI run-context router above exposes a bounded synthetic-DEM0 operator
+# The GLPI run-context router above exposes a bounded synthetic-DEMO operator
 # path only. It requires the dedicated operator token, a unique explicit RUN
 # reference to the fixed ACME synthetic scenario, and server-side GLPI tokens.
 # It can create a PROPOSED Core record and an idempotent private GLPI follow-up;
