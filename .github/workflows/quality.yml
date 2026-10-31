@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   policy-and-static:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 Chromium is qualified on Ubuntu 24.04; keep browser E2E mandatory.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
