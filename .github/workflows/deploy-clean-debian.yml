@@ -94,10 +94,7 @@ jobs:
               with urlopen(request, timeout=20) as response:
                   return json.loads(response.read(2_000_000))
 
-          approved_refs = (
-              "main",
-              "test/debian12-install-runtime-qualification-20261031",
-          )
+          approved_refs = ("main",)
           ancestry = []
           for ref in approved_refs:
               try:
@@ -110,7 +107,7 @@ jobs:
                   ancestry.append(ref)
           if not ancestry:
               raise SystemExit(
-                  "BLOCKED|source_sha_not_ancestor_of_approved_main_or_debian_qualification_ref"
+                  "BLOCKED|source_sha_not_ancestor_of_main"
               )
 
           runs = get(f"/actions/runs?head_sha={sha}&per_page=100").get(
