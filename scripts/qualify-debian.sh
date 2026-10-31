@@ -38,7 +38,6 @@ for pattern in \
   "$VENV/venv/bin/python" -m unittest discover -s tests -p "$pattern" -v
 done
 
-node --check app/portal/glpi_operator_view.py 2>/dev/null || true
 if [[ -f app/portal/acme_explore_story_client.js ]]; then node --check app/portal/acme_explore_story_client.js; fi
 if [[ -f app/portal/portal_bootstrap_client.js ]]; then node --check app/portal/portal_bootstrap_client.js; fi
 
