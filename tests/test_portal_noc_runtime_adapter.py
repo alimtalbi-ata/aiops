@@ -367,6 +367,20 @@ class NocRuntimeRouteTests(unittest.TestCase):
         self.assertEqual(response.headers["pragma"], "no-cache")
         read.assert_not_called()
 
+    def test_denial_headers_are_no_store_csp_and_anti_framing(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
+            noc_runtime, "read_signed_noc_snapshot",
+            side_effect=AssertionError("no upstream read")
+        ) as read:
+            response = self.client.get("/api/noc/runtime-state",
+                headers={"Authorization": "Bearer " + PORTAL_TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+        read.assert_not_called()
+
     @staticmethod
     def _safe_view():
         body, headers = signed_response()
