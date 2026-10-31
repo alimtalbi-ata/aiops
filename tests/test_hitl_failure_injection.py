@@ -47,7 +47,7 @@ class FakeTemporal:
             raise AssertionError("no_offline_signal")
 
 
-def workflow_class(fake):
+def workflow_class(fake, stages=("HITL", "REMEDIATE")):
     path = "app/worker/workflow.py"
     tree = ast.parse((ROOT / path).read_text(), filename=path)
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "IncidentWorkflow")
@@ -59,7 +59,7 @@ def workflow_class(fake):
     for n in cls.body:
         n.decorator_list = []
     env = {"workflow": fake, "datetime": datetime, "asyncio": asyncio,
-           "STAGES": ("HITL", "REMEDIATE"), "RETRY": object()}
+           "STAGES": stages, "RETRY": object()}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])),
                  path, "exec"), env)
     return env["IncidentWorkflow"]
@@ -112,6 +112,50 @@ class OfflineFailureInjection(unittest.TestCase):
         self.assertEqual((rejected["state"], rejected["decision"]), ("BLOCKED", "HUMAN_APPROVAL"))
         qualified = evaluate(self.policy_input())
         self.assertEqual((qualified["state"], qualified["decision"]), ("PASS", "SIMULATE"))
+
+    def test_unknown_or_failed_critic_policy_stage_never_reaches_hitl(self):
+        # Offline fake activities only. An UNKNOWN or non-PASS stage cannot
+        # be treated as successful, even if a later HITL fixture says PASS.
+        for stage in ("DGX_CRITIC", "POLICY"):
+            for status in ("UNKNOWN", "FAIL", "REJECTED", "WAITING"):
+                with self.subTest(stage=stage, status=status):
+                    class NonPassingTemporal(FakeTemporal):
+                        async def execute_activity(self, name, args, **kw):
+                            if name == "execute_stage" and args["stage"] == stage:
+                                self.calls.append(stage)
+                                return {
+                                    "version": 2, "status": status,
+                                    "execution_allowed": False, "effect_allowed": False,
+                                }
+                            return await super().execute_activity(name, args, **kw)
+
+                    fake = NonPassingTemporal(synthetic=True)
+                    workflow = workflow_class(fake, stages=(stage, "HITL", "REMEDIATE"))()
+                    receipt = asyncio.run(workflow.run({
+                        "run_id": "RUN-OFFLINE", "mode": "DEMO",
+                        "scenario_id": "SCENARIO-OFFLINE",
+                    }))
+                    self.assertEqual(receipt["status"], "BLOCKED")
+                    self.assertEqual(receipt["reason"], "stage_not_passed")
+                    self.assertIs(receipt["execution_allowed"], False)
+                    self.assertIs(receipt["effect_allowed"], False)
+                    self.assertEqual(fake.calls, ["start_run", stage])
+
+    def test_unknown_mode_blocks_before_any_activity(self):
+        # Policy SIMULATE is not a workflow mode. Do not start Core for a
+        # malformed, forged or unrecognized mode.
+        for mode in ("SIMULATE", "UNKNOWN", "", None, True, 1):
+            with self.subTest(mode=repr(mode)):
+                fake = FakeTemporal(synthetic=True)
+                workflow = workflow_class(fake)()
+                receipt = asyncio.run(workflow.run({
+                    "run_id": "RUN-OFFLINE", "mode": mode,
+                    "scenario_id": "SCENARIO-OFFLINE",
+                }))
+                self.assertEqual(receipt["reason"], "unsupported_workflow_mode")
+                self.assertIs(receipt["execution_allowed"], False)
+                self.assertIs(receipt["effect_allowed"], False)
+                self.assertEqual(fake.calls, [])
 
     def test_critic_reject_prevents_proposal(self):
         for critique in ({"validated": False}, {"validated": True, "issues": ["unsafe"]}):
