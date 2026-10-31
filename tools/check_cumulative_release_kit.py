@@ -226,7 +226,7 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                                         entry["bytes"] = len(payload)
                                         entry["sha256"] = hashlib.sha256(payload).hexdigest()
                                     versions = re.findall(
-                                        r"^version=([^\\r\\n]+)$",
+                                        r"^version=([^\r\n]+)$",
                                         manifest if "RELEASE-MANIFEST.txt" in files else "",
                                         re.MULTILINE)
                                     if not valid_entries or len(versions) != 1:
