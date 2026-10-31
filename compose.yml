@@ -85,8 +85,8 @@ services:
     container_name: ${AIOPS_STACK_ID:-aiops2}-intelligence
     restart: unless-stopped
     environment:
-      LLM_PROVIDER_NAME: ${LLM_PROVIDER_NAME:-openai-compatible}
-      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_PROVIDER_NAME: ${LLM_PROVIDER_NAME:-NVIDIA_NIM}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://10.79.94.31:8000/v1}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
