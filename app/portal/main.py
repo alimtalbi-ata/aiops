@@ -1218,24 +1218,26 @@ def portal_hitl_inbox(authorization: str | None = Header(default=None)):
         result = get_json(CORE, "/api/proposals?status=PROPOSED&limit=100", timeout=12)
         rows = result.get("items", []) if isinstance(result, dict) else []
         safe_items = []
-        seen = set()
+        run_modes = {}
         for item in rows[:100]:
             if not isinstance(item, dict):
                 continue
             run_id = item.get("run_id")
             if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", run_id):
                 continue
-            if run_id not in seen:
-                seen.add(run_id)
+            if run_id not in run_modes:
                 try:
                     detail = get_json(CORE, "/api/runs/" + run_id, timeout=8)
                 except Exception:
-                    continue
-                run = detail.get("run") if isinstance(detail, dict) else None
-                if not isinstance(run, dict) or run.get("run_id") != run_id:
-                    continue
-                if run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
-                    continue
+                    run_modes[run_id] = "UNKNOWN"
+                else:
+                    run = detail.get("run") if isinstance(detail, dict) else None
+                    run_modes[run_id] = (
+                        run.get("mode") if isinstance(run, dict) and run.get("run_id") == run_id
+                        else "UNKNOWN"
+                    )
+            if run_modes[run_id] not in ("DEMO", "REPLAY", "STORY"):
+                continue
             safe_items.append({
                 "proposal_id": item.get("proposal_id"),
                 "run_id": run_id,
