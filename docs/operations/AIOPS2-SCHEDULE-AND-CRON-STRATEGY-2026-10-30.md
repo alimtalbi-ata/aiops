@@ -89,3 +89,7 @@ The saved schedules retain their existing cadence. Immediate-run requests confir
 3. Run a manual read-only smoke and verify it cannot POST/PUT/PATCH/DELETE, mutate GLPI or execute remediation.
 4. Enable the 15-minute read-only schedule only after runner health, ownership, log retention, alerting and rollback are tested.
 5. Keep deployment automation separate. Require a protected release artifact, signed/checksummed manifest, backup, explicit approval, deployer path coverage, health smoke, applied SHA and tested rollback before any deployment schedule is considered.
+
+## 2026-10-31 21:11 Paris — control-plane evidence update
+
+See [Automation Control Plane A/B/C/D](AIOPS2-AUTOMATION-CONTROL-PLANE-2026-10-31.md) and offline heartbeat verifier `scripts/automation_heartbeat_gate.py`. Current five ChatGPT tasks are enabled HOURLY but all return `next_run_time=null`; main Actions has no `schedule`/`workflow_dispatch`, and Debian minute cron remains UNATTESTED. Do not install or modify host scheduling. GitHub scheduled-run API returns zero. Only read-only operator inventory is proposed.
