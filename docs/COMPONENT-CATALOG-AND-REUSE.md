@@ -81,3 +81,63 @@ Record the following before integration:
 - **Destination:** `app/portal/fixtures/noc_rag_synthetic.json`, `app/portal/noc_demo_rag.py`, portal NOC panel. Reuses PR #36's strict catalog-validation idea and exact-asset selection; adds operator token, bounded JSON, duplicate-key rejection and SHA-256 citations.
 - **Limits:** no real Checkmk/Thruk, Grafana, Core correlation for this fixture, model inference, vendor-authenticated documentation or tenant ACL; all unqualified. Only synthetic fixture content is returned, and `live_remediation_authorized=false`.
 - **Qualification:** offline unit/API tests under existing `quality.yml`; [PR #54 CI 40594299546](https://github.com/alimtalbi-ata/aiops/actions/runs/40594299546) completed/success for static/contract/Compose checks; merged at `b44b7f2ffcddecaf5229a4e5fd4c745e038a0c98`. Do not use this module as evidence of a live service incident.
+
+
+## 2026-10-30 — Current convergence register
+
+Use `docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md` as the current PR/branch convergence record. The original V1/V145 inventory above remains a candidate list and must not be interpreted as qualification.
+
+New decision vocabulary for active PRs:
+- **Primary scenario candidate:** #185, subject to exact-head requalification and source-transport review.
+- **Targeted correctness fix:** #190, subject to current-head CI.
+- **Complementary integration slices:** #192 (Portal/GLPI read), #193 (guarded proposal), #194 (Core OIDC/outbox/Temporal); reconcile contracts before combining.
+- **Schedule candidate:** #188; #189 is overlapping and must not run in parallel.
+- **Deferred:** #187 observability expansion pending security/resource/retention review.
+- **Not authorized for activation:** #146/#153 Debian auto-deployment; #177 broad UI promotion until transport and CI gaps are closed.
+
+AI evaluation reuse:
+- `tools/evaluate_ai_core.py`
+- `eval/ai-core-cases.json`
+- `tests/test_ai_eval_harness.py`
+- `tests/test_model_evaluation_api.py`
+These were source-reviewed on the HITL candidate branch. Quality metrics exist; per-call token/cost/latency telemetry is not yet qualified. Port selectively and preserve dataset/prompt/model hashes.
+
+
+## 2026-10-30 12:15 UTC — exact-head component and overlap check
+
+- **Portal/Core/Twin/Policy ACME:** #185 HEAD `5782d6f` has eight exact 1/5–4/5 source blobs. The V2.8 isolated gate failed on a stale gates-response fixture; treat the candidate as **not qualified** until the 2/5 contract test is repaired and all exact-head workflows pass.
+- **GLPI/HITL:** #192 (read-only ticket context) and #193 (PROPOSED-only fastpath) overlap in `app/portal/glpi_run_context.py` and its test. #194 additionally overlaps #185/#190/#192 on `app/core/main.py`, `app/portal/main.py`, `compose.yml`; port contracts selectively and preserve Core authority. #193 Quality succeeded only after a transient pip-download retry; that does not validate a combined branch.
+- **AI evaluator:** #196 reuses `tools/evaluate_ai_core.py` and `tests/test_ai_eval_harness.py` for provider-reported token/latency accounting. Its exact-head workflows succeeded; no live invocation, pricing source or actual cost has been qualified. Baseline local harness: 3/3 PASS, five synthetic cases, no inference.
+- **Scheduling:** #188 daily full quality + 15-minute read-only runtime smoke is preferred, but both #188 and #189 remain unmerged. #189's actual YAML is `23 */2 * * *`, despite its stale PR description mentioning six hours. Never activate both.
+- **Release/deployer:** stable SHA `e54c4e9a` is unchanged; stable deployer is portal-only and cannot transport the four-service candidate. #187 Loki/Tempo/OTel is deferred; #146/#153 auto-deploy is not authorized.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair — main-based adapter boundaries
+
+- [#198](https://github.com/alimtalbi-ata/aiops/pull/198) reuses the existing Core read-only Run locator; its bearer Evidence-refs endpoint is absent on `main`, so evidence attestation remains UNKNOWN. 14/14 local locator tests reported; exact-head Quality SUCCESS. No new Core engine.
+- [#197](https://github.com/alimtalbi-ata/aiops/pull/197) is a fail-closed UTC Evidence preflight adapter (5/5 local tests, Quality SUCCESS); not a GLPI client or proof of authenticated reconciliation.
+- [#199](https://github.com/alimtalbi-ata/aiops/pull/199) is a SIMULATE-only Policy fixture adapter (22/22 local Policy tests, Quality SUCCESS); it does not create approval authority or execution rights.
+- The main Portal lacks the divergent Demo Studio run-detail routes; 2/5 must not import the old Portal tree. The integration owner must supply a reviewed main-based route before the foreign-run guard can be ported. Reuse Core, Temporal, Evidence, Twin, GLPI, Portal and evaluation harness; do not duplicate engines.
+
+### 2026-10-30 13:12 UTC — source completeness boundary
+
+#185 `2b2af9c` scenario/evaluator source and 395/395 archive checks do not include #194 migration `011_hitl_decision_outbox.sql` or OIDC modules, #196 AI telemetry implementation or #195 architecture/story docs. Main-based #197 Evidence UTC preflight is not GLPI authority; #198 Run locator is not tenant ACL; #199 Policy SIMULATE fixture is not approval/execution. #192/#193 share `glpi_run_context.py`; #185/#190/#192/#194 overlap Core/Portal main modules and #185/#192/#194/#196 overlap Compose. Reuse Core/Temporal/Evidence/Twin/Policy/GLPI/Portal/evaluator, do not duplicate engines. Prometheus/Grafana remain observability baseline; #187 deferred.
+
+## 2026-10-30 14:00 UTC — clean-main exact-blob reuse boundary
+
+Draft [#201](https://github.com/alimtalbi-ata/aiops/pull/201) reuses (not reimplements) #198 `tools/find_acme_demo_run.py` (synthetic locator), #197 `app/shared/acme_evidence_utc_preflight.py` (timestamp preflight, not GLPI client), #199 `app/policy/simulate_fixture.py` (Policy evaluate() adapter, `execution_allowed=false`) and #195 architecture/docs. It adds **no** new Incident/Run store, AI engine, executor, GLPI connector or Portal. #194 OIDC/outbox and #196 AI telemetry are not included; #185 scenario UI not included. Source-verified synthetic != authenticated tenant/Evidence/GLPI/production.
+
+### 2026-10-30 14:16 UTC — release verification component
+
+Reuse `tools/check_cumulative_release_kit.py` from draft #201 (HEAD `03a5b0cce44e56d7ae315ee7df16e850a5e35b11`) as a **read-only package/source inventory gate**, not as a new packager or deployment engine. Inputs: ZIP, expected exact commit SHA, clean source checkout; outputs: JSON PASS/FAIL, checksum and source-file counts, explicit missing/unsafe members. Tests: `python3 -m unittest discover -s tests -p 'test_cumulative_release_kit_gate.py' -v` → 10/10 PASS locally. CI for new head pending. Mandatory files are a convergence acceptance contract, not evidence that #194 OIDC, #196 telemetry or rollback are already integrated. Continue to reuse existing `deploy/package.sh` and release scripts; T1–T5 remain unqualified.
+
+### 2026-10-30 15:12 UTC — source reuse and evidence boundaries
+
+- **Twin ACME fixture:** #198 source `tests/test_acme_san_payments_fixture_contract.py` blob `675a0af6` selectively reused in main-based #201 `7474c74c`; pinned `005_seed_acme.sql` blob `67f0124a`. CI 41077972849 executes the six fixture assertions (6/6 PASS). Stored edges are consumer→dependency; customer SAN→Payments narration traverses reverse; synthetic-only, not actual service degradation or GLPI evidence.
+- **AI evaluator / Ollama:** reuse #196 existing evaluator, do not build a second engine. Exact-head 41070920303 benchmark jobs marked SUCCESS while all six evaluator repeats failed with `ReadTimeout`; missing usage/latency/cost remain UNKNOWN. Add a post-artifact fail-closed benchmark gate and timeout diagnosis before selective main-based port; #196 itself remains stacked/divergent.
+- **Release/operations:** #201 source gate and CI are T0 only; migration 011, OIDC/outbox, telemetry, cumulative ZIP, install/rollback and Debian applied SHA remain unqualified. #188 scheduling preferred, #189 redundant; #146/#153 disabled; #187 deferred.
+
+<!-- convergence-5of5-477da60-20261030 -->
+### 5/5 source-transport catalog — 2026-10-30T16:15:33.055Z
+
+#201 main-based `477da60d92dc777e1e635eea4c5510c350a5d90c`: reused #198's existing ACME locator and tests (UTC epoch/canonical fail-closed), plus #202's existing Portal Run-detail and read-session JS/tests (strict four-field Core identity, no authority promotion, visible HTTP 401/403/503). **No new service, engine, UI, store, connector, OIDC, ticket authority or remediation capability.** Exact-head Quality pending; runtime/tenant ACL and Evidence links UNKNOWN. #194/#204/#196 selective port and cumulative kit remain release blockers.
