@@ -226,6 +226,29 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
                 gen.load_catalog(c)
 
+    def test_replay_rejects_injected_graph_even_with_valid_fixture_ids(self):
+        forged = copy.deepcopy(self.graph)
+        # A caller-provided graph with an invented direct dependency must not
+        # bypass the pinned SQL Git blob simply because its CI IDs are valid.
+        forged["consumers"]["ACME-SAN-FABRIC-A"].append(
+            ("ACME-E08", "ACME-SVC-PAYMENTS"))
+        with self.assertRaisesRegex(ValueError, "unpinned graph override"):
+            gen.replay(graph=forged)
+        self.assertEqual(
+            gen.replay(graph=self.graph)["dataset_sha256"],
+            "ce0aef74222699da695c2e894e622b0625c992ef654dda34a84cff26b5e64f3f")
+
+    def test_replay_rejects_injected_catalog_priority(self):
+        forged = copy.deepcopy(self.catalog)
+        golden = next(s for s in forged["scenarios"]
+                      if s["key"] == "REDUNDANT_SAN_PATH_LOSS")
+        golden["urgency_synthetic"] = "LOW"
+        with self.assertRaisesRegex(ValueError, "unpinned catalog override"):
+            gen.replay(catalog=forged)
+        self.assertEqual(
+            gen.replay(catalog=self.catalog)["dataset_sha256"],
+            "ce0aef74222699da695c2e894e622b0625c992ef654dda34a84cff26b5e64f3f")
+
     def test_cli_artifact_is_reproducible_and_sha_matches(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "replay.json"
