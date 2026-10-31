@@ -3,69 +3,80 @@
 **Status:** Controlled first-install automation; not an in-place upgrade workflow.  
 **Workflow:** `.github/workflows/deploy-clean-debian.yml`  
 **Target:** A new, empty Debian 12 host.  
-**Approval:** No human approval gate. Dispatch runs automatically once repository SSH secrets are configured.
+**Approval model:** No interactive approval prompt; dispatch is gated by exact-SHA ancestry and two successful exact-head CI workflows.
 
 ## Purpose and safety boundary
 
 This workflow transfers a reviewed source snapshot to a Debian 12 host over SSH, runs the repository's canonical `deploy/install.sh`, and collects sanitized deployment evidence.
 
-It is deliberately restricted to **first installation into a path that does not exist**. It will refuse to overwrite an existing directory, existing AIOps installation, or persistent volumes. It does not deploy to SRV-DEB-05 by default and must not be repurposed as an in-place upgrade workflow.
+It is restricted to a dedicated clean installation path under `/home/aiops/aiops2-clean-*`. The remote preflight requires the SSH account to be `aiops`, refuses root, requires Debian 12, and refuses to proceed if AIOps2-prefixed containers, volumes or networks already exist. It is not an in-place upgrade workflow and must not target SRV-DEB-05, which is an existing Debian 13 environment.
 
-No automatic rollback or volume deletion is performed. If installation or qualification fails, the target directory, generated host-local `.env`, containers and volumes are retained for diagnosis. An operator must inspect the failure and decide the recovery action. This is safer than deleting state whose consistency has not been proven.
+The workflow does not delete existing resources. If installation or qualification fails, the target directory, generated host-local `.env`, containers and volumes are retained for diagnosis. An operator must inspect the failure and decide the recovery action.
+
+## Automated source gates
+
+Dispatch requires an exact 40-character commit SHA; movable branch and tag names are refused. Before transferring code, the workflow verifies:
+
+1. The source commit is an ancestor of `main`, `main` reports `protected: true` through the GitHub API, and the commit is associated with a merged, same-repository pull request targeting `main`; an unprotected branch, open feature/qualification branch and direct-push-only commit are refused.
+2. The latest `AIOps quality gates` run for that exact SHA completed successfully.
+3. The latest `Debian 12 and 13 installation and runtime qualification` run for that exact SHA completed successfully.
+4. Both workflow runs originate from this repository and the expected workflow paths.
+
+The check is implemented and unit-tested in `scripts/verify_clean_debian_source.py`; it also requires a merged same-repository PR association for the source commit. The GitHub token used for these checks has read-only Contents, Actions and Pull Requests permissions. The gate requires the GitHub API's `main.protected == true` signal and merged-PR provenance. Repository administrators must still verify that the enabled ruleset requires the intended reviews and checks. The SSH private key and known-hosts value remain repository secrets and are never written to the repository or artifact.
 
 ## GitHub configuration
 
 Configure these repository-level Actions secrets (Settings → Secrets and variables → Actions):
-   - `DEPLOY_SSH_HOST`: DNS name or IP of the clean Debian 12 host.
-   - `DEPLOY_SSH_USER`: non-root account with Docker access.
-   - `DEPLOY_SSH_PRIVATE_KEY`: private key dedicated to this workflow.
-   - `DEPLOY_SSH_KNOWN_HOSTS`: pre-verified SSH host-key line(s), obtained out-of-band.
-Do not use `ssh-keyscan` in the workflow as a trust-on-first-use substitute. The SSH account must have sufficient disk space (>8 GiB per current preflight), Docker Engine and Compose v2 already installed, and permission to create the selected target path.
+
+- `DEPLOY_SSH_HOST`: DNS name or IP of a disposable clean Debian 12 host.
+- `DEPLOY_SSH_USER`: must be the non-root Linux account `aiops`.
+- `DEPLOY_SSH_PRIVATE_KEY`: private key dedicated to this workflow.
+- `DEPLOY_SSH_KNOWN_HOSTS`: pre-verified SSH host-key line(s), obtained out-of-band.
+
+Do not use `ssh-keyscan` in the workflow as a trust-on-first-use substitute. The target must have Docker Engine and Compose v2 already installed, more than 8 GiB free, and a writable `/home/aiops` parent directory.
 
 Never put the private key or host credentials in repository files, workflow inputs, or deployment artifacts.
 
 ## Run
 
-From GitHub Actions, select **Automated clean Debian deployment** and manually dispatch it with:
-- `source_ref`: reviewed branch, tag or immutable commit SHA;
-- `target_root`: absolute path that does not yet exist, for example `/home/aiops/aiops2-v8`.
+From GitHub Actions, dispatch **Automated clean Debian deployment** with:
 
-The workflow checks the host is Debian 12, the SSH user is not root, Docker/Compose are usable, free space is sufficient and the target path is absent. It then transfers a source archive excluding `.git`, `.env`, Python bytecode and caches.
+- `source_sha`: exact commit SHA that has both required CI workflows green and belongs to an approved branch.
+- `target_root`: a new path matching `/home/aiops/aiops2-clean-<label>`.
 
-The remote command runs `bash deploy/install.sh`. That script generates unique secrets on the target (or preserves an existing `.env`; however, the target-path guard means a new target is expected), validates secrets, checks Compose, builds images, starts the stack, runs `tests/qualification.sh` and `tests/synthetic-e2e.sh`.
+The workflow checks the host is Debian 12, the SSH user is `aiops` and not root, Docker/Compose are usable, no AIOps2-prefixed containers/volumes/networks exist, free space is sufficient and the target path is absent. It then transfers a source archive excluding `.git`, `.env`, Python bytecode and caches.
 
-A successful workflow uploads:
-- source commit SHA and run identity;
-- qualification result;
-- sanitized Compose service status.
+The remote command runs `bash deploy/install.sh`. That script generates unique secrets on the target, validates secrets, checks Compose, builds images, starts the stack, runs `tests/qualification.sh` and runs the synthetic E2E only when the REAL provider is explicitly configured.
 
-The artifact must never contain `.env`, private keys, tokens, database dumps or raw model prompts.
+A successful workflow uploads the source commit SHA and run identity, qualification result and sanitized Compose service status. Artifacts must never contain `.env`, private keys, tokens, database dumps or raw model prompts.
 
-## What this workflow does not yet automate
+## What this workflow does not automate
 
 - In-place upgrades of an existing AIOps2 installation.
+- Deployment to the current SRV-DEB-05 Debian 13 stack.
 - Database schema upgrades on existing PostgreSQL/MariaDB volumes.
 - Consistent backup of PostgreSQL, MariaDB, GLPI documents, Temporal, n8n, Grafana and Prometheus state.
 - Restore drills and RPO/RTO proof.
 - Automatic application rollback after database migrations.
 - Immutable GHCR image publication and digest-based promotion.
-- NIM/Nemotron application-level qualification; the deployment's generic qualification does not prove NIM is connected.
+- NIM/Nemotron application-level qualification unless the real provider is separately configured and tested.
 - GLPI/OIDC external integration qualification unless those integrations are separately configured and tested.
 
-These are separate release gates. Do not point this first-install workflow at an existing production directory or mount/copy SRV-DEB-05 volumes.
+These are separate release gates. Never point this first-install workflow at an existing installation or mount/copy SRV-DEB-05 volumes.
 
 ## Acceptance test
 
 Before using the workflow on a customer or development host:
+
 - [ ] Configure the four repository-level Actions secrets.
-- [ ] Provision a disposable Debian 12 host with a dedicated non-root Docker user.
+- [ ] Provision a disposable Debian 12 host with a dedicated `aiops` account.
 - [ ] Pre-verify and pin its SSH host key in `DEPLOY_SSH_KNOWN_HOSTS`.
-- [ ] Confirm the target directory does not exist.
-- [ ] Run workflow with an immutable reviewed SHA.
-- [ ] Verify all services and synthetic E2E pass.
+- [ ] Confirm the host has no AIOps2-prefixed containers, volumes or networks.
+- [ ] Run workflow with an exact immutable SHA and verify both exact-head CI gates.
+- [ ] Verify all services and synthetic E2E pass where the REAL provider is configured.
 - [ ] Inspect the uploaded manifest and service list for secrets.
-- [ ] Destroy the disposable host only after retaining required evidence; never delete persistent volumes as an automatic failure handler.
+- [ ] Retain evidence; never delete persistent volumes as an automatic failure handler.
 
 ## Current status
 
-The workflow is implemented as a guarded first-install path with no human approval gate. It is operational once the four repository-level SSH secrets and a disposable Debian 12 target are provisioned. No SSH deployment was performed while authoring this workflow because no target credentials or host were available.
+The workflow is an automated, CI-gated first-install path. It still requires the four repository-level SSH secrets and a disposable Debian 12 target. No SSH deployment is performed by CI qualification, and no deployment to SRV-DEB-05 is authorized by this workflow.

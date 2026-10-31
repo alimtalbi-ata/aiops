@@ -5,6 +5,7 @@ on:
     branches: [main, test/debian12-install-runtime-qualification-20261031]
   push:
     branches:
+      - main
       - "test/debian12-install-runtime-qualification-20261031"
       - "integration/real-ai-runtime-demo-20261031"
 

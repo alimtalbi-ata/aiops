@@ -7,19 +7,20 @@ on:
       - "docs/operations/APPROVED-CLEAN-DEBIAN-DEPLOYMENT.md"
   workflow_dispatch:
     inputs:
-      source_ref:
-        description: Branch, tag or immutable commit SHA to deploy
+      source_sha:
+        description: Exact 40-character commit SHA; must be in an approved branch and have both exact-head CI workflows green
         required: true
         type: string
-        default: test/debian12-install-runtime-qualification-20261031
       target_root:
         description: New, empty installation directory on the Debian host
         required: true
         type: string
-        default: /home/aiops/aiops2-v8
+        default: /home/aiops/aiops2-clean-v1
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
 
 concurrency:
   group: aiops2-clean-debian-deployment
@@ -38,25 +39,23 @@ jobs:
 
   deploy-clean-host:
     if: github.event_name == 'workflow_dispatch'
-    name: Deploy and qualify a clean Debian 12 host without approval gate
+    name: Deploy and qualify a CI-qualified clean Debian 12 host
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Validate deployment inputs
         env:
-          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
           TARGET_ROOT: ${{ inputs.target_root }}
         run: |
           set -Eeuo pipefail
-          [[ -n "$SOURCE_REF" ]] || { echo "source_ref is required"; exit 2; }
-          [[ "$TARGET_ROOT" == /* && "$TARGET_ROOT" != "/" ]] || { echo "target_root must be an absolute non-root path"; exit 2; }
-          case "$TARGET_ROOT" in *".."*|*" "*|*$'\n'*) echo "unsafe target_root"; exit 2 ;; esac
-          [[ "$TARGET_ROOT" =~ ^/[A-Za-z0-9_./-]+$ ]] || { echo "target_root contains unsupported characters"; exit 2; }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "BLOCKED|source_sha_must_be_full_40_character_commit"; exit 2; }
+          [[ "$TARGET_ROOT" =~ ^/home/aiops/aiops2-clean-[A-Za-z0-9_-]+$ ]] || { echo "BLOCKED|target_root_must_be_dedicated_aiops_clean_install_path"; exit 2; }
 
       - name: Checkout selected source revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -66,7 +65,14 @@ jobs:
           set -Eeuo pipefail
           SHA="$(git rev-parse HEAD)"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "Deploying source SHA: $SHA"
+          [[ "$SHA" == "${{ inputs.source_sha }}" ]] || { echo "BLOCKED|checkout_sha_mismatch"; exit 2; }
+          echo "Deploying exact source SHA: $SHA"
+
+      - name: Verify approved source ancestry and exact-head CI
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/verify_clean_debian_source.py
 
       - name: Validate repository SSH secrets and prepare archive
         env:
@@ -97,11 +103,24 @@ jobs:
           ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$SSH_USER@$SSH_HOST" "TARGET_ROOT='$TARGET_ROOT' bash -s" <<'REMOTE'
           set -Eeuo pipefail
           [[ "$(id -u)" -ne 0 ]] || { echo "BLOCKED|run_as_non_root"; exit 2; }
+          [[ "$(id -un)" == "aiops" ]] || { echo "BLOCKED|ssh_user_must_be_aiops"; exit 2; }
           . /etc/os-release
           [[ "${ID:-}" == debian && "${VERSION_ID:-}" == 12 ]] || { echo "BLOCKED|unsupported_os|${PRETTY_NAME:-unknown}|expected=Debian12"; exit 2; }
           command -v docker >/dev/null || { echo "BLOCKED|docker_missing"; exit 2; }
           docker compose version >/dev/null || { echo "BLOCKED|compose_missing"; exit 2; }
           docker info >/dev/null || { echo "BLOCKED|docker_access_denied"; exit 2; }
+          if docker ps -a --format '{{.Names}}' | grep -Eq '^aiops2(-|$)'; then
+            echo "BLOCKED|existing_aiops2_containers_on_target"
+            exit 2
+          fi
+          if docker volume ls --format '{{.Name}}' | grep -Eq '^aiops2([-_]|$)'; then
+            echo "BLOCKED|existing_aiops2_volumes_on_target"
+            exit 2
+          fi
+          if docker network ls --format '{{.Name}}' | grep -Eq '^aiops2([-_]|$)'; then
+            echo "BLOCKED|existing_aiops2_networks_on_target"
+            exit 2
+          fi
           PARENT="$(dirname "$TARGET_ROOT")"
           [[ -d "$PARENT" && -w "$PARENT" ]] || { echo "BLOCKED|target_parent_missing_or_not_writable|$PARENT"; exit 2; }
           FREE_KB="$(df -Pk "$PARENT" | awk 'NR==2{print $4}')"
