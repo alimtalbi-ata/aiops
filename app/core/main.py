@@ -1,4 +1,4 @@
-import os,json,requests,datetime,hashlib,hmac,uuid,re
+import os,json,requests,datetime,hashlib,hmac,uuid,re,math
 from shared.safety import canonical_sha256, gold_set_eligible, critical_approval_complete
 from fastapi import FastAPI,HTTPException,Header
 from fastapi.responses import JSONResponse
@@ -382,6 +382,46 @@ def get_run(rid:str):
         e=c.execute('select sequence,stage,event_type,status,occurred_at,evidence_ids,decision,confidence,payload from aiops.run_events where run_id=%s order by sequence',(rid,)).fetchall();s=c.execute('select stage,state,attempt,started_at,completed_at,last_error from aiops.run_stage_state where run_id=%s order by array_position(%s::text[],stage)',(rid,STAGES)).fetchall();g=c.execute('select stage,state,decision,reason,evidence_ids,evaluated_at from aiops.gates where run_id=%s order by evaluated_at',(rid,)).fetchall()
     k=['run_id','incident_id','mode','scenario_id','status','version','overall_confidence','created_at','started_at','completed_at'];ek=['sequence','stage','event_type','status','occurred_at','evidence_ids','decision','confidence','payload'];sk=['stage','state','attempt','started_at','completed_at','last_error'];gk=['stage','state','decision','reason','evidence_ids','evaluated_at'];return {'run':dict(zip(k,r)),'events':[dict(zip(ek,x)) for x in e],'stages':[dict(zip(sk,x)) for x in s],'gates':[dict(zip(gk,x)) for x in g]}
 
+def bounded_model_invocation(value):
+    """Persist only bounded provider telemetry; never store request/response bodies or credentials."""
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    invocation_id = value.get('invocation_id')
+    if isinstance(invocation_id, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,96}', invocation_id):
+        out['invocation_id'] = invocation_id
+    for key in ('request_count', 'retry_count', 'prompt_tokens', 'completion_tokens',
+                'total_tokens', 'cached_tokens', 'reasoning_tokens'):
+        item = value.get(key)
+        if type(item) is int and 0 <= item <= 1000000000:
+            out[key] = item
+        else:
+            out[key] = None
+    latency = value.get('latency_ms')
+    if type(latency) in (int, float) and math.isfinite(float(latency)) and 0 <= float(latency) <= 3600000:
+        out['latency_ms'] = round(float(latency), 2)
+    else:
+        out['latency_ms'] = None
+    usage_source = value.get('usage_source')
+    out['usage_source'] = usage_source if usage_source in ('provider_reported', 'unavailable') else 'unavailable'
+    status = value.get('status')
+    out['status'] = status if status in ('success', 'failed') else 'unknown'
+    error_class = value.get('error_class')
+    if isinstance(error_class, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]{0,63}', error_class):
+        out['error_class'] = error_class
+    cost = value.get('cost_usd')
+    if type(cost) in (int, float) and math.isfinite(float(cost)) and 0 <= float(cost) <= 1000000:
+        out['cost_usd'] = round(float(cost), 8)
+    else:
+        out['cost_usd'] = None
+    pricing = value.get('pricing_source')
+    if isinstance(pricing, str) and len(pricing) <= 160 and not any(ord(ch) < 32 for ch in pricing):
+        out['pricing_source'] = pricing
+    else:
+        out['pricing_source'] = None
+    return out
+
+
 @app.post('/api/runs/{rid}/analysis-record')
 def persist_analysis(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
@@ -404,7 +444,7 @@ def persist_analysis(rid:str,x:dict,authorization:str|None=Header(default=None))
         if n!=len(evidence_ids): raise HTTPException(422,'analysis references unknown evidence')
         revision=c.execute('select coalesce(max(revision),0)+1 from aiops.analysis_records where run_id=%s',(rid,)).fetchone()[0]
         aid=new('ANL')
-        c.execute('insert into aiops.analysis_records(analysis_id,run_id,incident_id,idempotency_key,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(aid,rid,run[0],idem,revision,str(analysis.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),str(x.get('prompt_version','analyst-v2.0')),json.dumps(evidence_ids),evidence_hash,json.dumps(analysis),float(analysis.get('confidence',0)),'VALID'))
+        invocation=bounded_model_invocation(x.get('model_invocation'))\n        c.execute('insert into aiops.analysis_records(analysis_id,run_id,incident_id,idempotency_key,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status,model_invocation) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(aid,rid,run[0],idem,revision,str(analysis.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),str(x.get('prompt_version','analyst-v2.0')),json.dumps(evidence_ids),evidence_hash,json.dumps(analysis),float(analysis.get('confidence',0)),'VALID',json.dumps(invocation)))
     return {'analysis_id':aid,'revision':revision,'evidence_set_hash':evidence_hash,'idempotent':False}
 
 @app.post('/api/runs/{rid}/critique-record')
@@ -426,7 +466,7 @@ def persist_critique(rid:str,x:dict,authorization:str|None=Header(default=None))
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids):raise HTTPException(422,'critique_references_unknown_evidence')
         cid=new('CRT')
-        c.execute('insert into aiops.critique_records(critique_id,idempotency_key,analysis_id,run_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(cid,idem,aid,rid,str(critique.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),bool(critique.get('validated',False)),json.dumps(critique.get('issues',[])),json.dumps(evidence_ids),json.dumps(critique),float(critique.get('diagnostic_confidence',0))))
+        invocation=bounded_model_invocation(x.get('model_invocation'))\n        c.execute('insert into aiops.critique_records(critique_id,idempotency_key,analysis_id,run_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence,model_invocation) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(cid,idem,aid,rid,str(critique.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),bool(critique.get('validated',False)),json.dumps(critique.get('issues',[])),json.dumps(evidence_ids),json.dumps(critique),float(critique.get('diagnostic_confidence',0)),json.dumps(invocation)))
     return {'critique_id':cid,'idempotent':False}
 
 @app.post('/api/runs/{rid}/policy-record')
@@ -475,13 +515,13 @@ def get_ai_ledger(rid:str,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
         if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
-        analyses=c.execute('select analysis_id,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status,created_at from aiops.analysis_records where run_id=%s order by revision',(rid,)).fetchall()
-        critiques=c.execute('select critique_id,analysis_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence,created_at from aiops.critique_records where run_id=%s order by created_at',(rid,)).fetchall()
+        analyses=c.execute('select analysis_id,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status,model_invocation,created_at from aiops.analysis_records where run_id=%s order by revision',(rid,)).fetchall()
+        critiques=c.execute('select critique_id,analysis_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence,model_invocation,created_at from aiops.critique_records where run_id=%s order by created_at',(rid,)).fetchall()
         decisions=c.execute('select policy_decision_id,analysis_id,critique_id,policy_version,input_hash,decision,state,reasons,proof_snapshot,created_at from aiops.policy_decisions where run_id=%s order by created_at',(rid,)).fetchall()
     return {
       'run_id':rid,
-      'analyses':[dict(zip(['analysis_id','revision','contract_version','provider','model','prompt_version','evidence_ids','evidence_set_hash','output','confidence','status','created_at'],row)) for row in analyses],
-      'critiques':[dict(zip(['critique_id','analysis_id','contract_version','provider','model','validated','issues','evidence_ids','output','diagnostic_confidence','created_at'],row)) for row in critiques],
+      'analyses':[dict(zip(['analysis_id','revision','contract_version','provider','model','prompt_version','evidence_ids','evidence_set_hash','output','confidence','status','model_invocation','created_at'],row)) for row in analyses],
+      'critiques':[dict(zip(['critique_id','analysis_id','contract_version','provider','model','validated','issues','evidence_ids','output','diagnostic_confidence','model_invocation','created_at'],row)) for row in critiques],
       'policy_decisions':[dict(zip(['policy_decision_id','analysis_id','critique_id','policy_version','input_hash','decision','state','reasons','proof_snapshot','created_at'],row)) for row in decisions]
     }
 
