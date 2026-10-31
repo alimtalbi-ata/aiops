@@ -142,3 +142,9 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 | T5 LIVE | NO-GO | No identity, executor fencing, runtime HITL/outbox or operator approval |
 
 The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte ZIP, SHA256 `01f97936ab67e68c4864ad1384d411a452fb78c57dcaeb4bdd6784bb3d719f6e`, CRC PASS, one JSON report, `result=FAIL`, `effect_receipts=0`. No production claim. `RELEASE_STABLE=NO_GO`.
+
+### Exact-head CI recheck — 2026-10-31 UTC
+
+#201 `e6f9ad656d3b6f92ef065f7aec13f3d1b2ca3d74`: [Quality 41155594473](https://github.com/alimtalbi-ata/aiops/actions/runs/41155594473) **COMPLETED SUCCESS 3/3 jobs** (policy-and-static, core-postgres-noc-real-integration, grafana-real-integration). Logs: Portal bootstrap HTTP **6/6**, Run API/HTML **32/32**, Run-link JS **8/8**, bootstrap DOM JS **5/5**, Chromium synthetic **6/6**, cumulative-kit guard **12/12**. T0 **GO limited** on this exact head; **T1 still BLOCKED**, T2 NOT_QUALIFIED, T3 NOT_ATTESTED, T4/T5 NO-GO.
+
+[Artifact 13024589352](https://github.com/alimtalbi-ata/aiops/actions/runs/41155594473/artifacts/13024589352) downloaded and inspected: ZIP 237,689 bytes, SHA256 `451544e07a6da6a5284705fad6947cf5c1be3b917c1a1dfbb7e6fe93c9ea5b87`, 2/2 ZIP members CRC PASS; screenshot PNG SHA256 `8a1720c3851833525d0e817a157d24826ff431fc84ce1d9d9742fd5595ebcaca` matches metadata. `source_head_sha=e6f9ad65…`, `base_sha=27deb9b1…`, `checkout_sha=58c8d9b5…`, `runtime_authenticated=false`, `glpi_ticket_id=null`, `production_qualified=false`. This is a CI-simulated screenshot, **not** a T2 runtime receipt or cumulative kit.
