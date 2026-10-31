@@ -35,7 +35,7 @@ class XrefPostgresTests(unittest.TestCase):
                               "values(%s,%s,%s,%s,true,%s,%s)",
                               (kind,rid,tenant,"EVT-OWNER-"+suffix,cls.now-timedelta(seconds=30),
                                cls.now-timedelta(seconds=10)))
-            for ticket in ("789","790","791","792","795","796","797"):
+            for ticket in ("789","790","791","792","795","796","797","798"):
                 c.execute("insert into aiops.tenant_resource_ownership "
                           "(resource_kind,resource_id,tenant_id,source_event_id,verified,observed_at,known_at) "
                           "values('glpi_ticket',%s,'TEN-A','EVT-OWNER-A',true,%s,%s)",
@@ -57,6 +57,12 @@ class XrefPostgresTests(unittest.TestCase):
             cls.insert(c,"797","REVERSED1",known_at=cls.now-timedelta(seconds=5))
             cls.insert(c,"797","REVERSED2",mapping_version=2,
                        supersedes_association_id="XREF-REVERSED1")
+            cls.insert(c,"798","BACKDATE1",observed_at=cls.now-timedelta(seconds=20),
+                       known_at=cls.now-timedelta(seconds=15))
+            cls.insert(c,"798","BACKDATE2",mapping_version=2,
+                       supersedes_association_id="XREF-BACKDATE1",
+                       observed_at=cls.now-timedelta(seconds=25),
+                       known_at=cls.now-timedelta(seconds=5))
 
     @classmethod
     def insert(cls,c,ticket,suffix,**changes):
@@ -139,7 +145,7 @@ class XrefPostgresTests(unittest.TestCase):
         self.hidden(r)
 
     def test_postgres_signed_history_chronology_fail_closed(self):
-        for ticket in ("796","797"):
+        for ticket in ("796","797","798"):
             with self.subTest(ticket=ticket):
                 r=self.read(ticket=ticket,expected_run_id="RUN-XREF-A")
                 self.assertEqual(r.status_code,200,r.text)
