@@ -606,7 +606,7 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids):raise HTTPException(422,'proposal_references_unknown_evidence')
         old=c.execute('select proposal_id,proposal_revision,status from aiops.action_proposals where run_id=%s and proposal_hash=%s',(rid,digest)).fetchone()
-        if old:return {'proposal_id':old[0],'revision':old[1],'status':old[2],'proposal_hash':digest,'idempotent':True,'execution_allowed':False}
+        if old:return {'proposal_id':old[0],'revision':old[1],'status':old[2],'proposal_hash':digest,'idempotent':True,'execution_allowed':False,'effect_allowed':False}
         revision=c.execute('select coalesce(max(proposal_revision),0)+1 from aiops.action_proposals where run_id=%s',(rid,)).fetchone()[0]
         pid=new('ACT')
         expires=x.get('expires_at')
@@ -617,7 +617,7 @@ def create_action_proposal(rid:str,x:dict,authorization:str|None=Header(default=
             if expires<=datetime.datetime.now(datetime.timezone.utc):raise HTTPException(422,'proposal_expiry_must_be_future')
         else: expires=datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(minutes=30)
         c.execute('insert into aiops.action_proposals(proposal_id,run_id,analysis_id,critique_id,source_action_id,proposal_revision,target_ci_id,action_type,risk_tier,parameters,evidence_ids,preconditions,expected_postconditions,rollback_plan,proposal_hash,status,expires_at) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(pid,rid,analysis_id,critique_id,source_action_id,revision,target,action,risk,json.dumps(parameters),json.dumps(evidence_ids),json.dumps(preconditions),json.dumps(postconditions),json.dumps(rollback),digest,'PROPOSED',expires))
-    return {'proposal_id':pid,'revision':revision,'proposal_hash':digest,'status':'PROPOSED','expires_at':expires.isoformat(),'execution_allowed':False,'idempotent':False}
+    return {'proposal_id':pid,'revision':revision,'proposal_hash':digest,'status':'PROPOSED','expires_at':expires.isoformat(),'execution_allowed':False,'effect_allowed':False,'idempotent':False}
 
 @app.post('/api/proposals/{proposal_id}/approval')
 def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Header(default=None)):
@@ -655,7 +655,7 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
             old_scope=json.loads(old[6]) if isinstance(old[6],str) else old[6]
             old_audit=json.loads(old[7]) if isinstance(old[7],str) else old[7]
             if old[1]==proposal_id and old[2]==digest and old[3]==decision and old[4]==actor and old[5]==role and old_scope==scope and old_audit.get('revokes_approval_id')==requested_revoke_id:
-                return {'approval_id':old[0],'proposal_id':proposal_id,'decision':decision,'idempotent':True,'execution_allowed':False}
+                return {'approval_id':old[0],'proposal_id':proposal_id,'decision':decision,'idempotent':True,'execution_allowed':False,'effect_allowed':False}
             raise HTTPException(409,'approval_nonce_reuse')
         if decision=='REVOKE':
             if status!='APPROVED':raise HTTPException(409,'only_approved_proposals_can_be_revoked')
@@ -693,7 +693,7 @@ def record_proposal_approval(proposal_id:str,x:dict,authorization:str|None=Heade
                 (new('HDO'),proposal_id,rid,digest,proposal_revision,
                  delivery_decision,next_status,approval_id)
             )
-    return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'approval_count':approval_count,'approval_complete':approval_complete,'status':next_status,'execution_allowed':False,'idempotent':False}
+    return {'approval_id':approval_id,'proposal_id':proposal_id,'decision':decision,'proposal_hash':digest,'approval_count':approval_count,'approval_complete':approval_complete,'status':next_status,'execution_allowed':False,'effect_allowed':False,'idempotent':False}
 
 @app.post('/api/hitl/decision-outbox/claim')
 def claim_hitl_decision_outbox(x:dict,authorization:str|None=Header(default=None)):
@@ -738,7 +738,7 @@ def claim_hitl_decision_outbox(x:dict,authorization:str|None=Header(default=None
                     row
                 )))
     return {'items':items,'count':len(items),'delivery':'at-least-once',
-            'execution_allowed':False}
+            'execution_allowed':False,'effect_allowed':False}
 
 
 @app.post('/api/hitl/decision-outbox/{event_id}/delivered')
@@ -756,16 +756,23 @@ def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=
         if not row:
             raise HTTPException(404,'outbox_event_not_found')
         if row[0]=='DELIVERED':
-            return {'event_id':event_id,'status':'DELIVERED','idempotent':True}
+            # A lost ACK can be retried only with the original lease token.
+            # The DELIVERED row retains only its SHA-256 digest, not the secret.
+            if not row[1] or not hmac.compare_digest(
+                    str(row[1]),hashlib.sha256(token.encode()).hexdigest()):
+                raise HTTPException(409,'outbox_lease_lost_or_invalid')
+            return {'event_id':event_id,'status':'DELIVERED','idempotent':True,
+                    'execution_allowed':False,'effect_allowed':False}
         if (row[0]!='LEASED' or not row[1] or row[2] is not True
                 or not hmac.compare_digest(str(row[1]),token)):
             raise HTTPException(409,'outbox_lease_lost_or_invalid')
         c.execute(
             "update aiops.hitl_decision_outbox set status='DELIVERED',"
-            "delivered_at=now(),lease_owner=null,lease_token=null,lease_until=null,last_error=null "
-            "where event_id=%s",(event_id,)
+            "delivered_at=now(),lease_owner=null,lease_token=%s,lease_until=null,last_error=null "
+            "where event_id=%s",(hashlib.sha256(token.encode()).hexdigest(),event_id)
         )
-    return {'event_id':event_id,'status':'DELIVERED','idempotent':False}
+    return {'event_id':event_id,'status':'DELIVERED','idempotent':False,
+            'execution_allowed':False,'effect_allowed':False}
 
 
 @app.get('/api/hitl/decision-outbox/status')
@@ -776,7 +783,7 @@ def hitl_decision_outbox_status(authorization:str|None=Header(default=None)):
             'select status,count(*) from aiops.hitl_decision_outbox group by status order by status'
         ).fetchall()
     return {'counts':{status:count for status,count in rows},
-            'delivery':'at-least-once','execution_allowed':False}
+            'delivery':'at-least-once','execution_allowed':False,'effect_allowed':False}
 
 
 @app.post('/api/runs/{rid}/learning-cases')
