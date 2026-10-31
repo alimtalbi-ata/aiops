@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Debian installer shell syntax
+        run: bash -n scripts/install-debian-reporter.sh
       - name: Test Debian read-only reporter safety contracts
         run: |
           python3 -m py_compile scripts/debian-readonly-reporter.py tests/test_debian_readonly_reporter.py
