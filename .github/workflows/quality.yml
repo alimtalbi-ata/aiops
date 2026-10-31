@@ -1,6 +1,9 @@
 name: AIOps quality gates
 
 on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -32,6 +35,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_acme_san_payments_fixture_contract.py" -v
       - name: ACME graph-bound synthetic catalog and replay contract tests
         run: python -m unittest discover -s tests -p "test_acme_synthetic_incident_catalog.py" -v
+      - name: ACME pinned graph and catalog override type integrity regressions (3 tests)
+        run: python -m unittest discover -s tests -p "test_acme_fixture_override_types.py" -v
       - name: Generate pinned offline ACME replay and checksum
         run: |
           python tools/generate_acme_incidents.py --scenario REDUNDANT_SAN_PATH_LOSS --seed 20261018 --output "$RUNNER_TEMP/acme-synthetic-replay.json"
