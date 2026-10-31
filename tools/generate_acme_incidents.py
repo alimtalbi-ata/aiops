@@ -448,7 +448,7 @@ def twin_service_context_offline(manifest):
     if _git_blob(raw) != SEED_GIT_BLOB:
         raise ValueError("untrusted Twin node provenance")
     node_pattern = re.compile(
-        r"^\\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','([^']+)','[^']+',([1-5]),",
+        r"^\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','([^']+)','[^']+',([1-5]),",
         re.M,
     )
     rows = node_pattern.findall(raw.decode("utf-8"))
