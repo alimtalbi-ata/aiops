@@ -118,6 +118,7 @@ services:
       CORE_URL: http://aiops2-core:810
       TWIN_URL: http://aiops2-twin:811
       EVIDENCE_URL: http://aiops2-evidence:812
+      INTELLIGENCE_URL: http://aiops2-intelligence:817
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["814"]
     networks: [aiops2-control]
@@ -125,6 +126,7 @@ services:
       aiops2-core: {condition: service_healthy}
       aiops2-twin: {condition: service_healthy}
       aiops2-evidence: {condition: service_healthy}
+      aiops2-intelligence: {condition: service_healthy}
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:814/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-worker:
