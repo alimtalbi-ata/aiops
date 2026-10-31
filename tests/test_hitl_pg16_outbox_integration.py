@@ -121,33 +121,37 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
             self.assertEqual(c.execute("select count(*) from aiops.effect_receipts "
                                        "where proposal_id=%s", (proposal,)).fetchone()[0], 0)
 
-    def test_synthetic_approve_outbox_notification_is_not_authorization(self):
-        """Even an APPROVE-shaped Temporal notification cannot grant authority.
+    def test_synthetic_approve_cannot_create_outbox_authority(self):
+        """PostgreSQL rejects synthetic APPROVE before a deliverable event exists.
 
-        This deliberately seeds a synthetic, unverified approval in disposable
-        PostgreSQL; it does not exercise a real OIDC identity or HITL decision.
+        The approval fixture is deliberately unverified and DEMO-only.
+        A real OIDC human approval and LIVE lifecycle are not exercised.
         """
-        event, proposal = fixture(decision="APPROVE")
-        items = claim("ci-approve-is-not-authority")
-        self.assertEqual(len(items), 1)
-        item = items[0]
-        self.assertEqual((item["event_id"], item["decision"],
-                          item["source_status"], item["proposal_revision"]),
-                         (event, "APPROVE", "APPROVED", 1))
         with db() as c:
-            row = c.execute(
-                "select r.mode,a.actor_id,a.audit->>'identity_attested',"
-                "a.audit->>'synthetic' from aiops.hitl_decision_outbox o "
-                "join aiops.runs r on r.run_id=o.run_id "
-                "join aiops.approval_records a on a.approval_id=o.approval_id "
-                "where o.event_id=%s", (event,)).fetchone()
-        self.assertEqual(row, ("DEMO", "SYNTHETIC_UNVERIFIED", "false", "true"))
-        receipt = ack(event, item["lease_token"])
-        self.assertEqual((receipt["status"], receipt["idempotent"]),
-                         ("DELIVERED", False))
-        self.assertTrue(ack(event, item["lease_token"])["idempotent"])
-        self.assertEqual(claim("ci-approve-after-ack"), [])
-        self.no_effect(proposal)
+            before = (
+                c.execute("select count(*) from aiops.approval_records "
+                          "where decision='APPROVE' and actor_id='SYNTHETIC_UNVERIFIED'")
+                 .fetchone()[0],
+                c.execute("select count(*) from aiops.hitl_decision_outbox "
+                          "where decision='APPROVE' and run_id like 'CI-HITL-RUN-%'")
+                 .fetchone()[0],
+                c.execute("select count(*) from aiops.effect_receipts").fetchone()[0],
+            )
+        with self.assertRaises(psycopg.errors.RaiseException) as blocked:
+            fixture(decision="APPROVE")
+        self.assertIn("real action lifecycle requires LIVE run", str(blocked.exception))
+        with db() as c:
+            after = (
+                c.execute("select count(*) from aiops.approval_records "
+                          "where decision='APPROVE' and actor_id='SYNTHETIC_UNVERIFIED'")
+                 .fetchone()[0],
+                c.execute("select count(*) from aiops.hitl_decision_outbox "
+                          "where decision='APPROVE' and run_id like 'CI-HITL-RUN-%'")
+                 .fetchone()[0],
+                c.execute("select count(*) from aiops.effect_receipts").fetchone()[0],
+            )
+        self.assertEqual(after, before)  # Rejected transaction leaves no approval/outbox/effect.
+        self.assertEqual(claim("ci-no-synthetic-approve-delivery"), [])
 
     def test_concurrent_claim_single_winner(self):
         event, proposal = fixture()
