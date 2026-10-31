@@ -39,9 +39,14 @@ REQUIRED_PATHS = (
     "docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md",
     "docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md",
 )
+# Only explicit installation and rollback entrypoints satisfy source inventory.
+# deploy/aiops_release.py is audit-only and deploy/deploy-acme-p0.py is a
+# partial four-service transaction; neither is a cumulative-kit rollback.
+# Presence of these paths is NOT evidence that an operation was exercised.
 ENTRYPOINT_ALTERNATIVES = {
-    "install_upgrade_entrypoint": ("deploy/aiops_release.py", "deploy/deploy-acme-p0.py"),
-    "rollback_entrypoint": ("deploy/aiops_release.py", "deploy/deploy-acme-p0.py"),
+    "install_entrypoint": ("deploy/install.sh", "deploy/release_install.py"),
+    "upgrade_entrypoint": ("deploy/upgrade.sh", "deploy/release_upgrade.py"),
+    "rollback_entrypoint": ("deploy/rollback.sh", "deploy/release_rollback.py"),
 }
 SHA = re.compile(r"^[0-9a-f]{40}$")
 CHECKSUM = re.compile(r"^([0-9a-f]{64})  (?:\./)?(.+)$")
@@ -80,6 +85,20 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
             if errors:
                 return {"status": "FAIL", "errors": sorted(set(errors)), "checksums_verified": 0, "source_files_verified": 0}
             files = set(names)
+            # Migration order is a single repository-wide namespace. Two
+            # distinct SQL files sharing an ordinal (for example 009_*)
+            # cannot both be promoted by a checksum-valid release archive.
+            migration_ordinals = {}
+            for migration in sorted(p for p in files if p.startswith("db/migrations/") and p.endswith(".sql")):
+                match = re.fullmatch(r"db/migrations/([0-9]{3})_[^/]+\.sql", migration)
+                if match is None:
+                    errors.append("MIGRATION_NAME_INVALID:" + migration)
+                    continue
+                ordinal = match.group(1)
+                if ordinal in migration_ordinals:
+                    errors.append("MIGRATION_ORDINAL_DUPLICATE:" + ordinal)
+                else:
+                    migration_ordinals[ordinal] = migration
             for path in required_paths:
                 if path not in files:
                     errors.append("REQUIRED_MISSING:" + path)
