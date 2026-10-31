@@ -110,6 +110,27 @@ class XrefPostgresTests(unittest.TestCase):
         r=self.read(ticket="792")
         self.assertEqual(r.json()["status"],"VERIFIED")
         self.assertEqual(r.json()["mapping_version"],2)
+    def test_postgres_owner_source_and_future_timestamp_fail_closed(self):
+        # Real disposable PostgreSQL rows, never a production GLPI/DB write.
+        with psycopg.connect(self.url) as c:
+            for ticket,source_id,observed,known in (
+                ("793","EVT-OWNER-FUTURE",self.now+timedelta(minutes=2),
+                 self.now+timedelta(minutes=3)),
+                ("794","",self.now-timedelta(seconds=30),
+                 self.now-timedelta(seconds=10)),
+            ):
+                c.execute("insert into aiops.tenant_resource_ownership "
+                          "(resource_kind,resource_id,tenant_id,source_event_id,verified,observed_at,known_at) "
+                          "values('glpi_ticket',%s,'TEN-A',%s,true,%s,%s)",
+                          ("GLPI-A:"+ticket,source_id,observed,known))
+                self.insert(c,ticket,"OWNER-"+ticket)
+        for ticket,status in (("793","CONFLICT"),("794","UNKNOWN")):
+            with self.subTest(ticket=ticket):
+                r=self.read(ticket=ticket)
+                self.assertEqual(r.status_code,200,r.text)
+                self.assertEqual(r.json()["status"],status)
+                self.hidden(r)
+
     def test_postgres_immutability_and_idempotency(self):
         with self.assertRaises(psycopg.Error):
             with psycopg.connect(self.url) as c:
