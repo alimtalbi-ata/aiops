@@ -208,3 +208,16 @@ This is a **source integration in a Draft PR**, not a host deployment. The PR ha
 
 - Integration PR: https://github.com/alimtalbi-ata/aiops/pull/215
 - First exact-head quality workflow: https://github.com/alimtalbi-ata/aiops/actions/runs/41221642043
+
+
+### CI integration findings and corrections
+
+The first exact-head runs exposed genuine integration conflicts; they were not suppressed:
+
+- Porting the newer Policy module changed the already-qualified synthetic decision contract (P1 DEMO/REPLAY/STORY behavior). Restored the PR #214 Policy implementation, preserving the existing synthetic simulation contract and LIVE fail-closed posture. The newer autonomy/fencing modules remain unused until separately reconciled with the existing policy tests.
+- The Core integration test exposed a missing regex import in the preserved signed NOC projection; added the import.
+- The AST-isolated Core INGEST test executes only the `create()` function body and therefore needs its shared `initial_stage_state` collaborator injected explicitly. Updated the test harness rather than changing runtime behavior.
+- The signed NOC read projection from PR #214 was appended to the newer Core main so the existing NOC read security contract remains intact.
+- The first failures from missing policy modules were fixed by porting their source files and making the execution-fence import work both as a service package and under the `app.policy` test import path.
+
+Exact-head requalification is running again after these corrections. Prior failed runs remain visible in GitHub history; they are not being relabelled as PASS.
