@@ -257,11 +257,35 @@ def replay(scenario_key="REDUNDANT_SAN_PATH_LOSS", seed=20261018,
 
 
 def correlate_offline(events):
-    """Dedup identical source events; never issue a tenant-qualified incident."""
-    if not events or any(e.get("provenance") != "SYNTHETIC_FIXTURE" or
+    """Dedup *fixture-only* events; reject untrusted IDs, CIs and evidence.
+
+    This is not a Core correlation or tenant-authorization API. Validation is
+    deliberately fail-closed even though the output is never publishable.
+    """
+    if not events or any(not isinstance(e, dict) or
+                         e.get("provenance") != "SYNTHETIC_FIXTURE" or
                          e.get("tenant_id") is not None or
                          e.get("tenant_scope") != "UNKNOWN" for e in events):
         raise ValueError("tenant/identity not qualified; no cross-tenant correlation")
+    nodes = load_graph()["nodes"]  # pinned SQL blob, not caller-supplied CMDB
+    for event in events:
+        if (event.get("source") != SOURCE or event.get("synthetic") is not True or
+                event.get("id_authority") != "LOCAL_FIXTURE_ONLY" or
+                event.get("ci_id") not in nodes or
+                event.get("evidence_id") is not None or
+                event.get("observed_impact") != "UNKNOWN" or
+                event.get("freshness") != "SYNTHETIC_CLOCK_ONLY" or
+                not isinstance(event.get("payload"), dict) or
+                not re.fullmatch(r"SYN-EVT-[0-9A-F]{20}", str(event.get("source_event_id", ""))) or
+                not re.fullmatch(r"SYN-DEDUP-[0-9A-F]{20}", str(event.get("dedupe_key", ""))) or
+                not re.fullmatch(r"SYN-CORR-[0-9A-F]{20}", str(event.get("correlation_key", "")))):
+            raise ValueError("untrusted synthetic event identity, CI or evidence")
+        if (event.get("event_time") != event.get("observed_at") or
+                any(not isinstance(event.get(k), str) or
+                    not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", event[k])
+                    for k in ("event_time", "observed_at", "known_at")) or
+                synthetic_freshness(event) != "SYNTHETIC_CLOCK_ONLY"):
+            raise ValueError("stale or invalid synthetic event chronology")
     keys = {e["correlation_key"] for e in events}
     if len(keys) != 1:
         raise ValueError("unrelated scenarios must not be correlated")
