@@ -367,24 +367,24 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn("credentials: 'same-origin'", js.text)
         self.assertIn("portal-read-token", js.text)
 
-    def test_same_origin_session_exchange_sets_short_lived_httponly_cookie_and_opens_page(self):
-        response = self.client.post(
-            "/api/portal/run-session",
-            headers={"Authorization": "Bearer " + TOKEN, "Origin": "http://testserver",
-                     "X-Portal-Run-ID": RID},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["state"], "READ_ONLY_SESSION_CREATED")
-        cookie = response.headers["set-cookie"]
-        self.assertIn("httponly", cookie.lower())
-        self.assertIn("samesite=strict", cookie.lower())
-        self.assertIn("path=/runs", cookie.lower())
-        self.assertIn("max-age=300", cookie.lower())
-        self.assertNotIn(TOKEN, cookie)
-        self.assertNotIn("; secure", cookie.lower())
-        with patch.object(acme_run_detail, "_read_core_run", return_value=run()) as core:
+    def test_authenticated_unqualified_session_never_issues_cookie_or_reads_core(self):
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("no Core read")) as core:
+            response = self.client.post(
+                "/api/portal/run-session",
+                headers={"Authorization": "Bearer " + TOKEN, "Origin": "http://testserver",
+                         "X-Portal-Run-ID": RID, "X-Tenant-ID": "foreign",
+                         "X-Actor-ID": "forged"},
+            )
             page = self.client.get("/runs/" + RID)
-        self.assertEqual(page.status_code, 503)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertFalse(response.json()["tenant_acl_qualified"])
+        self.assertNotIn("set-cookie", response.headers)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        self.assertEqual(page.status_code, 401)
         self.assertIn("Requested Run — NOT VERIFIED", page.text)
         core.assert_not_called()
 
@@ -408,6 +408,8 @@ class RunDetailTests(unittest.TestCase):
                               "Origin": "https://untrusted.example", "X-Portal-Run-ID": RID}, 403),
             ("invalid_run", {"Authorization": "Bearer " + TOKEN,
                              "X-Portal-Run-ID": "RUN-../foreign"}, 422),
+            ("valid_but_unqualified", {"Authorization": "Bearer " + TOKEN,
+                                       "X-Portal-Run-ID": RID}, 503),
         )
         for label, headers, expected in cases:
             with self.subTest(label=label):
@@ -457,14 +459,25 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         core.assert_not_called()
 
-    def test_session_cookie_can_be_secure_when_portal_is_behind_tls(self):
-        with patch.dict(os.environ, {"AIOPS_PORTAL_COOKIE_SECURE": "true"}):
-            response = self.client.post(
+    def test_legacy_signed_cookie_is_never_actor_tenant_authority(self):
+        # A cookie minted by an older Portal version remains cryptographically
+        # valid, but must not authenticate the Run page without an ACL.
+        cookie = acme_run_detail._issue_session(RID)
+        self.assertTrue(acme_run_detail._valid_session(cookie, RID))
+        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("no Core read")) as core:
+            page = self.client.get("/runs/" + RID)
+            exchange = self.client.post(
                 "/api/portal/run-session",
-                headers={"Authorization": "Bearer " + TOKEN, "X-Portal-Run-ID": RID},
+                headers={"Authorization": "Bearer " + TOKEN,
+                         "X-Portal-Run-ID": RID},
             )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("; secure", response.headers["set-cookie"].lower())
+        self.assertEqual(page.status_code, 401)
+        self.assertEqual(exchange.status_code, 503)
+        self.assertNotIn("set-cookie", exchange.headers)
+        self.assertEqual(exchange.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        core.assert_not_called()
 
     def test_session_exchange_requires_valid_run_scope_before_cookie(self):
         with patch.object(acme_run_detail, "_read_core_run",
