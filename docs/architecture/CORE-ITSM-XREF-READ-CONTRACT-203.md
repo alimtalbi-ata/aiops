@@ -156,3 +156,8 @@ Core owner / #203: inspect actual schema, implement audited xref persistence, te
 - The Core-owned `shared.core_itsm_xref_read.resolve_ticket_run` contract consumer now accepts such negative responses only when the trusted transport reports `authenticated=True` **and** `tenant_acl_checked=True`. Any *present* contradictory tenant becomes `UNAUTHORIZED`; contradictory instance/ticket becomes `UNKNOWN`. None of these responses exposes `run_id`, `incident_id` or `ticket_id`.
 - Positive `VERIFIED` remains strict: canonical tenant/instance/ticket identifiers and all provenance/read-back/temporal requirements must be present and exact. An ID-less `VERIFIED` response is rejected.
 - Adversarial mock-contract regression tests cover ID-less `STALE`, `CONFLICT`, `UNKNOWN`, missing transport auth/ACL, explicit wrong scope and ID-less fake `VERIFIED`. This fixes contract semantics only; no real GLPI ticket/CI read-back, IdP, production DB or authenticated integrated #201/#205 journey is implied.
+
+
+### Evidence timestamp parity with Core endpoint
+
+The injectable Core consumer receives a path-only `core_get`; it does **not** forward `evidence_known_at` as an HTTP query parameter. It therefore performs its own fail-closed UTC preflight **after trusted tenant authentication/ACL and before invoking Core**: any future Evidence timestamp is invalid, and Evidence older than five minutes yields `STALE` with all business identifiers hidden and no Core request. The boundary at exactly five minutes is accepted. A signed positive Core read-back cannot launder stale Evidence. This is a contract-level defense, not a real Evidence-store read or source authenticity proof.
