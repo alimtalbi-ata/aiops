@@ -42,7 +42,7 @@ if ! grep -Fq "$CRON_MARKER" <<<"$CURRENT"; then
   { printf '%s\n' "$CURRENT"; printf '%s\n' "$CRON_LINE"; } | crontab -
 fi
 echo "AIOPS2_DEBIAN_REPORTER_INSTALLED=1"
-echo "SCHEDULE=* * * * * (collection every minute; GitHub publication every 15 minutes when token is configured)"
+echo "SCHEDULE=* * * * * (collection every minute; GitHub publication every 5 minutes when token is configured)"
 if [[ ! -f "$TOKEN" ]]; then
   echo "NOTICE: local collection is active; configure $TOKEN (mode 600) to enable GitHub publication."
 fi
