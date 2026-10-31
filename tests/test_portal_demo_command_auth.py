@@ -118,10 +118,23 @@ class DemoOperatorBoundaryTests(unittest.TestCase):
         self.assertNotIn("private-core-host-secret", r.text)
         upstream.assert_not_called()
 
+    def test_framework_generated_405_and_422_also_have_security_headers(self):
+        # FastAPI emits these responses before reaching route auth handlers.
+        for method, path, kwargs, expected in (
+            ("get", "/api/demo", {}, 405),
+            ("put", "/api/portal/itsm", {}, 405),
+            ("get", "/api/copilot", {}, 405),
+            ("post", "/api/copilot", {"json": ["not", "an", "object"]}, 422),
+        ):
+            with self.subTest(method=method, path=path):
+                response = getattr(self.client, method)(path, **kwargs)
+                self.assertEqual(response.status_code, expected)
+                self.assert_security(response)
+
     def test_anonymous_home_disables_demo_launch_and_stays_synthetic(self):
         r = self.client.get("/")
         self.assertEqual(r.status_code, 200)
-        self.assertIn('id="demo-token"', r.text)
+        self.assertIn('id="demo-token" type="password" disabled aria-disabled="true"', r.text)
         self.assertIn('disabled aria-disabled="true"', r.text)
         self.assertIn("Golden DEMO — désactivé", r.text)
         self.assertNotIn('onclick="demo()"', r.text)
