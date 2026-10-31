@@ -13,6 +13,7 @@ class QualityScheduleContractTests(unittest.TestCase):
         self.assertIn("  workflow_dispatch:", WORKFLOW)
 
     def test_quality_workflow_remains_hosted_and_read_only(self):
+        self.assertIn("policy-and-static:\\n    runs-on: ubuntu-24.04", WORKFLOW)
         self.assertIn("permissions:\n  contents: read", WORKFLOW)
         self.assertNotIn("self-hosted", WORKFLOW)
 
