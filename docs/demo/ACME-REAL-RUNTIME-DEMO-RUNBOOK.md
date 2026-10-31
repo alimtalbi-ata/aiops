@@ -46,7 +46,7 @@ Required:
 
 Store `.env` as owner-restricted mode `0600`. Do not print, commit, paste or include tokens/API keys in CI artifacts, screenshots, URLs or support bundles.
 
-If the provider variables are blank, Intelligence reports unavailable and the Worker must block the Run. That is a correct fail-closed outcome, not a successful AI demo.
+If the provider variables are blank or `AIOPS_DEMO_PROVIDER_KIND` is not `REAL`, `tests/synthetic-e2e.sh` refuses the customer rehearsal. Intelligence reports unavailable and the Worker must block the Run. That is a correct fail-closed outcome, not a successful AI demo.
 
 Cost remains `UNKNOWN` unless provider pricing is explicitly versioned. Token totals remain `UNKNOWN` unless the provider returns usage. Do not substitute estimates for provider-reported values.
 
@@ -59,6 +59,7 @@ bash deploy/preflight.sh
 docker compose --env-file .env config --quiet
 docker compose --env-file .env ps
 bash tests/qualification.sh
+bash tests/synthetic-e2e.sh
 ```
 
 Verify that Core, Twin, Evidence, Policy, Worker, Simulator, Portal, Temporal, PostgreSQL and Intelligence are healthy. Intelligence `/ready` should report provider configured. A healthy container alone is not proof that the model endpoint is reachable; a real provider call is required.
@@ -142,3 +143,12 @@ For each rehearsal archive:
 - customer-visible limitations and known issues.
 
 Do not include credentials, raw prompts, private provider payloads or customer data. Update this runbook and the architecture readiness document whenever the scenario contract, model provider, migration, portal route or acceptance criteria change.
+
+
+## 9. Current implementation boundary
+
+The Portal's public homepage is an UNKNOWN-first shell and does not perform anonymous Core/Twin reads. The shared viewer token is not a tenant ACL; the bootstrap, Copilot and GLPI ticket fastpaths remain fail-closed until a server-derived actor/tenant authorization contract is implemented.
+
+The synthetic Run status page is intended only for the isolated AIOps2 demo environment. Do not reuse these read paths as a customer multi-tenant authorization design. Before a shared/customer deployment, scope all Run, Evidence, Twin and GLPI reads to a verified identity and tenant, then add cross-tenant denial tests.
+
+The Portal CSP currently allows same-origin scripts and inline scripts for the legacy demo screens. This is a compatibility measure, not the final hardening target. Migrate inline handlers to external same-origin assets or nonce-based CSP before a customer production deployment; no `unsafe-eval` is permitted.
