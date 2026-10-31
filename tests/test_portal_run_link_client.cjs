@@ -110,3 +110,34 @@ test('no credential persistence or browser cookie access is used', () => {
 test('missing existing Portal controls do not create a parallel UI', () => {
   assert.equal(mount({ getElementById: () => null }, () => { throw Error('unexpected'); }, null), false);
 });
+
+test('bootstrap UI keeps 401/403/503 visible and never renders unscoped records', async () => {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  const source = fs.readFileSync(
+    require.resolve('../app/portal/portal_bootstrap_client.js'), 'utf8');
+  for (const [status, expected] of [
+    [401, 'UNAUTHORIZED (HTTP 401)'],
+    [403, 'UNAUTHORIZED (HTTP 403)'],
+    [503, 'UNKNOWN (HTTP 503)']
+  ]) {
+    const nodes = {
+      'portal-read-token': { value: 'test-only-viewer-token' },
+      'portal-read-result': { textContent: '' }
+    };
+    const window = {};
+    const document = {
+      getElementById: id => nodes[id] || null,
+      querySelector: () => null
+    };
+    let calls = 0;
+    vm.runInNewContext(source, { window, document, fetch: async () => {
+      calls += 1;
+      return { ok: false, status };
+    } });
+    await window.loadPortalReadModel();
+    assert.equal(calls, 1);
+    assert.equal(nodes['portal-read-token'].value, '');
+    assert.ok(nodes['portal-read-result'].textContent.includes(expected));
+  }
+});
