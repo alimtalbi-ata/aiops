@@ -39,9 +39,13 @@ REQUIRED_PATHS = (
     "docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md",
     "docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md",
 )
+# Only explicit installation and rollback entrypoints satisfy source inventory.
+# deploy/aiops_release.py is audit-only and deploy/deploy-acme-p0.py is a
+# partial four-service transaction; neither is a cumulative-kit rollback.
+# Presence of these paths is NOT evidence that an operation was exercised.
 ENTRYPOINT_ALTERNATIVES = {
-    "install_upgrade_entrypoint": ("deploy/aiops_release.py", "deploy/deploy-acme-p0.py"),
-    "rollback_entrypoint": ("deploy/aiops_release.py", "deploy/deploy-acme-p0.py"),
+    "install_upgrade_entrypoint": ("deploy/install.sh", "deploy/release_install.py"),
+    "rollback_entrypoint": ("deploy/rollback.sh", "deploy/release_rollback.py"),
 }
 SHA = re.compile(r"^[0-9a-f]{40}$")
 CHECKSUM = re.compile(r"^([0-9a-f]{64})  (?:\./)?(.+)$")
