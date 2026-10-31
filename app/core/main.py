@@ -1,6 +1,8 @@
 import os,json,requests,datetime,hashlib,hmac,uuid,re
 from shared.safety import canonical_sha256, gold_set_eligible, critical_approval_complete
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import JSONResponse
+from shared.tenant_scope import reject_unqualified_tenant_scope
 from pydantic import BaseModel,Field
 from shared.db import db
 from core.demo_evidence_read import register_demo_evidence_routes
