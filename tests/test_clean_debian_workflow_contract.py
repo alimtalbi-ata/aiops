@@ -16,6 +16,8 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
         self.assertIn("checkout_sha_mismatch", WORKFLOW)
 
     def test_exact_head_ci_and_approved_ancestry_are_required(self):
+        self.assertIn('approved_refs = ("main",)', WORKFLOW)
+        self.assertNotIn("test/debian12-install-runtime-qualification-20261031", WORKFLOW)
         self.assertIn("APPROVED_SOURCE_ANCESTRY=PASS", WORKFLOW)
         self.assertIn("EXACT_HEAD_CI=PASS", WORKFLOW)
         self.assertIn(".github/workflows/quality.yml", WORKFLOW)
