@@ -66,15 +66,17 @@ class StageBlockTests(unittest.TestCase):
             'mode':'DEMO','scenario_id':'S1'},1)
         return result,calls
 
-    def test_rejected_critic_records_policy_denial_then_blocks(self):
+    def test_rejected_critic_persists_durable_denial_intent_then_blocks(self):
         result,calls=self.run_stage()
         self.assertEqual(result['status'],'BLOCKED')
-        self.assertTrue(result['policy_denial_recorded'])
-        self.assertLess(next(i for i,c in enumerate(calls) if c[0]=='denial'),
+        self.assertFalse(result['policy_denial_recorded'])
+        self.assertTrue(result['denial_intent_durable'])
+        self.assertLess(next(i for i,c in enumerate(calls) if c[0]=='call' and c[1].endswith('/events') and c[2]['event_type']=='CRITIC_COMPLETED'),
                         next(i for i,c in enumerate(calls) if c[0]=='post' and c[1].endswith('/critic-denial-resume')))
-        self.assertEqual(sum(c[0]=='denial' for c in calls),1)
+        self.assertEqual(sum(c[0]=='denial' for c in calls),0)
+        self.assertFalse(any(c[0]=='post' and ('remediat' in c[1] or 'approval' in c[1]) for c in calls))
 
-    def test_failed_denial_audit_still_blocks_and_reports_gap(self):
+    def test_legacy_denial_audit_hook_is_not_called_with_outbox_contract(self):
         result,calls=self.run_stage(persist_fails=True)
         self.assertEqual(result['status'],'BLOCKED')
         self.assertFalse(result['policy_denial_recorded'])
