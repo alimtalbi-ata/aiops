@@ -112,7 +112,11 @@
       if (current !== generation) return;
       if (!response.ok) {
         if ($("portal-read-result")) $("portal-read-result").textContent =
-          "UNKNOWN — accès refusé ou source indisponible";
+          response.status === 401 || response.status === 403
+            ? "UNAUTHORIZED (HTTP " + response.status + ") — lecture refusée"
+            : response.status === 503
+              ? "UNKNOWN (HTTP 503) — autorisation tenant non qualifiée ou source indisponible"
+              : "UNKNOWN (HTTP " + response.status + ") — lecture non qualifiée";
         return;
       }
       const data = await response.json();

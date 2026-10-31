@@ -41,6 +41,16 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_demo_command_auth.py" -v
       - name: Portal authenticated Core Twin bootstrap HTTP regression
         run: python -m unittest discover -s tests -p "test_portal_bootstrap_auth.py" -v
+      - name: Portal legacy Copilot tenant fence API/HTML security regression
+        run: python -m unittest discover -s tests -p "test_portal_copilot_tenant_fence.py" -v
+      - name: Portal Copilot inline JS syntax and synthetic DOM refusal regression
+        run: node --test tests/test_portal_copilot_client.cjs
+      - name: Main-based Portal Run detail API/HTML fail-closed regression
+        run: python -m unittest discover -s tests -p "test_portal_run_detail.py" -v
+      - name: Portal Run deep-link JS syntax and DOM regression
+        run: |
+          node --check app/portal/portal_run_link_client.js
+          node --test tests/test_portal_run_link_client.cjs
       - name: Portal Core Twin browser JS syntax
         run: node --check app/portal/portal_bootstrap_client.js
       - name: Portal Core Twin browser DOM regression (synthetic DOM only)

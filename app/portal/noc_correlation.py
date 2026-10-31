@@ -104,15 +104,12 @@ def noc_correlation(authorization: str | None = Header(default=None)):
         noc_runtime._require_portal_read_auth(authorization)
     except HTTPException as exc:
         return noc_runtime._noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
-    try:
-        noc = noc_runtime.read_signed_noc_snapshot()
-    except noc_runtime.NocSourceNotConfigured:
-        return noc_runtime._noc_json_response({"detail": "noc_source_not_configured"}, status_code=503)
-    except Exception:
-        return noc_runtime._noc_json_response({"detail": "noc_source_unavailable_or_unverified"}, status_code=503)
-    try:
-        run = _read_core_run(noc["run_id"])
-        result = correlate(noc, run)
-    except Exception:
-        return noc_runtime._noc_json_response({"detail": "canonical_correlation_unavailable_or_unverified"}, status_code=503)
-    return noc_runtime._noc_json_response(result)
+    # Signed NOC + internal Core bearer do not establish actor/tenant ACL.
+    # Never fetch either source or expose a Run identity on this browser route.
+    return noc_runtime._noc_json_response({
+        "state": "UNKNOWN",
+        "reason": "TENANT_ACL_NOT_QUALIFIED",
+        "connection_state": "UNKNOWN",
+        "source": "NOC_CORE_CORRELATION_NOT_TENANT_AUTHORIZED",
+        "source_freshness": "UNKNOWN",
+    }, status_code=503)

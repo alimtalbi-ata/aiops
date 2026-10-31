@@ -77,28 +77,30 @@ class CorrelationTests(unittest.TestCase):
                             noc_correlation.correlate(noc, run)
 
     def test_scoped_run_http_refusal_redacts_identity_and_disables_cache(self):
-        run = {**core_run(), "metadata": {"ownerTenantId": "PRIVATE-TENANT-ABC"}}
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
                 noc_correlation.noc_runtime, "read_signed_noc_snapshot",
-                return_value=noc_view()), patch.object(
-                noc_correlation, "_read_core_run", return_value=run):
+                side_effect=AssertionError("no NOC read")) as noc_read, patch.object(
+                noc_correlation, "_read_core_run",
+                side_effect=AssertionError("no Core read")) as core_read:
             response = self.request()
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"],
-                         "canonical_correlation_unavailable_or_unverified")
-        self.assertNotIn("PRIVATE-TENANT-ABC", response.text)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
         self.assertNotIn("RUN-ACME-001", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
+        noc_read.assert_not_called()
+        core_read.assert_not_called()
 
     def test_live_http_refusal_is_not_cached(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
                 noc_correlation.noc_runtime, "read_signed_noc_snapshot",
-                return_value=noc_view()), patch.object(
-                noc_correlation, "_read_core_run", return_value=core_run("LIVE")):
+                return_value=noc_view()) as noc_read, patch.object(
+                noc_correlation, "_read_core_run", return_value=core_run("LIVE")) as core_read:
             response = self.request()
         self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
         self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertNotIn("RUN-ACME-001", response.text)
+        noc_read.assert_not_called()
+        core_read.assert_not_called()
 
     def test_identity_mismatch_does_not_leak_canonical_ids(self):
         run = core_run()
@@ -135,29 +137,41 @@ class CorrelationTests(unittest.TestCase):
     def test_no_source_never_contacts_core(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
                 noc_correlation.noc_runtime, "read_signed_noc_snapshot",
-                side_effect=noc_correlation.noc_runtime.NocSourceNotConfigured()), patch.object(
-                noc_correlation, "_read_core_run", side_effect=AssertionError("no Core call")):
+                side_effect=noc_correlation.noc_runtime.NocSourceNotConfigured()) as noc_read, patch.object(
+                noc_correlation, "_read_core_run",
+                side_effect=AssertionError("no Core call")) as core_read:
             response = self.request()
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"], "noc_source_not_configured")
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        noc_read.assert_not_called()
+        core_read.assert_not_called()
 
     def test_core_error_redacted(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
-                noc_correlation.noc_runtime, "read_signed_noc_snapshot", return_value=noc_view()), patch.object(
-                noc_correlation, "_read_core_run", side_effect=RuntimeError("SECRET-IN-CORE-ERROR")):
+                noc_correlation.noc_runtime, "read_signed_noc_snapshot",
+                return_value=noc_view()) as noc_read, patch.object(
+                noc_correlation, "_read_core_run",
+                side_effect=RuntimeError("SECRET-IN-CORE-ERROR")) as core_read:
             response = self.request()
         self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
         self.assertNotIn("SECRET", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
+        noc_read.assert_not_called()
+        core_read.assert_not_called()
 
-    def test_route_exposes_only_allowlisted_projection(self):
+    def test_route_denies_shared_token_without_tenant_acl(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}), patch.object(
-                noc_correlation.noc_runtime, "read_signed_noc_snapshot", return_value=noc_view()), patch.object(
-                noc_correlation, "_read_core_run", return_value=core_run()):
+                noc_correlation.noc_runtime, "read_signed_noc_snapshot",
+                return_value=noc_view()) as noc_read, patch.object(
+                noc_correlation, "_read_core_run", return_value=core_run()) as core_read:
             response = self.request()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["state"], "MATCHED_UNATTESTED")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertNotIn("RUN-ACME-001", response.text)
         self.assertNotIn("private_payload", response.text)
+        noc_read.assert_not_called()
+        core_read.assert_not_called()
 
     def test_core_endpoint_rejected_before_network(self):
         for url in ("https://evil.example", "http://user:pass@aiops2-core:810",
