@@ -37,10 +37,10 @@ class DebianReadonlyReporterTests(unittest.TestCase):
 
     def test_docker_inventory_captures_topology_without_mounts_or_env(self):
         responses = [
-            {"available": True, "returncode": 0, "stdout": "portal\\n", "stderr": ""},
+            {"available": True, "returncode": 0, "stdout": "portal\n", "stderr": ""},
             {"available": True, "returncode": 0,
              "stdout": "running|healthy|portal:test|compose-demo|portal|2|0|net-public,net-data,|777/tcp=10.0.0.2:17777,;", "stderr": ""},
-            {"available": True, "returncode": 0, "stdout": "net-public|bridge|local\\nnet-data|bridge|local", "stderr": ""},
+            {"available": True, "returncode": 0, "stdout": "net-public|bridge|local\nnet-data|bridge|local", "stderr": ""},
             {"available": True, "returncode": 0, "stdout": "portal|1.25%|200MiB / 1GiB|19.5%", "stderr": ""},
         ]
         with mock.patch.object(MODULE, "fixed_command", side_effect=responses):
