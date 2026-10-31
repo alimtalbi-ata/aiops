@@ -92,6 +92,18 @@ class XrefPostgresTests(unittest.TestCase):
         r=self.read(ticket="791")
         self.assertEqual(r.status_code,403)
         self.hidden(r)
+    def test_stale_evidence_does_not_bypass_real_http_auth(self):
+        stale=(self.now-timedelta(minutes=10)).isoformat()
+        for token,code in (("none",401),("bad",401),("b",403),("no_perm",403)):
+            with self.subTest(token=token):
+                r=self.read(token=token,evidence_known_at=stale)
+                self.assertEqual(r.status_code,code,r.text)
+                self.hidden(r)
+        r=self.read(evidence_known_at=stale)
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"STALE")
+        self.hidden(r)
+
     def test_no_mapping_copied_run_and_preflight(self):
         r=self.read(ticket="9999")
         self.assertEqual(r.status_code,404)
