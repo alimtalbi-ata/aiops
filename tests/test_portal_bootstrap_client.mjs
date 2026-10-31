@@ -33,7 +33,7 @@ function harness(fetchImpl) {
   return {window, ids, metrics};
 }
 
-test("one-shot Bearer read uses no credentials or cache; DOM is text-only", async () => {
+test("hypothetical server-qualified read uses no cookies/cache; DOM is text-only", async () => {
   const calls = [];
   const h = harness(async (url, options) => {
     calls.push({url, options});
@@ -41,6 +41,7 @@ test("one-shot Bearer read uses no credentials or cache; DOM is text-only", asyn
     return {ok: true, json: async () => ({
       schema: "aiops.portal.readmodels.v1",
       provenance: "UNATTESTED_UPSTREAM_API_READ",
+      tenant_acl_qualified: true, actor_identity_server_derived: true,
       runtime_authenticated: false,
       live_remediation_authorized: false,
       states: {dashboard: "READABLE_UNVERIFIED", runs: "READABLE_UNVERIFIED",
@@ -67,6 +68,25 @@ test("one-shot Bearer read uses no credentials or cache; DOM is text-only", asyn
   h.window.clearPortalReadModel();
   assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
   assert.equal(h.ids.get("portal-read-token").value, "");
+});
+
+test("legacy unscoped HTTP 200 cannot populate cockpit metrics or Run IDs", async () => {
+  const h = harness(async () => ({ok: true, json: async () => ({
+    schema: "aiops.portal.readmodels.v1",
+    provenance: "UNATTESTED_UPSTREAM_API_READ",
+    runtime_authenticated: false, live_remediation_authorized: false,
+    states: {dashboard: "READABLE_UNVERIFIED", runs: "READABLE_UNVERIFIED", twin: "UNKNOWN"},
+    dashboard: {open_p1: 7, open_incidents: 8, running: 1, blocked: 2,
+                twin_nodes: 4, degraded_nodes: 1},
+    runs: {items: [{run_id: "RUN-FOREIGN-TENANT"}]},
+    twin: null
+  })}));
+  h.ids.get("portal-read-token").value = "synthetic-token";
+  await h.window.loadPortalReadModel();
+  assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
+  assert.equal(h.ids.get("portal-runs").children[0].children[0].textContent,
+               "UNKNOWN — lecture non attestée");
+  assert.match(h.ids.get("portal-read-result").textContent, /UNKNOWN/);
 });
 
 test("denied and missing tokens never render stale data", async () => {
@@ -97,6 +117,7 @@ test("forged or malformed bootstrap envelopes fail closed before DOM updates", a
   const base = () => ({
     schema: "aiops.portal.readmodels.v1",
     provenance: "UNATTESTED_UPSTREAM_API_READ",
+    tenant_acl_qualified: true, actor_identity_server_derived: true,
     runtime_authenticated: false,
     live_remediation_authorized: false,
     states: {dashboard: "READABLE_UNVERIFIED", runs: "READABLE_UNVERIFIED",
@@ -109,6 +130,8 @@ test("forged or malformed bootstrap envelopes fail closed before DOM updates", a
   const mutations = [
     (x) => { delete x.schema; },
     (x) => { x.provenance = "LIVE"; },
+    (x) => { x.tenant_acl_qualified = false; },
+    (x) => { delete x.actor_identity_server_derived; },
     (x) => { x.runtime_authenticated = true; },
     (x) => { x.live_remediation_authorized = true; },
     (x) => { x.states.dashboard = "OK"; },
@@ -134,6 +157,7 @@ test("all unavailable sources remain UNKNOWN even after HTTP 200", async () => {
   const h = harness(async () => ({ok: true, json: async () => ({
     schema: "aiops.portal.readmodels.v1",
     provenance: "UNATTESTED_UPSTREAM_API_READ",
+    tenant_acl_qualified: true, actor_identity_server_derived: true,
     runtime_authenticated: false, live_remediation_authorized: false,
     states: {dashboard: "UNKNOWN", runs: "UNKNOWN", twin: "UNKNOWN"},
     dashboard: null, runs: null, twin: null
