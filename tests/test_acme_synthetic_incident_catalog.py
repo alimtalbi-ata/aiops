@@ -368,6 +368,57 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     gen.correlate_catalog_manifest_offline(invalid, false_positive="yes")
 
+    def test_every_supported_path_is_reverse_edge_sourced_without_runtime_attestation(self):
+        """Check all catalog paths, not just Golden, against the pinned Twin edges."""
+        for scenario in self.catalog["scenarios"]:
+            if scenario["status"] != "SUPPORTED_BY_SEED":
+                continue
+            modes = (False,) if scenario["key"] == "REDUNDANT_SAN_PATH_LOSS" else (False, True)
+            for stochastic in modes:
+                with self.subTest(category=scenario["key"], stochastic=stochastic):
+                    manifest = gen.replay(scenario["key"], seed=20261018,
+                                          stochastic=stochastic)
+                    impact = manifest["impact_estimate"]
+                    nodes = impact["path_node_ids"]
+                    edges = impact["path_edge_ids"]
+                    self.assertEqual((nodes[0], nodes[-1]),
+                                     (scenario["source_ci_id"], scenario["service_id"]))
+                    self.assertEqual(len(edges), len(nodes) - 1)
+                    for edge_id, dependency, consumer in zip(edges, nodes, nodes[1:]):
+                        edge = self.graph["edges"][edge_id]
+                        self.assertEqual((edge["target_id"], edge["source_id"]),
+                                         (dependency, consumer))
+                    self.assertIn(manifest["service_id"], impact["candidate_service_ids"])
+                    self.assertEqual(impact["source"], "db/migrations/005_seed_acme.sql")
+                    self.assertEqual(impact["observed_service_impact"], "UNKNOWN")
+                    self.assertFalse(impact["causality_verified"])
+                    self.assertFalse(impact["redundancy_evaluated"])
+                    self.assertEqual(impact["tenant_scope"], "UNKNOWN")
+                    self.assertIsNone(impact["observed_at"])
+                    self.assertIsNone(impact["known_at"])
+                    self.assertEqual(manifest["graph_version"], gen.SEED_GIT_BLOB)
+                    self.assertEqual(manifest["catalog_sha256"], self.catalog_sha)
+                    self.assertIsNone(manifest["tenant_id"])
+                    self.assertIsNone(manifest["incident_id"])
+                    self.assertIsNone(manifest["run_id"])
+                    self.assertIsNone(manifest["ticket_id"])
+                    self.assertEqual(manifest["evidence_ids"], [])
+                    self.assertEqual(manifest["itil"]["priority_confirmed"], "UNKNOWN")
+                    self.assertFalse(manifest["itil"]["roles_authenticated"])
+                    self.assertFalse(manifest["publishable_to_core_or_glpi"])
+                    self.assertFalse(manifest["live_effects_authorized"])
+                    self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                                        for c in manifest["checkpoints"]))
+                    events = manifest["events"]
+                    self.assertEqual(len({e["source_event_id"] for e in events}), len(events))
+                    self.assertEqual(len({e["correlation_key"] for e in events}), 1)
+                    self.assertTrue(all(e["ci_id"] in self.graph["nodes"] and
+                                        e["tenant_id"] is None and
+                                        e["tenant_scope"] == "UNKNOWN" and
+                                        e["provenance"] == "SYNTHETIC_FIXTURE" and
+                                        e["freshness"] == "SYNTHETIC_CLOCK_ONLY"
+                                        for e in events))
+
     def test_cli_artifact_is_reproducible_and_sha_matches(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "replay.json"
