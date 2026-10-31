@@ -54,6 +54,14 @@ class IncidentWorkflow:
     @workflow.run
     async def run(self, args: dict) -> dict:
         run_id = args["run_id"]
+        # Reject unsupported modes before any Core state transition or activity.
+        # SIMULATE is a Policy decision, not an unvalidated workflow mode.
+        if args.get("mode") not in ("DEMO", "REPLAY", "STORY", "LIVE"):
+            return {
+                "run_id": run_id, "status": "BLOCKED", "final_version": None,
+                "reason": "unsupported_workflow_mode",
+                "execution_allowed": False, "effect_allowed": False,
+            }
         receipt = await workflow.execute_activity(
             "start_run",
             args,
@@ -77,6 +85,17 @@ class IncidentWorkflow:
                 result_type=dict,
             )
             version = receipt["version"]
+            # UNKNOWN, FAIL, REJECTED or an unexpected WAITING stage cannot
+            # advance toward HITL/remediation. Only a LIVE HITL wait is valid.
+            if receipt.get("status") not in ("PASS", "BLOCKED") and not (
+                stage == "HITL" and args["mode"] == "LIVE"
+                and receipt.get("status") == "WAITING"
+            ):
+                return {
+                    "run_id": run_id, "status": "BLOCKED",
+                    "final_version": version, "reason": "stage_not_passed",
+                    "execution_allowed": False, "effect_allowed": False,
+                }
             if receipt.get("status") == "BLOCKED":
                 return {"run_id": run_id, "status": "BLOCKED", "final_version": version, "execution_allowed": False, "effect_allowed": False}
 
