@@ -77,7 +77,7 @@ Les profils, entités, catégories, règles métier, plugins, formulaires,
 templates et pages natives GLPI n'ont pas été inspectés sur une instance autorisée.</p>
 </section>
 <section class="panel" aria-labelledby="queue"><h2 id="queue">File opérateur P1–P4 / SLA — non chargée</h2>
-<p id="queue-unavailable" role="status">NOT_INSTALLED — aucune API GLPI authentifiée et
+<p id="queue-unavailable" role="note">NOT_INSTALLED — aucune API GLPI authentifiée et
 tenant-scoped ne fournit la file, les délais SLA/OLA ou les fenêtres de maintenance.
 Aucun ticket ni compteur n'est déduit des fixtures SYNTHETIC.</p>
 <table aria-describedby="queue-unavailable">
