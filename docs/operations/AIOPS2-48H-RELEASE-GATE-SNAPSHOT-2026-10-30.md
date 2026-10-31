@@ -122,3 +122,10 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 ### 2026-10-31 exact-head CI release decision
 
 #201 `f38014c92b85763be8ac3f72042b50a48dbba95c` [Quality 41145124544](https://github.com/alimtalbi-ata/aiops/actions/runs/41145124544) SUCCESS 3/3; Portal fail-closed tests 30/30, JS 7/7, Chromium synthetic 6/6, kit guard 12/12. **T0 GO_LIMITED**, not T1 authorization. T1 BLOCKED (Core actor+tenant ACL missing), T2 NOT_TESTED, T3 NOT_ATTESTED, T4 NO_GO, T5 NO_GO; `RELEASE_STABLE=NO_GO`. Artifact `13020710411` listed, not inspected. No deployment or LIVE.
+
+
+### 2026-10-31 5/5 gate refresh — tenant existence oracle remains
+
+- Exact #201 `f38014c92b85763be8ac3f72042b50a48dbba95c`, base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, [Quality 41145124544](https://github.com/alimtalbi-ata/aiops/actions/runs/41145124544) SUCCESS 3/3. Exact #195 prior `057d99351921f30beeb4e6ab4158f841dccf1a15`, [Quality 41145381815](https://github.com/alimtalbi-ata/aiops/actions/runs/41145381815) SUCCESS 3/3. No cumulative kit qualification.
+- **BLOCKER (source review):** despite identity-field redaction, #201 Portal differentiates a valid internal Core Run from an absent/unqualified one via 503 reason/connection state. [#202 owner handoff](https://github.com/alimtalbi-ata/aiops/pull/202#issuecomment-6536560492) requests identical unqualified viewer responses and negative API/HTML tests; actor+tenant Core exact-Run ACL remains missing. No runtime cross-tenant exploit test performed.
+- T0 **GO_LIMITED** (isolated CI); T1 **BLOCKED** (tenant ACL + non-enumerability); T2 **NOT_TESTED** (single Incident/Run Core→Temporal→Evidence); T3 **NOT_ATTESTED**; T4 **NO_GO** (kit/install/rollback); T5 **NO_GO** (LIVE). `RELEASE_STABLE=NO_GO`. #196 real Ollama still FAIL; #204 stacked HITL tests do not promote release. No Debian, GLPI write or deployment.
