@@ -21,6 +21,7 @@ REQUIRED_PATHS = (
     "compose.yml",
     "config/.env.example",
     "deploy/package.sh",
+    "deploy/refresh_release_inventory.py",
     "db/migrations/011_hitl_decision_outbox.sql",
     "app/core/hitl_identity.py",
     "app/shared/hitl_identity.py",
@@ -39,9 +40,14 @@ REQUIRED_PATHS = (
     "docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md",
     "docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md",
 )
+# Only explicit installation and rollback entrypoints satisfy source inventory.
+# deploy/aiops_release.py is audit-only and deploy/deploy-acme-p0.py is a
+# partial four-service transaction; neither is a cumulative-kit rollback.
+# Presence of these paths is NOT evidence that an operation was exercised.
 ENTRYPOINT_ALTERNATIVES = {
-    "install_upgrade_entrypoint": ("deploy/aiops_release.py", "deploy/deploy-acme-p0.py"),
-    "rollback_entrypoint": ("deploy/aiops_release.py", "deploy/deploy-acme-p0.py"),
+    "install_entrypoint": ("deploy/install.sh", "deploy/release_install.py"),
+    "upgrade_entrypoint": ("deploy/upgrade.sh", "deploy/release_upgrade.py"),
+    "rollback_entrypoint": ("deploy/rollback.sh", "deploy/release_rollback.py"),
 }
 SHA = re.compile(r"^[0-9a-f]{40}$")
 CHECKSUM = re.compile(r"^([0-9a-f]{64})  (?:\./)?(.+)$")
@@ -80,6 +86,20 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
             if errors:
                 return {"status": "FAIL", "errors": sorted(set(errors)), "checksums_verified": 0, "source_files_verified": 0}
             files = set(names)
+            # Migration order is a single repository-wide namespace. Two
+            # distinct SQL files sharing an ordinal (for example 009_*)
+            # cannot both be promoted by a checksum-valid release archive.
+            migration_ordinals = {}
+            for migration in sorted(p for p in files if p.startswith("db/migrations/") and p.endswith(".sql")):
+                match = re.fullmatch(r"db/migrations/([0-9]{3})_[^/]+\.sql", migration)
+                if match is None:
+                    errors.append("MIGRATION_NAME_INVALID:" + migration)
+                    continue
+                ordinal = match.group(1)
+                if ordinal in migration_ordinals:
+                    errors.append("MIGRATION_ORDINAL_DUPLICATE:" + ordinal)
+                else:
+                    migration_ordinals[ordinal] = migration
             for path in required_paths:
                 if path not in files:
                     errors.append("REQUIRED_MISSING:" + path)
@@ -177,11 +197,83 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         errors.append("SOURCE_TREE_DIRTY")
                 except (OSError, subprocess.CalledProcessError):
                     errors.append("SOURCE_HEAD_OR_STATUS_UNAVAILABLE")
-                for path in required_paths:
-                    if path not in files or path == "RELEASE-MANIFEST.txt":
+                # A valid sidecar does not prove that an extra packaged file
+                # belongs to Git HEAD. Check every member, not only REQUIRED_PATHS.
+                # RELEASE-MANIFEST and SHA256SUMS are generated and independently
+                # validated above. The staged JSON is allowed only if it matches
+                # the deterministic transformation of the tracked source JSON.
+                try:
+                    tracked_output = subprocess.check_output(
+                        ["git", "-C", str(root), "ls-files", "-z", "--cached"],
+                        stderr=subprocess.DEVNULL)
+                    tracked = set(tracked_output.decode(
+                        "utf-8", "surrogateescape").rstrip("\0").split("\0"))
+                except (OSError, subprocess.CalledProcessError):
+                    errors.append("SOURCE_TRACKED_FILES_UNAVAILABLE")
+                    tracked = set()
+                generated = {"RELEASE-MANIFEST.txt", "FILES-SHA256SUMS"}
+                # The staged generator deliberately refreshes MANIFEST.json from
+                # source metadata and the exact archive bytes. Accept that one
+                # generated member only when its entire JSON object is the
+                # deterministic transformation of the tracked source manifest.
+                # Other members must remain byte-identical to Git HEAD.
+                staged_name = "manifests/MANIFEST.json"
+                if staged_name in files:
+                    try:
+                        staged = json.loads(archive.read(staged_name))
+                        if (isinstance(staged, dict) and
+                                staged.get("inventory_kind") == "staged-release-file-digests"):
+                            original = root / staged_name
+                            if staged_name not in tracked or original.is_symlink() or not original.is_file():
+                                errors.append("STAGED_MANIFEST_SOURCE_MISSING")
+                            else:
+                                expected = json.loads(original.read_text(encoding="utf-8"))
+                                if (not isinstance(expected, dict) or
+                                        not isinstance(expected.get("files"), list) or
+                                        not expected["files"]):
+                                    errors.append("STAGED_MANIFEST_SOURCE_INVALID")
+                                else:
+                                    valid_entries = True
+                                    for entry in expected["files"]:
+                                        if not isinstance(entry, dict):
+                                            valid_entries = False
+                                            break
+                                        member = entry.get("path")
+                                        if (not isinstance(member, str) or
+                                                not _safe_name(member) or member not in files or
+                                                member in {staged_name, "FILES-SHA256SUMS"}):
+                                            valid_entries = False
+                                            break
+                                        payload = archive.read(member)
+                                        entry["bytes"] = len(payload)
+                                        entry["sha256"] = hashlib.sha256(payload).hexdigest()
+                                    versions = re.findall(
+                                        r"^version=([^\r\n]+)$",
+                                        manifest if "RELEASE-MANIFEST.txt" in files else "",
+                                        re.MULTILINE)
+                                    if not valid_entries or len(versions) != 1:
+                                        errors.append("STAGED_MANIFEST_SOURCE_INVALID")
+                                    else:
+                                        expected.setdefault("source_manifest_release", expected.get("release", "UNKNOWN"))
+                                        expected.setdefault("source_manifest_name", expected.get("name", "UNKNOWN"))
+                                        expected["release"] = versions[0]
+                                        expected["name"] = "AIOps 2.0 staged deployment kit inventory"
+                                        expected["inventory_kind"] = "staged-release-file-digests"
+                                        if staged != expected:
+                                            errors.append("STAGED_MANIFEST_SOURCE_PROVENANCE_MISMATCH")
+                                        else:
+                                            generated.add(staged_name)
+                                            source_verified += 1
+                    except (ValueError, UnicodeDecodeError, OSError, TypeError):
+                        errors.append("STAGED_MANIFEST_SOURCE_UNREADABLE")
+                for path in sorted(files - generated):
+                    if path not in tracked:
+                        errors.append("SOURCE_MEMBER_UNTRACKED:" + path)
                         continue
                     candidate = root / path
-                    if not candidate.is_file() or candidate.is_symlink():
+                    if candidate.is_symlink():
+                        errors.append("SOURCE_FILE_SYMLINK:" + path)
+                    elif not candidate.is_file():
                         errors.append("SOURCE_FILE_MISSING:" + path)
                     elif hashlib.sha256(candidate.read_bytes()).hexdigest() != hashlib.sha256(archive.read(path)).hexdigest():
                         errors.append("SOURCE_BLOB_MISMATCH:" + path)
