@@ -43,7 +43,7 @@ class RunDetailTests(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["state"], "UNKNOWN")
         self.assertEqual(data["reason"], "TENANT_ACL_NOT_QUALIFIED")
-        self.assertEqual(data["connection_state"], "CONNECTED")
+        self.assertEqual(data["connection_state"], "UNKNOWN")
         self.assertEqual(data["provenance"], "UNKNOWN")
         for private_field in ("run_id", "incident_id", "mode", "run_status"):
             self.assertNotIn(private_field, data)
@@ -75,7 +75,7 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(api.status_code, 503)
         self.assertEqual(page.status_code, 503)
         self.assertEqual(api.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
-        self.assertEqual(api.json()["connection_state"], "CONNECTED")
+        self.assertEqual(api.json()["connection_state"], "UNKNOWN")
         for response in (api, page):
             self.assertNotIn(private_incident, response.text)
             self.assertNotIn("FAILED", response.text)
@@ -142,8 +142,7 @@ class RunDetailTests(unittest.TestCase):
                     return_value=run(status=invalid)):
                 response = self.get()
             self.assertEqual(response.status_code, 503)
-            self.assertEqual(response.json(), {
-                "state": "UNKNOWN", "reason": "CORE_RUN_UNVERIFIED"})
+            self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
             self.assertEqual(response.headers["cache-control"], "no-store")
             self.assertEqual(response.headers["x-frame-options"], "DENY")
         for status in sorted(acme_run_detail.STATUSES):
@@ -184,8 +183,7 @@ class RunDetailTests(unittest.TestCase):
                     acme_run_detail, "_read_core_run", return_value=run(**claim)):
                 response = self.get()
             self.assertEqual(response.status_code, 503)
-            self.assertEqual(response.json(), {
-                "state": "UNKNOWN", "reason": "CORE_RUN_UNVERIFIED"})
+            self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
             self.assertNotIn("APPROVED", response.text)
             self.assertNotIn("GLPI-FAKE", response.text)
 
@@ -219,13 +217,46 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.json()["state"], "UNKNOWN")
         self.assertNotIn("secret-in-upstream", response.text)
 
-    def test_core_timeout_is_unavailable(self):
+    def test_core_timeout_is_unknown_without_tenant_acl(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=TimeoutError("sensitive host")):
             response = self.get()
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["state"], "UNAVAILABLE")
+        self.assertEqual(response.json()["state"], "UNKNOWN")
         self.assertNotIn("sensitive host", response.text)
+
+    def test_tenant_unqualified_run_presence_absence_and_foreign_are_indistinguishable(self):
+        # Identical API and HTML for a valid internal read, foreign/malformed
+        # identity, absent Run and transport timeout. No Core-derived existence
+        # oracle is allowed until actor+tenant exact-Run authorization exists.
+        scenarios = (
+            ("present", run()),
+            ("foreign", run(incident_id="INC-PRIVATE-FOREIGN")),
+            ("malformed", {"run_id": RID, "incident_id": "INC-PRIVATE-FOREIGN"}),
+            ("missing", urllib.error.HTTPError("http://core", 404, "not found", {}, None)),
+            ("timeout", TimeoutError("private upstream")),
+        )
+        api_bodies, page_bodies = [], []
+        for label, outcome in scenarios:
+            with self.subTest(label=label):
+                kwargs = ({"side_effect": outcome} if isinstance(outcome, Exception)
+                          else {"return_value": outcome})
+                with patch.object(acme_run_detail, "_read_core_run", **kwargs):
+                    api = self.get()
+                    page = self.get("/runs/" + RID)
+                self.assertEqual(api.status_code, 503)
+                self.assertEqual(page.status_code, 503)
+                self.assertEqual(api.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+                self.assertEqual(api.json()["connection_state"], "UNKNOWN")
+                self.assertEqual(api.json()["source"], "UNKNOWN")
+                for response in (api, page):
+                    self.assertEqual(response.headers["cache-control"], "no-store")
+                    self.assertNotIn("INC-PRIVATE-FOREIGN", response.text)
+                    self.assertNotIn("private upstream", response.text)
+                api_bodies.append(api.json())
+                page_bodies.append(page.text)
+        self.assertTrue(all(body == api_bodies[0] for body in api_bodies))
+        self.assertTrue(all(body == page_bodies[0] for body in page_bodies))
 
     def test_acme_story_marker_remains_synthetic_on_all_run_read_states(self):
         # The fixed ACME story label is not an assertion about the requested
@@ -280,11 +311,11 @@ class RunDetailTests(unittest.TestCase):
         self.assertIn("source freshness: UNKNOWN", response.text)
         self.assertNotIn("<script", response.text)
 
-    def test_html_shows_verified_and_denied_connection_states_without_evidence(self):
+    def test_html_preserves_auth_denials_but_hides_unqualified_connection_state(self):
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()):
             connected = self.get("/runs/" + RID)
         self.assertEqual(connected.status_code, 503)
-        self.assertIn("connection: CONNECTED", connected.text)
+        self.assertIn("connection: UNKNOWN", connected.text)
         self.assertIn("source freshness: UNKNOWN", connected.text)
         self.assertIn("CORE_BEARER_EVIDENCE_REFS_ENDPOINT_MISSING", connected.text)
         with patch.object(
@@ -298,7 +329,7 @@ class RunDetailTests(unittest.TestCase):
                           side_effect=TimeoutError("sensitive-upstream")):
             unavailable = self.get("/runs/" + RID)
         self.assertEqual(unavailable.status_code, 503)
-        self.assertIn("connection: UNAVAILABLE", unavailable.text)
+        self.assertIn("connection: UNKNOWN", unavailable.text)
         self.assertNotIn("sensitive-upstream", unavailable.text)
 
     def test_home_entry_and_js_asset_do_not_ship_secrets(self):
