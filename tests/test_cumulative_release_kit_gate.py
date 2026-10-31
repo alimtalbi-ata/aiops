@@ -215,7 +215,8 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.build(overrides={"deploy/aiops_release.py": b"# read-only audit\\n"})
         result = audit_kit(self.kit, self.sha, self.source,
                            required_paths=self.required)
-        self.assertIn("ENTRYPOINT_MISSING:install_upgrade_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:install_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:upgrade_entrypoint", result["errors"])
         self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
 
     def test_partial_p0_transaction_does_not_qualify_cumulative_rollback(self):
@@ -228,7 +229,8 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.build(overrides={"deploy/install.sh": b"#!/bin/sh\\nexit 1\\n"})
         result = audit_kit(self.kit, self.sha, self.source,
                            required_paths=self.required)
-        self.assertNotIn("ENTRYPOINT_MISSING:install_upgrade_entrypoint", result["errors"])
+        self.assertNotIn("ENTRYPOINT_MISSING:install_entrypoint", result["errors"])
+        self.assertIn("ENTRYPOINT_MISSING:upgrade_entrypoint", result["errors"])
         self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
 
 
