@@ -11,6 +11,10 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 SPEC=importlib.util.spec_from_file_location("aiops_release_verifier",ROOT/"tests"/"verify-package.py")
 MODULE=importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+REFRESH_SPEC=importlib.util.spec_from_file_location(
+    "aiops_release_inventory",ROOT/"deploy"/"refresh_release_inventory.py")
+REFRESH=importlib.util.module_from_spec(REFRESH_SPEC)
+REFRESH_SPEC.loader.exec_module(REFRESH)
 
 REQUIRED=(
     "compose.yml",
@@ -198,6 +202,23 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
             self._repack(path,entries)
             with self.assertRaisesRegex(ValueError,"required_files_missing"):
                 MODULE.verify(path)
+
+    def test_staged_inventory_refresh_reconciles_legacy_hashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp)
+            (root/"manifests").mkdir()
+            (root/"compose.yml").write_text("new staged content\\n")
+            (root/"manifests/MANIFEST.json").write_text(json.dumps({
+                "release":"8.0.0","name":"legacy",
+                "files":[{"path":"compose.yml","bytes":0,"sha256":"0"*64}]
+            }))
+            self.assertEqual(REFRESH.refresh(root,"2.1.0-core-rc1.4"),1)
+            doc=json.loads((root/"manifests/MANIFEST.json").read_text())
+            self.assertEqual(doc["release"],"2.1.0-core-rc1.4")
+            self.assertEqual(doc["source_manifest_release"],"8.0.0")
+            self.assertEqual(doc["files"][0]["bytes"],len((root/"compose.yml").read_bytes()))
+            self.assertEqual(doc["files"][0]["sha256"],
+                             hashlib.sha256((root/"compose.yml").read_bytes()).hexdigest())
 
     @staticmethod
     def _repack(path,entries):
