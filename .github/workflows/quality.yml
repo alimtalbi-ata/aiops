@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   policy-and-static:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 Chromium is unsupported on the ubuntu-latest 26.04 runner.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
