@@ -10,7 +10,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
     volumes:
       - aiops2-postgres-data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./db/bootstrap:/docker-entrypoint-initdb.d:ro
+      - ./db/migrations:/opt/aiops/migrations:ro
     networks: [aiops2-data]
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
