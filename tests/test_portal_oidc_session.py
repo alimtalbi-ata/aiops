@@ -17,7 +17,8 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
-from portal import main, oidc_session
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "internal-" + "i" * 48}):
+    from portal import main, oidc_session
 
 
 def b64(raw):
