@@ -31,7 +31,7 @@ def test_glpi_ticket_fastpath_links_only_verified_run(monkeypatch):
     })
     seen = {}
 
-    def copilot(base, path, payload):
+    def copilot(base, path, payload, **kwargs):
         seen.update(payload)
         return {"answer": "grounded", "sources": ["core:/api/runs/RUN-ABCDEF123456"]}
 
@@ -119,7 +119,7 @@ def test_glpi_hitl_fastpath_creates_only_guarded_proposal(monkeypatch):
     monkeypatch.setattr(module, "get_json", read_core)
     calls = []
 
-    def post(base, path, payload):
+    def post(base, path, payload, **kwargs):
         calls.append((path, payload))
         if path == "/api/copilot/query":
             return {"answer": "grounded", "sources": ["core:/api/runs/" + run_id]}
