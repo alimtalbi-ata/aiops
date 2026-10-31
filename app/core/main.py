@@ -444,7 +444,8 @@ def persist_analysis(rid:str,x:dict,authorization:str|None=Header(default=None))
         if n!=len(evidence_ids): raise HTTPException(422,'analysis references unknown evidence')
         revision=c.execute('select coalesce(max(revision),0)+1 from aiops.analysis_records where run_id=%s',(rid,)).fetchone()[0]
         aid=new('ANL')
-        invocation=bounded_model_invocation(x.get('model_invocation'))\n        c.execute('insert into aiops.analysis_records(analysis_id,run_id,incident_id,idempotency_key,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status,model_invocation) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(aid,rid,run[0],idem,revision,str(analysis.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),str(x.get('prompt_version','analyst-v2.0')),json.dumps(evidence_ids),evidence_hash,json.dumps(analysis),float(analysis.get('confidence',0)),'VALID',json.dumps(invocation)))
+        invocation=bounded_model_invocation(x.get('model_invocation'))
+        c.execute('insert into aiops.analysis_records(analysis_id,run_id,incident_id,idempotency_key,revision,contract_version,provider,model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status,model_invocation) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(aid,rid,run[0],idem,revision,str(analysis.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),str(x.get('prompt_version','analyst-v2.0')),json.dumps(evidence_ids),evidence_hash,json.dumps(analysis),float(analysis.get('confidence',0)),'VALID',json.dumps(invocation)))
     return {'analysis_id':aid,'revision':revision,'evidence_set_hash':evidence_hash,'idempotent':False}
 
 @app.post('/api/runs/{rid}/critique-record')
@@ -466,7 +467,8 @@ def persist_critique(rid:str,x:dict,authorization:str|None=Header(default=None))
         n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(evidence_ids,)).fetchone()[0]
         if n!=len(evidence_ids):raise HTTPException(422,'critique_references_unknown_evidence')
         cid=new('CRT')
-        invocation=bounded_model_invocation(x.get('model_invocation'))\n        c.execute('insert into aiops.critique_records(critique_id,idempotency_key,analysis_id,run_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence,model_invocation) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(cid,idem,aid,rid,str(critique.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),bool(critique.get('validated',False)),json.dumps(critique.get('issues',[])),json.dumps(evidence_ids),json.dumps(critique),float(critique.get('diagnostic_confidence',0)),json.dumps(invocation)))
+        invocation=bounded_model_invocation(x.get('model_invocation'))
+        c.execute('insert into aiops.critique_records(critique_id,idempotency_key,analysis_id,run_id,contract_version,provider,model,validated,issues,evidence_ids,output,diagnostic_confidence,model_invocation) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(cid,idem,aid,rid,str(critique.get('contract_version','2.0')),str(x.get('provider','unknown')),str(x.get('model','unknown')),bool(critique.get('validated',False)),json.dumps(critique.get('issues',[])),json.dumps(evidence_ids),json.dumps(critique),float(critique.get('diagnostic_confidence',0)),json.dumps(invocation)))
     return {'critique_id':cid,'idempotent':False}
 
 @app.post('/api/runs/{rid}/policy-record')
