@@ -7,6 +7,7 @@ from portal.demo_ledger_read import router as demo_ledger_router
 from portal.acme_explore_story import router as acme_explore_story_router
 from portal.acme_impact_read_model import router as acme_impact_router
 from portal.glpi_operator_view import router as glpi_operator_router
+from portal.glpi_run_context import router as glpi_run_context_router
 from portal.portal_integrations import build_navigation
 from portal.noc_runtime import router as noc_runtime_router, _noc_json_response, _require_portal_read_auth
 from portal.portal_command_auth import require_demo_operator
@@ -35,6 +36,7 @@ app.include_router(demo_ledger_router)
 app.include_router(acme_explore_story_router)
 app.include_router(acme_impact_router)
 app.include_router(glpi_operator_router)
+app.include_router(glpi_run_context_router)
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
