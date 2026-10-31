@@ -85,13 +85,18 @@ def _project(rid: str, raw: object) -> dict:
     # CONNECTED describes only the internal Core transport, NOT tenant access.
     # Do not include even a synthetic Run ID, incident ID, mode or status:
     # they are tenant data until an independent server-side ACL is enforced.
+    return _unqualified_run()
+
+
+def _unqualified_run() -> dict:
+    """Constant fail-closed projection, independent of Core Run existence."""
     return {
         "schema": "aiops.portal.run-detail.v1",
         "state": "UNKNOWN",
         "reason": "TENANT_ACL_NOT_QUALIFIED",
-        "connection_state": "CONNECTED",
+        "connection_state": "UNKNOWN",
         "provenance": "UNKNOWN",
-        "source": "CORE_INTERNAL_BEARER_NOC_RUN_READ",
+        "source": "UNKNOWN",
         "source_observed_at": None,
         "source_freshness": "UNKNOWN",
         "tenant_acl_qualified": False,
@@ -235,12 +240,12 @@ def _read(rid: str, authorization: str | None) -> tuple[int, dict]:
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
             return exc.code, {"state": "UNAUTHORIZED", "reason": "CORE_READ_DENIED"}
-        return 503, {"state": "UNAVAILABLE", "reason": "CORE_READ_UNAVAILABLE"}
+        return 503, _unqualified_run()
     except (OSError, TimeoutError):
-        return 503, {"state": "UNAVAILABLE", "reason": "CORE_READ_UNAVAILABLE"}
+        return 503, _unqualified_run()
     except Exception:
         # Includes malformed collections, foreign IDs, tenant claims and bad Core config.
-        return 503, {"state": "UNKNOWN", "reason": "CORE_RUN_UNVERIFIED"}
+        return 503, _unqualified_run()
 
 
 @router.get("/api/portal/runs/{rid}", name="portal_read_only_run_detail")
