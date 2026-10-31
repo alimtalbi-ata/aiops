@@ -64,7 +64,7 @@ def verify(archive: Path) -> dict:
                 raise ValueError("unsafe_archive_path:"+name)
             if name==".env" or name.endswith("/.env") or name.startswith((".git/","backups/","reports/")):
                 raise ValueError("forbidden_archive_content:"+name)
-        required={"RELEASE-MANIFEST.txt","FILES-SHA256SUMS","compose.yml",
+        required={"RELEASE-MANIFEST.txt","FILES-SHA256SUMS","manifests/MANIFEST.json","compose.yml",
                   "deploy/install.sh","deploy/migrate.sh","app/worker/workflow.py",
                   "db/migrations/009_ai_decision_ledger.sql",
                   "db/migrations/010_evidence_identity.sql",
@@ -98,6 +98,37 @@ def verify(archive: Path) -> dict:
             if key in meta:
                 raise ValueError("duplicate_release_manifest_key")
             meta[key]=value
+        # The historical V8 source manifest is not automatically a valid kit
+        # manifest. Verify its independent claims even when FILES-SHA256SUMS passes.
+        try:
+            embedded=json.loads(z.read("manifests/MANIFEST.json"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ValueError("embedded_manifest_unreadable") from exc
+        if not isinstance(embedded,dict) or not isinstance(embedded.get("files"),list) or not embedded["files"]:
+            raise ValueError("embedded_manifest_invalid")
+        if not meta.get("version") or embedded.get("release")!=meta["version"]:
+            raise ValueError("embedded_release_version_mismatch")
+        seen=set()
+        for entry in embedded["files"]:
+            if not isinstance(entry,dict):
+                raise ValueError("embedded_manifest_entry_invalid")
+            path=entry.get("path")
+            size=entry.get("bytes")
+            digest=entry.get("sha256")
+            if (not isinstance(path,str) or not path or path.startswith("/")
+                or "\\" in path or any(p in ("",".","..") for p in path.split("/"))
+                or path in seen or path in ("manifests/MANIFEST.json","FILES-SHA256SUMS")
+                or not isinstance(size,int) or isinstance(size,bool) or size<0
+                or not isinstance(digest,str) or not re.fullmatch(r"[0-9a-f]{64}",digest)):
+                raise ValueError("embedded_manifest_entry_invalid")
+            seen.add(path)
+            if path not in names:
+                raise ValueError("embedded_manifest_file_missing:"+path)
+            payload=z.read(path)
+            if len(payload)!=size:
+                raise ValueError("embedded_manifest_size_mismatch:"+path)
+            if sha256(payload)!=digest:
+                raise ValueError("embedded_manifest_sha_mismatch:"+path)
         if meta.get("real_model_qualification")!="NOT_RUN":
             raise ValueError("real_model_qualification_must_be_explicit")
         if meta.get("production_qualification")!="NOT_RUN":

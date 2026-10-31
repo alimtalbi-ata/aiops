@@ -11,6 +11,10 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 SPEC=importlib.util.spec_from_file_location("aiops_release_verifier",ROOT/"tests"/"verify-package.py")
 MODULE=importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+REFRESH_SPEC=importlib.util.spec_from_file_location(
+    "aiops_release_inventory",ROOT/"deploy"/"refresh_release_inventory.py")
+REFRESH=importlib.util.module_from_spec(REFRESH_SPEC)
+REFRESH_SPEC.loader.exec_module(REFRESH)
 
 REQUIRED=(
     "compose.yml",
@@ -31,12 +35,19 @@ def fixture(tmp, *, qualified=False, failing_evidence=False, stale_reports=False
     flags=[
         "product=AIOps 2.0",
         "qualification="+status,
+        "version=2.1.0-core-rc1.4",
         "synthetic_analyst_critic_quality="+("PASS" if qualified else "NOT_RUN"),
         "ci_evidence_carried="+("yes" if qualified else "no"),
         "real_model_qualification=NOT_RUN",
         "production_qualification=NOT_RUN",
     ]
     entries["RELEASE-MANIFEST.txt"]=("\n".join(flags)+"\n").encode()
+    entries["manifests/MANIFEST.json"]=json.dumps({
+        "release":"2.1.0-core-rc1.4",
+        "files":[{"path":"compose.yml",
+                  "bytes":len(entries["compose.yml"]),
+                  "sha256":hashlib.sha256(entries["compose.yml"]).hexdigest()}]
+    }).encode()
     if qualified or stale_reports:
         eval_result="FAIL" if failing_evidence else "PASS"
         entries["09-Qualification/ai-core-evaluation.json"]=json.dumps({
@@ -144,6 +155,83 @@ class ReleaseQualificationVerificationTests(unittest.TestCase):
                 hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\n")
             with self.assertRaisesRegex(ValueError,"archive_compression_ratio_limit_exceeded"):
                 MODULE.verify(path)
+
+
+    def test_stale_embedded_digest_rejected_even_if_outer_and_file_checksums_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=fixture(tmp)
+            with zipfile.ZipFile(path) as source:
+                entries={n:source.read(n) for n in source.namelist() if n!="FILES-SHA256SUMS"}
+            embedded=json.loads(entries["manifests/MANIFEST.json"])
+            embedded["files"][0]["sha256"]="0"*64
+            entries["manifests/MANIFEST.json"]=json.dumps(embedded).encode()
+            self._repack(path,entries)
+            with self.assertRaisesRegex(ValueError,"embedded_manifest_sha_mismatch"):
+                MODULE.verify(path)
+
+    def test_stale_embedded_size_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=fixture(tmp)
+            with zipfile.ZipFile(path) as source:
+                entries={n:source.read(n) for n in source.namelist() if n!="FILES-SHA256SUMS"}
+            embedded=json.loads(entries["manifests/MANIFEST.json"])
+            embedded["files"][0]["bytes"]+=1
+            entries["manifests/MANIFEST.json"]=json.dumps(embedded).encode()
+            self._repack(path,entries)
+            with self.assertRaisesRegex(ValueError,"embedded_manifest_size_mismatch"):
+                MODULE.verify(path)
+
+    def test_embedded_release_must_match_text_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=fixture(tmp)
+            with zipfile.ZipFile(path) as source:
+                entries={n:source.read(n) for n in source.namelist() if n!="FILES-SHA256SUMS"}
+            embedded=json.loads(entries["manifests/MANIFEST.json"])
+            embedded["release"]="8.0.0"
+            entries["manifests/MANIFEST.json"]=json.dumps(embedded).encode()
+            self._repack(path,entries)
+            with self.assertRaisesRegex(ValueError,"embedded_release_version_mismatch"):
+                MODULE.verify(path)
+
+    def test_missing_embedded_manifest_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=fixture(tmp)
+            with zipfile.ZipFile(path) as source:
+                entries={n:source.read(n) for n in source.namelist()
+                         if n not in ("FILES-SHA256SUMS","manifests/MANIFEST.json")}
+            self._repack(path,entries)
+            with self.assertRaisesRegex(ValueError,"required_files_missing"):
+                MODULE.verify(path)
+
+    def test_staged_inventory_refresh_reconciles_legacy_hashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp)
+            (root/"manifests").mkdir()
+            (root/"compose.yml").write_text("new staged content\n")
+            (root/"manifests/MANIFEST.json").write_text(json.dumps({
+                "release":"8.0.0","name":"legacy",
+                "files":[{"path":"compose.yml","bytes":0,"sha256":"0"*64}]
+            }))
+            self.assertEqual(REFRESH.refresh(root,"2.1.0-core-rc1.4"),1)
+            doc=json.loads((root/"manifests/MANIFEST.json").read_text())
+            self.assertEqual(doc["release"],"2.1.0-core-rc1.4")
+            self.assertEqual(doc["source_manifest_release"],"8.0.0")
+            self.assertEqual(doc["files"][0]["bytes"],len((root/"compose.yml").read_bytes()))
+            self.assertEqual(doc["files"][0]["sha256"],
+                             hashlib.sha256((root/"compose.yml").read_bytes()).hexdigest())
+
+    @staticmethod
+    def _repack(path,entries):
+        entries["FILES-SHA256SUMS"]=("\n".join(
+            hashlib.sha256(data).hexdigest()+"  ./"+name
+            for name,data in sorted(entries.items())
+        )+"\n").encode()
+        with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as target:
+            for name,data in sorted(entries.items()):
+                target.writestr(name,data)
+        path.with_suffix(".zip.sha256").write_text(
+            hashlib.sha256(path.read_bytes()).hexdigest()+"  "+path.name+"\n"
+        )
 
 
 if __name__=="__main__":
