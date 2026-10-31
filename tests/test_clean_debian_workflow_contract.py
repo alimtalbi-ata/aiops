@@ -10,10 +10,10 @@ DOCS = (ROOT / "docs/operations/APPROVED-CLEAN-DEBIAN-DEPLOYMENT.md").read_text(
 class CleanDebianWorkflowContractTests(unittest.TestCase):
     def test_dispatch_requires_exact_commit_sha_not_movable_ref(self):
         self.assertIn("source_sha:", WORKFLOW)
-        self.assertIn(r"^\$SOURCE_SHA", WORKFLOW)
-        self.assertIn(r"\^\[0-9a-f\]\{40\}\$", WORKFLOW)
+        self.assertIn('[[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]', WORKFLOW)
         self.assertNotIn("source_ref:", WORKFLOW)
-        self.assertIn('ref: ${{ inputs.source_sha }}', WORKFLOW)
+        self.assertIn("ref: ${{ inputs.source_sha }}", WORKFLOW)
+        self.assertIn("checkout_sha_mismatch", WORKFLOW)
 
     def test_exact_head_ci_and_approved_ancestry_are_required(self):
         self.assertIn("APPROVED_SOURCE_ANCESTRY=PASS", WORKFLOW)
@@ -34,7 +34,8 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
     def test_documentation_describes_automated_gates(self):
         self.assertIn("exact-head", DOCS)
         self.assertIn("aiops2-clean-", DOCS)
-        self.assertIn("existing AIOps2 containers, volumes and networks", DOCS)
+        self.assertIn("AIOps2-prefixed containers, volumes or networks", DOCS)
+        self.assertIn("CI-gated first-install path", DOCS)
 
 
 if __name__ == "__main__":
