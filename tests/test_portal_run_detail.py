@@ -490,6 +490,7 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["state"], "UNKNOWN")
         self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(response.json()["connection_state"], "UNKNOWN")
         self.assertEqual(response.json()["source_freshness"], "UNKNOWN")
         for key in ("runs", "dashboard", "twin", "incident_id", "run_id"):
             self.assertNotIn(key, response.json())
