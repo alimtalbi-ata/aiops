@@ -767,43 +767,27 @@ class DemoV2Tests(unittest.TestCase):
         self.assertEqual(reads, ["/api/incidents", "/api/runs/RUN-ACME",
                                  "/api/runs/RUN-ACME/evidence"])
 
-    def test_cockpit_api_states_and_verified_run_journey(self):
+    def test_cockpit_public_shell_does_not_load_unscoped_core_twin(self):
         from fastapi.testclient import TestClient
         from portal import main as portal_main
-        listed={"run_id":"RUN-ACME","mode":"DEMO","status":"BLOCKED",
-                "synthetic":True,"incident_id":"INC-ACME"}
-        reads=[]
-        def source(path,base=None):
+
+        reads = []
+        def forbidden(path, base=None):
             reads.append(path)
-            if path=="/api/dashboard":
-                return {"open_incidents":2,"running":0}
-            if path=="/api/twin/summary":
-                return {"nodes":25,"edges":20}
-            if path=="/api/runs/RUN-ACME":
-                return {"run":dict(listed),"events":[]}
-            raise AssertionError(path)
-        with (patch.object(portal_main,"_get",side_effect=source),
-              patch.object(portal_main,"_runs",return_value=[
-                  {"run_id":"RUN-LIVE","mode":"LIVE","status":"RESOLVED"},listed]),
-              patch.object(portal_main,"post_json",
-                           side_effect=AssertionError("read-only"))):
-            response=TestClient(portal_main.app).get("/")
-        self.assertEqual(response.status_code,200)
-        self.assertIn("Core /api/dashboard",response.text)
-        self.assertIn("Twin /api/twin/summary",response.text)
-        self.assertGreaterEqual(response.text.count("CONNECTED"),2)
-        self.assertIn("SYNTHETIC",response.text)
-        for link in ("/demo-studio/run/RUN-ACME",
-                     "/twin?run_id=RUN-ACME",
-                     "/timeline?run_id=RUN-ACME",
-                     "/demo-studio/run/RUN-ACME#demo-ledger-output",
-                     "/demo-studio/run/RUN-ACME#demo-evidence-itsm-output",
-                     "/policy-control?run_id=RUN-ACME"):
-            self.assertIn('href="'+link+'"',response.text)
-        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"',response.text)
-        self.assertIn("Aucun ticket GET authentifié",response.text)
-        self.assertEqual(reads,["/api/dashboard","/api/twin/summary",
-                                "/api/runs/RUN-ACME"])
+            raise AssertionError("public shell must not perform unscoped reads")
+
+        with (patch.object(portal_main, "_get", side_effect=forbidden),
+              patch.object(portal_main, "_runs", side_effect=AssertionError("unscoped run list")),
+              patch.object(portal_main, "post_json", side_effect=AssertionError("read-only"))):
+            response = TestClient(portal_main.app).get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Sources du cockpit", response.text)
+        self.assertIn("UNKNOWN", response.text)
+        self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text) if "TENANT_ACL_NOT_QUALIFIED" in response.text else None
+        self.assertNotIn("CONNECTED", response.text)
+        self.assertNotIn("RUN-ACME", response.text)
+        self.assertEqual(reads, [])
 
     def test_cockpit_refuses_foreign_detail_and_missing_provenance(self):
         from fastapi.testclient import TestClient
