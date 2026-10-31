@@ -38,7 +38,7 @@ The existing loose event-only helper remains for illustrative dedup testing;
 it does **not** authenticate source events and must not be used for release
 evidence or canonical ID correlation.
 
-The strict helper does not authenticate any API or tenant and cannot prove
+Strict Golden and non-Golden manifest comparisons are **type-sensitive canonical JSON byte comparisons**, not Python dictionary equality. Python considers `true == 1`, `false == 0` and `7 == 7.0` equal after JSON parsing; an attacker could otherwise substitute numeric values for safety flags, event counts or nested maintenance/ITIL flags while retaining the original checksum. The isolated adversarial test checks these aliases for both a Golden and a non-Golden replay and requires the storyboard projection to reject them. The existing Golden replay bytes, fixture seed and event IDs are unchanged. This is an offline parsing/consistency guard, **not** an API signature, tenant authentication or LIVE attestation.\n\nThe strict helper does not authenticate any API or tenant and cannot prove
 that a source event happened. `tenant_id`, `incident_id`, `run_id`,
 `ticket_id` and `evidence_ids` remain UNKNOWN until independently read
 from authoritative APIs; `observed_at` and `known_at` in events are simulated
