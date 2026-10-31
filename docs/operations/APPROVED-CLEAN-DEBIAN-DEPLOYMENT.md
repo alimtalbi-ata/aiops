@@ -1,9 +1,9 @@
-# Approved clean Debian deployment from GitHub Actions
+# Automated clean Debian deployment from GitHub Actions
 
 **Status:** Controlled first-install automation; not an in-place upgrade workflow.  
 **Workflow:** `.github/workflows/deploy-clean-debian.yml`  
 **Target:** A new, empty Debian 12 host.  
-**Approval:** GitHub Environment `aiops-debian-lab` must be configured with required reviewers.
+**Approval:** No human approval gate. Dispatch runs automatically once repository SSH secrets are configured.
 
 ## Purpose and safety boundary
 
@@ -15,23 +15,18 @@ No automatic rollback or volume deletion is performed. If installation or qualif
 
 ## GitHub configuration
 
-Create a GitHub Environment named `aiops-debian-lab`:
-
-1. Require at least one reviewer before the deployment job starts.
-2. Restrict deployment branches/tags to reviewed release candidates.
-3. Add these environment-scoped secrets:
+Configure these repository-level Actions secrets (Settings → Secrets and variables → Actions):
    - `DEPLOY_SSH_HOST`: DNS name or IP of the clean Debian 12 host.
    - `DEPLOY_SSH_USER`: non-root account with Docker access.
    - `DEPLOY_SSH_PRIVATE_KEY`: private key dedicated to this workflow.
    - `DEPLOY_SSH_KNOWN_HOSTS`: pre-verified SSH host-key line(s), obtained out-of-band.
-4. Do not use `ssh-keyscan` in the workflow as a trust-on-first-use substitute.
-5. The SSH account must have sufficient disk space (>8 GiB per current preflight), Docker Engine and Compose v2 already installed, and permission to create the selected target path.
+Do not use `ssh-keyscan` in the workflow as a trust-on-first-use substitute. The SSH account must have sufficient disk space (>8 GiB per current preflight), Docker Engine and Compose v2 already installed, and permission to create the selected target path.
 
 Never put the private key or host credentials in repository files, workflow inputs, or deployment artifacts.
 
 ## Run
 
-From GitHub Actions, select **Approved clean Debian deployment** and manually dispatch it with:
+From GitHub Actions, select **Automated clean Debian deployment** and manually dispatch it with:
 - `source_ref`: reviewed branch, tag or immutable commit SHA;
 - `target_root`: absolute path that does not yet exist, for example `/home/aiops/aiops2-v8`.
 
@@ -62,7 +57,7 @@ These are separate release gates. Do not point this first-install workflow at an
 ## Acceptance test
 
 Before using the workflow on a customer or development host:
-- [ ] Configure protected GitHub Environment and reviewer.
+- [ ] Configure the four repository-level Actions secrets.
 - [ ] Provision a disposable Debian 12 host with a dedicated non-root Docker user.
 - [ ] Pre-verify and pin its SSH host key in `DEPLOY_SSH_KNOWN_HOSTS`.
 - [ ] Confirm the target directory does not exist.
@@ -73,4 +68,4 @@ Before using the workflow on a customer or development host:
 
 ## Current status
 
-The workflow is implemented as a guarded first-install path. It is not yet operationally enabled until the GitHub Environment, reviewers, four SSH secrets and a disposable Debian 12 target are provisioned. No SSH deployment was performed as part of authoring this workflow.
+The workflow is implemented as a guarded first-install path with no human approval gate. It is operational once the four repository-level SSH secrets and a disposable Debian 12 target are provisioned. No SSH deployment was performed while authoring this workflow because no target credentials or host were available.
