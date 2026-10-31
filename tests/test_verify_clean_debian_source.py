@@ -23,6 +23,7 @@ def run(name, path, sha=SHA, status="completed", conclusion="success", repo=REPO
 class VerifyCleanDebianSourceTests(unittest.TestCase):
     def fixture(self, comparison="ahead", runs=None):
         responses = {
+            "/branches/main": {"protected": True},
             "/compare/" + SHA + "...main": {"status": comparison},
             "/commits/" + SHA + "/pulls": [{
                 "state": "closed",
@@ -51,7 +52,17 @@ class VerifyCleanDebianSourceTests(unittest.TestCase):
         get_json, calls = self.fixture()
         result = verify_source(REPO, SHA, "read-only-token", get_json)
         self.assertEqual(len(result), 2)
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 4)
+
+
+    def test_rejects_unprotected_main(self):
+        get_json, _ = self.fixture()
+        def unprotected(repo, token, path):
+            if path == "/branches/main":
+                return {"protected": False}
+            return get_json(repo, token, path)
+        with self.assertRaisesRegex(ValueError, "main_branch_protection_disabled"):
+            verify_source(REPO, SHA, "read-only-token", unprotected)
 
     def test_rejects_source_not_in_main(self):
         get_json, _ = self.fixture(comparison="behind")
