@@ -94,7 +94,11 @@ def health():
 
 @app.post("/api/policy/check")
 def check(x: Decision):
-    return evaluate(x)
+    # Preserve the v2.1 three-field HTTP contract consumed by the existing
+    # strict Core read-only probe. Extra fields are internal/fixture only;
+    # absence of an HTTP execution flag never implies permission.
+    verdict = evaluate(x)
+    return {key: verdict[key] for key in ("state", "decision", "reason")}
 
 
 @app.get("/metrics")
