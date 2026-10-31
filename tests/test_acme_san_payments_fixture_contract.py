@@ -118,5 +118,50 @@ class AcmeSanPaymentsFixtureContractTests(unittest.TestCase):
                             for _, _, _, _, payload in steps))
 
 
+    def test_every_twin_edge_and_scenario_target_resolves_to_unique_seed_ci(self):
+        _, sql, edges, steps = seed_contract()
+        nodes = re.findall(
+            r"^\\('(ACME-[^']+)','(?:BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)'",
+            sql, flags=re.MULTILINE,
+        )
+        self.assertEqual(len(nodes), 18)
+        self.assertEqual(len(nodes), len(set(nodes)))
+        for edge_id, (consumer, dependency, _, _) in edges.items():
+            with self.subTest(edge_id=edge_id):
+                self.assertIn(consumer, nodes)
+                self.assertIn(dependency, nodes)
+        for step_no, _, _, target, _ in steps:
+            with self.subTest(step_no=step_no):
+                self.assertIn(target, nodes)
+
+    def test_seed_edge_identity_and_relationships_are_not_ambiguous(self):
+        _, sql, edges, _ = seed_contract()
+        rows = EDGE_ROW.findall(sql)
+        self.assertEqual(len(rows), 17)
+        self.assertEqual(len(rows), len(edges))
+        self.assertEqual(len(rows), len({row[0] for row in rows}))
+        self.assertEqual(len(rows), len({(row[1], row[2], row[3]) for row in rows}))
+
+    def test_portal_illustration_cannot_be_joined_to_core_seed_ids(self):
+        # This older Portal illustration is NOT the canonical Core/Twin seed.
+        # It is never a source for Core incident/run/evidence/ticket identity.
+        portal_path = SEED_PATH.parents[2] / "app/portal/acme-fixtures.json"
+        portal = json.loads(portal_path.read_text(encoding="utf-8"))
+        _, sql, edges, _ = seed_contract()
+        seed_ci_ids = {node for _, (consumer, dependency, _, _) in edges.items()
+                       for node in (consumer, dependency)}
+        portal_ci_ids = {ci["id"] for ci in portal["ci"]}
+        self.assertEqual(portal["schema"], "aiops.acme.demo.v1")
+        self.assertEqual(portal["provenance"], "SIMULATED_TARGET")
+        self.assertFalse(seed_ci_ids.intersection(portal_ci_ids))
+        self.assertTrue(all(inc["status"] == "simulated" and
+                            inc["live_remediation"] is False
+                            for inc in portal["incidents"]))
+        self.assertFalse(any(field in portal for field in
+                             ("tenant_id", "run_id", "evidence_ids", "ticket_id")))
+        self.assertNotIn("ACME-DEMO-SAN-001", sql)
+        self.assertNotIn("ACME-DEMO-PAY-002", sql)
+
+
 if __name__ == "__main__":
     unittest.main()
