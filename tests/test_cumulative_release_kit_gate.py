@@ -11,6 +11,8 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from check_cumulative_release_kit import audit_kit
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy"))
+from refresh_release_inventory import refresh
 
 
 class CumulativeKitGateTests(unittest.TestCase):
@@ -60,6 +62,34 @@ class CumulativeKitGateTests(unittest.TestCase):
         return audit_kit(self.kit, self.sha, self.source if source else None,
                          required_paths=self.required, alternative_groups={})
 
+    def staged_manifest(self):
+        stage = self.root / "stage"
+        for name, content in self.files.items():
+            path = stage / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        self.assertEqual(refresh(stage, "2.1.0-core-rc1.4"), 2)
+        return json.loads((stage / "manifests/MANIFEST.json").read_text())
+
+    def test_generated_staged_manifest_preserves_exact_source_provenance(self):
+        staged = self.staged_manifest()
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(staged).encode()})
+        result = self.audit()
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertEqual(result["source_files_verified"], 3)
+
+    def test_generated_manifest_forged_source_release_fails(self):
+        staged = self.staged_manifest()
+        staged["source_manifest_release"] = "forged"
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(staged).encode()})
+        self.assertIn("STAGED_MANIFEST_SOURCE_PROVENANCE_MISMATCH", self.audit()["errors"])
+
+    def test_generated_manifest_forged_file_order_fails(self):
+        staged = self.staged_manifest()
+        staged["files"].reverse()
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(staged).encode()})
+        self.assertIn("STAGED_MANIFEST_SOURCE_PROVENANCE_MISMATCH", self.audit()["errors"])
+
     def test_valid_inventory_with_exact_source(self):
         self.build()
         result = self.audit()
@@ -101,6 +131,39 @@ class CumulativeKitGateTests(unittest.TestCase):
     def test_unchecksummed_file_fails(self):
         self.build(extra=[("untracked.txt", b"unverified")])
         self.assertIn("UNCHECKSUMMED_MEMBER:untracked.txt", self.audit()["errors"])
+
+    def test_checksummed_untracked_member_fails_source_provenance(self):
+        # Sidecar integrity alone does not prove that the member belongs to HEAD.
+        self.build(overrides={"foreign.txt": b"not in git HEAD"})
+        result = self.audit()
+        self.assertIn("SOURCE_MEMBER_UNTRACKED:foreign.txt", result["errors"])
+
+    def test_non_required_tracked_member_must_match_head(self):
+        path = self.source / "notes.txt"
+        path.write_bytes(b"tracked source\\n")
+        subprocess.run(["git", "-C", str(self.source), "add", "notes.txt"], check=True)
+        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=CI",
+                        "-c", "user.email=ci@example.invalid",
+                        "commit", "-qm", "add non-required source"], check=True)
+        self.sha = subprocess.check_output(
+            ["git", "-C", str(self.source), "rev-parse", "HEAD"], text=True).strip()
+        self.build(overrides={"notes.txt": b"modified in package\\n"})
+        result = self.audit()
+        self.assertIn("SOURCE_BLOB_MISMATCH:notes.txt", result["errors"])
+
+    def test_non_required_tracked_member_matching_head_passes(self):
+        path = self.source / "notes.txt"
+        path.write_bytes(b"tracked source\\n")
+        subprocess.run(["git", "-C", str(self.source), "add", "notes.txt"], check=True)
+        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=CI",
+                        "-c", "user.email=ci@example.invalid",
+                        "commit", "-qm", "add non-required source"], check=True)
+        self.sha = subprocess.check_output(
+            ["git", "-C", str(self.source), "rev-parse", "HEAD"], text=True).strip()
+        self.build(overrides={"notes.txt": b"tracked source\\n"})
+        result = self.audit()
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertEqual(result["source_files_verified"], 4)
 
     def test_zip_slip_member_fails(self):
         self.build(extra=[("../escape.txt", b"bad")])
