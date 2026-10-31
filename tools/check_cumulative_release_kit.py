@@ -44,7 +44,8 @@ REQUIRED_PATHS = (
 # partial four-service transaction; neither is a cumulative-kit rollback.
 # Presence of these paths is NOT evidence that an operation was exercised.
 ENTRYPOINT_ALTERNATIVES = {
-    "install_upgrade_entrypoint": ("deploy/install.sh", "deploy/release_install.py"),
+    "install_entrypoint": ("deploy/install.sh", "deploy/release_install.py"),
+    "upgrade_entrypoint": ("deploy/upgrade.sh", "deploy/release_upgrade.py"),
     "rollback_entrypoint": ("deploy/rollback.sh", "deploy/release_rollback.py"),
 }
 SHA = re.compile(r"^[0-9a-f]{40}$")
