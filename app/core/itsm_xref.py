@@ -105,7 +105,11 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
         observed,known=_utc(e["observed_at"]),_utc(e["known_at"])
         if observed is None or known is None: return "UNKNOWN",None
         if observed>known or observed>now or known>now: return "CONFLICT",None
-        if previous is not None and known<_utc(previous["known_at"]): return "CONFLICT",None
+        # A superseding source observation cannot precede the event it supersedes.
+        # Later ingestion alone must not turn an out-of-order observation into VERIFIED.
+        if previous is not None and (known<_utc(previous["known_at"]) or
+                                     observed<_utc(previous["observed_at"])):
+            return "CONFLICT",None
         previous=e
     e=previous
     if e["event_type"]=="REVOKED": return "UNKNOWN",None
