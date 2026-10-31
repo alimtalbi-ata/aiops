@@ -166,6 +166,8 @@ jobs:
               }.items():
                   print(key + "=" + value, file=f)
           PY
+      - name: P0 combined 009 AI / 010 Evidence / 011 HITL / 012 xref PG16 disposable chain, idempotence and DDL rollback
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_core_itsm_xref_migration_chain.py" -v
       - name: Start actual Core HTTP service and verify readiness
         run: |
           PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &

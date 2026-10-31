@@ -40,3 +40,14 @@ The migration 012 is staged for architect review only; the combined
 009 AI / 010 Evidence / 011 HITL / 012 xref chain, idempotence and rollback
 remain NOT_QUALIFIED on a disposable PostgreSQL instance. Never apply it
 to a persistent DB. Rollback is revert of this branch and deletion of CI DB.
+
+## Disposable combined migration qualification
+A separate CI-only database tests 001→004→009 AI→010 Evidence→011 HITL→012 xref,
+a full transactional DDL rollback, and a second idempotent application.
+The three predecessor SQL fixtures are pinned by Git blob SHA-1 from
+`#194@40d38705cf2bde3be6052340442c117a81908f65`; they are **test-only
+snapshots**, not installed migrations. This does not qualify the final
+architect-integrated migration versions, data downgrade, or any persistent
+database upgrade. CI refuses non-loopback PostgreSQL and always drops the
+isolated test database. Final chain still requires requalification on the
+architect's exact integrated HEAD.
