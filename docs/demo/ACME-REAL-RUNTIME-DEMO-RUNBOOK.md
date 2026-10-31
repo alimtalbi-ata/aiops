@@ -73,6 +73,47 @@ The host-gateway alias `host.docker.internal` is added to the Intelligence Compo
 
 Discover the exact model ID from the NIM OpenAI-compatible `GET /v1/models` endpoint. The `LLM_MODEL` value must match the returned ID exactly; the string “Nemotron 120B” is a human label, not a guaranteed API model identifier. Do not guess a NIM alias. If the endpoint requires authentication, supply its key through the protected secret file only. Never include the key in command history, output, issue comments or CI logs.
 
+
+### Probe the configured NIM endpoint from the Intelligence container
+
+Run this from the Debian Compose project directory after the Intelligence image containing the NIM adapter has been deployed. It reads the configured endpoint and API key inside the container, queries `/v1/models`, and prints only the non-secret endpoint/model IDs. It never prints the API key.
+
+```bash
+docker exec -i aiops2-rebuild-intelligence python - <<'PY'
+import json, os, urllib.request, urllib.error
+base = os.environ.get("LLM_BASE_URL", "").rstrip("/")
+model = os.environ.get("LLM_MODEL", "")
+provider = os.environ.get("LLM_PROVIDER_NAME", "openai-compatible")
+print("PROVIDER=", provider)
+print("BASE_URL=", base or "NOT_CONFIGURED")
+print("CONFIGURED_MODEL=", model or "NOT_CONFIGURED")
+if not base:
+    raise SystemExit(2)
+models_url = base + "/models" if base.endswith("/v1") else base + "/v1/models"
+headers = {}
+key = os.environ.get("LLM_API_KEY", "")
+if key:
+    headers["Authorization"] = "Bearer " + key
+try:
+    req = urllib.request.Request(models_url, headers=headers)
+    with urllib.request.urlopen(req, timeout=8) as response:
+        payload = json.loads(response.read(1024 * 1024))
+    ids = [item.get("id") for item in payload.get("data", []) if isinstance(item, dict) and item.get("id")]
+    print("NIM_MODELS_HTTP=200")
+    print("AVAILABLE_MODEL_IDS=", json.dumps(ids))
+    print("CONFIGURED_MODEL_MATCH=", model in ids)
+except urllib.error.HTTPError as exc:
+    print("NIM_MODELS_HTTP=", exc.code)
+    raise SystemExit(1)
+except Exception as exc:
+    print("NIM_MODELS_PROBE=UNAVAILABLE")
+    print("ERROR_TYPE=", type(exc).__name__)
+    raise SystemExit(1)
+PY
+```
+
+Do not paste secrets. Share only `PROVIDER`, `BASE_URL`, `CONFIGURED_MODEL`, `AVAILABLE_MODEL_IDS` and the HTTP status. A successful `/models` probe confirms connectivity only; the Analyst/Critic evaluation and a real synthetic workflow are still required to qualify inference.
+
 The Intelligence `/ready` response reports the configured provider label and model ID (never the API key). The actual qualification is stronger than readiness: run the fixed evidence-grounded Analyst/Critic evaluation and then the canonical synthetic Temporal scenario. The provider must return structured JSON accepted by the strict contracts. Both invocations must persist invocation ID, model/provider, prompt version, latency and provider-reported usage. If NIM omits usage, token fields remain UNKNOWN; do not estimate them.
 
 A 105-second inference timeout leaves time inside the Worker activity deadline for Core ledger persistence and retry handling. Tune only from measured p95 latency; keep the Worker activity's outer timeout larger than the provider timeout. Never disable fail-closed behavior to make a slow model appear successful.
