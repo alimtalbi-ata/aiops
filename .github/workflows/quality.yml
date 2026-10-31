@@ -37,6 +37,15 @@ jobs:
         env:
           PYTHONPATH: app
         run: python -m unittest discover -s tests -p "test_intelligence_http_integration.py" -v
+      - name: Temporal Worker real Analyst/Critic and fail-closed contracts
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_worker_boot.py" -v
+          python -m unittest discover -s tests -p "test_worker_dgx_timeout_v25.py" -v
+          python -m unittest discover -s tests -p "test_worker_critic_block_v26.py" -v
+          python -m unittest discover -s tests -p "test_v28_worker_resume_behavior.py" -v
+          python -m unittest discover -s tests -p "test_v28_denial_worker.py" -v
       - name: AI evaluator and benchmark aggregation contract tests
         run: |
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
