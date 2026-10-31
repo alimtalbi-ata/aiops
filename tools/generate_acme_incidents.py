@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SEED_FILE = ROOT / "db/migrations/005_seed_acme.sql"
 CATALOG_FILE = ROOT / "tests/fixtures/acme_enterprise_incident_catalog_v1.json"
 SEED_GIT_BLOB = "67f0124a2c3b450e5249165e719a5d943fdd7237"
+CATALOG_GIT_BLOB = "78e749c623d7ee7ea1d33a74577b4f7b696f3207"
 SOURCE = "ACME_OFFLINE_SYNTHETIC_REPLAY_V1"
 ANCHOR = datetime(2026, 10, 31, 9, 42, tzinfo=timezone.utc)  # fixture clock, NOT wall clock
 NODE_RE = re.compile(r"^\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','[^']+','[^']+',([1-5]),", re.M)
@@ -91,6 +92,8 @@ def load_graph(path=SEED_FILE):
 
 def load_catalog(path=CATALOG_FILE):
     raw = Path(path).read_bytes()
+    if _git_blob(raw) != CATALOG_GIT_BLOB:
+        raise ValueError("catalog Git blob mismatch; no unreviewed scenario parameters")
     data = json.loads(raw, object_pairs_hook=_unique_object)
     if (data.get("schema") != "aiops.acme.synthetic-incident-catalog.v1" or
             data.get("graph_git_blob") != SEED_GIT_BLOB or
