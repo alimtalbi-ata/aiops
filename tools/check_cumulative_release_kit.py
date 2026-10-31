@@ -206,7 +206,7 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         ["git", "-C", str(root), "ls-files", "-z", "--cached"],
                         stderr=subprocess.DEVNULL)
                     tracked = set(tracked_output.decode(
-                        "utf-8", "surrogateescape").rstrip("\\0").split("\\0"))
+                        "utf-8", "surrogateescape").rstrip("\0").split("\0"))
                 except (OSError, subprocess.CalledProcessError):
                     errors.append("SOURCE_TRACKED_FILES_UNAVAILABLE")
                     tracked = set()
