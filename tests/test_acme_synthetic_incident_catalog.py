@@ -444,6 +444,74 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                                         e["freshness"] == "SYNTHETIC_CLOCK_ONLY"
                                         for e in events))
 
+    def test_storyboard_projects_same_event_ids_path_roles_and_unknown_runtime(self):
+        manifest = gen.replay(seed=20261018)
+        story = gen.storyboard_offline(manifest)
+        self.assertEqual(story, gen.storyboard_offline(gen.replay(seed=20261018)))
+        self.assertEqual(story["source_dataset_sha256"], manifest["dataset_sha256"])
+        self.assertEqual(story["source_manifest_sha256"],
+                         hashlib.sha256(gen._canonical(manifest)).hexdigest())
+        self.assertEqual(story["graph_version"], gen.SEED_GIT_BLOB)
+        self.assertEqual(story["service_id"], "ACME-SVC-PAYMENTS")
+        self.assertEqual(story["dependency_path"]["node_ids"],
+                         manifest["impact_estimate"]["path_node_ids"])
+        self.assertEqual(story["dependency_path"]["edge_ids"],
+                         manifest["impact_estimate"]["path_edge_ids"])
+        self.assertEqual(story["dependency_path"]["business_links"], [
+            {"edge_id": "ACME-E01", "business_ci_id": "ACME-BIZ-PAYMENTS"}])
+        self.assertEqual(story["event_count"], 7)
+        self.assertEqual([e["source_event_id"] for e in story["timeline"]],
+                         [e["source_event_id"] for e in manifest["events"]])
+        self.assertEqual([e["event_time"] for e in story["timeline"]],
+                         [e["event_time"] for e in manifest["events"]])
+        self.assertEqual([e["ci_id"] for e in story["timeline"]],
+                         [e["ci_id"] for e in manifest["events"]])
+        self.assertEqual(story["itil"]["roles_planned"], [
+            "N1", "N2", "N3", "INCIDENT_COMMANDER"])
+        self.assertEqual(story["itil"]["priority_candidate"], "P1")
+        self.assertEqual(story["itil"]["priority_confirmed"], "UNKNOWN")
+        self.assertFalse(story["itil"]["roles_authenticated"])
+        self.assertEqual(story["dependency_path"]["observed_service_impact"], "UNKNOWN")
+        for key in ("tenant_id", "incident_id", "run_id", "ticket_id"):
+            self.assertIsNone(story[key])
+        self.assertEqual(story["evidence_ids"], [])
+        self.assertEqual(story["runtime_api_readback"], "NOT_EXECUTED")
+        self.assertFalse(story["publishable_to_core_or_glpi"])
+        self.assertFalse(story["live_effects_authorized"])
+        self.assertFalse(story["recovery_verified"])
+        self.assertTrue(all(e["runtime_evidence_id"] is None and
+                            e["runtime_readback"] == "NOT_EXECUTED" and
+                            e["provenance"] == "SYNTHETIC_FIXTURE"
+                            for e in story["timeline"]))
+        self.assertEqual([c["stage"] for c in story["checkpoints"]], list(gen.CHECKPOINTS))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in story["checkpoints"]))
+
+    def test_storyboard_rejects_rehashed_forged_runtime_and_non_golden_mode(self):
+        manifest = gen.replay()
+        for name, mutate in (
+            ("runtime_evidence", lambda m: m["events"][2].__setitem__("evidence_id", "FAKE")),
+            ("recovered", lambda m: m["events"][-1]["payload"].__setitem__("state", "HEALTHY")),
+            ("ticket", lambda m: m.__setitem__("ticket_id", "FAKE")),
+            ("checkpoint", lambda m: m["checkpoints"][3].__setitem__("status", "SUCCESS")),
+        ):
+            with self.subTest(name=name):
+                forged = copy.deepcopy(manifest)
+                mutate(forged)
+                unsigned = {k: v for k, v in forged.items() if k != "dataset_sha256"}
+                forged["dataset_sha256"] = hashlib.sha256(gen._canonical(unsigned)).hexdigest()
+                with self.assertRaises(ValueError):
+                    gen.storyboard_offline(forged)
+        with self.assertRaises(ValueError):
+            gen.storyboard_offline(gen.replay(seed=20261019))
+        capacity = gen.replay("CAPACITY_PRESSURE", seed=42, stochastic=True)
+        self.assertEqual(gen.storyboard_offline(capacity)["event_count"], capacity["event_count"])
+        fp = gen.replay("CAPACITY_PRESSURE", seed=42, false_positive=True)
+        with self.assertRaises(ValueError):
+            gen.storyboard_offline(fp)
+        self.assertEqual(gen.storyboard_offline(fp, false_positive=True)["itil"]["priority_candidate"],
+                         "UNKNOWN")
+
     def test_cli_cannot_overwrite_source_fixture_or_file_alias(self):
         """Replay export must not mutate the pinned SQL/catalog or repository docs."""
         original = {path: hashlib.sha256(path.read_bytes()).hexdigest()
