@@ -17,8 +17,9 @@ class EndScan(Exception):
 
 
 class OfflineClient:
-    def __init__(self, signals):
+    def __init__(self, signals, *, signal_failure=False):
         self.signals = signals
+        self.signal_failure = signal_failure
         self.connects = 0
 
     async def connect(self, address):
@@ -31,6 +32,8 @@ class OfflineClient:
         return self
 
     async def signal(self, signal_method, payload):
+        if self.signal_failure:
+            raise ConnectionError("injected_temporal_signal_failure")
         self.signals.append(dict(payload))
 
 
@@ -44,11 +47,12 @@ def event(**changes):
 
 
 def scan_once(claims, *, lost_ack=False, signals=None, acknowledgements=None,
-              ack_receipt="DEFAULT", debug_events=None):
+              ack_receipt="DEFAULT", debug_events=None,
+              signal_failure=False):
     """Execute one AST-extracted scan; interrupt only the idle sleep."""
     signals = [] if signals is None else signals
     acknowledgements = [] if acknowledgements is None else acknowledgements
-    client = OfflineClient(signals)
+    client = OfflineClient(signals, signal_failure=signal_failure)
     requests = []
 
     def post(base, path, payload, **kwargs):
@@ -172,6 +176,52 @@ class OutboxWorkerReplayFaultTests(unittest.TestCase):
                 self.assertEqual(len(signals), 1)
                 self.assertEqual(len(acks), 1)
                 self.assertEqual(debug_events, [])
+
+    def test_temporal_signal_failure_never_acks_then_retries_no_effect(self):
+        """A failed Temporal signal is not Core authorization or delivery."""
+        original = {"execution_allowed": False, "effect_allowed": False,
+                    "items": [event()]}
+        debug_events = []
+        signals, acks, requests = scan_once(
+            original, signal_failure=True, debug_events=debug_events)
+        self.assertEqual((signals, acks), ([], []))
+        self.assertEqual([path for path, _ in requests],
+                         ["/api/hitl/decision-outbox/claim"])
+        self.assertEqual(len(debug_events), 1)
+        self.assertEqual(debug_events[0][-1], "ConnectionError")
+
+        # Offline logical lease takeover: no real DB clock or network claim.
+        reclaimed = {"execution_allowed": False, "effect_allowed": False,
+                     "items": [event(lease_token="lease-2")]}
+        signals, acks, requests = scan_once(reclaimed)
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(acks, [{"lease_token": "lease-2"}])
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(signals[0]["decision"], "REJECT")
+        self.assertNotIn("execution_allowed", signals[0])
+        self.assertNotIn("effect_allowed", signals[0])
+
+    def test_poisoned_batch_item_does_not_block_independent_rejections(self):
+        """Skip malformed claims; only valid REJECT notifications get ACKs."""
+        batch = {"execution_allowed": False, "effect_allowed": False,
+                 "items": [
+                     event(event_id="HDO-INVALID", proposal_revision=0),
+                     event(),
+                     event(event_id="HDO-SECOND", proposal_id="ACT-SECOND",
+                           lease_token="lease-2"),
+                 ]}
+        signals, acks, requests = scan_once(batch)
+        self.assertEqual([p["proposal_id"] for p in signals],
+                         ["ACT-ISOLATED", "ACT-SECOND"])
+        self.assertTrue(all(p["decision"] == "REJECT" for p in signals))
+        self.assertEqual(acks, [{"lease_token": "lease-1"},
+                                {"lease_token": "lease-2"}])
+        self.assertEqual([path for path, _ in requests
+                          if path.endswith("/delivered")],
+                         ["/api/hitl/decision-outbox/HDO-ISOLATED/delivered",
+                          "/api/hitl/decision-outbox/HDO-SECOND/delivered"])
+        self.assertTrue(all("execution_allowed" not in p
+                            and "effect_allowed" not in p for p in signals))
 
     def test_valid_revoke_is_notification_only(self):
         claim = {"execution_allowed": False, "effect_allowed": False,
