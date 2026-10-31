@@ -419,6 +419,7 @@ def bad_refs(analyst, evidence):
 def answer(x: AssistantRequest, authorization: str | None = Header(default=None)):
     """Evidence-grounded interactive assistant; advisory only, no tool execution."""
     auth(authorization)
+    enforce_request_budget(x)
     integrity_errors = validate_evidence(x.evidence)
     if integrity_errors:
         raise HTTPException(422, detail={'code':'invalid_evidence_contract','reasons':integrity_errors})
