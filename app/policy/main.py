@@ -25,7 +25,7 @@ class Decision(BaseModel):
     human_approved: bool = False
 
 
-def evaluate(x: Decision) -> dict:
+def _evaluate_decision(x: Decision) -> dict:
     # Severity is an independent safety signal: never downgrade P1 to UNKNOWN
     # or ALLOW merely because evidence is missing or confidence is high.
     if x.mode == "LIVE" and x.severity == "P1":
@@ -77,6 +77,16 @@ def evaluate(x: Decision) -> dict:
     return {"state": "BLOCKED", "decision": "HUMAN_APPROVAL", "reason": reason}
 
 
+def evaluate(x: Decision) -> dict:
+    """Expose a non-authorizing Policy verdict on every path.
+
+    PASS/ALLOW can describe a read-only policy check, never an effect grant.
+    Core HITL, OIDC, fencing and executor authorization are separate gates.
+    """
+    verdict = _evaluate_decision(x)
+    return {**verdict, "execution_allowed": False, "effect_allowed": False}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "component": "policy", "fail_closed": True}
@@ -84,7 +94,11 @@ def health():
 
 @app.post("/api/policy/check")
 def check(x: Decision):
-    return evaluate(x)
+    # Preserve the v2.1 three-field HTTP contract consumed by the existing
+    # strict Core read-only probe. Extra fields are internal/fixture only;
+    # absence of an HTTP execution flag never implies permission.
+    verdict = evaluate(x)
+    return {key: verdict[key] for key in ("state", "decision", "reason")}
 
 
 @app.get("/metrics")
