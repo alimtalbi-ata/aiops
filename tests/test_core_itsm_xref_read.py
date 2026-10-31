@@ -171,6 +171,39 @@ class CoreXrefReadContractTests(unittest.TestCase):
                 self.assertEqual(out["link_status"], status)
                 self.assert_hidden(out)
 
+    def test_real_core_negative_readback_has_no_business_identifiers(self):
+        # Core's actual 200 negative response is only {schema, status}.
+        # It is not an authorization failure and must never expose a Run.
+        for status, expected in (("STALE", "STALE"), ("CONFLICT", "CONFLICT"),
+                                 ("UNKNOWN", "UNKNOWN")):
+            with self.subTest(status=status):
+                body = {"schema": SCHEMA, "status": status}
+                out = call(Mock(return_value=CoreRead(200, body, True, True)))
+                self.assertEqual(out["link_status"], expected)
+                self.assertEqual(out["connection_state"], "CONNECTED")
+                self.assert_hidden(out)
+
+    def test_negative_readback_requires_transport_acl_and_rejects_wrong_scope(self):
+        body = {"schema": SCHEMA, "status": "STALE"}
+        for authenticated, scoped in ((False, True), (True, False)):
+            with self.subTest(authenticated=authenticated, scoped=scoped):
+                out = call(Mock(return_value=CoreRead(200, body, authenticated, scoped)))
+                self.assertEqual(out["link_status"], "UNAUTHORIZED")
+                self.assert_hidden(out)
+        for field, value, expected in (("tenant_id", "TEN-OTHER", "UNAUTHORIZED"),
+                                       ("glpi_instance_id", "GLPI-OTHER", "UNKNOWN"),
+                                       ("ticket_id", "9999", "UNKNOWN")):
+            with self.subTest(field=field):
+                out = call(Mock(return_value=CoreRead(
+                    200, {**body, field: value}, True, True)))
+                self.assertEqual(out["link_status"], expected)
+                self.assert_hidden(out)
+        # A positive status without canonical IDs cannot become VERIFIED.
+        out = call(Mock(return_value=CoreRead(
+            200, {"schema": SCHEMA, "status": "VERIFIED"}, True, True)))
+        self.assertNotEqual(out["link_status"], "VERIFIED")
+        self.assert_hidden(out)
+
     def test_missing_or_forged_provenance_denied(self):
         cases = [{"source_event_id": None}, {"association_id": None},
                  {"mapping_version": True}, {"mapping_version": 0},
