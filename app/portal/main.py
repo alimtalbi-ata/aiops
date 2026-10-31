@@ -68,12 +68,21 @@ def portal_bootstrap_script():
 
 @app.get('/api/portal/components')
 def components(authorization: str | None = Header(default=None)):
-    # Reuse PR #36 NOC viewer contract; reject before reading configured URLs.
+    # A shared viewer bearer authenticates but cannot authorize disclosure
+    # of operator-configured GLPI/NOC URLs or tenant-specific navigation.
+    # Do not read the registry or environment links before server-derived ACL.
     try:
         _require_portal_read_auth(authorization)
     except HTTPException as exc:
         return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
-    return _noc_json_response(build_navigation())
+    return _noc_json_response({
+        'state': 'UNKNOWN',
+        'reason': 'TENANT_ACL_NOT_QUALIFIED',
+        'connection_state': 'UNKNOWN',
+        'source': 'PORTAL_NAVIGATION_NOT_TENANT_AUTHORIZED',
+        'source_freshness': 'UNKNOWN',
+        'tenant_acl_qualified': False,
+    }, status_code=503)
 
 @app.get('/assets/portal-navigation.js')
 def portal_navigation_script():
