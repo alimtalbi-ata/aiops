@@ -165,3 +165,21 @@ The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte Z
 | T5 | NO_GO | No independent LIVE authorization or effect qualification |
 
 `RELEASE_STABLE=NO_GO`. No merge, main push, Debian/runner/cron, GLPI write or LIVE action.
+
+
+### 2026-10-31 03:27 UTC — fail-closed Run response normalization, exact CI pending
+
+#201 main-based `a5bdb5bfeb8a05bd761cba7268b9c6ffc8fc3b95` (base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`), two targeted commits `647ced1057891d5c88395c2226b486e765ad976f` and `a5bdb5bfeb8a05bd761cba7268b9c6ffc8fc3b95`: Portal Run API/HTML 503 responses for valid, absent, foreign/malformed and timeout Core reads are source-normalized to `UNKNOWN/TENANT_ACL_NOT_QUALIFIED`, `connection_state=UNKNOWN`, `source=UNKNOWN`; one five-scenario negative test added. 401/403 authentication denials preserved. This is **not** Core actor+tenant authorization; upstream auth-status and timing side channels are not qualified. New exact-head Quality **NOT_OBSERVED** at this write; previous `e6f9ad65` Quality 41155594473 SUCCESS 3/3 remains historical T0 only.
+
+#195 previous `cb19bbe5` Quality 41160220790 SUCCESS 3/3. #202 `2f49443e` Quality 41162565031 SUCCESS 3/3 (older Run blob). #204 stacked `b4198e1e` Quality 41162880436 SUCCESS 6/6, not a main-based E2E. #196 `747f0df4` Quality 41083049858 FAILURE, zero scored Ollama repeats.
+
+| Gate | Decision | Basis |
+|---|---|---|
+| T0 | PENDING | New #201 source SHA requires exact-head CI; prior SHA GO_LIMITED |
+| T1 | BLOCKED | Core-owned actor+tenant exact-Run ACL absent; no authenticated isolated integration |
+| T2 | NOT_QUALIFIED | No complete 14-checkpoint ACME single-Run receipt on #201 |
+| T3 | NOT_ATTESTED | No Debian host/runner access |
+| T4 | NO_GO | No main-based cumulative install/upgrade/rollback sandbox exercise |
+| T5 | NO_GO | No independent LIVE authorization/effect attestation |
+
+`RELEASE_STABLE=NO_GO`. No merge, main push, Debian/cron/runner, GLPI write or LIVE.
