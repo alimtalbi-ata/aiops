@@ -98,3 +98,32 @@ class GLPIClient:
             "range":f"0-{max(1,min(int(limit),100))-1}",
         }
         return self._call("GET","search/Ticket",params=params)
+
+    def list_ticket_followups(self,ticket_id,limit=100):
+        if not str(ticket_id).isdigit():
+            raise ValueError("invalid_glpi_ticket_id")
+        count=max(1,min(int(limit),100))
+        result=self._call("GET",f"Ticket/{int(ticket_id)}/ITILFollowup",
+                          params={"range":f"0-{count-1}","order":"DESC"})
+        if not isinstance(result,list):
+            raise GLPIError("glpi_followup_list_invalid")
+        return result
+
+    def add_private_followup(self,ticket_id,marker,content):
+        """Idempotently add an internal note; never create a public follow-up."""
+        if not str(ticket_id).isdigit():
+            raise ValueError("invalid_glpi_ticket_id")
+        if not isinstance(marker,str) or not marker.startswith("[AIOPS2-HITL-PROPOSAL:"):
+            raise ValueError("invalid_aiops_followup_marker")
+        if not isinstance(content,str) or marker not in content or len(content)>6000:
+            raise ValueError("invalid_aiops_followup_content")
+        existing=self.list_ticket_followups(ticket_id,100)
+        for item in existing:
+            if isinstance(item,dict) and marker in str(item.get("content","")):
+                return {"id":item.get("id"),"idempotent":True,"is_private":item.get("is_private") in (1,True,"1")}
+        result=self._call("POST","ITILFollowup",json={"input":{
+            "itemtype":"Ticket","items_id":int(ticket_id),"content":content,"is_private":1
+        }})
+        if not isinstance(result,dict) or not result.get("id"):
+            raise GLPIError("glpi_followup_receipt_invalid")
+        return {"id":result["id"],"idempotent":False,"is_private":True}
