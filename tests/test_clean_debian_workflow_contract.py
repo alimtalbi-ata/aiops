@@ -28,6 +28,7 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
         self.assertIn("actions: read", WORKFLOW)
         self.assertIn("pull-requests: read", WORKFLOW)
         self.assertIn("MERGED_MAIN_PR=PASS", source_gate)
+        self.assertIn("main_branch_protection_disabled", source_gate)
         push_section = QUALIFICATION_WORKFLOW.split("  push:", 1)[1].split("\n\npermissions:", 1)[0]
         self.assertIn("- main", push_section)
 
