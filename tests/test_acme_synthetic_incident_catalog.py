@@ -512,6 +512,24 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
         self.assertEqual(gen.storyboard_offline(fp, false_positive=True)["itil"]["priority_candidate"],
                          "UNKNOWN")
 
+    def test_cli_storyboard_export_is_deterministic_and_not_runtime_evidence(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "acme-storyboard.json"
+            cmd = [sys.executable, str(gen.ROOT / "tools/generate_acme_incidents.py"),
+                   "--scenario", "REDUNDANT_SAN_PATH_LOSS", "--seed", "20261018",
+                   "--storyboard", "--output", str(out)]
+            first = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            raw = out.read_bytes()
+            second = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            story = json.loads(raw)
+            self.assertEqual(raw, out.read_bytes())
+            self.assertEqual(first.stdout, second.stdout)
+            self.assertEqual(json.loads(first.stdout)["sha256"], hashlib.sha256(raw).hexdigest())
+            self.assertEqual(story, gen.storyboard_offline(gen.replay()))
+            self.assertEqual(story["schema"], "aiops.acme.synthetic-storyboard.v1")
+            self.assertEqual(story["runtime_api_readback"], "NOT_EXECUTED")
+            self.assertFalse(story["publishable_to_core_or_glpi"])
+
     def test_cli_cannot_overwrite_source_fixture_or_file_alias(self):
         """Replay export must not mutate the pinned SQL/catalog or repository docs."""
         original = {path: hashlib.sha256(path.read_bytes()).hexdigest()
