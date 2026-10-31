@@ -154,13 +154,14 @@ def verified_no_effect_command_receipt(receipt, run_id, command, expected_versio
     return {**receipt, 'execution_allowed': False, 'effect_allowed': False}
 
 
-def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version):
+def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version, expected_event_type='STAGE_COMPLETED'):
     """Normalize a Core event ACK only after a known PASS event was committed.
 
     Core's event API returns run_id/sequence/version, not event status.
     Never promote a contradictory, stale or effect-authorizing ACK.
     """
-    if (not isinstance(receipt, dict)
+    if (expected_event_type not in ('STAGE_COMPLETED', 'HITL_SIMULATION_SKIPPED')
+            or not isinstance(receipt, dict)
             or receipt.get('run_id') != run_id
             or type(started_version) is not int
             or type(receipt.get('version')) is not int
@@ -170,7 +171,7 @@ def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version):
             or type(receipt.get('sequence')) is not int
             or receipt['sequence'] < 1
             or ('stage' in receipt and receipt['stage'] != stage)
-            or receipt.get('event_type') not in (None, 'STAGE_COMPLETED')
+            or receipt.get('event_type') not in (None, expected_event_type)
             or ('idempotent' in receipt and type(receipt['idempotent']) is not bool)
             or receipt.get('status') not in (None, 'PASS')
             or any(receipt.get(key) is not None and receipt.get(key) is not False
@@ -383,6 +384,8 @@ def _execute_stage_blocking(a,attempt):
                     'confidence': 0,
                     'payload': payload,
                 })
+                event = verified_no_effect_stage_receipt(
+                    event, rid, stage, v, 'HITL_SIMULATION_SKIPPED')
                 post_json(CORE, f'/api/runs/{rid}/checkpoint',
                           {'stage': stage, 'version': event['version']}, token=ADMIN)
                 return {
