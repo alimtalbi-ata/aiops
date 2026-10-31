@@ -327,54 +327,45 @@ class NocRuntimeRouteTests(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(response.headers["pragma"], "no-cache")
 
-    def test_route_reports_unconfigured_source_without_network_access(self):
-        env = {
-            "AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN,
-            "AIOPS_NOC_READ_MODEL_URL": "",
-            "AIOPS_NOC_READ_MODEL_TOKEN": "",
-            "AIOPS_NOC_READ_MODEL_HMAC_KEY": "",
-            "AIOPS_NOC_ALLOWED_ORIGINS": "",
-        }
-        with patch.dict(os.environ, env), patch.object(
-            noc_runtime.urllib.request, "build_opener",
-            side_effect=AssertionError("must not open network"),
-        ):
-            response = self.client.get(
-                "/api/noc/runtime-state",
-                headers={"Authorization": "Bearer " + PORTAL_TOKEN},
-            )
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"], "noc_source_not_configured")
-        self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertEqual(response.headers["pragma"], "no-cache")
-
-    def test_route_returns_only_verified_projection_and_no_store(self):
-        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
-            noc_runtime, "read_signed_noc_snapshot", return_value=self._safe_view(),
-        ):
-            response = self.client.get(
-                "/api/noc/runtime-state",
-                headers={"Authorization": "Bearer " + PORTAL_TOKEN},
-            )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertIs(response.json()["runtime_attested"], False)
-        self.assertIs(response.json()["live_remediation_authorized"], False)
-
-    def test_route_redacts_upstream_exceptions(self):
+    def test_route_does_not_probe_source_configuration_without_tenant_acl(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
             noc_runtime, "read_signed_noc_snapshot",
-            side_effect=RuntimeError("PRIVATE-TOKEN-AND-UPSTREAM-BODY"),
-        ):
-            response = self.client.get(
-                "/api/noc/runtime-state",
-                headers={"Authorization": "Bearer " + PORTAL_TOKEN},
-            )
+            side_effect=AssertionError("must not read signed NOC")
+        ) as read:
+            response = self.client.get("/api/noc/runtime-state",
+                headers={"Authorization": "Bearer " + PORTAL_TOKEN})
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"], "noc_source_unavailable_or_unverified")
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(response.json()["source_freshness"], "UNKNOWN")
         self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertEqual(response.headers["pragma"], "no-cache")
+        read.assert_not_called()
+
+    def test_route_does_not_return_signed_projection_without_tenant_acl(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
+            noc_runtime, "read_signed_noc_snapshot", return_value=self._safe_view()
+        ) as read:
+            response = self.client.get("/api/noc/runtime-state",
+                headers={"Authorization": "Bearer " + PORTAL_TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertNotIn("RUN-ACME-001", response.text)
+        self.assertNotIn("SIM-GLPI-001", response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        read.assert_not_called()
+
+    def test_route_never_reaches_upstream_without_tenant_acl(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": PORTAL_TOKEN}), patch.object(
+            noc_runtime, "read_signed_noc_snapshot",
+            side_effect=RuntimeError("PRIVATE-TOKEN-AND-UPSTREAM-BODY")
+        ) as read:
+            response = self.client.get("/api/noc/runtime-state",
+                headers={"Authorization": "Bearer " + PORTAL_TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
         self.assertNotIn("PRIVATE-TOKEN", response.text)
+        self.assertEqual(response.headers["pragma"], "no-cache")
+        read.assert_not_called()
 
     @staticmethod
     def _safe_view():
