@@ -111,6 +111,20 @@ class PortalOIDCIdentityTests(unittest.TestCase):
                     (identity.IdentityRejected, identity.IdentityUnavailable)):
                 identity.verify_server_oidc_assertion(value, env=config(), now=NOW)
 
+    def test_invalid_utf8_claims_and_control_character_config_rejected(self):
+        bad_payload = (b64(b'{"alg":"RS256","kid":"fixture-key"}') + "." +
+                       b64(b"\\xff") + "." + b64(b"synthetic"))
+        with patch.object(identity, "_verify_rs256", return_value=None):
+            with self.assertRaises(identity.IdentityRejected):
+                identity.verify_server_oidc_assertion(bad_payload, env=config(), now=NOW)
+        settings = {**config(), "AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN":
+                    "a" * 33 + "\\x00"}
+        actor = self.verified()
+        with self.assertRaises(identity.IdentityRejected):
+            identity.core_xref_preflight(
+                actor, tenant_id="ACME", run_id="RUN-ACME-123",
+                ticket_id="TICKET-001", env=settings)
+
     def test_no_core_xref_fetch_even_with_verified_identity(self):
         actor = self.verified()
         with patch("urllib.request.urlopen", side_effect=AssertionError("upstream forbidden")) as upstream:
