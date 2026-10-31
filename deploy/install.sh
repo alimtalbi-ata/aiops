@@ -14,4 +14,8 @@ bash deploy/migrate.sh
 # Start the full stack only after the schema upgrade is recorded.
 docker compose --env-file .env up -d --wait
 bash tests/qualification.sh
-bash tests/synthetic-e2e.sh
+if grep -q '^AIOPS_DEMO_PROVIDER_KIND=REAL .env; then
+  bash tests/synthetic-e2e.sh
+else
+  echo 'SYNTHETIC_E2E=SKIP|real_model_provider_not_configured'
+fi
