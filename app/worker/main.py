@@ -138,6 +138,29 @@ async def start_run(a):
     return verified_no_effect_command_receipt(receipt, a['run_id'], 'START', a['version'])
 
 
+
+def verified_synthetic_policy_verdict(verdict, mode):
+    """Fail closed before persisting a synthetic Policy verdict.
+
+    Policy alone decides; an LLM, fixture or Temporal receipt cannot
+    promote ALLOW or an unreasoned response to SIMULATE authority.
+    """
+    allowed = {
+        'PASS': ('SIMULATE',),
+        'BLOCKED': ('HUMAN_APPROVAL', 'ENRICH', 'ESCALATE'),
+        'UNKNOWN': ('HUMAN_APPROVAL', 'ENRICH', 'ESCALATE'),
+    }
+    if (mode not in ('DEMO', 'REPLAY', 'STORY')
+            or not isinstance(verdict, dict)
+            or verdict.get('decision') not in allowed.get(verdict.get('state'), ())
+            or not isinstance(verdict.get('reason'), str)
+            or not verdict['reason'].strip()
+            or any(key in verdict and verdict[key] is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('synthetic_policy_verdict_not_qualified')
+    return {**verdict, 'execution_allowed': False, 'effect_allowed': False}
+
+
 def verified_no_effect_command_receipt(receipt, run_id, command, expected_version):
     """Fence a committed Core START/RESOLVE ACK; do not infer effect authority."""
     target = {'START': 'RUNNING', 'RESOLVE': 'RESOLVED'}.get(command)
@@ -582,7 +605,8 @@ def _execute_stage_blocking(a,attempt):
             critique_record_id=(critic_event or {}).get('payload',{}).get('critique_record_id')
             freshness=assess_evidence_freshness(source_evidence)
             policy_input={'mode':mode,'command':'EXECUTE','severity':analysis.get('severity','UNKNOWN'),'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),'evidence_count':len(source_evidence),'critic_validated':critique.get('validated') is True,'redundancy_ok':False if not source_evidence else True,'evidence_fresh':freshness['status']=='FRESH','evidence_freshness':freshness,'preconditions_verified':False,'fencing_verified':False,'human_approved':False}
-            pol=post_json(POLICY,'/api/policy/check',policy_input,token=ADMIN)
+            pol=verified_synthetic_policy_verdict(
+                post_json(POLICY,'/api/policy/check',policy_input,token=ADMIN), mode)
             decision_record=post_json(CORE,f'/api/runs/{rid}/policy-record',{'policy':pol,'analysis_id':analysis_record_id,'critique_id':critique_record_id,'evidence_ids':[x['evidence_id'] for x in source_evidence],'policy_version':'2.1.0','policy_input':policy_input},timeout=15,token=ADMIN)
             pol['policy_decision_id']=decision_record['policy_decision_id']
             post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':[x['evidence_id'] for x in source_evidence],'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
