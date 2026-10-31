@@ -34,6 +34,7 @@ class PolicySimulateFixtureTests(unittest.TestCase):
                 self.assertEqual(result["provenance"], "WHAT_IF_FIXTURE_NOT_OBSERVED")
                 self.assertTrue(result["dry_run"])
                 self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
                 self.assertIs(result["human"]["approval_valid_now"], False)
                 self.assertIs(result["human"]["authenticated_runtime"], False)
                 self.assertIs(result["audit"]["runtime_verified"], False)
@@ -97,6 +98,22 @@ class PolicySimulateFixtureTests(unittest.TestCase):
             self.assertEqual(result["policy"]["decision"], "SIMULATE")
             self.assertIs(result["human"]["approval_valid_now"], False)
             self.assertIs(result["execution_allowed"], False)
+
+
+    def test_synthetic_actor_and_approval_boolean_never_grant_effect(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for approved in (False, True):
+                with self.subTest(mode=mode, approved=approved):
+                    result = present_simulate_fixture(
+                        decision(mode=mode, human_approved=approved),
+                        timestamp="2026-10-29T12:00:00+00:00",
+                        fixture_actor_id="SYNTHETIC_UNVERIFIED",
+                    )
+                    self.assertEqual(result["classification"], "SYNTHETIC_UNVERIFIED")
+                    self.assertIs(result["execution_allowed"], False)
+                    self.assertIs(result["effect_allowed"], False)
+                    self.assertIs(result["human"]["approval_valid_now"], False)
+                    self.assertIs(result["human"]["authenticated_runtime"], False)
 
 
 if __name__ == "__main__":
