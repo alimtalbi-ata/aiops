@@ -28,7 +28,7 @@ class DebianReadonlyReporterTests(unittest.TestCase):
             "available": True, "containers": [], "truncated": False
         }), mock.patch.object(MODULE, "tcp_probe", return_value={"reachable": False}):
             report = MODULE.collect()
-        self.assertEqual(report["schema_version"], 2)
+        self.assertEqual(report["schema_version"], 3)
         self.assertEqual(set(report["tcp_loopback"]), {"5432", "7233", "17777", "3000", "9090"})
         self.assertNotIn("environment", report)
         self.assertNotIn("logs", report)
@@ -53,6 +53,39 @@ class DebianReadonlyReporterTests(unittest.TestCase):
         self.assertEqual(report["resource_usage"][0]["cpu_percent"], "1.25%")
         self.assertNotIn("mounts", report["containers"][0])
         self.assertNotIn("environment", report["containers"][0])
+
+    def test_published_tcp_probes_follow_explicit_docker_bindings(self):
+        docker = {"containers": [
+            {"name": "portal", "published_ports": [
+                {"host_ip": "10.79.94.202", "host_port": "17777"},
+                {"host_ip": "0.0.0.0", "host_port": "3000"},
+                {"host_ip": "10.79.94.202", "host_port": "17777"},
+                {"host_ip": "10.79.94.202", "host_port": "5432"},
+                {"host_ip": "not-an-ip", "host_port": "8080"},
+            ]},
+        ]}
+        with mock.patch.object(MODULE, "tcp_probe", side_effect=[
+            {"reachable": True}, {"reachable": False}
+        ]) as probe:
+            result = MODULE.published_tcp_probes(docker)
+        self.assertEqual(result, [
+            {"service": "grafana", "host": "127.0.0.1", "port": 3000, "reachable": False},
+            {"service": "portal", "host": "10.79.94.202", "port": 17777, "reachable": True},
+        ])
+        self.assertEqual(probe.call_args_list, [
+            mock.call(17777, "10.79.94.202"),
+            mock.call(3000, "127.0.0.1"),
+        ])
+
+    def test_published_tcp_probes_ignore_unknown_ports_and_invalid_addresses(self):
+        result = MODULE.published_tcp_probes({"containers": [
+            {"published_ports": [
+                {"host_ip": "10.79.94.202", "host_port": "7233"},
+                {"host_ip": "invalid", "host_port": "8081"},
+            ]}
+        ]})
+        self.assertEqual(result, [])
+
 
     def test_token_permissions_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
