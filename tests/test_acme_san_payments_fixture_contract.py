@@ -80,5 +80,43 @@ class AcmeSanPaymentsFixtureContractTests(unittest.TestCase):
                 self.assertNotIn(field, sql)
 
 
+    def test_exact_sourced_reverse_path_edge_types(self):
+        _, _, edges, _ = seed_contract()
+        expected = ("PATH", "USES", "RUNS_ON", "DEPENDS_ON", "USES")
+        self.assertEqual(tuple(edges[eid][2] for eid, _, _ in PATH), expected)
+        for eid, affected, consumer in PATH:
+            with self.subTest(edge_id=eid):
+                self.assertEqual(edges[eid][:2], (consumer, affected))
+        # Edge confidence and a synthetic graph are not an observed outage.
+        self.assertEqual(edges["ACME-E08"][3], 1)
+        self.assertEqual(edges["ACME-E09"][3], 1)
+
+    def test_checkpoint_order_does_not_prove_recovery(self):
+        _, _, _, steps = seed_contract()
+        self.assertEqual([action for _, _, action, _, _ in steps], [
+            "INCIDENT_OPEN", "SET_STATE", "OBSERVE", "CHANGE_LOOKUP",
+            "POLICY_CHECK", "VERIFY", "RECONCILE",
+        ])
+        self.assertEqual(steps[4][4], {"requested_action": "HUMAN_APPROVAL"})
+        self.assertEqual(steps[5][4], {"latency_ms": 92, "status": "OK"})
+        self.assertEqual(steps[6][4]["state"], "DEGRADED")
+        self.assertLess(steps[5][1], steps[6][1])
+        self.assertFalse(any(action in ("LIVE", "EXECUTE", "GLPI_WRITE")
+                             for _, _, action, _, _ in steps))
+
+    def test_fixture_has_no_runtime_identity_or_priority_calculation(self):
+        _, sql, _, steps = seed_contract()
+        for field in ("tenant_id", "incident_id", "run_id", "evidence_id",
+                      "ticket_id", "observed_at", "known_at", "freshness",
+                      "provenance", "impact", "urgency", "policy_version"):
+            with self.subTest(field=field):
+                self.assertNotIn(field, sql)
+        self.assertTrue(all(not any(k in payload for k in
+                                    ("tenant_id", "incident_id", "run_id",
+                                     "evidence_ids", "ticket_id", "observed_at",
+                                     "known_at", "impact", "urgency"))
+                            for _, _, _, _, payload in steps))
+
+
 if __name__ == "__main__":
     unittest.main()
