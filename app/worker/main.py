@@ -164,12 +164,14 @@ def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version):
             or receipt.get('run_id') != run_id
             or type(started_version) is not int
             or type(receipt.get('version')) is not int
-            or receipt['version'] <= started_version
+            or receipt['version'] != started_version + 1
             # Core event ACKs carry a positive sequence; absent/forged sequence
             # cannot prove a committed stage even when the version looks fresh.
             or type(receipt.get('sequence')) is not int
             or receipt['sequence'] < 1
             or ('stage' in receipt and receipt['stage'] != stage)
+            or receipt.get('event_type') not in (None, 'STAGE_COMPLETED')
+            or ('idempotent' in receipt and type(receipt['idempotent']) is not bool)
             or receipt.get('status') not in (None, 'PASS')
             or any(receipt.get(key) is not None and receipt.get(key) is not False
                    for key in ('execution_allowed', 'effect_allowed'))):
@@ -512,8 +514,9 @@ def _execute_stage_blocking(a,attempt):
                     evidence_key=hashlib.sha256(json.dumps(evidence_ids,separators=(',',':')).encode()).hexdigest()[:16]
                     record=post_json(CORE,f'/api/runs/{rid}/analysis-record',{'analysis':result,'evidence_ids':evidence_ids,'idempotency_key':f'ANALYST-{rid}-V2-{evidence_key}','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0')},timeout=15,token=ADMIN)
                     saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'ANALYST_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':evidence_ids,'confidence':result['confidence'],'payload':{'analysis':result,'analysis_record_id':record['analysis_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
+                    saved=verified_no_effect_stage_receipt(saved, rid, stage, v)
                     post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
-                    return verified_no_effect_stage_receipt(saved, rid, stage, v)
+                    return saved
                 analyst_event=next((e for e in reversed(detail.get('events',[])) if e.get('stage')=='DGX_ANALYST' and e.get('event_type')=='ANALYST_COMPLETED'),None)
                 if not analyst_event or not isinstance(analyst_event.get('payload',{}).get('analysis'),dict):
                     raise RuntimeError('analyst_result_missing')
@@ -529,6 +532,8 @@ def _execute_stage_blocking(a,attempt):
                     result,source_evidence
                 ) if state=='BLOCKED' else None
                 saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'denial_policy_input':denial_snapshot,'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
+                if state=='PASS':
+                    saved=verified_no_effect_stage_receipt(saved, rid, stage, v)
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
                     try:
@@ -553,7 +558,7 @@ def _execute_stage_blocking(a,attempt):
                         'policy_denial_recorded':False,
                         'denial_intent_durable':True,
                     }
-                return verified_no_effect_stage_receipt(saved, rid, stage, v)
+                return saved
             except AtomicDenialBlockError:
                 raise
             except Exception as exc:
@@ -583,10 +588,11 @@ def _execute_stage_blocking(a,attempt):
                 blocked=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':blocked_event['version'],'idempotency_key':f'POLICY-BLOCK-{rid}','command':'BLOCK'})
                 return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked['version']}
         completed=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':eids,'confidence':.94,'payload':{'executor':'temporal','synthetic':synthetic,'attempt':attempt}})
+        completed=verified_no_effect_stage_receipt(completed, rid, stage, v)
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
             post_json(CORE,f'/api/runs/{rid}/demo-artifacts',{'artifact_type':'stage','title':stage,'sequence_no':completed['sequence'],'caption':f'{stage} — {mode} — evidence linked','payload':{'scenario_id':scenario,'synthetic':True}},token=ADMIN)
-        return verified_no_effect_stage_receipt(completed, rid, stage, v)
+        return completed
     except Exception as exc:
         try: call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_FAILED','event_key':f'{stage}:FAIL','status':'FAIL','confidence':0,'payload':{'error':str(exc)[:500],'attempt':attempt}})
         finally: raise
