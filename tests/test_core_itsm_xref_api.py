@@ -148,6 +148,22 @@ class XrefHttpTests(unittest.TestCase):
         self.assertEqual(r.json()["status"],"VERIFIED")
         self.assertEqual(len(self.fake.calls),3)
 
+    def test_stale_evidence_requires_auth_and_tenant_acl_without_db(self):
+        stale=(NOW-timedelta(minutes=10)).isoformat()
+        for token,code in ((None,401),("wrong",401),
+                           ("ci-service-b",403),("ci-no-permission",403)):
+            with self.subTest(token=token):
+                r=self.read(token=token,evidence_known_at=stale)
+                self.assertEqual(r.status_code,code,r.text)
+                self.hidden(r)
+        self.assertEqual(self.fake.calls,[])
+        # Valid scoped service may receive STALE without touching Core DB.
+        r=self.read(evidence_known_at=stale)
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"STALE")
+        self.hidden(r)
+        self.assertEqual(self.fake.calls,[])
+
     def test_copied_run_or_incident_is_not_verified(self):
         for params in ({"expected_run_id":"RUN-B"},{"expected_incident_id":"INC-B"}):
             r=self.read(**params)
