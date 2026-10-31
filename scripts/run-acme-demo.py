@@ -124,7 +124,7 @@ def main() -> int:
             raise RuntimeError("canonical_scenario_not_registered")
 
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        external_id = "DEMO-ACME-PAYMENTS-" + stamp + "-" + uuid.uuid4().hex[:8]
+        external_id = "DEMO-ENRICHED-ACME-PAYMENTS-" + stamp + "-" + uuid.uuid4().hex[:8]
         incident = request_json(core, "/api/incidents", token=token, payload={
             "external_id": external_id,
             "title": "P1 — Dégradation SAN affectant le service Payments",
@@ -161,11 +161,13 @@ def main() -> int:
             raise RuntimeError("temporal_run_timeout")
 
         ledger = request_json(core, f"/api/runs/{run_id}/ai-ledger", token=token)
+        evidence_ledger = request_json(evidence, f"/api/evidence?run_id={run_id}", token=token)
         proof = request_json(core, f"/api/runs/{run_id}/demo-verification", token=token)
         analyses = ledger.get("analyses", [])
         critiques = ledger.get("critiques", [])
         events = detail.get("events", [])
-        stages = detail.get("stages", [])
+        evidence_items = evidence_ledger.get("items", [])
+        evidence_sources = sorted({str(x.get("source", "UNKNOWN")) for x in evidence_items if isinstance(x, dict)})
         policy_gates = [g for g in detail.get("gates", []) if g.get("stage") == "POLICY"]
         analyst_usage = usage_summary(analyses)
         critic_usage = usage_summary(critiques)
@@ -176,6 +178,7 @@ def main() -> int:
             status == "RESOLVED"
             and len(analyses) >= 1
             and len(critiques) >= 1
+            and len(evidence_items) >= 6
             and hitl_skipped
             and policy_simulate
             and no_effects
@@ -193,6 +196,8 @@ def main() -> int:
             "run_status": status,
             "analyst_records": len(analyses),
             "critic_records": len(critiques),
+            "evidence_count": len(evidence_items),
+            "evidence_sources": evidence_sources,
             "analyst_usage": analyst_usage,
             "critic_usage": critic_usage,
             "policy_simulate_pass": policy_simulate,
