@@ -21,7 +21,7 @@ def safe_base_url(raw: str) -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("NIM_BASE_URL must be an absolute http(s) URL")
     if parsed.username or parsed.password:
-        raise ValueError("Do not embed credentials in NIM_BASE_URL; use NIM_API_KEY")
+        raise ValueError("Do not embed credentials in NIM_BASE_URL")
     if parsed.query or parsed.fragment:
         raise ValueError("NIM_BASE_URL must not contain query or fragment")
     path = parsed.path.rstrip("/")
@@ -30,14 +30,12 @@ def safe_base_url(raw: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
 
 
-def request_json(url: str, api_key: str, payload: dict | None, timeout: float) -> tuple[dict, float, int]:
+def request_json(url: str, payload: dict | None, timeout: float) -> tuple[dict, float, int]:
     headers = {"Accept": "application/json"}
     data = None
     if payload is not None:
         headers["Content-Type"] = "application/json"
         data = json.dumps(payload).encode("utf-8")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
     request = Request(url, data=data, headers=headers, method="POST" if data else "GET")
     started = time.monotonic()
     try:
@@ -58,7 +56,7 @@ def request_json(url: str, api_key: str, payload: dict | None, timeout: float) -
         raise RuntimeError("INVALID_JSON") from None
 
 
-def qualify(base_url: str, model: str, api_key: str, timeout: float) -> dict:
+def qualify(base_url: str, model: str, timeout: float) -> dict:
     report = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "provider": "nim",
@@ -72,25 +70,45 @@ def qualify(base_url: str, model: str, api_key: str, timeout: float) -> dict:
     }
     try:
         models, elapsed, status = request_json(
-            f"{base_url}/v1/models", api_key, None, timeout
+            f"{base_url}/v1/models", None, timeout
         )
         available = [
             item.get("id") for item in models.get("data", [])
             if isinstance(item, dict) and isinstance(item.get("id"), str)
         ]
+        selected_model = model
+        if not selected_model:
+            nemotron_120b = [
+                item for item in available
+                if "nemotron" in item.lower() and ("120b" in item.lower() or "120-b" in item.lower())
+            ]
+            if len(nemotron_120b) == 1:
+                selected_model = nemotron_120b[0]
+            elif len(available) == 1:
+                selected_model = available[0]
+            else:
+                report["models_api"] = {
+                    "status": "MODEL_SELECTION_REQUIRED",
+                    "http_status": status,
+                    "latency_ms": elapsed,
+                    "available_model_ids": available,
+                }
+                report["error"] = "Set NIM_MODEL to one of the model IDs listed by /v1/models"
+                return report
+        report["model"] = selected_model
         report["models_api"] = {
-            "status": "PASS" if model in available else "MODEL_NOT_LISTED",
+            "status": "PASS" if selected_model in available else "MODEL_NOT_LISTED",
             "http_status": status,
             "latency_ms": elapsed,
             "model_count": len(available),
-            "requested_model_found": model in available,
+            "requested_model_found": selected_model in available,
         }
-        if model not in available:
+        if selected_model not in available:
             report["error"] = "Configured model ID not found in /v1/models"
             return report
 
         payload = {
-            "model": model,
+            "model": selected_model,
             "messages": [
                 {"role": "system", "content": "You are a runtime connectivity probe. Follow the user instruction exactly."},
                 {"role": "user", "content": f"Reply with exactly this token and no other text: {MARKER}"},
@@ -99,7 +117,7 @@ def qualify(base_url: str, model: str, api_key: str, timeout: float) -> dict:
             "max_tokens": 48,
         }
         answer, elapsed, status = request_json(
-            f"{base_url}/v1/chat/completions", api_key, payload, timeout
+            f"{base_url}/v1/chat/completions", payload, timeout
         )
         choices = answer.get("choices", [])
         content = ""
@@ -135,14 +153,14 @@ def qualify(base_url: str, model: str, api_key: str, timeout: float) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default=os.getenv("NIM_BASE_URL", ""))
+    parser.add_argument("--base-url", default=os.getenv("NIM_BASE_URL", "http://10.79.94.31:8000/v1"))
     parser.add_argument("--model", default=os.getenv("NIM_MODEL", ""))
     parser.add_argument("--timeout", type=float, default=float(os.getenv("NIM_TIMEOUT_SECONDS", "30")))
     parser.add_argument("--report", default="artifacts/nim-runtime-qualification.json")
     args = parser.parse_args()
 
-    if not args.base_url or not args.model:
-        print("CONFIG_ERROR: set NIM_BASE_URL and NIM_MODEL (exact model ID from the NIM service).", file=sys.stderr)
+    if not args.base_url:
+        print("CONFIG_ERROR: set NIM_BASE_URL.", file=sys.stderr)
         return 2
     if args.timeout <= 0 or args.timeout > 300:
         print("CONFIG_ERROR: timeout must be between 0 and 300 seconds.", file=sys.stderr)
@@ -154,7 +172,7 @@ def main() -> int:
         print(f"CONFIG_ERROR: {exc}", file=sys.stderr)
         return 2
 
-    result = qualify(base, args.model, os.getenv("NIM_API_KEY", ""), args.timeout)
+    result = qualify(base, args.model, args.timeout)
     rendered = json.dumps(result, indent=2, sort_keys=True)
     print(rendered)
     report_path = args.report
