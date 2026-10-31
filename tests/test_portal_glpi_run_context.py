@@ -1,6 +1,7 @@
 import os
 
 from fastapi.testclient import TestClient
+from unittest.mock import Mock
 
 from portal import glpi_run_context as module
 from portal.main import app
@@ -62,17 +63,15 @@ def test_glpi_ticket_fastpath_does_not_guess_ambiguous_run(monkeypatch):
     monkeypatch.setattr(module, "GLPIClient", AmbiguousGLPI)
     monkeypatch.setattr(module, "get_json", lambda *args: (_ for _ in ()).throw(
         AssertionError("ambiguous references must not trigger Core lookup")))
-    seen = {}
-    monkeypatch.setattr(module, "post_json", lambda base, path, payload: (
-        seen.update(payload) or {"answer": "unknown", "sources": []}))
+    post = Mock()
+    monkeypatch.setattr(module, "post_json", post)
     response = TestClient(app).post(
         "/api/copilot/glpi-ticket/2",
         headers={"Authorization": "Bearer " + "p" * 64},
         json={"question": "Analyse ce ticket."},
     )
-    assert response.status_code == 200
-    assert seen["run_id"] is None
-    assert response.json()["run_link"]["status"] == "UNKNOWN"
+    assert response.status_code == 409
+    post.assert_not_called()
 
 
 
