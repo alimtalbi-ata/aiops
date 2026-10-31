@@ -71,15 +71,15 @@ class StageBlockTests(unittest.TestCase):
         self.assertEqual(result['status'],'BLOCKED')
         self.assertTrue(result['policy_denial_recorded'])
         self.assertLess(next(i for i,c in enumerate(calls) if c[0]=='denial'),
-                        next(i for i,c in enumerate(calls) if c[0]=='call' and c[1].endswith('/command')))
+                        next(i for i,c in enumerate(calls) if c[0]=='post' and c[1].endswith('/critic-denial-resume')))
         self.assertEqual(sum(c[0]=='denial' for c in calls),1)
 
     def test_failed_denial_audit_still_blocks_and_reports_gap(self):
         result,calls=self.run_stage(persist_fails=True)
         self.assertEqual(result['status'],'BLOCKED')
         self.assertFalse(result['policy_denial_recorded'])
-        self.assertTrue(any(c[0]=='call' and c[1].endswith('/command')
-                            and c[2]['command']=='BLOCK' for c in calls))
+        self.assertTrue(any(c[0]=='post' and c[1].endswith('/critic-denial-resume') for c in calls))
+        self.assertTrue(result['denial_intent_durable'])
         self.assertFalse(any(c[0]=='post' and ('remediat' in c[1] or 'approval' in c[1]) for c in calls))
 
 if __name__=='__main__':unittest.main()
