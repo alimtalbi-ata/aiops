@@ -135,6 +135,17 @@ class CoreAIInvocationLedgerIntegration(unittest.TestCase):
         self.assertEqual(c["usage_source"], "provider_reported")
         self.assertIsNone(c["cost_usd"])
 
+        proof = requests.get(
+            f"{BASE}/api/runs/{self.run_id}/demo-verification",
+            headers=self.headers,
+            timeout=5,
+        )
+        self.assertEqual(proof.status_code, 200, proof.text)
+        self.assertTrue(proof.json()["synthetic"])
+        self.assertTrue(proof.json()["no_effects_observed"])
+        self.assertFalse(proof.json()["live_remediation_authorized"])
+        self.assertEqual(proof.json()["effect_receipts"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
