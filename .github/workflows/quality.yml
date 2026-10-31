@@ -88,8 +88,13 @@ jobs:
         run: node --test tests/test_portal_copilot_client.cjs
       - name: Main-based Portal Run detail API/HTML fail-closed regression
         run: python -m unittest discover -s tests -p "test_portal_run_detail.py" -v
-      - name: Portal GLPI native handoff, role and tenant denial regression
-        run: python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
+      - name: Portal GLPI handoff and AIOps bot UI regression
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-glpi-ui-internal-ephemeral-token
+        run: |
+          python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
+          python -m unittest discover -s tests -p "test_portal_glpi_bot_ui.py" -v
       - name: GLPI ticket read and NOC incident join contracts
         env:
           PYTHONPATH: app
@@ -111,6 +116,7 @@ jobs:
       - name: Portal Run deep-link JS syntax and DOM regression
         run: |
           node --check app/portal/portal_run_link_client.js
+          node --check app/portal/portal_glpi_bot_client.js
           node --test tests/test_portal_run_link_client.cjs
       - name: Portal Core Twin browser JS syntax
         run: node --check app/portal/portal_bootstrap_client.js
