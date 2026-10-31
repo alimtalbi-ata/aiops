@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("AIOPS_INTERNAL_TOKEN", "synthetic-ci-only-internal-token")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from portal import main
 
@@ -89,6 +90,20 @@ class PortalNavigationAuthTests(unittest.TestCase):
                     self.assertEqual(response.status_code, 503)
                     self.assertEqual(response.json(), base.json())
                     self.assert_uncacheable(response)
+
+    def test_explicit_tenant_403_is_preserved_without_registry_or_upstream(self):
+        with patch.object(main, "_require_portal_read_auth",
+                          side_effect=HTTPException(403, "forbidden_tenant")), patch.object(
+            main, "build_navigation", side_effect=AssertionError("registry accessed")
+        ) as registry:
+            response = self.client.get("/api/portal/components",
+                                       headers={"Authorization": "Bearer " + TOKEN})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"detail": "forbidden_tenant"})
+        self.assert_uncacheable(response)
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        registry.assert_not_called()
 
     def test_public_html_does_not_expose_configured_urls(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN,
