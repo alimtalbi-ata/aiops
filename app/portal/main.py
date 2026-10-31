@@ -91,7 +91,10 @@ def portal_navigation_script():
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
 @app.post('/api/copilot')
-def copilot(q: dict, authorization: str | None = Header(default=None)):
+def copilot(authorization: str | None = Header(default=None)):
+    # Do not bind or parse a browser request body: FastAPI would otherwise
+    # return 422 for malformed JSON before the auth gate runs. No body is
+    # consumed, forwarded or treated as actor/tenant authority.
     # Legacy Copilot has no tenant/run-scoped read contract. A shared viewer
     # bearer cannot authorize sending browser questions to this upstream.
     try:
