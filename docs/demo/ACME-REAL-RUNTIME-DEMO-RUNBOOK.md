@@ -4,7 +4,7 @@
 **Scenario:** `SCN-GOLDEN-PAYMENT-P1` — SAN fabric degradation affecting ACME Payments.  
 **Mode:** `DEMO` only.  
 **Implementation:** PR #215, branch `integration/real-ai-runtime-demo-20261031`.  
-**Safety:** no real SAN/storage/payment changes, no LIVE approval, no SSH/sudo, no production action and no GLPI ticket write.
+**Safety:** no real SAN/storage/payment changes, no LIVE approval, no SSH/sudo or production action. The bounded synthetic GLPI path may add one idempotent private ITIL follow-up note for a validated PROPOSED record; it never creates a ticket, changes ticket core fields, approves or executes.
 
 ## 1. What is real, and what is simulated
 
@@ -28,7 +28,7 @@ The demo must be honest about this boundary.
 - No physical SAN, storage array, hypervisor, network switch, payment gateway or business application is contacted or changed.
 - DEMO/REPLAY/STORY record HITL as `HITL_SIMULATION_SKIPPED`; this is not a human approval.
 - Policy uses `SIMULATE`; no effect receipt, SSH, sudo or command execution is allowed.
-- GLPI remains the ITSM system of record, but this demo does not create or update a real GLPI ticket. Ticket/CMDB linkage must remain `UNKNOWN` until an authenticated actor+tenant read contract is qualified.
+- GLPI remains the ITSM system of record. The operator-only synthetic bot can read one explicitly selected ticket, require one unique RUN reference to the fixed ACME DEMO, and add an idempotent private ITIL follow-up only after Core accepts a LOW-risk proposal derived from persisted Analyst/Critic records. It does not create tickets, update ticket core fields, approve the proposal or execute an action. This is not tenant-scoped customer authorization; LIVE remains blocked.
 - A deterministic TEST_PROVIDER is CI evidence only. It must never be described to a customer as a real model invocation.
 
 ## 2. Required configuration
@@ -142,7 +142,7 @@ The Portal `/copilot` page provides a guarded operator workflow for the ACME syn
 
 - `AIOPS_PORTAL_OPERATOR_TOKEN`: unique generated secret, mode 0600 in `.env`; never share with `AIOPS_PORTAL_READ_TOKEN` or `AIOPS_INTERNAL_TOKEN`.
 - `GLPI_API_URL`, `GLPI_APP_TOKEN`, `GLPI_USER_TOKEN`: server-side credentials for a GLPI service account with only the required ticket read and private-follow-up rights.
-- `LLM_PROVIDER_NAME=NVIDIA_NIM`, `LLM_BASE_URL`, exact `LLM_MODEL` and `LLM_API_KEY` if required: see the NIM profile above.
+- `LLM_PROVIDER_NAME=NVIDIA_NIM`, `LLM_BASE_URL=http://10.79.94.31:8000/v1`, exact discovered `LLM_MODEL`; keep `LLM_API_KEY` empty for the Debian NGX endpoint.
 - The Intelligence container must reach NIM over a private route. Never publish the NIM endpoint to the public network.
 
 ## 3. Preflight
