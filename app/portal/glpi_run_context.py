@@ -9,6 +9,7 @@ import re
 from fastapi import APIRouter, Header, HTTPException
 from shared.http import get_json, post_json
 from portal.glpi_client import GLPIClient
+from portal.portal_command_auth import require_demo_operator
 
 router = APIRouter()
 CORE = os.getenv("CORE_URL", "http://aiops2-core:810")
@@ -17,12 +18,8 @@ _RUN = re.compile(r"\bRUN-[A-Za-z0-9_-]{6,120}\b")
 
 
 def _authorize(authorization):
-    secret = os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
-    supplied = (authorization or "").removeprefix("Bearer ")
-    if not secret:
-        raise HTTPException(503, "portal_read_auth_not_configured")
-    if not supplied or not hmac.compare_digest(supplied, secret):
-        raise HTTPException(401, "invalid_portal_read_token")
+    # Dedicated synthetic DEMO operator only; viewer credentials cannot read tickets or create proposals.
+    require_demo_operator(authorization)
 
 
 @router.post("/api/copilot/glpi-ticket/{ticket_id}")
@@ -129,7 +126,7 @@ def create_glpi_hitl_proposal(ticket_id: str, q: dict,
     run = detail.get("run") if isinstance(detail, dict) else None
     if not isinstance(run, dict) or run.get("run_id") != run_id:
         raise HTTPException(502, "core_run_identity_mismatch")
-    if run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
+    if run.get("mode") not in ("DEMO", "REPLAY", "STORY") or run.get("scenario_id") != "SCN-GOLDEN-PAYMENT-P1":
         raise HTTPException(409, "fastpath_requires_synthetic_run")
 
     analyses = ledger.get("analyses") if isinstance(ledger, dict) else None
