@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-glpi-no-upstream-token"}):
-    from portal import main, glpi_operator_view
+    from portal import main, glpi_operator_view, glpi_run_context
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -165,7 +165,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
             for method in route.methods
         }
         self.assertTrue(expected.issubset(mounted))
-        with patch.object(main.glpi_run_context, "GLPIClient",
+        with patch.object(glpi_run_context, "GLPIClient",
                           side_effect=AssertionError("viewer token must be rejected before GLPI access")):
             for path in ("/api/copilot/glpi-ticket/1", "/api/hitl/glpi-ticket/1/proposal"):
                 with self.subTest(path=path):
