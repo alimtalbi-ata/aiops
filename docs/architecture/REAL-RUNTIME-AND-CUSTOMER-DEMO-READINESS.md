@@ -45,7 +45,7 @@ At code head `b893a9ce3c76a19412e37745a0ccdf48f8476b7b`:
 
 ### 2.1.1 Current verification limits
 
-- NVIDIA NIM is now the declared reference provider profile (`LLM_PROVIDER_NAME=NVIDIA_NIM`). The Intelligence adapter exposes an evidence-grounded interactive answer endpoint and Copilot persists the answer/usage as a Core event. However the exact NIM base URL and served model ID have not yet been discovered from SRV-DEB-05; no real Nemotron 120B call is claimed until the host `.env` and `/v1/models` response are verified.
+- NVIDIA NIM is the declared Debian reference provider (`LLM_PROVIDER_NAME=NVIDIA_NIM`) at the operator-supplied no-key endpoint `http://10.79.94.31:8000/v1`. Compose and `.env.example` now use this endpoint; Intelligence auto-discovers one unambiguous Nemotron 120B model ID from `/v1/models`. `deploy/configure-ngx-nim-runtime.sh` probes a real completion, backs up `.env`, configures the existing stack, and verifies a second completion from inside the Intelligence container. This script has been committed but has not yet been executed on SRV-DEB-05; no successful real inference is claimed.
 - No provider-reported token usage, calibrated model quality or cost may be claimed until an actual run is captured. Cost remains UNKNOWN until pricing is versioned.
 - GLPI integration code now includes authenticated server-side ticket reads and private HITL proposal follow-ups, with tests. The host's actual API credentials, GLPI permissions, ticket #1 mapping and private-note write have not yet been revalidated on SRV-DEB-05. OIDC tenant/entity scoping and customer LIVE approvals remain unqualified.
 - The portal's synthetic demo launch and the Portal run page are not a production tenant authorization mechanism. Keep the environment isolated and synthetic.
@@ -283,7 +283,7 @@ A real PostgreSQL/Core integration test verifies write → read-back of both inv
 ### 9.4 Current verification boundary
 
 - Intelligence adapter HTTP integration against `TEST_PROVIDER` proves the HTTP/schema/usage contract, not real model quality.
-- Real provider demo requires explicit `AIOPS_DEMO_PROVIDER_KIND=REAL`, configured `LLM_BASE_URL`, `LLM_MODEL` and secure API key.
+- Real provider demo requires explicit `AIOPS_DEMO_PROVIDER_KIND=REAL`, the configured NGX base URL and exact discovered model ID. The supplied Debian endpoint requires no API key; `LLM_API_KEY` remains empty.
 - Real GLPI ticket read-back and tenant/entity authorization are still separate acceptance gates. The demo runner does not invent a GLPI ticket ID or write a ticket.
 - The runner has not been executed on SRV-DEB-05. Do not run it there until exact-head CI passes, a dedicated model provider is configured and a fresh isolated backup/rollback decision is recorded.
 
