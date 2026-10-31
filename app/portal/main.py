@@ -1177,13 +1177,20 @@ def policy_story():
 
 
 @app.post("/api/portal/hitl/simulator/token")
-def portal_hitl_simulator_token(request: dict):
-    """Proxy a development-only fixture identity request; never an approval."""
+def portal_hitl_simulator_token(request: dict,
+                                authorization: str | None = Header(default=None)):
+    """Operator-gated development identity fixture; never a LIVE approval."""
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
     subject = request.get("subject")
     if not isinstance(subject, str) or len(subject) > 100:
         raise HTTPException(422, "invalid_simulator_subject")
     token = os.getenv("AIOPS_INTERNAL_TOKEN", "")
-    if not token:
+    if len(token) < 32:
         raise HTTPException(503, "portal_internal_auth_not_configured")
     try:
         return post_json(
@@ -1195,64 +1202,91 @@ def portal_hitl_simulator_token(request: dict):
         raise HTTPException(503, "identity_simulator_unavailable")
 
 
+@app.get("/api/portal/hitl/inbox")
+def portal_hitl_inbox(authorization: str | None = Header(default=None)):
+    """Expose only synthetic proposals to the dedicated DEMO operator capability."""
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
+    if len(os.getenv("AIOPS_INTERNAL_TOKEN", "")) < 32:
+        return _noc_json_response({"state": "UNKNOWN", "reason": "internal_service_auth_not_configured"},
+                                  status_code=503)
+    try:
+        result = get_json(CORE, "/api/proposals?status=PROPOSED&limit=100", timeout=12)
+        rows = result.get("items", []) if isinstance(result, dict) else []
+        safe_items = []
+        seen = set()
+        for item in rows[:100]:
+            if not isinstance(item, dict):
+                continue
+            run_id = item.get("run_id")
+            if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", run_id):
+                continue
+            if run_id not in seen:
+                seen.add(run_id)
+                try:
+                    detail = get_json(CORE, "/api/runs/" + run_id, timeout=8)
+                except Exception:
+                    continue
+                run = detail.get("run") if isinstance(detail, dict) else None
+                if not isinstance(run, dict) or run.get("run_id") != run_id:
+                    continue
+                if run.get("mode") not in ("DEMO", "REPLAY", "STORY"):
+                    continue
+            safe_items.append({
+                "proposal_id": item.get("proposal_id"),
+                "run_id": run_id,
+                "mode": "SYNTHETIC_DEMO",
+                "revision": item.get("revision"),
+                "target_ci_id": item.get("target_ci_id"),
+                "action_type": item.get("action_type"),
+                "risk_tier": item.get("risk_tier"),
+                "status": item.get("status"),
+                "evidence_ids": item.get("evidence_ids", []),
+                "preconditions": item.get("preconditions", []),
+                "expected_postconditions": item.get("expected_postconditions", []),
+                "expires_at": item.get("expires_at"),
+                "execution_allowed": False,
+                "approval_available": False,
+            })
+        return _noc_json_response({
+            "schema": "aiops.portal.hitl-demo-inbox.v1",
+            "state": "CONNECTED" if safe_items else "EMPTY",
+            "items": safe_items,
+            "count": len(safe_items),
+            "scope": "SYNTHETIC_DEMO_ONLY",
+            "execution_allowed": False,
+            "approval_available": False,
+        })
+    except Exception:
+        return _noc_json_response({"state": "UNKNOWN", "reason": "hitl_inbox_unavailable"},
+                                  status_code=503)
+
+
+@app.get("/assets/portal-hitl.js")
+def portal_hitl_script():
+    return FileResponse(Path(__file__).with_name("portal_hitl_client.js"),
+                        media_type="application/javascript",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
 @app.get("/hitl", response_class=HTMLResponse)
 def hitl_command_center():
-    """Cross-platform HITL status view. Deliberately read-only; no approval controls."""
-    identity = _get("/api/hitl/identity/health", CORE)
-    proposals = _get("/api/proposals?status=PROPOSED&limit=100", CORE)
-    identity_mode = identity.get("mode", "UNKNOWN")
-    simulator = "READY" if identity.get("simulator_ready") is True else ("ENABLED / KEY MISSING" if identity.get("simulator_enabled") is True else "DISABLED")
-    live_ready = "YES" if identity.get("live_approval_ready") is True else "NO"
-    proposal_items = proposals.get("items", []) if isinstance(proposals.get("items"), list) else []
-    proposal_state = str(len(proposal_items)) if isinstance(proposals.get("items"), list) else "UNKNOWN"
-    body = panel(
-        "HITL v1 — Identity & approval status",
-        table(["Control", "Observed state"], [
-            ("Identity provider mode", identity_mode),
-            ("IAM simulator", simulator),
-            ("Production AD / LDAP", identity.get("production_directory", "UNKNOWN")),
-            ("LIVE human approval ready", live_ready),
-            ("Open proposals", proposal_state),
-            ("Execution authority", "CLOSED — execution_allowed=false"),
-        ])
-        + '<p>Cette vue est volontairement en lecture seule. Le simulateur émet des identités fictives ; '
-          'elles ne sont jamais recevables pour une approbation LIVE.</p>'
-    )
-    proposal_rows = [
-        (
-            html.escape(str(item.get("proposal_id", "UNKNOWN"))),
-            html.escape(str(item.get("risk_tier", "UNKNOWN"))),
-            html.escape(str(item.get("action_type", "UNKNOWN"))),
-            html.escape(str(item.get("target_ci_id", "UNKNOWN"))),
-            html.escape(str(item.get("status", "UNKNOWN"))),
-            html.escape(str(len(item.get("evidence_ids", [])))),
-        )
-        for item in proposal_items[:100] if isinstance(item, dict)
-    ]
-    body += panel(
-        "Inbox HITL — propositions en attente (lecture seule)",
-        table(["Proposal", "Risque", "Action", "CI cible", "État", "Preuves"],
-              proposal_rows)
-        if proposal_rows else
-        "<p>Aucune proposition PROPOSED disponible, ou registre non accessible.</p>"
-    )
-    body += panel("Intégration AIOps2 — navigation",
-        '<nav aria-label="AIOps2 platform integration">'
-        '<a href="/runs">Core / Runs</a> · '
-        '<a href="/timeline">Timeline / événements</a> · '
-        '<a href="/demo-studio">Analyst / Critic / DGX</a> · '
-        '<a href="/evidence">Evidence Ledger</a> · '
-        '<a href="/twin">Digital Twin / CMDB</a> · '
-        '<a href="/policy-control">Policy / Gates</a> · '
-        'GLPI / ITSM API · '
-        '<a href="/copilot">Copilot</a>'
-        '</nav>'
-        '<p>Temporal conserve l’état durable du workflow. Core reste l’autorité des propositions et décisions ; '
-        'Policy et l’exécuteur restent les autorités de contrôle avant tout effet.</p>'
-    )
+    """Static HITL shell; proposal data is loaded only after operator authentication."""
+    body = panel("Accès opérateur DEMO",
+        '<p>Cette capacité permet uniquement de consulter les propositions synthétiques et d’émettre une identité de test. '
+        'Elle ne constitue pas une identité humaine, une approbation ou une autorisation LIVE.</p>'
+        '<label for="hitl-operator-token">Jeton opérateur DEMO</label>'
+        '<input id="hitl-operator-token" type="password" autocomplete="off">'
+        '<button type="button" id="hitl-load-inbox">Charger les propositions</button>'
+        '<span id="hitl-inbox-status" role="status">UNKNOWN — authentification requise</span>')
+    body += panel("Inbox HITL — propositions synthétiques",
+        '<pre id="hitl-inbox-output" class="log" aria-live="polite">Aucune proposition chargée.</pre>')
     body += panel("Banc de simulation IAM — sans effet",
-        '<p>Choisir un compte fictif pour obtenir une assertion de test de courte durée. '
-        'Cette identité porte toujours simulated=true et ne peut jamais approuver un run LIVE.</p>'
+        '<p>Les identités ci-dessous sont fictives, de courte durée et toujours rejetées pour les approbations LIVE.</p>'
         '<label for="hitl-sim-subject">Identité fictive</label>'
         '<select id="hitl-sim-subject">'
         '<option value="operator.alex">Alex Operator</option>'
@@ -1263,23 +1297,13 @@ def hitl_command_center():
         '<option value="platform.pat">Pat Platform Admin</option>'
         '</select> <button type="button" id="hitl-sim-issue">Émettre une identité simulée</button>'
         '<pre id="hitl-sim-result" role="status" aria-live="polite">Aucune identité émise.</pre>'
-        '<script>(function(){const b=document.getElementById("hitl-sim-issue");'
-        'const o=document.getElementById("hitl-sim-result");if(!b||!o)return;'
-        'b.addEventListener("click",async()=>{o.textContent="Émission…";try{'
-        'const r=await fetch("/api/portal/hitl/simulator/token",{method:"POST",'
-        'headers:{"Content-Type":"application/json"},body:JSON.stringify({'
-        'subject:document.getElementById("hitl-sim-subject").value})});'
-        'const d=await r.json();o.textContent=JSON.stringify(d,null,2);'
-        'if(!r.ok)o.textContent="HTTP "+r.status+" — "+o.textContent;'
-        '}catch(e){o.textContent="Simulateur indisponible";}});})();</script>'
-    )
+        '<script src="/assets/portal-hitl.js" defer></script>')
     body += panel("Barrières de sécurité",
         '<ul><li>Nemotron Analyst / Critic : avis et contre-expertise, jamais une identité ni un droit.</li>'
-        '<li>AD / LDAP : futur fournisseur de groupes et identifiants immuables, aucun annuaire supposé présent.</li>'
-        '<li>CRITICAL : deux sujets distincts et les rôles security_admin + incident_commander.</li>'
-        '<li>Linux / Unix : catalogue d’actions et wrappers sudo bornés ; aucune commande shell libre.</li>'
+        '<li>Inbox : propositions DEMO/REPLAY/STORY uniquement ; aucune proposition LIVE n’est exposée par cette route.</li>'
+        '<li>Une proposition reste PROPOSED. Cette vue ne crée aucune approbation et ne déclenche aucune exécution.</li>'
+        '<li>Les décisions LIVE exigent une identité OIDC vérifiée, un run LIVE et les rôles autorisés côté Core.</li>'
         '<li>GLPI, Evidence, Twin, CMDB, Policy et audit restent corrélés au même run et à la même empreinte de proposition.</li>'
-        '<li>Simulation et qualification : aucune exécution réelle.</li></ul>'
-    )
+        '<li>Aucune commande shell libre, SSH/sudo ou remédiation n’est disponible depuis l’assistant.</li></ul>')
     return shell("/hitl", "Human-in-the-Loop Command Center",
-                 "Vue transversale de l’identité, des décisions et des contrôles AIOps2.", body)
+                 "Inbox opérateur, identité simulée et limites d’autorisation AIOps2.", body)
