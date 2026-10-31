@@ -165,6 +165,17 @@ class IntelligenceContractTests(unittest.TestCase):
         self.assertIn(ready['status'], ('ready', 'degraded'))
         self.assertIn('provider_configured', ready)
 
+    def test_ready_reports_explicit_nim_provider_and_served_model(self):
+        with patch.object(MODULE, 'BASE', 'http://host.docker.internal:8000/v1'), \
+             patch.object(MODULE, 'MODEL', 'nvidia/nemotron-120b-served-id'), \
+             patch.object(MODULE, 'TOKEN', 'internal-test-token'), \
+             patch.object(MODULE, 'PROVIDER', 'NVIDIA_NIM'):
+            ready = MODULE.ready()
+        self.assertEqual(ready['status'], 'ready')
+        self.assertEqual(ready['provider'], 'NVIDIA_NIM')
+        self.assertEqual(ready['model'], 'nvidia/nemotron-120b-served-id')
+        self.assertNotIn('api_key', ready)
+
     def test_action_cannot_be_marked_executable(self):
         with self.assertRaises(Exception):
             MODULE.Action(action_id='A1', intent='restart', risk_tier='HIGH', expected_effect='restart', advisory_only=False)
