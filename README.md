@@ -69,3 +69,7 @@ Before resuming work in a new session, read these documents in order:
 5. [Change safety and qualification protocol](docs/QUALIFICATION-AND-CHANGE-PROTOCOL.md)
 
 **Maintenance rule:** every significant development session must update the continuity record and all affected architecture, decision, component, qualification and release documents in the same branch/PR. Prefer adapting qualified AIOps v1/V145 capabilities over rebuilding them, but verify source, contracts, dependencies and tests before declaring a component reusable. Never treat a file listing or synthetic demo as qualification evidence.
+
+## Autonomous development team
+
+See [the autonomous team operating model](docs/operations/AIOPS2-AUTONOMOUS-DEV-TEAM-OPERATING-MODEL-2026-10-31.md) for the five-schedule organization, ownership, branch integration policy, ITIL 4 vertical slice, Twin requirements and evidence gates.
