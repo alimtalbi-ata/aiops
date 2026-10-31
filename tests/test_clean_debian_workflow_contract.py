@@ -26,7 +26,7 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
         self.assertIn("^/home/aiops/aiops2-clean-[A-Za-z0-9_-]+$", WORKFLOW)
 
     def test_remote_preflight_requires_aiops_and_no_existing_stack(self):
-        self.assertIn('$(id -un) == "aiops"', WORKFLOW)
+        self.assertIn('[[ "$(id -un)" == "aiops" ]]', WORKFLOW)
         self.assertIn("existing_aiops2_containers_on_target", WORKFLOW)
         self.assertIn("existing_aiops2_volumes_on_target", WORKFLOW)
         self.assertIn("existing_aiops2_networks_on_target", WORKFLOW)
