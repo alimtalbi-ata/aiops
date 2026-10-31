@@ -77,3 +77,7 @@ The repository is DEV-only. GitHub reports `main.protected=false`, so the archit
 ## 7. Schedule DTSTART correction — 2026-10-31 22:15 Europe/Paris
 
 The five hourly ChatGPT schedules now use future local DTSTART values 23:00, 23:10, 23:20, 23:30 and 23:45 Europe/Paris. All are enabled. The scheduler still returns `next_run_time=null`, so the future firing remains unverified.
+
+## 2026-10-31 23:48 Europe/Paris — scheduler evidence and missed-run truth
+
+A Debian SRV-DEB-05: requested `*/1`, but command/user/PATH/working directory/flock/timeout/logs/last success/heartbeat/next execution remain UNATTESTED; no host shell or duplicate cron. B GitHub: `23 2 * * *` UTC daily Quality configured on main; post-merge #230 Quality #41242870529 was a push-triggered run, **not** a schedule heartbeat. C ChatGPT: five enabled HOURLY configurations; all five `next_run_time=null`, so future cadence is UNKNOWN. Latest handoffs ACME/Portal/Core completed; Policy was in progress; architect active. D lab: ACME seed 20261018, Chromium, PG16 and Temporal are synthetic/disposable, not Debian/NGX/GLPI runtime. `scripts/automation_heartbeat_gate.py` is offline only; missed runs cannot be certified without timestamped receipts. Alerting/recovery remain proposed, not deployed.

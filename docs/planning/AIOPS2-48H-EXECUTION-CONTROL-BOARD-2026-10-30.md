@@ -615,3 +615,16 @@ The five existing hourly schedules are now assigned as four specialist developer
 ## 12. Schedule start-time correction — 2026-10-31 22:15 Europe/Paris
 
 The five RRULEs were reset with future local DTSTART values to avoid a first DTSTART already in the past: 1/5 23:00, 2/5 23:10, 3/5 23:20, 4/5 23:30, 5/5 23:45 Europe/Paris. All remain enabled and hourly. The automation API still reports `next_run_time=null`; this adjustment corrects the configured DTSTART but does not prove the next firing.
+
+## 2026-10-31 23:48 Europe/Paris — architect release board
+
+**Main:** `ae7c3e5102b99a66bd7806d602146f1309a9749d`, post-merge #230 Quality #41242870529 SUCCESS 3/3. **Only integration candidate:** [Draft #234](https://github.com/alimtalbi-ata/aiops/pull/234) `integration/enterprise-slice-main-20261031-2230` initial commit `21a0c4d544cb58b4bebc9fc47a1961413f456bff` (8 scoped ACME files, no Core/Portal/Policy). **Old #227 closed as superseded**, #201 historical NO MERGE.
+
+| Owner / priority | Source exact HEAD / source CI | Dependency / next contract |
+|---|---|---|
+| 1 ACME/Twin P1 | #231 `4f0edb91e4d62e9ef0c8f29243d85e586fc17a49`, Quality #41246212856 3/3, 67/67 | Source selectively ported; add governed owner/SLA/OLA/maintenance, never invent missing CIs; replay artifact #13058997818 is SYNTHETIC |
+| 2 Portal P0 | #232 `3961ce2f85f3c6e1b7890ca5cebbdf09ac368db4`, Quality #41247272385 3/3; OIDC 11/12 + 1 SKIP | Run real RSA CI test; server OIDC callback + revocable session; Core exact actor+tenant Run/ticket/entity ACL. No positive authorization yet |
+| 3 Core P0 | #233 `4a22adb19f4d5f1de4a03898cd0908058222d256`, Quality #41248332891 3/3; PG16 pinned-fixture migration 1/1 | Install actual 009 AI/010 Evidence/011 HITL/012 xref, requalify idempotence/rollback/data downgrade and independent GLPI ownership proof |
+| 4 Policy/HITL P0 | #204 `5285aec4359a8132cb6c5801dc8d3a18118930fc`; #228 `cd703c7d92782eb3309aaec70931efda465aed0d` Draft stacked | Clean-main no-effect + PG16 outbox/DR/Temporal port after migrations; re-run exact candidate SHA, no LIVE |
+
+**Gates:** D0 source CI_PASS but candidate new HEAD NOT_VERIFIED until workflow; D1 disposable combined NOT_QUALIFIED; D2 browser/API same SHA NOT_QUALIFIED; D3 kit install/upgrade/rollback NO_GO; D4 sign-off NOT_ATTESTED. Shared workflow owned by architect, reconcile ACME and Core changes. Rollback revert focused #234 commit(s) and discard disposable fixtures. No host, GLPI real write, executor or LIVE.
