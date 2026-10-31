@@ -31,6 +31,10 @@
     if (!data || typeof data !== "object" || Array.isArray(data) ||
         data.schema !== "aiops.portal.readmodels.v1" ||
         data.provenance !== "UNATTESTED_UPSTREAM_API_READ" ||
+        // The old bearer-only Core/Twin projection is not a tenant ACL.
+        // A future positive server contract must attest both properties.
+        data.tenant_acl_qualified !== true ||
+        data.actor_identity_server_derived !== true ||
         data.runtime_authenticated !== false ||
         data.live_remediation_authorized !== false) return false;
     const states = data.states;
