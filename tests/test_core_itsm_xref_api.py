@@ -221,6 +221,29 @@ class XrefHttpTests(unittest.TestCase):
         self.hidden(r)
         self.assertEqual(len(self.fake.calls),1)
 
+    def test_signed_history_predecessor_cannot_time_travel(self):
+        # Both versions are individually HMAC-signed; a valid final row must
+        # not hide a future or chronologically inverted predecessor.
+        final=dict(association_id="XREF-B",source_event_id="EVT-B",
+                   mapping_version=2,supersedes_association_id="XREF-A")
+        cases=(
+            (event(observed_at=NOW+timedelta(minutes=2),
+                   known_at=NOW+timedelta(minutes=3)), "CONFLICT"),
+            (event(known_at=NOW-timedelta(seconds=5)), "CONFLICT"),
+            (event(known_at=None), "UNKNOWN"),
+        )
+        for first,status in cases:
+            with self.subTest(status=status,first=first):
+                self.fake.events=[first,event(**final)]
+                r=self.read(expected_run_id="RUN-A")
+                self.assertEqual(r.status_code,200,r.text)
+                self.assertEqual(r.json()["status"],status)
+                self.hidden(r)
+                self.assertEqual(self.fake.calls[-1][0].count("itsm_xref_events"),1)
+                self.assertNotIn("from aiops.runs",self.fake.calls[-1][0])
+        # No historical event can have a later known_at than its successor.
+        self.assertTrue(all("from aiops.runs" not in sql for sql,_ in self.fake.calls))
+
     def test_duplicate_and_conflicting_history(self):
         self.fake.events=[event(),event()]
         r=self.read()
