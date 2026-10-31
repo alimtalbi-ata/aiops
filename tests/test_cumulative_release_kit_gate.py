@@ -11,6 +11,8 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from check_cumulative_release_kit import audit_kit
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy"))
+from refresh_release_inventory import refresh
 
 
 class CumulativeKitGateTests(unittest.TestCase):
@@ -59,6 +61,34 @@ class CumulativeKitGateTests(unittest.TestCase):
     def audit(self, source=True):
         return audit_kit(self.kit, self.sha, self.source if source else None,
                          required_paths=self.required, alternative_groups={})
+
+    def staged_manifest(self):
+        stage = self.root / "stage"
+        for name, content in self.files.items():
+            path = stage / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        self.assertEqual(refresh(stage, "2.1.0-core-rc1.4"), 2)
+        return json.loads((stage / "manifests/MANIFEST.json").read_text())
+
+    def test_generated_staged_manifest_preserves_exact_source_provenance(self):
+        staged = self.staged_manifest()
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(staged).encode()})
+        result = self.audit()
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertEqual(result["source_files_verified"], 3)
+
+    def test_generated_manifest_forged_source_release_fails(self):
+        staged = self.staged_manifest()
+        staged["source_manifest_release"] = "forged"
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(staged).encode()})
+        self.assertIn("STAGED_MANIFEST_SOURCE_PROVENANCE_MISMATCH", self.audit()["errors"])
+
+    def test_generated_manifest_forged_file_order_fails(self):
+        staged = self.staged_manifest()
+        staged["files"].reverse()
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(staged).encode()})
+        self.assertIn("STAGED_MANIFEST_SOURCE_PROVENANCE_MISMATCH", self.audit()["errors"])
 
     def test_valid_inventory_with_exact_source(self):
         self.build()
