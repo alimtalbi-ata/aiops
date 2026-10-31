@@ -8,6 +8,7 @@ from portal.acme_explore_story import router as acme_explore_story_router
 from portal.acme_impact_read_model import router as acme_impact_router
 from portal.glpi_operator_view import router as glpi_operator_router
 from portal.glpi_run_context import router as glpi_run_context_router
+from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.portal_integrations import build_navigation
 from portal.noc_runtime import router as noc_runtime_router, _noc_json_response, _require_portal_read_auth
 from portal.portal_command_auth import require_demo_operator
@@ -37,6 +38,7 @@ app.include_router(acme_explore_story_router)
 app.include_router(acme_impact_router)
 app.include_router(glpi_operator_router)
 app.include_router(glpi_run_context_router)
+app.include_router(noc_demo_rag_router)
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
@@ -599,6 +601,30 @@ def portal_glpi_bot_script():
     return FileResponse(Path(__file__).with_name("portal_glpi_bot_client.js"),
                         media_type="application/javascript",
                         headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+
+
+@app.get("/assets/portal-noc-rag.js")
+def portal_noc_rag_script():
+    return FileResponse(Path(__file__).with_name("portal_noc_rag_client.js"),
+                        media_type="application/javascript",
+                        headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+
+
+@app.get("/noc-rag",response_class=HTMLResponse)
+def noc_rag_page():
+    body=panel("NOC RAG — catalogue synthétique",
+        '<p>Drilldown documentaire synthétique uniquement. Les fiches ne sont ni des observations runtime, '
+        'ni une autorité constructeur, ni une preuve de cause racine.</p>'
+        '<label for="noc-rag-asset">Identifiant d’asset</label>'
+        '<input id="noc-rag-asset" maxlength="64" value="brocade-fc01" autocomplete="off">'
+        '<label for="noc-rag-token">Jeton lecture Portal</label>'
+        '<input id="noc-rag-token" type="password" autocomplete="off">'
+        '<button id="noc-rag-read" type="button">Lire fiches RAG DEMO</button>'
+        '<button id="noc-rag-clear" type="button" class="secondary">Effacer</button>'
+        '<p id="noc-rag-status" role="status">UNKNOWN — aucune fiche chargée</p>'
+        '<pre id="noc-rag-output" class="log">Aucune donnée.</pre>'
+        '<script src="/assets/portal-noc-rag.js" defer></script>')
+    return shell("/noc-rag","NOC RAG DEMO","Références synthétiques — aucune observation de production.",body)
 
 
 @app.get("/copilot",response_class=HTMLResponse)
