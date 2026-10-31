@@ -114,48 +114,19 @@ class TenantScopeFenceTests(unittest.TestCase):
     def test_signed_scoped_payload_is_redacted_by_actual_route(self):
         data = payload()
         data["steps"][0]["tenantId"] = "SECRET-TENANT-VALUE"
-        raw = json.dumps(data, separators=(",", ":")).encode("utf-8")
-        signature = hmac.new(KEY, raw, hashlib.sha256).hexdigest()
-
-        class Response:
-            headers = {
-                "Content-Type": "application/json",
-                "Content-Length": str(len(raw)),
-                "X-AIOps-Read-Model-SHA256": hashlib.sha256(raw).hexdigest(),
-                "X-AIOps-Read-Model-Signature": signature,
-            }
-            def __enter__(self): return self
-            def __exit__(self, *args): return False
-            def geturl(self): return "https://noc.example.test/api/read-model"
-            def getcode(self): return 200
-            def read(self, count): return raw[:count]
-
-        class Opener:
-            def open(self, request, timeout):
-                self.request = request
-                return Response()
-
         app = FastAPI()
         app.include_router(noc_runtime.router)
-        env = {
-            "AIOPS_PORTAL_READ_TOKEN": TOKEN,
-            "AIOPS_NOC_READ_MODEL_URL": "https://noc.example.test/api/read-model",
-            "AIOPS_NOC_READ_MODEL_TOKEN": "synthetic-noc-upstream-token",
-            "AIOPS_NOC_READ_MODEL_HMAC_KEY": KEY.decode(),
-            "AIOPS_NOC_ALLOWED_ORIGINS": "https://noc.example.test",
-        }
-        opener = Opener()
-        with TestClient(app) as client, patch.dict(os.environ, env), patch.object(
-            noc_runtime.urllib.request, "build_opener", return_value=opener
-        ):
+        with TestClient(app) as client, patch.dict(os.environ, {
+            "AIOPS_PORTAL_READ_TOKEN": TOKEN
+        }), patch.object(noc_runtime, "read_signed_noc_snapshot",
+                        side_effect=AssertionError("no source read")) as read:
             response = client.get("/api/noc/runtime-state",
                                   headers={"Authorization": "Bearer " + TOKEN})
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json(), {"detail": "noc_source_unavailable_or_unverified"})
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
         self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertEqual(response.headers["pragma"], "no-cache")
         self.assertNotIn("SECRET-TENANT-VALUE", response.text)
-        self.assertEqual(opener.request.get_method(), "GET")
+        read.assert_not_called()
 
 
 if __name__ == "__main__":

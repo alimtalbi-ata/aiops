@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("AIOPS_INTERNAL_TOKEN", "synthetic-ci-only-internal-token")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from portal import main
 
@@ -49,19 +50,60 @@ class PortalNavigationAuthTests(unittest.TestCase):
             self.assertEqual(response.status_code, 401)
             self.assert_uncacheable(response)
 
-    def test_authorized_registry_is_explicitly_unverified(self):
+    def test_shared_bearer_cannot_disclose_configured_links_or_read_registry(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN,
-                                     "AIOPS_PORTAL_LINK_GRAFANA": GRAFANA}):
+                                     "AIOPS_PORTAL_LINK_GRAFANA": GRAFANA}), patch.object(
+            main, "build_navigation", side_effect=AssertionError("pre-ACL registry read")
+        ) as registry, patch.object(
+            main, "get_json", side_effect=AssertionError("pre-ACL upstream")
+        ) as upstream:
+            response = self.client.get("/api/portal/components",
+                                       headers={"Authorization": "Bearer " + TOKEN,
+                                                "X-Tenant-ID": "foreign",
+                                                "X-Actor-ID": "forged",
+                                                "X-GLPI-Profile": "manager"})
+        self.assertEqual(response.status_code, 503)
+        self.assert_uncacheable(response)
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        data = response.json()
+        self.assertEqual(data["state"], "UNKNOWN")
+        self.assertEqual(data["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(data["connection_state"], "UNKNOWN")
+        self.assertFalse(data["tenant_acl_qualified"])
+        self.assertEqual(data["source_freshness"], "UNKNOWN")
+        self.assertNotIn("items", data)
+        self.assertNotIn(GRAFANA, response.text)
+        registry.assert_not_called()
+        upstream.assert_not_called()
+
+    def test_forged_roles_and_tenants_do_not_change_denial(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN}):
+            base = self.client.get("/api/portal/components",
+                                   headers={"Authorization": "Bearer " + TOKEN})
+            for role in ("N1", "N2", "N3", "manager", "admin"):
+                with self.subTest(role=role):
+                    response = self.client.get("/api/portal/components?tenant=foreign",
+                        headers={"Authorization": "Bearer " + TOKEN,
+                                 "X-Tenant-ID": "foreign", "X-Actor-ID": "forged",
+                                 "X-GLPI-Profile": role})
+                    self.assertEqual(response.status_code, 503)
+                    self.assertEqual(response.json(), base.json())
+                    self.assert_uncacheable(response)
+
+    def test_explicit_tenant_403_is_preserved_without_registry_or_upstream(self):
+        with patch.object(main, "_require_portal_read_auth",
+                          side_effect=HTTPException(403, "forbidden_tenant")), patch.object(
+            main, "build_navigation", side_effect=AssertionError("registry accessed")
+        ) as registry:
             response = self.client.get("/api/portal/components",
                                        headers={"Authorization": "Bearer " + TOKEN})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {"detail": "forbidden_tenant"})
         self.assert_uncacheable(response)
-        data = response.json()
-        self.assertFalse(data["runtime_verified"])
-        self.assertFalse(data["live_remediation_authorized"])
-        grafana = next(row for row in data["items"] if row["id"] == "grafana")
-        self.assertEqual(grafana["external_url"], GRAFANA)
-        self.assertEqual(grafana["state"], "UNKNOWN")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        registry.assert_not_called()
 
     def test_public_html_does_not_expose_configured_urls(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN,
@@ -81,8 +123,9 @@ class PortalNavigationAuthTests(unittest.TestCase):
                                      "AIOPS_PORTAL_LINK_GLPI": "javascript:alert(1)"}):
             response = self.client.get("/api/portal/components",
                                        headers={"Authorization": "Bearer " + TOKEN})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
         self.assertNotIn("javascript:", response.text)
+        self.assertNotIn("external_url", response.text)
 
     def test_script_has_no_persistent_token_or_unsafe_html(self):
         response = self.client.get("/assets/portal-navigation.js")

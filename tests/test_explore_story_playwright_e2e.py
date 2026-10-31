@@ -344,5 +344,41 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                     validate_pair(left, story)
 
 
+    def test_07_run_and_glpi_browser_fail_closed_without_tenant_acl(self):
+        """Real ephemeral Chromium: no Run existence oracle or GLPI authority."""
+        ids = ("RUN-FOREIGN-TENANT", "RUN-FORGED-999")
+        projections = []
+        for rid in ids:
+            response = self.context.request.get(
+                self.base + "/api/portal/runs/" + rid,
+                headers={"Authorization": "Bearer " + VIEWER,
+                         "X-Tenant-ID": "forged-tenant", "X-Actor-ID": "admin"},
+            )
+            self.assertEqual(response.status, 503)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+            projections.append(response.json())
+        self.assertEqual(projections[0], projections[1])
+        self.assertEqual(projections[0]["state"], "UNKNOWN")
+        self.assertEqual(projections[0]["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertNotIn("run_id", projections[0])
+
+        self.page.goto(self.base + "/runs/" + ids[0])
+        expect(self.page.get_by_role("heading", name=re.compile("NOT VERIFIED"))).to_be_visible()
+        self.assertIn("UNKNOWN", self.page.locator("body").inner_text())
+        self.assertNotIn("CONNECTED", self.page.locator("body").inner_text())
+        self.page.goto(self.base + "/itsm")
+        expect(self.page.get_by_role("heading", name="GLPI / ITSM — point de passage opérateur")).to_be_visible()
+        self.assertTrue(self.page.locator("#priority").is_disabled())
+        self.assertIn("NOT_INSTALLED", self.page.locator("body").inner_text())
+        status = self.context.request.get(
+            self.base + "/api/portal/itsm",
+            headers={"Authorization": "Bearer " + VIEWER},
+        )
+        self.assertEqual(status.status, 503)
+        self.assertFalse(status.json()["glpi_write_enabled"])
+        self.assertNotIn("CONNECTED", status.text())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
