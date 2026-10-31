@@ -78,7 +78,7 @@ test("denied and missing tokens never render stale data", async () => {
   await h.window.loadPortalReadModel();
   assert.equal(calls, 1);
   assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
-  assert.match(h.ids.get("portal-read-result").textContent, /UNKNOWN/);
+  assert.match(h.ids.get("portal-read-result").textContent, /UNAUTHORIZED \(HTTP 401\)/);
 });
 
 test("clear invalidates a pending response before it can render", async () => {
