@@ -39,6 +39,27 @@ def _canonical(obj):
     return json.dumps(obj, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode("ascii")
 
 
+def _strict_fixture_equal(actual, pinned):
+    """Compare injected fixture structures without Python bool/int/float aliases.
+
+    The graph contains sets and tuples, so canonical JSON alone cannot be
+    used here. This check does not grant runtime or tenant authority.
+    """
+    if type(actual) is not type(pinned):
+        return False
+    if isinstance(pinned, dict):
+        return (actual.keys() == pinned.keys() and
+                all(_strict_fixture_equal(actual[key], value)
+                    for key, value in pinned.items()))
+    if isinstance(pinned, (list, tuple)):
+        return (len(actual) == len(pinned) and
+                all(_strict_fixture_equal(a, b) for a, b in zip(actual, pinned)))
+    if isinstance(pinned, (set, frozenset)):
+        return (len(actual) == len(pinned) and
+                all(any(_strict_fixture_equal(a, b) for a in actual) for b in pinned))
+    return actual == pinned
+
+
 def _unique_object(pairs):
     out = {}
     for key, value in pairs:
@@ -203,12 +224,12 @@ def replay(scenario_key="REDUNDANT_SAN_PATH_LOSS", seed=20261018,
     pinned_graph = load_graph()
     if graph is None:
         graph = pinned_graph
-    elif graph != pinned_graph:
+    elif not _strict_fixture_equal(graph, pinned_graph):
         raise ValueError("unpinned graph override; use the reviewed SQL fixture")
     pinned_catalog, catalog_sha = load_catalog()
     if catalog is None:
         catalog = pinned_catalog
-    elif catalog != pinned_catalog:
+    elif not _strict_fixture_equal(catalog, pinned_catalog):
         raise ValueError("unpinned catalog override; use the reviewed catalog fixture")
     choices = [s for s in catalog["scenarios"] if s["key"] == scenario_key]
     if len(choices) != 1:
