@@ -484,6 +484,8 @@ def main(argv=None):
     parser.add_argument("--seed", type=int)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--false-positive", action="store_true")
+    parser.add_argument("--storyboard", action="store_true",
+                        help="export strict read-only SYNTHETIC timeline, not Core Evidence")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.stochastic and args.seed is None:
@@ -491,6 +493,8 @@ def main(argv=None):
     try:
         result = replay(args.scenario, 20261018 if args.seed is None else args.seed, stochastic=args.stochastic,
                         false_positive=args.false_positive)
+        if args.storyboard:
+            result = storyboard_offline(result, false_positive=args.false_positive)
     except (ValueError, OSError, UnicodeError) as exc:
         parser.error(str(exc))
     data = json.dumps(result, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
