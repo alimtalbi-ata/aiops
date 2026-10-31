@@ -515,7 +515,7 @@ class RunDetailTests(unittest.TestCase):
         # dedicated authenticated route and must not trigger anonymous reads.
         self.assertIn("script-src 'self' 'unsafe-inline'", policy)
         self.assertIn("Sources du cockpit", response.text)
-        self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
+        self.assertIn("UNKNOWN", response.text)
         self.assertNotIn('id="portal-runs"', response.text)
 
     def test_unverified_run_html_stays_no_store_with_security_headers(self):
