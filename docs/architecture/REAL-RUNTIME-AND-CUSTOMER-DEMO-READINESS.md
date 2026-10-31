@@ -174,3 +174,37 @@ Each implementation PR updates this document with:
 - rollback, security implications and remaining blockers.
 
 Never label a container stage as Analyst/Critic PASS unless a real endpoint invocation succeeded and the persisted output passes deterministic evidence-quality checks. Never label a GLPI ticket connected unless the actual ticket has been read back from GLPI. Never label a demo simulation as a real customer remediation.
+
+
+## 8. Implementation progress — integration PR #215 (2026-10-31)
+
+A separate draft integration branch `integration/real-ai-runtime-demo-20261031` was created from the PR #214 head. This avoids rewriting the PR #214 operations/reproducibility baseline and isolates the AI/HITL runtime port.
+
+### Ported source assets
+
+- Existing Intelligence service and Dockerfile from PR #196, including strict Analyst/Critic contracts, evidence freshness/integrity guards, provider-reported usage/latency/retry telemetry and bounded model requests.
+- Existing Temporal Worker and deterministic workflow from PR #194/#196, including real calls to `/api/intelligence/analyze` and `/api/intelligence/critic`, analysis/critique ledger persistence, fail-closed model-unavailable handling and explicit DEMO HITL simulation skip.
+- Core decision ledger and denial/HITL modules plus migrations 009, 010, 011 and 090–092.
+- Compose service wiring for Intelligence, model evaluator, test provider, GLPI API configuration and Temporal schema/namespace initialization.
+- Portal authenticated GLPI read client and ticket↔Run context routes, while preserving the current ACME Explore/Impact and GLPI operator handoff routers.
+- Fixed synthetic AI evaluation dataset, evaluator, benchmark summarizer and opt-in Ollama CPU benchmark workflow.
+- CI tests for Intelligence contract, AI evaluation/summary, OIDC identity and HITL workflow contract.
+
+### Important qualification distinction
+
+This is a **source integration in a Draft PR**, not a host deployment. The PR has 58 changed files and approximately 8.5k additions. It is a selective file-level port from divergent PR #194/#196 histories, not a wholesale merge. CI has been triggered; no exact-head PASS is claimed yet.
+
+### Remaining work before a real customer demonstration
+
+1. Resolve all CI failures and migration ordering/upgrade compatibility.
+2. Run a full synthetic Temporal scenario with a configured isolated model endpoint; verify persisted Analyst/Critic outputs and provider telemetry.
+3. Configure a dedicated least-privilege GLPI API identity and verify read-only ticket/CI access with entity/tenant scope.
+4. Prove one canonical Incident ID and Run ID are linked to a real lab GLPI ticket read back from GLPI.
+5. Execute Playwright against the runtime-backed Portal journey and capture a sanitized evidence bundle.
+6. Run at least three model repeats where feasible; keep actual quality, tokens and cost UNKNOWN when no provider evidence exists.
+7. Only after exact-head CI and isolated lab qualification, plan a controlled SRV-DEB-05 deployment. No application changes have been made on that host by this integration.
+
+### CI reference
+
+- Integration PR: https://github.com/alimtalbi-ata/aiops/pull/215
+- First exact-head quality workflow: https://github.com/alimtalbi-ata/aiops/actions/runs/41221642043
