@@ -69,6 +69,20 @@ class IncidentWorkflow:
             retry_policy=RETRY,
             result_type=dict,
         )
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("run_id") != run_id
+            or receipt.get("status") != "RUNNING"
+            or type(receipt.get("version")) is not int
+            or receipt["version"] < 1
+            or receipt.get("execution_allowed") is not False
+            or receipt.get("effect_allowed") is not False
+        ):
+            return {
+                "run_id": run_id, "status": "BLOCKED", "final_version": None,
+                "reason": "start_receipt_not_qualified",
+                "execution_allowed": False, "effect_allowed": False,
+            }
         version = receipt["version"]
         for stage in STAGES:
             receipt = await workflow.execute_activity(
@@ -204,4 +218,22 @@ class IncidentWorkflow:
             retry_policy=RETRY,
             result_type=dict,
         )
-        return {"run_id": run_id, "status": result["status"], "final_version": result["version"], "execution_allowed": False, "effect_allowed": False}
+        if (
+            not isinstance(result, dict)
+            or result.get("run_id") != run_id
+            or result.get("status") != "RESOLVED"
+            or type(result.get("version")) is not int
+            or result["version"] <= version
+            or result.get("execution_allowed") is not False
+            or result.get("effect_allowed") is not False
+        ):
+            return {
+                "run_id": run_id, "status": "BLOCKED", "final_version": version,
+                "reason": "finish_receipt_not_qualified",
+                "execution_allowed": False, "effect_allowed": False,
+            }
+        return {
+            "run_id": run_id, "status": result["status"],
+            "final_version": result["version"],
+            "execution_allowed": False, "effect_allowed": False,
+        }
