@@ -34,7 +34,7 @@ def run_create(mode="DEMO", existing=None):
     node.decorator_list = []
     cursor = RecordingCursor(existing)
     events = []
-    from shared.domain import STAGES
+    from shared.domain import STAGES, initial_stage_state
     namespace = {
         "RunIn": object,
         "Header": lambda default=None: None,
@@ -43,6 +43,7 @@ def run_create(mode="DEMO", existing=None):
         "db": lambda: cursor,
         "new": lambda kind: "RUN-TEST-INGEST",
         "STAGES": STAGES,
+        "initial_stage_state": initial_stage_state,
         "append_event": lambda *args, **kwargs: events.append((args, kwargs)),
     }
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), "exec"), namespace)
