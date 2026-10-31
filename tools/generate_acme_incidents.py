@@ -186,11 +186,18 @@ def replay(scenario_key="REDUNDANT_SAN_PATH_LOSS", seed=20261018,
            *, stochastic=False, false_positive=False, graph=None, catalog=None):
     if type(seed) is not int or not 0 <= seed < 2**32:
         raise ValueError("seed must be a declared 32-bit nonnegative integer")
-    graph = load_graph() if graph is None else graph
+    # Even caller-supplied parsed fixtures must match the pinned source files.
+    # Otherwise an injected graph/catalog could fabricate a dependency or P1.
+    pinned_graph = load_graph()
+    if graph is None:
+        graph = pinned_graph
+    elif graph != pinned_graph:
+        raise ValueError("unpinned graph override; use the reviewed SQL fixture")
+    pinned_catalog, catalog_sha = load_catalog()
     if catalog is None:
-        catalog, catalog_sha = load_catalog()
-    else:
-        catalog_sha = hashlib.sha256(_canonical(catalog)).hexdigest()
+        catalog = pinned_catalog
+    elif catalog != pinned_catalog:
+        raise ValueError("unpinned catalog override; use the reviewed catalog fixture")
     choices = [s for s in catalog["scenarios"] if s["key"] == scenario_key]
     if len(choices) != 1:
         raise ValueError("unknown scenario category")
