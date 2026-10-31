@@ -130,8 +130,29 @@ def persist_critic_denial(rid, mode, analysis, critique, analysis_id, critique_i
 
 @activity.defn
 async def start_run(a):
-    # Requests are blocking I/O. Run them off the shared FastAPI/Temporal event loop.
-    return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
+    # Core command ACKs are version/status receipts, never effect grants.
+    receipt = await asyncio.to_thread(
+        call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+        {'expected_version': a['version'], 'idempotency_key': 'START-'+a['run_id'],
+         'command': 'START'})
+    return verified_no_effect_command_receipt(receipt, a['run_id'], 'START', a['version'])
+
+
+def verified_no_effect_command_receipt(receipt, run_id, command, expected_version):
+    """Fence a committed Core START/RESOLVE ACK; do not infer effect authority."""
+    target = {'START': 'RUNNING', 'RESOLVE': 'RESOLVED'}.get(command)
+    if (target is None
+            or type(expected_version) is not int or expected_version < 0
+            or not isinstance(receipt, dict)
+            or receipt.get('run_id') != run_id
+            or receipt.get('status') != target
+            or type(receipt.get('version')) is not int
+            or receipt['version'] != expected_version + 1
+            or any(receipt.get(key) is not None and receipt.get(key) is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('command_receipt_not_qualified')
+    return {**receipt, 'execution_allowed': False, 'effect_allowed': False}
+
 
 def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version):
     """Normalize a Core event ACK only after a known PASS event was committed.
@@ -542,7 +563,11 @@ def _execute_stage_blocking(a,attempt):
         finally: raise
 @activity.defn
 async def finish_run(a):
-    return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
+    receipt = await asyncio.to_thread(
+        call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+        {'expected_version': a['version'], 'idempotency_key': 'RESOLVE-'+a['run_id'],
+         'command': 'RESOLVE'})
+    return verified_no_effect_command_receipt(receipt, a['run_id'], 'RESOLVE', a['version'])
 @app.get('/health')
 def health():
  if not worker_state['polling']:
