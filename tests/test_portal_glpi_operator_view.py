@@ -12,12 +12,12 @@ with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-glpi-no-upstream-token"
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-TOKEN = "ci-glpi-viewer-token"
+TOKEN = "v" * 64
 
 
 class GlpiOperatorViewTests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN, "AIOPS_PORTAL_OPERATOR_TOKEN": "ci-glpi-operator-token"})
+        self.env = patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN, "AIOPS_PORTAL_OPERATOR_TOKEN": "o" * 64})
         self.env.start()
         self.client = TestClient(main.app)
 
