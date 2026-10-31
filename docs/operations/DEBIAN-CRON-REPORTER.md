@@ -4,7 +4,7 @@
 
 The existing Debian cron runs a fixed, local Python probe every five minutes as the unprivileged `aiops` account. It never downloads or executes commands from GitHub. It collects CPU load, memory, disk, Docker container state/image names and loopback TCP reachability for PostgreSQL, Temporal, Portal, Grafana and Prometheus. A local lock prevents overlap. Output is bounded and contains no environment variables, container environment, logs, SQL data, GLPI records, user data or credentials.
 
-A local snapshot is refreshed every minute. One report is published to `ops/debian-runtime-reports` every 15 minutes to avoid 1,440 Git commits per day. GitHub is currently used only as the report sink. The reporter remains read-only. Authorized application operations are specified separately in `config/ops/debian-service-operations-policy.yml` and `docs/operations/DEBIAN-SERVICE-OPERATIONS-POLICY.md`; they are not yet executable by this reporter.
+A local snapshot is refreshed every minute. One report is published to `ops/debian-runtime-reports` every 5 minutes to avoid 1,440 Git commits per day. GitHub is currently used only as the report sink. The reporter remains read-only. Authorized application operations are specified separately in `config/ops/debian-service-operations-policy.yml` and `docs/operations/DEBIAN-SERVICE-OPERATIONS-POLICY.md`; they are not yet executable by this reporter.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ install -m 700 scripts/debian-readonly-reporter.py /home/aiops/.local/bin/aiops-
 python3 /home/aiops/.local/bin/aiops-debian-reporter
 ```
 
-The first manual run writes a local snapshot. Cron collects every minute. At UTC minutes 00/15/30/45 it publishes to GitHub if the token is configured; otherwise it continues local collection and reports `TOKEN_NOT_CONFIGURED`.
+The first manual run writes a local snapshot. Cron collects every minute. At UTC minutes 00/05/10/15/20/25/30/35/40/45/50/55 it publishes to GitHub if the token is configured; otherwise it continues local collection and reports `TOKEN_NOT_CONFIGURED`.
 
 The installer adds the following to the `aiops` user's crontab (or add it manually if preferred):
 
