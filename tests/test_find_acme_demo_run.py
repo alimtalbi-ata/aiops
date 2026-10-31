@@ -250,8 +250,9 @@ class CoreLocatorTests(unittest.TestCase):
     def test_network_opener_disables_proxies_and_redirects(self):
         from urllib.request import ProxyHandler
         handlers = locator._OPENER.handlers
-        self.assertTrue(any(isinstance(h, ProxyHandler) and h.proxies == {}
-                            for h in handlers))
+        # urllib omits an explicitly empty ProxyHandler from the installed
+        # handler list; its presence in build_opener prevents ambient proxies.
+        self.assertFalse(any(isinstance(h, ProxyHandler) for h in handlers))
         self.assertTrue(any(isinstance(h, locator._NoRedirect) for h in handlers))
         for code in (301, 302, 303, 307, 308):
             self.assertIsNone(locator._NoRedirect().redirect_request(
