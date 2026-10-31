@@ -3,7 +3,7 @@
 **Author:** Abdelhalim Talbi  
 **Repository:** https://github.com/alimtalbi-ata/aiops  
 **Default branch:** `main` (protected by workflow; work on branches and propose PRs)  
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-30
 
 ## Why this document exists
 
@@ -140,3 +140,101 @@ Dedicated P0 branch from main `723ca6458c722a1aa0e57ddb5eee3374d20cc830`: shared
 ## 2026-10-28 11:15 Europe/Paris — Worker simulation/Policy fence (draft)
 
 Targeted reuse of the existing #72 / #36 `simulation_policy_contract` on current main. The Worker rejects invalid execution modes before Temporal connection or stage effects; DEMO/REPLAY/STORY send OBSERVE to Policy, not EXECUTE. LIVE continues to hit the existing emergency stop and Policy HITL refusal. The helper and AST regression tests are reused without a mass merge. This is unit/static qualification only; no Core/Temporal/Twin/Evidence integration or HITL approval claimed. See `docs/automation-runs/2026-10-28-1115-p0-worker-policy-mode.md` for exact CI status and follow-up.
+
+
+## 2026-10-30 — 48-hour architecture convergence and AI benchmark baseline
+
+- **Branch:** `architecture/48h-convergence-20261030`. This is a documentation/architecture tranche based on `main`; it does not merge application code or change a deployed environment.
+- **Reference architecture:** `docs/architecture/AIOPS2-REFERENCE-ARCHITECTURE-2026-10-30.md` establishes one control plane and data authority: Core owns Incident/Run and business transitions; Temporal owns durable orchestration; Evidence is append-only; Twin/CMDB supplies sourced topology; Analyst/Critic are advisory; Policy is deterministic; HITL binds a verified human decision to an immutable proposal; execution remains separately fenced; Portal is a read-model/API client.
+- **ITIL 4:** the customer story explicitly maps Monitoring/Event Management, Incident Management, Service Desk, Service Configuration, Problem, Knowledge, Change Enablement, Release/Deployment, Service Validation, Information Security, Service Level Management and Continual Improvement. This is process alignment, not certification.
+- **48-hour plan:** `docs/planning/AIOPS2-48H-DELIVERY-PLAN-2026-10-30.md` sequences inventory, vertical-slice integration, AI benchmarking, failure injection and cumulative release-kit rehearsal.
+- **AI benchmark:** `docs/architecture/AIOPS2-AI-BENCHMARK-GOVERNANCE-2026-10-30.md` reuses `tools/evaluate_ai_core.py`, `eval/ai-core-cases.json` and the Core evaluation ledger found on the HITL candidate branch. Source review found quality metrics but no qualified per-invocation token/cost/latency telemetry; those metrics must remain UNKNOWN until instrumented.
+- **Reuse and PR convergence:** `docs/architecture/AIOPS2-REUSE-CONVERGENCE-REGISTER-2026-10-30.md` records current PRs #185, #187–#194 and the older schedule/deployment proposals. It directs selective reuse, not mass merge.
+- **Schedules:** `docs/operations/AIOPS2-SCHEDULE-AND-CRON-STRATEGY-2026-10-30.md` retains the five existing schedules and assigns 5/5 as architecture/release coordinator. It prefers #188's daily quality + 15-minute read-only runtime smoke design over duplicate #189 cadence, subject to merge and runner installation. Debian auto-deploy #146/#153 stays disabled.
+- **Customer story:** `docs/customer-story/ACME-P1-SAN-PAYMENTS-ITIL-DEMO-2026-10-30.md` defines one synthetic P1 journey with explicit provenance and no-effect boundaries.
+- **Observed repository state:** many open PRs overlap Core, Portal, Worker, Compose and quality workflows. #185 is a large ACME candidate whose PR body reports earlier CI/package evidence and DEMO_LOCAL=GO / RELEASE_STABLE=NO_GO; #190's latest head requires CI recheck; #192/#193/#194 are complementary but require identity and schema convergence; #187 is untested observability expansion; #188/#189 duplicate schedule intent. No PR is merged by this tranche.
+- **Operational limits:** no SSH/Debian host access, runner installation, cron modification, Docker restart, live migration, production data mutation, GLPI write, stable promotion or LIVE remediation was performed. Current source and CI findings are not host runtime proof.
+- **Next:** revalidate exact current PR heads and CI, implement a shared AI invocation telemetry contract in the existing evaluator/provider path, integrate the single ACME customer journey, then package only after clean install/upgrade/rollback and exact-SHA gates.
+
+
+### 2026-10-30 12:15 UTC — AI invocation telemetry and candidate dependency revalidation
+
+- PR #196 (`feat/ai-benchmark-telemetry-20261030`, stacked on #194) adds per-call provider usage, measured latency, retries, bounded request bytes/output tokens, and evaluator aggregation. Corrected head `388b7c48a108f70315b9fae92de72d10ac399704` passed AIOps quality run `41053026110` (6/6 jobs), Offline Integrity `41053026078`, Historical Trace `41053026102`, V2.8 Core `41053026140`. This is CI using the deterministic provider, not a real DGX/model benchmark.
+- Missing token usage remains UNKNOWN; cost remains UNKNOWN until pricing is pinned. Detailed invocation rows are report artifacts, not yet a dedicated DB ledger; per-tenant/run quotas remain unimplemented.
+- PR #185 current head `02dd3aa45a4adc0d3f7613f04288a71f77d9061e` has 6/6 quality jobs and a deployment-kit artifact, but its base is `feat/cron-stable-reconciled-20261028`, not main. That base diverges from main (672 commits ahead, 43 behind). Use as scenario/package source; do not merge its full branch into main.
+- PR #195 architecture docs were updated with these exact findings; new docs-only CI run `41053331399` is in progress at this update.
+- Existing Schedule 5/5 has been reoriented as architect/release coordinator and an immediate run was requested. The run was in progress; no completion is claimed.
+
+
+## 2026-10-30 12:15 UTC — 5/5 exact-head integration and qualification stop
+
+- The single scenario candidate remains draft [#185](https://github.com/alimtalbi-ata/aiops/pull/185), now at `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`. One selective commit copied eight exact source blobs from 1/5 `f50d3da`, 2/5 `ca6feab`, 3/5 `18ff72e`, and 4/5 `901c5bb`. No `demo_v2.py`, `main`, stable or Debian changes.
+- Exact-head V2.8 isolated qualification [41053319372](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319372) **FAILED**: `test_v28_portal_ui.PortalPageContractTests.test_demo_live_trace_is_source_backed` expects legacy `gates.decision`, while the current read-only scoped Core contract requires `gates.items`; 59 tests, one error. Do not weaken scope validation. Handoff to 2/5 for a fixture/contract-consistent fix. Quality [41053319020](https://github.com/alimtalbi-ata/aiops/actions/runs/41053319020) was still in progress at this snapshot; Historical and Offline succeeded.
+- #193 exact-head Quality [41024125286](https://github.com/alimtalbi-ata/aiops/actions/runs/41024125286) initially failed during pip download (`IncompleteRead`), not a test assertion; the targeted rerun finished six jobs SUCCESS. #196 [388b7c4](https://github.com/alimtalbi-ata/aiops/pull/196) now implements provider usage/latency telemetry on top of #194 and its four exact-head workflows succeeded; not yet integrated into #185 or validated on a deployed model.
+- The existing evaluator dataset contains five synthetic cases; local archive harness unit tests were **3/3 PASS**, with dataset SHA256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`. No model inference was executed; p50/p95, provider tokens and cost remain UNKNOWN. See `docs/architecture/AIOPS2-AI-BENCHMARK-BASELINE-2026-10-30.md`.
+- `deploy/aiops2-stable` still matches `e54c4e9a9b37e6229559a1b587c9a06b4741a8b3`. The stable portal deployer copies only `demo_v2.py` and its test and patches `main.py` locally; the candidate poller enforces stable-only and refuses untransported paths. Actual installed Debian cron, `applied.sha`, four-image transport, GLPI/Evidence read and rollback are not attested. **Single release decision: NO-GO.**
+
+
+### 2026-10-30 12:20 UTC — artifact-level AI benchmark inspection
+
+- Downloaded and inspected exact CI runtime report artifact `12974854416` from AIOps quality run `41053026110`.
+- Evaluation `EVAL-d7fd00c3b558414e82df074c02502ddc`, dataset `aiops-core-qualification-1.0.0`, SHA-256 `b383ce38ec8cf819176884f61822ad074057721c7df803cbebebfa604751438e`, provider/model `openai-compatible / ci-deterministic`.
+- Five cases passed all current quality metrics (1.00 each). Ten model calls had 100% fixture usage coverage, 20 fixed placeholder tokens total, P50 1.69 ms, P95 3.24 ms, zero retries; cost UNKNOWN.
+- **Interpretation:** the CI provider reports fixed 1+1 token placeholders per call. This verifies token/latency telemetry wiring and evaluator aggregation only; it is not a real DGX/model benchmark or cost estimate.
+- Synthetic Runtime E2E Run `RUN-FB8DDB7C6B22B5F4`: RESOLVED, 12 evidence records, P1, Critic validated, Policy PASS/SIMULATE, zero effect receipts, LIVE disabled.
+- Detailed report: `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`.
+
+
+### 2026-10-30 12:22 UTC — five-schedule handoff and ancestry audit
+
+- Schedules 1/5–4/5 delivered new source commits: `f50d3dac` (ACME), `ca6feab` (Portal), `18ff72e` (NOC/Evidence/GLPI), `901c5bb` (Policy/HITL). Their schedules report targeted suites 70/70, 62/62, NOC UTC fail-closed corrections, and 48/48 plus 195/195 respectively.
+- Exact commit Actions runs were not found at this check. Treat these as schedule-reported targeted test results, not GitHub CI qualification.
+- Each branch is divergent from main (711/43, 740/43, 736/43, 739/43). The compare operation reports large ancestry/file differences; do not copy complete branch trees. 5/5 has been instructed to obtain exact commit diffs and port only minimal source/test changes to a clean main-based integration branch.
+- PR #185 current head 02dd3aa also remains based on a divergent stable branch. It is a demo/package source, not directly mergeable.
+- AI benchmark artifact baseline is documented at `docs/benchmarks/2026-10-30-ci-deterministic-ai-baseline.md`; the 20 tokens and P95 3.24 ms are deterministic placeholders and not real model metrics.
+
+
+### 2026-10-30 12:20 UTC — package completion after initial gate snapshot
+
+- New #185 HEAD `5782d6f` Quality completed **6/6 SUCCESS**, but V2.8 remained **FAILED** (58/59 PASS, legacy gates fixture error). Exact CI artifact `12975971501` verified (445 CRC, 395 SHA256, eight source blobs), extracted archive **253/253** targeted tests PASS, isolated Portal **14/14** GET 200, POST 405 and unknown run 404. The same package's evaluator harness passed **3/3** without model calls.
+- The PR #185 base branch is **672 commits ahead / 43 behind** `main`; do not merge the 72-file PR directly. Preserve a clean-main selective integration plan. `RELEASE_STABLE=NO_GO` until all exact-head CI and Debian/runtime/rollback gates pass.
+
+
+### 2026-10-30 12:25 UTC — RC1.4 deployment-kit archive audit
+
+- Downloaded artifact `aiops2-core-deployment-kit` ID `12974884559` from exact CI run `41053026110`.
+- Outer artifact contains inner `AIOps-2.1.0-core-rc1.4-Core-Deployment-Kit-20261030T120953Z.zip`, 763,130 bytes, SHA-256 `4c7bd6a707fc24a308de033ee7f1b02b6df123cfd7c2615eea9cecb7b7be2646`.
+- Inner archive: 455 entries; `FILES-SHA256SUMS` lists 405 files; all 405 hashes verified, zero missing/mismatch.
+- Contains migration 011, Intelligence service, AI evaluation harness, OIDC/HITL code and qualification JSON reports.
+- Manifest explicitly states `real_model_qualification=NOT_RUN`, `production_qualification=NOT_RUN`. Its `git_commit=6273ad48...` is the temporary packaging tree SHA, not PR head or Debian `applied.sha`.
+- The package does **not** contain the new architecture/ITIL/48h docs from PR #195. It is a reproducible RC candidate from the stacked #194/#196 tree, not the final cumulative kit for the main-based architecture.
+- Audit report: `docs/release/AIOPS2-RC1.4-KIT-AUDIT-2026-10-30.md`.
+
+
+### 2026-10-30 12:27 UTC — second RC1.4 kit and V2.8 candidate failure
+
+- Latest PR #185 head `5782d6fcece32cfd38ada0d50bfe68a8b74bd164`: Quality 6/6 PASS, Offline and Historical PASS, V2.8 FAILED (58 PASS / 1 ERROR). Failing test expects the old `gates.decision` response while the new scoped reader returns `gates.items`; correct the test fixture, preserve fail-closed identity validation.
+- Downloaded PR #185 artifact `12975971501`: inner SHA-256 `af627c8af804eec25e643e7b3a7169bb6e513ee6cae8687c18bc4c47c2c0aa5d`, 445 entries, 395/395 file checksums verified. It lacks migration 011, OIDC verifier and AI per-call telemetry.
+- Compared with #196 artifact `12974884559` (inner SHA `4c7bd6a...`, 455 entries, 405/405 checksums) which includes migration 011/OIDC/telemetry but not the latest ACME branch fixes or architecture docs.
+- These two RC1.4 packages are valid but non-cumulative and built from different divergent trees. Final kit must be rebuilt from a single clean integrated source SHA.
+
+
+## 2026-10-30 12:30 UTC — 5/5 scoped-gates regression repair
+
+- Issue #186 read before action. #185 moved from `5782d6f` to exact commit [`2b2af9cd21e48be741a3906b7a12cfffa3371f7b`](https://github.com/alimtalbi-ata/aiops/commit/2b2af9cd21e48be741a3906b7a12cfffa3371f7b): **only** `tests/test_v28_portal_ui.py` changed. The old mock returned `gates.decision`; the corrected mock returns `gates.items[0].decision`. Portal identity guard unchanged. The previous kit extracted locally with the exact two-line fixture change passed V2.8 **59/59**, targeted tests **253/253**, and `py_compile` PASS; these local results do not constitute new-head packaging verification.
+- Exact new-head [V2.8 #41055650146](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650146) **SUCCESS (2/2 jobs)**, [Offline #41055650247](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650247) SUCCESS, [Historical #41055650640](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650640) SUCCESS. [Quality #41055650123](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650123) **IN_PROGRESS at this snapshot**; no all-green claim yet.
+- Main-based 1/5 #198 `8f48b1b`, 3/5 #197 `d9d0981`, 4/5 #199 `e0fc68f` have exact-head Quality SUCCESS; 2/5 has no safe main-based Portal route to attach its guards. They are independent small slices, **not** a cumulative release.
+- #196 latest `6b6a3b3991e8a4b5b83ff4c6534dfa4b34f72932` has Quality/Offline/Historical/V2.8 SUCCESS; synthetic provider tokens/latency are not real-model results. Both audited RC1.4 ZIPs remain incomplete. #185 base still diverges from main (741 ahead / 43 behind after fixture commit). **RELEASE_STABLE=NO_GO**, no merge, host action or LIVE.
+
+
+### 2026-10-30 12:32 UTC — final exact-head CI and kit inspection
+
+#185 `2b2af9cd21e48be741a3906b7a12cfffa3371f7b`: all four exact-head workflows now **SUCCESS** — Quality [41055650123](https://github.com/alimtalbi-ata/aiops/actions/runs/41055650123) **6/6**, V2.8 41055650146 **2/2**, Offline 41055650247 and Historical 41055650640. Downloaded new artifact `12976991134`; inner ZIP SHA256 `3ff78df871c3e32b72d1f9c4d077cee0301b5aeeb3dae0edab20a415719fc2aa`, 445/445 CRC, 395/395 SHA256, updated test blob Git SHA `ca08e07e612e66d10936c0793d3f11c469147bd8`. Tests on **new exact archive** V2.8 **59/59**, selected 11-module suite **253/253**, compileall PASS; loopback read-only preview **14/14 GET 200**, POST 405, unknown run 404. **New artifact still lacks migration 011/OIDC/AI per-call telemetry and architecture docs.** #195 documentation CI for prior commit `fe4e92f`: [41055915595](https://github.com/alimtalbi-ata/aiops/actions/runs/41055915595) SUCCESS. These results do not authorize stable or Debian deployment.
+
+### 2026-10-30 13:12 UTC — release handoff
+
+One ITIL4-aligned synthetic ACME SAN→Payments P1 path; source-verified Incident/Run/Evidence/GLPI links or UNKNOWN, Analyst→Critic→Policy→HITL SIMULATE→VERIFY. #185 repaired head `2b2af9c` has exact-head Quality/V2.8/Offline/Historical SUCCESS, and fresh ZIP checks 395/395, V2.8 59/59, AI harness 3/3. Its base is 741 ahead/43 behind main; archive omits migration 011, OIDC, #196 telemetry and #195 docs. #197/#198/#199 are separate main-based green patches; 2/5 main Portal run-detail route missing. Keep #185 as demo-only scenario candidate, construct a clean cumulative main-based SHA before any stable gate. #188 preferred; #189 duplicate unmerged; no Debian/GLPI/LIVE action. `RELEASE_STABLE=NO_GO`.
+
+## 2026-10-30 14:00 UTC — 5/5 main-based integration staging
+
+Draft [#201](https://github.com/alimtalbi-ata/aiops/pull/201) at `2ceda14c8a21fe71e88b3228879799e6c37a5387` is a clean `main@27deb9b1` one-commit staging integration, **not a release**. It selects six exact code/test blobs from #197/#198/#199 and fourteen architecture/ITIL/benchmark/release docs from this PR #195; the Quality workflow adds isolated tests for 1/5 and 3/5 to the existing 4/5 test. No Portal, Core API, Worker, Compose, DB, cron or Debian mutation. CI run [41068355452](https://github.com/alimtalbi-ata/aiops/actions/runs/41068355452) was **IN_PROGRESS** at this snapshot; no PASS claimed. #185 remains historical divergent scenario source; #201 is the sole clean-main integration staging candidate, not a cumulative kit. T0 PENDING; T1/T2 NOT_TESTED; T3 NOT_ATTESTED; T4 NOT_TESTED; T5 NO_GO.

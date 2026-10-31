@@ -64,19 +64,19 @@ class GrafanaHealthContractTests(unittest.TestCase):
                     "http://127.0.0.1:3000?x=1", "https://127.0.0.1:3000"):
             with self.subTest(url=url), patch.dict(os.environ, {"AIOPS_GRAFANA_READ_URL": url}), patch.object(
                     module.urllib.request, "build_opener", side_effect=AssertionError("network")):
-                r = self.get()
-                self.assertEqual(r.status_code, 503)
+                with self.assertRaises(ValueError):
+                    module.read_grafana_health()
     def test_real_response_contract_never_attests_metrics(self):
+        # Internal adapter contract only; not a browser tenant authorization.
         opener = Opener()
         with patch.object(module.urllib.request, "build_opener", return_value=opener):
-            r = self.get()
-        self.assertEqual(r.status_code, 200)
+            result = module.read_grafana_health()
         self.assertEqual(opener.called, 1)
-        self.assertEqual(r.json()["state"], "GRAFANA_HTTP_READY_UNATTESTED")
-        self.assertEqual(r.json()["grafana_observation"], "NOT_TESTED")
-        self.assertFalse(r.json()["tenant_acl_qualified"])
-        self.assertFalse(r.json()["live_remediation_authorized"])
-        self.assertNotIn("version", r.json())
+        self.assertEqual(result["state"], "GRAFANA_HTTP_READY_UNATTESTED")
+        self.assertEqual(result["grafana_observation"], "NOT_TESTED")
+        self.assertFalse(result["tenant_acl_qualified"])
+        self.assertFalse(result["live_remediation_authorized"])
+        self.assertNotIn("version", result)
     def test_invalid_health_and_redirect_fail_closed(self):
         url = "http://127.0.0.1:3000/api/health"
         for response in (Response(url, {"database": "fail", "version": "11.6.0"}),
@@ -86,7 +86,8 @@ class GrafanaHealthContractTests(unittest.TestCase):
                          Response(url, code=302)):
             with self.subTest(response=response), patch.object(
                     module.urllib.request, "build_opener", return_value=Opener(response)):
-                self.assertEqual(self.get().status_code, 503)
+                with self.assertRaises(ValueError):
+                    module.read_grafana_health()
     def test_oversize_and_duplicate_keys_rejected(self):
         url = "http://127.0.0.1:3000/api/health"
         for body in (b'{"database":"ok","database":"fail","version":"1"}',
@@ -96,7 +97,18 @@ class GrafanaHealthContractTests(unittest.TestCase):
             response.body = body
             with self.subTest(body=body[:30]), patch.object(
                     module.urllib.request, "build_opener", return_value=Opener(response)):
-                self.assertEqual(self.get().status_code, 503)
+                with self.assertRaises(ValueError):
+                    module.read_grafana_health()
+    def test_shared_token_never_probes_grafana_without_tenant_acl(self):
+        with patch.object(module, "read_grafana_health", side_effect=AssertionError("no upstream")) as read:
+            response = self.get()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(response.json()["source_freshness"], "UNKNOWN")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
+        read.assert_not_called()
     def test_portal_mount_and_visible_button(self):
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": TOKEN}):
             from portal import main as portal_main

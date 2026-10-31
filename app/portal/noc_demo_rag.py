@@ -132,12 +132,14 @@ def build_demo_rag(asset: str, *, catalog: tuple[list[dict], str] | None = None)
 
 
 @router.get("/api/noc/demo-rag", name="noc_synthetic_rag_drilldown")
-def noc_demo_rag(asset: str, authorization: str | None = Header(default=None)):
+def noc_demo_rag(asset: str | None = None, authorization: str | None = Header(default=None)):
     try:
         noc_runtime._require_portal_read_auth(authorization)
     except HTTPException as exc:
         return noc_runtime._noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
-    if noc_runtime.IDENTIFIER.fullmatch(asset) is None:
+    # Query validation must follow authentication: an absent asset must not
+    # let FastAPI return 422 before the 401/503 viewer gate runs.
+    if not isinstance(asset, str) or noc_runtime.IDENTIFIER.fullmatch(asset) is None:
         return noc_runtime._noc_json_response({"detail": "invalid_asset_identifier"}, status_code=400)
     try:
         return noc_runtime._noc_json_response(build_demo_rag(asset))

@@ -139,11 +139,14 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertRegex(run_id, r"^SIM-ACME-[A-F0-9]{16}$")
         self.assertIn("ACME-DEMO-SAN-001", scenario)
         self.assertIn("ACME-DEMO-PAY-002", scenario)
-        self.assertEqual(self.page.locator("#timeline li").count(), 9)
+        self.assertEqual(self.page.locator("#timeline li").count(), 14)
         self.assertEqual(self.page.locator("#story-token").input_value(), "")
         self.page.locator("#advance").click()
-        expect(self.page.locator("#story-status")).to_contain_text("2/9")
+        expect(self.page.locator("#story-status")).to_contain_text("2/14")
         self.assertIn("MISSING", self.page.locator("#step-detail").inner_text())
+        # After advancing, the active step is the SECOND checkpoint (NOC L2).
+        self.assertIn("service_configuration_management", self.page.locator("#step-detail").inner_text())
+        self.assertIn("noc_l2", self.page.locator("#step-title").inner_text().lower())
 
         # A different real portal route must use the same synthetic Run ID.
         self.page.goto(self.base + "/demo/acme-impact")
@@ -156,7 +159,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.page.locator("#pause").click()
         expect(self.page.locator("#story-status")).to_contain_text("PAUSE / EXPLORE")
         self.assertIn(run_id, self.page.locator("#scenario").inner_text())
-        self.assertEqual(self.page.locator("#timeline li").count(), 9)
+        self.assertEqual(self.page.locator("#timeline li").count(), 14)
         self.assertTrue(all(
             "MISSING" in text for text in self.page.locator("#timeline li").all_inner_texts()
         ))
@@ -189,7 +192,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "impact_incident_id": "ACME-DEMO-PAY-002",
             "glpi_ticket_id": None,
             "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-            "git_sha": os.environ.get("GITHUB_SHA"),
+            # On pull_request GITHUB_SHA is the ephemeral merge checkout, not the PR source.
+            "git_sha": os.environ.get("GITHUB_SHA"),  # legacy checkout alias
+            "checkout_sha": os.environ.get("GITHUB_SHA"),
+            "source_head_sha": os.environ.get("AIOPS_SOURCE_HEAD_SHA"),
+            "base_sha": os.environ.get("AIOPS_BASE_SHA") or None,
             "screenshot_file": "explore-story-ci-simulated.png",
             "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
             "runtime_authenticated": False,
@@ -197,6 +204,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             "live_remediation_authorized": False,
             "privacy_reviewed": False,
         }
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            self.assertRegex(receipt["source_head_sha"] or "", r"^[a-f0-9]{40}$")
+            self.assertEqual(receipt["checkout_sha"], os.environ.get("GITHUB_SHA"))
+            if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+                self.assertRegex(receipt["base_sha"] or "", r"^[a-f0-9]{40}$")
         (output / "capture-metadata.json").write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
@@ -218,7 +230,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(report["contract_status"], "PASS")
         self.assertEqual(report["overall"], "NO_GO")
         self.assertEqual(report["scope"], "EPHEMERAL_PORTAL_SIMULATED_CONTRACT_ONLY")
-        self.assertEqual(report["checkpoint_count"], 9)
+        self.assertEqual(report["checkpoint_count"], 14)
         self.assertFalse(report["runtime_attested"])
         self.assertIn("CORE_TEMPORAL_ANALYST_CRITIC_POLICY_EVIDENCE_NOT_TESTED",
                       report["blockers"])
@@ -267,6 +279,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             ("status", "VERIFIED"),
             ("screenshot_sha256", "0" * 64),
             ("runtime_authenticated", True),
+            ("source", "FORGED_CAPTURE"),
+            ("itil_practice", "unverified_practice"),
         ):
             with self.subTest(checkpoint=key):
                 left = deepcopy(impact)
@@ -319,7 +333,11 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                 with self.assertRaisesRegex(QualificationError, "^" + code + "$"):
                     validate_pair(changed, story)
 
-        for field, forged in (("service", "temporal"), ("view", "live_recovery")):
+        for field, forged in (("service", "temporal"), ("view", "live_recovery"),
+                              ("itil_practice", "fabricated_practice"),
+                              ("owner_role", "unverified_actor"),
+                              ("handoff", "unverified_handoff"),
+                              ("evidence_required", "fake_receipt")):
             with self.subTest(joint_checkpoint_field=field):
                 left, right = deepcopy(impact), deepcopy(story)
                 left["checkpoint_evidence"][0][field] = forged
@@ -342,6 +360,42 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                 left["decision_preview"][field] = forged
                 with self.assertRaisesRegex(QualificationError, "^policy_preview_not_fail_closed$"):
                     validate_pair(left, story)
+
+
+    def test_07_glpi_operator_handoff_browser_navigation_and_permissions(self):
+        """Real Chromium, ephemeral Portal only; no GLPI instance or ticket data."""
+        self.page.goto(self.base + "/")
+        self.page.get_by_role("link", name="GLPI / ITSM").click()
+        self.assertTrue(self.page.url.endswith("/itsm"))
+        expect(self.page.get_by_role("heading", name="GLPI / ITSM — point de passage opérateur")).to_be_visible()
+        expect(self.page.get_by_role("status")).to_contain_text("UNKNOWN")
+        expect(self.page.locator('[data-story-provenance="SYNTHETIC"]')).to_contain_text("SYNTHETIC")
+        self.assertTrue(self.page.locator("#priority").is_disabled())
+        self.assertEqual(self.page.locator("button").count(), 0)
+        self.assertNotIn("ticket_id", self.page.content())
+        self.assertNotIn("evidence_id", self.page.content())
+        self.page.keyboard.press("Tab")
+        self.assertEqual(self.page.evaluate("document.activeElement.tagName"), "A")
+        page = self.context.request.get(self.base + "/itsm")
+        self.assertEqual(page.status, 200)
+        self.assertEqual(page.headers["cache-control"], "no-store")
+        self.assertEqual(page.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", page.headers["content-security-policy"])
+        for headers, expected in (
+            ({}, 401),
+            ({"Authorization": "Bearer wrong"}, 401),
+            ({"Authorization": "Bearer " + VIEWER,
+              "X-Tenant-ID": "foreign", "X-Actor-ID": "forged",
+              "X-GLPI-Profile": "manager"}, 503),
+        ):
+            with self.subTest(expected=expected):
+                response = self.context.request.get(self.base + "/api/portal/itsm",
+                                                    headers=headers)
+                self.assertEqual(response.status, expected)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertEqual(response.headers["x-frame-options"], "DENY")
+                self.assertNotIn("ticket_id", response.text())
+        # This test does not create a screenshot or claim native GLPI UI access.
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from portal.acme_fixture_contract import load_fixture_bytes, validate_fixture
 from portal.acme_impact_read_model import (
     FIXTURE_PATH, build_acme_impact_read_model, router,
 )
+from portal.acme_explore_story import router as explore_story_router
 
 class AcmeImpactTests(unittest.TestCase):
     def setUp(self):
@@ -45,6 +46,41 @@ class AcmeImpactTests(unittest.TestCase):
         self.assertFalse(first["live_remediation_authorized"])
         self.assertTrue(all(not item["runtime_authenticated"] and item["status"] == "MISSING"
                             for item in first["checkpoint_evidence"]))
+
+    def test_itil_story_projects_explicit_synthetic_roles_handoffs_and_evidence_gates(self):
+        model = build_acme_impact_read_model()
+        steps = model["checkpoint_evidence"]
+        self.assertEqual(len(steps), 14)
+        self.assertEqual(steps[0]["itil_practice"], "monitoring_event_management")
+        self.assertEqual(steps[0]["owner_role"], "noc_l1")
+        self.assertEqual(steps[2]["owner_role"], "service_desk_n1")
+        self.assertEqual(steps[4]["owner_role"], "incident_commander")
+        self.assertEqual(steps[9]["owner_role"], "authorized_approver")
+        self.assertEqual(steps[-1]["itil_practice"], "continual_improvement")
+        self.assertTrue(all(
+            step["status"] == "MISSING"
+            and step["runtime_authenticated"] is False
+            and step["source"] == "SYNTHETIC_ITIL_CHECKPOINT_CONTRACT_ONLY_NO_CAPTURE"
+            and step["evidence_required"]
+            for step in steps
+        ))
+
+        app = FastAPI()
+        app.include_router(explore_story_router)
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "unit-test-only"}):
+            response = TestClient(app).post(
+                "/api/demo/explore-story/control",
+                headers={"Authorization": "Bearer unit-test-only"},
+                json={"action": "start", "cursor": 0, "mode": "story"},
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["timeline"]), 14)
+        self.assertEqual(payload["timeline"][9]["owner_role"], "authorized_approver")
+        self.assertTrue(all(item["status"] == "MISSING" for item in payload["timeline"]))
+        self.assertFalse(payload["runtime_attested"])
+        self.assertFalse(payload["production_qualified"])
+        self.assertFalse(payload["live_remediation_authorized"])
 
     def test_rejects_live_or_unsafe_actions(self):
         for key, value in (("status", "open"), ("live_remediation", True),

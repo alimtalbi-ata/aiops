@@ -78,9 +78,12 @@ def grafana_health(authorization: str | None = Header(default=None)):
         noc_runtime._require_portal_read_auth(authorization)
     except HTTPException as exc:
         return noc_runtime._noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
-    try:
-        result = read_grafana_health()
-    except Exception:
-        return noc_runtime._noc_json_response(
-            {"detail": "grafana_not_configured_or_unavailable"}, status_code=503)
-    return noc_runtime._noc_json_response(result)
+    # HTTP readiness is global, not an actor/tenant-scoped read grant.
+    # Do not probe Grafana from the browser route until server-derived ACL exists.
+    return noc_runtime._noc_json_response({
+        "state": "UNKNOWN",
+        "reason": "TENANT_ACL_NOT_QUALIFIED",
+        "connection_state": "UNKNOWN",
+        "source": "GRAFANA_READINESS_NOT_TENANT_AUTHORIZED",
+        "source_freshness": "UNKNOWN",
+    }, status_code=503)

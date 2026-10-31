@@ -113,8 +113,16 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
         cursor = min(cursor + 1, len(steps) - 1)
     playing = mode == "story" and action in {"start", "advance", "replay"} and cursor < len(steps) - 1
     # Strict projection: no raw fixture, secret, backend URLs or unqualified evidence.
-    timeline = [{"cue": s["cue"], "service": s["service"], "view": s["view"],
-                 "status": "MISSING"} for s in steps]
+    timeline = [{
+        "cue": step["cue"],
+        "service": step["service"],
+        "view": step["view"],
+        "itil_practice": step["itil_practice"],
+        "owner_role": step["owner_role"],
+        "handoff": step["handoff"],
+        "evidence_required": step["evidence_required"],
+        "status": "MISSING",
+    } for step in steps]
     return _noc_json_response({
         "schema": "aiops.acme-explore-story.v1",
         "mode": mode, "action": action, "cursor": cursor, "playing": playing,

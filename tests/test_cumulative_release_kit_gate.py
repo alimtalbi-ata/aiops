@@ -1,0 +1,153 @@
+"""Offline release inventory guard regressions; no production or network access."""
+
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+import zipfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from check_cumulative_release_kit import audit_kit
+
+
+class CumulativeKitGateTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.source = self.root / "source"
+        self.source.mkdir()
+        self.files = {"README.md": b"AIOps synthetic test\n", "db/migrations/011_hitl_decision_outbox.sql": b"-- test\n"}
+        self.files["manifests/MANIFEST.json"] = json.dumps({
+            "release": "2.1.0-core-rc1.4",
+            "files": [
+                {"path": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+                for name, data in self.files.items()
+            ],
+        }).encode()
+        for name, content in self.files.items():
+            path = self.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        subprocess.run(["git", "init", "-q", str(self.source)], check=True)
+        subprocess.run(["git", "-C", str(self.source), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.source), "-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "fixture"], check=True)
+        self.sha = subprocess.check_output(["git", "-C", str(self.source), "rev-parse", "HEAD"], text=True).strip()
+        self.kit = self.root / "kit.zip"
+        self.required = tuple(self.files)
+
+    def build(self, overrides=None, extra=None, manifest_sha=None, duplicate=False):
+        contents = dict(self.files)
+        contents["RELEASE-MANIFEST.txt"] = ("git_commit=" + (manifest_sha or self.sha) + "\nversion=2.1.0-core-rc1.4\n").encode()
+        contents.update(overrides or {})
+        lines = [hashlib.sha256(data).hexdigest() + "  ./" + name for name, data in contents.items()]
+        with zipfile.ZipFile(self.kit, "w") as z:
+            for name, data in contents.items():
+                z.writestr(name, data)
+            for name, data in extra or []:
+                z.writestr(name, data)
+            if duplicate:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", UserWarning)
+                    z.writestr("README.md", b"duplicate")
+            z.writestr("FILES-SHA256SUMS", "\n".join(lines) + "\n")
+
+    def audit(self, source=True):
+        return audit_kit(self.kit, self.sha, self.source if source else None,
+                         required_paths=self.required, alternative_groups={})
+
+    def test_valid_inventory_with_exact_source(self):
+        self.build()
+        result = self.audit()
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertEqual(result["checksums_verified"], 4)
+        self.assertEqual(result["source_files_verified"], 3)
+
+    def test_missing_migration_fails(self):
+        self.build(overrides={"db/migrations/011_hitl_decision_outbox.sql": b""})
+        # A placeholder migration is not proven functional, but a source mismatch is detected.
+        self.assertIn("SOURCE_BLOB_MISMATCH:db/migrations/011_hitl_decision_outbox.sql", self.audit()["errors"])
+
+    def test_manifest_commit_mismatch_fails(self):
+        self.build(manifest_sha="0" * 40)
+        self.assertIn("MANIFEST_SHA_MISMATCH", self.audit()["errors"])
+
+    def test_stale_embedded_sha_fails_even_when_sha256sums_is_valid(self):
+        embedded = json.loads(self.files["manifests/MANIFEST.json"])
+        embedded["files"][0]["sha256"] = "0" * 64
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(embedded).encode()})
+        self.assertIn("EMBEDDED_FILE_SHA_MISMATCH:README.md", self.audit()["errors"])
+
+    def test_stale_embedded_size_fails(self):
+        embedded = json.loads(self.files["manifests/MANIFEST.json"])
+        embedded["files"][0]["bytes"] += 1
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(embedded).encode()})
+        self.assertIn("EMBEDDED_FILE_SIZE_MISMATCH:README.md", self.audit()["errors"])
+
+    def test_release_version_conflict_fails(self):
+        embedded = json.loads(self.files["manifests/MANIFEST.json"])
+        embedded["release"] = "8.0.0"
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(embedded).encode()})
+        self.assertIn("EMBEDDED_RELEASE_VERSION_MISMATCH", self.audit()["errors"])
+
+    def test_invalid_embedded_manifest_fails(self):
+        self.build(overrides={"manifests/MANIFEST.json": b"{broken"})
+        self.assertIn("EMBEDDED_MANIFEST_UNREADABLE", self.audit()["errors"])
+
+    def test_unchecksummed_file_fails(self):
+        self.build(extra=[("untracked.txt", b"unverified")])
+        self.assertIn("UNCHECKSUMMED_MEMBER:untracked.txt", self.audit()["errors"])
+
+    def test_zip_slip_member_fails(self):
+        self.build(extra=[("../escape.txt", b"bad")])
+        self.assertIn("UNSAFE_MEMBER_PATH:../escape.txt", self.audit()["errors"])
+
+    def test_duplicate_member_fails(self):
+        self.build(duplicate=True)
+        self.assertIn("DUPLICATE_MEMBERS", self.audit()["errors"])
+
+    def test_missing_checkout_fails(self):
+        self.build()
+        self.assertIn("SOURCE_TREE_NOT_PROVIDED", self.audit(source=False)["errors"])
+
+    def test_dirty_checkout_cannot_masquerade_as_exact_head(self):
+        changed = b"locally modified source, not committed\\n"
+        (self.source / "README.md").write_bytes(changed)
+        self.build(overrides={"README.md": changed})
+        # The archive and checkout bytes match, but neither is the Git HEAD.
+        result = self.audit()
+        self.assertIn("SOURCE_TREE_DIRTY", result["errors"])
+
+    def test_nested_source_directory_is_not_repository_root(self):
+        self.build()
+        nested = self.source / "db"
+        result = audit_kit(self.kit, self.sha, nested,
+                           required_paths=self.required, alternative_groups={})
+        self.assertIn("SOURCE_NOT_REPOSITORY_ROOT", result["errors"])
+
+    def test_source_head_mismatch_fails(self):
+        self.build()
+        result = audit_kit(self.kit, "1" * 40, self.source,
+                           required_paths=self.required, alternative_groups={})
+        self.assertIn("SOURCE_HEAD_MISMATCH", result["errors"])
+
+    def test_missing_required_path_fails(self):
+        self.build()
+        result = audit_kit(self.kit, self.sha, self.source,
+                           required_paths=self.required + ("app/core/hitl_identity.py",), alternative_groups={})
+        self.assertIn("REQUIRED_MISSING:app/core/hitl_identity.py", result["errors"])
+
+    def test_missing_rollback_entrypoint_fails(self):
+        self.build()
+        result = audit_kit(self.kit, self.sha, self.source,
+                           required_paths=self.required,
+                           alternative_groups={"rollback_entrypoint": ("deploy/rollback.sh",)})
+        self.assertIn("ENTRYPOINT_MISSING:rollback_entrypoint", result["errors"])
+
+
+if __name__ == "__main__":
+    unittest.main()

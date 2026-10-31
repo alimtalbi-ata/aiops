@@ -58,7 +58,12 @@ async function loadPortalNavigation() {
     if (!response.ok) { resetPortalNavigation("UNKNOWN — accès refusé"); return; }
     const model = await response.json();
     if (epoch !== portalNavEpoch) return;
-    if (!model || model.schema !== "aiops-single-portal-component-registry-v1" ||
+    // A legacy HTTP 200 registry is not an actor/tenant-scoped authorization.
+    // These claims must originate from a future server-authorized contract;
+    // the current Portal route intentionally never issues them.
+    if (!model || model.tenant_acl_qualified !== true ||
+        model.actor_identity_server_derived !== true ||
+        model.schema !== "aiops-single-portal-component-registry-v1" ||
         model.navigation_mode !== "EXTERNAL_BROWSER_LINKS_ONLY_NO_PROXY" ||
         model.runtime_verified !== false || model.live_remediation_authorized !== false ||
         !Array.isArray(model.items)) throw Error("invalid envelope");

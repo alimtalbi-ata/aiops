@@ -43,9 +43,18 @@ function harness(responder) {
 
 function envelope(action, mode, cursor, overrides = {}) {
   const timeline = [
-    {cue: "detect", service: "grafana", view: "alert_dashboard", status: "MISSING"},
-    {cue: "correlate", service: "n8n", view: "ingress_execution", status: "MISSING"},
-    {cue: "ticket", service: "glpi", view: "incident_ticket", status: "MISSING"}
+    {cue: "detect", service: "grafana", view: "alert_dashboard",
+      itil_practice: "monitoring_event_management", owner_role: "noc_l1",
+      handoff: "monitoring_to_noc_l1", evidence_required: "source_event_id_observed_at",
+      status: "MISSING"},
+    {cue: "correlate", service: "twin", view: "service_dependency_path",
+      itil_practice: "service_configuration_management", owner_role: "noc_l2",
+      handoff: "noc_l1_to_noc_l2", evidence_required: "ci_edge_source_and_freshness",
+      status: "MISSING"},
+    {cue: "ticket", service: "glpi", view: "incident_ticket",
+      itil_practice: "incident_management", owner_role: "service_desk_n1",
+      handoff: "noc_l2_to_service_desk", evidence_required: "ticket_source_and_tenant",
+      status: "MISSING"}
   ];
   return {
     schema: "aiops.acme-explore-story.v1", mode, action, cursor,
@@ -78,6 +87,8 @@ test("anonymous controls do not fetch; authenticated Explore renders without coo
   assert.equal(h.get("story-token").value, "");
   assert.equal(h.get("timeline").children.length, 3);
   assert.match(h.get("scenario").textContent, /SAN-FABRIC-A/);
+  assert.match(h.get("step-detail").textContent, /monitoring_event_management/);
+  assert.match(h.get("step-detail").textContent, /monitoring_to_noc_l1/);
   assert.equal(h.timer(), null);
 });
 
