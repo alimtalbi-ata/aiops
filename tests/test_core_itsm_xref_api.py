@@ -53,7 +53,13 @@ class FakeDB:
         self.kind=("events" if "itsm_xref_events" in sql else
                    "core" if "from aiops.runs" in sql else "owners")
         return self
-    def fetchall(self): return self.events if self.kind=="events" else self.owners
+    def fetchall(self):
+        if self.kind=="events": return self.events
+        # The production query includes independent ownership provenance and
+        # bitemporal fields; four-column rows are legacy fixture shorthand.
+        return [tuple(row)+("EVT-OWNER",NOW-timedelta(seconds=30),
+                            NOW-timedelta(seconds=10)) if len(row)==4 else row
+                for row in self.owners]
     def fetchone(self): return self.core
 
 class XrefHttpTests(unittest.TestCase):
@@ -196,6 +202,24 @@ class XrefHttpTests(unittest.TestCase):
         r=self.read()
         self.assertEqual(r.json()["status"],"CONFLICT")
         self.hidden(r)
+    def test_owner_provenance_and_bitemporal_integrity_fail_closed(self):
+        owner=OWNERS[3]
+        cases=(
+            (owner+("",NOW-timedelta(seconds=30),NOW-timedelta(seconds=10)),"UNKNOWN"),
+            (owner+("EVT-OWNER",NOW+timedelta(minutes=2),NOW+timedelta(minutes=3)),"CONFLICT"),
+            (owner+("EVT-OWNER",NOW-timedelta(seconds=1),NOW-timedelta(seconds=10)),"CONFLICT"),
+            (owner+("EVT-OWNER",NOW-timedelta(seconds=30),None),"UNKNOWN"),
+        )
+        for record,status in cases:
+            with self.subTest(status=status,record=record):
+                self.fake.owners[3]=record
+                r=self.read()
+                self.assertEqual(r.status_code,200,r.text)
+                self.assertEqual(r.json()["status"],status)
+                self.hidden(r)
+        self.fake.owners[3]=owner
+        self.assertEqual(self.read().json()["status"],"VERIFIED")
+
     def test_supersession_and_revocation(self):
         newer=dict(association_id="XREF-B",source_event_id="EVT-B",mapping_version=2,
                    supersedes_association_id="XREF-A")
