@@ -73,6 +73,31 @@ The Debian lab endpoint is directly configured at `10.79.94.31:8000`; the Intell
 
 Intelligence performs unauthenticated `GET http://10.79.94.31:8000/v1/models` when `LLM_MODEL` is blank. It selects a unique Nemotron 120B ID; if the model list is ambiguous, it fails closed and asks for an exact `LLM_MODEL`. No API key or bearer token is sent for this endpoint.
 
+### Apply the NGX configuration to an existing Debian stack
+
+From the reviewed checkout on SRV-DEB-05, as the normal `aiops` account (never root):
+
+```bash
+bash deploy/configure-ngx-nim-runtime.sh
+```
+
+This operation:
+- discovers the exact model ID from the no-key `/v1/models` endpoint;
+- runs a real completion probe before changing the stack;
+- saves a mode-0600 backup of the existing `.env`;
+- sets NVIDIA_NIM, the exact NGX URL/model, a blank API key and REAL provider provenance;
+- rebuilds/recreates only Intelligence, Worker, Copilot and Portal;
+- verifies a second real completion from inside the Intelligence container;
+- checks the Intelligence readiness response and Compose service state;
+- restores the prior `.env` and attempts to restart the four prior services if the rollout fails.
+
+It does not run database migrations, modify GLPI tickets, or enable LIVE remediation. After the runtime qualification passes, an operator may explicitly launch the synthetic end-to-end ACME rehearsal with:
+
+```bash
+bash deploy/configure-ngx-nim-runtime.sh --run-acme-demo
+```
+
+That optional flag creates a synthetic Incident/Run and runs the Temporal scenario; it is not part of the default configuration operation.
 
 ### Probe the configured NIM endpoint from the Intelligence container
 
