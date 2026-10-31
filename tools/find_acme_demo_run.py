@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only, fail-closed Core DEMO Run/Evidence locator (no injection)."""
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -8,7 +9,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 SCENARIO = "SCN-GOLDEN-PAYMENT-P1"
 RUN_ID = re.compile(r"RUN-[A-Za-z0-9_-]{1,120}\Z")
@@ -24,25 +25,81 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-_OPENER = build_opener(_NoRedirect())
+# No proxy inheritance: a service Bearer must not be forwarded through an
+# operator's ambient HTTP(S)_PROXY. Redirects remain disabled for all status codes.
+_OPENER = build_opener(ProxyHandler({}), _NoRedirect())
+_DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+_API_PATH = re.compile(r"/api/[A-Za-z0-9/_-]{1,240}\Z")
+_TRUST_ENV = "AIOPS_ACME_TRUSTED_CORE_ORIGINS"
+
+
+def _origin(value):
+    """Canonical scheme/host/port only; reject IP aliases and URL authority tricks."""
+    if (type(value) is not str or not 1 <= len(value) <= 256
+            or any(c.isspace() or ord(c) < 33 or ord(c) > 126 for c in value)
+            or chr(92) in value or any(c in value for c in ("%", "@", "?", "#"))):
+        return None
+    try:
+        p = urlsplit(value)
+        host = p.hostname
+        if (p.scheme not in ("http", "https") or not host
+                or p.username is not None or p.password is not None
+                or p.path not in ("", "/") or p.query or p.fragment):
+            return None
+        port = p.port  # raises for invalid/out-of-range ports
+        if port is not None and not 1 <= port <= 65535:
+            return None
+        if host in ("127.0.0.1", "::1", "localhost"):
+            canonical_host = "[::1]" if host == "::1" else host
+        else:
+            # Numeric/alternative IPv4 and IPv6, localhost aliases and trailing
+            # dots must not bypass the operator's exact trusted-origin pin.
+            try:
+                ipaddress.ip_address(host)
+                return None
+            except ValueError:
+                pass
+            labels = host.split(".")
+            if (len(labels) < 2 or host.endswith(".")
+                    or any(not _DNS_LABEL.fullmatch(label) or label.startswith("xn--")
+                           for label in labels)
+                    or labels[-1].isdigit() or host.endswith(".localhost")
+                    or host.startswith("0x")):
+                return None
+            canonical_host = host
+        if p.scheme == "http" and host not in ("127.0.0.1", "::1", "localhost"):
+            return None
+        netloc = canonical_host + ((":" + str(port)) if port is not None else "")
+        if p.netloc != netloc:
+            return None
+        return p.scheme + "://" + netloc
+    except (TypeError, ValueError):
+        return None
 
 
 def _safe_url(base):
-    try:
-        p = urlsplit(base)
-        return (p.scheme == "https" or (p.scheme == "http" and p.hostname in
-                ("127.0.0.1", "localhost", "::1"))) and bool(p.hostname) and (
-                p.username is None and p.password is None and p.path in ("", "/")
-                and not p.query and not p.fragment)
-    except (TypeError, ValueError):
+    # Explicit pin is mandatory even for localhost. Reject the entire setting
+    # if any entry is malformed; never fall back to arbitrary HTTPS origins.
+    raw = os.environ.get(_TRUST_ENV, "")
+    if not raw or len(raw) > 2048:
         return False
+    entries = [entry.strip() for entry in raw.split(",")]
+    if not 1 <= len(entries) <= 16:
+        return False
+    pins = [_origin(entry) for entry in entries]
+    return all(pins) and _origin(base) in pins
 
 
 def fetch_json(base, path, token=None):
+    # Check again at the network boundary, including for direct callers.
+    # A path beginning with @ or // could otherwise alter the URL authority.
+    if (not _safe_url(base) or type(path) is not str or not _API_PATH.fullmatch(path)
+            or "//" in path or ".." in path):
+        raise ValueError("untrusted_core_origin_or_path")
     headers = {"Accept": "application/json"}
     if token is not None:
         headers["Authorization"] = "Bearer " + token
-    with _OPENER.open(Request(base.rstrip("/") + path, headers=headers), timeout=8) as response:
+    with _OPENER.open(Request(_origin(base) + path, headers=headers), timeout=8) as response:
         if response.status != 200:
             raise ValueError("unexpected_status")
         data = response.read(1024 * 1024 + 1)

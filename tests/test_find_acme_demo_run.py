@@ -47,7 +47,9 @@ def check(data=None, url="https://core.example", token="fake-test-token", rid=RI
     def get(base, path, token=None):
         calls.append((path, token))
         return copy.deepcopy(data[path])
-    return locator.qualify(url, rid, iid, token, get), calls
+    with mock.patch.dict(os.environ, {"AIOPS_ACME_TRUSTED_CORE_ORIGINS":
+                                   "https://core.example,http://127.0.0.1:810"}):
+        return locator.qualify(url, rid, iid, token, get), calls
 
 
 class CoreLocatorTests(unittest.TestCase):
@@ -165,6 +167,96 @@ class CoreLocatorTests(unittest.TestCase):
         self.assertEqual(check(url="https://user:pass@core.example")[0]["reason"], "AUTH_TRANSPORT_UNSAFE")
         self.assertEqual(check(url="https://core.example/path")[0]["reason"], "AUTH_TRANSPORT_UNSAFE")
         self.assertEqual(check(url="http://127.0.0.1:810")[0]["result"], "SOURCE_VERIFIED_SYNTHETIC_ONLY")
+
+
+    def test_explicit_pin_required_even_for_loopback(self):
+        with mock.patch.dict(os.environ, {"AIOPS_ACME_TRUSTED_CORE_ORIGINS": ""}):
+            for origin in ("https://core.example", "http://127.0.0.1:810"):
+                with self.subTest(origin=origin):
+                    self.assertEqual(locator.qualify(origin, RID, IID, "secret",
+                                     get=lambda *a, **k: self.fail("network attempted"))["reason"],
+                                     "AUTH_TRANSPORT_UNSAFE")
+
+    def test_origin_pinning_blocks_authority_port_ip_and_dns_aliases(self):
+        untrusted = (
+            "https://evil.example", "https://core.example.evil.example",
+            "https://core.example:443", "https://CORE.example",
+            "https://core.example.", "https://core.example./",
+            "https://core.example@evil.example",
+            "https://user:pass@core.example", "https://core.example/%2e",
+            "https://core.example//", "https://core.example?",
+            "https://core.example#", "https://core.example/path",
+            "https://core.example\\\\@evil.example",
+            "https://127.0.0.2", "https://[::ffff:127.0.0.1]",
+            "http://127.1:810", "http://2130706433:810",
+            "http://0177.0.0.1:810", "http://127.0.0.1.evil.example:810",
+            "http://localhost:810", "http://127.0.0.1:811",
+            "http://core.example", "https://core.example:99999",
+        )
+        for origin in untrusted:
+            with self.subTest(origin=origin):
+                result, calls = check(url=origin)
+                self.assertEqual(result["reason"], "AUTH_TRANSPORT_UNSAFE")
+                self.assertEqual(calls, [])
+        for origin in ("https://core.example", "https://core.example/",
+                       "http://127.0.0.1:810"):
+            with self.subTest(allowed=origin):
+                self.assertEqual(check(url=origin)[0]["result"],
+                                 "SOURCE_VERIFIED_SYNTHETIC_ONLY")
+
+    def test_invalid_pin_entry_disables_entire_allowlist(self):
+        with mock.patch.dict(os.environ, {"AIOPS_ACME_TRUSTED_CORE_ORIGINS":
+                                          "https://core.example,http://evil.example"}):
+            self.assertFalse(locator._safe_url("https://core.example"))
+        with mock.patch.dict(os.environ, {"AIOPS_ACME_TRUSTED_CORE_ORIGINS":
+                                          "https://core.example,"}):
+            self.assertFalse(locator._safe_url("https://core.example"))
+
+    def test_fetch_json_never_forwards_bearer_to_unpinned_origin(self):
+        response = mock.MagicMock()
+        response.status = 200
+        response.read.return_value = b'{"items":[]}'
+        response.__enter__.return_value = response
+        with mock.patch.dict(os.environ, {"AIOPS_ACME_TRUSTED_CORE_ORIGINS":
+                                          "https://core.example"}), \
+             mock.patch.object(locator._OPENER, "open", return_value=response) as send:
+            for origin in ("https://evil.example", "https://core.example:443",
+                           "http://127.0.0.1:810", "https://127.0.0.2"):
+                with self.subTest(origin=origin):
+                    with self.assertRaisesRegex(ValueError, "untrusted_core_origin_or_path"):
+                        locator.fetch_json(origin, "/api/runs", token="secret-test-bearer")
+            send.assert_not_called()
+            self.assertEqual(locator.fetch_json("https://core.example",
+                                                "/api/runs", token="secret-test-bearer"),
+                             {"items": []})
+            send.assert_called_once()
+            request = send.call_args.args[0]
+            self.assertEqual(request.full_url, "https://core.example/api/runs")
+            self.assertEqual(request.get_header("Authorization"), "Bearer secret-test-bearer")
+
+    def test_fetch_json_rejects_authority_path_injection_before_network(self):
+        with mock.patch.dict(os.environ, {"AIOPS_ACME_TRUSTED_CORE_ORIGINS":
+                                          "https://core.example"}), \
+             mock.patch.object(locator._OPENER, "open") as send:
+            for path in ("@evil.example/api/runs", "//evil.example/api/runs",
+                         "/api/runs?next=https://evil.example",
+                         "/api/runs#evil", "/api/../runs", "/api/%2f%2fevil",
+                         "/api/runs\\\\@evil.example", "https://evil.example/api/runs"):
+                with self.subTest(path=path):
+                    with self.assertRaises(ValueError):
+                        locator.fetch_json("https://core.example", path, token="secret")
+            send.assert_not_called()
+
+    def test_network_opener_disables_proxies_and_redirects(self):
+        from urllib.request import ProxyHandler
+        handlers = locator._OPENER.handlers
+        # urllib omits an explicitly empty ProxyHandler from the installed
+        # handler list; its presence in build_opener prevents ambient proxies.
+        self.assertFalse(any(isinstance(h, ProxyHandler) for h in handlers))
+        self.assertTrue(any(isinstance(h, locator._NoRedirect) for h in handlers))
+        for code in (301, 302, 303, 307, 308):
+            self.assertIsNone(locator._NoRedirect().redirect_request(
+                None, None, code, "Moved", {}, "https://evil.example"))
 
     def test_invalid_operator_pair_unknown(self):
         self.assertEqual(check(rid="RUN-../evil")[0]["reason"], "EXPECTED_PAIR_INVALID")
