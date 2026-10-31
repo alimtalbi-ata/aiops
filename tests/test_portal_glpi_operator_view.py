@@ -129,8 +129,8 @@ class GlpiOperatorViewTests(unittest.TestCase):
     def test_no_glpi_mutation_routes(self):
         for method in ("post", "put", "patch", "delete"):
             with self.subTest(method=method):
-                response = getattr(self.client, method)("/api/portal/itsm",
-                                                        json={"approve": True})
+                response = self.client.request(method.upper(), "/api/portal/itsm",
+                                               json={"approve": True})
                 self.assertEqual(response.status_code, 405)
 
 
