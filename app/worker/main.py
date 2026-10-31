@@ -321,6 +321,34 @@ def create_hitl_proposal(rid, mode, expected_version):
     return {'status': 'BLOCKED', 'reason': 'no_fully_structured_allowlisted_action'}
 
 
+def verified_no_effect_stage_started_receipt(receipt, run_id, stage, expected_version):
+    """Fence the Core STAGE_STARTED ACK before any downstream stage adapter.
+
+    Core /events returns run_id, sequence, version, idempotent; it does not
+    return the event status. Optional extra fields must not contradict RUNNING,
+    the stage, or the no-effect contract. A replay with a later Core version
+    cannot reauthorize an earlier stage.
+    """
+    if (not isinstance(receipt, dict)
+            or type(expected_version) is not int or expected_version < 0
+            or receipt.get('run_id') != run_id
+            or type(receipt.get('sequence')) is not int
+            or receipt['sequence'] < 1
+            or type(receipt.get('version')) is not int
+            or receipt['version'] != expected_version + 1
+            or ('stage' in receipt and receipt['stage'] != stage)
+            or receipt.get('event_type') not in (None, 'STAGE_STARTED')
+            or receipt.get('status') not in (None, 'RUNNING')
+            or ('idempotent' in receipt and type(receipt['idempotent']) is not bool)
+            or any(receipt.get(key) is not None and receipt.get(key) is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('stage_start_receipt_not_qualified')
+    return {
+        **receipt, 'stage': stage, 'status': 'RUNNING',
+        'execution_allowed': False, 'effect_allowed': False,
+    }
+
+
 def _execute_stage_blocking(a,attempt):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
     if stage=='DGX_CRITIC':
@@ -328,6 +356,7 @@ def _execute_stage_blocking(a,attempt):
         if recovered is not None:
             return recovered
     started=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':version,'stage':stage,'event_type':'STAGE_STARTED','event_key':f'{stage}:START','status':'RUNNING','confidence':None,'payload':{'executor':'temporal','retry_stable':True}})
+    started=verified_no_effect_stage_started_receipt(started,rid,stage,version)
     v=started['version']
     try:
         if stage == 'HITL':
