@@ -62,6 +62,7 @@ def present_simulate_fixture(
         "policy": dict(policy_result),
         "dry_run": True,
         "execution_allowed": False,
+        "effect_allowed": False,
         "human": {
             "fixture_actor_id": fixture_actor_id,
             "approval_valid_now": False,
