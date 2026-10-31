@@ -714,8 +714,15 @@ async def reconcile_hitl_decisions_loop():
     try:
      handle=client.get_workflow_handle(rid)
      await handle.signal(IncidentWorkflow.submit_hitl_decision,payload)
-     post_json(CORE,f'/api/hitl/decision-outbox/{event_id}/delivered',
-               {'lease_token':lease_token},token=ADMIN)
+     ack=post_json(CORE,f'/api/hitl/decision-outbox/{event_id}/delivered',
+                  {'lease_token':lease_token},token=ADMIN)
+     if (not isinstance(ack,dict)
+         or ack.get('event_id')!=event_id
+         or ack.get('status')!='DELIVERED'
+         or type(ack.get('idempotent')) is not bool
+         or ack.get('execution_allowed') is not False
+         or ack.get('effect_allowed') is not False):
+      raise RuntimeError('outbox_delivery_ack_not_qualified')
     except Exception as exc:
      # Do not ack. The lease will expire and another poller pass retries.
      log.debug('HITL outbox delivery deferred: %s',type(exc).__name__)
