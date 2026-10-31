@@ -1,0 +1,54 @@
+name: Debian 12 installation and runtime qualification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - "test/debian12-install-runtime-qualification-20261031"
+
+permissions:
+  contents: read
+
+jobs:
+  debian-12-userspace:
+    name: Debian 12 userspace and offline regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Debian installer shell syntax
+        run: bash -n scripts/install-debian-reporter.sh
+      - name: Test Debian read-only reporter safety contracts
+        run: |
+          python3 -m py_compile scripts/debian-readonly-reporter.py tests/test_debian_readonly_reporter.py
+          python3 -m unittest discover -s tests -p "test_debian_readonly_reporter.py" -v
+      - name: Run qualification inside clean Debian 12
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            debian:12-slim \
+            bash -Eeuo pipefail -c '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                bash ca-certificates curl git nodejs npm openssl \
+                python3 python3-pip python3-venv build-essential libpq-dev
+              bash scripts/qualify-debian.sh
+            '
+
+  compose-build:
+    name: Compose configuration and image build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate ephemeral local-only environment
+        run: bash deploy/init-env.sh
+      - name: Validate rendered Compose model
+        run: docker compose --env-file .env config --quiet
+      - name: Build application images without starting services
+        run: docker compose --env-file .env build --pull
+      - name: Remove ephemeral credentials
+        if: always()
+        run: rm -f .env
