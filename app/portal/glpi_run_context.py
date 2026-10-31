@@ -227,6 +227,25 @@ def create_glpi_hitl_proposal(ticket_id: str, q: dict,
             or proposal.get("execution_allowed") is not False):
         raise HTTPException(502, "core_proposal_response_invalid")
 
+    marker = "[AIOPS2-HITL-PROPOSAL:" + proposal["proposal_id"] + "]"
+    note = (
+        marker + "\\nAIOps2 — proposition de diagnostic/correction (SYNTHETIC DEMO)."
+        + "\\nÉtat : PROPOSED — validation humaine requise."
+        + "\\nAction : " + action_type + " · CI : " + str(action["target_ci_id"])
+        + "\\nPreuves : " + ", ".join(evidence_ids)
+        + "\\nAucune approbation n'est enregistrée. Aucune exécution n'est autorisée."
+        + "\\nRevue et décision : consulter le portail AIOps2 / Policy & HITL."
+    )
+    try:
+        followup = client.add_private_followup(ticket_id, marker, note)
+    except Exception:
+        # Core proposal is durable and idempotent; retrying this endpoint will
+        # re-read the same proposal and deduplicate the GLPI private note.
+        raise HTTPException(502, detail={
+            "code": "glpi_private_followup_unavailable",
+            "proposal_id": proposal["proposal_id"],
+        })
+
     sources = copilot.get("sources")
     copilot["sources"] = (sources if isinstance(sources, list) else []) + [
         "glpi:/Ticket/" + ticket_id,
@@ -238,6 +257,7 @@ def create_glpi_hitl_proposal(ticket_id: str, q: dict,
                            "link_method": "unique_explicit_run_reference_in_ticket",
                            "proposal_created": True, "actions_performed": []}
     copilot["hitl_proposal"] = proposal
+    copilot["glpi_followup"] = followup
     copilot["approval_required"] = True
     copilot["execution_allowed"] = False
     return copilot
