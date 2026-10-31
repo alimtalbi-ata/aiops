@@ -168,11 +168,20 @@ def dependency_candidates(graph, source_ci, service_id):
             "observed_at": None, "known_at": None, "tenant_scope": "UNKNOWN"}
 
 
-def _event(key, seed, idx, offset, action, ci, payload, frequency, maintenance):
-    unique = hashlib.sha256(_canonical([key, seed, idx, offset, action, ci])).hexdigest()[:20].upper()
+def _event(key, seed, idx, offset, action, ci, payload, frequency, maintenance,
+           variant="CANONICAL"):
+    # Namespace fixture-only identities by replay mode; default Golden stays identical.
+    event_parts = [key, seed, idx, offset, action, ci]
     bucket = offset // frequency
-    dedupe = hashlib.sha256(_canonical([key, seed, action, ci, bucket])).hexdigest()[:20].upper()
-    corr = hashlib.sha256(_canonical(["ACME-LOCAL-ONLY", key, seed])).hexdigest()[:20].upper()
+    dedupe_parts = [key, seed, action, ci, bucket]
+    corr_parts = ["ACME-LOCAL-ONLY", key, seed]
+    if variant != "CANONICAL":
+        event_parts.append(variant)
+        dedupe_parts.append(variant)
+        corr_parts.append(variant)
+    unique = hashlib.sha256(_canonical(event_parts)).hexdigest()[:20].upper()
+    dedupe = hashlib.sha256(_canonical(dedupe_parts)).hexdigest()[:20].upper()
+    corr = hashlib.sha256(_canonical(corr_parts)).hexdigest()[:20].upper()
     active = bool(maintenance and maintenance["start_offset_seconds"] <= offset < maintenance["end_offset_seconds"])
     return {"source": SOURCE, "source_event_id": "SYN-EVT-" + unique,
             "event_time": _stamp(offset), "observed_at": _stamp(offset),
@@ -231,8 +240,10 @@ def replay(scenario_key="REDUNDANT_SAN_PATH_LOSS", seed=20261018,
                      {"verified": False, "resolution": "UNKNOWN"}))
     if len(rows) > 1000:
         raise ValueError("bounded replay exceeded")
+    variant = ("CANONICAL" if not stochastic and not false_positive else
+               f"STOCHASTIC={int(stochastic)};FALSE_POSITIVE={int(false_positive)}")
     events = [_event(scenario_key, seed, i, offset, action, ci, payload,
-                     s["frequency_seconds"], s["maintenance_window"])
+                     s["frequency_seconds"], s["maintenance_window"], variant)
               for i, (offset, action, ci, payload) in enumerate(rows, 1)]
     active = any(e["maintenance_window_active"] for e in events)
     priority = PRIORITY[impact["estimated_impact_level"]][s["urgency_synthetic"]]

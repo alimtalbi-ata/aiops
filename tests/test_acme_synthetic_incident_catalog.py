@@ -149,6 +149,31 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
         self.assertFalse(grouped["publishable"])
         self.assertEqual(grouped["tenant_scope"], "UNKNOWN")
 
+    def test_distinct_replay_modes_never_alias_source_dedupe_or_correlation_ids(self):
+        """Same category and seed in different modes cannot share fixture identities."""
+        modes = ((False, False), (True, False), (False, True), (True, True))
+        manifests = [gen.replay("NETWORK_FAILURE", seed=99, stochastic=stochastic,
+                                false_positive=false_positive)
+                     for stochastic, false_positive in modes]
+        for manifest, (_, false_positive) in zip(manifests, modes):
+            events = manifest["events"]
+            self.assertEqual(len({e["source_event_id"] for e in events}), len(events))
+            self.assertEqual(len({e["correlation_key"] for e in events}), 1)
+            self.assertEqual(gen.correlate_catalog_manifest_offline(
+                manifest, false_positive=false_positive)["event_count"],
+                manifest["event_count"])
+        for i, left in enumerate(manifests):
+            for j, right in enumerate(manifests[i + 1:], i + 1):
+                with self.subTest(left_mode=modes[i], right_mode=modes[j]):
+                    for field in ("source_event_id", "dedupe_key", "correlation_key"):
+                        self.assertTrue(
+                            {e[field] for e in left["events"]}.isdisjoint(
+                                {e[field] for e in right["events"]}), field)
+                    with self.assertRaisesRegex(ValueError, "unrelated scenarios"):
+                        gen.correlate_offline(left["events"] + right["events"])
+        self.assertEqual(gen.replay()["dataset_sha256"],
+                         "ce0aef74222699da695c2e894e622b0625c992ef654dda34a84cff26b5e64f3f")
+
     def test_tenant_and_event_identity_conflicts_are_rejected(self):
         events = gen.replay()["events"]
         foreign = copy.deepcopy(events)
