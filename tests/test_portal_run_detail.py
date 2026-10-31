@@ -355,17 +355,13 @@ class RunDetailTests(unittest.TestCase):
 
     def test_home_entry_and_js_asset_do_not_ship_secrets(self):
         home = self.client.get("/")
-        self.assertIn('id="run-detail-id"', home.text)
-        self.assertIn('id="run-detail-open"', home.text)
-        self.assertIn('/assets/portal-run-link.js', home.text)
-        js = self.client.get("/assets/portal-run-link.js")
-        self.assertEqual(js.status_code, 200)
-        self.assertIn("javascript", js.headers["content-type"])
-        for forbidden in ("localStorage", "sessionStorage", "document.cookie", "token="):
-            self.assertNotIn(forbidden, js.text)
-        self.assertIn("Authorization: 'Bearer ' + token", js.text)
-        self.assertIn("credentials: 'same-origin'", js.text)
-        self.assertIn("portal-read-token", js.text)
+        self.assertIn("Sources du cockpit", home.text)
+        self.assertIn("Copilot — accès tenant non qualifié", home.text)
+        self.assertIn("UNKNOWN", home.text)
+        self.assertIn('/assets/portal-bootstrap.js', home.text)
+        self.assertIn('/assets/portal-copilot.js', home.text)
+        for forbidden in ("AIOPS_INTERNAL_TOKEN", "GLPI_USER_TOKEN", "localStorage", "sessionStorage", "document.cookie"):
+            self.assertNotIn(forbidden, home.text)
 
     def test_same_origin_session_exchange_sets_short_lived_httponly_cookie_and_opens_page(self):
         response = self.client.post(
@@ -515,10 +511,12 @@ class RunDetailTests(unittest.TestCase):
                           "frame-ancestors 'none'", "base-uri 'none'",
                           "object-src 'none'"):
             self.assertIn(directive, policy)
-        # Legacy inline event handlers stay functional; no parallel shell.
+        # Public shell is intentionally unscoped; run details live on their
+        # dedicated authenticated route and must not trigger anonymous reads.
         self.assertIn("script-src 'self' 'unsafe-inline'", policy)
-        self.assertIn('id="run-detail-open"', response.text)
-        self.assertIn('id="portal-runs"', response.text)
+        self.assertIn("Sources du cockpit", response.text)
+        self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text)
+        self.assertNotIn('id="portal-runs"', response.text)
 
     def test_unverified_run_html_stays_no_store_with_security_headers(self):
         with patch.object(acme_run_detail, "_read_core_run",
@@ -534,7 +532,7 @@ class RunDetailTests(unittest.TestCase):
 
     def test_bootstrap_shared_bearer_never_reads_unscoped_core_twin(self):
         # A valid shared token is service/viewer authentication, not tenant ACL.
-        with patch.object(main, "read_portal_snapshot",
+        with patch.object(main, "get_json",
                           side_effect=AssertionError("unscoped read forbidden")) as read:
             response = self.client.get("/api/portal/bootstrap", headers={
                 "Authorization": "Bearer " + TOKEN})
