@@ -36,6 +36,8 @@ a{color:#91d6ff}a:focus-visible,select:focus-visible{outline:3px solid #ffda7a;o
 nav{display:flex;gap:18px;flex-wrap:wrap}
 .panel{background:#0c1d2d;border:1px solid #31506a;border-radius:12px;padding:18px;margin:16px 0}
 .muted{color:#b5c9d7}.status{font-weight:700;color:#ffda7a}
+.journey{display:flex;flex-wrap:wrap;gap:10px;list-style:decimal;padding-left:24px}
+.journey li{padding:4px 10px 4px 0}.journey [aria-current=page]{font-weight:700}
 dl{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:8px}
 table{width:100%;border-collapse:collapse}th,td{border:1px solid #31506a;padding:10px;text-align:left}caption{text-align:left;color:#b5c9d7}
 dt{font-weight:700}dd{margin:0;color:#b5c9d7}
@@ -51,6 +53,17 @@ dt{font-weight:700}dd{margin:0;color:#b5c9d7}
 Aucune lecture GLPI/Core. Connecteur ticket↔Run : NOT_INSTALLED ; jamais CONNECTED.</p>
 <p>GLPI reste le système de référence pour tickets, CMDB, profils et actions.
 Ce Portal ne remplace ni les pages natives ni leurs contrôles de permission.</p>
+<nav class="panel" aria-labelledby="journey-title">
+<h2 id="journey-title">Parcours opérateur unique — lecture seule</h2>
+<p class="muted">Étapes de navigation, pas des données attestées. Source et fraîcheur :
+UNKNOWN. Aucun deep link vers un ticket ou Run non autorisé.</p>
+<ol class="journey" data-journey-provenance="SYNTHETIC">
+<li>Incident — UNKNOWN</li><li>Run — UNKNOWN</li>
+<li>Evidence — UNKNOWN</li><li>AI Ledger — UNKNOWN</li>
+<li>Policy — UNKNOWN</li><li>HITL — UNKNOWN</li>
+<li>Verification — UNKNOWN</li>
+<li><a href="/itsm" aria-current="page">GLPI</a> — NOT_INSTALLED</li>
+</ol></nav>
 <section class="panel" aria-labelledby="ticket"><h2 id="ticket">Fiche ticket enrichie — non chargée</h2>
 <dl>
 <dt>Ticket / entité / catégorie / formulaire / template</dt><dd>UNKNOWN — lecture GLPI native non attestée</dd>
