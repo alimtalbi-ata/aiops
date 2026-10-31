@@ -19,3 +19,24 @@ Disposable CI only. Do not run migration 012 on any persistent database until a 
 ## Remaining gates
 
 Independent GLPI ticket/entity/CI authenticated readback and entity ACL, attested association ingestion, IdP tenant, CI freshness, Twin import and source attestation, integrated #201/#205 exact-SHA E2E, combined ordered migrations, CI exact-head, release approval. `RELEASE_STABLE=NO_GO`.
+
+## Additional independent ownership proof gate (2026-10-31)
+The Core xref v1 schema and SQL remain unchanged. A signed xref history plus
+`tenant_resource_ownership.verified=true` alone cannot prove independent
+GLPI entity/tenant ownership. The read API now additionally requires a
+separately keyed `aiops.core-ownership-proof.v1` JSON manifest at the
+server-configured absolute `AIOPS_XREF_OWNER_PROOFS_PATH`, with
+`AIOPS_XREF_OWNER_ATTESTATION_KEY` independent of
+`AIOPS_XREF_ATTESTATION_KEY`. All five ownership rows are bound by HMAC
+to kind, ID, tenant, verified, source_event_id, observed_at and known_at.
+Missing/malformed/altered proof yields `UNKNOWN`, without business IDs.
+
+The disposable PostgreSQL fixture generates **synthetic** proofs after
+inserting its own rows. It is not an authenticated GLPI adapter or an
+independent source readback. No deployment should provision the proof
+manifest from unverified DB rows; the producer must authenticate GLPI/Core
+and tenant/actor scope independently. Until then field status is UNKNOWN.
+The migration 012 is staged for architect review only; the combined
+009 AI / 010 Evidence / 011 HITL / 012 xref chain, idempotence and rollback
+remain NOT_QUALIFIED on a disposable PostgreSQL instance. Never apply it
+to a persistent DB. Rollback is revert of this branch and deletion of CI DB.

@@ -157,6 +157,8 @@ jobs:
               for key, value in {
                   "AIOPS_XREF_READ_AUTHZ_JSON": config,
                   "AIOPS_XREF_ATTESTATION_KEY": secrets.token_hex(48),
+                  "AIOPS_XREF_OWNER_ATTESTATION_KEY": secrets.token_hex(48),
+                  "AIOPS_XREF_OWNER_PROOFS_PATH": os.path.join(os.environ["RUNNER_TEMP"],"xref-owner-proofs.json"),
                   "AIOPS_XREF_CI_TOKEN_A": a,
                   "AIOPS_XREF_CI_TOKEN_B": b,
                   "AIOPS_XREF_CI_TOKEN_NO_PERM": n,

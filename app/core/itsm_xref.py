@@ -1,6 +1,6 @@
 """Core authoritative read-only ITSM xref. No GLPI writes or ticket-text inference."""
 from __future__ import annotations
-import os, re, json, hmac, hashlib
+import os, re, json, hmac, hashlib, stat
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import JSONResponse
@@ -48,6 +48,46 @@ def _signed(row,key):
         mac = row["attestation_mac"]
         return _valid(mac,_HEX) and hmac.compare_digest(mac,hmac.new(key,_payload(row),hashlib.sha256).hexdigest())
     except (KeyError,TypeError,ValueError): return False
+
+def _owner_proof_payload(kind, resource_id, tenant_id, verified, source_event_id, observed_at, known_at):
+    """Canonical v1 ownership proof, independent of the xref event MAC."""
+    return json.dumps({"v":1,"kind":kind,"resource_id":resource_id,"tenant_id":tenant_id,
+                       "verified":verified,"source_event_id":source_event_id,
+                       "observed_at":_stamp(observed_at),"known_at":_stamp(known_at)},
+                      sort_keys=True,separators=(",",":"),ensure_ascii=True).encode("ascii")
+
+def _owners_attested(owned):
+    """Fail closed unless a separately keyed, deployment-owned proof exists for all five CIs.
+
+    This is only a cryptographic integrity gate. The producer MUST authenticate
+    GLPI/Core and tenant scope before signing; CI fixture signatures do not prove GLPI.
+    """
+    key=os.getenv("AIOPS_XREF_OWNER_ATTESTATION_KEY","")
+    path=os.getenv("AIOPS_XREF_OWNER_PROOFS_PATH","")
+    if not (isinstance(key,str) and key.isascii() and 32<=len(key)<=256
+            and isinstance(path,str) and os.path.isabs(path)):
+        return False
+    try:
+        info=os.stat(path,follow_symlinks=False)
+        if not stat.S_ISREG(info.st_mode) or info.st_size>65536: return False
+        with open(path,encoding="utf-8") as source:
+            manifest=json.load(source)
+        if not isinstance(manifest,dict) or set(manifest)!={"schema","proofs"}:
+            return False
+        if manifest["schema"]!="aiops.core-ownership-proof.v1": return False
+        proofs=manifest["proofs"]
+        if not isinstance(proofs,dict) or len(proofs)>256: return False
+        for kind,rid,tenant,verified,source_id,observed,known in owned:
+            name=kind+"|"+rid
+            mac=proofs.get(name)
+            if not _valid(mac,_HEX): return False
+            expected=hmac.new(key.encode("ascii"),
+                              _owner_proof_payload(kind,rid,tenant,verified,source_id,observed,known),
+                              hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(mac,expected): return False
+        return True
+    except (OSError,UnicodeError,ValueError,TypeError,KeyError):
+        return False
 
 def _auth(header):
     """Server-only digest ACL; never use shared ADMIN or caller actor/tenant claims."""
@@ -139,6 +179,9 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
             return "UNKNOWN",None
         if observed>known or known>now:
             return "CONFLICT",None
+    # Ownership rows alone are not an independent tenant/GLPI attestation.
+    # No attestor configured => UNKNOWN, even for a fully signed xref event.
+    if not _owners_attested(owned): return "UNKNOWN",None
     return "VERIFIED",e
 
 @router.get("/api/tenants/{tenant_id}/itsm/glpi/{instance_id}/tickets/{ticket_id}/xref")

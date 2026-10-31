@@ -1,8 +1,8 @@
 """Real Core HTTP + disposable PostgreSQL 16. All source records are CI SYNTHETIC."""
-import os, unittest, hashlib, hmac
+import os, unittest, hashlib, hmac, json
 from datetime import datetime, timezone, timedelta
 import psycopg, requests
-from core.itsm_xref import _COLUMNS, _payload
+from core.itsm_xref import _COLUMNS, _payload, _owner_proof_payload
 
 BASE="http://127.0.0.1:1810"
 PATH="/api/tenants/{tenant}/itsm/glpi/{instance}/tickets/{ticket}/xref"
@@ -14,6 +14,8 @@ class XrefPostgresTests(unittest.TestCase):
         cls.url=os.environ["DATABASE_URL"]
         if "127.0.0.1:5432/" not in cls.url: raise RuntimeError("Refusing non-disposable DB")
         cls.key=os.environ["AIOPS_XREF_ATTESTATION_KEY"].encode()
+        cls.owner_key=os.environ["AIOPS_XREF_OWNER_ATTESTATION_KEY"].encode()
+        cls.proof_path=os.environ["AIOPS_XREF_OWNER_PROOFS_PATH"]
         cls.token_a=os.environ["AIOPS_XREF_CI_TOKEN_A"]
         cls.token_b=os.environ["AIOPS_XREF_CI_TOKEN_B"]
         cls.token_no_perm=os.environ["AIOPS_XREF_CI_TOKEN_NO_PERM"]
@@ -63,6 +65,21 @@ class XrefPostgresTests(unittest.TestCase):
                        supersedes_association_id="XREF-BACKDATE1",
                        observed_at=cls.now-timedelta(seconds=25),
                        known_at=cls.now-timedelta(seconds=5))
+        cls.write_proofs()
+
+    @classmethod
+    def write_proofs(cls):
+        with psycopg.connect(cls.url) as c:
+            rows=c.execute("select resource_kind,resource_id,tenant_id,verified,"
+                           "source_event_id,observed_at,known_at "
+                           "from aiops.tenant_resource_ownership").fetchall()
+        proofs={kind+"|"+rid:hmac.new(cls.owner_key,_owner_proof_payload(*row),
+                                     hashlib.sha256).hexdigest()
+                for row in rows for kind,rid in [row[:2]]}
+        tmp=cls.proof_path+".tmp"
+        with open(tmp,"w",encoding="utf-8") as out:
+            json.dump({"schema":"aiops.core-ownership-proof.v1","proofs":proofs},out)
+        os.replace(tmp,cls.proof_path)
 
     @classmethod
     def insert(cls,c,ticket,suffix,**changes):
@@ -166,12 +183,27 @@ class XrefPostgresTests(unittest.TestCase):
                           "values('glpi_ticket',%s,'TEN-A',%s,true,%s,%s)",
                           ("GLPI-A:"+ticket,source_id,observed,known))
                 self.insert(c,ticket,"OWNER-"+ticket)
+        self.write_proofs()
         for ticket,status in (("793","CONFLICT"),("794","UNKNOWN")):
             with self.subTest(ticket=ticket):
                 r=self.read(ticket=ticket)
                 self.assertEqual(r.status_code,200,r.text)
                 self.assertEqual(r.json()["status"],status)
                 self.hidden(r)
+
+    def test_owner_proof_missing_or_tampered_never_verifies(self):
+        with open(self.proof_path,encoding="utf-8") as fp:
+            original=fp.read()
+        try:
+            with open(self.proof_path,"w",encoding="utf-8") as fp:
+                fp.write('{"schema":"aiops.core-ownership-proof.v1","proofs":{}}')
+            r=self.read()
+            self.assertEqual(r.status_code,200,r.text)
+            self.assertEqual(r.json()["status"],"UNKNOWN")
+            self.hidden(r)
+        finally:
+            with open(self.proof_path,"w",encoding="utf-8") as fp:
+                fp.write(original)
 
     def test_postgres_immutability_and_idempotency(self):
         with self.assertRaises(psycopg.Error):

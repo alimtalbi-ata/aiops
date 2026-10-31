@@ -1,5 +1,5 @@
 """Adversarial HTTP tests; mocked DB, no GLPI/production requests."""
-import os, json, hmac, hashlib, unittest
+import os, json, hmac, hashlib, unittest, tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
@@ -10,6 +10,7 @@ from core import itsm_xref as x
 NOW=datetime.now(timezone.utc)
 TOKEN="ci-service-a"
 KEY="ci-only-test-attestation-key-32bytes-long"
+OWNER_KEY="independent-ci-owner-attestor-key-32-bytes"
 PATH="/api/tenants/TEN-A/itsm/glpi/GLPI-A/tickets/123/xref"
 
 def authz():
@@ -53,13 +54,12 @@ class FakeDB:
         self.kind=("events" if "itsm_xref_events" in sql else
                    "core" if "from aiops.runs" in sql else "owners")
         return self
-    def fetchall(self):
-        if self.kind=="events": return self.events
-        # The production query includes independent ownership provenance and
-        # bitemporal fields; four-column rows are legacy fixture shorthand.
+    def owner_rows(self):
         return [tuple(row)+("EVT-OWNER",NOW-timedelta(seconds=30),
                             NOW-timedelta(seconds=10)) if len(row)==4 else row
                 for row in self.owners]
+    def fetchall(self):
+        return self.events if self.kind=="events" else self.owner_rows()
     def fetchone(self): return self.core
 
 class XrefHttpTests(unittest.TestCase):
@@ -69,15 +69,29 @@ class XrefHttpTests(unittest.TestCase):
         app.include_router(x.router)
         cls.client=TestClient(app)
     def setUp(self):
-        self.env=patch.dict(os.environ,{"AIOPS_XREF_READ_AUTHZ_JSON":authz(),
-                                       "AIOPS_XREF_ATTESTATION_KEY":KEY})
-        self.env.start()
         self.fake=FakeDB()
+        with tempfile.NamedTemporaryFile(mode="w",delete=False) as fp:
+            self.proof_path=fp.name
+        self.write_proofs()
+        self.env=patch.dict(os.environ,{"AIOPS_XREF_READ_AUTHZ_JSON":authz(),
+                                       "AIOPS_XREF_ATTESTATION_KEY":KEY,
+                                       "AIOPS_XREF_OWNER_ATTESTATION_KEY":OWNER_KEY,
+                                       "AIOPS_XREF_OWNER_PROOFS_PATH":self.proof_path})
+        self.env.start()
         self.mock=patch.object(x,"db",self.fake.connect)
         self.mock.start()
+    def write_proofs(self):
+        proofs={}
+        for row in self.fake.owner_rows():
+            kind,rid,*_=row
+            proofs[kind+"|"+rid]=hmac.new(OWNER_KEY.encode(),
+                    x._owner_proof_payload(*row),hashlib.sha256).hexdigest()
+        with open(self.proof_path,"w",encoding="utf-8") as fp:
+            json.dump({"schema":"aiops.core-ownership-proof.v1","proofs":proofs},fp)
     def tearDown(self):
         self.mock.stop()
         self.env.stop()
+        os.unlink(self.proof_path)
     def read(self,token=TOKEN,path=PATH,**params):
         headers={} if token is None else {"Authorization":"Bearer "+token}
         return self.client.get(path,headers=headers,params=params,follow_redirects=False)
@@ -93,6 +107,21 @@ class XrefHttpTests(unittest.TestCase):
         self.assertEqual(r.json()["run_id"],"RUN-A")
         self.assertEqual(r.json()["source_event_id"],"EVT-A")
         self.assertEqual(len(self.fake.calls),3)
+    def test_unsigned_or_rekeyed_ownership_never_verifies(self):
+        with patch.dict(os.environ,{"AIOPS_XREF_OWNER_ATTESTATION_KEY":""}):
+            r=self.read()
+            self.assertEqual(r.json()["status"],"UNKNOWN")
+            self.hidden(r)
+        self.fake.calls.clear()
+        # A signed xref event and verified=true DB row are insufficient.
+        self.fake.owners[4]=("glpi_entity","GLPI-A:0","TEN-A",True,
+                              "EVT-OWNER-FORGED",NOW-timedelta(seconds=30),
+                              NOW-timedelta(seconds=10))
+        r=self.read()
+        self.assertEqual(r.json()["status"],"UNKNOWN")
+        self.hidden(r)
+        self.assertEqual(len(self.fake.calls),3)
+
     def test_run_token_in_ticket_text_never_links(self):
         self.fake.events=[]
         r=self.read()
