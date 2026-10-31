@@ -8,19 +8,10 @@ bash "$SRC/deploy/preflight.sh"
 mkdir -p "$TARGET"
 cp -a "$SRC/." "$TARGET/"
 cd "$TARGET"
-[[ -f .env ]] || cp config/.env.example .env
-chmod 600 .env
-if ! grep -q '^POSTGRES_PASSWORD=' .env; then cat >> .env <<'EOV'
-POSTGRES_PASSWORD=Newaiops26$
-GLPI_DB_PASSWORD=Newaiops26$
-GLPI_DB_ROOT_PASSWORD=Newaiops26$
-AIOPS_ADMIN_TOKEN=Newaiops26$
-AIOPS_INTERNAL_TOKEN=Newaiops26$
-GRAFANA_ADMIN_PASSWORD=Newaiops26$
-N8N_ENCRYPTION_KEY=Newaiops26$-N8N
-EOV
-fi
-chmod 600 .env
+# Generate unique per-install secrets using the canonical environment initializer.
+# Never inject shared/default credentials into a new server.
+bash deploy/init-env.sh
+bash deploy/check-secrets.sh .env
 docker compose --env-file .env config >/dev/null
 echo "PASS|INSTALL_TREE|$TARGET"
 echo "NEXT|bash 00-Deployment/start.sh"
