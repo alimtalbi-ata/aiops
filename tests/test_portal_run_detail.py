@@ -39,7 +39,7 @@ class RunDetailTests(unittest.TestCase):
         with patch.object(acme_run_detail, "_read_core_run", return_value=run()) as core:
             response = self.get()
         self.assertEqual(response.status_code, 503)
-        core.assert_called_once_with(RID)
+        core.assert_not_called()
         data = response.json()
         self.assertEqual(data["state"], "UNKNOWN")
         self.assertEqual(data["reason"], "TENANT_ACL_NOT_QUALIFIED")
@@ -87,6 +87,23 @@ class RunDetailTests(unittest.TestCase):
         self.assertNotIn("run_status", api.json())
         self.assertIn('data-story-provenance="SYNTHETIC"', page.text)
 
+    def test_valid_bearer_never_fetches_core_without_server_derived_acl(self):
+        # Both API and HTML must refuse before Core even for syntactically
+        # valid but forged/cross-tenant Run IDs. The viewer token is not ACL.
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core must not be called")) as core:
+            for rid in (RID, "RUN-FOREIGN-TENANT", "RUN-FORGED-999"):
+                for route in ("/api/portal/runs/", "/runs/"):
+                    with self.subTest(rid=rid, route=route):
+                        response = self.get(route + rid)
+                        self.assertEqual(response.status_code, 503)
+                        self.assertNotIn("CONNECTED", response.text)
+                        self.assertEqual(response.headers["cache-control"], "no-store")
+                        self.assertEqual(response.headers["x-frame-options"], "DENY")
+                        self.assertIn("frame-ancestors 'none'",
+                                      response.headers["content-security-policy"])
+            core.assert_not_called()
+
     def test_auth_missing_and_wrong_never_touch_core(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
@@ -104,14 +121,18 @@ class RunDetailTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["state"], "UNKNOWN")
 
-    def test_upstream_401_403_preserved_without_credentials(self):
+    def test_upstream_denials_cannot_be_probed_before_tenant_acl(self):
+        # Upstream 401/403 cannot be surfaced until the actor+tenant ACL is
+        # qualified; the Portal must not make this network request at all.
         for code in (401, 403):
             with self.subTest(code=code), patch.object(
                     acme_run_detail, "_read_core_run",
-                    side_effect=urllib.error.HTTPError("http://core", code, "secret", {}, None)):
+                    side_effect=urllib.error.HTTPError("http://core", code, "secret", {}, None)) as core:
                 response = self.get()
-            self.assertEqual(response.status_code, code)
-            self.assertEqual(response.json()["state"], "UNAUTHORIZED")
+                core.assert_not_called()
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["state"], "UNKNOWN")
+            self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
             self.assertNotIn("secret", response.text)
 
     def test_invalid_identifier_refused_before_core(self):
@@ -274,7 +295,7 @@ class RunDetailTests(unittest.TestCase):
                           side_effect=AssertionError("anonymous Core read")) as core:
             anonymous = self.get("/runs/" + RID, authorized=False)
         core.assert_not_called()
-        for page, expected in ((verified, 503), (denied, 403),
+        for page, expected in ((verified, 503), (denied, 503),
                                (unavailable, 503), (anonymous, 401)):
             with self.subTest(status=expected):
                 self.assertEqual(page.status_code, expected)
@@ -322,8 +343,8 @@ class RunDetailTests(unittest.TestCase):
                 acme_run_detail, "_read_core_run",
                 side_effect=urllib.error.HTTPError("http://core", 403, "denied", {}, None)):
             denied = self.get("/runs/" + RID)
-        self.assertEqual(denied.status_code, 403)
-        self.assertIn("connection: UNAUTHORIZED", denied.text)
+        self.assertEqual(denied.status_code, 503)
+        self.assertIn("connection: UNKNOWN", denied.text)
         self.assertIn("NOT VERIFIED", denied.text)
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=TimeoutError("sensitive-upstream")):
@@ -365,7 +386,7 @@ class RunDetailTests(unittest.TestCase):
             page = self.client.get("/runs/" + RID)
         self.assertEqual(page.status_code, 503)
         self.assertIn("Requested Run — NOT VERIFIED", page.text)
-        core.assert_called_once_with(RID)
+        core.assert_not_called()
 
     def test_session_exchange_rejects_missing_token_and_cross_origin(self):
         missing = self.client.post("/api/portal/run-session")
