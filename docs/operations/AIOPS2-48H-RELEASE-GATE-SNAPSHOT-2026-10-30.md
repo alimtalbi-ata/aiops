@@ -201,3 +201,10 @@ The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte Z
 | T5 | NO_GO | LIVE authorization/effect gates absent |
 
 `RELEASE_STABLE=NO_GO`. No merge, main push, host changes, GLPI write or LIVE.
+
+### 2026-10-31 ~04:35 UTC — 5/5 release gate
+
+- T0: PENDING #201 new exact HEAD `e116d04c791b6f5a5028d6f2cc3797a547b460ec` [Quality 41169101273](https://github.com/alimtalbi-ata/aiops/actions/runs/41169101273); prior `a5bdb5bf` SUCCESS 3/3 only.
+- T1: BLOCKED (Core-owned actor+tenant exact-Run ACL and isolated authenticated negative integration). T2: NOT_QUALIFIED on main-based combined ACME. T3: NOT_ATTESTED Debian.
+- T4: NO_GO. #204 stacked [artifact 13029760540](https://github.com/alimtalbi-ata/aiops/actions/runs/41166983844/artifacts/13029760540) 406/406 SHA256SUMS PASS but **30/68 embedded manifest hashes mismatch**, release version conflicts, no SBOM/install/upgrade/rollback. New #201 source guard validates these semantics; exact-head CI pending and no kit built.
+- T5: NO_GO. #196 Ollama 0 qualified repeats, no real-model quality or cost claim. `RELEASE_STABLE=NO_GO`. No merge, host/runner/cron/GLPI write or LIVE effect.
