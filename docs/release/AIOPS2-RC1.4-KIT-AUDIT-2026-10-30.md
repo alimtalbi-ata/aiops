@@ -230,3 +230,23 @@ Main-based #201 `e116d04c791b6f5a5028d6f2cc3797a547b460ec` [Quality 41169101273]
 [Quality 41171155211 artifact 13030723934](https://github.com/alimtalbi-ata/aiops/actions/runs/41171155211/artifacts/13030723934) downloaded and inspected (source #204 HEAD `f3ee9e104f3bcbb7466a8de9b68f132fe0851022`): outer ZIP **711,161 bytes**, SHA256 `7b968ef5d210383c24ae8a6328e1fefffa3db600f0c0ef5941d46c5cf6933418`, 2/2 CRC PASS. Nested ZIP **768,973 bytes**, SHA256 `31a626259cdcfa1d85e1f6690debdd2888b85fb837173fd44944f18d9bc0e3b4`, 456 members CRC PASS. `FILES-SHA256SUMS` **406/406 PASS**. Embedded `manifests/MANIFEST.json` **38/68 SHA256 match, 30/68 mismatch**, with **30/68 size mismatches**; no missing listed paths. JSON `release=8.0.0` conflicts with text `version=2.1.0-core-rc1.4`. Text `git_commit=14924a6405c52c364c9aa81036f3e90f2e62e60f` is packaging checkout, not exact PR HEAD, and provenance is not distinguished. **Semantic integrity FAIL despite green Quality 6/6**. This is the pre-fix stacked #204 artifact, not a #206 generated kit.
 
 #206 revised source HEAD `516e32b1540077ab059f651d78020c2b365b3fd4` corrects test checksum fixture newlines after prior [Quality 41172832388](https://github.com/alimtalbi-ata/aiops/actions/runs/41172832388) showed 4/13 negative test failures due to invalid fixture sidecar; no production guard was weakened. New exact-head CI and regenerated artifact must be observed before any PASS. T4 NO_GO.
+
+
+### Exact #206 post-fix artifact audit — 2026-10-31 ~06:38 Europe/Paris
+
+Source: draft #206 `516e32b1540077ab059f651d78020c2b365b3fd4`, stacked on #204 `f3ee9e104f3bcbb7466a8de9b68f132fe0851022`. [Quality 41172956555](https://github.com/alimtalbi-ata/aiops/actions/runs/41172956555) SUCCESS 6/6; package verifier negative tests **13/13 PASS**. [Artifact 13031961877](https://github.com/alimtalbi-ata/aiops/actions/runs/41172956555/artifacts/13031961877) independently downloaded and audited.
+
+| Check | Observed result |
+|---|---|
+| Outer ZIP | 713,938 bytes, SHA256 `49286d8d32ce195adc6973497f2e700b6b4f4f534d49f0952bed5c9743917251`, 2/2 CRC PASS |
+| Nested ZIP | 771,686 bytes, SHA256 `4758c3b4fe803203dbf5273d1dad1994cf2d1ef070e3922af94f21bba042eecd`, 457 entries CRC PASS |
+| ZIP safety | No unsafe paths, duplicate members or symlinks |
+| Nested sidecar | SHA256 matches nested ZIP |
+| `FILES-SHA256SUMS` | **407/407 PASS** |
+| Embedded `manifests/MANIFEST.json` | **68/68 SHA256 PASS**, **68/68 sizes PASS**, 0 missing |
+| Release versions | JSON `2.1.0-core-rc1.4` = text `2.1.0-core-rc1.4`; historical source release `8.0.0` explicitly preserved |
+| Disposable extraction/repack | **408/408 file hashes PASS**; repacked ZIP CRC PASS |
+| Actual install / upgrade / rollback | **0 / 0 / 0 — NOT_TESTED** |
+| SBOM | NOT_ATTESTED |
+
+The prior 30/68 embedded checksum mismatch is **repaired in this exact stacked artifact**, not in a main-based #201 release. The text manifest still records packaging checkout `82368d8a957ea177a421d9c0355dd019b76bab54` as `git_commit`, without separately declaring source head/base. No real-model qualification, tenant authorization, Debian runtime, independent ACME T2, or sandbox rollback is inferred. **T4 NO_GO, T5 NO_GO; RELEASE_STABLE=NO_GO**.
