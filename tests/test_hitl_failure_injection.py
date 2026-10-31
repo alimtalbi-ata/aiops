@@ -679,5 +679,102 @@ class OfflineFailureInjection(unittest.TestCase):
                 self.assertEqual(writes, [("EVID", "/api/evidence")])
 
 
+    def test_synthetic_hitl_skip_ack_mutations_never_checkpoint(self):
+        # Fake Core ACKs only. No HTTP, DB, Temporal service or LIVE execution.
+        # The Core statusless event ACK is not itself a Policy/HITL grant.
+        mutations = (
+            {"run_id": "RUN-OTHER"},
+            {"version": 2}, {"version": 4}, {"version": True},
+            {"sequence": None}, {"sequence": 0}, {"sequence": True},
+            {"stage": "POLICY"}, {"event_type": "STAGE_COMPLETED"},
+            {"event_type": "HITL_PROPOSAL_CREATED"},
+            {"status": "BLOCKED"}, {"status": "UNKNOWN"},
+            {"effect_allowed": True}, {"execution_allowed": True},
+            {"idempotent": "yes"},
+        )
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for mutation in mutations:
+                with self.subTest(mode=mode, mutation=mutation):
+                    calls, checkpoints = [], []
+
+                    def fake_call(method, url, payload):
+                        kind = payload["event_type"]
+                        calls.append(kind)
+                        if kind == "STAGE_STARTED":
+                            return {"run_id": "RUN-OFFLINE",
+                                    "sequence": 1, "version": 2}
+                        if kind == "HITL_SIMULATION_SKIPPED":
+                            return {"run_id": "RUN-OFFLINE",
+                                    "sequence": 2, "version": 3, **mutation}
+                        if kind == "STAGE_FAILED":
+                            return {"run_id": "RUN-OFFLINE",
+                                    "sequence": 3, "version": 4}
+                        raise AssertionError("unexpected_core_call")
+
+                    def fake_post(base, path, payload, **kwargs):
+                        checkpoints.append(path)
+                        raise AssertionError("unqualified_hitl_ack_checkpoint")
+
+                    env = {"CORE": "CORE", "ADMIN": "offline",
+                           "call": fake_call, "post_json": fake_post}
+                    env["verified_no_effect_stage_receipt"] = extract(
+                        "app/worker/main.py", "verified_no_effect_stage_receipt", env)
+                    env["verified_no_effect_stage_started_receipt"] = extract(
+                        "app/worker/main.py", "verified_no_effect_stage_started_receipt", env)
+                    stage = extract("app/worker/main.py", "_execute_stage_blocking", env)
+                    with self.assertRaisesRegex(
+                            RuntimeError, "stage_pass_receipt_not_qualified"):
+                        stage({"run_id": "RUN-OFFLINE", "version": 1,
+                               "stage": "HITL", "mode": mode,
+                               "scenario_id": "SCENARIO-OFFLINE"}, 1)
+                    self.assertEqual(calls, ["STAGE_STARTED",
+                                             "HITL_SIMULATION_SKIPPED",
+                                             "STAGE_FAILED"])
+                    self.assertEqual(checkpoints, [])
+
+    def test_synthetic_hitl_skip_valid_ack_is_explicit_no_effect(self):
+        # A valid statusless ACK can only yield a synthetic no-effect receipt.
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            with self.subTest(mode=mode):
+                calls, checkpoints = [], []
+
+                def fake_call(method, url, payload):
+                    kind = payload["event_type"]
+                    calls.append(kind)
+                    if kind == "STAGE_STARTED":
+                        return {"run_id": "RUN-OFFLINE",
+                                "sequence": 1, "version": 2}
+                    if kind == "HITL_SIMULATION_SKIPPED":
+                        self.assertIs(payload["payload"]["execution_allowed"], False)
+                        self.assertIs(payload["payload"]["effect_allowed"], False)
+                        return {"run_id": "RUN-OFFLINE", "sequence": 2,
+                                "version": 3, "event_type": kind}
+                    raise AssertionError("unexpected_core_call")
+
+                def fake_post(base, path, payload, **kwargs):
+                    self.assertEqual(base, "CORE")
+                    checkpoints.append((path, payload))
+                    return {}
+
+                env = {"CORE": "CORE", "ADMIN": "offline",
+                       "call": fake_call, "post_json": fake_post}
+                env["verified_no_effect_stage_receipt"] = extract(
+                    "app/worker/main.py", "verified_no_effect_stage_receipt", env)
+                env["verified_no_effect_stage_started_receipt"] = extract(
+                    "app/worker/main.py", "verified_no_effect_stage_started_receipt", env)
+                stage = extract("app/worker/main.py", "_execute_stage_blocking", env)
+                result = stage({"run_id": "RUN-OFFLINE", "version": 1,
+                                "stage": "HITL", "mode": mode,
+                                "scenario_id": "SCENARIO-OFFLINE"}, 1)
+                self.assertEqual(result["status"], "PASS")
+                self.assertEqual(result["version"], 3)
+                self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
+                self.assertEqual(calls, ["STAGE_STARTED", "HITL_SIMULATION_SKIPPED"])
+                self.assertEqual(checkpoints, [
+                    ("/api/runs/RUN-OFFLINE/checkpoint",
+                     {"stage": "HITL", "version": 3})])
+
+
 if __name__ == "__main__":
     unittest.main()
