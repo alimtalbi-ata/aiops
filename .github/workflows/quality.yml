@@ -37,6 +37,8 @@ jobs:
         env:
           PYTHONPATH: app
         run: python -m unittest discover -s tests -p "test_intelligence_model_discovery.py" -v
+      - name: Direct NGX NIM completion probe contract tests (offline mocks)
+        run: python -m unittest discover -s tests -p "test_nim_runtime_qualification.py" -v
       - name: Real Intelligence HTTP adapter integration against deterministic TEST_PROVIDER
         env:
           PYTHONPATH: app
