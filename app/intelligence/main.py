@@ -10,6 +10,7 @@ app = FastAPI(title='AIOps Analyst and Critic Adapter', version='2.0.0')
 LOG = logging.getLogger('aiops2.intelligence')
 BASE = os.getenv('LLM_BASE_URL', '').rstrip('/')
 MODEL = os.getenv('LLM_MODEL', '')
+PROVIDER = os.getenv('LLM_PROVIDER_NAME', 'openai-compatible')
 KEY = os.getenv('LLM_API_KEY', '')
 TOKEN = os.getenv('AIOPS_INTERNAL_TOKEN', '')
 TIMEOUT = float(os.getenv('LLM_TIMEOUT_SECONDS', '45'))
@@ -405,7 +406,7 @@ def health():
 @app.get('/ready')
 def ready():
     configured = bool(BASE and MODEL and TOKEN)
-    return {'status':'ready' if configured else 'degraded','provider_configured':bool(BASE and MODEL),'internal_auth_configured':bool(TOKEN)}
+    return {'status':'ready' if configured else 'degraded','provider_configured':bool(BASE and MODEL),'provider':PROVIDER if BASE and MODEL else None,'model':MODEL or None,'internal_auth_configured':bool(TOKEN)}
 
 @app.post('/api/intelligence/analyze')
 def analyze(x: Request, authorization: str | None = Header(default=None)):
@@ -427,7 +428,7 @@ def analyze(x: Request, authorization: str | None = Header(default=None)):
     quality_errors=analysis_quality_errors(result.model_dump(mode='json'), x.evidence)
     if quality_errors:
         raise HTTPException(502, detail={'code':'ungrounded_or_inconsistent_analysis','reasons':quality_errors})
-    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'analyst-v2.2','evidence_freshness':freshness,'model_invocation':model_call_telemetry(),'execution_allowed':False}
+    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':PROVIDER,'model':MODEL,'prompt_version':'analyst-v2.2','evidence_freshness':freshness,'model_invocation':model_call_telemetry(),'execution_allowed':False}
 
 @app.post('/api/intelligence/critic')
 def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
