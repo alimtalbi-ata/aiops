@@ -46,7 +46,11 @@ def ack(event, token):
     return receipt
 
 
-def fixture():
+def fixture(decision="REJECT"):
+    """Create a synthetic decision notification, never a verified human approval."""
+    if decision not in ("REJECT", "APPROVE"):
+        raise ValueError("synthetic_fixture_decision_must_be_reject_or_approve")
+    proposal_status = "APPROVED" if decision == "APPROVE" else "REJECTED"
     suffix = uuid.uuid4().hex
     run, analysis, critique = ("CI-HITL-RUN-" + suffix,
                                "CI-HITL-AN-" + suffix, "CI-HITL-CR-" + suffix)
@@ -88,16 +92,16 @@ def fixture():
         c.execute("insert into aiops.approval_records "
                   "(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,"
                   "nonce,expires_at,audit) values(%s,%s,%s,'SYNTHETIC_UNVERIFIED',"
-                  "'ci_fixture','REJECT',%s,now()+interval '1 hour',%s)",
-                  (approval, proposal, digest, "ci-nonce-" + suffix,
+                  "'ci_fixture',%s,%s,now()+interval '1 hour',%s)",
+                  (approval, proposal, digest, decision, "ci-nonce-" + suffix,
                    json.dumps({"synthetic": True, "identity_attested": False})))
-        c.execute("update aiops.action_proposals set status='REJECTED' "
-                  "where proposal_id=%s", (proposal,))
+        c.execute("update aiops.action_proposals set status=%s "
+                  "where proposal_id=%s", (proposal_status, proposal))
         c.execute("insert into aiops.hitl_decision_outbox "
                   "(event_id,proposal_id,run_id,proposal_hash,proposal_revision,"
                   "decision,source_status,approval_id) "
-                  "values(%s,%s,%s,%s,1,'REJECT','REJECTED',%s)",
-                  (event, proposal, run, digest, approval))
+                  "values(%s,%s,%s,%s,1,%s,%s,%s)",
+                  (event, proposal, run, digest, decision, proposal_status, approval))
     return event, proposal
 
 class PostgreSQL16OutboxTests(unittest.TestCase):
@@ -116,6 +120,34 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
         with db() as c:
             self.assertEqual(c.execute("select count(*) from aiops.effect_receipts "
                                        "where proposal_id=%s", (proposal,)).fetchone()[0], 0)
+
+    def test_synthetic_approve_outbox_notification_is_not_authorization(self):
+        """Even an APPROVE-shaped Temporal notification cannot grant authority.
+
+        This deliberately seeds a synthetic, unverified approval in disposable
+        PostgreSQL; it does not exercise a real OIDC identity or HITL decision.
+        """
+        event, proposal = fixture(decision="APPROVE")
+        items = claim("ci-approve-is-not-authority")
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual((item["event_id"], item["decision"],
+                          item["source_status"], item["proposal_revision"]),
+                         (event, "APPROVE", "APPROVED", 1))
+        with db() as c:
+            row = c.execute(
+                "select r.mode,a.actor_id,a.audit->>'identity_attested',"
+                "a.audit->>'synthetic' from aiops.hitl_decision_outbox o "
+                "join aiops.runs r on r.run_id=o.run_id "
+                "join aiops.approval_records a on a.approval_id=o.approval_id "
+                "where o.event_id=%s", (event,)).fetchone()
+        self.assertEqual(row, ("DEMO", "SYNTHETIC_UNVERIFIED", "false", "true"))
+        receipt = ack(event, item["lease_token"])
+        self.assertEqual((receipt["status"], receipt["idempotent"]),
+                         ("DELIVERED", False))
+        self.assertTrue(ack(event, item["lease_token"])["idempotent"])
+        self.assertEqual(claim("ci-approve-after-ack"), [])
+        self.no_effect(proposal)
 
     def test_concurrent_claim_single_winner(self):
         event, proposal = fixture()
