@@ -80,7 +80,7 @@ jobs:
           TARGET_ROOT: ${{ inputs.target_root }}
         run: |
           set -Eeuo pipefail
-          ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$SSH_USER@$SSH_HOST" "bash -s" <<REMOTE
+          ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$SSH_USER@$SSH_HOST" "TARGET_ROOT='$TARGET_ROOT' bash -s" <<'REMOTE'
           set -Eeuo pipefail
           [[ "$(id -u)" -ne 0 ]] || { echo "BLOCKED|run_as_non_root"; exit 2; }
           . /etc/os-release
@@ -88,7 +88,9 @@ jobs:
           command -v docker >/dev/null || { echo "BLOCKED|docker_missing"; exit 2; }
           docker compose version >/dev/null || { echo "BLOCKED|compose_missing"; exit 2; }
           docker info >/dev/null || { echo "BLOCKED|docker_access_denied"; exit 2; }
-          FREE_KB=$(df -Pk "$(dirname "$TARGET_ROOT")" | awk 'NR==2{print $4}')
+          PARENT="$(dirname "$TARGET_ROOT")"
+          [[ -d "$PARENT" && -w "$PARENT" ]] || { echo "BLOCKED|target_parent_missing_or_not_writable|$PARENT"; exit 2; }
+          FREE_KB="$(df -Pk "$PARENT" | awk 'NR==2{print $4}')"
           (( FREE_KB > 8388608 )) || { echo "BLOCKED|disk_below_8GiB|${FREE_KB}KB"; exit 2; }
           [[ ! -e "$TARGET_ROOT" ]] || { echo "BLOCKED|target_must_be_empty|$TARGET_ROOT"; exit 2; }
           echo "REMOTE_PREFLIGHT=PASS"
