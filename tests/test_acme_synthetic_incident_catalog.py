@@ -162,6 +162,41 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unrelated scenarios"):
             gen.correlate_offline(events + gen.replay("NETWORK_FAILURE")["events"])
 
+    def test_offline_correlation_rejects_forged_ci_source_or_evidence(self):
+        events = gen.replay()["events"]
+        mutations = (
+            ("ci_id", "ACME-NOT-IN-PINNED-GRAPH"),
+            ("source", "UNTRUSTED_FAKE_MONITOR"),
+            ("id_authority", "CORE_VERIFIED"),
+            ("source_event_id", "SYN-EVT-FORGED"),
+            ("evidence_id", "EVIDENCE-NEVER-READ-FROM-API"),
+            ("observed_impact", "CONFIRMED"),
+            ("synthetic", False),
+            ("freshness", "LIVE"),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field):
+                tampered = copy.deepcopy(events)
+                tampered[0][field] = value
+                with self.assertRaisesRegex(ValueError, "untrusted synthetic event"):
+                    gen.correlate_offline(tampered)
+        self.assertEqual(gen.correlate_offline(events)["event_count"], 7)
+
+    def test_offline_correlation_rejects_stale_non_utc_or_reordered_time(self):
+        events = gen.replay()["events"]
+        mutations = (
+            ("known_at", "2026-10-31T10:00:00Z"),
+            ("known_at", "2026-10-31T09:42:01+00:00"),
+            ("known_at", "2026-10-31T09:41:59Z"),
+            ("event_time", "2026-10-31T09:42:01Z"),
+        )
+        for field, value in mutations:
+            with self.subTest(field=field, value=value):
+                tampered = copy.deepcopy(events)
+                tampered[0][field] = value
+                with self.assertRaisesRegex(ValueError, "stale or invalid synthetic event chronology"):
+                    gen.correlate_offline(tampered)
+
     def test_stale_and_invalid_time_never_become_real_freshness(self):
         event = copy.deepcopy(gen.replay()["events"][0])
         event["known_at"] = "2026-10-31T10:00:00Z"
