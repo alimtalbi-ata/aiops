@@ -90,15 +90,39 @@ class OutboxFaultTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 409)
 
     def test_lost_ack_retry(self):
-        first = core("acknowledge_hitl_decision_outbox", DB(("LEASED", "lease", True)))
+        first_db = DB(("LEASED", "lease", True))
+        first = core("acknowledge_hitl_decision_outbox", first_db)
         first_receipt = first("HDO", {"lease_token": "lease"})
         self.assertFalse(first_receipt["idempotent"])
-        retry = core("acknowledge_hitl_decision_outbox", DB(("DELIVERED", None, None)))
+        updates = [sql for sql in first_db.queries if "set status='DELIVERED'" in sql]
+        self.assertEqual(len(updates), 1)
+        # Preserve the original lease token as an idempotency fence after ACK.
+        self.assertNotIn("lease_token=null", updates[0])
+        retry_db = DB(("DELIVERED", "lease", None))
+        retry = core("acknowledge_hitl_decision_outbox", retry_db)
         retry_receipt = retry("HDO", {"lease_token": "lease"})
         self.assertTrue(retry_receipt["idempotent"])
+        self.assertFalse(any("set status='DELIVERED'" in sql for sql in retry_db.queries))
         for receipt in (first_receipt, retry_receipt):
             self.assertIs(receipt["execution_allowed"], False)
             self.assertIs(receipt["effect_allowed"], False)
+
+    def test_delivered_ack_replay_with_wrong_or_missing_original_lease_is_fenced(self):
+        # An event already DELIVERED is not a free ACK oracle for any token.
+        # These are scripted rows, never a PostgreSQL or Temporal integration.
+        for stored_token, supplied_token in (
+            (None, "old"),
+            ("original", "different"),
+            ("original", "ORIGINAL"),
+        ):
+            with self.subTest(stored_token=stored_token, supplied_token=supplied_token):
+                db = DB(("DELIVERED", stored_token, None))
+                with self.assertRaises(HTTPException) as ctx:
+                    core("acknowledge_hitl_decision_outbox", db)(
+                        "HDO-OFFLINE", {"lease_token": supplied_token})
+                self.assertEqual((ctx.exception.status_code, ctx.exception.detail),
+                                 (409, "outbox_lease_lost_or_invalid"))
+                self.assertFalse(any("set status='DELIVERED'" in sql for sql in db.queries))
 
     def test_dead_letter_claim_sql(self):
         db = DB()
