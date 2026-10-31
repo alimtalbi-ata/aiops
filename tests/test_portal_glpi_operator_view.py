@@ -66,6 +66,31 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertNotIn(">CONNECTED<", page)
         self.assertIn("NOT_INSTALLED", page)
 
+    def test_operator_queue_is_semantic_and_never_invents_tickets_or_sla(self):
+        with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \\
+             patch.object(main, "post_json", side_effect=AssertionError("GLPI write")) as write:
+            page = self.client.get("/itsm")
+        self.assertEqual(page.status_code, 200)
+        self.assert_security(page)
+        self.assertIn('aria-labelledby="queue"', page.text)
+        self.assertIn('aria-describedby="queue-unavailable"', page.text)
+        self.assertIn('<caption>État de la file ITSM, sans enregistrement client</caption>', page.text)
+        self.assertIn('colspan="4">UNKNOWN', page.text)
+        self.assertIn("NOT_INSTALLED", page.text)
+        self.assertIn("Aucun ticket ni compteur", page.text)
+        self.assertIn("Calendrier de maintenance : UNKNOWN", page.text)
+        self.assertNotIn("<button", page.text)
+        self.assertNotIn("<form", page.text)
+        core.assert_not_called()
+        write.assert_not_called()
+        api = self.client.get("/api/portal/itsm",
+                              headers={"Authorization": "Bearer " + TOKEN,
+                                       "X-Tenant-ID": "foreign", "X-GLPI-Profile": "manager"})
+        self.assertEqual(api.status_code, 503)
+        self.assertEqual(api.json()["connection_state"], "NOT_INSTALLED")
+        self.assertNotIn("ticket_id", api.json())
+        self.assert_security(api)
+
     def test_api_missing_invalid_and_unconfigured_bearer_fail_closed(self):
         for headers in ({}, {"Authorization": "Bearer incorrect"},
                         {"Authorization": "Basic " + TOKEN}):
