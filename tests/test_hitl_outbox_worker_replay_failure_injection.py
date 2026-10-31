@@ -43,7 +43,8 @@ def event(**changes):
     return item
 
 
-def scan_once(claims, *, lost_ack=False, signals=None, acknowledgements=None):
+def scan_once(claims, *, lost_ack=False, signals=None, acknowledgements=None,
+              ack_receipt="DEFAULT", debug_events=None):
     """Execute one AST-extracted scan; interrupt only the idle sleep."""
     signals = [] if signals is None else signals
     acknowledgements = [] if acknowledgements is None else acknowledgements
@@ -58,7 +59,11 @@ def scan_once(claims, *, lost_ack=False, signals=None, acknowledgements=None):
             if lost_ack:
                 raise ConnectionError("injected_lost_ack")
             acknowledgements.append(dict(payload))
-            return {"execution_allowed": False, "effect_allowed": False}
+            if ack_receipt != "DEFAULT":
+                return ack_receipt
+            return {"event_id": path.split("/")[-2], "status": "DELIVERED",
+                    "idempotent": False, "execution_allowed": False,
+                    "effect_allowed": False}
         raise AssertionError("unexpected_request")
 
     async def stop_after_scan(seconds):
@@ -69,7 +74,9 @@ def scan_once(claims, *, lost_ack=False, signals=None, acknowledgements=None):
     node = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef)
                 and n.name == "reconcile_hitl_decisions_loop")
     node.decorator_list = []
-    logger = types.SimpleNamespace(debug=lambda *a: None, warning=lambda *a: None)
+    logger = types.SimpleNamespace(
+        debug=lambda *a: debug_events.append(a) if debug_events is not None else None,
+        warning=lambda *a: None)
     env = {"Client": client, "TEMP": "offline", "CORE": "offline",
            "DENIAL_WORKER_OWNER": "offline-worker", "ADMIN": "offline",
            "post_json": post, "log": logger,
@@ -131,6 +138,40 @@ class OutboxWorkerReplayFaultTests(unittest.TestCase):
         self.assertEqual(signals[0]["decision"], "REJECT")
         self.assertNotIn("execution_allowed", signals[0])
         self.assertNotIn("effect_allowed", signals[0])
+
+    def test_malformed_delivery_ack_is_never_trusted_as_qualified(self):
+        claim = {"execution_allowed": False, "effect_allowed": False,
+                 "items": [event()]}
+        valid = {"event_id": "HDO-ISOLATED", "status": "DELIVERED",
+                 "idempotent": False, "execution_allowed": False,
+                 "effect_allowed": False}
+        mutations = (None, [], {},
+                     {**valid, "event_id": "HDO-OTHER"},
+                     {**valid, "status": "LEASED"},
+                     {**valid, "idempotent": "false"},
+                     {**valid, "idempotent": None},
+                     {**valid, "execution_allowed": True},
+                     {**valid, "effect_allowed": True},
+                     {k: v for k, v in valid.items() if k != "effect_allowed"})
+        for malformed in mutations:
+            with self.subTest(ack=malformed):
+                debug_events = []
+                signals, acks, requests = scan_once(
+                    claim, ack_receipt=malformed, debug_events=debug_events)
+                self.assertEqual(len(signals), 1)  # Temporal signal is not authorization.
+                self.assertEqual(acks, [{"lease_token": "lease-1"}])
+                self.assertEqual(len(requests), 2)
+                self.assertEqual(len(debug_events), 1)
+                self.assertEqual(debug_events[0][-1], "RuntimeError")
+        for idempotent in (False, True):
+            with self.subTest(idempotent=idempotent):
+                debug_events = []
+                signals, acks, _ = scan_once(
+                    claim, ack_receipt={**valid, "idempotent": idempotent},
+                    debug_events=debug_events)
+                self.assertEqual(len(signals), 1)
+                self.assertEqual(len(acks), 1)
+                self.assertEqual(debug_events, [])
 
     def test_valid_revoke_is_notification_only(self):
         claim = {"execution_allowed": False, "effect_allowed": False,
