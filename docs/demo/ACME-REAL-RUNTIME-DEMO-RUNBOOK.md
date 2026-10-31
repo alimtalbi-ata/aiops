@@ -77,6 +77,36 @@ The Intelligence `/ready` response reports the configured provider label and mod
 
 A 105-second inference timeout leaves time inside the Worker activity deadline for Core ledger persistence and retry handling. Tune only from measured p95 latency; keep the Worker activity's outer timeout larger than the provider timeout. Never disable fail-closed behavior to make a slow model appear successful.
 
+
+## 2.2 Portal AIOps Bot + GLPI + HITL proposal interaction
+
+The Portal `/copilot` page provides a guarded operator workflow for the ACME synthetic Payments scenario:
+
+1. The operator supplies a GLPI ticket ID, a dedicated `AIOPS_PORTAL_OPERATOR_TOKEN`, and a question.
+2. The server reads the GLPI ticket; it accepts only one unambiguous explicit `RUN-...` reference.
+3. Core must confirm the same run ID, mode DEMO/REPLAY/STORY, and scenario `SCN-GOLDEN-PAYMENT-P1`. The run must be RESOLVED.
+4. Copilot loads only that run's incident, Evidence records, Analyst output and Critic output. Ticket text is untrusted context, never instructions.
+5. Intelligence calls the configured NIM model through the OpenAI-compatible adapter. The answer contains structured claims with evidence IDs; unknown evidence references fail closed.
+6. Copilot records a `COPILOT_ANSWER_RECORDED` event in Core with provider/model, prompt version, latency/token telemetry, cited evidence IDs, a question hash and `NO_EXECUTION`. Raw question text is not stored in that event.
+7. The operator may request a proposal. Only a unique, validated Analyst action with a clean Critic, LOW risk, explicit preconditions, expected effect, verification steps and matching evidence is eligible. The current fast path allowlists only `CI-COLLECT-READONLY`.
+8. Core creates a durable `PROPOSED` action proposal. Portal adds a private GLPI `ITILFollowup` containing a unique proposal marker, proposal ID, CI, evidence IDs and explicit no-execution notice. Existing markers are detected before insert to avoid duplicate notes.
+
+### Important security semantics
+
+- The operator token is a dedicated synthetic-demo capability, distinct from viewer and internal service tokens. It is not a human identity and cannot approve LIVE work.
+- The GLPI follow-up is a private audit note, not a GLPI validation and not an approval.
+- The proposal remains `PROPOSED`; approval is not recorded by this DEMO path.
+- Core's verified OIDC approval endpoint remains the only human approval path. It derives the actor and roles from verified identity claims, rejects synthetic modes, and returns `execution_allowed=false`.
+- No shell, SSH, sudo, restart, deployment or remediation command is available from the assistant.
+- The Portal bot must not be used for real customer tickets until OIDC tenant/entity scoping and a customer-specific GLPI integration identity are qualified.
+
+### Required per-host configuration
+
+- `AIOPS_PORTAL_OPERATOR_TOKEN`: unique generated secret, mode 0600 in `.env`; never share with `AIOPS_PORTAL_READ_TOKEN` or `AIOPS_INTERNAL_TOKEN`.
+- `GLPI_API_URL`, `GLPI_APP_TOKEN`, `GLPI_USER_TOKEN`: server-side credentials for a GLPI service account with only the required ticket read and private-follow-up rights.
+- `LLM_PROVIDER_NAME=NVIDIA_NIM`, `LLM_BASE_URL`, exact `LLM_MODEL` and `LLM_API_KEY` if required: see the NIM profile above.
+- The Intelligence container must reach NIM over a private route. Never publish the NIM endpoint to the public network.
+
 ## 3. Preflight
 
 From the reviewed repository root:
