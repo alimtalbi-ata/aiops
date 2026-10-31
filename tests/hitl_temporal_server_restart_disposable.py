@@ -1,4 +1,4 @@
-"""Disposable-only in-flight Temporal server restart with Core outbox REJECT.
+"""Disposable-only in-flight Temporal and app Worker restart with Core outbox REJECT.
 
 A CI-only sink replays Temporal history after the server restarts. No OIDC
 attestation, LIVE approval, executor, or effect. Never run outside test Compose.
@@ -57,7 +57,8 @@ async def resume(dsn, state):
             or state.get("identity") != "NOT_ATTESTED"
             or state.get("execution_allowed") is not False
             or state.get("effect_allowed") is not False
-            or os.getenv("AIOPS_CI_TEMPORAL_RESTARTED_INFLIGHT") != "YES"):
+            or os.getenv("AIOPS_CI_TEMPORAL_RESTARTED_INFLIGHT") != "YES"
+            or os.getenv("AIOPS_CI_APP_WORKER_RESTARTED_INFLIGHT") != "YES"):
         raise AssertionError("invalid_disposable_restart_attestation")
     run_id, event, proposal, digest = (
         state["run_id"], state["event"], state["proposal"], state["digest"])
@@ -102,6 +103,7 @@ async def resume(dsn, state):
             "temporal_signals": len(result["decisions"]),
             "replay": "CI_SYNTHETIC_REQUEUE_NOT_REAL_LOST_ACK",
             "temporal_server_restart_inflight": "OBSERVED_CI_DISPOSABLE",
+            "app_worker_restart_inflight": "OBSERVED_CI_DISPOSABLE",
             "ci_sink_worker_restart_inflight": "OBSERVED",
             "production_worker_restart_inflight": "NOT_TESTED",
             "effect_receipts": 0, "execution_allowed": False,
