@@ -25,12 +25,8 @@ fi
 for cmd in curl python3 install crontab flock stat grep id; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "BLOCKED: missing required command: $cmd" >&2; exit 2; }
 done
-if [[ ! -f "$TOKEN" || -L "$TOKEN" ]]; then
-  echo "BLOCKED: provision the fine-grained GitHub token at $TOKEN first." >&2
-  exit 2
-fi
-if [[ "$(stat -c '%a' "$TOKEN")" != "600" ]]; then
-  echo "BLOCKED: token file must have mode 600." >&2
+if [[ -f "$TOKEN" && ! -L "$TOKEN" && "$(stat -c '%a' "$TOKEN")" != "600" ]]; then
+  echo "BLOCKED: existing token file must have mode 600." >&2
   exit 2
 fi
 
@@ -46,6 +42,9 @@ if ! grep -Fq "$CRON_MARKER" <<<"$CURRENT"; then
   { printf '%s\n' "$CURRENT"; printf '%s\n' "$CRON_LINE"; } | crontab -
 fi
 echo "AIOPS2_DEBIAN_REPORTER_INSTALLED=1"
-echo "SCHEDULE=* * * * * (collection every minute; GitHub publication remains throttled to every 15 minutes)"
+echo "SCHEDULE=* * * * * (collection every minute; GitHub publication every 15 minutes when token is configured)"
+if [[ ! -f "$TOKEN" ]]; then
+  echo "NOTICE: local collection is active; configure $TOKEN (mode 600) to enable GitHub publication."
+fi
 echo "LOCAL_REPORT=${STATE_DIR}/latest.json"
 echo "GITHUB_REPORT_BRANCH=ops/debian-runtime-reports"
