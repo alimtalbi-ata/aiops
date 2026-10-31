@@ -144,6 +144,11 @@ def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version):
             or type(started_version) is not int
             or type(receipt.get('version')) is not int
             or receipt['version'] <= started_version
+            # Core event ACKs carry a positive sequence; absent/forged sequence
+            # cannot prove a committed stage even when the version looks fresh.
+            or type(receipt.get('sequence')) is not int
+            or receipt['sequence'] < 1
+            or ('stage' in receipt and receipt['stage'] != stage)
             or receipt.get('status') not in (None, 'PASS')
             or any(receipt.get(key) is not None and receipt.get(key) is not False
                    for key in ('execution_allowed', 'effect_allowed'))):
