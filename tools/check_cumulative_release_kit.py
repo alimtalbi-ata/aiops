@@ -100,7 +100,7 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         errors.append("EMBEDDED_MANIFEST_INVALID")
                     else:
                         release = embedded.get("release")
-                        versions = re.findall(r"^version=([^\\r\\n]+)$", manifest, re.MULTILINE) if "RELEASE-MANIFEST.txt" in files else []
+                        versions = re.findall(r"^version=([^\r\n]+)$", manifest, re.MULTILINE) if "RELEASE-MANIFEST.txt" in files else []
                         if not isinstance(release, str) or not release or len(versions) != 1 or versions[0] != release:
                             errors.append("EMBEDDED_RELEASE_VERSION_MISMATCH")
                         seen = set()
