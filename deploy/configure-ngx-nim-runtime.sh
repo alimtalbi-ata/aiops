@@ -5,7 +5,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 NIM_BASE_URL="http://10.79.94.31:8000/v1"
-TIMEOUT="${NIM_TIMEOUT_SECONDS:-120}"
+TIMEOUT="${NIM_TIMEOUT_SECONDS:-105}"
 RUN_DEMO=0
 if [[ "${1:-}" == "--run-acme-demo" ]]; then RUN_DEMO=1
 elif [[ $# -gt 0 ]]; then echo "Usage: $0 [--run-acme-demo]" >&2; exit 2
@@ -71,7 +71,7 @@ python3 scripts/qualify_nim_runtime.py \
 BACKUP=".env.backup-nim-$(date -u +%Y%m%dT%H%M%SZ)"
 cp -p .env "$BACKUP"
 chmod 600 "$BACKUP"
-export NIM_BASE_URL MODEL_ID
+export NIM_BASE_URL MODEL_ID NIM_TIMEOUT_SECONDS="$TIMEOUT"
 python3 - <<'PY'
 import os, pathlib, tempfile
 path=pathlib.Path(".env")
