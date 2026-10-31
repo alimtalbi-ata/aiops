@@ -393,6 +393,20 @@ def synthetic_freshness(event, max_lag_seconds=300):
         return "UNKNOWN"
 
 
+def _safe_output_path(path):
+    """Never overwrite tracked source or a symlink/hardlink alias with replay JSON."""
+    path = path.expanduser()
+    if path.is_symlink():
+        raise ValueError("refusing symlink replay output")
+    if path.exists() and path.stat().st_nlink > 1:
+        raise ValueError("refusing hardlinked replay output")
+    resolved = path.resolve()
+    root = ROOT.resolve()
+    if resolved == root or root in resolved.parents:
+        raise ValueError("refusing replay output inside source checkout")
+    return path
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", default="REDUNDANT_SAN_PATH_LOSS")
@@ -410,7 +424,10 @@ def main(argv=None):
         parser.error(str(exc))
     data = json.dumps(result, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
     if args.output is not None:
-        args.output.write_text(data, encoding="utf-8")
+        try:
+            _safe_output_path(args.output).write_text(data, encoding="utf-8")
+        except (ValueError, OSError, RuntimeError) as exc:
+            parser.error(str(exc))
         print(json.dumps({"output": str(args.output), "sha256": hashlib.sha256(data.encode()).hexdigest(),
                           "events": result["event_count"], "synthetic": True}, sort_keys=True))
     else:
