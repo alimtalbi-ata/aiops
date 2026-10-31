@@ -14,9 +14,9 @@ Status: **PROPOSED / NOT INTEGRATED**. Owner: Policy/Worker/outbox/HITL tests. T
 
 The current #201 Policy `app/policy/main.py` (2.1.0) already distinguishes `SIMULATE` from authorization, and rejects caller-supplied `human_approved=True` as sufficient for a LIVE mutation. The #201 Worker maps DEMO/REPLAY/STORY to OBSERVE and blocks LIVE adapters; neither is a Core HITL ledger.
 
-This PR makes the existing Policy verdict explicitly return `execution_allowed=false` and `effect_allowed=false` on **every Policy response path**, including read-only `PASS/ALLOW`, synthetic `PASS/SIMULATE`, UNKNOWN, ESCALATE and BLOCKED. It does not change the deterministic disposition, does not add a second Policy engine, and does not claim all Worker/Temporal paths are integrated. Offline API and decision-matrix tests are added to the already-invoked `test_policy_safety.py` CI suite. An `ALLOW` for read-only observation is **not** an executor grant.
+This PR makes the existing Policy verdict explicitly return `execution_allowed=false` and `effect_allowed=false` on **every Policy response path**, including read-only `PASS/ALLOW`, synthetic `PASS/SIMULATE`, UNKNOWN, ESCALATE and BLOCKED. It does not change the deterministic disposition, does not add a second Policy engine, and does not claim all Worker/Temporal paths are integrated. Offline API and decision-matrix tests are added to the already-invoked `test_policy_safety.py` CI suite; a real-loopback HTTP no-effect test is added to the existing `test_policy_real_http_integration.py` CI suite. An `ALLOW` for read-only observation is **not** an executor grant.
 
-Scope of this PR: `app/policy/main.py`, `tests/test_policy_safety.py`, and this HITL qualification note. No Core, Portal, migrations, release manifest, deployment or new workflow.
+Scope of this PR: `app/policy/main.py`, `tests/test_policy_safety.py`, `tests/test_policy_real_http_integration.py`, and this HITL qualification note. No Core, Portal, migrations, release manifest, deployment or new workflow.
 
 ## Deferred: parent-dependent Worker/outbox/Temporal chain
 
@@ -39,7 +39,7 @@ The source #204 migration directory contains `009_ai_decision_ledger.sql` (blob 
 
 ## Qualification, rollback and ownership
 
-Commands for this port: `python -m unittest discover -s tests -p test_policy_safety.py -v`; `python -m unittest discover -s tests -p test_policy_simulate_fixture.py -v`; `python -m unittest discover -s tests -p test_simulation_policy_contract.py -v`. The existing candidate Quality workflow runs all three. New exact-head CI must be checked on the PR head before calling this port PASS; PostgreSQL 16/outbox/Temporal are **NOT_TESTED on this port** until a Core-owned integrated environment exists.
+Commands for this port: `python -m unittest discover -s tests -p test_policy_safety.py -v`; `python -m unittest discover -s tests -p test_policy_simulate_fixture.py -v`; `python -m unittest discover -s tests -p test_simulation_policy_contract.py -v`; with the ephemeral Policy service listening on 127.0.0.1:1813, `python -m unittest discover -s tests -p test_policy_real_http_integration.py -v`. The existing candidate Quality workflow runs all four. New exact-head CI must be checked on the PR head before calling this port PASS; PostgreSQL 16/outbox/Temporal are **NOT_TESTED on this port** until a Core-owned integrated environment exists.
 
 Rollback: revert the targeted Policy/test/doc commits on this dedicated branch (or close the draft PR); no DB migrations, external effects, host access or release state to undo. Integration is architect-owned, never automatic.
 
