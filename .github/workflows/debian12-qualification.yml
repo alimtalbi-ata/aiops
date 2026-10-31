@@ -21,7 +21,7 @@ jobs:
       - name: Validate Debian installer shell syntax
         run: bash -n scripts/install-debian-reporter.sh
       - name: Validate installation, migration and PostgreSQL bootstrap shell syntax
-        run: bash -n deploy/install.sh deploy/migrate.sh db/bootstrap/10-apply-baseline.sh
+        run: bash -n deploy/install.sh deploy/migrate.sh deploy/configure-ngx-nim-runtime.sh db/bootstrap/10-apply-baseline.sh
       - name: Test Debian read-only reporter safety contracts
         run: |
           python3 -m py_compile scripts/debian-readonly-reporter.py tests/test_debian_readonly_reporter.py
