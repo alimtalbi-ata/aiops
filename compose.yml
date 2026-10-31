@@ -334,6 +334,28 @@ services:
     depends_on: {aiops2-postgres: {condition: service_healthy}}
 
 
+  aiops2-demo-runner:
+    profiles: ["demo"]
+    build: {context: ., dockerfile: deploy/Dockerfile.demo-runner}
+    container_name: ${AIOPS_STACK_ID:-aiops2}-demo-runner
+    restart: "no"
+    environment:
+      CORE_URL: http://aiops2-core:810
+      WORKER_URL: http://aiops2-worker:815
+      INTELLIGENCE_URL: http://aiops2-intelligence:817
+      EVIDENCE_URL: http://aiops2-evidence:812
+      POLICY_URL: http://aiops2-policy:813
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_DEMO_PROVIDER_KIND: ${AIOPS_DEMO_PROVIDER_KIND:-UNCONFIGURED}
+      LLM_MODEL: ${LLM_MODEL:-UNKNOWN}
+    networks: [aiops2-control]
+    depends_on:
+      aiops2-core: {condition: service_healthy}
+      aiops2-worker: {condition: service_healthy}
+      aiops2-intelligence: {condition: service_healthy}
+      aiops2-evidence: {condition: service_healthy}
+      aiops2-policy: {condition: service_healthy}
+
   aiops2-model-evaluator:
     profiles: ["qualification"]
     user: "${AIOPS_EVAL_UID:-1000}:${AIOPS_EVAL_GID:-1000}"
