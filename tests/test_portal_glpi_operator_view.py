@@ -44,6 +44,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertIn("ACME P1 SAN→Payments", response.text)
         self.assertIn("SYNTHETIC", response.text)
         self.assertIn("UNKNOWN", response.text)
+        self.assertIn("NOT_INSTALLED", response.text)
         self.assertIn('href="/#integrations"', response.text)
         self.assertIn("GLPI reste le système de référence", response.text)
         core.assert_not_called()
@@ -62,7 +63,8 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertNotIn("<button", page)
         self.assertNotIn("ticket_id", page)
         self.assertNotIn("evidence_id", page)
-        self.assertNotIn("CONNECTED", page.replace("aucun état CONNECTED", ""))
+        self.assertNotIn(">CONNECTED<", page)
+        self.assertIn("NOT_INSTALLED", page)
 
     def test_api_missing_invalid_and_unconfigured_bearer_fail_closed(self):
         for headers in ({}, {"Authorization": "Bearer incorrect"},
@@ -90,7 +92,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         data = response.json()
         self.assertEqual(data["reason"], "TENANT_ACL_NOT_QUALIFIED")
-        self.assertEqual(data["connection_state"], "UNKNOWN")
+        self.assertEqual(data["connection_state"], "NOT_INSTALLED")
         self.assertEqual(data["source_freshness"], "UNKNOWN")
         self.assertFalse(data["tenant_acl_qualified"])
         self.assertFalse(data["glpi_write_enabled"])
