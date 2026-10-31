@@ -85,6 +85,18 @@ class IncidentWorkflow:
                 result_type=dict,
             )
             version = receipt["version"]
+            # A PASS is only a no-effect stage receipt when both fences are
+            # explicit. Missing flags are not equivalent to False.
+            if receipt.get("status") == "PASS" and (
+                receipt.get("execution_allowed") is not False
+                or receipt.get("effect_allowed") is not False
+            ):
+                return {
+                    "run_id": run_id, "status": "BLOCKED",
+                    "final_version": version,
+                    "reason": "stage_effect_fence_missing_or_invalid",
+                    "execution_allowed": False, "effect_allowed": False,
+                }
             # UNKNOWN, FAIL, REJECTED or an unexpected WAITING stage cannot
             # advance toward HITL/remediation. Only a LIVE HITL wait is valid.
             if receipt.get("status") not in ("PASS", "BLOCKED") and not (
