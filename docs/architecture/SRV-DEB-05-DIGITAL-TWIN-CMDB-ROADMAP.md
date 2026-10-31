@@ -310,8 +310,13 @@ The Debian reporter remains read-only. Any future operator must use typed operat
 | 2026-10-31 | Defined environment classification, canonical CI model, relationship model and reconciliation guardrails. |
 | 2026-10-31 | Defined ITIL 4 workflows and AI quality/cost benchmarking measures. |
 | 2026-10-31 | Reporter v2 topology/resource inventory implementation added to PR #214; CI outcome pending at time of writing. |
+| 2026-10-31 | Added second-server deployment and recovery standard; corrected legacy fresh-install script to remove embedded shared credentials and use generated per-install secrets. |
 
-## 11. Source of truth and update discipline
+## 11. Reproducible deployment on a second server
+
+The customer/server portability and recovery standard is maintained in [`docs/operations/REPRODUCIBLE-DEPLOYMENT-AND-RECOVERY.md`](../operations/REPRODUCIBLE-DEPLOYMENT-AND-RECOVERY.md). It documents verified repository assets, unique per-install secrets, immutable release selection, installation sequence, migration caveats, backup/restore gaps and release acceptance criteria. Current status is **partially reproducible**; a clean second-server install and full restore drill have not yet been demonstrated.
+
+## 12. Source of truth and update discipline
 
 - Architecture and this roadmap: this document in Git.
 - Operational authorization: `config/ops/debian-service-operations-policy.yml`.
