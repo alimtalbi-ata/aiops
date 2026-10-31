@@ -393,6 +393,37 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     gen.correlate_catalog_manifest_offline(invalid, false_positive="yes")
 
+    def test_strict_manifest_rejects_python_json_scalar_type_aliases(self):
+        """Python True == 1 and 7 == 7.0 must not bypass a pinned replay."""
+        cases = (
+            ("synthetic_bool_as_int", lambda m: m.__setitem__("synthetic", 1)),
+            ("no_live_effects_bool_as_int",
+             lambda m: m.__setitem__("live_effects_authorized", 0)),
+            ("count_int_as_float",
+             lambda m: m.__setitem__("event_count", float(m["event_count"]))),
+            ("roles_authenticated_bool_as_int",
+             lambda m: m["itil"].__setitem__("roles_authenticated", 0)),
+            ("event_maintenance_bool_as_int",
+             lambda m: m["events"][0].__setitem__("maintenance_window_active", 0)),
+        )
+        for category in ("REDUNDANT_SAN_PATH_LOSS", "CAPACITY_PRESSURE"):
+            baseline = gen.replay(category, seed=20261018)
+            validator = (gen.correlate_golden_manifest_offline
+                         if category == "REDUNDANT_SAN_PATH_LOSS"
+                         else gen.correlate_catalog_manifest_offline)
+            for label, mutate in cases:
+                with self.subTest(category=category, mutation=label):
+                    forged = copy.deepcopy(baseline)
+                    mutate(forged)
+                    # The old dict comparison accepted these different JSON
+                    # representations with the unchanged dataset checksum.
+                    self.assertEqual(forged, baseline)
+                    self.assertNotEqual(gen._canonical(forged), gen._canonical(baseline))
+                    with self.assertRaisesRegex(ValueError, "manifest mismatch"):
+                        validator(forged)
+                    with self.assertRaises(ValueError):
+                        gen.storyboard_offline(forged)
+
     def test_every_supported_path_is_reverse_edge_sourced_without_runtime_attestation(self):
         """Check all catalog paths, not just Golden, against the pinned Twin edges."""
         for scenario in self.catalog["scenarios"]:
