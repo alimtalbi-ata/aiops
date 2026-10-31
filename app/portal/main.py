@@ -13,7 +13,6 @@ from portal.portal_integrations import build_navigation
 from portal.noc_runtime import router as noc_runtime_router, _noc_json_response, _require_portal_read_auth
 from portal.portal_command_auth import require_demo_operator
 from portal.noc_correlation import router as noc_correlation_router
-from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.noc_grafana_health import router as noc_grafana_health_router
 from portal.acme_run_detail import router as acme_run_detail_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
@@ -41,7 +40,6 @@ app.include_router(glpi_run_context_router)
 app.include_router(noc_demo_rag_router)
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
-app.include_router(noc_demo_rag_router)
 app.include_router(noc_grafana_health_router)
 app.include_router(acme_run_detail_router)
 @app.get('/health')
@@ -56,10 +54,6 @@ def portal_navigation_script():
     return FileResponse(Path(__file__).with_name('portal_navigation_client.js'),
                         media_type='application/javascript',
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
-
-@app.get('/assets/portal-navigation.js')
-def portal_navigation_script():
-    return FileResponse(Path(__file__).with_name('portal_navigation_client.js'), media_type='application/javascript', headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
 @app.get('/api/portal/bootstrap')
 def bootstrap(authorization: str | None = Header(default=None)):
