@@ -103,7 +103,7 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
     if e["event_type"]=="REVOKED": return "UNKNOWN",None
     observed,known=_utc(e["observed_at"]),_utc(e["known_at"])
     if observed is None or known is None: return "UNKNOWN",None
-    if observed>known or known>now+timedelta(minutes=5): return "CONFLICT",None
+    if observed>known or observed>now or known>now: return "CONFLICT",None
     if now-observed>timedelta(minutes=5) or now-known>timedelta(minutes=5): return "STALE",None
     core=c.execute("select r.incident_id,i.incident_id from aiops.runs r join aiops.incidents i "
                    "on i.incident_id=r.incident_id where r.run_id=%s",(e["run_id"],)).fetchone()
@@ -136,7 +136,8 @@ def read_ticket_xref(tenant_id:str,instance_id:str,ticket_id:str,
                 return _reply(404)
             stamp=evidence_known_at[:-1]+"+00:00" if evidence_known_at.endswith("Z") else evidence_known_at
             when=_utc(datetime.fromisoformat(stamp))
-            if when is None or when>now+timedelta(minutes=5): return _reply(404)
+            if when is None or when>now: return _reply(404)
+            if now-when>timedelta(minutes=5): return _reply(200,"STALE")
         except (TypeError,ValueError,OverflowError): return _reply(404)
     actor,code=_auth(authorization)
     if code!=200: return _reply(code)
