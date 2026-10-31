@@ -8,35 +8,27 @@ It does **not** claim that AIOps2 Analyst/Critic or Temporal Worker are wired to
 
 - Debian 12 (or another supported Python 3 host).
 - Python 3.10+; standard library only.
-- Network access from the Debian host to the NIM endpoint.
-- Exact model ID returned by the NIM `/v1/models` API.
-- API key in an environment variable if the NIM deployment requires authentication.
+- Network access from the Debian host to NGX at `http://10.79.94.31:8000/v1`.
+- No API key or bearer token is used by this deployment.
 
 ## Run on Debian
 
 From the AIOps2 repository root:
 
 ```bash
-export NIM_BASE_URL='http://127.0.0.1:8000/v1'
-export NIM_MODEL='YOUR_EXACT_NIM_MODEL_ID'
-# Only if NIM requires bearer authentication:
-read -rsp 'NIM API key: ' NIM_API_KEY; export NIM_API_KEY; echo
-
 python3 scripts/qualify_nim_runtime.py \
-  --timeout 60 \
+  --timeout 120 \
   --report artifacts/nim-runtime-qualification.json
-
-unset NIM_API_KEY
 ```
 
-Do not put API keys in shell history, command-line arguments, reports, screenshots, or tickets. The script reads `NIM_API_KEY` from the process environment and never writes it to the report.
+The script defaults to the NGX URL above and performs unauthenticated requests. It discovers a unique Nemotron 120B model ID from `/v1/models`; if the endpoint advertises multiple plausible models, it reports the available IDs and asks for an explicit `NIM_MODEL` rather than guessing.
 
 ## What it verifies
 
 1. Base URL is valid HTTP(S); credentials, query strings and fragments embedded in the URL are rejected.
-2. Authenticated `GET /v1/models` succeeds.
+2. Unauthenticated `GET /v1/models` succeeds.
 3. The exact configured model ID is present in the returned model list.
-4. Authenticated `POST /v1/chat/completions` succeeds with a small synthetic probe prompt.
+4. Unauthenticated `POST /v1/chat/completions` succeeds with a small synthetic probe prompt.
 5. The completion returns the unique marker `AIOPS2_NIM_OK`.
 6. Provider-reported token usage is recorded when present; absent usage stays null.
 7. Latency, HTTP status, model identity and sanitized error class are written to a mode-0600 JSON report.
@@ -46,7 +38,7 @@ Exit codes:
 - `1`: endpoint/model/completion qualification failed.
 - `2`: local configuration is invalid or incomplete.
 
-The report intentionally omits the API key, prompt body and full model response. A PASS proves connectivity and a basic completion only; it is not a Nemotron quality benchmark, load test, GPU qualification, or proof of AIOps2 Worker integration.
+The report intentionally omits the prompt body and full model response. A PASS proves connectivity and a basic completion only; it is not a Nemotron quality benchmark, load test, GPU qualification, or proof of AIOps2 Worker integration.
 
 ## CI
 
