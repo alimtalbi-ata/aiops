@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "PyJWT[crypto]==2.10.1" "temporalio==1.17.0"
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Real Intelligence Analyst/Critic contract and grounding tests
@@ -191,7 +191,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql", "009_ai_decision_ledger.sql", "010_evidence_identity.sql", "011_hitl_decision_outbox.sql", "012_model_invocation_telemetry.sql", "090_critic_denial_outbox.sql", "091_critic_denial_fencing.sql", "092_critic_denial_resume.sql"):
+              for name in ("000_n8n.sql", "001_schema.sql", "002_integrity.sql", "003_seed_twin.sql", "004_operational_model.sql", "005_seed_acme.sql", "006_execution_receipts.sql", "007_runtime_hardening.sql", "008_event_idempotency.sql", "009_ai_decision_ledger.sql", "010_evidence_identity.sql", "011_hitl_decision_outbox.sql", "012_model_invocation_telemetry.sql", "090_critic_denial_outbox.sql", "091_critic_denial_fencing.sql", "092_critic_denial_resume.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness
