@@ -27,6 +27,7 @@ class DemoOperatorBoundaryTests(unittest.TestCase):
             "AIOPS_PORTAL_READ_TOKEN": VIEWER,
             "AIOPS_INTERNAL_TOKEN": INTERNAL,
             "AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED": "true",
+            "AIOPS_DEMO_MODE": "1",
         })
         self.env.start()
 
