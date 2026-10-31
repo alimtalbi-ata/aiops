@@ -29,6 +29,8 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
         self.assertEqual(len(items), 10)
         self.assertEqual(sum(s["status"] == "SUPPORTED_BY_SEED" for s in items), 4)
         self.assertEqual(sum(s["status"] == "BLOCKED_MISSING_CMDB_CI" for s in items), 6)
+        self.assertEqual({s["severity_synthetic"] for s in items}, {"P1", "P2", "P3", "P4"})
+        self.assertIsNone(next(s for s in items if s["key"] == "DB_LATENCY")["scenario_id"])
         self.assertEqual(self.catalog["tenant_scope"], "UNKNOWN")
         self.assertIsNone(self.catalog["observed_at"])
         self.assertIsNone(self.catalog["known_at"])
@@ -105,6 +107,11 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
             gen.replay(stochastic=True)
         with self.assertRaises(ValueError):
             gen.replay(false_positive=True)
+        cmd = [sys.executable, str(gen.ROOT / "tools/generate_acme_incidents.py"),
+               "--scenario", "CAPACITY_PRESSURE", "--stochastic"]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("requires explicit --seed", proc.stderr)
 
     def test_network_and_capacity_edges_are_from_pinned_graph(self):
         network = gen.replay("NETWORK_FAILURE")

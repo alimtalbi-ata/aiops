@@ -105,7 +105,7 @@ def load_catalog(path=CATALOG_FILE):
     if not isinstance(scenarios, list) or len(scenarios) != 10:
         raise ValueError("expected exactly ten catalog categories")
     keys = [s.get("key") for s in scenarios]
-    if len(set(keys)) != 10 or any(not isinstance(k, str) for k in keys):
+    if any(not isinstance(k, str) for k in keys) or len(set(keys)) != 10:
         raise ValueError("duplicate or invalid scenario category")
     for s in scenarios:
         if (s.get("severity_synthetic") not in ("P1", "P2", "P3", "P4") or
@@ -123,8 +123,7 @@ def load_catalog(path=CATALOG_FILE):
                               not s.get("blocker")):
             raise ValueError("unsupported category missing actionable blocker")
         allowed_ids = {"REDUNDANT_SAN_PATH_LOSS": "SCN-GOLDEN-PAYMENT-P1",
-                       "CAPACITY_PRESSURE": "SCN-STORAGE-CAPACITY-P2",
-                       "DB_LATENCY": "SCN-ORACLE-LATENCY-P1"}
+                       "CAPACITY_PRESSURE": "SCN-STORAGE-CAPACITY-P2"}
         if s.get("scenario_id") != allowed_ids.get(s["key"]):
             raise ValueError("scenario_id not registered for this catalog category")
         if s.get("maintenance_window") is not None:
@@ -295,13 +294,15 @@ def synthetic_freshness(event, max_lag_seconds=300):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scenario", default="REDUNDANT_SAN_PATH_LOSS")
-    parser.add_argument("--seed", type=int, default=20261018)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--false-positive", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
+    if args.stochastic and args.seed is None:
+        parser.error("--stochastic requires explicit --seed")
     try:
-        result = replay(args.scenario, args.seed, stochastic=args.stochastic,
+        result = replay(args.scenario, 20261018 if args.seed is None else args.seed, stochastic=args.stochastic,
                         false_positive=args.false_positive)
     except (ValueError, OSError, UnicodeError) as exc:
         parser.error(str(exc))
