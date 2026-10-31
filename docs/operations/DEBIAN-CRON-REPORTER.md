@@ -1,10 +1,10 @@
-# Debian cron read-only reporter (account: aiops)
+# Debian cron agent and service-operations policy (account: aiops)
 
 ## Design
 
 The existing Debian cron runs a fixed, local Python probe every five minutes as the unprivileged `aiops` account. It never downloads or executes commands from GitHub. It collects CPU load, memory, disk, Docker container state/image names and loopback TCP reachability for PostgreSQL, Temporal, Portal, Grafana and Prometheus. A local lock prevents overlap. Output is bounded and contains no environment variables, container environment, logs, SQL data, GLPI records, user data or credentials.
 
-A local snapshot is refreshed every five minutes. One report is published to `ops/debian-runtime-reports` every 15 minutes to avoid 288 Git commits per day. GitHub is used only as the report sink; no task queue or remote shell exists.
+A local snapshot is refreshed every five minutes. One report is published to `ops/debian-runtime-reports` every 15 minutes to avoid 288 Git commits per day. GitHub is currently used only as the report sink. The reporter remains read-only. Authorized application operations are specified separately in `config/ops/debian-service-operations-policy.yml` and `docs/operations/DEBIAN-SERVICE-OPERATIONS-POLICY.md`; they are not yet executable by this reporter.
 
 ## Prerequisites
 
