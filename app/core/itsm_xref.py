@@ -100,12 +100,16 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
             or e["glpi_ticket_readback_verified"] is not True
             or e["core_run_readback_verified"] is not True
             or not _valid(e["source_payload_hash"],_HEX) or not _signed(e,key)): return "UNKNOWN",None
+        # Verify every signed historical event, not just the terminal row.
+        # A fresh v2 must not launder a future-dated or time-reversed v1.
+        observed,known=_utc(e["observed_at"]),_utc(e["known_at"])
+        if observed is None or known is None: return "UNKNOWN",None
+        if observed>known or observed>now or known>now: return "CONFLICT",None
+        if previous is not None and known<_utc(previous["known_at"]): return "CONFLICT",None
         previous=e
     e=previous
     if e["event_type"]=="REVOKED": return "UNKNOWN",None
     observed,known=_utc(e["observed_at"]),_utc(e["known_at"])
-    if observed is None or known is None: return "UNKNOWN",None
-    if observed>known or observed>now or known>now: return "CONFLICT",None
     if now-observed>timedelta(minutes=5) or now-known>timedelta(minutes=5): return "STALE",None
     core=c.execute("select r.incident_id,i.incident_id from aiops.runs r join aiops.incidents i "
                    "on i.incident_id=r.incident_id where r.run_id=%s",(e["run_id"],)).fetchone()
