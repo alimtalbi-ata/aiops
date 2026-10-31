@@ -92,8 +92,8 @@ def query(x: Q):
     question_hash = hashlib.sha256(x.question.encode("utf-8")).hexdigest()
     event = {
         "expected_version": int(run.get("version", 0)), "stage": "LEARN",
-        "event_type": "COPILOT_ANSWER_RECORDED", "status": "RECORDED",
-        "event_key": "COPILOT:" + hashlib.sha256((x.run_id + ":" + question_hash).encode()).hexdigest(),
+        "event_type": "COPILOT_ANSWER_RECORDED", "status": "PASS",
+        "event_key": "COPILOT:" + hashlib.sha256((x.run_id + ":" + str(usage.get("invocation_id") or question_hash)).encode()).hexdigest(),
         "evidence_ids": refs, "decision": "NO_EXECUTION",
         "payload": {"answer": body, "provider": answer.get("provider"), "model": answer.get("model"),
                     "prompt_version": answer.get("prompt_version"), "model_invocation": usage,
