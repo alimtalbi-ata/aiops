@@ -249,6 +249,46 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
             gen.replay(catalog=self.catalog)["dataset_sha256"],
             "ce0aef74222699da695c2e894e622b0625c992ef654dda34a84cff26b5e64f3f")
 
+    def test_strict_golden_manifest_correlates_only_complete_pinned_replay(self):
+        manifest = gen.replay(seed=20261018)
+        grouped = gen.correlate_golden_manifest_offline(manifest)
+        self.assertEqual(grouped["event_count"], 7)
+        self.assertEqual(grouped["ci_ids"], ["ACME-SAN-FABRIC-A", "ACME-SVC-PAYMENTS"])
+        self.assertFalse(grouped["publishable"])
+        self.assertEqual(grouped["tenant_scope"], "UNKNOWN")
+        self.assertEqual(grouped["provenance"], "SYNTHETIC_FIXTURE")
+
+    def test_strict_golden_manifest_rejects_forged_links_and_rehashed_payload(self):
+        original = gen.replay()
+        mutations = (
+            ("tenant_id", lambda m: m.__setitem__("tenant_id", "UNVERIFIED-TENANT")),
+            ("incident_id", lambda m: m.__setitem__("incident_id", "UNVERIFIED-INCIDENT")),
+            ("run_id", lambda m: m.__setitem__("run_id", "UNVERIFIED-RUN")),
+            ("ticket_id", lambda m: m.__setitem__("ticket_id", "UNVERIFIED-TICKET")),
+            ("evidence_ids", lambda m: m.__setitem__("evidence_ids", ["UNVERIFIED-EVIDENCE"])),
+            ("priority", lambda m: m["itil"].__setitem__("priority_confirmed", "P1")),
+            ("observed_impact", lambda m: m["impact_estimate"].__setitem__("observed_service_impact", "HIGH")),
+            ("checkpoint", lambda m: m["checkpoints"][0].__setitem__("status", "SUCCESS")),
+            ("event_payload", lambda m: m["events"][2]["payload"].__setitem__("value", 0)),
+            ("source_event_id", lambda m: m["events"][0].__setitem__("source_event_id", "SYN-EVT-AAAAAAAAAAAAAAAAAAAA")),
+            ("maintenance", lambda m: m["events"][0].__setitem__("maintenance_window_active", True)),
+            ("ci_id", lambda m: m["events"][0].__setitem__("ci_id", "ACME-SAN-FABRIC-B")),
+            ("event_removed", lambda m: m["events"].pop()),
+        )
+        for name, mutate in mutations:
+            with self.subTest(name=name):
+                forged = copy.deepcopy(original)
+                mutate(forged)
+                # Even a matching attacker-controlled checksum is not authority.
+                unsigned = {k: v for k, v in forged.items() if k != "dataset_sha256"}
+                forged["dataset_sha256"] = hashlib.sha256(gen._canonical(unsigned)).hexdigest()
+                with self.assertRaisesRegex(ValueError, "golden replay manifest mismatch"):
+                    gen.correlate_golden_manifest_offline(forged)
+        for invalid in (None, {}, gen.replay("NETWORK_FAILURE"), {"seed": True}):
+            with self.subTest(invalid=str(type(invalid))):
+                with self.assertRaisesRegex(ValueError, "untrusted golden replay manifest"):
+                    gen.correlate_golden_manifest_offline(invalid)
+
     def test_cli_artifact_is_reproducible_and_sha_matches(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "replay.json"
