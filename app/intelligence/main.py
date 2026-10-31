@@ -440,7 +440,7 @@ def answer(x: AssistantRequest, authorization: str | None = Header(default=None)
         'If evidence is insufficient, say UNKNOWN and ask for the missing observation. Return only the requested JSON contract.'
     )
     result = call_model(system, payload, AssistantAnswer)
-    known = known_ids(x.evidence)
+    known = {str(item.get('evidence_id')) for item in x.evidence if isinstance(item, dict) and item.get('evidence_id')}
     invalid_refs = []
     for claim in result.claims:
         invalid_refs.extend(ref for ref in (claim.supporting_evidence_ids + claim.contradicting_evidence_ids) if ref not in known)
