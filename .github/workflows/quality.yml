@@ -373,7 +373,10 @@ jobs:
           assert r["temporal_signals"]==2 and r["effect_receipts"]==0
           assert r["execution_allowed"] is False and r["effect_allowed"] is False
           assert r["identity"]=="NOT_ATTESTED"
-          print("CI_HITL_OUTBOX_TEMPORAL=PASS|signals=2|effects=0")
+          assert r["ci_sink_worker_restart_inflight"]=="OBSERVED"
+          assert r["production_worker_restart_inflight"]=="NOT_TESTED"
+          assert r["temporal_server_restart_inflight"]=="NOT_TESTED"
+          print("CI_HITL_OUTBOX_TEMPORAL=PASS|signals=2|effects=0|sink_worker_replay=OBSERVED")
           PY
       - name: Upload disposable HITL outbox to Temporal qualification
         if: always()
