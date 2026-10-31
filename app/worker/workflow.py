@@ -87,7 +87,8 @@ class IncidentWorkflow:
             version = receipt["version"]
             # A PASS is only a no-effect stage receipt when both fences are
             # explicit. Missing flags are not equivalent to False.
-            if receipt.get("status") == "PASS" and (
+            # HITL has its own stricter synthetic/proposal-specific fence.
+            if stage != "HITL" and receipt.get("status") == "PASS" and (
                 receipt.get("execution_allowed") is not False
                 or receipt.get("effect_allowed") is not False
             ):
