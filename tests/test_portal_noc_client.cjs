@@ -104,6 +104,66 @@ test("RAG rejects forged 200 runtime-attested data", async () => {
   assert.doesNotMatch(elements["noc-rag-result"].textContent, /CONNECTED|SECRET/);
 });
 
+// A late response from an older click must never replace a newer refusal.
+for (const [handler, , resultId] of routes) {
+  test(handler + " ignores stale HTTP 200 after a newer HTTP 403", async () => {
+    let release;
+    const delayedJson = new Promise(resolve => { release = resolve; });
+    let calls = 0;
+    const { handlers, elements } = makeNocHandlers(async () => {
+      if (++calls === 1) return { ok: true, status: 200, json: () => delayedJson };
+      return { ok: false, status: 403, json: async () => ({ reason: "forbidden" }) };
+    });
+    const first = handlers[handler]();
+    elements["noc-token"].value = "second-operator-token";
+    await handlers[handler]();
+    assert.equal(calls, 2);
+    assert.match(elements[resultId].textContent, /HTTP 403/);
+    release(handler === "demoRag"
+      ? { state: "SYNTHETIC_REFERENCE_ONLY",
+          data_classification: "SYNTHETIC_SIMULATION_ONLY",
+          tenant_acl_qualified: false, source_runtime_observed: false,
+          runtime_authenticated: false, live_remediation_authorized: false,
+          citations: [{ doc_id: "STALE_PRIVATE_CITATION" }] }
+      : { state: "CONNECTED", tenant_acl_qualified: true, ticket_id: "STALE_PRIVATE_TICKET" });
+    await first;
+    assert.match(elements[resultId].textContent, /HTTP 403/);
+    assert.doesNotMatch(elements[resultId].textContent, /STALE_PRIVATE|CONNECTED|SYNTHETIC —/);
+  });
+
+  test(handler + " ignores stale network errors after a newer refusal", async () => {
+    let rejectOld;
+    const pending = new Promise((_, reject) => { rejectOld = reject; });
+    let calls = 0;
+    const { handlers, elements } = makeNocHandlers(async () => {
+      if (++calls === 1) return pending;
+      return { ok: false, status: 401, json: async () => ({ reason: "unauthorized" }) };
+    });
+    const first = handlers[handler]();
+    elements["noc-token"].value = "second-operator-token";
+    await handlers[handler]();
+    rejectOld(Error("STALE_PRIVATE_UPSTREAM"));
+    await first;
+    assert.match(elements[resultId].textContent, /HTTP 401/);
+    assert.doesNotMatch(elements[resultId].textContent, /STALE_PRIVATE|indisponible/);
+  });
+}
+
+test("a missing token on the latest click invalidates an in-flight NOC response", async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const { handlers, elements } = makeNocHandlers(async () => ({
+    ok: true, status: 200, json: () => pending
+  }));
+  const first = handlers.correlateNoc();
+  elements["noc-token"].value = "";
+  await handlers.correlateNoc();
+  release({ state: "CONNECTED", tenant_acl_qualified: true, ticket_id: "STALE_PRIVATE" });
+  await first;
+  assert.match(elements["noc-result"].textContent, /jeton opérateur requis/);
+  assert.doesNotMatch(elements["noc-result"].textContent, /CONNECTED|STALE_PRIVATE/);
+});
+
 test("missing token never triggers NOC request", async () => {
   const { handlers, elements } = makeNocHandlers(async () => {
     throw Error("unexpected upstream");
