@@ -47,7 +47,7 @@ dt{font-weight:700}dd{margin:0;color:#b5c9d7}
 <p role="note" data-story-provenance="SYNTHETIC">ACME P1 SAN→Payments —
 <strong>SYNTHETIC</strong> uniquement. Aucun ticket, CI, impact ou Run réel attesté.</p>
 <p role="status" class="status">UNKNOWN — ACL acteur+tenant non qualifiée.
-Aucune lecture GLPI/Core, aucun état CONNECTED.</p>
+Aucune lecture GLPI/Core. Connecteur ticket↔Run : NOT_INSTALLED ; jamais CONNECTED.</p>
 <p>GLPI reste le système de référence pour tickets, CMDB, profils et actions.
 Ce Portal ne remplace ni les pages natives ni leurs contrôles de permission.</p>
 <section class="panel" aria-labelledby="ticket"><h2 id="ticket">Fiche ticket enrichie — non chargée</h2>
@@ -77,7 +77,7 @@ templates et pages natives GLPI n'ont pas été inspectés sur une instance auto
 </section>
 <section class="panel" aria-labelledby="source"><h2 id="source">Source et fraîcheur</h2>
 <p>Source API : UNKNOWN / non autorisée. Observé à : UNKNOWN.
-Fraîcheur : UNKNOWN. Contrat Core ticket↔Run : non intégré dans ce Portal.</p>
+Fraîcheur : UNKNOWN. Contrat Core ticket↔Run : NOT_INSTALLED dans ce Portal.</p>
 <p>Le lien GLPI natif éventuel se consulte dans les intégrations configurées
 après authentification; sa présence ne prouve pas la disponibilité du service.</p>
 </section></main></body></html>"""
@@ -108,7 +108,7 @@ def glpi_readonly_status(authorization: str | None = Header(default=None)):
         "schema": "aiops.portal.glpi-handoff.v1",
         "state": "UNKNOWN",
         "reason": "TENANT_ACL_NOT_QUALIFIED",
-        "connection_state": "UNKNOWN",
+        "connection_state": "NOT_INSTALLED",
         "source": "NO_AUTHORIZED_GLPI_TICKET_RUN_READ",
         "source_freshness": "UNKNOWN",
         "tenant_acl_qualified": False,
