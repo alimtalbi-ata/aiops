@@ -791,20 +791,19 @@ class DemoV2Tests(unittest.TestCase):
     def test_cockpit_refuses_foreign_detail_and_missing_provenance(self):
         from fastapi.testclient import TestClient
         from portal import main as portal_main
-        listed={"run_id":"RUN-ACME","mode":"REPLAY","status":"RESOLVED"}
-        def source(path,base=None):
-            if path=="/api/runs/RUN-ACME":
-                return {"run":{"run_id":"RUN-OTHER","mode":"REPLAY"}}
-            return {}
-        with (patch.object(portal_main,"_get",side_effect=source),
-              patch.object(portal_main,"_runs",return_value=[listed]),
-              patch.object(portal_main,"post_json",
-                           side_effect=AssertionError("read-only"))):
-            response=TestClient(portal_main.app).get("/")
-        self.assertEqual(response.status_code,200)
-        self.assertIn("Run Core sélectionné — UNKNOWN",response.text)
-        self.assertNotIn('href="/demo-studio/run/RUN-ACME"',response.text)
-        self.assertNotIn("provenance déclarée par Core",response.text)
+        with (patch.object(portal_main, "_get",
+                           side_effect=AssertionError("public shell must not read Core")),
+              patch.object(portal_main, "_runs",
+                           side_effect=AssertionError("public shell must not enumerate runs")),
+              patch.object(portal_main, "post_json",
+                           side_effect=AssertionError("public shell is read-only"))):
+            response = TestClient(portal_main.app).get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Sources du cockpit", response.text)
+        self.assertIn("UNKNOWN", response.text)
+        self.assertNotIn("RUN-ACME", response.text)
+        self.assertNotIn('href="/demo-studio/run/RUN-ACME"', response.text)
+        self.assertNotIn("provenance déclarée par Core", response.text)
 
     def test_cockpit_source_errors_and_malformed_run_rows_fail_closed(self):
         from fastapi.testclient import TestClient
