@@ -233,19 +233,10 @@ def _read(rid: str, authorization: str | None) -> tuple[int, dict]:
                                  "reason": exc.detail}
     if not _valid_run_id(rid):
         return 422, {"state": "UNKNOWN", "reason": "INVALID_RUN_ID"}
-    try:
-        # The internal bearer is service authentication, not actor/tenant ACL.
-        # Preserve upstream 401/403, but fail closed even on valid Core identity.
-        return 503, _project(rid, _read_core_run(rid))
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
-            return exc.code, {"state": "UNAUTHORIZED", "reason": "CORE_READ_DENIED"}
-        return 503, _unqualified_run()
-    except (OSError, TimeoutError):
-        return 503, _unqualified_run()
-    except Exception:
-        # Includes malformed collections, foreign IDs, tenant claims and bad Core config.
-        return 503, _unqualified_run()
+    # The shared viewer bearer is authentication, never actor/tenant authority.
+    # No server-derived exact-Run ACL exists: do not fetch Core even to check
+    # whether this Run exists. A constant response avoids presence/timing oracles.
+    return 503, _unqualified_run()
 
 
 @router.get("/api/portal/runs/{rid}", name="portal_read_only_run_detail")
