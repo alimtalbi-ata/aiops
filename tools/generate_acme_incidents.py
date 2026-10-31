@@ -393,6 +393,7 @@ def storyboard_offline(manifest, *, false_positive=False):
         "evidence_ids": [], "service_id": service_id, "ci_id": manifest["ci_id"],
         "correlation_key": correlated["correlation_key"],
         "correlation_status": "OFFLINE_SYNTHETIC_ONLY",
+        "twin_service_context": twin_service_context_offline(manifest),
         "dependency_path": {
             "node_ids": list(impact["path_node_ids"]),
             "edge_ids": list(impact["path_edge_ids"]),
@@ -431,6 +432,77 @@ def storyboard_offline(manifest, *, false_positive=False):
             for checkpoint in manifest["checkpoints"]
         ],
         "recovery_verified": False,
+    }
+
+
+def twin_service_context_offline(manifest):
+    """Sourced Twin-only context; no invented owner, SLA, change or DC identity.
+
+    The pinned 005 SQL proves only synthetic node site/criticality and edges.
+    The replay must first pass the full strict manifest check. The returned
+    metadata is an offline *candidate* projection, never runtime evidence.
+    """
+    correlate_catalog_manifest_offline(manifest)
+    graph = load_graph()
+    raw = SEED_FILE.read_bytes()
+    if _git_blob(raw) != SEED_GIT_BLOB:
+        raise ValueError("untrusted Twin node provenance")
+    node_pattern = re.compile(
+        r"^\\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','([^']+)','[^']+',([1-5]),",
+        re.M,
+    )
+    rows = node_pattern.findall(raw.decode("utf-8"))
+    details = {ci: {"type": kind, "site": site, "criticality": int(criticality)}
+               for ci, kind, site, criticality in rows}
+    if (len(rows) != len(graph["nodes"]) or len(details) != len(graph["nodes"]) or
+            any(ci not in details or details[ci]["type"] != node["type"] or
+                details[ci]["criticality"] != node["criticality"]
+                for ci, node in graph["nodes"].items())):
+        raise ValueError("ambiguous pinned Twin node metadata")
+    impact = manifest["impact_estimate"]
+    path_nodes = impact["path_node_ids"]
+    service = manifest["service_id"]
+    if (service not in details or details[service]["type"] != "SERVICE" or
+            not path_nodes or path_nodes[-1] != service):
+        raise ValueError("untrusted Twin service path")
+    path_sites = {ci: details[ci]["site"] for ci in path_nodes}
+    sites = set(path_sites.values())
+    return {
+        "source": "db/migrations/005_seed_acme.sql",
+        "source_git_blob": SEED_GIT_BLOB,
+        "provenance": "SYNTHETIC_FIXTURE",
+        "freshness": "PINNED_FIXTURE_NOT_LIVE",
+        "tenant_scope": "UNKNOWN",
+        "site": next(iter(sites)) if len(sites) == 1 else "UNKNOWN",
+        "site_by_path_ci_id": path_sites,
+        "datacenter_id": "UNKNOWN",
+        "datacenter_relation": "UNKNOWN",
+        "service_id": service,
+        "service_criticality_synthetic_1_to_5": details[service]["criticality"],
+        "service_owner_id": "UNKNOWN",
+        "service_team_id": "UNKNOWN",
+        "sla_id": "UNKNOWN",
+        "ola_id": "UNKNOWN",
+        "change_id": "UNKNOWN",
+        "change_lookup": ("PLANNED_NOT_EXECUTED" if any(
+            e["action"] == "CHANGE_LOOKUP" for e in manifest["events"])
+            else "NOT_PRESENT_IN_SCENARIO"),
+        "maintenance_window_synthetic": manifest["maintenance_window"],
+        "maintenance_actual": "UNKNOWN",
+        "dependency_direction": impact["direction"],
+        "dependency_path_node_ids": list(path_nodes),
+        "dependency_path_edge_ids": list(impact["path_edge_ids"]),
+        "blast_radius_candidate_ci_count": impact["candidate_ci_count"],
+        "blast_radius_candidate_service_ids": list(impact["candidate_service_ids"]),
+        "blast_radius_observed": "UNKNOWN",
+        "causality_verified": False,
+        "redundancy_evaluated": False,
+        "impact_estimated": impact["estimated_impact_level"],
+        "impact_observed": "UNKNOWN",
+        "itil_priority_candidate": manifest["itil"]["priority_candidate"],
+        "itil_priority_confirmed": "UNKNOWN",
+        "urgency_synthetic": manifest["itil"]["urgency_input"],
+        "runtime_readback": "NOT_EXECUTED",
     }
 
 
