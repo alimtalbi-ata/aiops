@@ -167,6 +167,40 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
         self.assertEqual(digest, hashlib.sha256(new["lease_token"].encode()).hexdigest())
         self.no_effect(proposal)
 
+    def test_concurrent_expired_lease_takeover_fences_stale_ack(self):
+        """Two fresh claimers race a lost ACK; only the new lease may ACK."""
+        event, proposal = fixture()
+        old = claim("ci-lost-ack-original")[0]
+        with db() as c:
+            c.execute("update aiops.hitl_decision_outbox "
+                      "set lease_until=now()-interval '1 second' where event_id=%s",
+                      (event,))
+        barrier = threading.Barrier(2)
+        def contender(n):
+            barrier.wait(timeout=10)
+            return claim("ci-takeover-" + str(n))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(contender, n) for n in (1, 2)]
+            winners = [item for future in futures
+                       for item in future.result(timeout=15)]
+        self.assertEqual(len(winners), 1)
+        new = winners[0]
+        self.assertEqual((new["event_id"], new["attempts"]), (event, 2))
+        self.assertNotEqual(old["lease_token"], new["lease_token"])
+        with self.assertRaises(HTTPException) as stale:
+            ack(event, old["lease_token"])
+        self.assertEqual(stale.exception.status_code, 409)
+        self.assertFalse(ack(event, new["lease_token"])["idempotent"])
+        self.assertTrue(ack(event, new["lease_token"])["idempotent"])
+        self.assertEqual(claim("ci-after-takeover"), [])
+        with db() as c:
+            state = c.execute("select status,attempts,lease_token from "
+                              "aiops.hitl_decision_outbox where event_id=%s",
+                              (event,)).fetchone()
+        self.assertEqual(state, ("DELIVERED", 2,
+                         hashlib.sha256(new["lease_token"].encode()).hexdigest()))
+        self.no_effect(proposal)
+
     def test_retry_dead_letter(self):
         event, proposal = fixture()
         with db() as c:
