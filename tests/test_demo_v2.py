@@ -814,29 +814,23 @@ class DemoV2Tests(unittest.TestCase):
         self.assertEqual(portal_main._source_state(
             {"nodes":True,"edges":1},"summary"),"UNKNOWN")
         def source(path,base=None):
-            if path=="/api/dashboard":
-                return {"status":"UNKNOWN","error_type":"HTTPStatusError",
-                        "http_status":401}
-            if path=="/api/twin/summary":
-                return {"status":"UNKNOWN","error_type":"ConnectionError"}
             if path=="/api/runs":
-                return {"items":[None,42,"bad",
-                                 {"run_id":"RUN-LIVE","mode":"LIVE"}]}
+                return {"items":[None,42,"bad",{"run_id":"RUN-LIVE","mode":"LIVE"}]}
             return {}
-        with (patch.object(portal_main,"_get",side_effect=source),
-              patch.object(portal_main,"post_json",
-                           side_effect=AssertionError("read-only"))):
+        with patch.object(portal_main,"_get",side_effect=source):
             self.assertEqual(len(portal_main._runs()),1)
-            client=TestClient(portal_main.app)
-            home=client.get("/")
-            policy=client.get("/policy")
+        with (patch.object(portal_main,"_get",
+                           side_effect=AssertionError("public shell must not call unscoped APIs")),
+              patch.object(portal_main,"_runs",
+                           side_effect=AssertionError("public shell must not enumerate runs")),
+              patch.object(portal_main,"post_json",
+                           side_effect=AssertionError("public shell is read-only"))):
+            home=TestClient(portal_main.app).get("/")
         self.assertEqual(home.status_code,200)
-        self.assertEqual(policy.status_code,200)
-        self.assertIn("UNAUTHORIZED",home.text)
-        self.assertIn("UNAVAILABLE",home.text)
-        self.assertIn("Run Core sélectionné — UNKNOWN",home.text)
-        self.assertNotIn('href="/demo-studio/run/RUN-LIVE"',home.text)
-
+        self.assertIn("Sources du cockpit",home.text)
+        self.assertIn("UNKNOWN",home.text)
+        self.assertNotIn("UNAUTHORIZED",home.text)
+        self.assertNotIn("RUN-LIVE",home.text)
 
     def test_demo_studio_skips_foreign_detail_and_selects_next_verified_run(self):
         from fastapi.testclient import TestClient
