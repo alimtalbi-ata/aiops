@@ -67,7 +67,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertIn("NOT_INSTALLED", page)
 
     def test_operator_queue_is_semantic_and_never_invents_tickets_or_sla(self):
-        with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \\
+        with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \
              patch.object(main, "post_json", side_effect=AssertionError("GLPI write")) as write:
             page = self.client.get("/itsm")
         self.assertEqual(page.status_code, 200)
