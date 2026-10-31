@@ -64,23 +64,64 @@ def docker_inventory() -> dict:
     if not names["available"] or names["returncode"] != 0:
         return {"available": False, "reason": names.get("reason", "docker_unavailable")}
     containers = []
-    for name in names["stdout"].splitlines()[:80]:
-        if not name or any(c in name for c in "\r\n\x00"):
+    all_names = names["stdout"].splitlines()
+    for name in all_names[:100]:
+        if not name or any(ch in name for ch in "\\r\\n\\x00"):
             continue
         inspected = fixed_command([
             "docker", "inspect", "--format",
-            "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}|{{.Config.Image}}",
+            "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}|{{.Config.Image}}|{{index .Config.Labels \"com.docker.compose.project\"}}|{{index .Config.Labels \"com.docker.compose.service\"}}|{{.RestartCount}}|{{.State.ExitCode}}|{{range $n,$v := .NetworkSettings.Networks}}{{$n}},{{end}}|{{range $p,$b := .NetworkSettings.Ports}}{{$p}}={{range $b}}{{.HostIp}}:{{.HostPort}},{{end}};{{end}}",
             name,
         ])
-        fields = inspected["stdout"].split("|", 2)
+        fields = inspected["stdout"].split("|", 8)
+        networks = [x for x in fields[7].split(",") if x][:20] if len(fields) > 7 else []
+        published = []
+        if len(fields) > 8:
+            for entry in fields[8].split(";")[:30]:
+                if "=" in entry:
+                    container_port, host_values = entry.split("=", 1)
+                    for binding in host_values.split(",")[:5]:
+                        if binding and ":" in binding:
+                            host_ip, host_port = binding.rsplit(":", 1)
+                            published.append({"container_port": container_port[:32],
+                                              "host_ip": host_ip[:64], "host_port": host_port[:8]})
         containers.append({
             "name": name[:128],
             "state": fields[0][:32] if len(fields) > 0 else "unknown",
             "health": fields[1][:32] if len(fields) > 1 else "unknown",
             "image": fields[2][:160] if len(fields) > 2 else "unknown",
+            "compose_project": fields[3][:96] if len(fields) > 3 and fields[3] != "<no value>" else None,
+            "compose_service": fields[4][:96] if len(fields) > 4 and fields[4] != "<no value>" else None,
+            "restart_count": int(fields[5]) if len(fields) > 5 and fields[5].isdigit() else None,
+            "exit_code": int(fields[6]) if len(fields) > 6 and fields[6].lstrip("-").isdigit() else None,
+            "networks": networks,
+            "published_ports": published,
             "inspect_ok": inspected.get("returncode") == 0,
         })
-    return {"available": True, "containers": containers, "truncated": len(names["stdout"].splitlines()) > 80}
+    network_result = fixed_command(["docker", "network", "ls", "--format", "{{.Name}}|{{.Driver}}|{{.Scope}}"])
+    networks = []
+    if network_result.get("available") and network_result.get("returncode") == 0:
+        for line in network_result["stdout"].splitlines()[:60]:
+            fields = line.split("|", 2)
+            if len(fields) == 3:
+                networks.append({"name": fields[0][:128], "driver": fields[1][:32], "scope": fields[2][:32]})
+    stats_result = fixed_command([
+        "docker", "stats", "--no-stream", "--format",
+        "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}",
+    ], timeout=12)
+    stats = []
+    if stats_result.get("available") and stats_result.get("returncode") == 0:
+        for line in stats_result["stdout"].splitlines()[:100]:
+            fields = line.split("|", 3)
+            if len(fields) == 4:
+                stats.append({"name": fields[0][:128], "cpu_percent": fields[1][:24],
+                              "memory_usage": fields[2][:64], "memory_percent": fields[3][:24]})
+    return {
+        "available": True, "containers": containers,
+        "truncated": len(all_names) > 100,
+        "networks": networks, "networks_truncated": len(network_result.get("stdout", "").splitlines()) > 60,
+        "resource_usage": stats, "resource_usage_available": stats_result.get("returncode") == 0,
+    }
 
 
 def tcp_probe(port: int, host: str = "127.0.0.1") -> dict:
@@ -107,7 +148,7 @@ def collect() -> dict:
     except OSError:
         pass
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "collected_at": now.isoformat(),
         "agent": {"name": "aiops-debian-readonly", "version": "1.0.0"},
         "host": {"reported_name": os.environ.get("AIOPS_AGENT_HOST_LABEL", "SRV-DEB-05"),
