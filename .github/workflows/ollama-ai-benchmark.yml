@@ -1,0 +1,150 @@
+name: AIOps real local-model benchmark (Ollama CPU)
+
+on:
+  push:
+    branches:
+      - feat/ai-benchmark-telemetry-20261030
+    paths:
+      - ".github/workflows/ollama-ai-benchmark.yml"
+      - ".github/compose.ollama-benchmark.yml"
+      - "tools/summarize_ai_benchmark.py"
+      - "tests/test_ai_benchmark_summary.py"
+      - "app/intelligence/**"
+      - "tools/evaluate_ai_core.py"
+      - "eval/ai-core-cases.json"
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: "Repeated evaluations per model (1, 3 or 5)"
+        type: choice
+        options: ["1", "3", "5"]
+        default: "1"
+        required: true
+  workflow_call:
+    inputs:
+      repeats:
+        description: "Repeated evaluations per model"
+        type: string
+        default: "1"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  ollama-benchmark:
+    name: "Ollama CPU — ${{ matrix.model }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ["qwen3:1.7b", "qwen3:4b"]
+    env:
+      COMPOSE_FILE: compose.yml:.github/compose.ollama-benchmark.yml
+      AIOPS_BENCHMARK_MODEL: ${{ matrix.model }}
+      LLM_API_KEY: ""
+      AIOPS_BENCHMARK_TIMEOUT_SECONDS: "300"
+      AIOPS_EVALUATOR_TIMEOUT_SECONDS: "330"
+      AIOPS_BENCHMARK_MAX_OUTPUT_TOKENS: "2048"
+      AIOPS_BENCHMARK_MAX_REQUEST_BYTES: "65536"
+      AIOPS_EVAL_UID: "1001"
+      AIOPS_EVAL_GID: "1001"
+      REPEATS: ${{ inputs.repeats || '1' }}
+    steps:
+      - name: Checkout exact benchmark source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Normalize artifact-safe model identifier
+        id: model
+        run: echo "safe=${AIOPS_BENCHMARK_MODEL//:/-}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare isolated AIOps environment
+        run: |
+          set -Eeuo pipefail
+          bash deploy/init-env.sh
+          mkdir -p reports
+          docker compose config --quiet
+
+      - name: Start isolated Ollama service and pull the selected model
+        run: |
+          set -Eeuo pipefail
+          docker compose up -d --wait --wait-timeout 300 aiops2-ollama
+          docker compose exec -T aiops2-ollama ollama --version
+          docker compose exec -T aiops2-ollama ollama pull "$AIOPS_BENCHMARK_MODEL"
+          docker compose exec -T aiops2-ollama ollama show "$AIOPS_BENCHMARK_MODEL"
+
+      - name: Start Core and real-model Intelligence service
+        run: |
+          set -Eeuo pipefail
+          docker compose up -d --build --wait --wait-timeout 300 aiops2-core aiops2-intelligence
+          bash deploy/migrate.sh
+          docker compose exec -T aiops2-intelligence python -c "import urllib.request; urllib.request.urlopen('http://aiops2-ollama:11434/api/tags', timeout=10)"
+          docker compose ps
+
+      - name: Run repeated evidence-grounded Analyst/Critic evaluations
+        run: |
+          set -Eeuo pipefail
+          model_safe="${AIOPS_BENCHMARK_MODEL//:/-}"
+          for repeat in $(seq 1 "$REPEATS"); do
+            report="/reports/${model_safe}-repeat-${repeat}.json"
+            set +e
+            docker compose --profile qualification run --rm \
+              -e "AIOPS_EVAL_REPORT=${report}" \
+              aiops2-model-evaluator
+            rc=$?
+            set -e
+            printf '%s|repeat=%s|evaluator_exit=%s\n' "$AIOPS_BENCHMARK_MODEL" "$repeat" "$rc" \
+              | tee -a reports/experiment-exit-codes.txt
+            test -s "reports/${model_safe}-repeat-${repeat}.json"
+          done
+
+      - name: Capture bounded Intelligence diagnostics
+        if: always()
+        run: docker compose logs --no-color --tail=160 aiops2-intelligence || true
+
+      - name: Aggregate comparable runs without estimating tokens or cost
+        if: always()
+        run: |
+          if compgen -G 'reports/*-repeat-*.json' >/dev/null; then
+            python tools/summarize_ai_benchmark.py --reports-dir reports
+            cat reports/ai-benchmark-summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No benchmark report generated." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Upload model benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops-ollama-benchmark-${{ steps.model.outputs.safe }}-${{ github.run_id }}
+          path: |
+            reports/*-repeat-*.json
+            reports/ai-benchmark-summary.json
+            reports/ai-benchmark-summary.md
+            reports/experiment-exit-codes.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail benchmark job when any evaluator repeat fails
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          test -s reports/experiment-exit-codes.txt
+          expected="$REPEATS"
+          actual="$(grep -c 'evaluator_exit=' reports/experiment-exit-codes.txt)"
+          test "$actual" -eq "$expected"
+          if grep -Ev 'evaluator_exit=0$' reports/experiment-exit-codes.txt; then
+            echo "One or more real-model evaluations failed; inspect the uploaded report and diagnostics."
+            exit 1
+          fi
+      - name: Tear down isolated benchmark environment
+        if: always()
+        run: docker compose down -v --remove-orphans || true
