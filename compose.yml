@@ -85,6 +85,7 @@ services:
     container_name: ${AIOPS_STACK_ID:-aiops2}-intelligence
     restart: unless-stopped
     environment:
+      LLM_PROVIDER_NAME: ${LLM_PROVIDER_NAME:-openai-compatible}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
@@ -94,6 +95,8 @@ services:
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
       AIOPS_EVIDENCE_MAX_AGE_SECONDS: ${AIOPS_EVIDENCE_MAX_AGE_SECONDS:-900}
     expose: ["817"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks: [aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:817/health')"], interval: 5s, timeout: 3s, retries: 20}
 
