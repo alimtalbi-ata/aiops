@@ -108,6 +108,20 @@ class DemoOperatorBoundaryTests(unittest.TestCase):
         for call in upstream.call_args_list:
             self.assertEqual(call.kwargs["token"], INTERNAL)
 
+    def test_demo_routes_are_disabled_outside_explicit_demo_environment(self):
+        with patch.dict(os.environ, {"AIOPS_DEMO_MODE":"0"}), patch.object(
+                main, "post_json", side_effect=AssertionError("Core write")) as post, patch.object(
+                main, "_get", side_effect=AssertionError("unscoped Core read")) as get:
+            launch=self.post(OPERATOR)
+            studio=self.client.get("/demo-studio")
+            status=self.client.get("/api/demo-status/RUN-DEMO-123456")
+        self.assertEqual(launch.status_code,503)
+        self.assertEqual(launch.json()["reason"],"SYNTHETIC_DEMO_LAUNCH_DISABLED")
+        self.assertEqual(studio.status_code,503)
+        self.assertEqual(status.status_code,503)
+        post.assert_not_called()
+        get.assert_not_called()
+
     def test_forged_actor_tenant_role_and_run_payload_is_rejected(self):
         headers = {"Authorization": "Bearer " + OPERATOR, "X-Actor-ID": "admin",
                    "X-Tenant-ID": "other-tenant", "X-GLPI-Profile": "manager",
