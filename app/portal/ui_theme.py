@@ -49,6 +49,7 @@ NAV = [
     ("/evidence", "Preuves"),
     ("/policy", "Policy / HITL"),
     ("/copilot", "Copilot"),
+    ("/itsm", "GLPI / ITSM"),
     ("/qualification", "Qualification"),
     ("/demo-studio", "Demo Studio"),
 ]
