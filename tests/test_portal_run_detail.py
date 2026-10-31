@@ -480,6 +480,35 @@ class RunDetailTests(unittest.TestCase):
                       response.headers["content-security-policy"])
         self.assertNotIn("unqualified Core payload", response.text)
 
+    def test_bootstrap_shared_bearer_never_reads_unscoped_core_twin(self):
+        # A valid shared token is service/viewer authentication, not tenant ACL.
+        with patch.object(main, "read_portal_snapshot",
+                          side_effect=AssertionError("unscoped read forbidden")) as read:
+            response = self.client.get("/api/portal/bootstrap", headers={
+                "Authorization": "Bearer " + TOKEN})
+        read.assert_not_called()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(response.json()["source_freshness"], "UNKNOWN")
+        for key in ("runs", "dashboard", "twin", "incident_id", "run_id"):
+            self.assertNotIn(key, response.json())
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+
+    def test_bootstrap_auth_refusals_precede_any_unscoped_read(self):
+        with patch.object(main, "read_portal_snapshot",
+                          side_effect=AssertionError("unscoped read forbidden")) as read:
+            for headers in ({}, {"Authorization": "Bearer wrong"}):
+                response = self.client.get("/api/portal/bootstrap", headers=headers)
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+            with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}):
+                response = self.client.get("/api/portal/bootstrap", headers={
+                    "Authorization": "Bearer " + TOKEN})
+                self.assertEqual(response.status_code, 503)
+            read.assert_not_called()
+
     def test_no_new_write_endpoint(self):
         self.assertEqual(self.client.post("/api/portal/runs/" + RID).status_code, 405)
         self.assertEqual(self.client.post("/runs/" + RID).status_code, 405)
