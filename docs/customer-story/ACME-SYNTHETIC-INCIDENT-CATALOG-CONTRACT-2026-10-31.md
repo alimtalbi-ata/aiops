@@ -85,6 +85,8 @@ From repository root, without any service or credentials:
 
 The Quality workflow runs the new isolated tests and uploads an **offline-only** replay JSON with SHA256, not a Core Evidence artifact. dataset_sha256 hashes the canonical JSON payload without its own checksum field. Identical seed + graph + catalog produces byte-identical replay.
 
+Replay export safety: the CLI refuses `--output` destinations inside the source checkout (including path aliases), symlinks, and existing hardlinks, so a replay cannot silently overwrite the pinned SQL/catalog or tracked story. Export to an external temporary path such as `$RUNNER_TEMP/acme-synthetic-replay.json` or `/tmp/acme-synthetic-replay.json`; existing regular external replay files can still be overwritten for byte-identical repeatability. This is a local file-safety guard, not a runtime identity or evidence attestation.
+
 ## Blockers / owner handoff
 
 3/5 and 5/5 must qualify, on **disposable** PostgreSQL/GLPI/Core/Temporal/Evidence only: authoritative tenant/actor binding, GLPI readback, exact Incident↔Run↔Evidence links, source/observed_at/known_at/freshness, idempotent ticket/incident creation, dedup, cascade, tenant isolation, independent verification and resolution/reopen. Current results qualify **T0 offline fixture contracts only**, not T1/T2 E2E, Debian, production or LIVE. RELEASE_STABLE=NO_GO.
