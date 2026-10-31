@@ -310,28 +310,25 @@ def _noc_json_response(content: dict, *, status_code: int = 200) -> JSONResponse
             "Pragma": "no-cache",
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+            "X-Frame-Options": "DENY",
         },
     )
 
 
 @router.get("/api/noc/runtime-state", name="authenticated_noc_runtime_read_model")
 def noc_runtime_state(authorization: str | None = Header(default=None)):
-    """Return a signed, bounded NOC projection through the existing portal only."""
+    """A shared viewer token cannot authorize tenant-scoped NOC identities."""
     try:
         _require_portal_read_auth(authorization)
     except HTTPException as exc:
-        # Authentication/configuration failures must not be cached by browsers
-        # or intermediary proxies, and must not reach the upstream.
         return _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
-    try:
-        payload = read_signed_noc_snapshot()
-    except NocSourceNotConfigured:
-        return _noc_json_response(
-            {"detail": "noc_source_not_configured"}, status_code=503
-        )
-    except Exception:
-        # Do not leak URLs, upstream bodies, credentials, or parser exceptions.
-        return _noc_json_response(
-            {"detail": "noc_source_unavailable_or_unverified"}, status_code=503
-        )
-    return _noc_json_response(payload)
+    # HMAC authenticates source bytes, not the browser actor's tenant/run ACL.
+    # Do not fetch signed NOC data until a server-derived ACL exists.
+    return _noc_json_response({
+        "state": "UNKNOWN",
+        "reason": "TENANT_ACL_NOT_QUALIFIED",
+        "connection_state": "UNKNOWN",
+        "source": "NOC_RUNTIME_NOT_TENANT_AUTHORIZED",
+        "source_freshness": "UNKNOWN",
+    }, status_code=503)
