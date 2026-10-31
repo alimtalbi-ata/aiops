@@ -444,6 +444,30 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                                         e["freshness"] == "SYNTHETIC_CLOCK_ONLY"
                                         for e in events))
 
+    def test_cli_cannot_overwrite_source_fixture_or_file_alias(self):
+        """Replay export must not mutate the pinned SQL/catalog or repository docs."""
+        original = {path: hashlib.sha256(path.read_bytes()).hexdigest()
+                    for path in (gen.SEED_FILE, gen.CATALOG_FILE)}
+        with tempfile.TemporaryDirectory() as d:
+            alias = Path(d) / "seed-symlink.json"
+            alias.symlink_to(gen.SEED_FILE)
+            hardlink = Path(d) / "seed-hardlink.json"
+            hardlink.hardlink_to(gen.SEED_FILE)
+            targets = (gen.SEED_FILE, gen.CATALOG_FILE,
+                       gen.ROOT / "docs/customer-story/ACME-SYNTHETIC-INCIDENT-CATALOG-CONTRACT-2026-10-31.md",
+                       alias, hardlink)
+            for target in targets:
+                with self.subTest(target=str(target)):
+                    result = subprocess.run(
+                        [sys.executable, str(gen.ROOT / "tools/generate_acme_incidents.py"),
+                         "--scenario", "REDUNDANT_SAN_PATH_LOSS", "--seed", "20261018",
+                         "--output", str(target)],
+                        capture_output=True, text=True, check=False)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("refusing", result.stderr)
+        for path, digest in original.items():
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), digest)
+
     def test_cli_artifact_is_reproducible_and_sha_matches(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "replay.json"
