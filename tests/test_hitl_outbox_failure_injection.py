@@ -1,6 +1,7 @@
 """Offline outbox lease/ack and synthetic-approval fault injection for #194."""
 import ast
 import datetime
+import hashlib
 import hmac
 import pathlib
 import unittest
@@ -11,13 +12,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 class DB:
     def __init__(self, row=None):
-        self.row, self.queries = row, []
+        self.row, self.queries, self.params = row, [], []
     def __enter__(self):
         return self
     def __exit__(self, *args):
         return False
     def execute(self, sql, params=()):
         self.queries.append(sql)
+        self.params.append(params)
         return self
     def fetchone(self):
         return self.row
@@ -32,7 +34,8 @@ def core(name, db, **extra):
     node.decorator_list = []
     env = dict(Header=lambda default=None: default, HTTPException=HTTPException,
                db=lambda: db, auth=lambda token: None,
-               bearer=lambda value: value, hmac=hmac, datetime=datetime)
+               bearer=lambda value: value, hmac=hmac, hashlib=hashlib,
+               datetime=datetime)
     env.update(extra)
     exec(compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])),
                  path, "exec"), env)
@@ -96,9 +99,11 @@ class OutboxFaultTests(unittest.TestCase):
         self.assertFalse(first_receipt["idempotent"])
         updates = [sql for sql in first_db.queries if "set status='DELIVERED'" in sql]
         self.assertEqual(len(updates), 1)
-        # Preserve the original lease token as an idempotency fence after ACK.
-        self.assertNotIn("lease_token=null", updates[0])
-        retry_db = DB(("DELIVERED", "lease", None))
+        # Retain only a digest of the original token for idempotent replay.
+        self.assertIn("lease_token=%s", updates[0])
+        self.assertEqual(first_db.params[-1],
+                         (hashlib.sha256(b"lease").hexdigest(), "HDO"))
+        retry_db = DB(("DELIVERED", hashlib.sha256(b"lease").hexdigest(), None))
         retry = core("acknowledge_hitl_decision_outbox", retry_db)
         retry_receipt = retry("HDO", {"lease_token": "lease"})
         self.assertTrue(retry_receipt["idempotent"])
@@ -110,10 +115,11 @@ class OutboxFaultTests(unittest.TestCase):
     def test_delivered_ack_replay_with_wrong_or_missing_original_lease_is_fenced(self):
         # An event already DELIVERED is not a free ACK oracle for any token.
         # These are scripted rows, never a PostgreSQL or Temporal integration.
+        stored_digest = hashlib.sha256(b"original").hexdigest()
         for stored_token, supplied_token in (
             (None, "old"),
-            ("original", "different"),
-            ("original", "ORIGINAL"),
+            (stored_digest, "different"),
+            (stored_digest, "ORIGINAL"),
         ):
             with self.subTest(stored_token=stored_token, supplied_token=supplied_token):
                 db = DB(("DELIVERED", stored_token, None))
