@@ -155,13 +155,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL 16 client (match disposable server major)
+      - name: Configure PostgreSQL 16 client from matching container image
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
-          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
-          /usr/lib/postgresql/16/bin/pg_dump --version | grep -E ' 16\\.'
-          /usr/lib/postgresql/16/bin/pg_restore --version | grep -E ' 16\\.'
+          mkdir -p "$RUNNER_TEMP/pg16-bin"
+          for client in pg_dump pg_restore psql; do
+            cat > "$RUNNER_TEMP/pg16-bin/$client" <<EOF
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          exec docker run --rm --network host \
+            -e PGPASSWORD -e PGHOST -e PGPORT -e PGUSER \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v /tmp:/tmp \
+            -w "$GITHUB_WORKSPACE" postgres:16-alpine $client "\$@"
+          EOF
+            chmod +x "$RUNNER_TEMP/pg16-bin/$client"
+          done
+          echo "$RUNNER_TEMP/pg16-bin" >> "$GITHUB_PATH"
+          docker run --rm postgres:16-alpine pg_dump --version | grep -E ' 16\\.'
+          docker run --rm postgres:16-alpine pg_restore --version | grep -E ' 16\\.'
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
