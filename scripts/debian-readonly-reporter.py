@@ -3,6 +3,7 @@
 from __future__ import annotations
 import datetime as dt
 import fcntl
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -132,6 +133,42 @@ def tcp_probe(port: int, host: str = "127.0.0.1") -> dict:
         return {"reachable": False}
 
 
+PUBLISHED_SERVICE_PORTS = {
+    17777: "portal",
+    8080: "glpi",
+    3000: "grafana",
+    9090: "prometheus",
+    8081: "temporal_ui",
+}
+
+
+def published_tcp_probes(docker: dict) -> list[dict]:
+    """Probe only known application ports that Docker explicitly publishes."""
+    probes = []
+    seen = set()
+    for container in docker.get("containers", []) if isinstance(docker, dict) else []:
+        for binding in container.get("published_ports", []) if isinstance(container, dict) else []:
+            try:
+                port = int(binding.get("host_port", ""))
+                service = PUBLISHED_SERVICE_PORTS[port]
+                address = ipaddress.ip_address(binding.get("host_ip", ""))
+            except (KeyError, TypeError, ValueError):
+                continue
+            host = ("::1" if address.version == 6 else "127.0.0.1") if address.is_unspecified else str(address)
+            key = (host, port)
+            if key in seen:
+                continue
+            seen.add(key)
+            result = tcp_probe(port, host)
+            probes.append({
+                "service": service,
+                "host": host,
+                "port": port,
+                "reachable": bool(result.get("reachable")),
+            })
+    return sorted(probes, key=lambda item: (item["service"], item["host"], item["port"]))
+
+
 def collect() -> dict:
     now = dt.datetime.now(dt.timezone.utc)
     try:
@@ -147,17 +184,19 @@ def collect() -> dict:
                 os_release[k] = v.strip().strip('"')[:160]
     except OSError:
         pass
+    docker = docker_inventory()
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "collected_at": now.isoformat(),
-        "agent": {"name": "aiops-debian-readonly", "version": "1.0.0"},
+        "agent": {"name": "aiops-debian-readonly", "version": "1.1.0"},
         "host": {"reported_name": os.environ.get("AIOPS_AGENT_HOST_LABEL", "SRV-DEB-05"),
                  "os": os_release, "kernel": platform.release()[:160],
                  "architecture": platform.machine()[:64], "uptime": uptime.get("stdout", "")[:256]},
         "resources": {"load_1_5_15": load, "memory_bytes": read_meminfo(),
                       "disk_root": disk_info("/"), "disk_home": disk_info("/home/aiops")},
-        "docker": docker_inventory(),
+        "docker": docker,
         "tcp_loopback": {str(p): tcp_probe(p) for p in (5432, 7233, 17777, 3000, 9090)},
+        "tcp_published": published_tcp_probes(docker),
     }
 
 

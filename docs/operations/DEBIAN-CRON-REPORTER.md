@@ -2,9 +2,9 @@
 
 ## Design
 
-The existing Debian cron runs a fixed, local Python probe every five minutes as the unprivileged `aiops` account. It never downloads or executes commands from GitHub. It collects CPU load, memory, disk, Docker container state/image names and loopback TCP reachability for PostgreSQL, Temporal, Portal, Grafana and Prometheus. A local lock prevents overlap. Output is bounded and contains no environment variables, container environment, logs, SQL data, GLPI records, user data or credentials.
+The existing Debian cron runs a fixed, local Python probe every minute as the unprivileged `aiops` account. It never downloads or executes commands from GitHub. It collects CPU load, memory, disk, Docker container state/image names and loopback TCP reachability for PostgreSQL, Temporal, Portal, Grafana and Prometheus. A local lock prevents overlap. Output is bounded and contains no environment variables, container environment, logs, SQL data, GLPI records, user data or credentials.
 
-A local snapshot is refreshed every minute. One report is published to `ops/debian-runtime-reports` every 5 minutes to avoid 1,440 Git commits per day. GitHub is currently used only as the report sink. The reporter remains read-only. Authorized application operations are specified separately in `config/ops/debian-service-operations-policy.yml` and `docs/operations/DEBIAN-SERVICE-OPERATIONS-POLICY.md`; they are not yet executable by this reporter.
+A local snapshot is refreshed every minute. One report is published to `ops/debian-runtime-reports` every 5 minutes to avoid 1,440 Git commits per day. GitHub is currently used only as the report sink. The reporter remains read-only. Schema v3 adds TCP probes for a fixed allowlist of published application ports (Portal 17777, GLPI 8080, Grafana 3000, Prometheus 9090 and Temporal UI 8081), using only the bind addresses already reported by Docker; wildcard binds are tested through loopback. Internal-only PostgreSQL/Temporal ports are not falsely represented as host-published services. Authorized application operations are specified separately in `config/ops/debian-service-operations-policy.yml` and `docs/operations/DEBIAN-SERVICE-OPERATIONS-POLICY.md`; they are not yet executable by this reporter.
 
 ## Prerequisites
 
@@ -42,14 +42,14 @@ The first manual run writes a local snapshot. Cron collects every minute. At UTC
 The installer adds the following to the `aiops` user's crontab (or add it manually if preferred):
 
 ```cron
-*/5 * * * * /usr/bin/flock -n /home/aiops/.local/state/aiops-debian-agent/cron.lock /usr/bin/python3 /home/aiops/.local/bin/aiops-debian-reporter >> /home/aiops/.local/state/aiops-debian-agent/cron.log 2>&1
+* * * * * /usr/bin/flock -n /home/aiops/.local/state/aiops-debian-agent/cron.lock /usr/bin/python3 /home/aiops/.local/bin/aiops-debian-reporter >> /home/aiops/.local/state/aiops-debian-agent/cron.log 2>&1
 ```
 
 ## Read and validate
 
 - Local latest: `/home/aiops/.local/state/aiops-debian-agent/latest.json`
 - GitHub latest: `ops/debian-reports/SRV-DEB-05/latest.json` on branch `ops/debian-runtime-reports`
-- The agent reports observation only. TCP reachability is not application health; Docker health status is only as good as the image healthcheck.
+- The agent reports observation only. `tcp_loopback` retains the legacy fixed local-port probes; `tcp_published` is the authoritative result for the allowlisted host-published application ports. TCP reachability is not application health; Docker health status is only as good as the image healthcheck.
 - No service restart, container exec, image pull, migration, GLPI write, Temporal workflow, SSH, sudo or LIVE action is performed.
 
 ## Disable / rollback
