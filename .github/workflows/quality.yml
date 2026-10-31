@@ -54,6 +54,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_copilot_tenant_fence.py" -v
       - name: Portal Copilot inline JS syntax and synthetic DOM refusal regression
         run: node --test tests/test_portal_copilot_client.cjs
+      - name: Portal NOC browser HTTP refusal and synthetic RAG DOM regression
+        run: node --test tests/test_portal_noc_client.cjs
       - name: Main-based Portal Run detail API/HTML fail-closed regression
         run: python -m unittest discover -s tests -p "test_portal_run_detail.py" -v
       - name: Portal GLPI native handoff, role and tenant denial regression
