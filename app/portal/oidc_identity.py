@@ -45,7 +45,7 @@ class PortalActorContext:
     tenant_acl_qualified: bool = False
 
 
-def _json_strict(raw: str) -> object:
+def _json_strict(raw: str | bytes) -> object:
     def pairs(values):
         result = {}
         for key, value in values:
@@ -54,6 +54,8 @@ def _json_strict(raw: str) -> object:
             result[key] = value
         return result
     try:
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
         return json.loads(raw, object_pairs_hook=pairs)
     except (ValueError, UnicodeError, RecursionError) as exc:
         raise IdentityRejected("invalid identity JSON") from exc
@@ -74,6 +76,7 @@ def _map(raw: str, name: str) -> dict[str, str]:
     if (not isinstance(value, dict) or not value or len(value) > 128
             or any(not isinstance(k, str) or not k or len(k) > 128
                    or not isinstance(v, str) or not v or len(v) > 128
+                   or not v.isascii() or not v.isprintable()
                    for k, v in value.items())):
         raise IdentityUnavailable("invalid " + name)
     return value
@@ -82,10 +85,14 @@ def _map(raw: str, name: str) -> dict[str, str]:
 def _configuration(env: Mapping[str, str]) -> tuple[str, str, dict, dict, dict]:
     issuer = env.get("AIOPS_PORTAL_OIDC_ISSUER", "")
     audience = env.get("AIOPS_PORTAL_OIDC_AUDIENCE", "")
-    parsed = urlsplit(issuer)
+    try:
+        parsed = urlsplit(issuer)
+    except ValueError as exc:
+        raise IdentityUnavailable("invalid OIDC issuer") from exc
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username
             or parsed.password or parsed.query or parsed.fragment
-            or not audience or len(audience) > 256):
+            or not audience or len(audience) > 256
+            or not audience.isascii() or not audience.isprintable()):
         raise IdentityUnavailable("invalid OIDC issuer/audience")
     jwks = _json_strict(env.get("AIOPS_PORTAL_OIDC_JWKS_JSON", ""))
     if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list):
@@ -146,8 +153,8 @@ def verify_server_oidc_assertion(token: str, *,
             or not token.isascii() or token.count(".") != 2):
         raise IdentityRejected("invalid OIDC assertion")
     header_part, payload_part, signature_part = token.split(".")
-    header = _json_strict(_decode(header_part).decode("utf-8"))
-    payload = _json_strict(_decode(payload_part).decode("utf-8"))
+    header = _json_strict(_decode(header_part))
+    payload = _json_strict(_decode(payload_part))
     if not isinstance(header, dict) or not isinstance(payload, dict):
         raise IdentityRejected("invalid JWT structure")
     kid = header.get("kid")
@@ -196,7 +203,7 @@ def core_xref_preflight(identity: PortalActorContext, *, tenant_id: str,
             or not isinstance(run_id, str) or not re.fullmatch(r"RUN-[A-Za-z0-9_.-]{2,124}", run_id)
             or not isinstance(ticket_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", ticket_id)
             or len(service) < 32 or len(service) > 256 or not service.isascii()
-            or any(ch.isspace() for ch in service)
+            or not service.isprintable() or any(ch.isspace() for ch in service)
             or service in (viewer, operator)):
         raise IdentityRejected("Core xref preflight rejected")
     # Do not return the service secret or use it in a browser request.
