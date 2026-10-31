@@ -466,6 +466,16 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                          [e["event_time"] for e in manifest["events"]])
         self.assertEqual([e["ci_id"] for e in story["timeline"]],
                          [e["ci_id"] for e in manifest["events"]])
+        self.assertEqual([e["observed_at"] for e in story["timeline"]],
+                         [e["observed_at"] for e in manifest["events"]])
+        self.assertEqual([e["known_at"] for e in story["timeline"]],
+                         [e["known_at"] for e in manifest["events"]])
+        self.assertEqual([e["dedupe_key"] for e in story["timeline"]],
+                         [e["dedupe_key"] for e in manifest["events"]])
+        self.assertEqual({e["correlation_key"] for e in story["timeline"]},
+                         {story["correlation_key"]})
+        self.assertTrue(all(e["freshness"] == "SYNTHETIC_CLOCK_ONLY" and
+                            e["tenant_scope"] == "UNKNOWN" for e in story["timeline"]))
         self.assertEqual(story["itil"]["roles_planned"], [
             "N1", "N2", "N3", "INCIDENT_COMMANDER"])
         self.assertEqual(story["itil"]["priority_candidate"], "P1")
