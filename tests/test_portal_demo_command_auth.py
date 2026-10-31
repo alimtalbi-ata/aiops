@@ -5,6 +5,7 @@ Offline TestClient only. No Core, GLPI, Temporal or LIVE calls.
 import os
 import sys
 import unittest
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -143,6 +144,40 @@ class DemoOperatorBoundaryTests(unittest.TestCase):
         self.assertNotIn("localStorage", r.text)
         self.assert_security(r)
         self.assertEqual(self.client.get("/health").status_code, 200)
+
+
+
+class PortalReconciliationQualityBridgeTests(unittest.TestCase):
+    """Temporary Portal-owned exact-head gate while shared quality.yml stays unchanged.
+
+    The architect owns CI wiring; do not change daily cron or heartbeat here.
+    Fail the existing Portal quality step if new Run/GLPI/NOC tests regress.
+    """
+
+    def _run(self, command):
+        root = Path(__file__).resolve().parents[1]
+        completed = subprocess.run(command, cwd=root, capture_output=True,
+                                   text=True, timeout=120)
+        self.assertEqual(completed.returncode, 0,
+                         "command: " + " ".join(command) + "\\n" +
+                         completed.stdout + completed.stderr)
+        print("\\nPORTAL_RECONCILIATION_GATE " + " ".join(command) +
+              "\\n" + completed.stdout + completed.stderr)
+
+    def test_run_glpi_copilot_python_suites(self):
+        for pattern in ("test_portal_run_detail.py",
+                        "test_portal_glpi_operator_view.py",
+                        "test_portal_copilot_tenant_fence.py"):
+            with self.subTest(pattern=pattern):
+                self._run([sys.executable, "-m", "unittest", "discover",
+                           "-s", "tests", "-p", pattern, "-v"])
+
+    def test_noc_run_copilot_javascript_suites(self):
+        for path in ("tests/test_portal_noc_client.cjs",
+                     "tests/test_portal_run_link_client.cjs",
+                     "tests/test_portal_copilot_client.cjs"):
+            with self.subTest(path=path):
+                self._run(["node", "--test", path])
 
 
 if __name__ == "__main__":
