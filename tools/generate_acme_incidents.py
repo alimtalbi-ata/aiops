@@ -275,7 +275,8 @@ def correlate_golden_manifest_offline(manifest):
             manifest.get("scenario_category") != "REDUNDANT_SAN_PATH_LOSS" or
             manifest.get("scenario_id") != "SCN-GOLDEN-PAYMENT-P1" or
             manifest.get("stochastic") is not False or
-            type(manifest.get("seed")) is not int):
+            type(manifest.get("seed")) is not int or
+            manifest.get("seed") != 20261018):
         raise ValueError("untrusted golden replay manifest")
     try:
         expected = replay(seed=manifest["seed"])
