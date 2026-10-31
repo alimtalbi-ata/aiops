@@ -30,7 +30,8 @@ class FakeTemporal:
     async def execute_activity(self, name, args, **kw):
         self.calls.append(name)
         if name == "start_run":
-            return {"version": 1}
+            return {"run_id": "RUN-OFFLINE", "version": 1, "status": "RUNNING",
+                    "execution_allowed": False, "effect_allowed": False}
         if name == "execute_stage" and args["stage"] == "HITL":
             if self.synthetic:
                 return {"version": 2, "status": "PASS", "synthetic": True,
@@ -286,7 +287,9 @@ class OfflineFailureInjection(unittest.TestCase):
                             "effect_allowed": False}
                 if name == "finish_run":
                     self.calls.append(name)
-                    return {"version": 4, "status": "COMPLETED"}
+                    return {"run_id": "RUN-OFFLINE", "version": 4,
+                            "status": "RESOLVED", "execution_allowed": False,
+                            "effect_allowed": False}
                 return await super().execute_activity(name, args, **kw)
 
         fake = CompletedSyntheticTemporal(synthetic=True)
@@ -295,7 +298,7 @@ class OfflineFailureInjection(unittest.TestCase):
             "run_id": "RUN-OFFLINE", "mode": "DEMO",
             "scenario_id": "SCENARIO-OFFLINE",
         }))
-        self.assertEqual(result["status"], "COMPLETED")
+        self.assertEqual(result["status"], "RESOLVED")
         self.assertIs(result["execution_allowed"], False)
         self.assertEqual(fake.calls, ["start_run", "execute_stage", "execute_stage", "finish_run"])
 
@@ -497,6 +500,105 @@ class OfflineFailureInjection(unittest.TestCase):
                 self.assertIs(result["effect_allowed"], False)
                 self.assertEqual(fake.calls, ["start_run", "execute_stage"])
 
+
+
+    def test_core_command_ack_fencing_start_and_resolve(self):
+        # Core command receipts are not permission grants, even on idempotent replay.
+        # This invokes an isolated AST function only, without network or DB.
+        normalize = extract("app/worker/main.py",
+                            "verified_no_effect_command_receipt", {})
+        for command, status, previous in (
+            ("START", "RUNNING", 1), ("RESOLVE", "RESOLVED", 3),
+        ):
+            with self.subTest(command=command):
+                base = {"run_id": "RUN-OFFLINE", "status": status,
+                        "version": previous + 1}
+                result = normalize(base, "RUN-OFFLINE", command, previous)
+                self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
+                for mutation in (
+                    {"run_id": "RUN-OTHER"},
+                    {"status": "PASS"},
+                    {"status": "BLOCKED"},
+                    {"version": previous},
+                    {"version": True},
+                    {"version": float(previous + 1)},
+                    {"execution_allowed": True},
+                    {"effect_allowed": True},
+                    {"execution_allowed": 1},
+                    {"effect_allowed": 1},
+                ):
+                    with self.subTest(mutation=mutation):
+                        with self.assertRaisesRegex(
+                                RuntimeError, "command_receipt_not_qualified"):
+                            normalize({**base, **mutation},
+                                      "RUN-OFFLINE", command, previous)
+                with self.assertRaisesRegex(
+                        RuntimeError, "command_receipt_not_qualified"):
+                    normalize(base, "RUN-OFFLINE", command, True)
+
+    def test_temporal_forged_start_receipt_blocks_before_any_stage(self):
+        # An activity ACK with missing/forged effect flags is not trusted.
+        for mutation in (
+            {"effect_allowed": True},
+            {"execution_allowed": True},
+            {"effect_allowed": None},
+            {"execution_allowed": None},
+            {"run_id": "RUN-OTHER"},
+            {"status": "PASS"},
+            {"version": True},
+        ):
+            with self.subTest(mutation=mutation):
+                class ForgedStart(FakeTemporal):
+                    async def execute_activity(self, name, args, **kw):
+                        if name == "start_run":
+                            base = await super().execute_activity(name, args, **kw)
+                            return {**base, **mutation}
+                        return await super().execute_activity(name, args, **kw)
+
+                fake = ForgedStart(synthetic=True)
+                result = asyncio.run(workflow_class(fake)().run({
+                    "run_id": "RUN-OFFLINE", "mode": "DEMO",
+                    "scenario_id": "SCENARIO-OFFLINE",
+                }))
+                self.assertEqual(result["reason"], "start_receipt_not_qualified")
+                self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
+                self.assertEqual(fake.calls, ["start_run"])
+
+    def test_temporal_forged_finish_receipt_blocks_resolution(self):
+        # The final command cannot fabricate success or authorize an effect.
+        for mutation in (
+            {"effect_allowed": True},
+            {"execution_allowed": True},
+            {"effect_allowed": None},
+            {"run_id": "RUN-OTHER"},
+            {"status": "COMPLETED"},
+            {"version": 2},
+            {"version": 3.0},
+        ):
+            with self.subTest(mutation=mutation):
+                class ForgedFinish(FakeTemporal):
+                    async def execute_activity(self, name, args, **kw):
+                        if name == "finish_run":
+                            self.calls.append(name)
+                            return {
+                                "run_id": "RUN-OFFLINE", "status": "RESOLVED",
+                                "version": 3, "execution_allowed": False,
+                                "effect_allowed": False, **mutation,
+                            }
+                        return await super().execute_activity(name, args, **kw)
+
+                fake = ForgedFinish(synthetic=True)
+                result = asyncio.run(workflow_class(
+                    fake, stages=("HITL",))().run({
+                        "run_id": "RUN-OFFLINE", "mode": "DEMO",
+                        "scenario_id": "SCENARIO-OFFLINE",
+                    }))
+                self.assertEqual(result["reason"], "finish_receipt_not_qualified")
+                self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
+                self.assertEqual(fake.calls, ["start_run", "execute_stage", "finish_run"])
 
 
 if __name__ == "__main__":
