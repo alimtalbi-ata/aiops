@@ -191,7 +191,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql", "009_ai_decision_ledger.sql", "010_evidence_identity.sql", "011_hitl_decision_outbox.sql", "012_model_invocation_telemetry.sql", "090_critic_denial_outbox.sql", "091_critic_denial_fencing.sql", "092_critic_denial_resume.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Start actual Core HTTP service and verify readiness
@@ -217,6 +217,8 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Real Core PostgreSQL AI invocation ledger persistence and privacy
+        run: python -m unittest discover -s tests -p "test_core_ai_invocation_ledger_real_integration.py" -v
       - name: Start actual Policy HTTP service (ephemeral CI only)
         run: |
           PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &
