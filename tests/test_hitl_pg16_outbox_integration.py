@@ -314,6 +314,44 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
         self.no_effect(healthy_proposal)
 
 
+    def test_concurrent_batch_claims_partition_three_events_without_duplicates(self):
+        """Two claimers with limit=2 partition three committed synthetic REJECTs."""
+        fixtures = [fixture() for _ in range(3)]
+        expected = {event for event, _ in fixtures}
+        barrier = threading.Barrier(2)
+
+        def contender(n):
+            barrier.wait(timeout=10)
+            receipt = core("claim_hitl_decision_outbox", Connection(), uuid=uuid)(
+                {"owner": "ci-batch-" + str(n), "limit": 2, "lease_seconds": 15})
+            assert receipt["execution_allowed"] is False
+            assert receipt["effect_allowed"] is False
+            assert receipt["count"] == len(receipt["items"])
+            return receipt["items"]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(contender, n) for n in (1, 2)]
+            batches = [future.result(timeout=15) for future in futures]
+        self.assertEqual(sorted(map(len, batches)), [1, 2])
+        items = [item for batch in batches for item in batch]
+        self.assertEqual({item["event_id"] for item in items}, expected)
+        self.assertEqual(len(items), len(expected))  # No double lease.
+        self.assertTrue(all(item["decision"] == "REJECT"
+                            and item["attempts"] == 1 for item in items))
+        for item in items:
+            receipt = ack(item["event_id"], item["lease_token"])
+            self.assertEqual((receipt["status"], receipt["idempotent"]),
+                             ("DELIVERED", False))
+        self.assertEqual(claim("ci-batch-after-delivery"), [])
+        with db() as c:
+            rows = c.execute(
+                "select event_id,status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=any(%s)", (list(expected),)).fetchall()
+        self.assertEqual({(event, status, attempts) for event, status, attempts in rows},
+                         {(event, "DELIVERED", 1) for event in expected})
+        for _, proposal in fixtures:
+            self.no_effect(proposal)
+
     def test_lost_ack_response_after_commit_is_idempotent(self):
         """Simulate lost HTTP response after Core committed DELIVERED, no redelivery."""
         event, proposal = fixture()
