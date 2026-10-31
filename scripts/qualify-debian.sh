@@ -4,6 +4,13 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+MODE="${1:-offline}"
+case "$MODE" in
+  offline|--offline) MODE=offline ;;
+  runtime|--runtime) MODE=runtime ;;
+  *) echo "Usage: $0 [--offline|--runtime]" >&2; exit 2 ;;
+esac
+
 required=(python3 bash node npm curl openssl git)
 for cmd in "${required[@]}"; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "BLOCKED|missing_command|$cmd"; exit 2; }
@@ -42,4 +49,13 @@ done
 if [[ -f app/portal/acme_explore_story_client.js ]]; then node --check app/portal/acme_explore_story_client.js; fi
 if [[ -f app/portal/portal_bootstrap_client.js ]]; then node --check app/portal/portal_bootstrap_client.js; fi
 
-echo "DEBIAN_READONLY_QUALIFICATION=PASS"
+if [[ "$MODE" == runtime ]]; then
+  command -v docker >/dev/null 2>&1 || { echo "BLOCKED|missing_command|docker"; exit 2; }
+  docker compose version >/dev/null
+  [[ -f .env ]] || { echo "BLOCKED|missing_env_file|.env"; exit 2; }
+  docker compose --env-file .env config --quiet
+  bash tests/qualification.sh
+  echo "DEBIAN_RUNTIME_READONLY_QUALIFICATION=PASS"
+else
+  echo "DEBIAN_OFFLINE_QUALIFICATION=PASS"
+fi
