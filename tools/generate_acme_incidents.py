@@ -393,7 +393,7 @@ def storyboard_offline(manifest, *, false_positive=False):
         "evidence_ids": [], "service_id": service_id, "ci_id": manifest["ci_id"],
         "correlation_key": correlated["correlation_key"],
         "correlation_status": "OFFLINE_SYNTHETIC_ONLY",
-        "twin_service_context": twin_service_context_offline(manifest),
+        "twin_service_context": twin_service_context_offline(manifest, false_positive=false_positive),
         "dependency_path": {
             "node_ids": list(impact["path_node_ids"]),
             "edge_ids": list(impact["path_edge_ids"]),
@@ -435,14 +435,14 @@ def storyboard_offline(manifest, *, false_positive=False):
     }
 
 
-def twin_service_context_offline(manifest):
+def twin_service_context_offline(manifest, *, false_positive=False):
     """Sourced Twin-only context; no invented owner, SLA, change or DC identity.
 
     The pinned 005 SQL proves only synthetic node site/criticality and edges.
     The replay must first pass the full strict manifest check. The returned
     metadata is an offline *candidate* projection, never runtime evidence.
     """
-    correlate_catalog_manifest_offline(manifest)
+    correlate_catalog_manifest_offline(manifest, false_positive=false_positive)
     graph = load_graph()
     raw = SEED_FILE.read_bytes()
     if _git_blob(raw) != SEED_GIT_BLOB:
