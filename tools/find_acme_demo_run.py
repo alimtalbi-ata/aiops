@@ -28,8 +28,8 @@ class _NoRedirect(HTTPRedirectHandler):
 # No proxy inheritance: a service Bearer must not be forwarded through an
 # operator's ambient HTTP(S)_PROXY. Redirects remain disabled for all status codes.
 _OPENER = build_opener(ProxyHandler({}), _NoRedirect())
-_DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\Z")
-_API_PATH = re.compile(r"/api/[A-Za-z0-9/_-]{1,240}\\Z")
+_DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+_API_PATH = re.compile(r"/api/[A-Za-z0-9/_-]{1,240}\Z")
 _TRUST_ENV = "AIOPS_ACME_TRUSTED_CORE_ORIGINS"
 
 
@@ -37,7 +37,7 @@ def _origin(value):
     """Canonical scheme/host/port only; reject IP aliases and URL authority tricks."""
     if (type(value) is not str or not 1 <= len(value) <= 256
             or any(c.isspace() or ord(c) < 33 or ord(c) > 126 for c in value)
-            or any(c in value for c in ("\\\\", "%", "@", "?", "#"))):
+            or chr(92) in value or any(c in value for c in ("%", "@", "?", "#"))):
         return None
     try:
         p = urlsplit(value)
@@ -93,8 +93,8 @@ def _safe_url(base):
 def fetch_json(base, path, token=None):
     # Check again at the network boundary, including for direct callers.
     # A path beginning with @ or // could otherwise alter the URL authority.
-    if not _safe_url(base) or type(path) is not str or not _API_PATH.fullmatch(path) \\
-            or "//" in path or ".." in path:
+    if (not _safe_url(base) or type(path) is not str or not _API_PATH.fullmatch(path)
+            or "//" in path or ".." in path):
         raise ValueError("untrusted_core_origin_or_path")
     headers = {"Accept": "application/json"}
     if token is not None:
