@@ -57,7 +57,7 @@ class PortalHitlInboxTests(unittest.TestCase):
             if path == "/api/proposals?status=PROPOSED&limit=100":
                 return proposals
             if path == "/api/runs/" + DEMO_RUN:
-                return {"run": {"run_id": DEMO_RUN, "mode": "DEMO"}}
+                return {"run": {"run_id": DEMO_RUN, "mode": "DEMO", "scenario_id": "SCN-GOLDEN-PAYMENT-P1"}}
             if path == "/api/runs/" + LIVE_RUN:
                 return {"run": {"run_id": LIVE_RUN, "mode": "LIVE"}}
             raise AssertionError(path)
