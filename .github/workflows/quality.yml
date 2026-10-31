@@ -354,6 +354,35 @@ jobs:
           docker compose --env-file .env restart aiops2-temporal aiops2-worker
           docker compose --env-file .env up -d --wait --wait-timeout 180 aiops2-temporal aiops2-worker
           bash tests/runtime-e2e.sh
+      - name: Qualify real Core outbox to Temporal CI sink after disposable restart
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          mkdir -p reports
+          docker compose --env-file .env exec -T \
+            -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
+            aiops2-core sh -c 'cat > /tmp/ci_hitl_outbox_temporal.py && python /tmp/ci_hitl_outbox_temporal.py' \
+            < tests/hitl_outbox_temporal_disposable.py > reports/hitl-outbox-temporal.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("reports/hitl-outbox-temporal.json",encoding="utf-8"))
+          assert r["result"]=="PASS" and r["mode"]=="DEMO"
+          assert r["outbox_state"]=="DELIVERED" and r["attempts"]==2
+          assert r["temporal_signals"]==2 and r["effect_receipts"]==0
+          assert r["execution_allowed"] is False and r["effect_allowed"] is False
+          assert r["identity"]=="NOT_ATTESTED"
+          print("CI_HITL_OUTBOX_TEMPORAL=PASS|signals=2|effects=0")
+          PY
+      - name: Upload disposable HITL outbox to Temporal qualification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-hitl-outbox-temporal-report
+          path: reports/hitl-outbox-temporal.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Upload runtime qualification report
         if: always()
         uses: actions/upload-artifact@v4
