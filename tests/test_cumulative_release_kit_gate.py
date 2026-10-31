@@ -1,6 +1,7 @@
 """Offline release inventory guard regressions; no production or network access."""
 
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -20,6 +21,13 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.source = self.root / "source"
         self.source.mkdir()
         self.files = {"README.md": b"AIOps synthetic test\n", "db/migrations/011_hitl_decision_outbox.sql": b"-- test\n"}
+        self.files["manifests/MANIFEST.json"] = json.dumps({
+            "release": "2.1.0-core-rc1.4",
+            "files": [
+                {"path": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+                for name, data in self.files.items()
+            ],
+        }).encode()
         for name, content in self.files.items():
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -33,7 +41,7 @@ class CumulativeKitGateTests(unittest.TestCase):
 
     def build(self, overrides=None, extra=None, manifest_sha=None, duplicate=False):
         contents = dict(self.files)
-        contents["RELEASE-MANIFEST.txt"] = ("git_commit=" + (manifest_sha or self.sha) + "\n").encode()
+        contents["RELEASE-MANIFEST.txt"] = ("git_commit=" + (manifest_sha or self.sha) + "\nversion=2.1.0-core-rc1.4\n").encode()
         contents.update(overrides or {})
         lines = [hashlib.sha256(data).hexdigest() + "  ./" + name for name, data in contents.items()]
         with zipfile.ZipFile(self.kit, "w") as z:
@@ -56,8 +64,8 @@ class CumulativeKitGateTests(unittest.TestCase):
         self.build()
         result = self.audit()
         self.assertEqual(result["status"], "PASS", result)
-        self.assertEqual(result["checksums_verified"], 3)
-        self.assertEqual(result["source_files_verified"], 2)
+        self.assertEqual(result["checksums_verified"], 4)
+        self.assertEqual(result["source_files_verified"], 3)
 
     def test_missing_migration_fails(self):
         self.build(overrides={"db/migrations/011_hitl_decision_outbox.sql": b""})
@@ -67,6 +75,28 @@ class CumulativeKitGateTests(unittest.TestCase):
     def test_manifest_commit_mismatch_fails(self):
         self.build(manifest_sha="0" * 40)
         self.assertIn("MANIFEST_SHA_MISMATCH", self.audit()["errors"])
+
+    def test_stale_embedded_sha_fails_even_when_sha256sums_is_valid(self):
+        embedded = json.loads(self.files["manifests/MANIFEST.json"])
+        embedded["files"][0]["sha256"] = "0" * 64
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(embedded).encode()})
+        self.assertIn("EMBEDDED_FILE_SHA_MISMATCH:README.md", self.audit()["errors"])
+
+    def test_stale_embedded_size_fails(self):
+        embedded = json.loads(self.files["manifests/MANIFEST.json"])
+        embedded["files"][0]["bytes"] += 1
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(embedded).encode()})
+        self.assertIn("EMBEDDED_FILE_SIZE_MISMATCH:README.md", self.audit()["errors"])
+
+    def test_release_version_conflict_fails(self):
+        embedded = json.loads(self.files["manifests/MANIFEST.json"])
+        embedded["release"] = "8.0.0"
+        self.build(overrides={"manifests/MANIFEST.json": json.dumps(embedded).encode()})
+        self.assertIn("EMBEDDED_RELEASE_VERSION_MISMATCH", self.audit()["errors"])
+
+    def test_invalid_embedded_manifest_fails(self):
+        self.build(overrides={"manifests/MANIFEST.json": b"{broken"})
+        self.assertIn("EMBEDDED_MANIFEST_UNREADABLE", self.audit()["errors"])
 
     def test_unchecksummed_file_fails(self):
         self.build(extra=[("untracked.txt", b"unverified")])
