@@ -610,5 +610,92 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
             self.assertEqual(json.loads(raw)["event_count"], 7)
 
 
+class AcmeTwinSourcedServiceContextTests(unittest.TestCase):
+    """Provenance-adversarial, offline-only Twin service context assertions."""
+
+    def test_site_and_criticality_are_from_pinned_nodes_not_runtime(self):
+        manifest = gen.replay(seed=20261018)
+        context = gen.twin_service_context_offline(manifest)
+        self.assertEqual(context["source_git_blob"], gen.SEED_GIT_BLOB)
+        self.assertEqual(context["source"], "db/migrations/005_seed_acme.sql")
+        self.assertEqual(context["site"], "PARIS")
+        self.assertEqual(set(context["site_by_path_ci_id"]),
+                         set(manifest["impact_estimate"]["path_node_ids"]))
+        self.assertEqual(set(context["site_by_path_ci_id"].values()), {"PARIS"})
+        self.assertEqual(context["service_criticality_synthetic_1_to_5"], 5)
+        self.assertEqual(context["service_id"], "ACME-SVC-PAYMENTS")
+        self.assertEqual(context["freshness"], "PINNED_FIXTURE_NOT_LIVE")
+
+    def test_missing_dc_owner_sla_ola_team_change_and_maintenance_remain_unknown(self):
+        context = gen.storyboard_offline(gen.replay())["twin_service_context"]
+        for key in ("datacenter_id", "datacenter_relation", "service_owner_id",
+                    "service_team_id", "sla_id", "ola_id", "change_id",
+                    "maintenance_actual", "blast_radius_observed",
+                    "impact_observed", "itil_priority_confirmed"):
+            with self.subTest(key=key):
+                self.assertEqual(context[key], "UNKNOWN")
+        self.assertIsNone(context["maintenance_window_synthetic"])
+        self.assertEqual(context["change_lookup"], "PLANNED_NOT_EXECUTED")
+        self.assertEqual(context["runtime_readback"], "NOT_EXECUTED")
+        self.assertEqual(context["tenant_scope"], "UNKNOWN")
+
+    def test_dependency_blast_radius_and_priority_are_candidates_only(self):
+        manifest = gen.replay()
+        context = gen.twin_service_context_offline(manifest)
+        impact = manifest["impact_estimate"]
+        self.assertEqual(context["dependency_direction"], "REVERSE_CONSUMER_TO_DEPENDENCY")
+        self.assertEqual(context["dependency_path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertEqual(context["dependency_path_node_ids"], impact["path_node_ids"])
+        self.assertEqual(context["blast_radius_candidate_service_ids"],
+                         ["ACME-SVC-ERP", "ACME-SVC-PAYMENTS"])
+        self.assertEqual(context["blast_radius_candidate_ci_count"],
+                         impact["candidate_ci_count"])
+        self.assertEqual(context["impact_estimated"], "HIGH")
+        self.assertEqual(context["urgency_synthetic"], "CRITICAL")
+        self.assertEqual(context["itil_priority_candidate"], "P1")
+        self.assertFalse(context["causality_verified"])
+        self.assertFalse(context["redundancy_evaluated"])
+
+    def test_forged_manifest_fields_cannot_claim_twin_or_runtime_provenance(self):
+        original = gen.replay()
+        for name, mutate in (
+            ("service", lambda m: m.__setitem__("service_id", "ACME-SVC-ERP")),
+            ("site", lambda m: m.__setitem__("site", "LONDON")),
+            ("owner", lambda m: m.__setitem__("service_owner_id", "FAKE")),
+            ("impact", lambda m: m["impact_estimate"].__setitem__(
+                "candidate_service_ids", ["ACME-SVC-PAYMENTS"])),
+            ("priority", lambda m: m["itil"].__setitem__("priority_confirmed", "P1")),
+            ("evidence", lambda m: m.__setitem__("evidence_ids", ["FAKE"])),
+        ):
+            with self.subTest(name=name):
+                forged = copy.deepcopy(original)
+                mutate(forged)
+                unsigned = {k: v for k, v in forged.items() if k != "dataset_sha256"}
+                forged["dataset_sha256"] = hashlib.sha256(gen._canonical(unsigned)).hexdigest()
+                with self.assertRaises(ValueError):
+                    gen.twin_service_context_offline(forged)
+
+    def test_tampered_seed_graph_rejected_and_replay_not_mutated(self):
+        from unittest import mock
+        manifest = gen.replay()
+        before = gen._canonical(manifest)
+        with tempfile.TemporaryDirectory() as directory:
+            altered = Path(directory) / "005_seed_acme.sql"
+            altered.write_bytes(gen.SEED_FILE.read_bytes().replace(
+                b"'PARIS'", b"'LONDON'", 1))
+            with mock.patch.object(gen, "SEED_FILE", altered):
+                with self.assertRaises(ValueError):
+                    gen.twin_service_context_offline(manifest)
+        story = gen.storyboard_offline(manifest)
+        self.assertEqual(gen._canonical(manifest), before)
+        self.assertEqual(story["source_dataset_sha256"], manifest["dataset_sha256"])
+        self.assertFalse(story["publishable_to_core_or_glpi"])
+        self.assertEqual(story["checkpoints"], [
+            {"stage": stage, "status": "NOT_EXECUTED", "id": None}
+            for stage in gen.CHECKPOINTS
+        ])
+
+
 if __name__ == "__main__":
     unittest.main()
