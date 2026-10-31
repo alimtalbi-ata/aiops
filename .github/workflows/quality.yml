@@ -38,6 +38,14 @@ jobs:
           python -m unittest discover -s tests -p "test_hitl_identity.py" -v
       - name: Analyst Critic fail-closed fault injection
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
+      - name: HITL workflow and outbox fault injection (offline, no effects)
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_hitl_failure_injection.py" -v
+          python -m unittest discover -s tests -p "test_hitl_outbox_failure_injection.py" -v
+          python -m unittest discover -s tests -p "test_hitl_outbox_worker_replay_failure_injection.py" -v
+          python -m unittest discover -s tests -p "test_hitl_stage_start_ack_failure_injection.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
       - name: Demo Studio V2 synthetic stage-marker presentation contract
@@ -148,8 +156,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Set up pinned Python for disposable HITL integration
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure PostgreSQL 16 client from matching container image
+        run: |
+          mkdir -p "$RUNNER_TEMP/pg16-bin"
+          for client in pg_dump pg_restore psql; do
+            cat > "$RUNNER_TEMP/pg16-bin/$client" <<EOF
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          exec docker run --rm --network host \
+            -e PGPASSWORD -e PGHOST -e PGPORT -e PGUSER \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -v /tmp:/tmp \
+            -w "$GITHUB_WORKSPACE" postgres:16-alpine $client "\$@"
+          EOF
+            chmod +x "$RUNNER_TEMP/pg16-bin/$client"
+          done
+          echo "$RUNNER_TEMP/pg16-bin" >> "$GITHUB_PATH"
+          docker run --rm postgres:16-alpine pg_dump --version | grep -E ' 16\.'
+          docker run --rm postgres:16-alpine pg_restore --version | grep -E ' 16\.'
+      - name: Install pinned PostgreSQL 16 HITL test dependencies
+        run: python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "pydantic==2.11.7"
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
@@ -186,6 +215,23 @@ jobs:
         env:
           PGPASSWORD: ci-only-password
         run: psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f tests/sql/evidence-identity-invariants.sql
+      - name: Qualify HITL outbox concurrency and lease fencing on disposable PostgreSQL 16
+        env:
+          AIOPS_CI_OUTBOX_DISPOSABLE: "YES"
+          PGPASSWORD: ci-only-password
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: aiops
+          PGDATABASE: aiops
+        run: python tests/test_hitl_pg16_outbox_integration.py
+      - name: Upload PostgreSQL 16 HITL outbox qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-hitl-pg16-outbox-report
+          path: reports/hitl-pg16-outbox.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Qualified disposable PostgreSQL disaster recovery drill
         env:
           PGPASSWORD: ci-only-password
@@ -299,6 +345,110 @@ jobs:
           mkdir -p reports
           AIOPS_EVAL_UID="$(id -u)" AIOPS_EVAL_GID="$(id -g)" docker compose --env-file .env --profile test --profile qualification run --rm aiops2-model-evaluator
           bash tests/model-evaluation-e2e.sh
+      - name: Restart disposable Temporal and Worker then verify synthetic no-effect replay
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          docker compose --env-file .env restart aiops2-temporal aiops2-worker
+          docker compose --env-file .env up -d --wait --wait-timeout 180 aiops2-temporal aiops2-worker
+          bash tests/runtime-e2e.sh
+      - name: Qualify real Core outbox to Temporal CI sink after disposable restart
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          mkdir -p reports
+          docker compose --env-file .env exec -T \
+            -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
+            aiops2-core sh -c 'cat > /tmp/ci_hitl_outbox_temporal.py && python /tmp/ci_hitl_outbox_temporal.py' \
+            < tests/hitl_outbox_temporal_disposable.py > reports/hitl-outbox-temporal.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("reports/hitl-outbox-temporal.json",encoding="utf-8"))
+          assert r["result"]=="PASS" and r["mode"]=="DEMO"
+          assert r["outbox_state"]=="DELIVERED" and r["attempts"]==2
+          assert r["temporal_signals"]==2 and r["effect_receipts"]==0
+          assert r["execution_allowed"] is False and r["effect_allowed"] is False
+          assert r["identity"]=="NOT_ATTESTED"
+          assert r["ci_sink_worker_restart_inflight"]=="OBSERVED"
+          assert r["production_worker_restart_inflight"]=="NOT_TESTED"
+          assert r["temporal_server_restart_inflight"]=="NOT_TESTED"
+          print("CI_HITL_OUTBOX_TEMPORAL=PASS|signals=2|effects=0|sink_worker_replay=OBSERVED")
+          PY
+      - name: Prepare no-effect outbox workflow pending across Temporal server restart
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          docker compose --env-file .env exec -T \
+            -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
+            aiops2-core sh -c 'cat > /tmp/ci_hitl_temporal_restart.py && python /tmp/ci_hitl_temporal_restart.py prepare' \
+            < tests/hitl_temporal_server_restart_disposable.py > reports/hitl-temporal-restart-prepared.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("reports/hitl-temporal-restart-prepared.json",encoding="utf-8"))
+          assert r["phase"]=="PREPARED" and r["attempts"]==1
+          assert r["identity"]=="NOT_ATTESTED" and r["effect_receipts"]==0
+          assert r["execution_allowed"] is False and r["effect_allowed"] is False
+          print("CI_TEMPORAL_RESTART_PENDING=PASS|effects=0")
+          PY
+      - name: Restart disposable Temporal server and application Worker while HITL workflow is in flight
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          test -s reports/hitl-temporal-restart-prepared.json
+          worker_container="$(docker compose --env-file .env ps -q aiops2-worker)"
+          test -n "$worker_container"
+          worker_started_before="$(docker inspect -f '{{.State.StartedAt}}' "$worker_container")"
+          docker compose --env-file .env restart aiops2-temporal aiops2-worker
+          docker compose --env-file .env up -d --wait --wait-timeout 180 aiops2-temporal aiops2-worker
+          worker_started_after="$(docker inspect -f '{{.State.StartedAt}}' "$worker_container")"
+          test -n "$worker_started_after"
+          test "$worker_started_before" != "$worker_started_after"
+          echo "CI_APP_WORKER_RESTART_INFLIGHT=PASS"
+      - name: Recover in-flight Temporal history and replay synthetic REJECT without effects
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          docker compose --env-file .env exec -T \
+            -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
+            -e AIOPS_CI_TEMPORAL_RESTARTED_INFLIGHT=YES \
+            -e AIOPS_CI_APP_WORKER_RESTARTED_INFLIGHT=YES \
+            aiops2-core python /tmp/ci_hitl_temporal_restart.py resume \
+            < reports/hitl-temporal-restart-prepared.json > reports/hitl-temporal-restart.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("reports/hitl-temporal-restart.json",encoding="utf-8"))
+          assert r["result"]=="PASS" and r["mode"]=="DEMO"
+          assert r["outbox_state"]=="DELIVERED" and r["attempts"]==2
+          assert r["temporal_signals"]==2 and r["effect_receipts"]==0
+          assert r["execution_allowed"] is False and r["effect_allowed"] is False
+          assert r["identity"]=="NOT_ATTESTED"
+          assert r["temporal_server_restart_inflight"]=="OBSERVED_CI_DISPOSABLE"
+          assert r["app_worker_restart_inflight"]=="OBSERVED_CI_DISPOSABLE"
+          assert r["production_worker_restart_inflight"]=="NOT_TESTED"
+          assert r["production_incident_workflow"]=="NOT_TESTED"
+          print("CI_TEMPORAL_AND_APP_WORKER_RESTART_INFLIGHT=PASS|signals=2|effects=0")
+          PY
+      - name: Upload disposable HITL outbox to Temporal qualification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-hitl-outbox-temporal-report
+          path: |
+            reports/hitl-outbox-temporal.json
+            reports/hitl-temporal-restart-prepared.json
+            reports/hitl-temporal-restart.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Upload runtime qualification report
         if: always()
         uses: actions/upload-artifact@v4

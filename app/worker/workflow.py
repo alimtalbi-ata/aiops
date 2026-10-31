@@ -39,6 +39,10 @@ class IncidentWorkflow:
         if any(key not in decision for key in required):
             self._hitl_conflict = True
             return
+        # Python bool/float compare equal to int revisions; never accept them.
+        if type(decision.get("proposal_revision")) is not int or decision["proposal_revision"] < 1:
+            self._hitl_conflict = True
+            return
         if decision.get("decision") not in ("APPROVE", "REJECT"):
             self._hitl_conflict = True
             return
@@ -50,6 +54,14 @@ class IncidentWorkflow:
     @workflow.run
     async def run(self, args: dict) -> dict:
         run_id = args["run_id"]
+        # Reject unsupported modes before any Core state transition or activity.
+        # SIMULATE is a Policy decision, not an unvalidated workflow mode.
+        if args.get("mode") not in ("DEMO", "REPLAY", "STORY", "LIVE"):
+            return {
+                "run_id": run_id, "status": "BLOCKED", "final_version": None,
+                "reason": "unsupported_workflow_mode",
+                "execution_allowed": False, "effect_allowed": False,
+            }
         receipt = await workflow.execute_activity(
             "start_run",
             args,
@@ -57,6 +69,20 @@ class IncidentWorkflow:
             retry_policy=RETRY,
             result_type=dict,
         )
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("run_id") != run_id
+            or receipt.get("status") != "RUNNING"
+            or type(receipt.get("version")) is not int
+            or receipt["version"] < 1
+            or receipt.get("execution_allowed") is not False
+            or receipt.get("effect_allowed") is not False
+        ):
+            return {
+                "run_id": run_id, "status": "BLOCKED", "final_version": None,
+                "reason": "start_receipt_not_qualified",
+                "execution_allowed": False, "effect_allowed": False,
+            }
         version = receipt["version"]
         for stage in STAGES:
             receipt = await workflow.execute_activity(
@@ -73,8 +99,32 @@ class IncidentWorkflow:
                 result_type=dict,
             )
             version = receipt["version"]
+            # A PASS is only a no-effect stage receipt when both fences are
+            # explicit. Missing flags are not equivalent to False.
+            # HITL has its own stricter synthetic/proposal-specific fence.
+            if stage != "HITL" and receipt.get("status") == "PASS" and (
+                receipt.get("execution_allowed") is not False
+                or receipt.get("effect_allowed") is not False
+            ):
+                return {
+                    "run_id": run_id, "status": "BLOCKED",
+                    "final_version": version,
+                    "reason": "stage_effect_fence_missing_or_invalid",
+                    "execution_allowed": False, "effect_allowed": False,
+                }
+            # UNKNOWN, FAIL, REJECTED or an unexpected WAITING stage cannot
+            # advance toward HITL/remediation. Only a LIVE HITL wait is valid.
+            if receipt.get("status") not in ("PASS", "BLOCKED") and not (
+                stage == "HITL" and args["mode"] == "LIVE"
+                and receipt.get("status") == "WAITING"
+            ):
+                return {
+                    "run_id": run_id, "status": "BLOCKED",
+                    "final_version": version, "reason": "stage_not_passed",
+                    "execution_allowed": False, "effect_allowed": False,
+                }
             if receipt.get("status") == "BLOCKED":
-                return {"run_id": run_id, "status": "BLOCKED", "final_version": version}
+                return {"run_id": run_id, "status": "BLOCKED", "final_version": version, "execution_allowed": False, "effect_allowed": False}
 
             # HITL is a mandatory barrier before every remediation stage.
             # A generic PASS from an unimplemented/failed proposal activity must
@@ -87,12 +137,13 @@ class IncidentWorkflow:
                     receipt.get("status") == "PASS"
                     and receipt.get("synthetic") is True
                     and receipt.get("execution_allowed") is False
+                    and receipt.get("effect_allowed") is False
                 ):
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
                         "reason": "synthetic_hitl_bypass_contract_invalid",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
 
             if stage == "HITL" and args["mode"] == "LIVE" and not (
@@ -102,7 +153,7 @@ class IncidentWorkflow:
                     "run_id": run_id, "status": "BLOCKED",
                     "final_version": version,
                     "reason": "hitl_proposal_not_persisted",
-                    "execution_allowed": False,
+                    "execution_allowed": False, "effect_allowed": False,
                 }
 
             # A durable wait is allowed only with a persisted proposal binding.
@@ -111,11 +162,11 @@ class IncidentWorkflow:
                 proposal_id = receipt.get("proposal_id")
                 proposal_hash = receipt.get("proposal_hash")
                 revision = receipt.get("proposal_revision")
-                if not proposal_id or not proposal_hash or type(revision) is not int:
+                if not proposal_id or not proposal_hash or type(revision) is not int or revision < 1:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version, "reason": "hitl_proposal_binding_missing",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 timeout_seconds = args.get("hitl_timeout_seconds", 86400)
                 if type(timeout_seconds) is not int or not 60 <= timeout_seconds <= 604800:
@@ -130,25 +181,26 @@ class IncidentWorkflow:
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
                         "reason": "hitl_timeout_or_conflicting_signal",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 if self._hitl_conflict or self._hitl_decision is None:
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version,
                         "reason": "hitl_timeout_or_conflicting_signal",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 decision = self._hitl_decision
                 if (
                     decision.get("proposal_id") != proposal_id
                     or decision.get("proposal_hash") != proposal_hash
+                    or type(decision.get("proposal_revision")) is not int
                     or decision.get("proposal_revision") != revision
                 ):
                     return {
                         "run_id": run_id, "status": "BLOCKED",
                         "final_version": version, "reason": "hitl_signal_scope_mismatch",
-                        "execution_allowed": False,
+                        "execution_allowed": False, "effect_allowed": False,
                     }
                 # Human approval is recorded, but Policy/executor qualification
                 # is not complete in this release. Never advance to REMEDIATE.
@@ -157,7 +209,7 @@ class IncidentWorkflow:
                     "final_version": version,
                     "reason": "human_decision_recorded_execution_gate_closed",
                     "human_decision": decision.get("decision"),
-                    "execution_allowed": False,
+                    "execution_allowed": False, "effect_allowed": False,
                 }
         result = await workflow.execute_activity(
             "finish_run",
@@ -166,4 +218,22 @@ class IncidentWorkflow:
             retry_policy=RETRY,
             result_type=dict,
         )
-        return {"run_id": run_id, "status": result["status"], "final_version": result["version"]}
+        if (
+            not isinstance(result, dict)
+            or result.get("run_id") != run_id
+            or result.get("status") != "RESOLVED"
+            or type(result.get("version")) is not int
+            or result["version"] <= version
+            or result.get("execution_allowed") is not False
+            or result.get("effect_allowed") is not False
+        ):
+            return {
+                "run_id": run_id, "status": "BLOCKED", "final_version": version,
+                "reason": "finish_receipt_not_qualified",
+                "execution_allowed": False, "effect_allowed": False,
+            }
+        return {
+            "run_id": run_id, "status": result["status"],
+            "final_version": result["version"],
+            "execution_allowed": False, "effect_allowed": False,
+        }

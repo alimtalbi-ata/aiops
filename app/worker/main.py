@@ -130,8 +130,81 @@ def persist_critic_denial(rid, mode, analysis, critique, analysis_id, critique_i
 
 @activity.defn
 async def start_run(a):
-    # Requests are blocking I/O. Run them off the shared FastAPI/Temporal event loop.
-    return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
+    # Core command ACKs are version/status receipts, never effect grants.
+    receipt = await asyncio.to_thread(
+        call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+        {'expected_version': a['version'], 'idempotency_key': 'START-'+a['run_id'],
+         'command': 'START'})
+    return verified_no_effect_command_receipt(receipt, a['run_id'], 'START', a['version'])
+
+
+
+def verified_synthetic_policy_verdict(verdict, mode):
+    """Fail closed before persisting a synthetic Policy verdict.
+
+    Policy alone decides; an LLM, fixture or Temporal receipt cannot
+    promote ALLOW or an unreasoned response to SIMULATE authority.
+    """
+    allowed = {
+        'PASS': ('SIMULATE',),
+        'BLOCKED': ('HUMAN_APPROVAL', 'ENRICH', 'ESCALATE'),
+        'UNKNOWN': ('HUMAN_APPROVAL', 'ENRICH', 'ESCALATE'),
+    }
+    if (mode not in ('DEMO', 'REPLAY', 'STORY')
+            or not isinstance(verdict, dict)
+            or verdict.get('decision') not in allowed.get(verdict.get('state'), ())
+            or not isinstance(verdict.get('reason'), str)
+            or not verdict['reason'].strip()
+            or any(key in verdict and verdict[key] is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('synthetic_policy_verdict_not_qualified')
+    return {**verdict, 'execution_allowed': False, 'effect_allowed': False}
+
+
+def verified_no_effect_command_receipt(receipt, run_id, command, expected_version):
+    """Fence a committed Core START/RESOLVE ACK; do not infer effect authority."""
+    target = {'START': 'RUNNING', 'RESOLVE': 'RESOLVED'}.get(command)
+    if (target is None
+            or type(expected_version) is not int or expected_version < 0
+            or not isinstance(receipt, dict)
+            or receipt.get('run_id') != run_id
+            or receipt.get('status') != target
+            or type(receipt.get('version')) is not int
+            or receipt['version'] != expected_version + 1
+            or any(receipt.get(key) is not None and receipt.get(key) is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('command_receipt_not_qualified')
+    return {**receipt, 'execution_allowed': False, 'effect_allowed': False}
+
+
+def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version, expected_event_type='STAGE_COMPLETED'):
+    """Normalize a Core event ACK only after a known PASS event was committed.
+
+    Core's event API returns run_id/sequence/version, not event status.
+    Never promote a contradictory, stale or effect-authorizing ACK.
+    """
+    if (expected_event_type not in ('STAGE_COMPLETED', 'HITL_SIMULATION_SKIPPED')
+            or not isinstance(receipt, dict)
+            or receipt.get('run_id') != run_id
+            or type(started_version) is not int
+            or type(receipt.get('version')) is not int
+            or receipt['version'] != started_version + 1
+            # Core event ACKs carry a positive sequence; absent/forged sequence
+            # cannot prove a committed stage even when the version looks fresh.
+            or type(receipt.get('sequence')) is not int
+            or receipt['sequence'] < 1
+            or ('stage' in receipt and receipt['stage'] != stage)
+            or receipt.get('event_type') not in (None, expected_event_type)
+            or ('idempotent' in receipt and type(receipt['idempotent']) is not bool)
+            or receipt.get('status') not in (None, 'PASS')
+            or any(receipt.get(key) is not None and receipt.get(key) is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('stage_pass_receipt_not_qualified')
+    return {
+        **receipt, 'stage': stage, 'status': 'PASS',
+        'execution_allowed': False, 'effect_allowed': False,
+    }
+
 
 @activity.defn
 async def execute_stage(a):
@@ -274,6 +347,34 @@ def create_hitl_proposal(rid, mode, expected_version):
     return {'status': 'BLOCKED', 'reason': 'no_fully_structured_allowlisted_action'}
 
 
+def verified_no_effect_stage_started_receipt(receipt, run_id, stage, expected_version):
+    """Fence the Core STAGE_STARTED ACK before any downstream stage adapter.
+
+    Core /events returns run_id, sequence, version, idempotent; it does not
+    return the event status. Optional extra fields must not contradict RUNNING,
+    the stage, or the no-effect contract. A replay with a later Core version
+    cannot reauthorize an earlier stage.
+    """
+    if (not isinstance(receipt, dict)
+            or type(expected_version) is not int or expected_version < 0
+            or receipt.get('run_id') != run_id
+            or type(receipt.get('sequence')) is not int
+            or receipt['sequence'] < 1
+            or type(receipt.get('version')) is not int
+            or receipt['version'] != expected_version + 1
+            or ('stage' in receipt and receipt['stage'] != stage)
+            or receipt.get('event_type') not in (None, 'STAGE_STARTED')
+            or receipt.get('status') not in (None, 'RUNNING')
+            or ('idempotent' in receipt and type(receipt['idempotent']) is not bool)
+            or any(receipt.get(key) is not None and receipt.get(key) is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('stage_start_receipt_not_qualified')
+    return {
+        **receipt, 'stage': stage, 'status': 'RUNNING',
+        'execution_allowed': False, 'effect_allowed': False,
+    }
+
+
 def _execute_stage_blocking(a,attempt):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
     if stage=='DGX_CRITIC':
@@ -281,6 +382,7 @@ def _execute_stage_blocking(a,attempt):
         if recovered is not None:
             return recovered
     started=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':version,'stage':stage,'event_type':'STAGE_STARTED','event_key':f'{stage}:START','status':'RUNNING','confidence':None,'payload':{'executor':'temporal','retry_stable':True}})
+    started=verified_no_effect_stage_started_receipt(started,rid,stage,version)
     v=started['version']
     try:
         if stage == 'HITL':
@@ -293,6 +395,7 @@ def _execute_stage_blocking(a,attempt):
                     'synthetic': True,
                     'approval_required': False,
                     'execution_allowed': False,
+                    'effect_allowed': False,
                 }
                 event = call('POST', f'{CORE}/api/runs/{rid}/events', {
                     'expected_version': v,
@@ -304,6 +407,8 @@ def _execute_stage_blocking(a,attempt):
                     'confidence': 0,
                     'payload': payload,
                 })
+                event = verified_no_effect_stage_receipt(
+                    event, rid, stage, v, 'HITL_SIMULATION_SKIPPED')
                 post_json(CORE, f'/api/runs/{rid}/checkpoint',
                           {'stage': stage, 'version': event['version']}, token=ADMIN)
                 return {
@@ -435,6 +540,7 @@ def _execute_stage_blocking(a,attempt):
                     evidence_key=hashlib.sha256(json.dumps(evidence_ids,separators=(',',':')).encode()).hexdigest()[:16]
                     record=post_json(CORE,f'/api/runs/{rid}/analysis-record',{'analysis':result,'evidence_ids':evidence_ids,'idempotency_key':f'ANALYST-{rid}-V2-{evidence_key}','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0')},timeout=15,token=ADMIN)
                     saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'ANALYST_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':evidence_ids,'confidence':result['confidence'],'payload':{'analysis':result,'analysis_record_id':record['analysis_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
+                    saved=verified_no_effect_stage_receipt(saved, rid, stage, v)
                     post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                     return saved
                 analyst_event=next((e for e in reversed(detail.get('events',[])) if e.get('stage')=='DGX_ANALYST' and e.get('event_type')=='ANALYST_COMPLETED'),None)
@@ -452,6 +558,8 @@ def _execute_stage_blocking(a,attempt):
                     result,source_evidence
                 ) if state=='BLOCKED' else None
                 saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'CRITIC_COMPLETED','event_key':f'{stage}:COMPLETE','status':state,'evidence_ids':evidence_ids,'decision':result.get('final_recommendation'),'confidence':result.get('diagnostic_confidence',0),'payload':{'critique':result,'analysis_record_id':analysis_record_id,'critique_record_id':critique_record['critique_id'],'denial_policy_input':denial_snapshot,'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
+                if state=='PASS':
+                    saved=verified_no_effect_stage_receipt(saved, rid, stage, v)
                 post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
                 if state=='BLOCKED':
                     try:
@@ -497,7 +605,8 @@ def _execute_stage_blocking(a,attempt):
             critique_record_id=(critic_event or {}).get('payload',{}).get('critique_record_id')
             freshness=assess_evidence_freshness(source_evidence)
             policy_input={'mode':mode,'command':'EXECUTE','severity':analysis.get('severity','UNKNOWN'),'confidence':min(float(analysis.get('confidence',0)),float(critique.get('diagnostic_confidence',0))),'evidence_count':len(source_evidence),'critic_validated':critique.get('validated') is True,'redundancy_ok':False if not source_evidence else True,'evidence_fresh':freshness['status']=='FRESH','evidence_freshness':freshness,'preconditions_verified':False,'fencing_verified':False,'human_approved':False}
-            pol=post_json(POLICY,'/api/policy/check',policy_input,token=ADMIN)
+            pol=verified_synthetic_policy_verdict(
+                post_json(POLICY,'/api/policy/check',policy_input,token=ADMIN), mode)
             decision_record=post_json(CORE,f'/api/runs/{rid}/policy-record',{'policy':pol,'analysis_id':analysis_record_id,'critique_id':critique_record_id,'evidence_ids':[x['evidence_id'] for x in source_evidence],'policy_version':'2.1.0','policy_input':policy_input},timeout=15,token=ADMIN)
             pol['policy_decision_id']=decision_record['policy_decision_id']
             post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':[x['evidence_id'] for x in source_evidence],'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
@@ -506,6 +615,7 @@ def _execute_stage_blocking(a,attempt):
                 blocked=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':blocked_event['version'],'idempotency_key':f'POLICY-BLOCK-{rid}','command':'BLOCK'})
                 return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked['version']}
         completed=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':eids,'confidence':.94,'payload':{'executor':'temporal','synthetic':synthetic,'attempt':attempt}})
+        completed=verified_no_effect_stage_receipt(completed, rid, stage, v)
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
             post_json(CORE,f'/api/runs/{rid}/demo-artifacts',{'artifact_type':'stage','title':stage,'sequence_no':completed['sequence'],'caption':f'{stage} — {mode} — evidence linked','payload':{'scenario_id':scenario,'synthetic':True}},token=ADMIN)
@@ -515,7 +625,11 @@ def _execute_stage_blocking(a,attempt):
         finally: raise
 @activity.defn
 async def finish_run(a):
-    return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
+    receipt = await asyncio.to_thread(
+        call, 'POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+        {'expected_version': a['version'], 'idempotency_key': 'RESOLVE-'+a['run_id'],
+         'command': 'RESOLVE'})
+    return verified_no_effect_command_receipt(receipt, a['run_id'], 'RESOLVE', a['version'])
 @app.get('/health')
 def health():
  if not worker_state['polling']:
@@ -562,8 +676,16 @@ async def reconcile_hitl_decisions_loop():
    snapshot=post_json(CORE,'/api/hitl/decision-outbox/claim',{
     'owner':DENIAL_WORKER_OWNER,'limit':20,'lease_seconds':45,
    },token=ADMIN)
-   items=snapshot.get('items',[]) if isinstance(snapshot,dict) else []
+   if (not isinstance(snapshot,dict)
+       or snapshot.get('execution_allowed') is not False
+       or snapshot.get('effect_allowed') is not False):
+    raise RuntimeError('outbox_claim_receipt_not_qualified')
+   items=snapshot.get('items',[])
+   if not isinstance(items,list):
+    raise RuntimeError('outbox_claim_items_invalid')
    for item in items:
+    if not isinstance(item,dict):
+     continue
     rid=item.get('run_id')
     pid=item.get('proposal_id')
     digest=item.get('proposal_hash')
@@ -571,23 +693,36 @@ async def reconcile_hitl_decisions_loop():
     event_id=item.get('event_id')
     lease_token=item.get('lease_token')
     decision=item.get('decision')
+    source_status=item.get('source_status')
     if (not all(isinstance(v,str) and v for v in
                 (rid,pid,digest,event_id,lease_token))
-            or type(revision) is not int
-            or decision not in ('APPROVE','REJECT')):
+            or type(revision) is not int or revision < 1
+            or (decision,source_status) not in (
+                ('APPROVE','APPROVED'),
+                ('REJECT','REJECTED'),
+                ('REJECT','REVOKED'))
+            or any(item.get(k) is not None and item.get(k) is not False
+                   for k in ('execution_allowed','effect_allowed'))):
      continue
     payload={
      'proposal_id':pid,
      'proposal_hash':digest,
      'proposal_revision':revision,
      'decision':decision,
-     'source_status':item.get('source_status'),
+     'source_status':source_status,
     }
     try:
      handle=client.get_workflow_handle(rid)
      await handle.signal(IncidentWorkflow.submit_hitl_decision,payload)
-     post_json(CORE,f'/api/hitl/decision-outbox/{event_id}/delivered',
-               {'lease_token':lease_token},token=ADMIN)
+     ack=post_json(CORE,f'/api/hitl/decision-outbox/{event_id}/delivered',
+                  {'lease_token':lease_token},token=ADMIN)
+     if (not isinstance(ack,dict)
+         or ack.get('event_id')!=event_id
+         or ack.get('status')!='DELIVERED'
+         or type(ack.get('idempotent')) is not bool
+         or ack.get('execution_allowed') is not False
+         or ack.get('effect_allowed') is not False):
+      raise RuntimeError('outbox_delivery_ack_not_qualified')
     except Exception as exc:
      # Do not ack. The lease will expire and another poller pass retries.
      log.debug('HITL outbox delivery deferred: %s',type(exc).__name__)
