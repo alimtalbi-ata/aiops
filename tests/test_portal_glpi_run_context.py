@@ -15,6 +15,10 @@ class FakeGLPI:
             "content": "Run: RUN-ABCDEF123456",
         }
 
+    def add_private_followup(self, ticket_id, marker, content):
+        assert marker in content
+        return {"id": 987, "idempotent": False, "is_private": True}
+
 
 def test_glpi_ticket_fastpath_links_only_verified_run(monkeypatch):
     monkeypatch.setenv("AIOPS_PORTAL_OPERATOR_TOKEN", "p" * 64)
@@ -142,6 +146,8 @@ def test_glpi_hitl_fastpath_creates_only_guarded_proposal(monkeypatch):
     assert body["hitl_proposal"]["status"] == "PROPOSED"
     assert body["approval_required"] is True
     assert body["execution_allowed"] is False
+    assert body["glpi_followup"]["id"] == 987
+    assert body["glpi_followup"]["is_private"] is True
     proposal_call = next(c for c in calls if c[0].endswith("/proposals"))
     assert proposal_call[1]["action_type"] == "COLLECT_DIAGNOSTICS"
     assert proposal_call[1]["evidence_ids"] == evidence
