@@ -959,6 +959,49 @@ def _noc_core_auth_failure(authorization: str | None):
     return None
 
 
+@app.get("/api/runs/{rid}/demo-verification")
+def demo_verification(rid: str, authorization: str | None = Header(default=None)):
+    """Internal read-only proof that a synthetic DEMO did not create LIVE effects."""
+    auth(bearer(authorization))
+    if not isinstance(rid, str) or _NOC_CORE_ID.fullmatch(rid) is None:
+        raise HTTPException(404, "demo_verification_unavailable")
+    try:
+        with db() as c:
+            row = c.execute(
+                "select r.run_id,r.incident_id,r.mode,r.status,i.synthetic,"
+                "(select count(*) from aiops.effect_receipts e join aiops.action_proposals p on p.proposal_id=e.proposal_id where p.run_id=r.run_id),"
+                "(select count(*) from aiops.approval_records a join aiops.action_proposals p on p.proposal_id=a.proposal_id where p.run_id=r.run_id),"
+                "(select count(*) from aiops.hitl_decision_outbox o where o.run_id=r.run_id),"
+                "(select count(*) from aiops.run_events ev where ev.run_id=r.run_id and ev.stage='HITL' and ev.event_type='HITL_SIMULATION_SKIPPED'),"
+                "(select workflow_id from aiops.execution_receipts x where x.run_id=r.run_id) "
+                "from aiops.runs r join aiops.incidents i on i.incident_id=r.incident_id "
+                "where r.run_id=%s", (rid,)
+            ).fetchone()
+        if not row or row[2] not in ("DEMO", "REPLAY", "STORY") or row[4] is not True:
+            raise ValueError("not a canonical synthetic run")
+        run_id, incident_id, mode, status, synthetic, effects, approvals, outbox, hitl_skips, workflow_id = row
+        no_effects_observed = effects == 0 and approvals == 0 and outbox == 0
+        return {
+            "run_id": run_id,
+            "incident_id": incident_id,
+            "mode": mode,
+            "status": status,
+            "synthetic": True,
+            "workflow_id": workflow_id,
+            "hitl_simulation_skipped": hitl_skips == 1,
+            "effect_receipts": effects,
+            "approval_records": approvals,
+            "outbox_events": outbox,
+            "no_effects_observed": no_effects_observed,
+            "live_remediation_authorized": False,
+            "proof_scope": "READ_ONLY_DATABASE_OBSERVATION_NOT_LIVE_ATTESTATION",
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "demo_verification_unavailable")
+
+
 @app.get("/api/noc/runs/{rid}")
 def noc_read_synthetic_run(rid: str, authorization: str | None = Header(default=None)):
     """Bounded synthetic-only Run identity for portal NOC correlation."""
