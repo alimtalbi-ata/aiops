@@ -183,3 +183,21 @@ The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte Z
 | T5 | NO_GO | No independent LIVE authorization/effect attestation |
 
 `RELEASE_STABLE=NO_GO`. No merge, main push, Debian/cron/runner, GLPI write or LIVE.
+
+
+### 2026-10-31 03:31 UTC — exact-head T0 green; T4 semantic-manifest blocker
+
+#201 HEAD `a5bdb5bfeb8a05bd761cba7268b9c6ffc8fc3b95`, [Quality 41164572871](https://github.com/alimtalbi-ata/aiops/actions/runs/41164572871) **SUCCESS 3/3**: Portal Run Python **33/33**, synthetic Chromium **6/6**, kit guard **12/12**. Artifact 13028322111 ZIP SHA256 `8b8a295aee139c573cca1ca38577d9b00da4a59c3c9aac93ab1e11fd095f615b`, 2/2 CRC PASS, source/base/checkout separated, runtime unauthenticated. This proves response-level negative fixtures, **not Core actor+tenant authorization** or complete T2.
+
+#204 stacked HEAD `b4198e1e` [Quality 41162880436](https://github.com/alimtalbi-ata/aiops/actions/runs/41162880436) SUCCESS 6/6. Its independently inspected nested kit artifact 13027198980: outer SHA256 `52bcc27148aa31c7cccce88823f3ef42c2fbec11ba838aaa6be72edda3f2bacf`, nested SHA256 `18255dab2e157c6671b077c18a4143309f83b2fb1eaeb2c37618e07829492e48`; generated `FILES-SHA256SUMS` 406/406 PASS, but embedded `manifests/MANIFEST.json` **30/68 digests mismatch** and release version conflicts with `RELEASE-MANIFEST.txt`. Extraction/repack 407/407 hashes PASS, install/rollback NOT_TESTED, SBOM absent. T4 remains NO_GO. #195 prior `71401ccf` Quality 41164604179 SUCCESS 3/3; any newer docs SHA requires new exact-head CI.
+
+| Gate | Decision | Evidence |
+|---|---|---|
+| T0 | GO_LIMITED | #201 exact-head Quality 3/3 and 33/33 Portal Run tests |
+| T1 | BLOCKED | No Core actor+tenant exact-Run ACL; timing/upstream auth distinctions not qualified |
+| T2 | NOT_QUALIFIED | No integrated main-based ACME 14-checkpoint single Run |
+| T3 | NOT_ATTESTED | No Debian access |
+| T4 | NO_GO | No cumulative #201 kit; #204 manifest mismatch; no install/rollback |
+| T5 | NO_GO | LIVE authorization/effect gates absent |
+
+`RELEASE_STABLE=NO_GO`. No merge, main push, host changes, GLPI write or LIVE.
