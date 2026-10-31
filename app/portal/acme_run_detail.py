@@ -298,6 +298,7 @@ def run_detail_page(rid: str, request: Request,
         f'mode: {mode} · connection: {connection} · source: {source} · source freshness: {freshness}</p>'
         '<p class="muted">Tenant ACL: NOT QUALIFIED. No Evidence bytes, AI decision, '
         'HITL approval, Payments impact or verification is attested here.</p>'
+        '<p><a href="/itsm">GLPI / ITSM native handoff — read-only, UNKNOWN</a></p>'
         f'<nav aria-label="ACME journey">{nav}</nav>{"".join(rows)}'
         '</main></body></html>'
     )
