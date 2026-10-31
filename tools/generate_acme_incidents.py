@@ -298,7 +298,10 @@ def correlate_golden_manifest_offline(manifest):
         raise ValueError("untrusted golden replay manifest") from exc
     # Compare all fields, not only the self-declared dataset_sha256. Rehashing
     # a modified payload must never turn a fabricated observation into proof.
-    if manifest != expected:
+    # Python dict equality conflates True with 1 and 0 with False. Compare
+    # canonical JSON bytes so forged scalar types cannot pass with the original
+    # dataset checksum, even when the parsed dictionaries compare equal.
+    if _canonical(manifest) != _canonical(expected):
         raise ValueError("golden replay manifest mismatch")
     return correlate_offline(manifest["events"])
 
@@ -329,7 +332,8 @@ def correlate_catalog_manifest_offline(manifest, *, false_positive=False):
     except (ValueError, TypeError, KeyError) as exc:
         raise ValueError("untrusted catalog replay manifest") from exc
     # A self-declared/recomputed dataset_sha256 is not a source attestation.
-    if manifest != expected:
+    # Type-sensitive JSON equality also rejects bool/int and int/float aliases.
+    if _canonical(manifest) != _canonical(expected):
         raise ValueError("catalog replay manifest mismatch")
     return correlate_offline(manifest["events"])
 
