@@ -22,7 +22,7 @@ if [[ ! -f /etc/os-release ]] || ! grep -q '^ID=debian' /etc/os-release; then
   echo "BLOCKED: this installer is intended for Debian." >&2
   exit 2
 fi
-for cmd in curl python3 install crontab flock; do
+for cmd in curl python3 install crontab flock stat grep id; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "BLOCKED: missing required command: $cmd" >&2; exit 2; }
 done
 if [[ ! -f "$TOKEN" || -L "$TOKEN" ]]; then
@@ -40,7 +40,6 @@ trap 'rm -f "$TMP"' EXIT
 curl --fail --silent --show-error --location --max-time 20 "$SOURCE" -o "$TMP"
 python3 -m py_compile "$TMP"
 install -m 700 "$TMP" "$DEST"
-python3 "$DEST" --help >/dev/null 2>&1 || true
 
 CURRENT="$(crontab -l 2>/dev/null || true)"
 if ! grep -Fq "$CRON_MARKER" <<<"$CURRENT"; then
