@@ -113,12 +113,12 @@ class PortalOIDCIdentityTests(unittest.TestCase):
 
     def test_invalid_utf8_claims_and_control_character_config_rejected(self):
         bad_payload = (b64(b'{"alg":"RS256","kid":"fixture-key"}') + "." +
-                       b64(b"\\xff") + "." + b64(b"synthetic"))
+                       b64(bytes([255])) + "." + b64(b"synthetic"))
         with patch.object(identity, "_verify_rs256", return_value=None):
             with self.assertRaises(identity.IdentityRejected):
                 identity.verify_server_oidc_assertion(bad_payload, env=config(), now=NOW)
         settings = {**config(), "AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN":
-                    "a" * 33 + "\\x00"}
+                    "a" * 33 + chr(0)}
         actor = self.verified()
         with self.assertRaises(identity.IdentityRejected):
             identity.core_xref_preflight(
