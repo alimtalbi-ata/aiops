@@ -148,3 +148,20 @@ The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte Z
 #201 `e6f9ad656d3b6f92ef065f7aec13f3d1b2ca3d74`: [Quality 41155594473](https://github.com/alimtalbi-ata/aiops/actions/runs/41155594473) **COMPLETED SUCCESS 3/3 jobs** (policy-and-static, core-postgres-noc-real-integration, grafana-real-integration). Logs: Portal bootstrap HTTP **6/6**, Run API/HTML **32/32**, Run-link JS **8/8**, bootstrap DOM JS **5/5**, Chromium synthetic **6/6**, cumulative-kit guard **12/12**. T0 **GO limited** on this exact head; **T1 still BLOCKED**, T2 NOT_QUALIFIED, T3 NOT_ATTESTED, T4/T5 NO-GO.
 
 [Artifact 13024589352](https://github.com/alimtalbi-ata/aiops/actions/runs/41155594473/artifacts/13024589352) downloaded and inspected: ZIP 237,689 bytes, SHA256 `451544e07a6da6a5284705fad6947cf5c1be3b917c1a1dfbb7e6fe93c9ea5b87`, 2/2 ZIP members CRC PASS; screenshot PNG SHA256 `8a1720c3851833525d0e817a157d24826ff431fc84ce1d9d9742fd5595ebcaca` matches metadata. `source_head_sha=e6f9ad65…`, `base_sha=27deb9b1…`, `checkout_sha=58c8d9b5…`, `runtime_authenticated=false`, `glpi_ticket_id=null`, `production_qualified=false`. This is a CI-simulated screenshot, **not** a T2 runtime receipt or cumulative kit.
+
+### 2026-10-31 02:28 UTC — stacked Temporal recovery verified, candidate release unchanged
+
+[#204](https://github.com/alimtalbi-ata/aiops/pull/204) HEAD `fb05a75e48827fec38d30a15532a6549492ebf45` (base #194 `40d38705cf2bde3be6052340442c117a81908f65`): [Quality 41158324110](https://github.com/alimtalbi-ata/aiops/actions/runs/41158324110) **SUCCESS 6/6**, including Docker/Temporal runtime-e2e. [Artifact 13026113139](https://github.com/alimtalbi-ata/aiops/actions/runs/41158324110/artifacts/13026113139) independently downloaded: ZIP SHA256 `58186c794a3e90a7e63b2b1f48e4bc4e20b15468b548e1873de07597b66d34f2`, 2/2 CRC PASS. Synthetic `RUN-95D829080D737810` RESOLVED, 1 Analyst, 1 Critic, 1 Policy `PASS|SIMULATE`, 12 Evidence, **0 effect receipts**. CI deterministic AI fixture 5/5 PASS, not real Ollama. This supersedes the *stacked-branch* failure at #204 `8aded617` but **does not qualify #201 main-based T2**, GLPI, tenant ACL, worker restart/lost ACK or sandbox rollback.
+
+#201 exact HEAD `e6f9ad656d3b6f92ef065f7aec13f3d1b2ca3d74`, base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, [Quality 41155594473](https://github.com/alimtalbi-ata/aiops/actions/runs/41155594473) SUCCESS 3/3. #202 HEAD `eb7bd709106695e05fd80e241cdd6a22265ba535` [Quality 41158529106](https://github.com/alimtalbi-ata/aiops/actions/runs/41158529106) SUCCESS 3/3; same `acme_run_detail.py` blob as #201, so Run-existence `connection_state` disclosure remains source-observed. #196 `747f0df4` Ollama evaluator FAILURE, 0 qualified repeats. #195 previous exact HEAD `6af61a6099cabc4dfd725d58fb84ff56366a97cb` [Quality 41155714529](https://github.com/alimtalbi-ata/aiops/actions/runs/41155714529) SUCCESS 3/3; new docs HEAD CI pending.
+
+| Gate | Decision | Reason |
+|---|---|---|
+| T0 | GO_LIMITED | #201 exact-head isolated CI SUCCESS |
+| T1 | BLOCKED | Core-owned actor+tenant exact-Run ACL and indistinguishable unqualified Run responses missing |
+| T2 | NOT_QUALIFIED | #204 stacked synthetic E2E PASS; not ported/tested on #201, no complete ACME 14-checkpoint receipt |
+| T3 | NOT_ATTESTED | Debian runner/runtime access unavailable |
+| T4 | NO_GO | No main-based cumulative install/upgrade/rollback exercised |
+| T5 | NO_GO | No independent LIVE authorization or effect qualification |
+
+`RELEASE_STABLE=NO_GO`. No merge, main push, Debian/runner/cron, GLPI write or LIVE action.
