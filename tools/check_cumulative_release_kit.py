@@ -177,11 +177,81 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         errors.append("SOURCE_TREE_DIRTY")
                 except (OSError, subprocess.CalledProcessError):
                     errors.append("SOURCE_HEAD_OR_STATUS_UNAVAILABLE")
-                for path in required_paths:
-                    if path not in files or path == "RELEASE-MANIFEST.txt":
+                # Every packaged source member, not just the required subset,
+                # must be backed by the exact tracked checkout. A checksummed
+                # untracked payload can otherwise masquerade as the source SHA.
+                # These two generated metadata files have independent checks.
+                generated = {"RELEASE-MANIFEST.txt", "FILES-SHA256SUMS"}
+                try:
+                    tracked_output = subprocess.check_output(
+                        ["git", "-C", str(root), "ls-files", "-z", "--cached"],
+                        stderr=subprocess.DEVNULL)
+                    tracked = set(tracked_output.decode("utf-8", "surrogateescape").rstrip("\0").split("\0"))
+                except (OSError, subprocess.CalledProcessError):
+                    errors.append("SOURCE_TRACKED_FILES_UNAVAILABLE")
+                    tracked = set()
+                # The staged generator deliberately refreshes MANIFEST.json from
+                # source metadata and the exact archive bytes. Accept that one
+                # generated member only when its entire JSON object is the
+                # deterministic transformation of the tracked source manifest.
+                # Other members must remain byte-identical to Git HEAD.
+                staged_name = "manifests/MANIFEST.json"
+                if staged_name in files:
+                    try:
+                        staged = json.loads(archive.read(staged_name))
+                        if (isinstance(staged, dict) and
+                                staged.get("inventory_kind") == "staged-release-file-digests"):
+                            original = root / staged_name
+                            if staged_name not in tracked or original.is_symlink() or not original.is_file():
+                                errors.append("STAGED_MANIFEST_SOURCE_MISSING")
+                            else:
+                                expected = json.loads(original.read_text(encoding="utf-8"))
+                                if (not isinstance(expected, dict) or
+                                        not isinstance(expected.get("files"), list) or
+                                        not expected["files"]):
+                                    errors.append("STAGED_MANIFEST_SOURCE_INVALID")
+                                else:
+                                    valid_entries = True
+                                    for entry in expected["files"]:
+                                        if not isinstance(entry, dict):
+                                            valid_entries = False
+                                            break
+                                        member = entry.get("path")
+                                        if (not isinstance(member, str) or
+                                                not _safe_name(member) or member not in files or
+                                                member in {staged_name, "FILES-SHA256SUMS"}):
+                                            valid_entries = False
+                                            break
+                                        payload = archive.read(member)
+                                        entry["bytes"] = len(payload)
+                                        entry["sha256"] = hashlib.sha256(payload).hexdigest()
+                                    versions = re.findall(
+                                        r"^version=([^\\r\\n]+)$",
+                                        manifest if "RELEASE-MANIFEST.txt" in files else "",
+                                        re.MULTILINE)
+                                    if not valid_entries or len(versions) != 1:
+                                        errors.append("STAGED_MANIFEST_SOURCE_INVALID")
+                                    else:
+                                        expected.setdefault("source_manifest_release", expected.get("release", "UNKNOWN"))
+                                        expected.setdefault("source_manifest_name", expected.get("name", "UNKNOWN"))
+                                        expected["release"] = versions[0]
+                                        expected["name"] = "AIOps 2.0 staged deployment kit inventory"
+                                        expected["inventory_kind"] = "staged-release-file-digests"
+                                        if staged != expected:
+                                            errors.append("STAGED_MANIFEST_SOURCE_PROVENANCE_MISMATCH")
+                                        else:
+                                            generated.add(staged_name)
+                                            source_verified += 1
+                    except (ValueError, UnicodeDecodeError, OSError, TypeError):
+                        errors.append("STAGED_MANIFEST_SOURCE_UNREADABLE")
+                for path in sorted(files - generated):
+                    if path not in tracked:
+                        errors.append("SOURCE_MEMBER_UNTRACKED:" + path)
                         continue
                     candidate = root / path
-                    if not candidate.is_file() or candidate.is_symlink():
+                    if candidate.is_symlink():
+                        errors.append("SOURCE_FILE_SYMLINK:" + path)
+                    elif not candidate.is_file():
                         errors.append("SOURCE_FILE_MISSING:" + path)
                     elif hashlib.sha256(candidate.read_bytes()).hexdigest() != hashlib.sha256(archive.read(path)).hexdigest():
                         errors.append("SOURCE_BLOB_MISMATCH:" + path)
