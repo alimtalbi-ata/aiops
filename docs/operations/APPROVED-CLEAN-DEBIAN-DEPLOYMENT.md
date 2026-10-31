@@ -17,7 +17,7 @@ The workflow does not delete existing resources. If installation or qualificatio
 
 Dispatch requires an exact 40-character commit SHA; movable branch and tag names are refused. Before transferring code, the workflow verifies:
 
-1. The source commit is an ancestor of protected `main`; an open feature or qualification branch is not an approved deployment source.
+1. The source commit is an ancestor of `main`; an open feature or qualification branch is not an approved deployment source.
 2. The latest `AIOps quality gates` run for that exact SHA completed successfully.
 3. The latest `Debian 12 and 13 installation and runtime qualification` run for that exact SHA completed successfully.
 4. Both workflow runs originate from this repository and the expected workflow paths.
