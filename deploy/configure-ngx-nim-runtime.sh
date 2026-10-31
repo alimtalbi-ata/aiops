@@ -20,6 +20,20 @@ docker compose version >/dev/null
 docker info >/dev/null
 chmod 600 .env
 umask 077
+BACKUP=""
+rollback_config_on_error() {
+  local status=$?
+  if [[ $status -ne 0 && -n "$BACKUP" && -f "$BACKUP" ]]; then
+    cp -p "$BACKUP" .env
+    chmod 600 .env
+    docker compose --env-file .env up -d \
+      aiops2-intelligence aiops2-worker aiops2-copilot aiops2-portal >/dev/null 2>&1 || true
+    echo "CONFIG_ROLLBACK=ATTEMPTED"
+    echo "ENV_BACKUP=$BACKUP"
+  fi
+  exit "$status"
+}
+trap rollback_config_on_error ERR
 
 # Probe from Debian host, without credentials, and select the exact served model ID.
 MODEL_ID="$(NIM_BASE_URL="$NIM_BASE_URL" python3 - <<'PY'
@@ -146,6 +160,7 @@ echo "ENV_BACKUP=$BACKUP"
 echo "DATABASE_MIGRATIONS=NOT_RUN"
 echo "GLPI_WRITES=NOT_RUN"
 echo "LIVE_REMEDIATION=DISABLED"
+trap - ERR
 
 if [[ "$RUN_DEMO" -eq 1 ]]; then
   docker compose --env-file .env --profile demo build aiops2-demo-runner
