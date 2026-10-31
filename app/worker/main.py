@@ -133,6 +133,27 @@ async def start_run(a):
     # Requests are blocking I/O. Run them off the shared FastAPI/Temporal event loop.
     return await asyncio.to_thread(call,'POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
 
+def verified_no_effect_stage_receipt(receipt, run_id, stage, started_version):
+    """Normalize a Core event ACK only after a known PASS event was committed.
+
+    Core's event API returns run_id/sequence/version, not event status.
+    Never promote a contradictory, stale or effect-authorizing ACK.
+    """
+    if (not isinstance(receipt, dict)
+            or receipt.get('run_id') != run_id
+            or type(started_version) is not int
+            or type(receipt.get('version')) is not int
+            or receipt['version'] <= started_version
+            or receipt.get('status') not in (None, 'PASS')
+            or any(receipt.get(key) is not None and receipt.get(key) is not False
+                   for key in ('execution_allowed', 'effect_allowed'))):
+        raise RuntimeError('stage_pass_receipt_not_qualified')
+    return {
+        **receipt, 'stage': stage, 'status': 'PASS',
+        'execution_allowed': False, 'effect_allowed': False,
+    }
+
+
 @activity.defn
 async def execute_stage(a):
     return await asyncio.to_thread(_execute_stage_blocking,a,activity.info().attempt)
@@ -437,7 +458,7 @@ def _execute_stage_blocking(a,attempt):
                     record=post_json(CORE,f'/api/runs/{rid}/analysis-record',{'analysis':result,'evidence_ids':evidence_ids,'idempotency_key':f'ANALYST-{rid}-V2-{evidence_key}','provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0')},timeout=15,token=ADMIN)
                     saved=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'ANALYST_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':evidence_ids,'confidence':result['confidence'],'payload':{'analysis':result,'analysis_record_id':record['analysis_id'],'provider':response.get('provider','openai-compatible'),'model':response.get('model','unknown'),'prompt_version':response.get('prompt_version','analyst-v2.0'),'synthetic':mode!='LIVE','evidence_count':len(source_evidence)}})
                     post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':saved['version']},token=ADMIN)
-                    return saved
+                    return verified_no_effect_stage_receipt(saved, rid, stage, v)
                 analyst_event=next((e for e in reversed(detail.get('events',[])) if e.get('stage')=='DGX_ANALYST' and e.get('event_type')=='ANALYST_COMPLETED'),None)
                 if not analyst_event or not isinstance(analyst_event.get('payload',{}).get('analysis'),dict):
                     raise RuntimeError('analyst_result_missing')
@@ -477,7 +498,7 @@ def _execute_stage_blocking(a,attempt):
                         'policy_denial_recorded':False,
                         'denial_intent_durable':True,
                     }
-                return saved
+                return verified_no_effect_stage_receipt(saved, rid, stage, v)
             except AtomicDenialBlockError:
                 raise
             except Exception as exc:
@@ -510,7 +531,7 @@ def _execute_stage_blocking(a,attempt):
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
             post_json(CORE,f'/api/runs/{rid}/demo-artifacts',{'artifact_type':'stage','title':stage,'sequence_no':completed['sequence'],'caption':f'{stage} — {mode} — evidence linked','payload':{'scenario_id':scenario,'synthetic':True}},token=ADMIN)
-        return completed
+        return verified_no_effect_stage_receipt(completed, rid, stage, v)
     except Exception as exc:
         try: call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_FAILED','event_key':f'{stage}:FAIL','status':'FAIL','confidence':0,'payload':{'error':str(exc)[:500],'attempt':attempt}})
         finally: raise
