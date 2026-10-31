@@ -148,7 +148,7 @@ class PolicySafetyTests(unittest.TestCase):
                 self.assertIs(result["execution_allowed"], False)
                 self.assertIs(result["effect_allowed"], False)
 
-    def test_http_verdicts_never_grant_execution_or_effect(self):
+    def test_http_contract_remains_strict_and_internal_verdict_no_effect(self):
         with TestClient(app) as client:
             for mode, command, evidence_count in (
                 ("DEMO", "REMEDIATE", 2),
@@ -161,8 +161,11 @@ class PolicySafetyTests(unittest.TestCase):
                     response = client.post("/api/policy/check", json=decision(
                         mode=mode, command=command, evidence_count=evidence_count).model_dump())
                     self.assertEqual(response.status_code, 200)
-                    self.assertIs(response.json()["execution_allowed"], False)
-                    self.assertIs(response.json()["effect_allowed"], False)
+                    self.assertEqual(set(response.json()), {"state", "decision", "reason"})
+                    self.assertIs(evaluate(decision(mode=mode, command=command,
+                        evidence_count=evidence_count))["execution_allowed"], False)
+                    self.assertIs(evaluate(decision(mode=mode, command=command,
+                        evidence_count=evidence_count))["effect_allowed"], False)
 
 
 if __name__ == "__main__":
