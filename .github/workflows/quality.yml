@@ -37,6 +37,10 @@ jobs:
         env:
           PYTHONPATH: app
         run: python -m unittest discover -s tests -p "test_intelligence_http_integration.py" -v
+      - name: Guarded customer demo runner contracts
+        run: |
+          python -m py_compile scripts/run-acme-demo.py
+          python -m unittest discover -s tests -p "test_demo_runner_contract.py" -v
       - name: Temporal Worker real Analyst/Critic and fail-closed contracts
         env:
           PYTHONPATH: app
