@@ -17,10 +17,11 @@ class CleanDebianWorkflowContractTests(unittest.TestCase):
         self.assertIn("checkout_sha_mismatch", WORKFLOW)
 
     def test_exact_head_ci_and_approved_ancestry_are_required(self):
-        self.assertIn('approved_refs = ("main",)', WORKFLOW)
-        self.assertNotIn("test/debian12-install-runtime-qualification-20261031", WORKFLOW)
-        self.assertIn("APPROVED_SOURCE_ANCESTRY=PASS", WORKFLOW)
-        self.assertIn("EXACT_HEAD_CI=PASS", (ROOT / "scripts/verify_clean_debian_source.py").read_text())
+        source_gate = (ROOT / "scripts/verify_clean_debian_source.py").read_text()
+        self.assertIn('quote("main"', source_gate)
+        self.assertNotIn("test/debian12-install-runtime-qualification-20261031", source_gate)
+        self.assertIn("APPROVED_SOURCE_ANCESTRY=PASS", source_gate)
+        self.assertIn("EXACT_HEAD_CI=PASS", source_gate)
         self.assertIn("scripts/verify_clean_debian_source.py", WORKFLOW)
         self.assertIn(".github/workflows/quality.yml", WORKFLOW)
         self.assertIn(".github/workflows/debian12-qualification.yml", WORKFLOW)
