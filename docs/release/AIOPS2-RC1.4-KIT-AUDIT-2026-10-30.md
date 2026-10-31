@@ -302,3 +302,22 @@ New [draft #209](https://github.com/alimtalbi-ata/aiops/pull/209) `9d515aee54a80
 - Source #204 HEAD \`0790872d170ec3af511993edbb1f7861689455c3\`, [Quality 41222846472](https://github.com/alimtalbi-ata/aiops/actions/runs/41222846472) SUCCESS 6/6. [New artifact 13049949421](https://github.com/alimtalbi-ata/aiops/actions/runs/41222846472/artifacts/13049949421) downloaded: outer ZIP **729166 bytes**, SHA256 \`d4a154289add6b13892d546d9fd13d9632c49675fa9c8eeed39bf26a7fd67342\`; inner ZIP **787945 bytes**, SHA256 \`cf896467e3a1a6ec880f41a8a2ecbea6e707054e08018bcdab96b8af69ab3041\`. Outer and inner CRC PASS; 462 inner members / 413 regular files; no duplicate or traversal paths; **412/412** FILES-SHA256SUMS entries match; extraction/repack preserves **413/413** regular file bytes.
 - **Embedded semantic failure persists:** JSON \`manifests/MANIFEST.json\` only **38/68** size+SHA256 entries match archive bytes, **30/68** wrong; JSON release \`8.0.0\` vs text \`2.1.0-core-rc1.4\`; \`RELEASE-MANIFEST.txt\` \`git_commit=0c1b6be04a39f24e8b4a55c2ea733451789e423b\` differs from source #204 HEAD. \`deploy/install.sh\` present; cumulative upgrade and rollback entrypoints absent. **0/0/0** clean sandbox install/upgrade/rollback exercised. **SEMANTIC_INTEGRITY=FAIL; D3 NO_GO.**
 - Separate draft #213 HEAD \`12a65b5733ecc96108f3cb77f96a340185f71616\` ports deterministic staged JSON provenance and strict Git-source correspondence from #209 onto an older #201 base. [Quality 41225279446](https://github.com/alimtalbi-ata/aiops/actions/runs/41225279446) SUCCESS 3/3, 28/28 offline release guard tests. It has **not** generated, installed, upgraded or rolled back a cumulative kit, and does not fix the #204 artifact. Sole main-based integration candidate remains #201 \`230feb52f64c4480f72a33e7e7c56bb12909b2ab\`. \`RELEASE_STABLE=NO_GO\`.
+
+### 2026-10-31 19:32 Paris — changed #204 artifact 13052770018
+
+Source [#204](https://github.com/alimtalbi-ata/aiops/pull/204) exact HEAD `241977c7802f5647a5f6eb6072bf1dcf1c508521` (base #194 `40d38705cf2bde3be6052340442c117a81908f65`); [Quality 41226950941](https://github.com/alimtalbi-ata/aiops/actions/runs/41226950941) **SUCCESS 6/6**. New artifact [13052770018](https://github.com/alimtalbi-ata/aiops/actions/runs/41226950941/artifacts/13052770018) downloaded and audited independently, not reused from previous #204 package.
+
+| Check | Observed |
+|---|---|
+| Outer ZIP | 729719 bytes; SHA256 `d81b1a1ce9bb55072fb6c01a19d237f61a7916d475ed6d034384af8c979d75df`; 2 members, CRC PASS |
+| Nested ZIP | SHA256 `7173839216c3b234e2f195cc38ab3181c9c88bc80991cb7b77fe3981c103880f`; 462 members, 413 regular files, CRC PASS |
+| Outer nested SHA sidecar | PASS, SHA256 of nested archive matches |
+| `FILES-SHA256SUMS` | **412/412 PASS**, `./` paths normalized before comparison |
+| Extraction/repack | **413/413** in-memory extracted regular file bytes identical after in-memory repack; CRC PASS; no unsafe paths, duplicates or symlinks. This is **not** an installation rehearsal |
+| Embedded `manifests/MANIFEST.json` | **38/68** file size+SHA matches; **30/68 FAIL** |
+| Release version | JSON `8.0.0` vs `VERSION=2.1.0-core-rc1.4`: **FAIL** |
+| Source provenance | `RELEASE-MANIFEST.txt` `git_commit=3f76c9aa04a067c0cf3e4d8e10b9cd504bd13f47` differs from #204 HEAD: **FAIL** |
+| Cumulative entrypoints | Install scripts exist; dedicated cumulative upgrade and rollback entrypoints **absent** |
+| Executed sandbox install/upgrade/rollback | **0/0/0** — NOT_RUN |
+
+**SEMANTIC_INTEGRITY=FAIL / D3 NO_GO.** #206 (stacked generator correction), #210 (entrypoint/ordinal guard) and #213 (source provenance guard on historical #201) are distinct branches; none retroactively validates this archive. No deployment, migration, GLPI write or host action. Required next: main-based cumulative source tree with migration order, exact checkout provenance, deterministic manifest, executable install/upgrade/rollback, disposable sandbox receipts, then same-SHA CI and operator attestation. Until then `RELEASE_STABLE=NO_GO`.
