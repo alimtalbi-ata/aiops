@@ -1,0 +1,165 @@
+name: Approved clean Debian deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch, tag or immutable commit SHA to deploy
+        required: true
+        type: string
+        default: test/debian12-install-runtime-qualification-20261031
+      target_root:
+        description: New, empty installation directory on the Debian host
+        required: true
+        type: string
+        default: /home/aiops/aiops2-v8
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiops2-clean-debian-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy-clean-host:
+    name: Deploy and qualify a clean Debian 12 host
+    runs-on: ubuntu-24.04
+    environment: aiops-debian-lab
+    timeout-minutes: 120
+    steps:
+      - name: Validate deployment inputs
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          TARGET_ROOT: ${{ inputs.target_root }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "$SOURCE_REF" ]] || { echo "source_ref is required"; exit 2; }
+          [[ "$TARGET_ROOT" == /* && "$TARGET_ROOT" != "/" ]] || { echo "target_root must be an absolute non-root path"; exit 2; }
+          case "$TARGET_ROOT" in *".."*|*" "*|*$'\n'*) echo "unsafe target_root"; exit 2 ;; esac
+          [[ "$TARGET_ROOT" =~ ^/[A-Za-z0-9_./-]+$ ]] || { echo "target_root contains unsupported characters"; exit 2; }
+
+      - name: Checkout selected source revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record immutable source revision
+        id: source
+        run: |
+          set -Eeuo pipefail
+          SHA="$(git rev-parse HEAD)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploying source SHA: $SHA"
+
+      - name: Validate SSH configuration and prepare archive
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          for name in SSH_PRIVATE_KEY SSH_KNOWN_HOSTS SSH_HOST SSH_USER; do
+            [[ -n "${!name:-}" ]] || { echo "Missing required environment secret: $name"; exit 2; }
+          done
+          install -m 0700 -d "$RUNNER_TEMP/aiops-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/aiops-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/aiops-ssh/known_hosts"
+          chmod 0600 "$RUNNER_TEMP/aiops-ssh/id_ed25519" "$RUNNER_TEMP/aiops-ssh/known_hosts"
+          tar --exclude=.git --exclude=.env --exclude='*.pyc' --exclude='__pycache__' -czf "$RUNNER_TEMP/aiops2-source.tar.gz" .
+          echo "SSH_HOST=$SSH_HOST" >> "$GITHUB_ENV"
+          echo "SSH_USER=$SSH_USER" >> "$GITHUB_ENV"
+
+      - name: Verify clean Debian 12 target before transfer
+        env:
+          SSH_KEY: ${{ runner.temp }}/aiops-ssh/id_ed25519
+          KNOWN_HOSTS: ${{ runner.temp }}/aiops-ssh/known_hosts
+          TARGET_ROOT: ${{ inputs.target_root }}
+        run: |
+          set -Eeuo pipefail
+          ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$SSH_USER@$SSH_HOST" "bash -s" <<REMOTE
+          set -Eeuo pipefail
+          [[ "$(id -u)" -ne 0 ]] || { echo "BLOCKED|run_as_non_root"; exit 2; }
+          . /etc/os-release
+          [[ "${ID:-}" == debian && "${VERSION_ID:-}" == 12 ]] || { echo "BLOCKED|unsupported_os|${PRETTY_NAME:-unknown}|expected=Debian12"; exit 2; }
+          command -v docker >/dev/null || { echo "BLOCKED|docker_missing"; exit 2; }
+          docker compose version >/dev/null || { echo "BLOCKED|compose_missing"; exit 2; }
+          docker info >/dev/null || { echo "BLOCKED|docker_access_denied"; exit 2; }
+          FREE_KB=$(df -Pk "$(dirname "$TARGET_ROOT")" | awk 'NR==2{print $4}')
+          (( FREE_KB > 8388608 )) || { echo "BLOCKED|disk_below_8GiB|${FREE_KB}KB"; exit 2; }
+          [[ ! -e "$TARGET_ROOT" ]] || { echo "BLOCKED|target_must_be_empty|$TARGET_ROOT"; exit 2; }
+          echo "REMOTE_PREFLIGHT=PASS"
+          REMOTE
+
+      - name: Transfer reviewed source archive
+        env:
+          SSH_KEY: ${{ runner.temp }}/aiops-ssh/id_ed25519
+          KNOWN_HOSTS: ${{ runner.temp }}/aiops-ssh/known_hosts
+        run: |
+          set -Eeuo pipefail
+          scp -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$RUNNER_TEMP/aiops2-source.tar.gz" "$SSH_USER@$SSH_HOST:/tmp/aiops2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+
+      - name: Install, start and qualify on the clean host
+        env:
+          SSH_KEY: ${{ runner.temp }}/aiops-ssh/id_ed25519
+          KNOWN_HOSTS: ${{ runner.temp }}/aiops-ssh/known_hosts
+          TARGET_ROOT: ${{ inputs.target_root }}
+          ARCHIVE_PATH: /tmp/aiops2-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -Eeuo pipefail
+          ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$SSH_USER@$SSH_HOST" "AIOPS2_ROOT='$TARGET_ROOT' ARCHIVE_PATH='$ARCHIVE_PATH' SOURCE_SHA='$SOURCE_SHA' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          ROOT="${AIOPS2_ROOT:?}"
+          ARCHIVE="${ARCHIVE_PATH:?}"
+          SHA="${SOURCE_SHA:?}"
+          [[ ! -e "$ROOT" ]] || { echo "BLOCKED|target_created_after_preflight|$ROOT"; exit 2; }
+          [[ -s "$ARCHIVE" ]] || { echo "BLOCKED|source_archive_missing"; exit 2; }
+          install -d -m 0750 "$ROOT"
+          tar -xzf "$ARCHIVE" -C "$ROOT"
+          rm -f "$ARCHIVE"
+          cd "$ROOT"
+          [[ -f compose.yml && -f deploy/install.sh && -f deploy/init-env.sh ]] || { echo "BLOCKED|incomplete_source_archive"; exit 2; }
+          printf 'DEPLOY_SOURCE_SHA=%s\n' "$SHA"
+          printf 'DEPLOY_TARGET=%s\n' "$ROOT"
+          bash deploy/install.sh
+          docker compose --env-file .env ps
+          echo "CLEAN_HOST_DEPLOYMENT_AND_QUALIFICATION=PASS"
+          REMOTE
+
+      - name: Collect sanitized deployment evidence
+        if: success()
+        env:
+          SSH_KEY: ${{ runner.temp }}/aiops-ssh/id_ed25519
+          KNOWN_HOSTS: ${{ runner.temp }}/aiops-ssh/known_hosts
+          TARGET_ROOT: ${{ inputs.target_root }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/aiops-deployment-evidence"
+          {
+            echo "source_sha=$SOURCE_SHA"
+            echo "target_root=$TARGET_ROOT"
+            echo "workflow_run_id=$GITHUB_RUN_ID"
+            echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "qualification=PASS"
+            echo "secrets_included=false"
+            echo "persistent_volumes_deleted=false"
+          } > "$RUNNER_TEMP/aiops-deployment-evidence/deployment-manifest.txt"
+          ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$KNOWN_HOSTS" "$SSH_USER@$SSH_HOST" "cd '$TARGET_ROOT' && docker compose --env-file .env ps --format json" > "$RUNNER_TEMP/aiops-deployment-evidence/compose-services.json"
+          chmod 0600 "$RUNNER_TEMP/aiops-deployment-evidence/"*
+      - name: Upload deployment evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiops2-clean-debian-deployment-${{ github.run_id }}
+          path: ${{ runner.temp }}/aiops-deployment-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove runner-side SSH material
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/aiops-ssh" "$RUNNER_TEMP/aiops2-source.tar.gz"
