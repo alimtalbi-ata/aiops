@@ -142,6 +142,7 @@ def read_ticket_xref(tenant_id:str,instance_id:str,ticket_id:str,
         or (expected_run_id is not None and not _valid(expected_run_id,_RUN))
         or (expected_incident_id is not None and not _valid(expected_incident_id,_INC))):
         return _reply(404)
+    stale_evidence = False
     if evidence_known_at is not None:
         try:
             if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})",evidence_known_at):
@@ -149,12 +150,16 @@ def read_ticket_xref(tenant_id:str,instance_id:str,ticket_id:str,
             stamp=evidence_known_at[:-1]+"+00:00" if evidence_known_at.endswith("Z") else evidence_known_at
             when=_utc(datetime.fromisoformat(stamp))
             if when is None or when>now: return _reply(404)
-            if now-when>timedelta(minutes=5): return _reply(200,"STALE")
+            stale_evidence = now-when>timedelta(minutes=5)
         except (TypeError,ValueError,OverflowError): return _reply(404)
     actor,code=_auth(authorization)
     if code!=200: return _reply(code)
     if "itsm:xref:read" not in actor["permissions"] or tenant_id not in actor["tenant_ids"]:
         return _reply(403,"UNAUTHORIZED")
+    # Never return a 200 STALE response before service authentication and
+    # server-side tenant/permission authorization. This preflight still
+    # guarantees zero DB calls for stale evidence.
+    if stale_evidence: return _reply(200,"STALE")
     key=_key()
     if key is None: return _reply(503)
     try:
