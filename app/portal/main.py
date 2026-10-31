@@ -16,6 +16,21 @@ from portal.noc_demo_rag import router as noc_demo_rag_router
 from portal.noc_grafana_health import router as noc_grafana_health_router
 from portal.acme_run_detail import router as acme_run_detail_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
+
+@app.middleware('http')
+async def portal_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    defaults = {
+        'Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'no-referrer',
+        'X-Frame-Options': 'DENY',
+        'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    }
+    for key, value in defaults.items():
+        response.headers.setdefault(key, value)
+    return response
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 app.include_router(demo_ledger_router)
 app.include_router(glpi_run_context_router)
@@ -39,6 +54,10 @@ def portal_navigation_script():
     return FileResponse(Path(__file__).with_name('portal_navigation_client.js'),
                         media_type='application/javascript',
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+
+@app.get('/assets/portal-navigation.js')
+def portal_navigation_script():
+    return FileResponse(Path(__file__).with_name('portal_navigation_client.js'), media_type='application/javascript', headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
 @app.get('/api/portal/bootstrap')
 def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
@@ -360,7 +379,15 @@ def home():
             "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu dans l'inventaire Core.</p>")
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
+    content+=panel("Intégrations — liens non attestés",
+        '<p class="muted">Les liens externes ne prouvent ni disponibilité ni authentification. Aucun secret ou URL configurée n’est exposé dans le HTML public.</p>'
+        '<label for="portal-navigation-token">Jeton lecture des liens (usage unique)</label> '
+        '<input id="portal-navigation-token" type="password" autocomplete="off"> '
+        '<button type="button" onclick="loadPortalNavigation()">Afficher les liens configurés</button> '
+        '<button type="button" onclick="clearPortalNavigation()">Effacer les liens</button> '
+        '<span id="portal-navigation-status">UNKNOWN — liens non chargés</span>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
+
 
 @app.get("/runs",response_class=HTMLResponse)
 def runs_page():
