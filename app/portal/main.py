@@ -25,7 +25,7 @@ async def portal_security_headers(request: Request, call_next):
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
         'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
     }
     for key, value in defaults.items():
         response.headers.setdefault(key, value)
