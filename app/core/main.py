@@ -3,6 +3,7 @@ from shared.safety import canonical_sha256, gold_set_eligible, critical_approval
 from fastapi import FastAPI,HTTPException,Header
 from fastapi.responses import JSONResponse
 from shared.tenant_scope import reject_unqualified_tenant_scope
+from shared.demo_policy_gate_read_model import project_demo_policy_gate
 from pydantic import BaseModel,Field
 from shared.db import db
 from core.demo_evidence_read import register_demo_evidence_routes
