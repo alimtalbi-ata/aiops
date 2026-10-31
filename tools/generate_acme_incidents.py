@@ -334,6 +334,77 @@ def correlate_catalog_manifest_offline(manifest, *, false_positive=False):
     return correlate_offline(manifest["events"])
 
 
+
+def storyboard_offline(manifest, *, false_positive=False):
+    """Project a strictly verified replay into a read-only SYNTHETIC demo story.
+
+    Source-event IDs are local fixture IDs, never Core/GLPI/Evidence IDs.
+    The projection adds no new observations or runtime checkpoint receipts.
+    """
+    correlated = correlate_catalog_manifest_offline(manifest, false_positive=false_positive)
+    graph = load_graph()
+    service_id = manifest["service_id"]
+    business_links = [
+        {"edge_id": edge_id, "business_ci_id": consumer}
+        for edge_id, consumer in graph["consumers"][service_id]
+        if graph["nodes"][consumer]["type"] == "BUSINESS"
+    ]
+    impact = manifest["impact_estimate"]
+    events = manifest["events"]
+    return {
+        "schema": "aiops.acme.synthetic-storyboard.v1",
+        "source": SOURCE, "provenance": "SYNTHETIC_FIXTURE",
+        "synthetic": True, "publishable_to_core_or_glpi": False,
+        "live_effects_authorized": False, "runtime_api_readback": "NOT_EXECUTED",
+        "source_dataset_sha256": manifest["dataset_sha256"],
+        "source_manifest_sha256": hashlib.sha256(_canonical(manifest)).hexdigest(),
+        "scenario_id": manifest["scenario_id"],
+        "scenario_category": manifest["scenario_category"],
+        "seed": manifest["seed"], "stochastic": manifest["stochastic"],
+        "graph_version": manifest["graph_version"],
+        "catalog_sha256": manifest["catalog_sha256"],
+        "tenant_scope": "UNKNOWN", "tenant_id": None,
+        "incident_id": None, "run_id": None, "ticket_id": None,
+        "evidence_ids": [], "service_id": service_id, "ci_id": manifest["ci_id"],
+        "correlation_key": correlated["correlation_key"],
+        "correlation_status": "OFFLINE_SYNTHETIC_ONLY",
+        "dependency_path": {
+            "node_ids": list(impact["path_node_ids"]),
+            "edge_ids": list(impact["path_edge_ids"]),
+            "business_links": business_links,
+            "candidate_service_ids": list(impact["candidate_service_ids"]),
+            "candidate_ci_count": impact["candidate_ci_count"],
+            "estimated_impact_level": impact["estimated_impact_level"],
+            "observed_service_impact": "UNKNOWN",
+            "causality_verified": False,
+            "redundancy_evaluated": False,
+        },
+        "itil": {
+            "priority_candidate": manifest["itil"]["priority_candidate"],
+            "priority_confirmed": "UNKNOWN",
+            "roles_planned": list(manifest["itil"]["roles_planned"]),
+            "roles_authenticated": False,
+        },
+        "event_count": len(events),
+        "timeline": [
+            {
+                "step": index, "source_event_id": event["source_event_id"],
+                "event_time": event["event_time"], "known_at": event["known_at"],
+                "ci_id": event["ci_id"], "action": event["action"],
+                "payload": dict(event["payload"]),
+                "source": event["source"], "provenance": "SYNTHETIC_FIXTURE",
+                "runtime_evidence_id": None, "runtime_readback": "NOT_EXECUTED",
+            }
+            for index, event in enumerate(events, 1)
+        ],
+        "checkpoints": [
+            {"stage": checkpoint["stage"], "status": "NOT_EXECUTED", "id": None}
+            for checkpoint in manifest["checkpoints"]
+        ],
+        "recovery_verified": False,
+    }
+
+
 def correlate_offline(events):
     """Dedup *fixture-only* events; reject untrusted IDs, CIs and evidence.
 
