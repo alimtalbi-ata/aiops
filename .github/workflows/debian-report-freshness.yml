@@ -1,0 +1,49 @@
+name: Debian reporter freshness and runtime snapshot
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/debian-report-freshness.yml"
+      - "scripts/check_debian_runtime_report.py"
+      - "tests/test_debian_runtime_report.py"
+      - "docs/operations/DEBIAN-REPORT-FRESHNESS.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiops2-debian-report-freshness
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile report validator
+        run: python3 -m py_compile scripts/check_debian_runtime_report.py
+      - name: Test report freshness and runtime safety contract
+        run: python3 -m unittest discover -s tests -p "test_debian_runtime_report.py" -v
+
+  freshness:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the Debian report branch without host access
+        uses: actions/checkout@v4
+        with:
+          ref: ops/debian-runtime-reports
+          path: debian-report
+          persist-credentials: false
+      - name: Validate snapshot freshness and allowlisted runtime signals
+        run: >-
+          python3 scripts/check_debian_runtime_report.py
+          --report debian-report/ops/debian-reports/SRV-DEB-05/latest.json
+          --max-age-seconds 900
