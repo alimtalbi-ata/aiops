@@ -1,4 +1,4 @@
-name: Debian 12 installation and runtime qualification
+name: Debian 12 and 13 installation and runtime qualification
 
 on:
   pull_request:
