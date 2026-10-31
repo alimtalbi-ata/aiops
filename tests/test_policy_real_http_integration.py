@@ -98,7 +98,7 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
 
 
-    def test_real_http_verdicts_are_never_effect_authorizations(self):
+    def test_real_http_verdicts_preserve_strict_non_authorizing_contract(self):
         # Real Policy service on the CI loopback; not Core, OIDC or Temporal.
         for mode, command, evidence_count in (
             ("DEMO", "REMEDIATE", 2),
@@ -112,8 +112,9 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
                                       evidence_count=evidence_count,
                                       human_approved=True)
                 self.assertEqual(response.status_code, 200, response.text)
-                self.assertIs(response.json()["execution_allowed"], False)
-                self.assertIs(response.json()["effect_allowed"], False)
+                # Existing Core cross-check rejects any extra HTTP fields.
+                self.assertEqual(set(response.json()), {"state", "decision", "reason"})
+                self.assertNotIn(response.json()["decision"], ("EXECUTE", "REMEDIATE"))
 
 
 if __name__ == "__main__":
