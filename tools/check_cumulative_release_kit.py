@@ -16,6 +16,7 @@ import zipfile
 
 REQUIRED_PATHS = (
     "RELEASE-MANIFEST.txt",
+    "manifests/MANIFEST.json",
     "README.md",
     "compose.yml",
     "config/.env.example",
@@ -90,6 +91,42 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                 matches = re.findall(r"^git_commit=([^\r\n]+)$", manifest, re.MULTILINE)
                 if len(matches) != 1 or matches[0] != expected_sha:
                     errors.append("MANIFEST_SHA_MISMATCH")
+            # The embedded product manifest is an independent integrity claim.
+            # A valid FILES-SHA256SUMS cannot excuse stale file digests here.
+            if "manifests/MANIFEST.json" in files:
+                try:
+                    embedded = json.loads(archive.read("manifests/MANIFEST.json"))
+                    if not isinstance(embedded, dict) or not isinstance(embedded.get("files"), list):
+                        errors.append("EMBEDDED_MANIFEST_INVALID")
+                    else:
+                        release = embedded.get("release")
+                        versions = re.findall(r"^version=([^\\r\\n]+)$", manifest, re.MULTILINE) if "RELEASE-MANIFEST.txt" in files else []
+                        if not isinstance(release, str) or not release or len(versions) != 1 or versions[0] != release:
+                            errors.append("EMBEDDED_RELEASE_VERSION_MISMATCH")
+                        seen = set()
+                        if not embedded["files"]:
+                            errors.append("EMBEDDED_MANIFEST_EMPTY")
+                        for entry in embedded["files"]:
+                            if not isinstance(entry, dict):
+                                errors.append("EMBEDDED_ENTRY_INVALID")
+                                continue
+                            path = entry.get("path")
+                            size = entry.get("bytes")
+                            digest = entry.get("sha256")
+                            if not isinstance(path, str) or not _safe_name(path) or path in seen or not isinstance(size, int) or isinstance(size, bool) or size < 0 or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                                errors.append("EMBEDDED_ENTRY_INVALID")
+                                continue
+                            seen.add(path)
+                            if path not in files:
+                                errors.append("EMBEDDED_FILE_MISSING:" + path)
+                                continue
+                            content = archive.read(path)
+                            if len(content) != size:
+                                errors.append("EMBEDDED_FILE_SIZE_MISMATCH:" + path)
+                            if hashlib.sha256(content).hexdigest() != digest:
+                                errors.append("EMBEDDED_FILE_SHA_MISMATCH:" + path)
+                except (ValueError, UnicodeDecodeError):
+                    errors.append("EMBEDDED_MANIFEST_UNREADABLE")
             if "FILES-SHA256SUMS" not in files:
                 errors.append("CHECKSUM_MANIFEST_MISSING")
             else:
