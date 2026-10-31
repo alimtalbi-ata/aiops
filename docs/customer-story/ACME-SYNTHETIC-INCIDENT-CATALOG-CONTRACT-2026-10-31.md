@@ -73,6 +73,36 @@ Stored edges point consumer→dependency. Reverse candidate path: ACME-SAN-FABRI
 
 Golden P1 is a synthetic priority candidate from graph criticality and scenario urgency; impact/urgency are not measured by Core. N1, N2, N3 and incident commander are planned roles, not authenticated assignments. The seeded 92ms/OK VERIFY is not an independent recovery receipt; final SAN state remains DEGRADED. Maintenance and false-positive fixtures suppress escalation; stale timestamps never become live freshness.
 
+## Read-only storyboard projection (same fixture, no new IDs)
+
+`storyboard_offline(manifest, false_positive=False)` accepts only a complete,
+strictly regenerated graph-bound replay (the Golden path requires seed
+`20261018`). It projects the existing source-event IDs, timestamps, CI IDs,
+service ID, dependency edge IDs, candidate business edge(s), planned ITIL roles
+and all six NOT_EXECUTED checkpoints into a deterministic timeline. It does
+**not** create a second fixture, infer an Incident/Run/ticket/Evidence ID,
+assert observed impact, claim recovery from the seeded `VERIFY` step, or
+perform any runtime API readback. The source manifest and dataset hashes are
+**offline fingerprints, not attestations**.
+
+The Golden business continuation `ACME-SVC-PAYMENTS → ACME-BIZ-PAYMENTS`
+is derived from pinned edge `ACME-E01`, not a measured blast radius.
+The seven timeline entries retain their `SYN-EVT-*` local fixture identifiers;
+`runtime_evidence_id=null`, `runtime_readback=NOT_EXECUTED` and
+`provenance=SYNTHETIC_FIXTURE` remain explicit on every entry.
+`tenant_id`, `incident_id`, `run_id`, `ticket_id` and `evidence_ids`
+remain UNKNOWN/empty. The read-only projection can be exported outside the
+checkout without contacting GLPI/Core/Twin/Policy/Worker:
+
+    python tools/generate_acme_incidents.py --scenario REDUNDANT_SAN_PATH_LOSS --seed 20261018 --storyboard --output /tmp/acme-synthetic-storyboard.json
+    sha256sum /tmp/acme-synthetic-storyboard.json
+
+The CLI's existing safe-output-path restriction applies to storyboard exports.
+Non-Golden supported categories can also be projected, but explicit
+`--false-positive` is required for false-positive replays; blocked categories
+still fail closed. The JSON is a **T0 demo storyboard**, not a video capture,
+Core Evidence receipt, GLPI ticket or proof of a resolved incident.
+
 ## Reproduction / artifact
 
 From repository root, without any service or credentials:
