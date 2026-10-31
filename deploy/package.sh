@@ -60,6 +60,9 @@ fi
  echo "ci_evidence_carried=$([[ "$QUALIFICATION" == "CI-runtime-e2e-PASS" ]] && echo yes || echo no)"
  echo "author=Abdelhalim Talbi"
 } > "$TMP/RELEASE-MANIFEST.txt"
+# Reconcile the tracked historical V8 inventory against the exact staged kit.
+# Fail closed on absent, unsafe or inconsistent paths before hashing the archive.
+python3 deploy/refresh_release_inventory.py --root "$TMP" --release "$VERSION"
 (cd "$TMP" && find . -type f ! -name FILES-SHA256SUMS -print0 | sort -z | xargs -0 sha256sum) > "$TMP/FILES-SHA256SUMS"
 (
  cd "$TMP"
