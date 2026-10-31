@@ -628,3 +628,17 @@ The five RRULEs were reset with future local DTSTART values to avoid a first DTS
 | 4 Policy/HITL P0 | #204 `5285aec4359a8132cb6c5801dc8d3a18118930fc`; #228 `cd703c7d92782eb3309aaec70931efda465aed0d` Draft stacked | Clean-main no-effect + PG16 outbox/DR/Temporal port after migrations; re-run exact candidate SHA, no LIVE |
 
 **Gates:** D0 source CI_PASS but candidate new HEAD NOT_VERIFIED until workflow; D1 disposable combined NOT_QUALIFIED; D2 browser/API same SHA NOT_QUALIFIED; D3 kit install/upgrade/rollback NO_GO; D4 sign-off NOT_ATTESTED. Shared workflow owned by architect, reconcile ACME and Core changes. Rollback revert focused #234 commit(s) and discard disposable fixtures. No host, GLPI real write, executor or LIVE.
+
+
+## 2026-11-01 00:41 Europe/Paris — Architect cycle / candidate integration
+
+**Decision:** RELEASE_STABLE=NO_GO. Sole candidate [Draft #234](https://github.com/alimtalbi-ata/aiops/pull/234), main base `ae7c3e5102b99a66bd7806d602146f1309a9749d`, integrated code checkpoint `f69b0f7e41ac3d199c8236b09dd8b301b2607176`. No merge to main; `main.protected=false` is not an effective safety gate.
+
+| Owner | Focus / source PR exact HEAD | Source CI and integrated dependency |
+|---|---|---|
+| 1 ACME/Twin P1 | #236 `6018a11bca365f6657b517b320158f41f812dd1f`, two-path trusted Core Bearer origin pin; #231 graph replay | #236 Quality #41250583981 3/3; next graph-derived SLA/OLA/owner/blast radius only |
+| 2 Portal P0 | #237 `015b078eb9c8e76817e94c0f6f588c268511be63`, OIDC PKCE/RS256 identity-only session | #41251913634 3/3, RSA 12/12 and session 8/8; exact positive actor+tenant ACL still UNKNOWN |
+| 3 Core P0 | #233 `4a22adb19f4d5f1de4a03898cd0908058222d256` + #238 `29602287616ffe3df2006e52c35ae42c1f605c5a`, read-only xref and real 009–012 SQL | #41248332891 and #41252130273 3/3 each; source #238 installed PG16 test unexecuted; architect added candidate gate; real GLPI provenance absent |
+| 4 Policy/HITL P0 | #239 `32864c175957a56dfdd039a0ec4ba3bb519c85ed`, strict public HTTP/no-effect internal verdict | #41252996008 3/3, 26/26 Policy + 9/9 HTTP; next disposable outbox/DR/Temporal after Core PG16 gate |
+
+**Exact integrated candidate Quality:** [#41253703233](https://github.com/alimtalbi-ata/aiops/actions/runs/41253703233) IN_PROGRESS at documentation checkpoint. D0 pending; D1 disposable combined, D2 same-SHA full ITIL browser/API, D3 semantic kit install/upgrade/rollback, D4 client sign-off all NOT_QUALIFIED/NO_GO. ACME synthetic is not a runtime Incident/GLPI receipt. Owners' hourly prompts updated; 3 P0 WIP cap enforced. Rollback revert #239 Policy → #233/#238 Core → #237 Portal → #236 ACME selective commits, discard disposable DB/artifacts, no main reset or LIVE.

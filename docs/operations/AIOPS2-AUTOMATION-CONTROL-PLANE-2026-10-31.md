@@ -81,3 +81,15 @@ The five hourly ChatGPT schedules now use future local DTSTART values 23:00, 23:
 ## 2026-10-31 23:48 Europe/Paris — scheduler evidence and missed-run truth
 
 A Debian SRV-DEB-05: requested `*/1`, but command/user/PATH/working directory/flock/timeout/logs/last success/heartbeat/next execution remain UNATTESTED; no host shell or duplicate cron. B GitHub: `23 2 * * *` UTC daily Quality configured on main; post-merge #230 Quality #41242870529 was a push-triggered run, **not** a schedule heartbeat. C ChatGPT: five enabled HOURLY configurations; all five `next_run_time=null`, so future cadence is UNKNOWN. Latest handoffs ACME/Portal/Core completed; Policy was in progress; architect active. D lab: ACME seed 20261018, Chromium, PG16 and Temporal are synthetic/disposable, not Debian/NGX/GLPI runtime. `scripts/automation_heartbeat_gate.py` is offline only; missed runs cannot be certified without timestamped receipts. Alerting/recovery remain proposed, not deployed.
+
+
+## 2026-11-01 00:41 Europe/Paris — automation truth / architect handoff
+
+| Plane | Owner/cadence/environment | Last evidence | Next/alert/recovery |
+|---|---|---|---|
+| A Debian SRV-DEB-05 | Host cron `*/1` requested, operator-owned | UNATTESTED: no shell, command/user/PATH/flock/timeout/logs/exit/heartbeat observed | UNKNOWN; inventory before any scheduler installation, local missed-run receipt required |
+| B GitHub Actions | Quality daily `23 2 * * *` UTC plus PR/push/dispatch, hosted disposable CI | Candidate [#41253703233](https://github.com/alimtalbi-ata/aiops/actions/runs/41253703233) PR-triggered IN_PROGRESS; NOT a schedule heartbeat | Next actual schedule run NOT_OBSERVED; inspect event, conclusion, artifacts and retention; no host/GLPI/LIVE |
+| C ChatGPT 1–5 | Five enabled HOURLY owner/architect automations | Latest owner last_run timestamps 2026-10-31 23:06–23:35 UTC; prompts updated with current contracts | **5/5 next_run_time=null**; NEXT_UNKNOWN, cannot certify recurrence/missed runs without run receipts |
+| D Internal lab | ACME seed 20261018, Portal RSA/Chromium, Core PG16, Policy HTTP synthetic/jetable | Source exact-head CIs isolated; combined candidate D0 pending | On-demand only; record seed/version/SHA/artifact, never classify as Debian/NGX/GLPI runtime |
+
+The offline `scripts/automation_heartbeat_gate.py` is not installed on Debian and cannot prove host cron cadence. Do not create duplicate scheduler or confuse GitHub daily schedule with ChatGPT hourly cadence. No host access, no GLPI write or LIVE.
