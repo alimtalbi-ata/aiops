@@ -221,3 +221,46 @@ The first exact-head runs exposed genuine integration conflicts; they were not s
 - The first failures from missing policy modules were fixed by porting their source files and making the execution-fence import work both as a service package and under the `app.policy` test import path.
 
 Exact-head requalification is running again after these corrections. Prior failed runs remain visible in GitHub history; they are not being relabelled as PASS.
+
+
+## 9. Real demo execution tooling and telemetry persistence
+
+### 9.1 Guarded ACME demo runner
+
+Added `scripts/run-acme-demo.py` and `deploy/Dockerfile.demo-runner`, exposed only through the opt-in Compose profile `demo` as `aiops2-demo-runner`.
+
+The runner:
+- requires explicit `--confirm-synthetic-demo`;
+- requires a configured Intelligence provider and explicit `AIOPS_DEMO_PROVIDER_KIND=REAL` (or the explicit `--allow-test-provider` override for contract testing only);
+- checks Core, Temporal Worker, Intelligence, Evidence and Policy readiness before creating anything;
+- creates a uniquely keyed synthetic P1 incident and canonical DEMO Run using Core APIs;
+- starts Temporal, waits for a terminal state, then reads the canonical Run, AI ledger and DEMO verification proof;
+- exits PASS only if the Run is RESOLVED, Analyst and Critic records exist, Policy passed with SIMULATE, HITL recorded `HITL_SIMULATION_SKIPPED`, and no effect/approval/outbox records are observed;
+- prints a sanitized JSON summary. Tokens, provider request bodies and secrets are never printed.
+
+Operator invocation (from a reviewed checkout, after the stack is qualified and provider configuration has been checked):
+
+```bash
+docker compose --env-file .env --profile demo run --rm aiops2-demo-runner --confirm-synthetic-demo
+```
+
+The runner is an explicit opt-in profile and is not started by normal `docker compose up`. It creates synthetic Incident/Run records and invokes the configured model. It does not create or update GLPI tickets, approve HITL, execute SSH/sudo, or perform LIVE remediation.
+
+### 9.2 No-effect verification endpoint
+
+Core now exposes an authenticated, read-only `GET /api/runs/{run_id}/demo-verification` for DEMO/REPLAY/STORY. It reports whether the incident and Run are synthetic, whether HITL simulation was skipped, and observed counts of effect receipts, approval records and outbox events. Its `proof_scope` explicitly says this is a database observation, not a LIVE attestation.
+
+### 9.3 Provider telemetry is now part of the immutable ledger
+
+Migration `012_model_invocation_telemetry.sql` adds a bounded `model_invocation` JSON object to Analyst and Critic ledger records. Core allowlists invocation ID, request/retry counts, provider-reported token counters, latency, usage source, status and optional priced cost metadata. It deliberately excludes API keys, headers, prompts, request bodies and model responses from the telemetry object.
+
+Temporal Worker now forwards the Intelligence adapter's `model_invocation` result into the immutable Analyst/Critic records and run event payloads. Missing usage and cost remain null/UNKNOWN; no token or cost estimates are synthesized.
+
+A real PostgreSQL/Core integration test verifies write → read-back of both invocation records and verifies the DEMO no-effect observation endpoint.
+
+### 9.4 Current verification boundary
+
+- Intelligence adapter HTTP integration against `TEST_PROVIDER` proves the HTTP/schema/usage contract, not real model quality.
+- Real provider demo requires explicit `AIOPS_DEMO_PROVIDER_KIND=REAL`, configured `LLM_BASE_URL`, `LLM_MODEL` and secure API key.
+- Real GLPI ticket read-back and tenant/entity authorization are still separate acceptance gates. The demo runner does not invent a GLPI ticket ID or write a ticket.
+- The runner has not been executed on SRV-DEB-05. Do not run it there until exact-head CI passes, a dedicated model provider is configured and a fresh isolated backup/rollback decision is recorded.
