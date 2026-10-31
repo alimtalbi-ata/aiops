@@ -35,7 +35,7 @@ class XrefPostgresTests(unittest.TestCase):
                               "values(%s,%s,%s,%s,true,%s,%s)",
                               (kind,rid,tenant,"EVT-OWNER-"+suffix,cls.now-timedelta(seconds=30),
                                cls.now-timedelta(seconds=10)))
-            for ticket in ("789","790","791","792","795"):
+            for ticket in ("789","790","791","792","795","796","797"):
                 c.execute("insert into aiops.tenant_resource_ownership "
                           "(resource_kind,resource_id,tenant_id,source_event_id,verified,observed_at,known_at) "
                           "values('glpi_ticket',%s,'TEN-A','EVT-OWNER-A',true,%s,%s)",
@@ -49,6 +49,14 @@ class XrefPostgresTests(unittest.TestCase):
             cls.insert(c,"792","SUPER1")
             cls.insert(c,"792","SUPER2",mapping_version=2,supersedes_association_id="XREF-SUPER1")
             cls.insert(c,"795","ORPHAN",mapping_version=2,supersedes_association_id=None)
+            # Signed, fresh terminal events cannot conceal an invalid predecessor.
+            cls.insert(c,"796","FUTURE1",observed_at=cls.now+timedelta(minutes=2),
+                       known_at=cls.now+timedelta(minutes=3))
+            cls.insert(c,"796","FUTURE2",mapping_version=2,
+                       supersedes_association_id="XREF-FUTURE1")
+            cls.insert(c,"797","REVERSED1",known_at=cls.now-timedelta(seconds=5))
+            cls.insert(c,"797","REVERSED2",mapping_version=2,
+                       supersedes_association_id="XREF-REVERSED1")
 
     @classmethod
     def insert(cls,c,ticket,suffix,**changes):
@@ -129,6 +137,14 @@ class XrefPostgresTests(unittest.TestCase):
         self.assertEqual(r.status_code,200,r.text)
         self.assertEqual(r.json()["status"],"CONFLICT")
         self.hidden(r)
+
+    def test_postgres_signed_history_chronology_fail_closed(self):
+        for ticket in ("796","797"):
+            with self.subTest(ticket=ticket):
+                r=self.read(ticket=ticket,expected_run_id="RUN-XREF-A")
+                self.assertEqual(r.status_code,200,r.text)
+                self.assertEqual(r.json()["status"],"CONFLICT")
+                self.hidden(r)
 
     def test_postgres_owner_source_and_future_timestamp_fail_closed(self):
         # Real disposable PostgreSQL rows, never a production GLPI/DB write.
