@@ -33,6 +33,10 @@ jobs:
           LLM_BASE_URL: http://127.0.0.1:9/v1
           LLM_MODEL: test-model
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
+      - name: Real Intelligence HTTP adapter integration against deterministic TEST_PROVIDER
+        env:
+          PYTHONPATH: app
+        run: python -m unittest discover -s tests -p "test_intelligence_http_integration.py" -v
       - name: AI evaluator and benchmark aggregation contract tests
         run: |
           python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
