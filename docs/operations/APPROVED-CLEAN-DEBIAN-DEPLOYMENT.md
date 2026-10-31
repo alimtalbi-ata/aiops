@@ -17,12 +17,12 @@ The workflow does not delete existing resources. If installation or qualificatio
 
 Dispatch requires an exact 40-character commit SHA; movable branch and tag names are refused. Before transferring code, the workflow verifies:
 
-1. The source commit is an ancestor of `main`; an open feature or qualification branch is not an approved deployment source.
+1. The source commit is an ancestor of `main` and is associated with a merged, same-repository pull request targeting `main`; an open feature or qualification branch and direct-push-only commits are refused.
 2. The latest `AIOps quality gates` run for that exact SHA completed successfully.
 3. The latest `Debian 12 and 13 installation and runtime qualification` run for that exact SHA completed successfully.
 4. Both workflow runs originate from this repository and the expected workflow paths.
 
-The check is implemented and unit-tested in `scripts/verify_clean_debian_source.py`. The GitHub token used for these checks has read-only Contents and Actions permissions. The SSH private key and known-hosts value remain repository secrets and are never written to the repository or artifact.
+The check is implemented and unit-tested in `scripts/verify_clean_debian_source.py`; it also requires a merged same-repository PR association for the source commit. The GitHub token used for these checks has read-only Contents and Actions permissions. The SSH private key and known-hosts value remain repository secrets and are never written to the repository or artifact.
 
 ## GitHub configuration
 
