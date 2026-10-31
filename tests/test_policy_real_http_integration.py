@@ -98,5 +98,23 @@ class RealPolicyHTTPIntegration(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
 
 
+    def test_real_http_verdicts_are_never_effect_authorizations(self):
+        # Real Policy service on the CI loopback; not Core, OIDC or Temporal.
+        for mode, command, evidence_count in (
+            ("DEMO", "REMEDIATE", 2),
+            ("REPLAY", "EXECUTE", 0),
+            ("STORY", "CANCEL", 2),
+            ("LIVE", "OBSERVE", 2),
+            ("LIVE", "REMEDIATE", 2),
+        ):
+            with self.subTest(mode=mode, command=command, evidence_count=evidence_count):
+                response = self.check(mode=mode, command=command,
+                                      evidence_count=evidence_count,
+                                      human_approved=True)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertIs(response.json()["execution_allowed"], False)
+                self.assertIs(response.json()["effect_allowed"], False)
+
+
 if __name__ == "__main__":
     unittest.main()
