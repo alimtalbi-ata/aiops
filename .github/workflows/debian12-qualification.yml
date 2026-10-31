@@ -2,7 +2,7 @@ name: Debian 12 and 13 installation and runtime qualification
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, test/debian12-install-runtime-qualification-20261031]
   push:
     branches:
       - "test/debian12-install-runtime-qualification-20261031"
