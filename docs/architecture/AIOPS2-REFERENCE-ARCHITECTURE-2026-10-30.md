@@ -113,3 +113,8 @@ Current 48-hour target: T2 customer story plus T3 only where actual access/evide
 Use ITIL 4 practice alignment for process design; use versioned API/data contracts, threat modelling, least privilege, auditability, change enablement and rollback for engineering governance. Map controls to ISO/IEC 20000-1 service management, ISO/IEC 27001 information security, ISO/IEC 27017/27018 where cloud/privacy scope applies, and ISO 22301 continuity only after a control-by-control assessment. Do not claim compliance/certification without formal scope, evidence and independent audit.
 
 Architecture changes require: ADR, source-of-truth owner, threat boundary, schema/API version, tests, operational owner, observability, migration/rollback, release manifest and exact qualification evidence.
+
+
+## ADR-INT-2026-10-31 — integration baseline (22:08 Europe/Paris)
+
+Decision: use **one** clean main-based candidate `integration/enterprise-slice-main-20261031-2208` from `main@780a8e03b32e0a3969fc36f6aeee69bacb5b45ab`; historical Draft #201 remains source-only. Architecture authority remains Core Incident/Run, GLPI authoritative ITSM/CMDB, Temporal workflow only, Portal API client, synthetic simulator without effects. Selective order: Portal fail-closed #202/#223; Core actor+tenant xref #205 and collision-free migrations 009 AI/010 Evidence/011 HITL/012 xref; parent #194 then #204 HITL; #198 ACME; release kit only after semantic/sandbox qualification. No bulk merges or D1-D4 claims. Full contracts, tests, CI and rollback: [integration ADR](../release/AIOPS2-CLEAN-MAIN-INTEGRATION-ADR-2026-10-31.md). RELEASE_STABLE=NO_GO.
