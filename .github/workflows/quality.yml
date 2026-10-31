@@ -101,6 +101,7 @@ jobs:
           PYTHONPATH: app
           AIOPS_INTERNAL_TOKEN: ci-glpi-internal-ephemeral-token
           AIOPS_PORTAL_READ_TOKEN: ci-glpi-viewer-ephemeral-token
+          AIOPS_DEMO_MODE: "1"
         run: |
           python -m unittest discover -s tests -p "test_demo_ledger_read.py" -v
           python -m unittest discover -s tests -p "test_demo_v2.py" -v
