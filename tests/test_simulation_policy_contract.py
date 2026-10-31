@@ -22,6 +22,15 @@ def function(path, name):
                 and node.name == name)
 
 
+def class_method(path, class_name, method_name):
+    module = parse(path)
+    cls = next(node for node in module.body
+               if isinstance(node, ast.ClassDef) and node.name == class_name)
+    return next(node for node in cls.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == method_name)
+
+
 def contains_call(node, name):
     return any(isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
                and child.func.id == name for child in ast.walk(node))
@@ -63,7 +72,7 @@ class SimulationPolicyContractTests(unittest.TestCase):
         self.assertEqual(pattern.value, "^(LIVE|DEMO|REPLAY|STORY)$")
 
     def test_temporal_workflow_propagates_canonical_mode_to_every_stage(self):
-        run = function(WORKFLOW, "run")
+        run = class_method(WORKFLOW, "IncidentWorkflow", "run")
         calls = [node for node in ast.walk(run)
                  if isinstance(node, ast.Call)
                  and isinstance(node.func, ast.Attribute)
