@@ -35,7 +35,7 @@ class XrefPostgresTests(unittest.TestCase):
                               "values(%s,%s,%s,%s,true,%s,%s)",
                               (kind,rid,tenant,"EVT-OWNER-"+suffix,cls.now-timedelta(seconds=30),
                                cls.now-timedelta(seconds=10)))
-            for ticket in ("789","790","791","792"):
+            for ticket in ("789","790","791","792","795"):
                 c.execute("insert into aiops.tenant_resource_ownership "
                           "(resource_kind,resource_id,tenant_id,source_event_id,verified,observed_at,known_at) "
                           "values('glpi_ticket',%s,'TEN-A','EVT-OWNER-A',true,%s,%s)",
@@ -48,6 +48,7 @@ class XrefPostgresTests(unittest.TestCase):
             cls.insert(c,"791","FOREIGN",incident_id="INC-XREF-B",run_id="RUN-XREF-B")
             cls.insert(c,"792","SUPER1")
             cls.insert(c,"792","SUPER2",mapping_version=2,supersedes_association_id="XREF-SUPER1")
+            cls.insert(c,"795","ORPHAN",mapping_version=2,supersedes_association_id=None)
 
     @classmethod
     def insert(cls,c,ticket,suffix,**changes):
@@ -122,6 +123,13 @@ class XrefPostgresTests(unittest.TestCase):
         r=self.read(ticket="792")
         self.assertEqual(r.json()["status"],"VERIFIED")
         self.assertEqual(r.json()["mapping_version"],2)
+    def test_orphan_history_version_two_postgres_is_not_verified(self):
+        # Real PG permits a standalone mapping_version=2; Core must reject it.
+        r=self.read(ticket="795",expected_run_id="RUN-XREF-A")
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"CONFLICT")
+        self.hidden(r)
+
     def test_postgres_owner_source_and_future_timestamp_fail_closed(self):
         # Real disposable PostgreSQL rows, never a production GLPI/DB write.
         with psycopg.connect(self.url) as c:
