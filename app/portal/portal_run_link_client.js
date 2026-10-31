@@ -38,13 +38,16 @@
         const response = await request('/api/portal/run-session', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + token, 'X-Portal-Run-ID': runId },
-          credentials: 'same-origin',
+          // No browser credential/cookie may become actor+tenant authority.
+          // Reject Set-Cookie even if an older endpoint returns HTTP 200.
+          credentials: 'omit',
           cache: 'no-store',
           redirect: 'error'
         });
         if (response && response.ok) {
-          output.textContent = 'READ_ONLY_SESSION_CREATED — navigation';
-          navigate(path);
+          // No positive server-derived exact-Run ACL contract is installed.
+          // HTTP 2xx (including legacy session success) grants no navigation.
+          output.textContent = 'UNKNOWN — session non qualifiée (ACL acteur+tenant absente)';
         } else {
           const status = response && response.status;
           output.textContent = status === 401
