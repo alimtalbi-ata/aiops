@@ -221,6 +221,25 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
             ack(event, last["lease_token"])
         self.no_effect(proposal)
 
+    def test_concurrent_duplicate_ack_is_serialized(self):
+        """Concurrent ACKs on one lease commit once, then become idempotent."""
+        event, proposal = fixture()
+        token = claim("ci-parallel-ack")[0]["lease_token"]
+        barrier = threading.Barrier(2)
+
+        def contender():
+            barrier.wait(timeout=10)
+            return ack(event, token)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(contender) for _ in range(2)]
+            receipts = [future.result(timeout=15) for future in futures]
+        self.assertEqual(sorted(r["idempotent"] for r in receipts), [False, True])
+        self.assertTrue(all(r["event_id"] == event and r["status"] == "DELIVERED"
+                            for r in receipts))
+        self.assertEqual(claim("ci-after-parallel-ack"), [])
+        self.no_effect(proposal)
+
     def test_duplicate_ack_and_no_redelivery(self):
         event, proposal = fixture()
         token = claim("ci-duplicate")[0]["lease_token"]
