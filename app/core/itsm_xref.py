@@ -1,0 +1,167 @@
+"""Core authoritative read-only ITSM xref. No GLPI writes or ticket-text inference."""
+from __future__ import annotations
+import os, re, json, hmac, hashlib
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, Header, Query
+from fastapi.responses import JSONResponse
+from shared.db import db
+
+router = APIRouter()
+SCHEMA = "aiops.core-itsm-xref-read.v1"
+_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z", re.ASCII)
+_TICKET = re.compile(r"[1-9][0-9]{0,17}\Z", re.ASCII)
+_RUN = re.compile(r"RUN-[A-Za-z0-9_-]{1,96}\Z", re.ASCII)
+_INC = re.compile(r"INC-[A-Za-z0-9_-]{1,96}\Z", re.ASCII)
+_HEX = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
+_FIELDS = ("association_id","tenant_id","glpi_instance_id","ticket_id","glpi_entity_id",
+           "incident_id","run_id","source_event_id","mapping_version","event_type","actor_id",
+           "observed_at","known_at","supersedes_association_id","verification_method",
+           "provenance","glpi_ticket_readback_verified","core_run_readback_verified","source_payload_hash")
+_COLUMNS = _FIELDS + ("attestation_mac",)
+_HEADERS = {"Cache-Control":"no-store","Pragma":"no-cache","X-Content-Type-Options":"nosniff"}
+
+def _reply(code, status="UNKNOWN", **fields):
+    headers = dict(_HEADERS)
+    if code == 401: headers["WWW-Authenticate"] = "Bearer"
+    return JSONResponse({"schema":SCHEMA,"status":status,**fields},status_code=code,headers=headers)
+
+def _valid(value, pattern=_ID):
+    return isinstance(value,str) and pattern.fullmatch(value) is not None
+
+def _utc(value):
+    if not isinstance(value,datetime) or value.tzinfo is None or value.utcoffset() is None: return None
+    try:
+        out = value.astimezone(timezone.utc)
+        return out if 1970 <= out.year < 9999 else None
+    except (OverflowError,ValueError): return None
+
+def _stamp(value):
+    out = _utc(value)
+    return out.isoformat(timespec="microseconds") if out else None
+
+def _payload(row):
+    return json.dumps({"v":1,"xref":{k:_stamp(row[k]) if k in ("observed_at","known_at") else row[k] for k in _FIELDS}},
+                      sort_keys=True,separators=(",",":"),ensure_ascii=True).encode("ascii")
+
+def _signed(row,key):
+    try:
+        mac = row["attestation_mac"]
+        return _valid(mac,_HEX) and hmac.compare_digest(mac,hmac.new(key,_payload(row),hashlib.sha256).hexdigest())
+    except (KeyError,TypeError,ValueError): return False
+
+def _auth(header):
+    """Server-only digest ACL; never use shared ADMIN or caller actor/tenant claims."""
+    raw = os.getenv("AIOPS_XREF_READ_AUTHZ_JSON","")
+    if not raw or len(raw)>16384: return None,503
+    try:
+        entries=json.loads(raw)
+        if not isinstance(entries,list) or not 0<len(entries)<=64: raise ValueError()
+        seen=set()
+        for e in entries:
+            if (not isinstance(e,dict) or set(e)!={"token_sha256","actor_id","tenant_ids","permissions"}
+                or not _valid(e["token_sha256"],_HEX) or e["token_sha256"] in seen
+                or not _valid(e["actor_id"]) or not isinstance(e["tenant_ids"],list) or not e["tenant_ids"]
+                or not all(_valid(t) for t in e["tenant_ids"])
+                or not isinstance(e["permissions"],list)
+                or not all(isinstance(p,str) and len(p)<=80 for p in e["permissions"])): raise ValueError()
+            seen.add(e["token_sha256"])
+    except (ValueError,KeyError,TypeError): return None,503
+    scheme,sep,token=(header or "").partition(" ")
+    if scheme.lower()!="bearer" or not sep or not token or len(token)>512 or any(c.isspace() for c in token):
+        return None,401
+    digest=hashlib.sha256(token.encode()).hexdigest()
+    matches=[e for e in entries if hmac.compare_digest(digest,e["token_sha256"])]
+    return (matches[0],200) if len(matches)==1 else (None,401)
+
+def _key():
+    key=os.getenv("AIOPS_XREF_ATTESTATION_KEY","")
+    return key.encode("ascii") if isinstance(key,str) and 32<=len(key)<=256 and key.isascii() else None
+
+def _evaluate(c,rows,tenant,instance,ticket,key,now):
+    if not rows: return "NOT_FOUND",None
+    if len(rows)>32: return "CONFLICT",None
+    previous=None
+    for record in rows:
+        e=dict(zip(_COLUMNS,record))
+        v=e["mapping_version"]
+        if (type(v) is not int or v<1
+            or (previous is None and e["supersedes_association_id"] is not None)
+            or (previous is not None and (v!=previous["mapping_version"]+1 or
+                e["supersedes_association_id"]!=previous["association_id"]))): return "CONFLICT",None
+        if (e["tenant_id"]!=tenant or e["glpi_instance_id"]!=instance or e["ticket_id"]!=ticket
+            or not all(_valid(e[k]) for k in ("association_id","source_event_id","actor_id"))
+            or not isinstance(e["glpi_entity_id"],str) or not re.fullmatch(r"[0-9]{1,18}",e["glpi_entity_id"])
+            or not _valid(e["run_id"],_RUN) or not _valid(e["incident_id"],_INC)
+            or e["event_type"] not in ("VERIFIED","REVOKED")
+            or e["verification_method"]!="AUTHENTICATED_ID_READBACK"
+            or e["provenance"]!="AUTHENTICATED_SOURCE_API"
+            or e["glpi_ticket_readback_verified"] is not True
+            or e["core_run_readback_verified"] is not True
+            or not _valid(e["source_payload_hash"],_HEX) or not _signed(e,key)): return "UNKNOWN",None
+        previous=e
+    e=previous
+    if e["event_type"]=="REVOKED": return "UNKNOWN",None
+    observed,known=_utc(e["observed_at"]),_utc(e["known_at"])
+    if observed is None or known is None: return "UNKNOWN",None
+    if observed>known or known>now+timedelta(minutes=5): return "CONFLICT",None
+    if now-observed>timedelta(minutes=5) or now-known>timedelta(minutes=5): return "STALE",None
+    core=c.execute("select r.incident_id,i.incident_id from aiops.runs r join aiops.incidents i "
+                   "on i.incident_id=r.incident_id where r.run_id=%s",(e["run_id"],)).fetchone()
+    if not core or core!=(e["incident_id"],e["incident_id"]): return "UNKNOWN",None
+    resources=(("incident",e["incident_id"]),("run",e["run_id"]),("glpi_instance",instance),
+               ("glpi_ticket",instance+":"+ticket),("glpi_entity",instance+":"+e["glpi_entity_id"]))
+    owned=c.execute("select resource_kind,resource_id,tenant_id,verified from aiops.tenant_resource_ownership "
+                    "where (resource_kind,resource_id) in ((%s,%s),(%s,%s),(%s,%s),(%s,%s),(%s,%s))",
+                    tuple(x for pair in resources for x in pair)).fetchall()
+    found={(kind,rid):(t,verified) for kind,rid,t,verified in owned}
+    if len(found)!=len(resources): return "UNKNOWN",None
+    if any(found[r][0]!=tenant for r in resources): return "UNAUTHORIZED",None
+    if any(found[r][1] is not True for r in resources): return "UNKNOWN",None
+    return "VERIFIED",e
+
+@router.get("/api/tenants/{tenant_id}/itsm/glpi/{instance_id}/tickets/{ticket_id}/xref")
+def read_ticket_xref(tenant_id:str,instance_id:str,ticket_id:str,
+                     authorization:str|None=Header(default=None),
+                     expected_run_id:str|None=Query(default=None),
+                     expected_incident_id:str|None=Query(default=None),
+                     evidence_known_at:str|None=Query(default=None)):
+    now=datetime.now(timezone.utc)
+    if (not (_valid(tenant_id) and _valid(instance_id) and _valid(ticket_id,_TICKET))
+        or (expected_run_id is not None and not _valid(expected_run_id,_RUN))
+        or (expected_incident_id is not None and not _valid(expected_incident_id,_INC))):
+        return _reply(404)
+    if evidence_known_at is not None:
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})",evidence_known_at):
+                return _reply(404)
+            stamp=evidence_known_at[:-1]+"+00:00" if evidence_known_at.endswith("Z") else evidence_known_at
+            when=_utc(datetime.fromisoformat(stamp))
+            if when is None or when>now+timedelta(minutes=5): return _reply(404)
+        except (TypeError,ValueError,OverflowError): return _reply(404)
+    actor,code=_auth(authorization)
+    if code!=200: return _reply(code)
+    if "itsm:xref:read" not in actor["permissions"] or tenant_id not in actor["tenant_ids"]:
+        return _reply(403,"UNAUTHORIZED")
+    key=_key()
+    if key is None: return _reply(503)
+    try:
+        with db() as c:
+            rows=c.execute("select "+",".join(_COLUMNS)+" from aiops.itsm_xref_events "
+                           "where tenant_id=%s and glpi_instance_id=%s and ticket_id=%s "
+                           "order by mapping_version asc limit 33",(tenant_id,instance_id,ticket_id)).fetchall()
+            status,e=_evaluate(c,rows,tenant_id,instance_id,ticket_id,key,now)
+    except Exception: return _reply(503)
+    if status=="NOT_FOUND": return _reply(404)
+    if status=="UNAUTHORIZED": return _reply(403,"UNAUTHORIZED")
+    if status!="VERIFIED": return _reply(200,status)
+    if ((expected_run_id is not None and e["run_id"]!=expected_run_id)
+        or (expected_incident_id is not None and e["incident_id"]!=expected_incident_id)):
+        return _reply(200)
+    return _reply(200,"VERIFIED",tenant_id=tenant_id,glpi_instance_id=instance_id,
+                  ticket_id=ticket_id,incident_id=e["incident_id"],run_id=e["run_id"],
+                  source_system="GLPI",source_event_id=e["source_event_id"],
+                  association_id=e["association_id"],mapping_version=e["mapping_version"],
+                  verification_method=e["verification_method"],tenant_acl_qualified=True,
+                  glpi_ticket_readback_verified=True,core_run_readback_verified=True,
+                  observed_at=_stamp(e["observed_at"]),known_at=_stamp(e["known_at"]),
+                  provenance=e["provenance"])
