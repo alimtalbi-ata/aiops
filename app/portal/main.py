@@ -31,7 +31,17 @@ def bootstrap(authorization: str | None = Header(default=None)):
         _require_portal_read_auth(authorization)
     except HTTPException as exc:
         return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
-    return _noc_json_response(read_portal_snapshot(get_json, CORE, TWIN))
+    # The shared viewer bearer is not a tenant/actor authorization. Core's
+    # /api/dashboard and /api/runs and Twin's summary lack tenant-scoped
+    # contracts. Never fetch or disclose these read models to a browser.
+    # Re-enable only after Core supplies server-derived tenant authorization.
+    return _noc_json_response({
+        'state': 'UNKNOWN',
+        'reason': 'TENANT_ACL_NOT_QUALIFIED',
+        'connection_state': 'UNAVAILABLE',
+        'source': 'CORE_TWIN_READ_MODELS_NOT_TENANT_AUTHORIZED',
+        'source_freshness': 'UNKNOWN',
+    }, status_code=503)
 @app.get('/assets/portal-bootstrap.js')
 def portal_bootstrap_script():
     return FileResponse(Path(__file__).with_name('portal_bootstrap_client.js'),
