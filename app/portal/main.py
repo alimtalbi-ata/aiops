@@ -1,6 +1,7 @@
 import os,json,html,uuid,hmac,re
+from pathlib import Path
 from fastapi import FastAPI,Request,Header,HTTPException
-from fastapi.responses import HTMLResponse,JSONResponse
+from fastapi.responses import HTMLResponse,JSONResponse,FileResponse
 from shared.http import get_json,post_json
 from portal.demo_ledger_read import router as demo_ledger_router
 from portal.acme_explore_story import router as acme_explore_story_router
@@ -8,6 +9,12 @@ from portal.acme_impact_read_model import router as acme_impact_router
 from portal.glpi_operator_view import router as glpi_operator_router
 from portal.glpi_client import GLPIClient, GLPIError
 from portal.glpi_run_context import router as glpi_run_context_router
+from portal.portal_integrations import build_navigation
+from portal.noc_runtime import router as noc_runtime_router
+from portal.noc_correlation import router as noc_correlation_router
+from portal.noc_demo_rag import router as noc_demo_rag_router
+from portal.noc_grafana_health import router as noc_grafana_health_router
+from portal.acme_run_detail import router as acme_run_detail_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 app.include_router(demo_ledger_router)
@@ -15,8 +22,24 @@ app.include_router(glpi_run_context_router)
 app.include_router(acme_explore_story_router)
 app.include_router(acme_impact_router)
 app.include_router(glpi_operator_router)
+app.include_router(noc_runtime_router)
+app.include_router(noc_correlation_router)
+app.include_router(noc_demo_rag_router)
+app.include_router(noc_grafana_health_router)
+app.include_router(acme_run_detail_router)
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':7777,'internal_port':777}
+@app.get('/api/portal/components')
+def portal_components(authorization: str | None = Header(default=None)):
+    _require_portal_read(authorization)
+    return JSONResponse(build_navigation(), headers={'Cache-Control':'no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff'})
+
+@app.get('/assets/portal-navigation.js')
+def portal_navigation_script():
+    return FileResponse(Path(__file__).with_name('portal_navigation_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+
 @app.get('/api/portal/bootstrap')
 def bootstrap():return {'dashboard':get_json(CORE,'/api/dashboard'),'runs':get_json(CORE,'/api/runs'),'twin':get_json(TWIN,'/api/twin/summary')}
 @app.post('/api/copilot')
