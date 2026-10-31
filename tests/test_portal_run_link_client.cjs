@@ -9,7 +9,7 @@ test('exact canonical run ID produces only a local deep link', () => {
   }
 });
 
-test('one-time bearer exchange clears input, sets same-origin cookie, then navigates', async () => {
+test('one-time bearer exchange clears input and navigates only after an authorized 200', async () => {
   const nodes = {
     'run-detail-id': { value: 'RUN-ACME-001' },
     'portal-read-token': { value: 'one-time-token' },
@@ -74,7 +74,7 @@ test('missing read token and failed session exchange do not navigate', async () 
 test('HTTP 403 and 503 remain visible and never navigate', async () => {
   for (const [status, expected] of [
     [403, 'UNAUTHORIZED (HTTP 403) — session lecture seule refusée'],
-    [503, 'UNKNOWN (HTTP 503) — service de session indisponible']
+    [503, 'UNKNOWN (HTTP 503) — ACL acteur+tenant non qualifiée']
   ]) {
     const nodes = {
       'run-detail-id': { value: 'RUN-ACME-001' },
