@@ -112,8 +112,13 @@ def _require_portal_read(authorization):
 # GLPI handoff read model visible, but do not expose ticket reads or proposal
 # creation until the authoritative tenant-scoped contract is qualified.
 
+def _demo_environment_enabled() -> bool:
+    return os.getenv('AIOPS_DEMO_MODE', '0').strip().lower() in ('1', 'true', 'yes')
+
+
 def _synthetic_demo_launch_enabled() -> bool:
-    return os.getenv('AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED', 'false').strip().lower() == 'true'
+    return (_demo_environment_enabled()
+            and os.getenv('AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED', 'false').strip().lower() == 'true')
 
 
 @app.get('/assets/demo-launch.js')
@@ -602,6 +607,8 @@ def copilot_page():
 @app.get("/demo-studio",response_class=HTMLResponse)
 def demo_studio():
     """Safe read-only ACME storyboard: no launch, effects, or credentials in browser."""
+    if not _demo_environment_enabled():
+        raise HTTPException(503, "demo_environment_disabled")
     dashboard=_get("/api/dashboard")
     graph=_get("/api/twin/graph",TWIN)
     impact=_get("/api/twin/impact/ACME-SAN-FABRIC-A",TWIN)
@@ -765,6 +772,8 @@ def demo_business_story():
 @app.get("/demo-studio/run/{rid}",response_class=HTMLResponse)
 def demo_run_detail(rid:str):
     """Show source-backed demo evidence, never substitute fixtures for live records."""
+    if not _demo_environment_enabled():
+        raise HTTPException(503, "demo_environment_disabled")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_demo_run_id")
     candidates=_runs()
@@ -916,6 +925,8 @@ def demo_evidence_itsm(rid: str, authorization: str | None = Header(default=None
 @app.get("/api/demo-status/{rid}")
 def demo_status(rid:str):
     """Read-only polling endpoint with strict DEMO ownership checked against Core."""
+    if not _demo_environment_enabled():
+        raise HTTPException(503, "demo_environment_disabled")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):
         raise HTTPException(404,"invalid_run_id")
     allowed=next((r for r in _qualified_demo_runs(_runs()) if r["run_id"]==rid),None)
