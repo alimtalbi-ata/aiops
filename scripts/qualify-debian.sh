@@ -26,6 +26,8 @@ VENV="$(mktemp -d "${TMPDIR:-/tmp}/aiops-debian-venv.XXXXXX")"
 trap 'rm -rf "$VENV"' EXIT
 python3 -m venv "$VENV/venv"
 "$VENV/venv/bin/python" -m pip install --disable-pip-version-check --no-warn-script-location -r app/requirements.txt
+# Starlette TestClient requires httpx; keep this test-only dependency out of runtime images.
+"$VENV/venv/bin/python" -m pip install --disable-pip-version-check --no-warn-script-location httpx==0.28.1
 
 export PYTHONPATH="$ROOT/app"
 "$VENV/venv/bin/python" -m compileall -q app tests tools
