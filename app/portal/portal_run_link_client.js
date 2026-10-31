@@ -52,7 +52,7 @@
             : status === 403
               ? 'UNAUTHORIZED (HTTP 403) — session lecture seule refusée'
               : status === 503
-                ? 'UNKNOWN (HTTP 503) — service de session indisponible'
+                ? 'UNKNOWN (HTTP 503) — ACL acteur+tenant non qualifiée'
                 : 'UNKNOWN — session lecture seule refusée';
         }
       } catch (_) {
