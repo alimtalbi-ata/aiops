@@ -22,6 +22,27 @@ Every event includes source, fixture-only SYN-EVT source_event_id, simulated obs
 
 `correlate_offline` is an illustrative, **non-publishable** dedup/correlation projection. It now fails closed on unknown CIs against the pinned SQL graph, untrusted source/fixture ID authority, a non-null Evidence ID, claimed observed impact, non-synthetic freshness, invalid UTC chronology or stale simulated timestamps. Adversarial tests cover those rejections. This guard **does not authenticate** an event, prove that a synthetic payload is genuine, establish a tenant, or replace Core's signed ingest/idempotency contract. In particular, local `SYN-EVT-*`/`SYN-CORR-*` values must never be promoted to Core Incident/Run/Evidence/GLPI identifiers. No API integration or lifecycle checkpoint has been executed.
 
+### Strict golden replay consumer contract
+
+Consumers presenting the **one** SAN→Payments story must call
+`correlate_golden_manifest_offline(manifest)` rather than treating
+`correlate_offline(events)` as a source-of-truth check. The strict helper
+regenerates the golden story from the pinned SQL graph, reviewed catalog and
+declared seed, then compares the **entire** manifest before deduplication.
+A plausible `SYN-EVT-*` ID, modified maintenance flag, changed service/CI,
+forged GLPI/Core/Run/Evidence link, claimed ITIL P1 confirmation or fabricated
+checkpoint fails even if the caller recomputes `dataset_sha256`.
+The existing loose event-only helper remains for illustrative dedup testing;
+it does **not** authenticate source events and must not be used for release
+evidence or canonical ID correlation.
+
+The strict helper does not authenticate any API or tenant and cannot prove
+that a source event happened. `tenant_id`, `incident_id`, `run_id`,
+`ticket_id` and `evidence_ids` remain UNKNOWN until independently read
+from authoritative APIs; `observed_at` and `known_at` in events are simulated
+fixture-clock timestamps, not LIVE observations. All six lifecycle checkpoints
+remain NOT_EXECUTED, and T1/T2 still require disposable service integration.
+
 ## SAN→Payments and ITIL interpretation
 
 Stored edges point consumer→dependency. Reverse candidate path: ACME-SAN-FABRIC-A → ACME-STO-PURE01 (ACME-E08) → ACME-VM-PAY01 (ACME-E06) → ACME-APP-ORACLEPAY (ACME-E04) → ACME-SVC-PAYMENTS (ACME-E02) → ACME-BIZ-PAYMENTS (ACME-E01). Fabric B remains reachable via ACME-E09. SAN-A also has a candidate ERP dependency via ACME-E16,E15,E14. **Neither an edge nor a confidence score is observed business impact; redundancy and causality remain unqualified.**
