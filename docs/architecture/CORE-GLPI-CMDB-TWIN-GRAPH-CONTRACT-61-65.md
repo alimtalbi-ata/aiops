@@ -22,7 +22,7 @@ A separate **offline** Python contract/seed/test bundle was prepared for owner r
 
 Fixed UTC seed, three entities, HQ + Lyon + Lille + DR, prod/preprod/dev/dr, redundant SAN, Payments/ERP/IAM/AD, DB, network, cloud, backup and monitoring. Small **117 CI / 134 edges**, medium **213 / 230**, large **597 / 614**; all 35 CI types and nine relation types. Small relations: BACKS_UP 2, CONNECTS_TO 12, CONSUMES 8, DEPENDS_ON 28, HOSTS 16, LOCATED_IN 51, OWNS 10, REPLICATES_TO 1, SUPPORTS 6. No orphan CI in these **fixtures**, not an observed GLPI quality claim. All identifiers and network addresses are synthetic.
 
-Local offline Python unit suite **13/13 PASS**: deterministic export/import, scoped IDs, cross-tenant, duplicate source/asset/MAC, unauthorized GLPI entity, stale/invalid UTC, dangling edge, forbidden cycle, graph diff/CI change/tombstone/rollback, hypothetical blast path and copied RUN text. No disposable GLPI/Twin/PostgreSQL integration or CI qualification of this new fixture has occurred.
+Local offline Python unit suite **16/16 PASS** (re-executed 2026-10-31 with `PYTHONPATH=app python -m unittest discover -s tests -p 'test_core_cmdb_twin_graph.py' -v` against the supplied v1.1 bundle): deterministic export/import, scoped IDs, cross-tenant, duplicate source/asset/MAC/IP, unauthorized GLPI entity, strict typed relation IDs, documentation-only TEST-NET IPs, stale/invalid UTC, dangling edge, forbidden cycle, graph diff/CI change/tombstone/rollback, hypothetical blast path and copied RUN text. The v1.1 normalizer and snapshots remain **outside the repository** and are not Core/Twin runtime code; no disposable GLPI/Twin/PostgreSQL import or CI qualification of this bundle has occurred.
 
 ## Integration gate and ownership
 
