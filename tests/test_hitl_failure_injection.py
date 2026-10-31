@@ -282,7 +282,8 @@ class OfflineFailureInjection(unittest.TestCase):
             async def execute_activity(self, name, args, **kw):
                 if name == "execute_stage" and args["stage"] == "REMEDIATE":
                     self.calls.append(name)
-                    return {"version": 3, "status": "PASS", "execution_allowed": False}
+                    return {"version": 3, "status": "PASS", "execution_allowed": False,
+                            "effect_allowed": False}
                 if name == "finish_run":
                     self.calls.append(name)
                     return {"version": 4, "status": "COMPLETED"}
@@ -441,12 +442,61 @@ class OfflineFailureInjection(unittest.TestCase):
             {"effect_allowed": True},
             {"execution_allowed": 1},
             {"effect_allowed": 1},
+            {"sequence": None},
+            {"sequence": True},
+            {"sequence": 2.0},
+            {"sequence": "2"},
+            {"sequence": 0},
+            {"sequence": -1},
+            {"stage": "HITL"},
         )
         for change in mutations:
             with self.subTest(change=change):
                 with self.assertRaisesRegex(
                         RuntimeError, "stage_pass_receipt_not_qualified"):
                     normalize({**base, **change}, "RUN-OFFLINE", "NORMALIZE", 2)
+
+
+    def test_stage_ack_missing_sequence_cannot_be_promoted(self):
+        # A Core ACK with a fresh version but no event sequence is unverified.
+        # This is an AST-only invocation, not a Core or Temporal request.
+        normalize = extract("app/worker/main.py",
+                            "verified_no_effect_stage_receipt", {})
+        with self.assertRaisesRegex(RuntimeError, "stage_pass_receipt_not_qualified"):
+            normalize({"run_id": "RUN-OFFLINE", "version": 3},
+                      "RUN-OFFLINE", "NORMALIZE", 2)
+
+    def test_non_hitl_pass_requires_explicit_no_effect_fences(self):
+        # A forged PASS for any earlier stage must not reach HITL or REMEDIATE.
+        # All activities are in-memory fakes, with no LIVE execution.
+        for fields in (
+            {},
+            {"execution_allowed": False},
+            {"effect_allowed": False},
+            {"execution_allowed": True, "effect_allowed": False},
+            {"execution_allowed": False, "effect_allowed": True},
+            {"execution_allowed": 0, "effect_allowed": False},
+        ):
+            with self.subTest(fields=fields):
+                class ForgedPassTemporal(FakeTemporal):
+                    async def execute_activity(self, name, args, **kw):
+                        if name == "execute_stage" and args["stage"] == "NORMALIZE":
+                            self.calls.append(name)
+                            return {"version": 2, "status": "PASS", **fields}
+                        return await super().execute_activity(name, args, **kw)
+
+                fake = ForgedPassTemporal(synthetic=True)
+                result = asyncio.run(workflow_class(
+                    fake, stages=("NORMALIZE", "HITL", "REMEDIATE"))().run({
+                        "run_id": "RUN-OFFLINE", "mode": "DEMO",
+                        "scenario_id": "SCENARIO-OFFLINE",
+                    }))
+                self.assertEqual(result["reason"],
+                                 "stage_effect_fence_missing_or_invalid")
+                self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
+                self.assertEqual(fake.calls, ["start_run", "execute_stage"])
+
 
 
 if __name__ == "__main__":
