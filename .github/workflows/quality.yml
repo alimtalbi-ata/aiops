@@ -73,6 +73,21 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_run_detail.py" -v
       - name: Portal GLPI native handoff, role and tenant denial regression
         run: python -m unittest discover -s tests -p "test_portal_glpi_operator_view.py" -v
+      - name: GLPI ticket read and NOC incident join contracts
+        env:
+          PYTHONPATH: app
+        run: |
+          python -m unittest discover -s tests -p "test_acme_glpi_ticket_read.py" -v
+          python -m unittest discover -s tests -p "test_acme_noc_glpi_join.py" -v
+      - name: Portal authenticated GLPI ticket-to-Run context tests
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: ci-glpi-internal-ephemeral-token
+          AIOPS_PORTAL_READ_TOKEN: ci-glpi-viewer-ephemeral-token
+        run: |
+          python -m unittest discover -s tests -p "test_portal_glpi_run_context.py" -v
+          python -m unittest discover -s tests -p "test_demo_ledger_read.py" -v
+          python -m unittest discover -s tests -p "test_demo_v2.py" -v
       - name: Portal Run deep-link JS syntax and DOM regression
         run: |
           node --check app/portal/portal_run_link_client.js
