@@ -18,6 +18,10 @@ The offline generator tools/generate_acme_incidents.py verifies the exact SQL Gi
 
 Every event includes source, fixture-only SYN-EVT source_event_id, simulated observed_at and known_at, event_time, freshness=SYNTHETIC_CLOCK_ONLY, provenance=SYNTHETIC_FIXTURE, tenant_scope=UNKNOWN, tenant_id=null, CI ID, dedupe_key and correlation_key. These local keys are **not** authenticated Core/Evidence identifiers and never qualify cross-tenant ingestion. Incident, Run, GLPI ticket and Evidence IDs remain null/empty until verified via authoritative APIs. All six lifecycle checkpoints (GLPI ticket, Core Incident, Core Run, Evidence, resolution, reopen) are NOT_EXECUTED; publishable_to_core_or_glpi=false and live_effects_authorized=false.
 
+### Offline correlation trust boundary
+
+`correlate_offline` is an illustrative, **non-publishable** dedup/correlation projection. It now fails closed on unknown CIs against the pinned SQL graph, untrusted source/fixture ID authority, a non-null Evidence ID, claimed observed impact, non-synthetic freshness, invalid UTC chronology or stale simulated timestamps. Adversarial tests cover those rejections. This guard **does not authenticate** an event, prove that a synthetic payload is genuine, establish a tenant, or replace Core's signed ingest/idempotency contract. In particular, local `SYN-EVT-*`/`SYN-CORR-*` values must never be promoted to Core Incident/Run/Evidence/GLPI identifiers. No API integration or lifecycle checkpoint has been executed.
+
 ## SAN→Payments and ITIL interpretation
 
 Stored edges point consumer→dependency. Reverse candidate path: ACME-SAN-FABRIC-A → ACME-STO-PURE01 (ACME-E08) → ACME-VM-PAY01 (ACME-E06) → ACME-APP-ORACLEPAY (ACME-E04) → ACME-SVC-PAYMENTS (ACME-E02) → ACME-BIZ-PAYMENTS (ACME-E01). Fabric B remains reachable via ACME-E09. SAN-A also has a candidate ERP dependency via ACME-E16,E15,E14. **Neither an edge nor a confidence score is observed business impact; redundancy and causality remain unqualified.**
