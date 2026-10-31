@@ -389,10 +389,14 @@ def storyboard_offline(manifest, *, false_positive=False):
         "timeline": [
             {
                 "step": index, "source_event_id": event["source_event_id"],
-                "event_time": event["event_time"], "known_at": event["known_at"],
+                "event_time": event["event_time"], "observed_at": event["observed_at"],
+                "known_at": event["known_at"], "freshness": "SYNTHETIC_CLOCK_ONLY",
                 "ci_id": event["ci_id"], "action": event["action"],
                 "payload": dict(event["payload"]),
+                "dedupe_key": event["dedupe_key"], "correlation_key": event["correlation_key"],
+                "maintenance_window_active": event["maintenance_window_active"],
                 "source": event["source"], "provenance": "SYNTHETIC_FIXTURE",
+                "tenant_scope": "UNKNOWN",
                 "runtime_evidence_id": None, "runtime_readback": "NOT_EXECUTED",
             }
             for index, event in enumerate(events, 1)
