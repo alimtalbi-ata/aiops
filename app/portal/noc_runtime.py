@@ -310,6 +310,8 @@ def _noc_json_response(content: dict, *, status_code: int = 200) -> JSONResponse
             "Pragma": "no-cache",
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+            "X-Frame-Options": "DENY",
         },
     )
 
