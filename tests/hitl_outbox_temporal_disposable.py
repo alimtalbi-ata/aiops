@@ -129,16 +129,21 @@ async def main():
                                              task_queue="ci-hitl-notification-sink")
         event, proposal, digest = await asyncio.to_thread(seed, dsn, run_id, suffix)
         first = await wait_delivered(dsn, event, proposal, 1)
-        # Synthetic duplicate delivery: re-queue this CI fixture only. This is
-        # NOT proof of an actual network ACK loss or a real human identity.
-        with psycopg.connect(dsn, connect_timeout=5) as c:
-            c.execute("update aiops.hitl_decision_outbox set status='PENDING',"
-                      "available_at=now(),lease_owner=null,lease_token=null,"
-                      "lease_until=null,delivered_at=null where event_id=%s "
-                      "and status='DELIVERED' and attempts=1", (event,))
-            if c.execute("select status from aiops.hitl_decision_outbox "
-                         "where event_id=%s", (event,)).fetchone()[0] != "PENDING":
-                raise AssertionError("ci_replay_not_queued")
+        # Exit while the CI sink workflow still waits for its second signal.
+        # A fresh sink Worker must replay persisted Temporal history to finish.
+        # This is NOT a production Worker or Temporal server restart.
+    # Synthetic duplicate delivery: re-queue this CI fixture only. This is
+    # NOT proof of an actual network ACK loss or a real human identity.
+    with psycopg.connect(dsn, connect_timeout=5) as c:
+        c.execute("update aiops.hitl_decision_outbox set status='PENDING',"
+                  "available_at=now(),lease_owner=null,lease_token=null,"
+                  "lease_until=null,delivered_at=null where event_id=%s "
+                  "and status='DELIVERED' and attempts=1", (event,))
+        if c.execute("select status from aiops.hitl_decision_outbox "
+                     "where event_id=%s", (event,)).fetchone()[0] != "PENDING":
+            raise AssertionError("ci_replay_not_queued")
+    async with Worker(client, task_queue="ci-hitl-notification-sink",
+                      workflows=[NotificationSink]):
         result = await asyncio.wait_for(handle.result(), timeout=100)
         second = await wait_delivered(dsn, event, proposal, 2)
     expected = {"proposal_id": proposal, "proposal_hash": digest,
@@ -157,6 +162,9 @@ async def main():
                       "outbox_state": second[0], "attempts": second[1],
                       "temporal_signals": len(result["decisions"]),
                       "replay": "CI_SYNTHETIC_REQUEUE_NOT_REAL_LOST_ACK",
+                      "ci_sink_worker_restart_inflight": "OBSERVED",
+                      "production_worker_restart_inflight": "NOT_TESTED",
+                      "temporal_server_restart_inflight": "NOT_TESTED",
                       "effect_receipts": 0, "execution_allowed": False,
                       "effect_allowed": False}, indent=2))
 
