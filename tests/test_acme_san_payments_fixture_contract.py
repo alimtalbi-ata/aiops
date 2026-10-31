@@ -121,7 +121,7 @@ class AcmeSanPaymentsFixtureContractTests(unittest.TestCase):
     def test_every_twin_edge_and_scenario_target_resolves_to_unique_seed_ci(self):
         _, sql, edges, steps = seed_contract()
         nodes = re.findall(
-            r"^\\('(ACME-[^']+)','(?:BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)'",
+            r"^\('(ACME-[^']+)','(?:BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)'",
             sql, flags=re.MULTILINE,
         )
         self.assertEqual(len(nodes), 18)
