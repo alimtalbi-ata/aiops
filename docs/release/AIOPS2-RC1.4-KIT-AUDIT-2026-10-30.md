@@ -321,3 +321,22 @@ Source [#204](https://github.com/alimtalbi-ata/aiops/pull/204) exact HEAD `24197
 | Executed sandbox install/upgrade/rollback | **0/0/0** — NOT_RUN |
 
 **SEMANTIC_INTEGRITY=FAIL / D3 NO_GO.** #206 (stacked generator correction), #210 (entrypoint/ordinal guard) and #213 (source provenance guard on historical #201) are distinct branches; none retroactively validates this archive. No deployment, migration, GLPI write or host action. Required next: main-based cumulative source tree with migration order, exact checkout provenance, deterministic manifest, executable install/upgrade/rollback, disposable sandbox receipts, then same-SHA CI and operator attestation. Until then `RELEASE_STABLE=NO_GO`.
+
+### 2026-10-31 20:25 Paris — independent changed-artifact #204 audit, semantic integrity FAIL
+
+Source [#204](https://github.com/alimtalbi-ata/aiops/pull/204) HEAD **a69c45939290a6b1abf5936e39ffab19d9046e8e** (stacked on #194 40d38705cf2bde3be6052340442c117a81908f65), [Quality 41232288005](https://github.com/alimtalbi-ata/aiops/actions/runs/41232288005) SUCCESS 6/6. Independently downloaded [artifact 13053983467](https://github.com/alimtalbi-ata/aiops/actions/runs/41232288005/artifacts/13053983467), not a historical artifact.
+
+| Test | Observed result |
+|---|---|
+| Outer ZIP | **730118 bytes**, SHA256 **37629972b04b3ab01710c6a2ff6b72e1739131a3009ccb091ec0336307359a88**, two members, CRC PASS |
+| Nested ZIP | **788814 bytes**, SHA256 **476e02dc1da27954f22628436b8ae8eb8ff7328b59e8335587c5c5412d632666**, 462 members / 413 files, CRC PASS, SHA sidecar PASS |
+| Archive paths | No traversal, duplicate or symlink found |
+| FILES-SHA256SUMS | **412/412 PASS** with ./ path normalization |
+| In-memory extract/repack | **413/413** regular file digests identical; repacked ZIP CRC PASS. This is not an installation test |
+| Embedded manifests/MANIFEST.json | **38/68** size+SHA match, **30/68 FAIL** |
+| Release version | JSON **8.0.0** vs VERSION **2.1.0-core-rc1.4**, FAIL |
+| Provenance | RELEASE-MANIFEST.txt git_commit **4dc89af6ae1af510a768c5ee7e1c0cdcad07f90a** != #204 HEAD, FAIL |
+| Cumulative entrypoints | deploy/install.sh present; no dedicated upgrade/rollback entrypoints |
+| Executed clean install / upgrade / rollback | **0/0/0 NOT_RUN** |
+
+**SEMANTIC_INTEGRITY=FAIL; D3 NO_GO; RELEASE_STABLE=NO_GO.** #206/#210/#213 are separate source fixes/guards; no retroactive validation. Owner 4 PG16 outbox 12/12, DR 32 tables and Temporal restart are **disposable CI evidence**, not an install/upgrade/rollback rehearsal or a qualified Core/Portal/ACME vertical slice. No main merge, production, Debian, cron, runner, SSH/sudo, GLPI write, executor or LIVE.
