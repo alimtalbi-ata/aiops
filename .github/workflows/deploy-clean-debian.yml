@@ -1,6 +1,10 @@
 name: Approved clean Debian deployment
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy-clean-debian.yml"
+      - "docs/operations/APPROVED-CLEAN-DEBIAN-DEPLOYMENT.md"
   workflow_dispatch:
     inputs:
       source_ref:
@@ -22,7 +26,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-workflow:
+    if: github.event_name == 'pull_request'
+    name: Validate deployment workflow YAML
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse workflow YAML
+        run: ruby -e 'require "yaml"; YAML.load_file(".github/workflows/deploy-clean-debian.yml"); puts "WORKFLOW_YAML=PASS"'
+
   deploy-clean-host:
+    if: github.event_name == 'workflow_dispatch'
     name: Deploy and qualify a clean Debian 12 host
     runs-on: ubuntu-24.04
     environment: aiops-debian-lab
