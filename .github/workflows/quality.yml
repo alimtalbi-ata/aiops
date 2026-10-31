@@ -164,6 +164,8 @@ jobs:
                   "AIOPS_XREF_CI_TOKEN_NO_PERM": n,
                   "AIOPS_XREF_CI_DISPOSABLE": "1",
               }.items():
+                  if key not in ("AIOPS_XREF_CI_DISPOSABLE", "AIOPS_XREF_OWNER_PROOFS_PATH"):
+                      print("::add-mask::" + value)
                   print(key + "=" + value, file=f)
           PY
       - name: P0 combined 009 AI / 010 Evidence / 011 HITL / 012 xref PG16 disposable chain, idempotence and DDL rollback
