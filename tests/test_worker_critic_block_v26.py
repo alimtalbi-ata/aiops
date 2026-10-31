@@ -44,7 +44,7 @@ class StageBlockTests(unittest.TestCase):
             if path.endswith('/checkpoint'):
                 return {'ok':True}
             if path.endswith('/critic-denial-resume'):
-                return {'run_id':'R1','status':'BLOCKED','denial_hash':'a'.repeat(64),'version':13}
+                return {'run_id':'R1','status':'BLOCKED','denial_hash':'a'*64,'version':13}
             raise AssertionError(path)
         def denial(*args):
             calls.append(('denial',None,None))
