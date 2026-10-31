@@ -126,7 +126,7 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql", "009_itsm_xref_read.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql", "012_itsm_xref_read.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
       - name: Configure disposable xref service auth and independent attestation key
