@@ -62,6 +62,43 @@ class NocDemoRagTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertNotIn("fixture", response.text)
 
+    def test_missing_asset_authentication_precedes_query_validation(self):
+        # Required query parameters must not emit FastAPI 422 before auth.
+        # A forged browser identity never authorizes a catalog read.
+        forged = {"X-Actor-ID": "forged", "X-Tenant-ID": "foreign",
+                  "X-GLPI-Profile": "manager"}
+        with patch.object(noc_demo_rag, "load_catalog",
+                          side_effect=AssertionError("fixture read before ACL")) as catalog:
+            for headers in (forged, {**forged, "Authorization": "Bearer wrong"}):
+                with self.subTest(headers=headers):
+                    response = self.client.get("/api/noc/demo-rag", headers=headers)
+                    self.assertEqual(response.status_code, 401)
+                    self.assertEqual(response.json(), {"detail": "invalid_portal_read_token"})
+                    self.assertEqual(response.headers["cache-control"], "no-store")
+            catalog.assert_not_called()
+
+    def test_missing_asset_valid_viewer_is_invalid_not_fixture_read(self):
+        with patch.object(noc_demo_rag, "load_catalog",
+                          side_effect=AssertionError("fixture read without asset")) as catalog:
+            response = self.client.get("/api/noc/demo-rag", headers={
+                "Authorization": "Bearer " + TOKEN,
+                "X-Actor-ID": "forged", "X-Tenant-ID": "foreign",
+            })
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json(), {"detail": "invalid_asset_identifier"})
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            catalog.assert_not_called()
+
+    def test_missing_asset_unconfigured_auth_is_503_before_validation(self):
+        with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}), \
+             patch.object(noc_demo_rag, "load_catalog",
+                          side_effect=AssertionError("fixture read before auth")) as catalog:
+            response = self.client.get("/api/noc/demo-rag")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json(), {"detail": "portal_read_auth_not_configured"})
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            catalog.assert_not_called()
+
     def test_missing_auth_configuration_is_unavailable(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": ""}):
             response = self.get()
