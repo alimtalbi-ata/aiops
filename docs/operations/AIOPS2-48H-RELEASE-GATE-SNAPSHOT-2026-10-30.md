@@ -129,3 +129,16 @@ New #201 head `1d3a902877d556549425a95cd4cef792c5c000c8`: [Quality 41096370024](
 - Exact #201 `f38014c92b85763be8ac3f72042b50a48dbba95c`, base `main@27deb9b1a66faf27df8d69b137a63451f7649d80`, [Quality 41145124544](https://github.com/alimtalbi-ata/aiops/actions/runs/41145124544) SUCCESS 3/3. Exact #195 prior `057d99351921f30beeb4e6ab4158f841dccf1a15`, [Quality 41145381815](https://github.com/alimtalbi-ata/aiops/actions/runs/41145381815) SUCCESS 3/3. No cumulative kit qualification.
 - **BLOCKER (source review):** despite identity-field redaction, #201 Portal differentiates a valid internal Core Run from an absent/unqualified one via 503 reason/connection state. [#202 owner handoff](https://github.com/alimtalbi-ata/aiops/pull/202#issuecomment-6536560492) requests identical unqualified viewer responses and negative API/HTML tests; actor+tenant Core exact-Run ACL remains missing. No runtime cross-tenant exploit test performed.
 - T0 **GO_LIMITED** (isolated CI); T1 **BLOCKED** (tenant ACL + non-enumerability); T2 **NOT_TESTED** (single Incident/Run Core→Temporal→Evidence); T3 **NOT_ATTESTED**; T4 **NO_GO** (kit/install/rollback); T5 **NO_GO** (LIVE). `RELEASE_STABLE=NO_GO`. #196 real Ollama still FAIL; #204 stacked HITL tests do not promote release. No Debian, GLPI write or deployment.
+
+## 2026-10-31 UTC — exact-head gate correction
+
+| Gate | Status | Evidence / blocker |
+|---|---|---|
+| T0 candidate #201 | PENDING NEW HEAD | `e6f9ad656d3b6f92ef065f7aec13f3d1b2ca3d74`, [Quality 41155594473](https://github.com/alimtalbi-ata/aiops/actions/runs/41155594473) IN_PROGRESS when checked; preceding `f38014c9` Quality 41145124544 SUCCESS 3/3 only |
+| T1 authenticated tenant integration | BLOCKED | Shared bearer bootstrap now fails closed; exact-Run `connection_state` oracle, Core actor+tenant authorization and NOC tenant correlation remain unqualified |
+| T2 single ACME Incident/Run Temporal/Evidence/Policy E2E | NOT_QUALIFIED | #204 [Quality 41153751242](https://github.com/alimtalbi-ata/aiops/actions/runs/41153751242) runtime-e2e FAILED: `RUN-E9872B4B3AF4065E` RUNNING, no Analyst/Critic/Policy records; 0 effects |
+| T3 Debian read-only | NOT_ATTESTED | No authorized Debian/runner access |
+| T4 cumulative kit + sandbox rollback | NO-GO | No exact-main-based cumulative migration 011/OIDC/AI package or exercised install/upgrade/rollback |
+| T5 LIVE | NO-GO | No identity, executor fencing, runtime HITL/outbox or operator approval |
+
+The #204 failure artifact `13024756054` was downloaded and inspected: 633-byte ZIP, SHA256 `01f97936ab67e68c4864ad1384d411a452fb78c57dcaeb4bdd6784bb3d719f6e`, CRC PASS, one JSON report, `result=FAIL`, `effect_receipts=0`. No production claim. `RELEASE_STABLE=NO_GO`.
