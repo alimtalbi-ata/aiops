@@ -66,7 +66,7 @@ def docker_inventory() -> dict:
     containers = []
     all_names = names["stdout"].splitlines()
     for name in all_names[:100]:
-        if not name or any(ch in name for ch in "\\r\\n\\x00"):
+        if not name or any(ch in name for ch in "\r\n\x00"):
             continue
         inspected = fixed_command([
             "docker", "inspect", "--format",
