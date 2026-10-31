@@ -109,17 +109,23 @@ class GrafanaHealthContractTests(unittest.TestCase):
         self.assertEqual(response.headers["x-frame-options"], "DENY")
         self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
         read.assert_not_called()
-    def test_portal_mount_and_visible_button(self):
-        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": TOKEN}):
+    def test_portal_mount_is_fail_closed_without_tenant_acl(self):
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": TOKEN,
+                                     "AIOPS_PORTAL_READ_TOKEN": TOKEN}):
             from portal import main as portal_main
         self.assertIn("/api/noc/grafana-health", [r.path for r in portal_main.app.routes])
-        snapshot = {"dashboard": {}, "runs": {"items": []}, "twin": {}, "states": {}}
-        with patch.object(portal_main, "read_portal_snapshot", return_value=snapshot), patch.object(
-                portal_main, "build_navigation", return_value={}), patch.object(
-                portal_main, "render_navigation_html", return_value=""):
-            page = portal_main.home()
-        self.assertIn("Tester Grafana réel (HTTP)", page)
-        self.assertIn("grafanaHealth()", page)
+        # The current Portal deliberately exposes no unscoped Grafana button or
+        # global probe. A shared viewer token is not a tenant ACL; the mounted
+        # route must remain UNKNOWN/503 and must not contact Grafana.
+        from fastapi.testclient import TestClient
+        client = TestClient(portal_main.app)
+        with patch.object(module, "read_grafana_health",
+                          side_effect=AssertionError("unscoped Grafana probe")) as read:
+            response = client.get("/api/noc/grafana-health",
+                                  headers={"Authorization": "Bearer " + TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        read.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
