@@ -181,10 +181,12 @@ def main() -> int:
         tmp.write_text(encoded + "\n")
         os.chmod(tmp, 0o600)
         tmp.replace(LATEST_PATH)
-        # Cron runs every 5 minutes; publish one consolidated snapshot every 15.
-        if dt.datetime.now(dt.timezone.utc).minute % 15 == 0:
+        # Cron collects every minute; publish one consolidated snapshot every 15 minutes.
+        if dt.datetime.now(dt.timezone.utc).minute % 15 == 0 and TOKEN_PATH.is_file():
             publish(report)
             print("AIOPS_DEBIAN_REPORT=PUBLISHED")
+        elif dt.datetime.now(dt.timezone.utc).minute % 15 == 0:
+            print("AIOPS_DEBIAN_REPORT=COLLECTED_LOCAL_TOKEN_NOT_CONFIGURED")
         else:
             print("AIOPS_DEBIAN_REPORT=COLLECTED_LOCAL")
         return 0
