@@ -185,7 +185,7 @@ def main() -> int:
         if dt.datetime.now(dt.timezone.utc).minute % 5 == 0 and TOKEN_PATH.is_file():
             publish(report)
             print("AIOPS_DEBIAN_REPORT=PUBLISHED")
-        elif dt.datetime.now(dt.timezone.utc).minute % 15 == 0:
+        elif dt.datetime.now(dt.timezone.utc).minute % 5 == 0:
             print("AIOPS_DEBIAN_REPORT=COLLECTED_LOCAL_TOKEN_NOT_CONFIGURED")
         else:
             print("AIOPS_DEBIAN_REPORT=COLLECTED_LOCAL")
