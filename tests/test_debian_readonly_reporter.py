@@ -28,11 +28,31 @@ class DebianReadonlyReporterTests(unittest.TestCase):
             "available": True, "containers": [], "truncated": False
         }), mock.patch.object(MODULE, "tcp_probe", return_value={"reachable": False}):
             report = MODULE.collect()
-        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["schema_version"], 2)
         self.assertEqual(set(report["tcp_loopback"]), {"5432", "7233", "17777", "3000", "9090"})
         self.assertNotIn("environment", report)
         self.assertNotIn("logs", report)
         self.assertNotIn("credentials", report)
+
+
+    def test_docker_inventory_captures_topology_without_mounts_or_env(self):
+        responses = [
+            {"available": True, "returncode": 0, "stdout": "portal\\n", "stderr": ""},
+            {"available": True, "returncode": 0,
+             "stdout": "running|healthy|portal:test|compose-demo|portal|2|0|net-public,net-data,|777/tcp=10.0.0.2:17777,;", "stderr": ""},
+            {"available": True, "returncode": 0, "stdout": "net-public|bridge|local\\nnet-data|bridge|local", "stderr": ""},
+            {"available": True, "returncode": 0, "stdout": "portal|1.25%|200MiB / 1GiB|19.5%", "stderr": ""},
+        ]
+        with mock.patch.object(MODULE, "fixed_command", side_effect=responses):
+            report = MODULE.docker_inventory()
+        self.assertEqual(report["containers"][0]["networks"], ["net-public", "net-data"])
+        self.assertEqual(report["containers"][0]["published_ports"][0]["host_port"], "17777")
+        self.assertEqual(report["containers"][0]["compose_project"], "compose-demo")
+        self.assertEqual(report["containers"][0]["restart_count"], 2)
+        self.assertEqual(len(report["networks"]), 2)
+        self.assertEqual(report["resource_usage"][0]["cpu_percent"], "1.25%")
+        self.assertNotIn("mounts", report["containers"][0])
+        self.assertNotIn("environment", report["containers"][0])
 
     def test_token_permissions_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
