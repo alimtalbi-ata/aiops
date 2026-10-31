@@ -594,17 +594,33 @@ def policy_page():
     body+=panel("Contrôles d'autorisation",'<p>Critic rejeté : blocage atomique, reçu et outbox. Approbation HITL, ownership et fencing sont requis avant effet. Cette page ne crée aucune validation.</p>')
     return shell("/policy","Policy & HITL","Décisions, approbations et barrières de sécurité — lecture seule.",body)
 
+@app.get("/assets/portal-glpi-bot.js")
+def portal_glpi_bot_script():
+    return FileResponse(Path(__file__).with_name("portal_glpi_bot_client.js"),
+                        media_type="application/javascript",
+                        headers={"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"})
+
+
 @app.get("/copilot",response_class=HTMLResponse)
 def copilot_page():
-    body=panel("Assistant IA et contestation",
-        '<p>Questionner les incidents, la CMDB, les preuves et les décisions. Les réponses doivent citer leurs sources, confiance et limites.</p>'
-        '<p id="glpi-status" class="muted">GLPI : vérification de la connexion…</p>'
-        '<label for="q">Votre question</label><textarea id="q" placeholder="Quelles preuves soutiennent le diagnostic ?"></textarea>'
-        '<label for="ticket-id">Ticket GLPI (facultatif)</label><input id="ticket-id" inputmode="numeric" placeholder="Ex. 123">'
-        '<label for="portal-token">Jeton de lecture du portail</label><input id="portal-token" type="password" autocomplete="off" placeholder="AIOPS_PORTAL_READ_TOKEN">'
-        '<p><button type="button" id="ask">Interroger Copilot</button> <button type="button" class="secondary" id="ask-ticket">Analyser avec le ticket GLPI</button></p><pre class="log" id="answer" role="status" aria-live="polite">Aucune réponse.</pre>'
-        '<script>fetch("/api/glpi/health").then(r=>r.json()).then(s=>{document.getElementById("glpi-status").textContent="GLPI : "+s.status+(s.authenticated?" · API authentifiée":"");}).catch(()=>{document.getElementById("glpi-status").textContent="GLPI : indisponible";});async function askCopilot(withTicket){const out=document.getElementById("answer");const question=document.getElementById("q").value;const id=document.getElementById("ticket-id").value.trim();if(withTicket&&!/^\\d+$/.test(id)){out.textContent="Saisir un identifiant numérique de ticket GLPI.";return;}out.textContent="Chargement…";try{const url=withTicket?"/api/copilot/ticket/"+encodeURIComponent(id):"/api/copilot";const headers={"Content-Type":"application/json"};if(withTicket)headers.Authorization="Bearer "+document.getElementById("portal-token").value;const r=await fetch(url,{method:"POST",headers,body:JSON.stringify({question})});const payload=await r.json();out.textContent=JSON.stringify(payload,null,2);if(!r.ok)out.textContent="Erreur HTTP "+r.status+" : "+out.textContent;}catch(e){out.textContent="Copilot indisponible";}}document.getElementById("ask").addEventListener("click",()=>askCopilot(false));document.getElementById("ask-ticket").addEventListener("click",()=>askCopilot(true));</script>')
-    return shell("/copilot","Copilot","Conversation contextualisée ; une réponse non étayée ne constitue pas une preuve.",body)
+    body=panel("Assistant AIOps — interaction GLPI / HITL",
+        '<p>Assistant opérateur limité au scénario synthétique ACME SAN → Payments. '
+        'Le bot relie un ticket GLPI à un Run DEMO explicite, consulte le registre Analyst/Critic '
+        'et peut créer une proposition HITL à risque faible si elle existe dans le ledger validé.</p>'
+        '<label for="glpi-ticket-id">Identifiant du ticket GLPI</label>'
+        '<input id="glpi-ticket-id" inputmode="numeric" maxlength="12" placeholder="Ex. 1">'
+        '<label for="demo-operator-token">Jeton opérateur DEMO (usage ponctuel)</label>'
+        '<input id="demo-operator-token" type="password" autocomplete="off">'
+        '<label for="glpi-bot-question">Votre question</label>'
+        '<textarea id="glpi-bot-question" maxlength="2000">Analyse ce ticket, distingue faits et hypothèses, cite les preuves, puis indique si une proposition corrective prudente est justifiée.</textarea>'
+        '<p><button id="glpi-bot-analyze" type="button">Interroger AIOps sur ce ticket</button> '
+        '<button id="glpi-bot-propose" type="button" class="secondary" disabled>Créer la proposition HITL</button></p>'
+        '<p id="glpi-bot-status" role="status" aria-live="polite">En attente — aucune lecture GLPI effectuée.</p>'
+        '<pre id="glpi-bot-answer" class="log" aria-live="polite">Aucune réponse.</pre>'
+        '<p class="muted">Une proposition est un objet PROPOSED, pas une approbation. Les décisions LIVE exigent une identité OIDC vérifiée et des rôles autorisés. '
+        'Aucune approbation, exécution, commande SSH/sudo ou remédiation n’est déclenchée depuis cette page.</p>'
+        '<script src="/assets/portal-glpi-bot.js" defer></script>')
+    return shell("/copilot","Assistant AIOps","Copilot contextualisé GLPI, preuves et proposition HITL — périmètre DEMO uniquement.",body)
 
 @app.get("/demo-studio",response_class=HTMLResponse)
 def demo_studio():
