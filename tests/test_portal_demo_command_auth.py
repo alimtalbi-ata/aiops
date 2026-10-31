@@ -118,13 +118,14 @@ class DemoOperatorBoundaryTests(unittest.TestCase):
         self.assertNotIn("private-core-host-secret", r.text)
         upstream.assert_not_called()
 
-    def test_framework_generated_405_and_422_also_have_security_headers(self):
-        # FastAPI emits these responses before reaching route auth handlers.
+    def test_framework_405_and_copilot_auth_first_401_have_security_headers(self):
+        # Framework 405 remains non-cacheable. Copilot malformed body must
+        # authenticate first, never emit pre-auth 422 schema validation.
         for method, path, kwargs, expected in (
             ("get", "/api/demo", {}, 405),
             ("put", "/api/portal/itsm", {}, 405),
             ("get", "/api/copilot", {}, 405),
-            ("post", "/api/copilot", {"json": ["not", "an", "object"]}, 422),
+            ("post", "/api/copilot", {"json": ["not", "an", "object"]}, 401),
         ):
             with self.subTest(method=method, path=path):
                 response = getattr(self.client, method)(path, **kwargs)
