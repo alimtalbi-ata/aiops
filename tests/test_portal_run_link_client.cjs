@@ -9,7 +9,7 @@ test('exact canonical run ID produces only a local deep link', () => {
   }
 });
 
-test('one-time bearer exchange clears input and navigates only after an authorized 200', async () => {
+test('legacy HTTP 200 cannot authorize a Run or mint browser credentials', async () => {
   const nodes = {
     'run-detail-id': { value: 'RUN-ACME-001' },
     'portal-read-token': { value: 'one-time-token' },
@@ -30,9 +30,37 @@ test('one-time bearer exchange clears input and navigates only after an authoriz
   assert.equal(requests[0].options.method, 'POST');
   assert.equal(requests[0].options.headers.Authorization, 'Bearer one-time-token');
   assert.equal(requests[0].options.headers['X-Portal-Run-ID'], 'RUN-ACME-001');
-  assert.equal(requests[0].options.credentials, 'same-origin');
+  assert.equal(requests[0].options.credentials, 'omit');
   assert.equal(requests[0].tokenInputAtRequest, '');
-  assert.deepEqual(paths, ['/runs/RUN-ACME-001']);
+  assert.deepEqual(paths, []);
+  assert.match(nodes['run-detail-error'].textContent, /UNKNOWN.*ACL acteur\+tenant absente/);
+});
+
+test('forged or stale 2xx responses never trigger Run navigation', async () => {
+  for (const status of [200, 201, 202, 204, 206]) {
+    const nodes = {
+      'run-detail-id': { value: 'RUN-FOREIGN-001' },
+      'portal-read-token': { value: 'viewer-bearer' },
+      'run-detail-open': { addEventListener: (event, cb) => { nodes.click = cb; } },
+      'run-detail-error': { textContent: '' }
+    };
+    const paths = [];
+    const calls = [];
+    mount({ getElementById: id => nodes[id] }, path => paths.push(path),
+          async (url, options) => {
+            calls.push({url, options});
+            return {ok: true, status, json: async () => ({
+              tenant_acl_qualified: true, actor_identity_server_derived: true,
+              run_id: 'RUN-FOREIGN-001', state: 'CONNECTED'
+            })};
+          });
+    await nodes.click();
+    assert.deepEqual(paths, [], 'HTTP ' + status + ' must not navigate');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.credentials, 'omit');
+    assert.equal(nodes['portal-read-token'].value, '');
+    assert.match(nodes['run-detail-error'].textContent, /UNKNOWN.*ACL acteur\+tenant absente/);
+  }
 });
 
 test('invalid Run ID never exchanges the token or navigates', async () => {
