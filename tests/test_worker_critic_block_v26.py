@@ -6,8 +6,8 @@ from unittest.mock import Mock
 
 SRC=pathlib.Path(__file__).resolve().parents[1]/'app/worker/main.py'
 tree=ast.parse(SRC.read_text())
-node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_execute_stage_blocking')
-code=compile(ast.Module(body=[node],type_ignores=[]),str(SRC),'exec')
+nodes=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('recover_committed_critic_block','_execute_stage_blocking')]
+code=compile(ast.Module(body=nodes,type_ignores=[]),str(SRC),'exec')
 
 class StageBlockTests(unittest.TestCase):
     def run_stage(self, persist_fails=False):
@@ -24,7 +24,7 @@ class StageBlockTests(unittest.TestCase):
         def get(base,path,**kwargs):
             calls.append(('get',path,None))
             if path.endswith('/api/runs/R1'):
-                return {'run':{'incident_id':'INC1'},'events':[{
+                return {'run':{'incident_id':'INC1','status':'RUNNING'},'events':[{
                     'stage':'DGX_ANALYST','event_type':'ANALYST_COMPLETED',
                     'payload':{'analysis_record_id':'ANL1','analysis':{
                         'severity':'P1','confidence':.9}}}]}
