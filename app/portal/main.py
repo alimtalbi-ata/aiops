@@ -64,7 +64,20 @@ def portal_navigation_script():
                         headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 
 @app.post('/api/copilot')
-def copilot(q:dict):return post_json(COPILOT,'/api/copilot/query',q)
+def copilot(q: dict, authorization: str | None = Header(default=None)):
+    # Legacy Copilot has no tenant/run-scoped read contract. A shared viewer
+    # bearer cannot authorize sending browser questions to this upstream.
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+    return _noc_json_response({
+        'state': 'UNKNOWN',
+        'reason': 'TENANT_ACL_NOT_QUALIFIED',
+        'connection_state': 'UNKNOWN',
+        'source': 'COPILOT_NOT_TENANT_AUTHORIZED',
+        'source_freshness': 'UNKNOWN',
+    }, status_code=503)
 @app.post('/api/demo')
 def demo(authorization: str | None = Header(default=None)):
     try:
