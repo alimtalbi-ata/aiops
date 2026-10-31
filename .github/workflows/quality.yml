@@ -30,6 +30,26 @@ jobs:
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: ACME read-only Core Evidence locator focused tests
+        run: python -m unittest discover -s tests -p "test_find_acme_demo_run.py" -v
+      - name: ACME SAN to Payments synthetic fixture hash and edge contract
+        run: python -m unittest discover -s tests -p "test_acme_san_payments_fixture_contract.py" -v
+      - name: ACME graph-bound synthetic catalog and replay contract tests
+        run: python -m unittest discover -s tests -p "test_acme_synthetic_incident_catalog.py" -v
+      - name: ACME pinned graph and catalog override type integrity regressions (3 tests)
+        run: python -m unittest discover -s tests -p "test_acme_fixture_override_types.py" -v
+      - name: Generate pinned offline ACME replay and checksum
+        run: |
+          python tools/generate_acme_incidents.py --scenario REDUNDANT_SAN_PATH_LOSS --seed 20261018 --output "$RUNNER_TEMP/acme-synthetic-replay.json"
+          sha256sum "$RUNNER_TEMP/acme-synthetic-replay.json"
+      - name: Upload offline synthetic replay (NOT Core or GLPI Evidence)
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-graph-bound-synthetic-replay
+          path: ${{ runner.temp }}/acme-synthetic-replay.json
+          retention-days: 7
+      - name: Compile ACME Core locator
+        run: python -m py_compile tools/find_acme_demo_run.py
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Portal registry and integration navigation unit tests
