@@ -215,6 +215,24 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
         self.assertFalse(result["publishable_to_core_or_glpi"])
         self.assertFalse(result["live_effects_authorized"])
 
+    def test_catalog_blob_pin_rejects_plausible_priority_edits_and_whitespace(self):
+        raw = gen.CATALOG_FILE.read_bytes()
+        self.assertEqual(gen._git_blob(raw), gen.CATALOG_GIT_BLOB)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "catalog.json"
+            edited = copy.deepcopy(self.catalog)
+            golden = next(s for s in edited["scenarios"]
+                          if s["key"] == "REDUNDANT_SAN_PATH_LOSS")
+            golden["urgency_synthetic"] = "HIGH"  # still valid schema, but unreviewed
+            path.write_text(json.dumps(edited, indent=2) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "catalog Git blob mismatch"):
+                gen.load_catalog(path)
+            path.write_bytes(raw + b"\n")
+            with self.assertRaisesRegex(ValueError, "catalog Git blob mismatch"):
+                gen.load_catalog(path)
+        self.assertEqual(gen.replay()["dataset_sha256"],
+                         "ce0aef74222699da695c2e894e622b0625c992ef654dda34a84cff26b5e64f3f")
+
     def test_tampered_graph_and_catalog_fail_closed(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "seed.sql"
@@ -223,8 +241,10 @@ class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
                 gen.load_graph(p)
             c = Path(d) / "catalog.json"
             c.write_text('{"schema":"x","schema":"y"}', encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+            with self.assertRaisesRegex(ValueError, "catalog Git blob mismatch"):
                 gen.load_catalog(c)
+            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+                json.loads(c.read_text(encoding="utf-8"), object_pairs_hook=gen._unique_object)
 
     def test_replay_rejects_injected_graph_even_with_valid_fixture_ids(self):
         forged = copy.deepcopy(self.graph)
