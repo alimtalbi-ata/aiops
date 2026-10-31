@@ -50,7 +50,9 @@ class StageBlockTests(unittest.TestCase):
             return 'POL1'
         ns={'activity':Mock(info=lambda:Mock(attempt=1)),
             'call':call,'get_json':get,'post_json':post,
-            'persist_critic_denial':denial,\n            'critic_denial_input':lambda *args: {'mode':'DEMO','critic_validated':False},\n            'AtomicDenialBlockError':type('AtomicDenialBlockError',(Exception,),{}),
+            'persist_critic_denial':denial,
+            'critic_denial_input':lambda *args: {'mode':'DEMO','critic_validated':False},
+            'AtomicDenialBlockError':type('AtomicDenialBlockError',(Exception,),{}),
             'CORE':'http://core','EVID':'http://evidence',
             'INTEL':'http://intelligence','ADMIN':'dummy',
             'hashlib':__import__('hashlib'),'json':__import__('json'),
