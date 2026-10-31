@@ -1,4 +1,4 @@
-import os,json,requests,datetime,hashlib,hmac,uuid
+import os,json,requests,datetime,hashlib,hmac,uuid,re
 from shared.safety import canonical_sha256, gold_set_eligible, critical_approval_complete
 from fastapi import FastAPI,HTTPException,Header
 from pydantic import BaseModel,Field
