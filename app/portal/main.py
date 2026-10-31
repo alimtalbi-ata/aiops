@@ -1,4 +1,4 @@
-import os,json,html,uuid,hmac,re
+import os,json,html,uuid,hmac,re,hashlib
 from pathlib import Path
 from fastapi import FastAPI,Request,Header,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse,FileResponse
@@ -75,25 +75,96 @@ def _require_portal_read(authorization):
 # GLPI handoff read model visible, but do not expose ticket reads or proposal
 # creation until the authoritative tenant-scoped contract is qualified.
 
+def _synthetic_demo_launch_enabled() -> bool:
+    return os.getenv('AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED', 'false').strip().lower() == 'true'
+
+
+@app.get('/assets/demo-launch.js')
+def demo_launch_script():
+    return FileResponse(Path(__file__).with_name('demo_launch_client.js'),
+                        media_type='application/javascript',
+                        headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+
+
 @app.post('/api/demo')
-def demo(authorization: str | None = Header(default=None)):
-    # A browser-supplied operator bearer authenticates only a DEMO request.
-    # It cannot supply the actor/tenant/Run authorization required for Core
-    # incident creation, Run creation or execution. Refuse before any I/O.
+async def demo(request: Request, authorization: str | None = Header(default=None),
+               idempotency_key: str | None = Header(default=None, alias='Idempotency-Key')):
+    # This endpoint launches one fixed synthetic ACME scenario only. The
+    # browser cannot supply an actor, tenant, incident, Run, service, mode,
+    # scenario or command. The operator token authorizes this bounded demo
+    # launch; it is not an identity/tenant claim and grants no LIVE authority.
     try:
         require_demo_operator(authorization)
     except HTTPException as exc:
         response = _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
         response.headers.update(exc.headers or {})
         return response
-    return _noc_json_response({
-        'state': 'UNKNOWN',
-        'reason': 'TENANT_ACL_NOT_QUALIFIED',
-        'connection_state': 'UNKNOWN',
-        'source': 'DEMO_CORE_MUTATION_NOT_AUTHORIZED',
-        'source_freshness': 'UNKNOWN',
-        'live_remediation_authorized': False,
-    }, status_code=503)
+
+    if not _synthetic_demo_launch_enabled():
+        return _noc_json_response({
+            'state':'UNKNOWN', 'reason':'SYNTHETIC_DEMO_LAUNCH_DISABLED',
+            'live_remediation_authorized':False,
+        }, status_code=503)
+    if await request.body():
+        return _noc_json_response({'detail':'synthetic_demo_payload_not_supported'},
+                                  status_code=422)
+
+    internal = os.getenv('AIOPS_INTERNAL_TOKEN', '')
+    if not internal:
+        return _noc_json_response({'state':'UNKNOWN',
+            'reason':'internal_service_auth_not_configured',
+            'live_remediation_authorized':False}, status_code=503)
+    key = idempotency_key or uuid.uuid4().hex
+    if (not isinstance(key, str) or len(key) < 8 or len(key) > 128
+            or not re.fullmatch(r'[A-Za-z0-9._:-]+', key)):
+        return _noc_json_response({'detail':'invalid_idempotency_key'}, status_code=422)
+
+    # Hash the caller's opaque retry key; never treat it as an identity or ID.
+    stable_key = 'DEMO-GOLDEN-' + hashlib.sha256(key.encode('ascii')).hexdigest()[:32]
+    incident_payload = {
+        'external_id': stable_key,
+        'title': 'ACME DEMO — dégradation SAN affectant Payments',
+        'severity': 'P1',
+        'service_id': 'ACME-SVC-PAYMENTS',
+        'source': 'synthetic-portal-demo',
+        'synthetic': True,
+        'payload': {'scenario_id':'SCN-GOLDEN-PAYMENT-P1',
+                    'story_version':'ACME-SAN-PAYMENTS-1.0',
+                    'live_remediation_authorized':False},
+    }
+    try:
+        incident = post_json(CORE, '/api/incidents', incident_payload,
+                             timeout=10, token=internal)
+        incident_id = incident.get('incident_id') if isinstance(incident, dict) else None
+        if not isinstance(incident_id, str) or not incident_id.startswith('INC-'):
+            raise ValueError('synthetic_incident_receipt_invalid')
+        run = post_json(CORE, '/api/runs', {
+            'mode':'DEMO', 'scenario_id':'SCN-GOLDEN-PAYMENT-P1',
+            'incident_id':incident_id, 'idempotency_key':stable_key,
+        }, timeout=10, token=internal)
+        run_id = run.get('run_id') if isinstance(run, dict) else None
+        if not isinstance(run_id, str) or not run_id.startswith('RUN-'):
+            raise ValueError('synthetic_run_receipt_invalid')
+        execution = post_json(CORE, f'/api/runs/{run_id}/execute', {},
+                              timeout=10, token=internal)
+        if not isinstance(execution, dict) or execution.get('run_id') != run_id:
+            raise ValueError('synthetic_execution_receipt_invalid')
+        return _noc_json_response({
+            'state':'STARTED', 'run_id':run_id,
+            'workflow_id':execution.get('workflow_id'),
+            'incident_id':incident_id, 'scenario_id':'SCN-GOLDEN-PAYMENT-P1',
+            'mode':'DEMO', 'synthetic':True,
+            'idempotent':bool(execution.get('idempotent',False)),
+            'live_remediation_authorized':False,
+            'effect_allowed':False,
+        }, status_code=202)
+    except Exception:
+        # Keep identifiers and infrastructure details out of the public error.
+        # The same Idempotency-Key can safely retry after an ambiguous timeout.
+        return _noc_json_response({
+            'state':'UNKNOWN', 'reason':'SYNTHETIC_DEMO_LAUNCH_UNAVAILABLE',
+            'live_remediation_authorized':False, 'effect_allowed':False,
+        }, status_code=503)
 @app.post('/api/demo-enriched')
 def demo_enriched(authorization: str | None = Header(default=None)):
     # Enriched DEMO launch remains disabled until server-derived actor/tenant
@@ -322,8 +393,17 @@ def home():
     else:
         content+=panel("Run Core sélectionné — UNKNOWN",
             "<p>UNKNOWN — aucun run DEMO/REPLAY/STORY non ambigu dans l'inventaire Core.</p>")
-    content+=panel("Démo ACME — simulation uniquement",
-        '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
+    if _synthetic_demo_launch_enabled():
+        content+=panel("Démo ACME — simulation uniquement",
+            '<p class="muted">Lance un incident et un Run ACME synthétiques via Core/Temporal. Aucun champ client n’est accepté ; aucune action LIVE n’est possible.</p>'
+            '<label for="demo-token">Jeton opérateur DEMO (usage unique)</label> '
+            '<input id="demo-token" type="password" autocomplete="off"> '
+            '<button type="button" id="launch-demo">Lancer le scénario SAN → Payments</button> '
+            '<span id="demo-launch-status" role="status">Prêt — scénario synthétique uniquement</span>'
+            '<script src="/assets/demo-launch.js" defer></script>')
+    else:
+        content+=panel("Démo ACME — simulation uniquement",
+            '<p class="muted">Le lancement synthétique est désactivé par configuration. Aucun Run ne sera créé depuis le portail.</p><button disabled title="AIOPS_SYNTHETIC_DEMO_LAUNCH_ENABLED=false">Lancer DEMO (désactivé)</button>')
     content+=panel("Intégrations — liens non attestés",
         '<p class="muted">Les liens externes ne prouvent ni disponibilité ni authentification. Aucun secret ou URL configurée n’est exposé dans le HTML public.</p>'
         '<label for="portal-navigation-token">Jeton lecture des liens (usage unique)</label> '
