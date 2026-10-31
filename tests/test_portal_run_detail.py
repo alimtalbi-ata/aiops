@@ -364,7 +364,8 @@ class RunDetailTests(unittest.TestCase):
         for forbidden in ("localStorage", "sessionStorage", "document.cookie", "token="):
             self.assertNotIn(forbidden, js.text)
         self.assertIn("Authorization: 'Bearer ' + token", js.text)
-        self.assertIn("credentials: 'same-origin'", js.text)
+        self.assertIn("credentials: 'omit'", js.text)
+        self.assertIn("HTTP 2xx (including legacy session success) grants no navigation", js.text)
         self.assertIn("portal-read-token", js.text)
 
     def test_authenticated_unqualified_session_never_issues_cookie_or_reads_core(self):
