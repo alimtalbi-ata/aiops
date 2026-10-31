@@ -756,6 +756,10 @@ def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=
         if not row:
             raise HTTPException(404,'outbox_event_not_found')
         if row[0]=='DELIVERED':
+            # A lost ACK can be retried only by the original lease holder.
+            # A different or missing token is not an idempotent delivery proof.
+            if not row[1] or not hmac.compare_digest(str(row[1]),token):
+                raise HTTPException(409,'outbox_lease_lost_or_invalid')
             return {'event_id':event_id,'status':'DELIVERED','idempotent':True,
                     'execution_allowed':False,'effect_allowed':False}
         if (row[0]!='LEASED' or not row[1] or row[2] is not True
@@ -763,7 +767,7 @@ def acknowledge_hitl_decision_outbox(event_id:str,x:dict,authorization:str|None=
             raise HTTPException(409,'outbox_lease_lost_or_invalid')
         c.execute(
             "update aiops.hitl_decision_outbox set status='DELIVERED',"
-            "delivered_at=now(),lease_owner=null,lease_token=null,lease_until=null,last_error=null "
+            "delivered_at=now(),lease_owner=null,lease_until=null,last_error=null "
             "where event_id=%s",(event_id,)
         )
     return {'event_id':event_id,'status':'DELIVERED','idempotent':False,
