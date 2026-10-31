@@ -386,5 +386,68 @@ class OfflineFailureInjection(unittest.TestCase):
 
 
 
+    def test_core_statusless_stage_ack_is_explicitly_no_effect(self):
+        # Core /events acknowledges version/sequence, not event status.
+        # The Worker may attach PASS only after its own known PASS event.
+        # No HTTP, database, provider, Temporal service or LIVE run.
+        events = []
+        def fake_call(method, url, payload):
+            self.assertEqual(method, "POST")
+            events.append(payload["event_type"])
+            if payload["event_type"] == "STAGE_STARTED":
+                return {"run_id": "RUN-OFFLINE", "sequence": 1, "version": 2}
+            if payload["event_type"] == "STAGE_COMPLETED":
+                return {"run_id": "RUN-OFFLINE", "sequence": 2, "version": 3}
+            raise AssertionError("unexpected_core_call")
+
+        def fake_post(base, path, payload, **kwargs):
+            if base == "EVID" and path == "/api/evidence":
+                return {"evidence_id": "E-OFFLINE"}
+            if base == "CORE" and (path.endswith("/checkpoint")
+                                   or path.endswith("/demo-artifacts")):
+                return {}
+            raise AssertionError("unexpected_post")
+
+        env = {"CORE": "CORE", "EVID": "EVID", "ADMIN": "offline",
+               "call": fake_call, "post_json": fake_post}
+        env["verified_no_effect_stage_receipt"] = extract(
+            "app/worker/main.py", "verified_no_effect_stage_receipt", env)
+        stage = extract("app/worker/main.py", "_execute_stage_blocking", env)
+        receipt = stage({
+            "run_id": "RUN-OFFLINE", "version": 1,
+            "stage": "NORMALIZE", "mode": "DEMO",
+            "scenario_id": "SCENARIO-OFFLINE",
+        }, 1)
+        self.assertEqual(events, ["STAGE_STARTED", "STAGE_COMPLETED"])
+        self.assertEqual(receipt["status"], "PASS")
+        self.assertEqual(receipt["version"], 3)
+        self.assertIs(receipt["execution_allowed"], False)
+        self.assertIs(receipt["effect_allowed"], False)
+
+    def test_stage_ack_fencing_rejects_stale_or_effect_authority(self):
+        # Isolated forged Core ACKs cannot become PASS or authorize effects.
+        normalize = extract("app/worker/main.py",
+                            "verified_no_effect_stage_receipt", {})
+        base = {"run_id": "RUN-OFFLINE", "sequence": 2, "version": 3}
+        mutations = (
+            {"run_id": "RUN-OTHER"},
+            {"version": 2},
+            {"version": True},
+            {"version": 2.0},
+            {"version": None},
+            {"status": "BLOCKED"},
+            {"status": "UNKNOWN"},
+            {"execution_allowed": True},
+            {"effect_allowed": True},
+            {"execution_allowed": 1},
+            {"effect_allowed": 1},
+        )
+        for change in mutations:
+            with self.subTest(change=change):
+                with self.assertRaisesRegex(
+                        RuntimeError, "stage_pass_receipt_not_qualified"):
+                    normalize({**base, **change}, "RUN-OFFLINE", "NORMALIZE", 2)
+
+
 if __name__ == "__main__":
     unittest.main()
