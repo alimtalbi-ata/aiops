@@ -635,25 +635,15 @@ def demo_studio():
           ("Impact SAN-A","DISPONIBLE" if isinstance(impact.get("affected"),list) and impact.get("root") else "INCONNU"),
           ("Scénarios DEMO/REPLAY/STORY visibles",str(len(demo_runs)) if runs else "UNKNOWN — registre vide ou inaccessible")
         ]))
-    if os.getenv("AIOPS_DEMO_LAUNCH_ENABLED")=="true":
+    if _synthetic_demo_launch_enabled():
         body+=panel("Lancer le scénario synthétique ACME",
-          '<p>Dev uniquement : jeton opérateur saisi localement, jamais conservé dans la page. '
-          'Le lancement crée un incident DEMO avec une identité unique et demande son exécution par Core/Temporal.</p>'
-          '<label for="operator-token">Jeton interne de la stack de développement</label>'
-          '<input id="operator-token" type="password" autocomplete="off" style="width:100%;max-width:440px">'
-          '<p><button id="launch-acme" type="button">Lancer la démonstration ACME</button></p>'
-          '<p id="launch-status" role="status" aria-live="polite">En attente.</p>'
-          '<script>(function(){const b=document.getElementById("launch-acme");'
-          'b.addEventListener("click",async()=>{const t=document.getElementById("operator-token");'
-          'const status=document.getElementById("launch-status");const token=t.value;t.value="";'
-          'if(!token){status.textContent="Jeton requis";return;}b.disabled=true;'
-          'status.textContent="Création du run DEMO…";'
-          'try{const response=await fetch("/api/demo",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:"{}"});'
-          'if(!response.ok){status.textContent="Échec du lancement : HTTP "+response.status;return;}'
-          'const data=await response.json();const rid=String(data.run_id||"");'
-          'if(!/^[A-Za-z0-9_-]{1,128}$/.test(rid)){status.textContent="Réponse de lancement sans identifiant valide";return;}'
-          'location.assign("/demo-studio/run/"+encodeURIComponent(rid));'
-          '}catch(e){status.textContent="Core ou portail indisponible";}finally{b.disabled=false;}});})();</script>')
+          '<p>Scénario fixe SAN → Payments en mode DEMO. Le jeton opérateur est utilisé une seule fois ; '
+          'aucun identifiant ou mode fourni par le navigateur n’est accepté.</p>'
+          '<label for="demo-token">Jeton opérateur DEMO</label>'
+          '<input id="demo-token" type="password" autocomplete="off">'
+          '<p><button id="launch-demo" type="button">Lancer la démonstration ACME</button></p>'
+          '<p id="demo-launch-status" role="status" aria-live="polite">En attente.</p>'
+          '<script src="/assets/demo-launch.js" defer></script>')
     # Navigate a real Core inventory entry; never substitute a fixture or LIVE run.
     import urllib.parse
     selected, selected_detail=_select_verified_demo_run(runs)
