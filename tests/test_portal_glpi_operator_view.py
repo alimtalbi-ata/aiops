@@ -50,6 +50,28 @@ class GlpiOperatorViewTests(unittest.TestCase):
         core.assert_not_called()
         write.assert_not_called()
 
+    def test_accessible_single_journey_never_fabricates_deep_links(self):
+        with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \\
+             patch.object(main, "post_json", side_effect=AssertionError("Core write")) as write:
+            response = self.client.get("/itsm")
+        self.assertEqual(response.status_code, 200)
+        self.assert_security(response)
+        page = response.text
+        self.assertIn('aria-labelledby="journey-title"', page)
+        self.assertIn('data-journey-provenance="SYNTHETIC"', page)
+        self.assertIn('<ol class="journey"', page)
+        stages = ("Incident", "Run", "Evidence", "AI Ledger", "Policy",
+                  "HITL", "Verification", "GLPI")
+        positions = [page.index(label, page.index('<ol class="journey"')) for label in stages]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(page.count('aria-current="page"'), 1)
+        self.assertIn('href="/itsm" aria-current="page"', page)
+        self.assertNotIn('href="/runs/', page)
+        self.assertIn("Aucun deep link vers un ticket ou Run non autorisé", page)
+        self.assertNotIn("<button", page)
+        core.assert_not_called()
+        write.assert_not_called()
+
     def test_native_inventory_roles_filters_and_no_browser_approval(self):
         page = self.client.get("/itsm").text
         for label in ("N1", "N2", "N3", "Manager", "P1", "P2", "P3", "P4",
