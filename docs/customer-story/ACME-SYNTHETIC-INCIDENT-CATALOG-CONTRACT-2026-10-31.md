@@ -28,7 +28,7 @@ Consumers presenting the **one** SAN→Payments story must call
 `correlate_golden_manifest_offline(manifest)` rather than treating
 `correlate_offline(events)` as a source-of-truth check. The strict helper
 regenerates the golden story from the pinned SQL graph, reviewed catalog and
-declared seed, then compares the **entire** manifest before deduplication.
+canonical seed `20261018`, then compares the **entire** manifest before deduplication.
 A plausible `SYN-EVT-*` ID, modified maintenance flag, changed service/CI,
 forged GLPI/Core/Run/Evidence link, claimed ITIL P1 confirmation or fabricated
 checkpoint fails even if the caller recomputes `dataset_sha256`.
