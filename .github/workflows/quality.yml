@@ -155,7 +155,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install real Core HTTP/PostgreSQL dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "psycopg[binary]==3.2.9" "requests==2.32.4" "uvicorn==0.35.0" "PyJWT[crypto]==2.10.1"
       - name: Apply Core schema to ephemeral real PostgreSQL
         run: |
           python - <<'PY'
