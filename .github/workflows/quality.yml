@@ -396,15 +396,22 @@ jobs:
           assert r["execution_allowed"] is False and r["effect_allowed"] is False
           print("CI_TEMPORAL_RESTART_PENDING=PASS|effects=0")
           PY
-      - name: Restart disposable Temporal server while HITL workflow is in flight
+      - name: Restart disposable Temporal server and application Worker while HITL workflow is in flight
         env:
           AIOPS_CI_DISPOSABLE: "YES"
         run: |
           test "$AIOPS_CI_DISPOSABLE" = "YES"
           test "$COMPOSE_PROFILES" = "test"
           test -s reports/hitl-temporal-restart-prepared.json
-          docker compose --env-file .env restart aiops2-temporal
-          docker compose --env-file .env up -d --wait --wait-timeout 180 aiops2-temporal
+          worker_container="$(docker compose --env-file .env ps -q aiops2-worker)"
+          test -n "$worker_container"
+          worker_started_before="$(docker inspect -f '{{.State.StartedAt}}' "$worker_container")"
+          docker compose --env-file .env restart aiops2-temporal aiops2-worker
+          docker compose --env-file .env up -d --wait --wait-timeout 180 aiops2-temporal aiops2-worker
+          worker_started_after="$(docker inspect -f '{{.State.StartedAt}}' "$worker_container")"
+          test -n "$worker_started_after"
+          test "$worker_started_before" != "$worker_started_after"
+          echo "CI_APP_WORKER_RESTART_INFLIGHT=PASS"
       - name: Recover in-flight Temporal history and replay synthetic REJECT without effects
         env:
           AIOPS_CI_DISPOSABLE: "YES"
@@ -414,6 +421,7 @@ jobs:
           docker compose --env-file .env exec -T \
             -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
             -e AIOPS_CI_TEMPORAL_RESTARTED_INFLIGHT=YES \
+            -e AIOPS_CI_APP_WORKER_RESTARTED_INFLIGHT=YES \
             aiops2-core python /tmp/ci_hitl_temporal_restart.py resume \
             < reports/hitl-temporal-restart-prepared.json > reports/hitl-temporal-restart.json
           python3 - <<'PY'
@@ -425,8 +433,10 @@ jobs:
           assert r["execution_allowed"] is False and r["effect_allowed"] is False
           assert r["identity"]=="NOT_ATTESTED"
           assert r["temporal_server_restart_inflight"]=="OBSERVED_CI_DISPOSABLE"
+          assert r["app_worker_restart_inflight"]=="OBSERVED_CI_DISPOSABLE"
+          assert r["production_worker_restart_inflight"]=="NOT_TESTED"
           assert r["production_incident_workflow"]=="NOT_TESTED"
-          print("CI_TEMPORAL_SERVER_RESTART_INFLIGHT=PASS|signals=2|effects=0")
+          print("CI_TEMPORAL_AND_APP_WORKER_RESTART_INFLIGHT=PASS|signals=2|effects=0")
           PY
       - name: Upload disposable HITL outbox to Temporal qualification
         if: always()
