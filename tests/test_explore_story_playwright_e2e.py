@@ -362,5 +362,41 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
                     validate_pair(left, story)
 
 
+    def test_07_glpi_operator_handoff_browser_navigation_and_permissions(self):
+        """Real Chromium, ephemeral Portal only; no GLPI instance or ticket data."""
+        self.page.goto(self.base + "/")
+        self.page.get_by_role("link", name="GLPI / ITSM").click()
+        self.assertTrue(self.page.url.endswith("/itsm"))
+        expect(self.page.get_by_role("heading", name="GLPI / ITSM — point de passage opérateur")).to_be_visible()
+        expect(self.page.get_by_role("status")).to_contain_text("UNKNOWN")
+        expect(self.page.locator('[data-story-provenance="SYNTHETIC"]')).to_contain_text("SYNTHETIC")
+        self.assertTrue(self.page.locator("#priority").is_disabled())
+        self.assertEqual(self.page.locator("button").count(), 0)
+        self.assertNotIn("ticket_id", self.page.content())
+        self.assertNotIn("evidence_id", self.page.content())
+        self.page.keyboard.press("Tab")
+        self.assertEqual(self.page.evaluate("document.activeElement.tagName"), "A")
+        page = self.context.request.get(self.base + "/itsm")
+        self.assertEqual(page.status, 200)
+        self.assertEqual(page.headers["cache-control"], "no-store")
+        self.assertEqual(page.headers["x-frame-options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", page.headers["content-security-policy"])
+        for headers, expected in (
+            ({}, 401),
+            ({"Authorization": "Bearer wrong"}, 401),
+            ({"Authorization": "Bearer " + VIEWER,
+              "X-Tenant-ID": "foreign", "X-Actor-ID": "forged",
+              "X-GLPI-Profile": "manager"}, 503),
+        ):
+            with self.subTest(expected=expected):
+                response = self.context.request.get(self.base + "/api/portal/itsm",
+                                                    headers=headers)
+                self.assertEqual(response.status, expected)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertEqual(response.headers["x-frame-options"], "DENY")
+                self.assertNotIn("ticket_id", response.text())
+        # This test does not create a screenshot or claim native GLPI UI access.
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
