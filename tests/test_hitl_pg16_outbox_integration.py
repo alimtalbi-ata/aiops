@@ -52,39 +52,53 @@ def fixture():
                                "CI-HITL-AN-" + suffix, "CI-HITL-CR-" + suffix)
     proposal, approval, event = ("CI-HITL-ACT-" + suffix,
                                  "CI-HITL-APR-" + suffix, "CI-HITL-HDO-" + suffix)
+    evidence = "CI-HITL-EVD-" + suffix
     digest = hashlib.sha256(("SYNTHETIC_UNVERIFIED:" + suffix).encode()).hexdigest()
+    evidence_ids = json.dumps([evidence])
+    action = {"action_id": "CI-FIXTURE", "risk_tier": "LOW",
+              "target_ci_id": "CI-SYNTHETIC", "advisory_only": True,
+              "requires_human_approval": True}
     with db() as c:
         c.execute("insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
                   "values(%s,'DEMO','CI-HITL','CREATED',%s)", (run, "ci-run-" + suffix))
+        c.execute("insert into aiops.evidence "
+                  "(evidence_id,source,claim,confidence,provenance,payload_hash,payload) "
+                  "values(%s,'ci-fixture','synthetic outbox qualification',0.5,"
+                  "'{\"synthetic\":true}',%s,'{}')", (evidence, digest))
         c.execute("insert into aiops.analysis_records "
                   "(analysis_id,run_id,idempotency_key,revision,contract_version,provider,"
-                  "model,prompt_version,evidence_set_hash,output,confidence,status) "
-                  "values(%s,%s,%s,1,'ci','ci-fixture','none','ci',%s,'{}',0.5,'VALID')",
-                  (analysis, run, "ci-analysis-" + suffix, digest))
+                  "model,prompt_version,evidence_ids,evidence_set_hash,output,confidence,status) "
+                  "values(%s,%s,%s,1,'ci','ci-fixture','none','ci',%s,%s,%s,0.5,'VALID')",
+                  (analysis, run, "ci-analysis-" + suffix, evidence_ids, digest,
+                   json.dumps({"recommended_actions": [action]})))
         c.execute("insert into aiops.critique_records "
                   "(critique_id,idempotency_key,analysis_id,run_id,contract_version,"
-                  "provider,model,validated,output,diagnostic_confidence) "
-                  "values(%s,%s,%s,%s,'ci','ci-fixture','none',false,'{}',0.5)",
-                  (critique, "ci-critique-" + suffix, analysis, run))
+                  "provider,model,validated,evidence_ids,output,diagnostic_confidence) "
+                  "values(%s,%s,%s,%s,'ci','ci-fixture','none',true,%s,%s,0.5)",
+                  (critique, "ci-critique-" + suffix, analysis, run, evidence_ids,
+                   json.dumps({"issues": [], "unsafe_actions": []})))
         c.execute("insert into aiops.action_proposals "
                   "(proposal_id,run_id,analysis_id,critique_id,source_action_id,"
-                  "proposal_revision,target_ci_id,action_type,risk_tier,proposal_hash,status,expires_at) "
+                  "proposal_revision,target_ci_id,action_type,risk_tier,evidence_ids,"
+                  "preconditions,expected_postconditions,proposal_hash,status,expires_at) "
                   "values(%s,%s,%s,%s,'CI-FIXTURE',1,'CI-SYNTHETIC',"
-                  "'COLLECT_DIAGNOSTICS','LOW',%s,'REJECTED',now()+interval '1 hour')",
-                  (proposal, run, analysis, critique, digest))
+                  "'COLLECT_DIAGNOSTICS','LOW',%s,'[\"ci precondition\"]',"
+                  "'[\"ci postcondition\"]',%s,'PROPOSED',now()+interval '1 hour')",
+                  (proposal, run, analysis, critique, evidence_ids, digest))
         c.execute("insert into aiops.approval_records "
                   "(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,"
                   "nonce,expires_at,audit) values(%s,%s,%s,'SYNTHETIC_UNVERIFIED',"
                   "'ci_fixture','REJECT',%s,now()+interval '1 hour',%s)",
                   (approval, proposal, digest, "ci-nonce-" + suffix,
                    json.dumps({"synthetic": True, "identity_attested": False})))
+        c.execute("update aiops.action_proposals set status='REJECTED' "
+                  "where proposal_id=%s", (proposal,))
         c.execute("insert into aiops.hitl_decision_outbox "
                   "(event_id,proposal_id,run_id,proposal_hash,proposal_revision,"
                   "decision,source_status,approval_id) "
                   "values(%s,%s,%s,%s,1,'REJECT','REJECTED',%s)",
                   (event, proposal, run, digest, approval))
     return event, proposal
-
 
 class PostgreSQL16OutboxTests(unittest.TestCase):
     @classmethod
