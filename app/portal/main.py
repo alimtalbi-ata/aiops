@@ -156,24 +156,23 @@ def demo(authorization: str | None = Header(default=None)):
         'live_remediation_authorized': False,
     }, status_code=503)
 @app.post('/api/demo-enriched')
-def demo_enriched(authorization:str|None=Header(default=None)):
-    """Independent DEMO B launch: evidence richer, but never pre-approve Critic."""
-    if os.getenv('AIOPS_DEMO_LAUNCH_ENABLED')!='true':
-        raise HTTPException(403,'demo_launch_disabled')
-    secret=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
-    bearer=(authorization or '').removeprefix('Bearer ')
-    if not secret or not hmac.compare_digest(bearer,secret):
-        raise HTTPException(401,'invalid internal token')
-    demo_id=uuid.uuid4().hex
-    external=f'DEMO-ENRICHED-{demo_id}'
-    iid=post_json(CORE,'/api/incidents',{'external_id':external,
-        'title':'Synthetic ACME payments SAN degradation — multi-source investigation',
-        'severity':'P1','service_id':'ACME-SVC-PAYMENTS','source':'portal-demo-enriched',
-        'synthetic':True,'payload':{'scenario_variant':'evidence-enriched','synthetic':True}})['incident_id']
-    run=post_json(CORE,'/api/runs',{'mode':'DEMO',
-        'scenario_id':'SCN-GOLDEN-PAYMENT-P1','incident_id':iid,
-        'idempotency_key':external})
-    return post_json(CORE,f"/api/runs/{run['run_id']}/execute",{})
+def demo_enriched(authorization: str | None = Header(default=None)):
+    # Enriched DEMO launch remains disabled until server-derived actor/tenant
+    # authorization and canonical Run idempotency are qualified.
+    try:
+        require_demo_operator(authorization)
+    except HTTPException as exc:
+        response = _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+        response.headers.update(exc.headers or {})
+        return response
+    return _noc_json_response({
+        'state': 'UNKNOWN',
+        'reason': 'DEMO_ENRICHED_MUTATION_NOT_AUTHORIZED',
+        'connection_state': 'UNKNOWN',
+        'source': 'DEMO_ENRICHED_CORE_MUTATION_NOT_QUALIFIED',
+        'source_freshness': 'UNKNOWN',
+        'live_remediation_authorized': False,
+    }, status_code=503)
 
 from portal.ui_theme import shell, panel, table, pretty, esc
 from portal.twin_graph import graph_panel
