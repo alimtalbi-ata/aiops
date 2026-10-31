@@ -85,7 +85,9 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
         e=dict(zip(_COLUMNS,record))
         v=e["mapping_version"]
         if (type(v) is not int or v<1
-            or (previous is None and e["supersedes_association_id"] is not None)
+            # An immutable history must begin at version 1. A lone version 2
+            # with no predecessor is not an authoritative read-back.
+            or (previous is None and (v!=1 or e["supersedes_association_id"] is not None))
             or (previous is not None and (v!=previous["mapping_version"]+1 or
                 e["supersedes_association_id"]!=previous["association_id"]))): return "CONFLICT",None
         if (e["tenant_id"]!=tenant or e["glpi_instance_id"]!=instance or e["ticket_id"]!=ticket
