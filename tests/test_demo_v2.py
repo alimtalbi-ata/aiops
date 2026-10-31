@@ -784,7 +784,6 @@ class DemoV2Tests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sources du cockpit", response.text)
         self.assertIn("UNKNOWN", response.text)
-        self.assertIn("TENANT_ACL_NOT_QUALIFIED", response.text) if "TENANT_ACL_NOT_QUALIFIED" in response.text else None
         self.assertNotIn("CONNECTED", response.text)
         self.assertNotIn("RUN-ACME", response.text)
         self.assertEqual(reads, [])
