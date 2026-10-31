@@ -174,11 +174,9 @@ class PortalOIDCIdentityTests(unittest.TestCase):
                 identity.verify_server_oidc_assertion(token(), env=settings, now=NOW)
 
     def test_real_rsa_signature_and_tamper_with_disposable_jwks(self):
-        try:
-            from cryptography.hazmat.primitives.asymmetric import rsa, padding
-            from cryptography.hazmat.primitives import hashes
-        except ImportError:
-            self.skipTest("cryptography absent in shared CI; Portal Dockerfile pins it")
+        # No skip: shared CI installs the explicit pinned Portal test requirement.
+        from cryptography.hazmat.primitives.asymmetric import rsa, padding
+        from cryptography.hazmat.primitives import hashes
         private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         pub = private.public_key().public_numbers()
         settings = config()
@@ -192,6 +190,30 @@ class PortalOIDCIdentityTests(unittest.TestCase):
         signed = unsigned + "." + b64(signature)
         actor = identity.verify_server_oidc_assertion(signed, env=settings, now=NOW)
         self.assertEqual(actor.tenant_id, "ACME")
+        self.assertGreater(actor.expires_at, NOW)
+        # Real signature, correct nonce, wrong nonce, rotated/unknown key.
+        nonce_payload = {"nonce": "server-bound-nonce"}
+        unsigned_nonce = token(nonce_payload).rsplit(".", 1)[0]
+        signed_nonce = unsigned_nonce + "." + b64(private.sign(
+            unsigned_nonce.encode("ascii"), padding.PKCS1v15(), hashes.SHA256()))
+        verified = identity.verify_server_oidc_assertion(
+            signed_nonce, env=settings, now=NOW,
+            expected_nonce="server-bound-nonce")
+        self.assertEqual(verified.subject, "operator-123")
+        with self.assertRaises(identity.IdentityRejected):
+            identity.verify_server_oidc_assertion(
+                signed_nonce, env=settings, now=NOW,
+                expected_nonce="forged-nonce")
+        with self.assertRaises(identity.IdentityRejected):
+            identity.verify_server_oidc_assertion(
+                signed, env=settings, now=NOW, expected_nonce="server-bound-nonce")
+        rotated = json.loads(settings["AIOPS_PORTAL_OIDC_JWKS_JSON"])
+        rotated["keys"][0]["kid"] = "rotated-key"
+        with self.assertRaises(identity.IdentityRejected):
+            identity.verify_server_oidc_assertion(
+                signed_nonce,
+                env={**settings, "AIOPS_PORTAL_OIDC_JWKS_JSON": json.dumps(rotated)},
+                now=NOW, expected_nonce="server-bound-nonce")
         tampered = signed[:-3] + ("AAA" if signed[-3:] != "AAA" else "BBB")
         with self.assertRaises(identity.IdentityRejected):
             identity.verify_server_oidc_assertion(tampered, env=settings, now=NOW)
