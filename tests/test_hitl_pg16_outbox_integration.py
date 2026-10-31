@@ -1,0 +1,196 @@
+"""PostgreSQL 16 disposable HITL outbox handler tests; no LIVE/identity/effects.
+
+Runs Core's actual claim/ack functions with a CI-only database. Authentication is
+stubbed, so this qualifies lease SQL, not OIDC or approval authority.
+"""
+import concurrent.futures
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import threading
+import unittest
+import uuid
+
+import psycopg
+from fastapi import HTTPException
+from test_hitl_outbox_failure_injection import core
+
+
+def db():
+    return psycopg.connect(host="127.0.0.1", port=5432, dbname="aiops", user="aiops",
+                           password=os.environ["PGPASSWORD"], connect_timeout=5)
+
+
+class Connection:
+    def __enter__(self):
+        self.connection = db()
+        return self.connection.__enter__()
+
+    def __exit__(self, *args):
+        return self.connection.__exit__(*args)
+
+
+def claim(owner):
+    receipt = core("claim_hitl_decision_outbox", Connection(), uuid=uuid)(
+        {"owner": owner, "limit": 1, "lease_seconds": 15})
+    assert receipt["execution_allowed"] is False and receipt["effect_allowed"] is False
+    return receipt["items"]
+
+
+def ack(event, token):
+    receipt = core("acknowledge_hitl_decision_outbox", Connection())(
+        event, {"lease_token": token})
+    assert receipt["execution_allowed"] is False and receipt["effect_allowed"] is False
+    return receipt
+
+
+def fixture():
+    suffix = uuid.uuid4().hex
+    run, analysis, critique = ("CI-HITL-RUN-" + suffix,
+                               "CI-HITL-AN-" + suffix, "CI-HITL-CR-" + suffix)
+    proposal, approval, event = ("CI-HITL-ACT-" + suffix,
+                                 "CI-HITL-APR-" + suffix, "CI-HITL-HDO-" + suffix)
+    digest = hashlib.sha256(("SYNTHETIC_UNVERIFIED:" + suffix).encode()).hexdigest()
+    with db() as c:
+        c.execute("insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
+                  "values(%s,'DEMO','CI-HITL','CREATED',%s)", (run, "ci-run-" + suffix))
+        c.execute("insert into aiops.analysis_records "
+                  "(analysis_id,run_id,idempotency_key,revision,contract_version,provider,"
+                  "model,prompt_version,evidence_set_hash,output,confidence,status) "
+                  "values(%s,%s,%s,1,'ci','ci-fixture','none','ci',%s,'{}',0.5,'VALID')",
+                  (analysis, run, "ci-analysis-" + suffix, digest))
+        c.execute("insert into aiops.critique_records "
+                  "(critique_id,idempotency_key,analysis_id,run_id,contract_version,"
+                  "provider,model,validated,output,diagnostic_confidence) "
+                  "values(%s,%s,%s,%s,'ci','ci-fixture','none',false,'{}',0.5)",
+                  (critique, "ci-critique-" + suffix, analysis, run))
+        c.execute("insert into aiops.action_proposals "
+                  "(proposal_id,run_id,analysis_id,critique_id,source_action_id,"
+                  "proposal_revision,target_ci_id,action_type,risk_tier,proposal_hash,status,expires_at) "
+                  "values(%s,%s,%s,%s,'CI-FIXTURE',1,'CI-SYNTHETIC',"
+                  "'COLLECT_DIAGNOSTICS','LOW',%s,'REJECTED',now()+interval '1 hour')",
+                  (proposal, run, analysis, critique, digest))
+        c.execute("insert into aiops.approval_records "
+                  "(approval_id,proposal_id,proposal_hash,actor_id,actor_role,decision,"
+                  "nonce,expires_at,audit) values(%s,%s,%s,'SYNTHETIC_UNVERIFIED',"
+                  "'ci_fixture','REJECT',%s,now()+interval '1 hour',%s)",
+                  (approval, proposal, digest, "ci-nonce-" + suffix,
+                   json.dumps({"synthetic": True, "identity_attested": False})))
+        c.execute("insert into aiops.hitl_decision_outbox "
+                  "(event_id,proposal_id,run_id,proposal_hash,proposal_revision,"
+                  "decision,source_status,approval_id) "
+                  "values(%s,%s,%s,%s,1,'REJECT','REJECTED',%s)",
+                  (event, proposal, run, digest, approval))
+    return event, proposal
+
+
+class PostgreSQL16OutboxTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        required = {"AIOPS_CI_OUTBOX_DISPOSABLE": "YES", "GITHUB_ACTIONS": "true",
+                    "PGHOST": "127.0.0.1", "PGPORT": "5432", "PGDATABASE": "aiops",
+                    "PGUSER": "aiops"}
+        if any(os.environ.get(k) != v for k, v in required.items()):
+            raise RuntimeError("refuse_non_disposable_postgres")
+        with db() as c:
+            if not str(c.execute("show server_version_num").fetchone()[0]).startswith("16"):
+                raise RuntimeError("requires_postgresql_16")
+
+    def no_effect(self, proposal):
+        with db() as c:
+            self.assertEqual(c.execute("select count(*) from aiops.effect_receipts "
+                                       "where proposal_id=%s", (proposal,)).fetchone()[0], 0)
+
+    def test_concurrent_claim_single_winner(self):
+        event, proposal = fixture()
+        barrier = threading.Barrier(2)
+        def contender(n):
+            barrier.wait(timeout=10)
+            return claim("ci-concurrent-" + str(n))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(contender, n) for n in (1, 2)]
+            items = [x for future in futures for x in future.result(timeout=15)]
+        self.assertEqual(len(items), 1)
+        self.assertEqual((items[0]["event_id"], items[0]["attempts"]), (event, 1))
+        self.assertFalse(ack(event, items[0]["lease_token"])["idempotent"])
+        self.no_effect(proposal)
+
+    def test_skip_locked_row(self):
+        event, proposal = fixture()
+        with db() as locked:
+            locked.execute("select event_id from aiops.hitl_decision_outbox "
+                           "where event_id=%s for update", (event,))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                self.assertEqual(pool.submit(claim, "ci-locked").result(timeout=10), [])
+        token = claim("ci-after-unlock")[0]["lease_token"]
+        ack(event, token)
+        self.no_effect(proposal)
+
+    def test_lost_ack_lease_expiry_reclaim_and_replay(self):
+        event, proposal = fixture()
+        old = claim("ci-before-restart")[0]
+        with db() as c:
+            c.execute("update aiops.hitl_decision_outbox "
+                      "set lease_until=now()-interval '1 second' where event_id=%s", (event,))
+        with self.assertRaises(HTTPException) as error:
+            ack(event, old["lease_token"])
+        self.assertEqual(error.exception.status_code, 409)
+        new = claim("ci-after-restart")[0]  # fresh handler and DB connection
+        self.assertEqual(new["attempts"], 2)
+        self.assertNotEqual(old["lease_token"], new["lease_token"])
+        with self.assertRaises(HTTPException):
+            ack(event, old["lease_token"])
+        self.assertFalse(ack(event, new["lease_token"])["idempotent"])
+        self.assertTrue(ack(event, new["lease_token"])["idempotent"])
+        with self.assertRaises(HTTPException):
+            ack(event, "forged-token")
+        with db() as c:
+            status, digest = c.execute("select status,lease_token from "
+                "aiops.hitl_decision_outbox where event_id=%s", (event,)).fetchone()
+        self.assertEqual(status, "DELIVERED")
+        self.assertEqual(digest, hashlib.sha256(new["lease_token"].encode()).hexdigest())
+        self.no_effect(proposal)
+
+    def test_retry_dead_letter(self):
+        event, proposal = fixture()
+        with db() as c:
+            c.execute("update aiops.hitl_decision_outbox set status='LEASED',"
+                      "attempts=19,lease_owner='ci',lease_token='old',"
+                      "lease_until=now()-interval '1 second' where event_id=%s", (event,))
+        last = claim("ci-attempt-20")[0]
+        self.assertEqual(last["attempts"], 20)
+        with db() as c:
+            c.execute("update aiops.hitl_decision_outbox "
+                      "set lease_until=now()-interval '1 second' where event_id=%s", (event,))
+        self.assertEqual(claim("ci-dead"), [])
+        with db() as c:
+            state = c.execute("select status,attempts,last_error from "
+                              "aiops.hitl_decision_outbox where event_id=%s", (event,)).fetchone()
+        self.assertEqual(state, ("DEAD", 20, "delivery_attempt_limit_exceeded"))
+        with self.assertRaises(HTTPException):
+            ack(event, last["lease_token"])
+        self.no_effect(proposal)
+
+    def test_duplicate_ack_and_no_redelivery(self):
+        event, proposal = fixture()
+        token = claim("ci-duplicate")[0]["lease_token"]
+        self.assertFalse(ack(event, token)["idempotent"])
+        self.assertTrue(ack(event, token)["idempotent"])
+        self.assertEqual(claim("ci-no-redelivery"), [])
+        self.no_effect(proposal)
+
+
+if __name__ == "__main__":
+    result = unittest.TextTestRunner(verbosity=2).run(
+        unittest.defaultTestLoader.loadTestsFromTestCase(PostgreSQL16OutboxTests))
+    Path("reports").mkdir(exist_ok=True)
+    Path("reports/hitl-pg16-outbox.json").write_text(json.dumps({
+        "status": "PASS" if result.wasSuccessful() else "FAIL",
+        "tests_run": result.testsRun,
+        "tests_passed": result.testsRun - len(result.failures) - len(result.errors),
+        "mode": "DEMO synthetic fixture", "identity": "NOT_ATTESTED",
+        "temporal_signal": "NOT_TESTED", "execution_allowed": False,
+        "effect_allowed": False}, indent=2) + "\n", encoding="utf-8")
+    sys.exit(0 if result.wasSuccessful() else 1)
