@@ -314,6 +314,46 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
         self.no_effect(healthy_proposal)
 
 
+    def test_lost_ack_response_after_commit_is_idempotent(self):
+        """Simulate lost HTTP response after Core committed DELIVERED, no redelivery."""
+        event, proposal = fixture()
+        first = claim("ci-ack-response-lost")[0]
+        ack(event, first["lease_token"])  # Core committed; discard response
+        self.assertEqual(claim("ci-after-lost-ack-response"), [])
+        replay = ack(event, first["lease_token"])
+        self.assertEqual((replay["event_id"], replay["status"], replay["idempotent"]),
+                         (event, "DELIVERED", True))
+        with db() as c:
+            status, attempts, stored = c.execute(
+                "select status,attempts,lease_token from aiops.hitl_decision_outbox "
+                "where event_id=%s", (event,)).fetchone()
+        self.assertEqual((status, attempts, stored),
+                         ("DELIVERED", 1,
+                          hashlib.sha256(first["lease_token"].encode()).hexdigest()))
+        self.no_effect(proposal)
+
+    def test_lease_tokens_are_scoped_to_exact_event(self):
+        """A valid lease for one synthetic REJECT cannot ACK another event."""
+        first_event, first_proposal = fixture()
+        second_event, second_proposal = fixture()
+        first = claim("ci-event-binding-first")[0]
+        second = claim("ci-event-binding-second")[0]
+        self.assertEqual((first["event_id"], second["event_id"]),
+                         (first_event, second_event))
+        for event_id, wrong_token in (
+                (first_event, second["lease_token"]),
+                (second_event, first["lease_token"])):
+            with self.subTest(event_id=event_id):
+                with self.assertRaises(HTTPException) as error:
+                    ack(event_id, wrong_token)
+                self.assertEqual(error.exception.status_code, 409)
+        self.assertFalse(ack(first_event, first["lease_token"])["idempotent"])
+        self.assertFalse(ack(second_event, second["lease_token"])["idempotent"])
+        self.assertEqual(claim("ci-after-event-bound-acks"), [])
+        self.no_effect(first_proposal)
+        self.no_effect(second_proposal)
+
+
 if __name__ == "__main__":
     result = unittest.TextTestRunner(verbosity=2).run(
         unittest.defaultTestLoader.loadTestsFromTestCase(PostgreSQL16OutboxTests))
