@@ -40,6 +40,15 @@ class GLPIPrivateFollowupTests(unittest.TestCase):
         self.assertEqual(request.call_args.args[0], "GET")
         self.assertIn("Ticket/1/ITILFollowup", request.call_args.args[1])
 
+
+    def test_existing_public_marker_is_not_accepted_as_private(self):
+        with patch("portal.glpi_client.requests.get", side_effect=[
+            self.response({"session_token": "session-1"}), self.response({})
+        ]), patch("portal.glpi_client.requests.request",
+                 return_value=self.response([{"id": 77, "content": self.content, "is_private": 0}])):
+            with self.assertRaises(GLPIError):
+                self.client.add_private_followup("1", self.marker, self.content)
+
     def test_new_followup_is_private_and_uses_ticket_parent(self):
         with patch("portal.glpi_client.requests.get", side_effect=[
             self.response({"session_token": "session-1"}),
