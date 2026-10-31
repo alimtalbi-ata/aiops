@@ -378,12 +378,65 @@ jobs:
           assert r["temporal_server_restart_inflight"]=="NOT_TESTED"
           print("CI_HITL_OUTBOX_TEMPORAL=PASS|signals=2|effects=0|sink_worker_replay=OBSERVED")
           PY
+      - name: Prepare no-effect outbox workflow pending across Temporal server restart
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          docker compose --env-file .env exec -T \
+            -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
+            aiops2-core sh -c 'cat > /tmp/ci_hitl_temporal_restart.py && python /tmp/ci_hitl_temporal_restart.py prepare' \
+            < tests/hitl_temporal_server_restart_disposable.py > reports/hitl-temporal-restart-prepared.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("reports/hitl-temporal-restart-prepared.json",encoding="utf-8"))
+          assert r["phase"]=="PREPARED" and r["attempts"]==1
+          assert r["identity"]=="NOT_ATTESTED" and r["effect_receipts"]==0
+          assert r["execution_allowed"] is False and r["effect_allowed"] is False
+          print("CI_TEMPORAL_RESTART_PENDING=PASS|effects=0")
+          PY
+      - name: Restart disposable Temporal server while HITL workflow is in flight
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          test -s reports/hitl-temporal-restart-prepared.json
+          docker compose --env-file .env restart aiops2-temporal
+          docker compose --env-file .env up -d --wait --wait-timeout 180 aiops2-temporal
+      - name: Recover in-flight Temporal history and replay synthetic REJECT without effects
+        env:
+          AIOPS_CI_DISPOSABLE: "YES"
+        run: |
+          test "$AIOPS_CI_DISPOSABLE" = "YES"
+          test "$COMPOSE_PROFILES" = "test"
+          docker compose --env-file .env exec -T \
+            -e AIOPS_CI_DISPOSABLE=YES -e GITHUB_ACTIONS=true -e COMPOSE_PROFILES=test \
+            -e AIOPS_CI_TEMPORAL_RESTARTED_INFLIGHT=YES \
+            aiops2-core python /tmp/ci_hitl_temporal_restart.py resume \
+            < reports/hitl-temporal-restart-prepared.json > reports/hitl-temporal-restart.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("reports/hitl-temporal-restart.json",encoding="utf-8"))
+          assert r["result"]=="PASS" and r["mode"]=="DEMO"
+          assert r["outbox_state"]=="DELIVERED" and r["attempts"]==2
+          assert r["temporal_signals"]==2 and r["effect_receipts"]==0
+          assert r["execution_allowed"] is False and r["effect_allowed"] is False
+          assert r["identity"]=="NOT_ATTESTED"
+          assert r["temporal_server_restart_inflight"]=="OBSERVED_CI_DISPOSABLE"
+          assert r["production_incident_workflow"]=="NOT_TESTED"
+          print("CI_TEMPORAL_SERVER_RESTART_INFLIGHT=PASS|signals=2|effects=0")
+          PY
       - name: Upload disposable HITL outbox to Temporal qualification
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aiops2-hitl-outbox-temporal-report
-          path: reports/hitl-outbox-temporal.json
+          path: |
+            reports/hitl-outbox-temporal.json
+            reports/hitl-temporal-restart-prepared.json
+            reports/hitl-temporal-restart.json
           if-no-files-found: ignore
           retention-days: 30
       - name: Upload runtime qualification report
