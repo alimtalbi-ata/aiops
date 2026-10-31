@@ -385,7 +385,8 @@ def home():
         '<input id="portal-navigation-token" type="password" autocomplete="off"> '
         '<button type="button" onclick="loadPortalNavigation()">Afficher les liens configurés</button> '
         '<button type="button" onclick="clearPortalNavigation()">Effacer les liens</button> '
-        '<span id="portal-navigation-status">UNKNOWN — liens non chargés</span>')
+        '<span id="portal-navigation-status">UNKNOWN — liens non chargés</span>'
+        '<script src="/assets/portal-navigation.js" defer></script>')
     return shell("/","Cockpit opérationnel","Vue consolidée des incidents, exécutions et dépendances réelles du registre.",content)
 
 
