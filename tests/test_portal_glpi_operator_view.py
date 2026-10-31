@@ -51,7 +51,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
         write.assert_not_called()
 
     def test_accessible_single_journey_never_fabricates_deep_links(self):
-        with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \\
+        with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \
              patch.object(main, "post_json", side_effect=AssertionError("Core write")) as write:
             response = self.client.get("/itsm")
         self.assertEqual(response.status_code, 200)
