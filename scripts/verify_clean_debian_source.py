@@ -43,6 +43,21 @@ def verify_source(repo: str, sha: str, token: str, get_json=github_get) -> list[
     if comparison.get("status") not in ("ahead", "identical"):
         raise ValueError("source_sha_not_ancestor_of_main")
 
+    associated_prs = get_json(repo, token, f"/commits/{sha}/pulls")
+    if not isinstance(associated_prs, list):
+        raise ValueError("invalid_commit_pull_requests_response")
+    merged_main_prs = [
+        pr for pr in associated_prs
+        if isinstance(pr, dict)
+        and pr.get("state") == "closed"
+        and pr.get("merged_at")
+        and pr.get("draft") is False
+        and (pr.get("base") or {}).get("ref") == "main"
+        and ((pr.get("head") or {}).get("repo") or {}).get("full_name") == repo
+    ]
+    if not merged_main_prs:
+        raise ValueError("source_sha_not_from_merged_same_repo_main_pr")
+
     runs = get_json(repo, token, f"/actions/runs?head_sha={sha}&per_page=100")
     workflow_runs = runs.get("workflow_runs", [])
     if not isinstance(workflow_runs, list):
@@ -88,6 +103,7 @@ def main() -> int:
     for name in passed:
         print("EXACT_HEAD_CI=PASS|" + name)
     print("APPROVED_SOURCE_ANCESTRY=PASS|main")
+    print("MERGED_MAIN_PR=PASS")
     return 0
 
 
