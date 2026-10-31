@@ -22,7 +22,7 @@ Dispatch requires an exact 40-character commit SHA; movable branch and tag names
 3. The latest `Debian 12 and 13 installation and runtime qualification` run for that exact SHA completed successfully.
 4. Both workflow runs originate from this repository and the expected workflow paths.
 
-The check is implemented and unit-tested in `scripts/verify_clean_debian_source.py`; it also requires a merged same-repository PR association for the source commit. The GitHub token used for these checks has read-only Contents and Actions permissions. The SSH private key and known-hosts value remain repository secrets and are never written to the repository or artifact.
+The check is implemented and unit-tested in `scripts/verify_clean_debian_source.py`; it also requires a merged same-repository PR association for the source commit. The GitHub token used for these checks has read-only Contents, Actions and Pull Requests permissions. The gate proves merged-PR provenance and exact CI, but does not itself prove that GitHub branch-protection/ruleset enforcement is enabled; repository administrators must verify required-review and required-check rules separately. The SSH private key and known-hosts value remain repository secrets and are never written to the repository or artifact.
 
 ## GitHub configuration
 
