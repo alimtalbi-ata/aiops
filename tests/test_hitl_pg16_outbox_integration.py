@@ -249,6 +249,71 @@ class PostgreSQL16OutboxTests(unittest.TestCase):
         self.no_effect(proposal)
 
 
+    def test_pending_event_is_not_claimable_before_available_at(self):
+        """Backoff/availability gate cannot be bypassed by an eager poller."""
+        event, proposal = fixture()
+        with db() as c:
+            c.execute("update aiops.hitl_decision_outbox "
+                      "set available_at=now()+interval '10 minutes' where event_id=%s",
+                      (event,))
+        self.assertEqual(claim("ci-before-available"), [])
+        with db() as c:
+            state = c.execute("select status,attempts from aiops.hitl_decision_outbox "
+                              "where event_id=%s", (event,)).fetchone()
+            self.assertEqual(state, ("PENDING", 0))
+            c.execute("update aiops.hitl_decision_outbox "
+                      "set available_at=now()-interval '1 second' where event_id=%s",
+                      (event,))
+        item = claim("ci-after-available")[0]
+        self.assertEqual((item["event_id"], item["attempts"]), (event, 1))
+        self.assertFalse(ack(event, item["lease_token"])["idempotent"])
+        self.no_effect(proposal)
+
+    def test_unexpired_lease_cannot_be_stolen_or_acked_with_wrong_token(self):
+        """No duplicate delivery while a valid lease is still outstanding."""
+        event, proposal = fixture()
+        first = claim("ci-valid-lease")[0]
+        self.assertEqual(claim("ci-premature-takeover"), [])
+        with self.assertRaises(HTTPException) as forged:
+            ack(event, "forged-token")
+        self.assertEqual(forged.exception.status_code, 409)
+        with db() as c:
+            state = c.execute("select status,attempts,lease_token from "
+                              "aiops.hitl_decision_outbox where event_id=%s",
+                              (event,)).fetchone()
+        self.assertEqual(state, ("LEASED", 1, first["lease_token"]))
+        self.assertFalse(ack(event, first["lease_token"])["idempotent"])
+        self.assertEqual(claim("ci-after-valid-ack"), [])
+        self.no_effect(proposal)
+
+    def test_dead_letter_exhaustion_does_not_starve_healthy_event(self):
+        """A poisoned expired lease is DEAD, not a blocker for independent REJECT."""
+        exhausted, exhausted_proposal = fixture()
+        healthy, healthy_proposal = fixture()
+        with db() as c:
+            c.execute("update aiops.hitl_decision_outbox "
+                      "set status='LEASED',attempts=20,lease_owner='ci-exhausted',"
+                      "lease_token='expired-token',"
+                      "lease_until=now()-interval '1 second' where event_id=%s",
+                      (exhausted,))
+        items = claim("ci-independent-healthy")
+        self.assertEqual(len(items), 1)
+        self.assertEqual((items[0]["event_id"], items[0]["attempts"]),
+                         (healthy, 1))
+        with db() as c:
+            state = c.execute("select status,attempts,last_error from "
+                              "aiops.hitl_decision_outbox where event_id=%s",
+                              (exhausted,)).fetchone()
+        self.assertEqual(state, ("DEAD", 20, "delivery_attempt_limit_exceeded"))
+        with self.assertRaises(HTTPException) as stale:
+            ack(exhausted, "expired-token")
+        self.assertEqual(stale.exception.status_code, 409)
+        self.assertFalse(ack(healthy, items[0]["lease_token"])["idempotent"])
+        self.assertEqual(claim("ci-after-dead-letter"), [])
+        self.no_effect(exhausted_proposal)
+        self.no_effect(healthy_proposal)
+
+
 if __name__ == "__main__":
     result = unittest.TextTestRunner(verbosity=2).run(
         unittest.defaultTestLoader.loadTestsFromTestCase(PostgreSQL16OutboxTests))
