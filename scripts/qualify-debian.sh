@@ -4,12 +4,13 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-required=(python3 python3-venv bash node npm curl openssl git)
+required=(python3 bash node npm curl openssl git)
 for cmd in "${required[@]}"; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "BLOCKED|missing_command|$cmd"; exit 2; }
 done
 
 echo "PLATFORM=$( . /etc/os-release; printf '%s-%s' "${ID:-unknown}" "${VERSION_ID:-unknown}" )"
+python3 -c "import venv; print(\"PYTHON_VENV=AVAILABLE\")"
 python3 --version
 node --version
 npm --version
