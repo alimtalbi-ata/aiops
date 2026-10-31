@@ -289,6 +289,37 @@ def correlate_golden_manifest_offline(manifest):
     return correlate_offline(manifest["events"])
 
 
+
+def correlate_catalog_manifest_offline(manifest, *, false_positive=False):
+    """Verify a complete graph-bound synthetic catalog replay before correlation.
+
+    For non-golden categories, the caller must declare the false-positive mode
+    explicitly; it is never inferred from attacker-controlled event payloads.
+    Golden Payments always delegates to its canonical-seed strict validator.
+    A match remains fixture-only, not an authenticated tenant or ITSM join.
+    """
+    if (not isinstance(manifest, dict) or
+            not isinstance(manifest.get("scenario_category"), str) or
+            type(manifest.get("seed")) is not int or
+            type(manifest.get("stochastic")) is not bool or
+            type(false_positive) is not bool):
+        raise ValueError("untrusted catalog replay manifest")
+    if manifest["scenario_category"] == "REDUNDANT_SAN_PATH_LOSS":
+        if false_positive:
+            raise ValueError("golden replay cannot be a false positive")
+        return correlate_golden_manifest_offline(manifest)
+    try:
+        expected = replay(manifest["scenario_category"], manifest["seed"],
+                          stochastic=manifest["stochastic"],
+                          false_positive=false_positive)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ValueError("untrusted catalog replay manifest") from exc
+    # A self-declared/recomputed dataset_sha256 is not a source attestation.
+    if manifest != expected:
+        raise ValueError("catalog replay manifest mismatch")
+    return correlate_offline(manifest["events"])
+
+
 def correlate_offline(events):
     """Dedup *fixture-only* events; reject untrusted IDs, CIs and evidence.
 
