@@ -27,7 +27,8 @@
       const data = await r.json();
       if (!r.ok) {
         status.textContent = 'HTTP ' + r.status + ' — ' +
-          (r.status === 401 ? "UNAUTHORIZED" : (data.reason || "UNKNOWN"));
+          (r.status === 401 ? "UNAUTHORIZED" : "UNKNOWN") +
+          (data.reason ? " (" + data.reason + ")" : "");
         return;
       }
       status.textContent = "UNKNOWN — réponse non qualifiée";
