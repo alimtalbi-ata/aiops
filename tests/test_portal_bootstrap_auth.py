@@ -58,35 +58,33 @@ class PortalBootstrapAuthTests(unittest.TestCase):
             self.assertEqual(response.json()["detail"], "portal_read_auth_not_configured")
             get.assert_not_called()
 
-    def test_valid_read_token_only_reads_expected_sources_and_is_unattested(self):
-        calls = []
-        def fake_read(base, path):
-            calls.append((base, path))
-            return VALID[path]
-        with patch.object(main, "get_json", side_effect=fake_read), patch.object(
+    def test_valid_shared_token_cannot_read_unscoped_tenant_data(self):
+        with patch.object(main, "get_json",
+                          side_effect=AssertionError("unscoped Core/Twin read")) as get, patch.object(
             main, "post_json", side_effect=AssertionError("no writes")
-        ):
+        ) as post:
             response = self.client.get("/api/portal/bootstrap",
                                        headers={"Authorization": "Bearer " + TOKEN})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["state"], "UNKNOWN")
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+        self.assertEqual(response.json()["connection_state"], "UNKNOWN")
+        self.assertEqual(response.json()["source_freshness"], "UNKNOWN")
+        for field in ("dashboard", "runs", "twin", "run_id", "incident_id"):
+            self.assertNotIn(field, response.json())
         self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertEqual(response.json()["states"],
-                         {"dashboard": "READABLE_UNVERIFIED", "runs": "READABLE_UNVERIFIED",
-                          "twin": "READABLE_UNVERIFIED"})
-        self.assertFalse(response.json()["runtime_authenticated"])
-        self.assertFalse(response.json()["live_remediation_authorized"])
-        self.assertEqual(calls, [(main.CORE, "/api/dashboard"),
-                                 (main.CORE, "/api/runs"),
-                                 (main.TWIN, "/api/twin/summary")])
+        get.assert_not_called()
+        post.assert_not_called()
 
-    def test_failed_upstream_remains_unknown_not_success(self):
-        with patch.object(main, "get_json", side_effect=TimeoutError("secret-internal-host")):
+    def test_bootstrap_denies_before_even_attempting_upstream_read(self):
+        with patch.object(main, "get_json",
+                          side_effect=TimeoutError("secret-internal-host")) as get:
             response = self.client.get("/api/portal/bootstrap",
                                        headers={"Authorization": "Bearer " + TOKEN})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(set(response.json()["states"].values()), {"UNKNOWN"})
-        self.assertIsNone(response.json()["runs"])
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
         self.assertNotIn("secret-internal-host", response.text)
+        get.assert_not_called()
 
     def test_anonymous_home_is_shell_without_backend_reads_or_token(self):
         with patch.object(main, "get_json", side_effect=AssertionError("no anonymous Core read")) as get:
