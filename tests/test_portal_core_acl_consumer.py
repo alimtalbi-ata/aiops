@@ -275,7 +275,7 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
     def test_session_replay_expiry_revocation_api_html_no_upstream(self):
         self.session()
         with patch.object(acme_run_detail, "_read_core_run",
-                          side_effect=AssertionError("no Core read")) as core, \\
+                          side_effect=AssertionError("no Core read")) as core, \
              patch("urllib.request.urlopen",
                    side_effect=AssertionError("no network")) as upstream:
             for route in ("/api/portal/runs/", "/runs/"):
