@@ -51,7 +51,7 @@ class V2SourceHandler(fixture.SourceHandler):
                     "where issuer=%s and actor_subject=%s and tenant_id=%s "
                     "and run_id=%s and incident_id=%s and glpi_instance_id=%s "
                     "and ticket_id=%s and glpi_entity_id=%s and permission=%s",
-                    (fixture.ISSUER, request["actor_subject"], request["tenant_id"],
+                    (request["actor_issuer"], request["actor_subject"], request["tenant_id"],
                      request["run_id"], request["incident_id"],
                      request["glpi_instance_id"], request["ticket_id"],
                      request["glpi_entity_id"], request["permission"])).fetchone()
@@ -169,7 +169,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
 
     def v2read(self, expected=None, claims=None, record=None):
         event = fixture.event_at(1)
-        row = {"run_id": fixture.RUN, "incident_id": fixture.INCIDENT,
+        row = {"tenant_id": fixture.TENANT, "run_id": fixture.RUN, "incident_id": fixture.INCIDENT,
                "glpi_entity_id": fixture.ENTITY,
                "source_event_id": event["source_event_id"],
                "source_payload_hash": fixture.canonical_hash(event)}
@@ -200,8 +200,9 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             with self.subTest(delta=delta):
                 self.assertFalse(self.v2read(expected={**self.expected, **delta}))
         self.assertFalse(self.v2read(claims={**self.claims, "sub": "idp|bob"}))
+        self.assertFalse(self.v2read(claims={**self.claims, "iss": "https://evil.invalid"}))
         self.assertFalse(self.v2read(record={
-            "run_id": fixture.RUN, "incident_id": fixture.INCIDENT,
+            "tenant_id": fixture.TENANT, "run_id": fixture.RUN, "incident_id": fixture.INCIDENT,
             "glpi_entity_id": fixture.ENTITY,
             "source_event_id": "EVT-SOURCE-01", "source_payload_hash": "a"*64}))
 
