@@ -157,3 +157,44 @@ def verify_pinned_core_response_signature(
 def core_authz_read_permitted(*_args: object, **_kwargs: object) -> bool:
     """Permanent fail-closed activation fence until a separately reviewed PR."""
     return False
+
+
+# This is the response Core #246/#250 actually emits today. It is deliberately
+# different from the proposed future detached-RS256 ALLOW envelope above.
+_CORE_CURRENT_SCHEMA = "aiops.core-actor-resource-authorization.v1"
+_CORE_CURRENT_DECISIONS = {200: "UNKNOWN", 401: "UNKNOWN",
+                           403: "UNAUTHORIZED", 503: "UNKNOWN"}
+
+
+def core_v1_current_unknown_reply_matches(status_code: object, payload: object,
+                                          headers: Mapping[str, str]) -> bool:
+    """Strict offline compatibility check for Core's *negative* v1 response.
+
+    The Core endpoint currently returns only {schema, decision}, no signed
+    actor/tenant/resource proof, nonce echo, issuer, GLPI rights or ALLOW.
+    A matching 200 UNKNOWN is NEVER an ACL grant. This function does not
+    dispatch I/O, consume a nonce, or authorize any business read.
+    """
+    if (type(status_code) is not int
+            or status_code not in _CORE_CURRENT_DECISIONS
+            or type(payload) is not dict
+            or set(payload) != {"schema", "decision"}
+            or payload["schema"] != _CORE_CURRENT_SCHEMA
+            or payload["decision"] != _CORE_CURRENT_DECISIONS[status_code]
+            or not isinstance(headers, Mapping)):
+        return False
+    normalized: dict[str, str] = {}
+    for key, value in headers.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            return False
+        lower = key.lower()
+        if lower in normalized and normalized[lower] != value:
+            return False
+        normalized[lower] = value
+    return all(normalized.get(key) == value for key, value in {
+        "cache-control": "no-store",
+        "pragma": "no-cache",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+    }.items()) and (status_code != 401
+                   or normalized.get("www-authenticate") == "Bearer")
