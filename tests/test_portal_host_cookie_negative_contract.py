@@ -505,6 +505,78 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
         })
 
 
+    def test_09_glpi_native_readmy_unknown_oidc_cookie_never_downgrades(self):
+        """Operator-visible GLPI gate: no native READMY/READ or Core authority."""
+        handle = self._session()
+        forged = "Z" * 43
+        claims = {
+            "X-GLPI-User-ID": "77", "X-GLPI-Profile": "Super-Admin",
+            "X-GLPI-Entity": "42", "X-GLPI-Ticket": "123",
+            "X-GLPI-Permission": "READ", "X-GLPI-READMY": "1",
+            "X-Core-Signed-Decision": "ALLOW", "X-Core-Run-ID": RUNS[0],
+            "X-Tenant-ID": "ACME", "X-Actor-ID": "operator-123",
+        }
+        projections = []
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core business GET")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("business GET")) as get, \
+             patch.object(main, "post_json",
+                          side_effect=AssertionError("business POST")) as post:
+            # Explicit OIDC wins over viewer bearer, regardless of forged rights.
+            self._assert_protected(self.client.get(
+                "/api/portal/itsm", headers={**self._headers(forged), **claims}), 401)
+            for rid in RUNS:
+                response = self.client.get("/api/portal/itsm", headers={
+                    **self._headers(handle), **claims, "X-Core-Run-ID": rid})
+                self._assert_protected(response, 503)
+                body = response.json()
+                projections.append(body)
+                self.assertEqual(body["state"], "UNKNOWN")
+                self.assertFalse(body["human_authority"]["human_allow"])
+                self.assertEqual(body["human_authority"]["readmy_ticket_ownership"],
+                                 "UNKNOWN")
+                self.assertEqual(body["human_authority"][
+                    "native_user_profile_entity_ticket_read"], "UNKNOWN")
+                self.assertFalse(body["glpi_write_enabled"])
+            self.assertEqual(projections[0], projections[1])
+            self.assertEqual(projections[1], projections[2])
+            # Valid identity without viewer is not GLPI human authority.
+            self._assert_protected(self.client.get(
+                "/api/portal/itsm", headers={"Cookie": COOKIE + "=" + handle}), 503)
+            # Duplicate/split Cookie headers cannot select a privileged handle.
+            split = self.client.get("/api/portal/itsm", headers=[
+                ("Authorization", "Bearer " + VIEWER),
+                ("Cookie", COOKIE + "=" + handle),
+                ("Cookie", COOKIE + "=" + forged),
+            ])
+            self._assert_protected(split, 401)
+            with oidc_session._lock:
+                oidc_session._sessions.pop(oidc_session._digest(handle), None)
+            self._assert_protected(self.client.get(
+                "/api/portal/itsm", headers={**self._headers(handle), **claims}), 401)
+            # Legacy viewer-only status is still constant UNKNOWN, never ALLOW.
+            self._assert_protected(self.client.get(
+                "/api/portal/itsm", headers=self._headers()), 503)
+            core.assert_not_called()
+            get.assert_not_called()
+            post.assert_not_called()
+        receipt("glpi-readmy-human-gate", {
+            "explicit_forged_or_revoked_oidc": 401,
+            "valid_oidc_without_native_rights": 503,
+            "split_cookie_fields": 401,
+            "viewer_only": 503,
+            "read_vs_readmy_ownership": "UNKNOWN",
+            "core_run_variants": len(RUNS),
+            "equal_status_projections": True,
+            "upstream_business_requests": 0,
+            "human_allow": False,
+            "independent_glpi_and_core_authorities_attested": False,
+            "local_7777_operator_reported": True,
+            "external_tls_sso_unique_entrypoint_verified": False,
+        })
+
+
 
 if __name__ == "__main__":
     unittest.main()
