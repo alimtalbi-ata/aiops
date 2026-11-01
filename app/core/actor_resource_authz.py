@@ -159,7 +159,8 @@ def authorize_actor_resource(
                 "ticket_id": ticket, "glpi_entity_id": entity,
                 "permission": "run:read", "nonce": payload["nonce"]}
     now = int(datetime.now(timezone.utc).timestamp())
-    if _actor_introspection(x_actor_delegation, expected, now) is None:
+    claims = _actor_introspection(x_actor_delegation, expected, now)
+    if claims is None:
         return _reply()
     key = x._key()
     if key is None:
@@ -181,7 +182,11 @@ def authorize_actor_resource(
             or record["incident_id"] != payload["incident_id"]
             or record["glpi_entity_id"] != entity):
         return _reply()
-    # The service GLPI readback in _evaluate is not a native GLPI actor ACL.
-    # No independently authenticated GLPI user/profile/entity rights adapter,
-    # or durable nonce/replay ledger, is installed. Always fail closed.
+    # Native GLPI reads use an actor session and an independently keyed,
+    # source-authenticated subject mapping, never the service GLPI session.
+    from core import actor_native_authority as native
+    if not native._native_glpi_preflight(claims, expected, now):
+        return _reply()
+    # Even a fully synthetic source-contract pass is NOT an ALLOW. Durable
+    # JTI/nonce consumption and real issuer/GLPI authority are unqualified.
     return _reply()
