@@ -5,6 +5,8 @@ on:
       - deploy/aiops2-stable
     paths:
       - deploy/deploy-demo-studio-v2.sh
+      - deploy/debian-runtime-readonly-probe.py
+      - tests/test_debian_runtime_readonly_probe.py
       - tests/test_debian_legacy_portal_guard.py
       - .github/workflows/debian-legacy-portal-guard.yml
   workflow_dispatch:
@@ -27,3 +29,5 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           bash -n deploy/deploy-demo-studio-v2.sh
           python3 -m unittest discover -s tests -p 'test_debian_legacy_portal_guard.py' -v
+          python3 -m py_compile deploy/debian-runtime-readonly-probe.py
+          python3 -m unittest discover -s tests -p 'test_debian_runtime_readonly_probe.py' -v
