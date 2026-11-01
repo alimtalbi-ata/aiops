@@ -390,3 +390,147 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 with self.psycopg.connect(self.url) as db:
                     db.execute(sql, (ids["event"],))
         self._no_effect()
+
+    def _canonical_core_client(self):
+        """Exercise the shipped Core FastAPI app, not a test-only router."""
+        import importlib
+        from fastapi.testclient import TestClient
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "synthetic-ci-core-only"}):
+            core_main = importlib.import_module("core.main")
+        route = "/api/tenants/{tenant_id}/hitl/reject-delivery/{event_id}/dead"
+        self.assertIn(route, [r.path for r in core_main.app.routes])
+        return TestClient(core_main.app)
+
+    def test_terminal_canonical_core_http_worker_contract_and_receipt(self):
+        ids, digest, tokens = self._exhaust()
+        client = self._canonical_core_client()
+        path = f"/api/tenants/TEN-A/hitl/reject-delivery/{ids['event']}/dead"
+        body = {
+            "owner": "svc-TEN-A", "run_id": ids["run"],
+            "proposal_id": ids["proposal"], "proposal_hash": digest,
+            "proposal_revision": 1, "lease_token": tokens[-1],
+            "execution_allowed": False, "effect_allowed": False,
+        }
+        headers = {"Authorization": "Bearer " + self.token_a}
+        self.assertEqual(client.post(path, json=body).status_code, 401)
+        self.assertEqual(client.post(path, json=body, headers={
+            "Authorization": "Bearer " + self.token_b}).status_code, 403)
+        wrong_tenant = client.post(
+            path.replace("/TEN-A/", "/TEN-B/"),
+            json={**body, "owner": "svc-TEN-B"},
+            headers={"Authorization": "Bearer " + self.token_b})
+        self.assertEqual((wrong_tenant.status_code, wrong_tenant.json()["status"]),
+                         (200, "UNKNOWN"))
+        for changed in (
+            {"run_id": "RUN-foreign"},
+            {"proposal_id": "PROPOSAL-foreign"},
+            {"proposal_hash": "0" * 64},
+            {"proposal_revision": 2},
+            {"lease_token": tokens[0]},
+            {"effect_allowed": True},
+        ):
+            denied = client.post(path, json={**body, **changed}, headers=headers)
+            self.assertEqual((denied.status_code, denied.json()["status"]),
+                             (200, "UNKNOWN"))
+            self.assertFalse(denied.json()["effect_allowed"])
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=%s", (ids["event"],)).fetchone(), ("LEASED", 8))
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchone()[0], 0)
+
+        success = client.post(path, json=body, headers=headers)
+        replay = client.post(path, json=body, headers=headers)
+        ack = client.post(path.removesuffix("/dead") + "/ack", json=body, headers=headers)
+        self.assertEqual((success.status_code, success.json()["status"],
+                          success.json()["idempotent"]), (200, "DEAD", False))
+        self.assertEqual((replay.status_code, replay.json()["status"],
+                          replay.json()["idempotent"]), (200, "DEAD", True))
+        self.assertEqual((ack.status_code, ack.json()["status"]), (200, "UNKNOWN"))
+        self.assertEqual(success.json()["receipt_sha256"],
+                         replay.json()["receipt_sha256"])
+        self.assertFalse(success.json()["execution_allowed"])
+        self.assertFalse(success.json()["effect_allowed"])
+        self.assertNotIn(tokens[-1], success.text)
+        self.assertNotIn("ALLOW", success.text)
+        with self.psycopg.connect(self.url) as db:
+            stored = db.execute(
+                "select receipt_payload,receipt_sha256 from "
+                "aiops.hitl_reject_terminal_receipts where event_id=%s",
+                (ids["event"],)).fetchall()
+            self.assertEqual(len(stored), 1)
+            receipt, receipt_sha = stored[0]
+            self.assertEqual(receipt["tenant_id"], "TEN-A")
+            self.assertEqual(receipt["run_id"], ids["run"])
+            self.assertEqual(receipt["proposal_hash"], digest)
+            self.assertEqual(receipt["lease_owner"], "svc-TEN-A")
+            self.assertEqual(receipt["lease_token_sha256"],
+                             hashlib.sha256(tokens[-1].encode()).hexdigest())
+            self.assertEqual(receipt_sha, success.json()["receipt_sha256"])
+            self.assertEqual(receipt_sha, delivery._terminal_digest(
+                delivery._terminal_json(receipt)))
+            self.assertNotIn(tokens[-1], json.dumps(receipt))
+            self.assertEqual(db.execute(
+                "select status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=%s", (ids["event"],)).fetchone(), ("DEAD", 8))
+        target = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if target:
+            path_out = Path(target)
+            path_out.mkdir(parents=True, exist_ok=True)
+            redacted = {
+                "schema": "aiops.core-terminal-main-http-contract.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "core_app_route_registered": True,
+                "http": {"unauthenticated": 401, "wrong_tenant_permission": 403,
+                         "foreign_tenant_non_enumerating": 200,
+                         "mismatched_bindings": 6, "dead": 200,
+                         "idempotent_replay": 200, "late_ack": 200},
+                "terminal_status": "DEAD", "late_ack_status": "UNKNOWN",
+                "audit_014_rows": 1, "attempts": 8,
+                "receipt_sha256": receipt_sha,
+                "human_glpi_attested": False, "actor_authorization": "UNKNOWN",
+                "execution_allowed": False, "effect_allowed": False,
+                "synthetic_disposable": True,
+            }
+            redacted["payload_sha256"] = hashlib.sha256(
+                json.dumps(redacted, sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest()
+            (path_out / "terminal-main-http-contract.json").write_text(
+                json.dumps(redacted, sort_keys=True, indent=2) + "\n")
+        self._no_effect()
+
+    def test_terminal_canonical_http_insert_failure_rolls_back_atomically(self):
+        ids, digest, tokens = self._exhaust()
+        client = self._canonical_core_client()
+        path = f"/api/tenants/TEN-A/hitl/reject-delivery/{ids['event']}/dead"
+        body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "proposal_id": ids["proposal"], "proposal_hash": digest,
+                "proposal_revision": 1, "lease_token": tokens[-1],
+                "execution_allowed": False, "effect_allowed": False}
+        headers = {"Authorization": "Bearer " + self.token_a}
+        # Simulate a DB insert failure *after* Core's UPDATE, without
+        # mutating schema or dropping any immutable audit rows.
+        with patch.object(delivery, "_TERMINAL_INSERT_SQL",
+                          "insert into aiops.hitl_reject_terminal_receipts "
+                          "(no_such_column) values (%s)"):
+            failed = client.post(path, json=body, headers=headers)
+        self.assertEqual((failed.status_code, failed.json()["status"]),
+                         (503, "UNKNOWN"))
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=%s", (ids["event"],)).fetchone(), ("LEASED", 8))
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchone()[0], 0)
+        recovered = client.post(path, json=body, headers=headers)
+        self.assertEqual((recovered.status_code, recovered.json()["status"]),
+                         (200, "DEAD"))
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+        self._no_effect()
+

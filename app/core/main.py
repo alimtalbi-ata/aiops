@@ -8,8 +8,11 @@ from shared.domain import transition,STAGES
 from shared.tenant_scope import reject_unqualified_tenant_scope
 from shared.demo_policy_gate_read_model import project_demo_policy_gate
 from core.itsm_xref import router as itsm_xref_router
+from core.hitl_reject_delivery import router as hitl_reject_delivery_router
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
 app.include_router(itsm_xref_router)
+# Core owns the REJECT-only terminal route; Worker may not mutate the outbox.
+app.include_router(hitl_reject_delivery_router)
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or ADMIN_TOKEN must be configured')
