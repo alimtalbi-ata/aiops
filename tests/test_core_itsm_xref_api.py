@@ -422,4 +422,6 @@ def load_tests(loader, tests, pattern):
     tests.addTests(loader.loadTestsFromTestCase(DisposableHumanAuthorityTests))
     from test_core_actor_native_tls_sources import DisposableNativeTLSAuthorityTests
     tests.addTests(loader.loadTestsFromTestCase(DisposableNativeTLSAuthorityTests))
+    from test_core_actor_run_event_source import CoreActorSourceBindingTests
+    tests.addTests(loader.loadTestsFromTestCase(CoreActorSourceBindingTests))
     return tests
