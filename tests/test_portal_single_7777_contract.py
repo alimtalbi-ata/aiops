@@ -124,14 +124,16 @@ class PortalSingle7777NegativeContract(unittest.TestCase):
 
     def test_single_entry_revocation_and_non_enumeration_without_upstream(self):
         self._session()
-        with patch("urllib.request.urlopen",
-                   side_effect=AssertionError("network upstream forbidden")) as network, \\
-             patch.object(main, "get_json",
-                          side_effect=AssertionError("Core/GLPI GET forbidden")) as core, \\
-             patch.object(main, "post_json",
-                          side_effect=AssertionError("Core/GLPI POST forbidden")) as post, \\
-             patch.object(acme_run_detail, "_read_core_run",
-                          side_effect=AssertionError("Run GET forbidden")) as run:
+        with (
+            patch("urllib.request.urlopen",
+                  side_effect=AssertionError("network upstream forbidden")) as network,
+            patch.object(main, "get_json",
+                         side_effect=AssertionError("Core/GLPI GET forbidden")) as core,
+            patch.object(main, "post_json",
+                         side_effect=AssertionError("Core/GLPI POST forbidden")) as post,
+            patch.object(acme_run_detail, "_read_core_run",
+                         side_effect=AssertionError("Run GET forbidden")) as run,
+        ):
             projections = []
             for rid in ("RUN-ACME-123", "RUN-FOREIGN-999",
                         "RUN-NOT-FOUND", "RUN-forged!"):
