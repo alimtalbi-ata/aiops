@@ -12,11 +12,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from test_core_hitl_reject_pg16_populated import CoreRejectPopulatedPG16
+import test_core_hitl_reject_pg16_populated as base
 from core import hitl_reject_delivery as delivery
 
 
-class CoreTerminalPopulatedPG16(CoreRejectPopulatedPG16):
+class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
