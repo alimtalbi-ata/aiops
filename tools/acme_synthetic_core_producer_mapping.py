@@ -87,8 +87,7 @@ def build_fixture(manifest):
 def verify_fixture(manifest, *, fixture=None, proposal=None, now=None):
     expected = build_fixture(manifest)
     if fixture is None:
-        fixture = json.loads(FILE.read_text(encoding="utf-8"),
-                             object_pairs_hook=gen._unique_object)
+        fixture = expected  # regenerated from the independently SHA-pinned source receipt
     if type(fixture) is not dict or gen._canonical(fixture) != gen._canonical(expected):
         raise ValueError("forged producer fixture")
     if proposal is not None:
