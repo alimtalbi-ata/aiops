@@ -394,7 +394,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertEqual(self.page.locator('a[href*="17777"]').count(), 0)
         self.page.goto(self.base + "/itsm")
         self.assertIn("UNKNOWN", self.page.locator("body").inner_text())
-        self.assertNotIn("CONNECTED", self.page.locator("body").inner_text())
+        self.assertIn("jamais CONNECTED", self.page.locator("body").inner_text())
+        self.assertIn("NOT_INSTALLED", self.page.locator("body").inner_text())
 
 
 # Quality browser entry point also runs the disposable negative Portal ACL suite.
