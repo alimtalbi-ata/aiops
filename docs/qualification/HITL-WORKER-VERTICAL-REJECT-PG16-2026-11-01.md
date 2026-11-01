@@ -10,9 +10,43 @@ The test uses the existing PG16 migration chain 001/004/009–014 and Core-owned
 
 The test starts a Temporal SDK server with persistent SQLite, restarts that server, and runs **two distinct disposable SDK Worker objects in one OS process** on the same task queue. Both produce the same read-only projection; Temporal signal count remains zero. This is not a two-OS-process test (that separate regression is covered by #316) or universal exactly-once proof. The Core Run API is exercised in-process via ASGI, **not** independent Core TCP; prior canonical /dead tests qualify TCP. The legacy Core `GET /api/runs/{id}` is not a tenant-authorized Portal API; the receipt is a correlated-ID contract for future Core/Portal ownership review, **not** a deployed Portal view.
 
+## New bounded Core writer rollback gate (Worker-owned test only)
+
+The second disposable PG16 test, \`test_16_core_event_command_writer_rollback_gate\`,
+probes the actual Core ASGI \`/api/runs/{id}/events\` and \`/command\`
+writers against the installed migration chain. It is a **negative contract**
+when \`aiops.run_events.event_key\` is missing: both requests currently return
+HTTP 500, and the test asserts the Run remains CREATED at its original
+version, zero events, zero command receipts, zero effect receipts and zero
+APPROVE. The 500 is a **Core-owned release blocker**, not an acceptable
+production API response. An invalid internal bearer is separately rejected
+with HTTP 401. The test never writes SQL DEAD or modifies immutable
+012/013/014. The existing first test still covers Core-owned /dead, one
+immutable 014 receipt, synthetic REJECT veto, and Temporal persisted restart.
+
+The test detects the column in PostgreSQL rather than hard-coding a
+perpetual 500 expectation. **When Core installs event_key**, it requires
+successful event and command writes with idempotent replay, two persisted
+events, one command receipt and no effects; a partial Core migration or
+writer defect must fail the workflow. The Core owner must supply and qualify
+the complete migration/API chain; Worker does not add a schema, fix Core
+handlers or represent test-fixture SQL as Core-written events. The conditional
+receipt records which branch actually ran, so a green negative case is never
+reported as a positive vertical.
+
+The second redacted machine receipt is
+\`worker-core-writer-rollback-gate.json\` with schema
+\`aiops.worker-core-writer-rollback-gate.v1\`, source HEAD, actual HTTP
+status codes, PostgreSQL column presence, Run version delta, persisted
+row counts, no-effect assertions and canonical SHA256. The CI artifact
+contains **two JSON receipts and SHA manifests only**; no PG16 dump or
+credential. Exact-head workflow requires **2/2 tests, zero SKIP**, plus the
+existing **DR 5/5**. These are disposable CI observations, not Debian
+runtime, native GLPI/OIDC human authority or Portal tenant authorization.
+
 ## Qualification and evidence
 
-Workflow: `.github/workflows/hitl-worker-vertical-reject-pg16.yml`. On exact source HEAD, run `PYTHONPATH=app:tests python -m unittest discover -s tests -p 'test_worker_hitl_vertical_reject_pg16.py' -v`, requiring 1/1 and zero SKIP; then existing `test_hitl_pg16_candidate_outbox.py` requiring DR 5/5 and zero SKIP, PG16 `pg_dump`/`pg_restore` 16.x. Check `AIOPS_EXPECTED_HEAD_SHA` against checkout and receipt. Upload **only** `worker-vertical-reject.json` plus SHA256 manifests, never raw dump, credentials, bearer or HMAC material. No SQL DEAD mutation, no SQL update to immutable 012/013/014. The synthetic fixture inserts provenance/analysis/critique/approval/outbox rows as test-only setup.
+Workflow: `.github/workflows/hitl-worker-vertical-reject-pg16.yml`. On exact source HEAD, run `PYTHONPATH=app:tests python -m unittest discover -s tests -p 'test_worker_hitl_vertical_reject_pg16.py' -v`, requiring 2/2 and zero SKIP; then existing `test_hitl_pg16_candidate_outbox.py` requiring DR 5/5 and zero SKIP, PG16 `pg_dump`/`pg_restore` 16.x. Check `AIOPS_EXPECTED_HEAD_SHA` against checkout and receipt. Upload **only** `worker-vertical-reject.json`, `worker-core-writer-rollback-gate.json` plus SHA256 manifests, never raw dump, credentials, bearer or HMAC material. No SQL DEAD mutation, no SQL update to immutable 012/013/014. The synthetic fixture inserts provenance/analysis/critique/approval/outbox rows as test-only setup.
 
 Evidence classification: `OBSERVED_CI_DISPOSABLE` only after exact-head green CI; otherwise `NOT_TESTED`. Actor is `SYNTHETIC_UNVERIFIED`, identity `NOT_ATTESTED`; CI signed manifest is not real OIDC/GLPI revocation. Host 7777 is `REPORTED_VERIFIED` **locally by operator**, not attested by this CI; external access, SSO/GLPI and portal uniqueness remain unverified. Gateway close in prior tests is injected after commit and is not physical packet loss.
 
@@ -20,4 +54,4 @@ Evidence classification: `OBSERVED_CI_DISPOSABLE` only after exact-head green CI
 
 Core remains sole Incident/Run, audit 012/013/014 and HITL /dead owner. Portal owner must independently qualify any tenant-authorized UI/read model; no direct exposure of legacy Core `GET /api/runs/{id}` is approved. No native human GLPI approval/REJECT is asserted. This Worker module must not be attached to LIVE runtime.
 
-Rollback: close focused Draft or revert only these four Worker-owned paths: `app/worker/hitl_reject_vertical_projection.py`, `tests/test_worker_hitl_vertical_reject_pg16.py`, `.github/workflows/hitl-worker-vertical-reject-pg16.yml`, and this qualification document. Do not revert or mutate Core 012/013/014 audit. No merge or main/stable push by Worker.
+Rollback: close focused Draft or revert the three modified Worker-owned paths (test, dedicated workflow and this document); the existing projection module remains on the architect candidate. Original source-only #321 rollback, if independently required, concerns its four paths: `app/worker/hitl_reject_vertical_projection.py`, `tests/test_worker_hitl_vertical_reject_pg16.py`, `.github/workflows/hitl-worker-vertical-reject-pg16.yml`, and this qualification document. Do not revert or mutate Core 012/013/014 audit. No merge or main/stable push by Worker.

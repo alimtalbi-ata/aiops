@@ -367,5 +367,173 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                     json.dumps(receipt, sort_keys=True, indent=2) + "\n")
 
 
+    async def test_16_core_event_command_writer_rollback_gate(self):
+        """Probe the real Core writer without pretending fixture SQL is Core history.
+
+        When 001/004/009-014 lacks event_key, both writes must leave the
+        synthetic Run unchanged. When Core installs that column, require
+        positive, idempotent writer behavior instead of silently passing an
+        obsolete expected-500 assertion. No Core migration is owned here.
+        """
+        head = os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+        self.assertEqual(len(head), 40)
+        ids = self._fixture()
+        admin = secrets.token_urlsafe(40)
+        with patch.dict(os.environ, {
+            "DATABASE_URL": self.url, "AIOPS_INTERNAL_TOKEN": admin,
+        }):
+            from core import main as core_main
+            with patch.object(core_main, "ADMIN", admin):
+                with TestClient(core_main.app,
+                                raise_server_exceptions=False) as client:
+                    route = f"/api/runs/{ids['run']}"
+                    before_response = client.get(route)
+                    self.assertEqual(before_response.status_code, 200)
+                    before = before_response.json()
+                    self.assertEqual(before["run"]["status"], "CREATED")
+                    self.assertEqual(before["events"], [])
+                    version = before["run"]["version"]
+                    headers = {"Authorization": "Bearer " + admin}
+                    with self.psycopg.connect(self.url) as db:
+                        has_event_key = db.execute(
+                            "select exists(select 1 from "
+                            "information_schema.columns "
+                            "where table_schema='aiops' "
+                            "and table_name='run_events' "
+                            "and column_name='event_key')").fetchone()[0]
+                        before_commands = db.execute(
+                            "select count(*) from aiops.command_receipts "
+                            "where run_id=%s", (ids["run"],)).fetchone()[0]
+                    self.assertEqual(before_commands, 0)
+
+                    event_body = {
+                        "expected_version": version,
+                        "stage": "POLICY",
+                        "event_type": "POLICY_EVALUATED",
+                        "status": "PASS",
+                        "event_key": "ci-writer-gate",
+                        "evidence_ids": [],
+                        "decision": "SIMULATE",
+                        "payload": {
+                            "synthetic": True,
+                            "execution_allowed": False,
+                            "effect_allowed": False,
+                        },
+                    }
+                    unauthorized = client.post(
+                        route + "/events", json=event_body,
+                        headers={"Authorization": "Bearer invalid"})
+                    self.assertEqual(unauthorized.status_code, 401)
+                    event_response = client.post(
+                        route + "/events", json=event_body, headers=headers)
+                    if has_event_key:
+                        self.assertEqual(event_response.status_code, 200)
+                        event_result = event_response.json()
+                        self.assertIs(event_result["idempotent"], False)
+                        replay_body = dict(
+                            event_body, expected_version=event_result["version"])
+                        replay = client.post(
+                            route + "/events", json=replay_body,
+                            headers=headers)
+                        self.assertEqual(replay.status_code, 200)
+                        self.assertIs(replay.json()["idempotent"], True)
+                        command_version = event_result["version"]
+                    else:
+                        self.assertEqual(event_response.status_code, 500)
+                        command_version = version
+
+                    command_body = {
+                        "expected_version": command_version,
+                        "idempotency_key": "ci-writer-gate-start",
+                        "command": "START",
+                    }
+                    command_response = client.post(
+                        route + "/command", json=command_body,
+                        headers=headers)
+                    if has_event_key:
+                        self.assertEqual(command_response.status_code, 200)
+                        command_result = command_response.json()
+                        self.assertEqual(command_result["status"], "RUNNING")
+                        replay_command = client.post(
+                            route + "/command",
+                            json=dict(command_body,
+                                      expected_version=command_result["version"]),
+                            headers=headers)
+                        self.assertEqual(replay_command.status_code, 200)
+                        self.assertEqual(replay_command.json(), command_result)
+                        writer_status = "CORE_WRITER_IDEMPOTENT_OBSERVED"
+                    else:
+                        self.assertEqual(command_response.status_code, 500)
+                        writer_status = "BLOCKED_MISSING_EVENT_KEY_MIGRATION"
+
+                    after_response = client.get(route)
+                    self.assertEqual(after_response.status_code, 200)
+                    after = after_response.json()
+                    with self.psycopg.connect(self.url) as db:
+                        commands = db.execute(
+                            "select count(*) from aiops.command_receipts "
+                            "where run_id=%s", (ids["run"],)).fetchone()[0]
+                        terminal = db.execute(
+                            "select count(*) from "
+                            "aiops.hitl_reject_terminal_receipts t "
+                            "join aiops.hitl_decision_outbox o "
+                            "on t.event_id=o.event_id "
+                            "where o.run_id=%s", (ids["run"],)).fetchone()[0]
+                        effects = db.execute(
+                            "select count(*) from aiops.effect_receipts"
+                        ).fetchone()[0]
+                        approves = db.execute(
+                            "select count(*) from aiops.approval_records "
+                            "where decision='APPROVE' and proposal_id=%s",
+                            (ids["proposal"],)).fetchone()[0]
+                    if has_event_key:
+                        self.assertEqual(after["run"]["status"], "RUNNING")
+                        self.assertEqual(after["run"]["version"], version + 2)
+                        self.assertEqual(len(after["events"]), 2)
+                        self.assertEqual(commands, 1)
+                    else:
+                        self.assertEqual(after["run"], before["run"])
+                        self.assertEqual(after["events"], before["events"])
+                        self.assertEqual(commands, 0)
+                    self.assertEqual((terminal, effects, approves), (0, 0, 0))
+                    self._no_effect()
+
+        receipt = {
+            "schema": "aiops.worker-core-writer-rollback-gate.v1",
+            "source_head": head,
+            "environment": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+            "core_writer_status": writer_status,
+            "migration_event_key_present": bool(has_event_key),
+            "core_event_http": event_response.status_code,
+            "core_command_http": command_response.status_code,
+            "core_unauthorized_event_http": unauthorized.status_code,
+            "core_run_status_before": "CREATED",
+            "core_run_status_after": after["run"]["status"],
+            "core_run_version_delta": after["run"]["version"] - version,
+            "core_event_rows_after": len(after["events"]),
+            "core_command_receipts_after": commands,
+            "core_terminal_014_rows_for_run": terminal,
+            "approve_count": approves,
+            "effect_receipt_count": effects,
+            "execution_allowed": False,
+            "effect_allowed": False,
+            "sql_dead_injection": False,
+            "immutable_012_013_014_mutation": False,
+            "temporal_restart": "COVERED_BY_SIBLING_VERTICAL_TEST",
+            "oidc_glpi_identity": "NOT_ATTESTED",
+            "host_7777_local_operator": "REPORTED_VERIFIED",
+            "host_7777_external": "NOT_ATTESTED",
+            "universal_exactly_once": "NOT_CLAIMED",
+        }
+        canonical = json.dumps(
+            receipt, sort_keys=True, separators=(",", ":")).encode()
+        receipt["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+        target = Path(os.environ["AIOPS_CI_VERTICAL_REJECT_RECEIPT_DIR"])
+        self.assertTrue(str(target).startswith("/tmp/hitl-worker-vertical-"))
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "worker-core-writer-rollback-gate.json").write_text(
+            json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+
+
 if __name__ == "__main__":
     unittest.main()
