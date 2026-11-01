@@ -28,7 +28,7 @@ from portal.oidc_identity import (
 _TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\\Z", re.ASCII)
 _NONCE = re.compile(r"[A-Za-z0-9_-]{32,128}\\Z", re.ASCII)
 _KID = re.compile(r"[A-Za-z0-9_.-]{1,128}\\Z", re.ASCII)
-_DOMAIN = b"aiops.portal.core-actor-resource-authorization.v1\\n"
+_DOMAIN = b"aiops.portal.core-actor-resource-authorization.v1\n"
 _MAX_BODY = 16384
 
 
@@ -97,7 +97,7 @@ def prepare_core_authz_wire(actor: PortalActorContext, binding: ServerXref, *,
 
 def _canonical_signed_bytes(origin: str, payload: dict) -> bytes:
     """Domain-separate the Core response signature and bind it to the origin."""
-    return (_DOMAIN + origin.encode("ascii") + b"\\n"
+    return (_DOMAIN + origin.encode("ascii") + b"\n"
             + json.dumps(payload, sort_keys=True, separators=(",", ":"),
                          ensure_ascii=True, allow_nan=False).encode("ascii"))
 
