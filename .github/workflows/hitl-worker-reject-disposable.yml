@@ -4,9 +4,12 @@ on:
   pull_request:
     branches:
       - main
+      - integration/enterprise-slice-main-20261031-2230
     paths:
       - app/worker/hitl_reject_notification.py
+      - app/worker/hitl_reject_core_wire.py
       - tests/test_worker_hitl_reject_notification.py
+      - tests/test_worker_core_reject_wire.py
       - .github/workflows/hitl-worker-reject-disposable.yml
       - docs/qualification/HITL-WORKER-TEMPORAL-REJECT-FENCING-2026-11-01.md
 
@@ -37,6 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONPATH=app python -m unittest discover -s tests -p 'test_worker_hitl_reject_notification.py' -v 2>&1 | tee /tmp/hitl-worker-reject.log
+          PYTHONPATH=app python -m unittest discover -s tests -p 'test_worker_core_reject_wire.py' -v 2>&1 | tee /tmp/hitl-worker-core-wire.log
           python - <<'PY'
           import json, os
           report = {
@@ -44,9 +48,10 @@ jobs:
             "runtime": "DISPOSABLE_TEMPORAL_DEV_SERVER",
             "worker_restart": "OBSERVED_IF_TEST_PASS",
             "temporal_server_restart": "NOT_TESTED",
-            "core_claim_ack_http": "NOT_TESTED",
+            "core_claim_ack_http": "NOT_TESTED_MOCK_WIRE_ONLY",
             "network_ack_loss": "NOT_TESTED",
             "lost_ack_response_injected": True,
+            "core_wire_fixture": "SYNTHETIC_NOT_CORE_HTTP",
             "human_identity": "NOT_ATTESTED",
             "decision": "REJECT",
             "execution_allowed": False,
@@ -64,6 +69,7 @@ jobs:
           name: hitl-worker-reject-temporal-disposable
           path: |
             /tmp/hitl-worker-reject.log
+            /tmp/hitl-worker-core-wire.log
             /tmp/hitl-worker-reject-report.json
           retention-days: 7
           if-no-files-found: warn
