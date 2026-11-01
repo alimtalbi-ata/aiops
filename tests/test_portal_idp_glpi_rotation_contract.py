@@ -581,7 +581,9 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
                     for run in runs:
                         response = client.get("/api/portal/runs/" + run)
                         self.assertEqual(response.status_code, 401)
-                        self.assertEqual(response.json()["state"], "UNKNOWN")
+                        # Run endpoint uses a uniform UNAUTHORIZED state for
+                        # missing/revoked identity; it is not a presence oracle.
+                        self.assertEqual(response.json()["state"], "UNAUTHORIZED")
                         revoked.append(response.json())
                     self.assertEqual(revoked[0], revoked[1])
                     self.assertEqual(revoked[1], revoked[2])
