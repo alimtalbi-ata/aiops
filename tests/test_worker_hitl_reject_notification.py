@@ -4,6 +4,8 @@ import copy
 import os
 import unittest
 
+from temporalio import workflow
+
 from worker.hitl_reject_notification import (
     UnqualifiedNotification, notify_reject_batch, prepare_reject,
     verify_delivery_ack,
@@ -148,39 +150,39 @@ class RejectNotificationContract(unittest.IsolatedAsyncioTestCase):
 # This is an isolated Temporal SDK development server + actual Temporal Worker
 # process lifecycle, NOT Core HTTP and NOT the production IncidentWorkflow.
 # The Temporal server itself is not restarted; its restart remains NOT_TESTED.
+@workflow.defn(sandboxed=False)
+class SyntheticRejectSink:
+    def __init__(self):
+        self.received = []
+
+    @workflow.run
+    async def run(self):
+        await workflow.wait_condition(lambda: len(self.received) == 2)
+        return self.received
+
+    @workflow.signal
+    def reject_notification(self, payload: dict):
+        # Signal is notification only, never an authorization.
+        if (payload.get("decision") != "REJECT"
+                or payload.get("notification_only") is not True
+                or payload.get("execution_allowed") is not False
+                or payload.get("effect_allowed") is not False):
+            raise ValueError("unsafe_temporal_signal")
+        self.received.append(payload)
+
+    @workflow.query
+    def count(self) -> int:
+        return len(self.received)
+
+
 class RealDisposableTemporalRestart(unittest.IsolatedAsyncioTestCase):
     async def test_real_temporal_worker_restart_reject_only(self):
         if (os.getenv("GITHUB_ACTIONS") != "true"
                 or os.getenv("AIOPS_CI_WORKER_DISPOSABLE") != "YES"):
             self.skipTest("real Temporal allowed only on disposable CI")
-        from temporalio import workflow
         from temporalio.testing import WorkflowEnvironment
         from temporalio.worker import Worker
         import uuid
-
-        @workflow.defn(sandboxed=False)
-        class SyntheticRejectSink:
-            def __init__(self):
-                self.received = []
-
-            @workflow.run
-            async def run(self):
-                await workflow.wait_condition(lambda: len(self.received) == 2)
-                return self.received
-
-            @workflow.signal
-            def reject_notification(self, payload: dict):
-                # Signal is notification only, never an authorization.
-                if (payload.get("decision") != "REJECT"
-                        or payload.get("notification_only") is not True
-                        or payload.get("execution_allowed") is not False
-                        or payload.get("effect_allowed") is not False):
-                    raise ValueError("unsafe_temporal_signal")
-                self.received.append(payload)
-
-            @workflow.query
-            def count(self) -> int:
-                return len(self.received)
 
         async with await WorkflowEnvironment.start_local() as env:
             queue = "ci-hitl-" + uuid.uuid4().hex
