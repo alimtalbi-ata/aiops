@@ -11,9 +11,13 @@ import secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
-from core import itsm_xref as x
-
 router = APIRouter()
+
+
+def _x():
+    # Lazy dependency avoids a cycle when PG16 tests import this module first.
+    from core import itsm_xref
+    return itsm_xref
 SCHEMA = "aiops.core-hitl-reject-delivery.v1"
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}\Z", re.ASCII)
 _HASH = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
@@ -36,7 +40,7 @@ def _valid(value, pattern=_ID):
 
 
 def _authorized(header, tenant):
-    actor, code = x._auth(header)
+    actor, code = _x()._auth(header)
     if code != 200:
         return None, _response(code)
     if ("hitl:reject:deliver" not in actor["permissions"]
@@ -57,7 +61,7 @@ def _proof(row, tenant):
     now = datetime.now(timezone.utc)
     if not (observed <= known <= now and (now - observed).total_seconds() <= 300):
         return False
-    return x._owners_attested([row])
+    return _x()._owners_attested([row])
 
 
 _CLAIM_SQL = """
@@ -127,7 +131,7 @@ def claim_reject(tenant_id: str, payload: dict,
             or type(payload["limit"]) is not int or payload["limit"] != 1):
         return _response()
     try:
-        with x.db() as c:
+        with _x().db() as c:
             row = c.execute(_CLAIM_SQL, (tenant_id,)).fetchone()
             if row is None:
                 return _response(items=[])
@@ -176,7 +180,7 @@ def ack_reject(tenant_id: str, event_id: str, payload: dict,
             or payload["effect_allowed"] is not False):
         return _response()
     try:
-        with x.db() as c:
+        with _x().db() as c:
             row = c.execute(_ACK_SQL, (tenant_id, event_id)).fetchone()
             if row is None:
                 return _response()
