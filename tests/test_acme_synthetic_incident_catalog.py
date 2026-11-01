@@ -1006,5 +1006,174 @@ class AcmeTwinGovernanceSourceIndexTests(unittest.TestCase):
                                      ensure_ascii=True) + "\n").encode("utf-8"), raw)
 
 
+
+class AcmeSyntheticVerticalContractTests(unittest.TestCase):
+    """No-effect ITIL storyboard: script anchors never become runtime receipts."""
+
+    def setUp(self):
+        self.manifest = gen.replay(seed=20261018)
+        self.contract = gen.vertical_contract_offline(self.manifest)
+
+    def test_vertical_fixture_is_independently_blob_pinned_and_graph_bound(self):
+        fixture = gen.load_vertical_contract_fixture()
+        self.assertEqual(gen._git_blob(gen.VERTICAL_CONTRACT_FILE.read_bytes()),
+                         gen.VERTICAL_CONTRACT_GIT_BLOB)
+        self.assertEqual(fixture["graph_git_blob"], gen.SEED_GIT_BLOB)
+        self.assertEqual(fixture["governance_index_git_blob"],
+                         gen.GOVERNANCE_SOURCE_GIT_BLOB)
+        self.assertEqual(fixture["seed"], 20261018)
+        self.assertEqual(len(fixture["stages"]), 15)
+        steps = {n: action for n, _, action, _, _ in gen.load_graph()["steps"]}
+        for stage in fixture["stages"]:
+            self.assertEqual(stage["expected_action"], steps[stage["source_step"]])
+            self.assertIn(stage["runtime_checkpoint"], (None, *gen.CHECKPOINTS))
+
+    def test_vertical_projection_is_byte_deterministic_without_changing_replay(self):
+        self.assertEqual(gen._canonical(self.contract),
+                         gen._canonical(gen.vertical_contract_offline(gen.replay())))
+        self.assertEqual(self.contract["source_dataset_sha256"],
+                         self.manifest["dataset_sha256"])
+        raw = (json.dumps(self.manifest, sort_keys=True, indent=2,
+                          ensure_ascii=True) + "\n").encode("utf-8")
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(self.contract["source_event_ids"],
+                         [e["source_event_id"] for e in self.manifest["events"]])
+        with self.assertRaises(ValueError):
+            gen.vertical_contract_offline(gen.replay(seed=20261019))
+
+    def test_all_fifteen_stages_are_unexecuted_without_runtime_id_or_evidence(self):
+        contract = self.contract
+        self.assertEqual(contract["runtime_readback"], "NOT_EXECUTED")
+        self.assertFalse(contract["publishable_to_core_or_glpi"])
+        self.assertFalse(contract["live_effects_authorized"])
+        self.assertFalse(contract["simulation_executed"])
+        self.assertFalse(contract["post_action_verified"])
+        self.assertFalse(contract["resolution_verified"])
+        self.assertFalse(contract["reopen_verified"])
+        for field in ("tenant_id", "ticket_id", "incident_id", "run_id"):
+            self.assertIsNone(contract[field])
+        self.assertEqual(contract["evidence_ids"], [])
+        self.assertEqual([c["stage"] for c in contract["checkpoints"]],
+                         list(gen.CHECKPOINTS))
+        for checkpoint in contract["checkpoints"]:
+            self.assertEqual(checkpoint, {"stage": checkpoint["stage"],
+                                          "status": "NOT_EXECUTED", "id": None})
+        for stage in contract["stages"]:
+            self.assertEqual(stage["status"], "NOT_EXECUTED")
+            self.assertIsNone(stage["runtime_id"])
+            self.assertEqual(stage["runtime_evidence_ids"], [])
+            self.assertFalse(stage["anchor_is_runtime_proof"])
+            self.assertEqual(stage["source_authority"], "OFFLINE_SCRIPT_ONLY")
+            self.assertEqual(stage["tenant_scope"], "UNKNOWN")
+
+    def test_stage_anchors_match_exact_synthetic_event_ids_ci_and_times(self):
+        events = self.manifest["events"]
+        names = [stage["stage"] for stage in self.contract["stages"]]
+        self.assertEqual(names[:5], ["EVENT_ALERT", "GLPI_TICKET", "CORE_INCIDENT",
+                                     "CORE_RUN", "TWIN_IMPACT_CANDIDATE"])
+        self.assertIn("ANALYST", names)
+        self.assertIn("CRITIC", names)
+        self.assertIn("HITL_APPROVAL", names)
+        self.assertIn("SIMULATE", names)
+        self.assertIn("REOPEN", names)
+        for stage in self.contract["stages"]:
+            event = events[stage["source_step"] - 1]
+            self.assertEqual(stage["source_event_id"], event["source_event_id"])
+            self.assertEqual(stage["source_event_time"], event["event_time"])
+            self.assertEqual(stage["source_event_ci_id"], event["ci_id"])
+            self.assertEqual(stage["source_action"], event["action"])
+        self.assertEqual([e["at_seconds"] for e in events],
+                         [0, 15, 30, 45, 60, 90, 110])
+
+    def test_foreign_tenant_forged_source_and_fake_receipts_are_rejected(self):
+        mutations = (
+            ("foreign tenant", lambda m: m.__setitem__("tenant_id", "FOREIGN")),
+            ("foreign scope", lambda m: m.__setitem__("tenant_scope", "TENANT-A")),
+            ("fake incident", lambda m: m.__setitem__("incident_id", "INC-FAKE")),
+            ("fake evidence", lambda m: m.__setitem__("evidence_ids", ["EVID-FAKE"])),
+            ("forged source", lambda m: m["events"][0].__setitem__(
+                "source_event_id", "SYN-EVT-FAKE")),
+            ("false observation", lambda m: m["impact_estimate"].__setitem__(
+                "observed_service_impact", "CONFIRMED")),
+            ("false priority", lambda m: m["itil"].__setitem__(
+                "priority_confirmed", "P1")),
+            ("stale time", lambda m: m["events"][0].__setitem__(
+                "known_at", "2026-11-01T10:00:00Z")),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label):
+                forged = copy.deepcopy(self.manifest)
+                mutate(forged)
+                with self.assertRaises(ValueError):
+                    gen.vertical_contract_offline(forged)
+
+    def test_forged_contract_stage_tenant_source_and_runtime_checkpoint_rejected(self):
+        original = gen.load_vertical_contract_fixture()
+        mutations = (
+            ("foreign tenant", lambda d: d.__setitem__("tenant_scope", "TENANT-B")),
+            ("false execution", lambda d: d.__setitem__("execution_status", "SUCCESS")),
+            ("fake authority", lambda d: d.__setitem__("authority", "CORE_VERIFIED")),
+            ("forged source", lambda d: d.__setitem__("source", "untrusted.sql")),
+            ("wrong event", lambda d: d["stages"][0].__setitem__("source_step", 7)),
+            ("wrong action", lambda d: d["stages"][0].__setitem__(
+                "expected_action", "VERIFY")),
+            ("fake checkpoint", lambda d: d["stages"][0].__setitem__(
+                "runtime_checkpoint", "EVIDENCE-FAKE")),
+            ("bool step", lambda d: d["stages"][0].__setitem__("source_step", True)),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                forged = copy.deepcopy(original)
+                mutate(forged)
+                with self.assertRaisesRegex(ValueError, "untrusted vertical contract override"):
+                    gen.vertical_contract_offline(self.manifest, fixture=forged)
+                path = Path(directory) / "forged-vertical.json"
+                path.write_text(json.dumps(forged) + "\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "vertical contract Git blob mismatch"):
+                    gen.load_vertical_contract_fixture(path)
+
+    def test_candidate_blast_radius_and_governance_unknowns_remain_separate(self):
+        contract = self.contract
+        self.assertEqual(contract["dependency_path"]["edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertEqual(contract["dependency_path"]["candidate_service_ids"],
+                         ["ACME-SVC-ERP", "ACME-SVC-PAYMENTS"])
+        self.assertEqual(contract["dependency_path"]["observed_service_impact"], "UNKNOWN")
+        self.assertFalse(contract["dependency_path"]["causality_verified"])
+        self.assertEqual(contract["observed_impact"], "UNKNOWN")
+        self.assertEqual(contract["itil"]["priority_candidate"], "P1")
+        self.assertEqual(contract["itil"]["priority_confirmed"], "UNKNOWN")
+        self.assertEqual(contract["governance_source_records"]["site"]["value"], "PARIS")
+        self.assertEqual(contract["governance_source_records"][
+            "service_criticality_synthetic_1_to_5"]["value"], 5)
+        self.assertEqual(set(contract["governance_unknowns"]), {
+            "datacenter_id", "datacenter_relation", "service_owner_id",
+            "service_team_id", "sla_id", "ola_id", "change_id", "maintenance_actual"})
+        self.assertTrue(all(v == "UNKNOWN" for v in contract["governance_unknowns"].values()))
+        self.assertEqual(contract["analyst_hypothesis"], "UNKNOWN")
+        self.assertEqual(contract["critic_disposition"], "UNKNOWN")
+        self.assertEqual(contract["policy_decision"], "UNKNOWN")
+        self.assertEqual(contract["hitl_approval"], "UNKNOWN")
+
+    def test_cli_vertical_export_is_readonly_and_storyboard_mode_exclusive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "vertical-contract.json"
+            cmd = [sys.executable, str(gen.ROOT / "tools/generate_acme_incidents.py"),
+                   "--seed", "20261018", "--vertical-contract",
+                   "--output", str(output)]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            parsed = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(gen._canonical(parsed), gen._canonical(self.contract))
+            self.assertEqual(parsed["event_count"], 7)
+            self.assertEqual(json.loads(result.stdout)["sha256"],
+                             hashlib.sha256(output.read_bytes()).hexdigest())
+            exclusive = subprocess.run(cmd + ["--storyboard"],
+                                       capture_output=True, text=True)
+            self.assertNotEqual(exclusive.returncode, 0)
+            self.assertIn("exclusive", exclusive.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

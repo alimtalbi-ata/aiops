@@ -22,3 +22,50 @@ Portal-owned `tests/test_portal_core_acl_consumer.py` extends the existing Quali
 Adversarial cases cover unpinned origins/shared tokens, cross-tenant and forged resources, expired identity, valid fake RSA-signed ALLOW with no grant, forged/altered signatures, wrong origin/key, replayed nonce, revoked session, API/HTML uniform UNKNOWN and no upstream. Disposable RSA private key is generated only in test memory. Browser/Chromium existing synthetic checks remain a separate qualification and do not attest GLPI.
 
 **Rollback:** revert the Portal-only PR commits or close the Draft. No Core/Worker/Evidence/shared Quality changes, migration, network action, GLPI write, deployment, SSH, sudo or LIVE. `RELEASE_STABLE=NO_GO`.
+
+
+## Exact Core v1 reconciliation — 2026-11-01, offline only
+
+Source reviewed against `app/core/actor_resource_authz.py` in the architect's
+candidate. Core's actual route is
+`POST /api/tenants/{tenant_id}/runs/{run_id}/actor-resource-authorization`,
+mounted on the existing ITSM xref router. The request JSON has **exactly**
+`incident_id`, `glpi_instance_id`, `ticket_id`, `glpi_entity_id`,
+`permission=run:read`, `nonce`. Portal's preflight emits that shape with a
+pinned HTTPS origin and a separate service bearer; **it does not send**
+`X-Actor-Delegation`. Core requires that header to contain a separately
+issuer-authenticated, opaque, short-lived IdP access token with exact resource
+grants. The Portal OIDC ID token/session, its `sub`, roles and browser claims
+are **not** interchangeable with this Core-audience delegation.
+
+Core's current reply is **not signed** and carries only
+`{"schema":"aiops.core-actor-resource-authorization.v1","decision":"UNKNOWN"}`
+for 200/503 (also 401 UNKNOWN), or `decision=UNAUTHORIZED` for 403.
+Its response headers include `no-store`, `no-cache`, `nosniff` and
+`no-referrer`; 401 also advertises `WWW-Authenticate: Bearer`.
+There is **no** actor issuer/audience, tenant/Run/Incident/ticket/entity proof,
+nonce echo, signature or native GLPI actor authorization in that reply.
+`core_v1_current_unknown_reply_matches` is a strict *negative-only*
+compatibility check, not a response signature verifier or ACL. Extra fields,
+forged ALLOW, incorrect status/headers and any purported CONNECTED status are
+rejected. No HTTP transport is implemented or invoked.
+
+The detached RS256 envelope described above is a **future proposal**, not the
+wire response currently implemented by Core. Its test-only signature may
+authenticate a synthetic payload, but cannot establish a Core-issued decision,
+replay prevention, native GLPI human permission or a positive Portal read.
+The Core IdP introspection audience may differ from the Portal OIDC audience;
+a Core-owner-defined subject mapping and signed-response issuer/key rotation
+contract are required before any activation.
+
+The Portal-owned regression suite now invokes the *actual Core router* with
+disposable mocked service auth and introspection to assert its current
+200/401/403 negative response and exact resource/nonce request, plus forged
+foreign IDs, ALLOW, replay-looking extra fields, revoked/expired sessions and
+uniform API/HTML 503 with zero business upstream calls. The Core router is
+read-only in these tests: no real IdP, GLPI, PostgreSQL or external HTTP.
+Run `python -m unittest discover -s tests -p 'test_portal_core_acl_consumer.py' -v`
+under the existing Quality environment. Core remains the owner of route,
+introspection, native GLPI rights, nonce/revocation ledger and eventual signed
+response contract. **dispatch_allowed=false**,
+**core_authz_read_permitted=false**, **RELEASE_STABLE=NO_GO**.
