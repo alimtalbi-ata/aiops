@@ -59,7 +59,7 @@ jobs:
           python3 -m venv /tmp/hitl-combined-venv
           /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "uvicorn==0.35.0"
           /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_dead_canonical_gateway_pg16.py
-      - name: Canonical Core HTTP DEAD and gateway close replay with Temporal persisted restart
+      - name: Canonical Core HTTP DEAD gateway replay and concurrent post-commit retry after Temporal restart
         shell: bash
         run: |
           set -euo pipefail
@@ -98,8 +98,36 @@ jobs:
           raw = path.read_text().lower()
           assert not any(s in raw for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
           print("CANONICAL_DEAD_GATEWAY_RECEIPT_PASS", digest)
+          race = Path(os.environ["AIOPS_CI_CANONICAL_DEAD_RECEIPT_DIR"]) / "canonical-dead-concurrent-retry.json"
+          evidence = json.loads(race.read_text())
+          race_digest = evidence.pop("payload_sha256")
+          race_canonical = json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode()
+          assert race_digest == hashlib.sha256(race_canonical).hexdigest()
+          assert evidence["schema"] == "aiops.worker-canonical-dead-concurrent-retry.v1"
+          assert evidence["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert evidence["core_http"] == "CANONICAL_CORE_MAIN_TCP_OBSERVED"
+          assert evidence["migration_014"] == "CORE_OWNED_RUNTIME_OBSERVED"
+          assert evidence["decision"] == "REJECT" and evidence["status"] == "DEAD"
+          assert evidence["attempts"] == 8
+          assert evidence["audit_rows_before"] == evidence["audit_rows_after"] == 1
+          assert evidence["receipt_sha256_before"] == evidence["receipt_sha256_after"]
+          assert evidence["concurrent_terminal_replays"] == evidence["idempotent_terminal_replays"] == 6
+          assert evidence["concurrent_late_acks_denied"] == evidence["concurrent_claims_empty"] == 6
+          assert evidence["delivery_only_terminal_denied"] is True
+          assert evidence["forged_terminal_token_denied"] is True
+          assert evidence["gateway_close"] == "INJECTED_AFTER_CORE_TCP_DEAD_COMMIT"
+          assert evidence["physical_packet_loss"] == "NOT_TESTED"
+          assert evidence["temporal_persisted_restarts"] == 1
+          assert evidence["temporal_signal_count"] == evidence["approve_count"] == evidence["delivered_count"] == evidence["effect_receipt_count"] == 0
+          assert evidence["execution_allowed"] is False and evidence["effect_allowed"] is False
+          assert evidence["sql_dead_injection"] is False
+          assert evidence["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert evidence["host_7777"] == "NOT_VERIFIED"
+          assert evidence["universal_exactly_once"] == "NOT_CLAIMED"
+          assert not any(s in race.read_text().lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
+          print("CANONICAL_DEAD_CONCURRENT_RETRY_RECEIPT_PASS", race_digest)
           PY
-          sha256sum "$AIOPS_CI_CANONICAL_DEAD_RECEIPT_DIR/canonical-dead-gateway.json" > /tmp/hitl-core-dead-canonical.sha256
+          sha256sum "$AIOPS_CI_CANONICAL_DEAD_RECEIPT_DIR"/canonical-dead-*.json > /tmp/hitl-core-dead-canonical.sha256
           sha256sum --check /tmp/hitl-core-dead-canonical.sha256
       - name: PostgreSQL 16 outbox DR restore regression
         shell: bash
@@ -116,7 +144,7 @@ jobs:
         with:
           name: hitl-worker-canonical-dead-gateway-pg16-receipts-only
           path: |
-            /tmp/hitl-core-dead-canonical-receipts/canonical-dead-gateway.json
+            /tmp/hitl-core-dead-canonical-receipts/canonical-dead-*.json
             /tmp/hitl-core-dead-canonical.sha256
             /tmp/hitl-core-dead-canonical-dr.sha256
           retention-days: 7
