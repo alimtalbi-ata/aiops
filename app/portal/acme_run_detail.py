@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from portal.core_acl_consumer import consume_run_acl
-from portal.oidc_session import _session_from_cookie
+from portal.oidc_session import _SESSION_COOKIE
 from portal.noc_correlation import _read_core_run
 from portal.noc_runtime import IDENTIFIER, _require_portal_read_auth
 from shared.domain import STATUSES
@@ -163,9 +163,9 @@ def _read(rid: str, authorization: str | None) -> tuple[int, dict]:
 @router.get("/api/portal/runs/{rid}", name="portal_read_only_run_detail")
 def run_detail_api(rid: str, request: Request,
                    authorization: str | None = Header(default=None)):
-    # A server-stored OIDC session is identity, never an exact-Run grant.
-    # Retain the legacy bearer refusal for clients without such a session.
-    if _session_from_cookie(request) is not None:
+    # An OIDC cookie, even expired/revoked/malformed, must not downgrade to
+    # the legacy viewer bearer path. Revalidate it server-side before ACL.
+    if _SESSION_COOKIE in request.cookies:
         status, reason = consume_run_acl(request, rid)
         data = _unqualified_run() if status == 503 else {"state": "UNAUTHORIZED", "reason": reason}
     else:
@@ -177,9 +177,9 @@ def run_detail_api(rid: str, request: Request,
 @router.get("/runs/{rid}", response_class=HTMLResponse, name="portal_run_detail_page")
 def run_detail_page(rid: str, request: Request,
                      authorization: str | None = Header(default=None)):
-    # Previously minted viewer cookies are not actor+tenant authority.
-    # Do not upgrade them into a bearer identity, even during their TTL.
-    if _session_from_cookie(request) is not None:
+    # A revoked OIDC cookie cannot fall back to a viewer bearer, including
+    # on the HTML journey. Identity alone never qualifies tenant/Run ACL.
+    if _SESSION_COOKIE in request.cookies:
         status, reason = consume_run_acl(request, rid)
         data = _unqualified_run() if status == 503 else {"state": "UNAUTHORIZED", "reason": reason}
     else:
