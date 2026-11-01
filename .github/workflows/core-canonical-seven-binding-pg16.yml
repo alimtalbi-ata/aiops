@@ -37,6 +37,8 @@ jobs:
       DATABASE_URL: postgresql://aiops:ci-seven-source-disposable-only@127.0.0.1:5432/aiops
       PGPASSWORD: ci-seven-source-disposable-only
       AIOPS_XREF_CI_DISPOSABLE: "1"
+      AIOPS_CORE_SEVEN_RECEIPT_DIR: /tmp/core-seven-redacted-receipts
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Install disposable test dependencies
         shell: bash
@@ -76,7 +78,48 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
-          grep -E '^Ran 12 tests in ' /tmp/core-seven-results.log
+          grep -E '^Ran 13 tests in ' /tmp/core-seven-results.log
           grep -x 'OK' /tmp/core-seven-results.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
           echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
+      - name: Validate redacted seven-source 013/014 recovery receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-seven-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "seven-014-recovery.json"
+          obj = json.loads(p.read_text())
+          expected = hashlib.sha256(json.dumps(
+              {k: v for k, v in obj.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert obj["receipt_sha256"] == expected
+          assert obj["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert obj["decision"] == obj["link_status"] == "UNKNOWN"
+          assert obj["source_preflight"] == "PASS_SYNTHETIC_ONLY"
+          assert obj["human_glpi_attested"] is False
+          assert obj["native_restore"] and obj["audit_013_014_immutable"]
+          assert obj["rows"] == {"evidence": 7, "run_events": 7, "nonce_013": 1,
+                                  "revocation_013": 1, "audit_014": 1}
+          assert len(obj["source_event_hashes"]) == 7
+          assert all(e["payload_sha256"] != e["full_event_sha256"]
+                     for e in obj["source_event_hashes"])
+          assert obj["hash_domains"]["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          raw = p.read_text()
+          for secret in ("DISPOSABLE-LEASE-", "ci-seven-source-disposable-only",
+                         "idp|alice", "source-reader-disposable"):
+              assert secret not in raw
+          print("CORE_SEVEN_014_REDACTED_RECEIPT=PASS", expected)
+          PY
+          sha256sum "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.json" \
+            > "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.sha256"
+          cd "$AIOPS_CORE_SEVEN_RECEIPT_DIR"
+          sha256sum --check seven-014-recovery.sha256
+      - name: Upload synthetic redacted receipt only
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-seven-014-redacted-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/core-seven-redacted-receipts/seven-014-recovery.*
+          retention-days: 7
+          if-no-files-found: error
