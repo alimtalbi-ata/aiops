@@ -864,9 +864,9 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
             before_glpi = len(peers.glpi_observations)
             with patch.dict(os.environ, settings), patch.object(
                     wire, "prepare_core_authz_wire",
-                    side_effect=AssertionError("no Core authz dispatch")) as preflight, \\
+                    side_effect=AssertionError("no Core authz dispatch")) as preflight, \
                  patch.object(acme_run_detail, "_read_core_run",
-                              side_effect=AssertionError("no Core business GET")) as core, \\
+                              side_effect=AssertionError("no Core business GET")) as core, \
                  patch.object(main, "get_json",
                               side_effect=AssertionError("no upstream GLPI GET")) as upstream:
                 projections = []
