@@ -57,3 +57,30 @@ sha256sum --check /tmp/hitl-core-dead-canonical-dr.sha256
 ```
 
 **Rollback:** close the focused Draft or revert only this cycle's three Worker-owned file edits. Preserve Core 013/014 immutable audit, migrations and sole candidate. CI URL, exact HEAD, N/N and checksum are reported only after verification and handed to issue #186. No persistent Debian stack, host access, GLPI write, executor or deploy.
+
+
+## Focused follow-up — post-DEAD tenant provenance and actor ACL revocation (2026-11-01 ~18:29 CET)
+
+**Owner:** Worker tests, dedicated disposable workflow and this qualification only. **Base:** sole Draft #234 exact `e6381a6d7e8e088add37e6e28e9fde9ef543a9ff`; **main reference:** `ae7c3e5102b99a66bd7806d602146f1309a9749d`. The architect has already selectively ported #303/#307; do not re-port. New source Draft is independent of candidate integration. Only three Worker-owned paths: new `tests/test_worker_core_dead_revocation_pg16.py`, existing dedicated workflow and this document.
+
+**Bounded adversarial contract:** canonical `core.main.app` over independent loopback TCP and disposable PG16 migrations through Core-owned 014. One synthetic REJECT reaches eight genuine Core claims; SQL accelerates *only lease_until*, never writes DEAD. Core `/dead` commits the terminal state and one immutable 014 receipt. A deterministic gateway drops the downstream HTTP response after Core commit; this is **INJECTED_GATEWAY_CLOSE, not physical packet loss**. An additional synthetic REJECT is left PENDING/attempts=0 to make a later claim check meaningful.
+
+The test explicitly revokes the two **CI-synthetic tenant/Run ownership attestations** by setting `verified=false` in the disposable ownership fixture (not in the outbox/audit tables). While the original actor remains ACL-authorized, four concurrent `/dead` replays, four late `/ack` calls and four `/claim` calls must all fail closed with UNKNOWN. Then the canonical Core TCP process restarts with that actor token removed from its server-held digest ACL; a restarted Temporal dev server reads the same persisted SQLite workflow history. Another 4+4+4 concurrent requests must all fail with 401 UNKNOWN. A delivery-only principal and a foreign-tenant principal cannot use the terminal permission (403 UNKNOWN). No Worker/Core schema or endpoint is introduced.
+
+Post-revocation DB readback must show **DEAD/attempts=8 and exactly one 014 receipt with identical canonical SHA256**, plus **PENDING/attempts=0 and zero 014 receipts** for the second event. Temporal query stays at zero signals across stop/start; zero APPROVE, DELIVERED and effect receipts, `execution_allowed=false`, `effect_allowed=false`. The receipt `aiops.worker-postdead-revocation-fencing.v1` records event ID *hashes only*, immutable audit SHA256 before/after, denial counts, exact source HEAD and explicit negative qualification boundaries. It must not contain Bearers, raw lease tokens, owner HMAC secrets or raw PostgreSQL dumps.
+
+**Evidence classification:** synthetic `verified=false` fixture revocation is **CI_INJECTED_PROVENANCE_REVOCATION**, not authenticated GLPI/OIDC revocation (`NOT_ATTESTED`). ACL revocation is a controlled Core process restart with a new server-only ACL snapshot, **not** live identity-provider propagation. Physical packet loss/partition `NOT_TESTED`; host port 7777 `NOT_VERIFIED` (17777 is different). This is one bounded race, **no universal exactly-once claim**. `RELEASE_STABLE=NO_GO`.
+
+**Exact-head reproducibility:**
+
+```bash
+PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_canonical_gateway_pg16.py' -v
+PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_revocation_pg16.py' -v
+/tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v
+sha256sum --check /tmp/hitl-core-dead-canonical.sha256
+sha256sum --check /tmp/hitl-core-dead-canonical-dr.sha256
+```
+
+The workflow verifies the new JSON canonical payload SHA256 and redaction, uploads only redacted `canonical-dead-*.json` and SHA256 manifests, **never raw PG16 DR dump**. Existing PG16 client major 16 and mandatory `pg_dump/pg_restore` DR are preserved. Expected 2/2 existing canonical, 1/1 new revocation and 5/5 DR; actual exact-head counts, run URL, artifact/checksum and rollback are reported only after CI. On PostgreSQL 16 package install failure, propose a separately version-pinned disposable major-16 client without removing DR.
+
+**Rollback:** close focused Draft or revert only these three Worker-owned file changes; do not revert Core 013/014, edit shared Quality, main, candidate, architecture board, Portal/ACME or any host stack. No real GLPI write, LIVE, executor, SSH, Docker socket, persistent stack or deploy.
