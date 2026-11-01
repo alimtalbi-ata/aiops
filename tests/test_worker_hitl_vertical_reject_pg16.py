@@ -402,7 +402,9 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                 receipt = {
                     **projection,
                     "source_head": head,
-                    "core_run_api": "READ_ONLY_CORE_ASGI_OBSERVED",
+                    "core_run_api": ("CORE_HTTP_WRITER_AND_READBACK_OBSERVED"
+                                     if has_event_key else
+                                     "READ_ONLY_CORE_ASGI_OBSERVED"),
                     "core_event_write": core_event_write,
                     "run_events_source": run_events_source,
                     "core_terminal_api": "CORE_OWNED_DEAD_OBSERVED",
