@@ -877,5 +877,134 @@ class AcmeTwinAuthorityBoundaryContractTests(unittest.TestCase):
         self.assertFalse(baseline["publishable_to_core_or_glpi"])
 
 
+
+class AcmeTwinGovernanceSourceIndexTests(unittest.TestCase):
+    """Independent pinned source pointers; absence must never become authority."""
+
+    def test_index_is_pinned_to_graph_catalog_and_explicit_unknowns(self):
+        index = gen.load_governance_source_index()
+        self.assertEqual(gen._git_blob(gen.GOVERNANCE_SOURCE_FILE.read_bytes()),
+                         gen.GOVERNANCE_SOURCE_GIT_BLOB)
+        self.assertEqual(index["graph_git_blob"], gen.SEED_GIT_BLOB)
+        self.assertEqual(index["catalog_git_blob"], gen.CATALOG_GIT_BLOB)
+        self.assertEqual(index["provenance"], "SYNTHETIC_FIXTURE")
+        self.assertEqual(index["tenant_scope"], "UNKNOWN")
+        self.assertEqual(len(index["fields"]), 13)
+        for field in ("datacenter_id", "datacenter_relation", "service_owner_id",
+                      "service_team_id", "sla_id", "ola_id", "change_id",
+                      "maintenance_actual"):
+            with self.subTest(field=field):
+                self.assertEqual(index["fields"][field],
+                                 {"authority": "UNKNOWN", "source": None, "selector": None})
+
+    def test_record_values_are_derived_from_pinned_sources_not_authority_claims(self):
+        graph = gen.load_graph()
+        catalog, _ = gen.load_catalog()
+        for scenario in catalog["scenarios"]:
+            if scenario["status"] != "SUPPORTED_BY_SEED":
+                continue
+            with self.subTest(scenario=scenario["key"]):
+                manifest = gen.replay(scenario["key"], seed=20261018)
+                context = gen.storyboard_offline(manifest)["twin_service_context"]
+                records = context["governance_source_records"]
+                self.assertEqual(context["governance_source_index_git_blob"],
+                                 gen.GOVERNANCE_SOURCE_GIT_BLOB)
+                self.assertEqual(set(records), set(gen.load_governance_source_index()["fields"]))
+                for field, record in records.items():
+                    self.assertEqual(record["value"], context[field])
+                    self.assertEqual(record["provenance"], "SYNTHETIC_FIXTURE")
+                    self.assertEqual(record["tenant_scope"], "UNKNOWN")
+                    if record["authority"] == "UNKNOWN":
+                        self.assertEqual(record["value"], "UNKNOWN")
+                        self.assertIsNone(record["source"])
+                        self.assertIsNone(record["source_git_blob"])
+                        self.assertEqual(record["source_ci_ids"], [])
+                site = records["site"]
+                self.assertEqual(site["source_git_blob"], gen.SEED_GIT_BLOB)
+                self.assertEqual(site["source_ci_ids"],
+                                 manifest["impact_estimate"]["path_node_ids"])
+                self.assertEqual(records["service_criticality_synthetic_1_to_5"][
+                    "source_ci_ids"], [manifest["service_id"]])
+                self.assertEqual(records["maintenance_window_synthetic"]["source_git_blob"],
+                                 gen.CATALOG_GIT_BLOB)
+                self.assertEqual(records["maintenance_window_synthetic"]["value"],
+                                 scenario["maintenance_window"])
+                self.assertEqual(records["blast_radius_candidate_service_ids"]["value"],
+                                 sorted(ci for ci in graph["nodes"]
+                                        if graph["nodes"][ci]["type"] == "SERVICE"
+                                        and ci in manifest["impact_estimate"]["candidate_service_ids"]))
+                self.assertEqual(context["blast_radius_observed"], "UNKNOWN")
+
+    def test_change_lookup_and_maintenance_are_plans_not_real_changes(self):
+        golden = gen.storyboard_offline(gen.replay())
+        records = golden["twin_service_context"]["governance_source_records"]
+        self.assertEqual(records["change_lookup"]["value"], "PLANNED_NOT_EXECUTED")
+        self.assertEqual(records["change_lookup"]["source_git_blob"], gen.SEED_GIT_BLOB)
+        self.assertIsNone(records["maintenance_window_synthetic"]["value"])
+        self.assertEqual(records["change_id"]["value"], "UNKNOWN")
+        self.assertEqual(records["maintenance_actual"]["value"], "UNKNOWN")
+        app = gen.storyboard_offline(gen.replay("APPLICATION_DEGRADATION", seed=20261018))
+        app_records = app["twin_service_context"]["governance_source_records"]
+        self.assertEqual(app_records["maintenance_window_synthetic"]["value"],
+                         {"start_offset_seconds": 0, "end_offset_seconds": 120})
+        self.assertEqual(app_records["change_lookup"]["value"], "NOT_PRESENT_IN_SCENARIO")
+        self.assertEqual(app_records["maintenance_actual"]["value"], "UNKNOWN")
+        self.assertEqual(app["itil"]["priority_candidate"], "UNKNOWN")
+        self.assertEqual(app["itil"]["priority_confirmed"], "UNKNOWN")
+
+    def test_forged_index_authority_selector_and_provenance_fail_closed(self):
+        from unittest import mock
+        raw = gen.GOVERNANCE_SOURCE_FILE.read_bytes()
+        for name, mutate in (
+            ("owner", lambda d: d["fields"]["service_owner_id"].update(
+                {"authority": "SYNTHETIC_NODE_ONLY", "source": "FAKE",
+                 "selector": "fake.owner"})),
+            ("sla", lambda d: d["fields"]["sla_id"].update(
+                {"authority": "VERIFIED", "source": "FAKE", "selector": "fake.sla"})),
+            ("maintenance", lambda d: d["fields"]["maintenance_window_synthetic"].update(
+                {"authority": "APPROVED"})),
+            ("graph", lambda d: d.__setitem__("graph_git_blob", "FAKE")),
+            ("tenant", lambda d: d.__setitem__("tenant_scope", "ACME-TENANT-FAKE")),
+        ):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                forged = json.loads(raw)
+                mutate(forged)
+                path = Path(directory) / "source-index.json"
+                path.write_text(json.dumps(forged, sort_keys=True) + "\n",
+                                encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "governance source index Git blob mismatch"):
+                    gen.load_governance_source_index(path)
+                with mock.patch.object(gen, "GOVERNANCE_SOURCE_FILE", path):
+                    with self.assertRaises(ValueError):
+                        gen.storyboard_offline(gen.replay())
+        self.assertEqual(gen._git_blob(gen.GOVERNANCE_SOURCE_FILE.read_bytes()),
+                         gen.GOVERNANCE_SOURCE_GIT_BLOB)
+
+    def test_story_checkpoints_and_golden_replay_remain_reproducible(self):
+        manifest = gen.replay(seed=20261018)
+        raw = (json.dumps(manifest, sort_keys=True, indent=2, ensure_ascii=True)
+               + "\n").encode("utf-8")
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        first = gen.storyboard_offline(manifest)
+        self.assertEqual(first, gen.storyboard_offline(gen.replay(seed=20261018)))
+        self.assertEqual(first["source_dataset_sha256"], manifest["dataset_sha256"])
+        self.assertEqual([event["source_event_id"] for event in first["timeline"]],
+                         [event["source_event_id"] for event in manifest["events"]])
+        self.assertEqual(first["checkpoints"], [
+            {"stage": stage, "status": "NOT_EXECUTED", "id": None}
+            for stage in gen.CHECKPOINTS])
+        self.assertIsNone(first["incident_id"])
+        self.assertIsNone(first["run_id"])
+        self.assertIsNone(first["ticket_id"])
+        self.assertEqual(first["evidence_ids"], [])
+        self.assertEqual(first["dependency_path"]["candidate_service_ids"],
+                         ["ACME-SVC-ERP", "ACME-SVC-PAYMENTS"])
+        self.assertEqual(first["dependency_path"]["observed_service_impact"], "UNKNOWN")
+        self.assertFalse(first["recovery_verified"])
+        self.assertEqual((json.dumps(manifest, sort_keys=True, indent=2,
+                                     ensure_ascii=True) + "\n").encode("utf-8"), raw)
+
+
 if __name__ == "__main__":
     unittest.main()
