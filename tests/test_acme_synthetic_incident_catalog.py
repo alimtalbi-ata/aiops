@@ -711,7 +711,7 @@ class AcmeTwinAuthorityBoundaryContractTests(unittest.TestCase):
         cls.node_rows = {
             node: {"site": site, "criticality": int(criticality)}
             for node, site, criticality in re.findall(
-                r"^\\('(ACME-[^']+)','(?:BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','([^']+)','[^']+',([1-5]),",
+                r"^\('(ACME-[^']+)','(?:BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','([^']+)','[^']+',([1-5]),",
                 raw.decode("utf-8"), re.M)
         }
 
