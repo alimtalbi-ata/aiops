@@ -3,6 +3,7 @@ name: Core canonical seven-event PG16 source readback (disposable)
 on:
   pull_request:
     branches:
+      - main
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - .github/workflows/core-canonical-seven-source-pg16.yml
