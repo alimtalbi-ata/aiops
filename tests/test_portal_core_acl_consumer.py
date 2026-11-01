@@ -158,30 +158,83 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         self.assertFalse(core_acl_consumer.positive_core_contract_matches(
             current_core, actor, binding))
 
-    def test_future_contract_rejects_expired_or_mismatched_claims(self):
+    def test_v1_shape_only_never_grants_authority(self):
         actor, binding = self.actor(), self.binding()
-        future = {"schema": "aiops.core-actor-resource-authorization.v1",
-                  "decision": "ALLOW", "permission": "run:read",
-                  "tenant_acl_qualified": True, "glpi_owner_attested": True,
-                  "provenance": "AUTHENTICATED_GLPI_READBACK",
-                  "acl_version": "v1", "expires_at": NOW + 100,
-                  "actor_subject": actor.subject, "tenant_id": "ACME",
-                  "run_id": RUN, "incident_id": "INC-ACME-123",
-                  "glpi_instance_id": "glpi-acme",
-                  "ticket_id": "123", "glpi_entity_id": "42"}
-        self.assertTrue(core_acl_consumer.positive_core_contract_matches(
+        nonce = "n" * 43
+        future = {
+            "schema": "aiops.core-actor-resource-authorization.v1",
+            "decision": "ALLOW", "permission": "run:read",
+            "tenant_acl_qualified": True, "glpi_owner_attested": True,
+            "provenance": "AUTHENTICATED_GLPI_READBACK",
+            "acl_version": "v1", "decision_id": "decision-1",
+            "authorized_at": NOW - 1, "revocation_checked_at": NOW,
+            "expires_at": NOW + 30, "request_nonce": nonce,
+            "actor_subject": actor.subject, "tenant_id": "ACME",
+            "run_id": RUN, "incident_id": "INC-ACME-123",
+            "glpi_instance_id": "glpi-acme",
+            "ticket_id": "123", "glpi_entity_id": "42",
+            "delegation": {
+                "subject": actor.subject, "tenant_id": "ACME",
+                "issuer": actor.issuer, "audience": actor.audience,
+                "status": "VERIFIED", "revoked": False},
+            "glpi_readback": {
+                "instance_id": "glpi-acme", "ticket_id": "123",
+                "entity_id": "42", "source": "AUTHENTICATED_GLPI_READBACK",
+                "verified": True},
+        }
+        # This is only structural inspection of untrusted JSON, not an ACL.
+        self.assertTrue(core_acl_consumer.core_v1_claims_match(
+            future, actor, binding, nonce=nonce, now=NOW))
+        self.assertFalse(core_acl_consumer.positive_core_contract_matches(
             future, actor, binding, now=NOW))
-        for changes in ({"expires_at": NOW - 1},
-                        {"actor_subject": "forged"},
-                        {"tenant_id": "OTHER"},
-                        {"run_id": OTHER},
-                        {"glpi_entity_id": "99"},
-                        {"glpi_owner_attested": False},
-                        {"provenance": "SYNTHETIC"},
-                        {"permission": "admin"}):
-            with self.subTest(changes=changes):
+        adversarial = (
+            {**future, "request_nonce": "replayed-" + nonce},
+            {**future, "expires_at": NOW - 1},
+            {**future, "authorized_at": NOW + 1},
+            {**future, "revocation_checked_at": NOW - 60},
+            {**future, "expires_at": NOW + 301},
+            {**future, "actor_subject": "forged"},
+            {**future, "tenant_id": "OTHER"},
+            {**future, "run_id": OTHER},
+            {**future, "glpi_entity_id": "99"},
+            {**future, "glpi_owner_attested": False},
+            {**future, "provenance": "SYNTHETIC"},
+            {**future, "permission": "admin"},
+            {**future, "decision": "DENY"},
+            {**future, "decision_id": ""},
+            {**future, "unexpected": "CONNECTED"},
+            {**future, "delegation": {**future["delegation"], "revoked": True}},
+            {**future, "delegation": {**future["delegation"], "subject": "other"}},
+            {**future, "glpi_readback": {**future["glpi_readback"], "verified": False}},
+            {**future, "glpi_readback": {**future["glpi_readback"], "entity_id": "99"}},
+        )
+        for payload in adversarial:
+            with self.subTest(payload=payload):
+                self.assertFalse(core_acl_consumer.core_v1_claims_match(
+                    payload, actor, binding, nonce=nonce, now=NOW))
                 self.assertFalse(core_acl_consumer.positive_core_contract_matches(
-                    {**future, **changes}, actor, binding, now=NOW))
+                    payload, actor, binding, now=NOW))
+        self.assertFalse(core_acl_consumer.core_v1_claims_match(
+            future, actor, binding, nonce="wrong" * 10, now=NOW))
+        self.assertFalse(core_acl_consumer.core_v1_claims_match(
+            future, actor, binding, nonce=nonce, now=NOW + 31))
+
+    def test_revoked_expired_or_forged_cookie_cannot_fallback_to_viewer(self):
+        viewer = {"Authorization": "Bearer " + os.environ["AIOPS_PORTAL_READ_TOKEN"],
+                  "X-Actor-ID": "admin", "X-Tenant-ID": "OTHER"}
+        self.session()
+        self.assert_fence(self.client.get("/api/portal/runs/" + RUN, headers=viewer))
+        with oidc_session._lock:
+            oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
+        for prefix in ("/api/portal/runs/", "/runs/"):
+            self.assert_fence(self.client.get(prefix + RUN, headers=viewer), 401)
+        self.client.cookies.set(oidc_session._SESSION_COOKIE, "B" * 43,
+                                domain="portal.example.test", path="/")
+        self.assert_fence(self.client.get("/api/portal/runs/" + RUN,
+                                          headers=viewer), 401)
+        self.session(ttl=-1)
+        self.assert_fence(self.client.get("/api/portal/runs/" + RUN,
+                                          headers=viewer), 401)
 
     def test_even_future_envelope_does_not_enable_network(self):
         self.session()
