@@ -501,6 +501,90 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 json.dumps(redacted, sort_keys=True, indent=2) + "\n")
         self._no_effect()
 
+    def test_terminal_canonical_http_postcommit_revocation_fails_closed(self):
+        """Committed DEAD survives service/provenance revocation; no replay grant."""
+        ids, digest, tokens = self._exhaust()
+        client = self._canonical_core_client()
+        path = f"/api/tenants/TEN-A/hitl/reject-delivery/{ids['event']}/dead"
+        ack_path = path.removesuffix("/dead") + "/ack"
+        body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "proposal_id": ids["proposal"], "proposal_hash": digest,
+                "proposal_revision": 1, "lease_token": tokens[-1],
+                "execution_allowed": False, "effect_allowed": False}
+        headers = {"Authorization": "Bearer " + self.token_a}
+        first = client.post(path, json=body, headers=headers)
+        self.assertEqual((first.status_code, first.json()["status"],
+                          first.json()["idempotent"]), (200, "DEAD", False))
+        receipt_hash = first.json()["receipt_sha256"]
+
+        # Revoke the service credential after commit: a matching token/lease
+        # must not be treated as a durable authorization.
+        with patch.dict(os.environ, {"AIOPS_XREF_READ_AUTHZ_JSON": "[]"}):
+            revoked = client.post(path, json=body, headers=headers)
+            self.assertEqual(revoked.status_code, 401)
+            self.assertEqual(revoked.json()["status"], "UNKNOWN")
+        # A still-recognized actor without the terminal permission is 403.
+        restricted = [{"token_sha256": hashlib.sha256(self.token_a.encode()).hexdigest(),
+                       "actor_id": "svc-TEN-A", "tenant_ids": ["TEN-A"],
+                       "permissions": ["hitl:reject:deliver"]}]
+        with patch.dict(os.environ, {"AIOPS_XREF_READ_AUTHZ_JSON": json.dumps(restricted)}):
+            forbidden = client.post(path, json=body, headers=headers)
+            self.assertEqual((forbidden.status_code, forbidden.json()["status"]),
+                             (403, "UNKNOWN"))
+
+        # Revoke independent run ownership provenance; even a previously
+        # committed DEAD must not bypass the fresh source proof on replay.
+        Path(self.proof_path).write_text(json.dumps({
+            "schema": "aiops.core-ownership-proof.v1", "proofs": {}}))
+        stale = client.post(path, json=body, headers=headers)
+        self.assertEqual((stale.status_code, stale.json()["status"]), (200, "UNKNOWN"))
+        late_ack = client.post(ack_path, json=body, headers=headers)
+        self.assertEqual((late_ack.status_code, late_ack.json()["status"]),
+                         (200, "UNKNOWN"))
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=%s", (ids["event"],)).fetchone(), ("DEAD", 8))
+            audit = db.execute(
+                "select receipt_sha256 from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchall()
+            self.assertEqual(audit, [(receipt_hash,)])
+        self._write_proofs()
+        replay = client.post(path, json=body, headers=headers)
+        self.assertEqual((replay.status_code, replay.json()["status"],
+                          replay.json()["idempotent"]), (200, "DEAD", True))
+        self.assertEqual(replay.json()["receipt_sha256"], receipt_hash)
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+
+        target = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if target:
+            path_out = Path(target)
+            path_out.mkdir(parents=True, exist_ok=True)
+            redacted = {
+                "schema": "aiops.core-terminal-postcommit-revocation.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "canonical_core_app": True, "synthetic_disposable": True,
+                "http": {"committed_dead": 200, "credential_revoked": 401,
+                         "terminal_permission_revoked": 403,
+                         "source_proof_revoked": 200, "late_ack": 200,
+                         "revalidated_idempotent_replay": 200},
+                "revoked_status": "UNKNOWN", "late_ack_status": "UNKNOWN",
+                "terminal_status": "DEAD", "attempts": 8,
+                "audit_014_rows": 1, "receipt_sha256": receipt_hash,
+                "actor_authorization": "UNKNOWN", "human_glpi_attested": False,
+                "execution_allowed": False, "effect_allowed": False,
+                "rollback": "CODE_ONLY_KEEP_013_014_AUDIT",
+            }
+            redacted["payload_sha256"] = hashlib.sha256(
+                json.dumps(redacted, sort_keys=True,
+                           separators=(",", ":")).encode()).hexdigest()
+            (path_out / "terminal-postcommit-revocation.json").write_text(
+                json.dumps(redacted, sort_keys=True, indent=2) + "\n")
+        self._no_effect()
+
     def test_terminal_canonical_http_insert_failure_rolls_back_atomically(self):
         ids, digest, tokens = self._exhaust()
         client = self._canonical_core_client()
