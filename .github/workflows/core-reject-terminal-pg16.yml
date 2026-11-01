@@ -1,0 +1,80 @@
+name: Core terminal REJECT DEAD PG16 audit (disposable)
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/core/hitl_reject_delivery.py
+      - db/migrations/014_hitl_reject_terminal_receipts.sql
+      - tests/test_core_hitl_reject_terminal_pg16.py
+      - .github/workflows/core-reject-terminal-pg16.yml
+      - docs/architecture/ADR-CORE-REJECT-TERMINAL-DEAD-AUDIT-20261101.md
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-terminal-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-terminal-disposable-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-terminal-disposable-only@127.0.0.1:5432/aiops
+      PGPASSWORD: ci-terminal-disposable-only
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      PYTHONPATH: app:tests
+    steps:
+      - name: Install isolated test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
+          python3 -m venv /tmp/core-terminal-venv
+          /tmp/core-terminal-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1"
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact SHA and same-major PostgreSQL
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$EXPECTED_SHA"
+          /usr/lib/postgresql/16/bin/pg_dump --version | grep -F '(PostgreSQL) 16.'
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/core-terminal-socat.log 2>&1 </dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
+      - name: Run installed 001/004/009-014 adversarial terminal transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python -m unittest discover -s tests -p 'test_core_hitl_reject_terminal_pg16.py' -v 2>&1 | tee /tmp/core-terminal-tests.log
+          grep -E '^Ran 11 tests in ' /tmp/core-terminal-tests.log
+          grep -x 'OK' /tmp/core-terminal-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-terminal-tests.log
+          echo "SYNTHETIC_ONLY=TRUE; HUMAN_GLPI_AUTH=UNKNOWN; EFFECT_ALLOWED=FALSE; HOST_DEPLOY=FALSE"
+      - name: Preserve redacted exact-head qualification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-terminal-pg16-redacted-${{ github.run_id }}
+          path: /tmp/core-terminal-tests.log
+          retention-days: 7
