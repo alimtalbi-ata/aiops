@@ -273,8 +273,9 @@ class CanonicalPostDeadRevocation(previous.CanonicalCoreDeadGatewayReplay):
                 core = None
                 core, port = start_core(revoked)
                 await wait_core(core, port)
+                temporal_restart_port = free_port()
                 async with await WorkflowEnvironment.start_local(
-                    port=free_port(),
+                    port=temporal_restart_port,
                     dev_server_database_filename=sqlite) as restarted:
                     handle = restarted.client.get_workflow_handle(queue)
                     async with Worker(restarted.client, task_queue=queue,
@@ -332,7 +333,7 @@ asyncio.run(run())
                                 result = Path(self.temp.name) / (
                                     f"revoked-worker-{queue}-{i}.json")
                                 cfg = {
-                                    "temporal": restarted.client.service_client.config.target_host,
+                                    "temporal": f"127.0.0.1:{temporal_restart_port}",
                                     "queue": queue, "ready": str(ready),
                                     "go": str(go_path), "result": str(result),
                                     "core": f"http://127.0.0.1:{port}",
