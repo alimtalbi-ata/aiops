@@ -30,7 +30,9 @@ Negative assertions:
 - Service-scoped bearer is never exposed in browser requests or responses.
   No browser route may contact the pinned Core origin or any foreign origin.
 - Run/ITSM response headers remain no-store, CSP frame-ancestors none,
-  X-Frame-Options DENY; GLPI write controls remain disabled.
+  X-Frame-Options DENY; GLPI write controls remain disabled. The ITSM API
+  has a separate legacy viewer gate: OIDC-only yields 401, and even a valid
+  legacy viewer bearer yields 503 UNKNOWN, never GLPI authority.
 
 Important limitation: a process-local fake OIDC session is **not** a real IdP
 callback or Core/GLPI delegated permission. This suite cannot qualify durable
