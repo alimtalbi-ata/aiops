@@ -1,0 +1,107 @@
+name: HITL combined Core HTTP Worker Temporal PG16 disposable
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - tests/test_worker_core_pg16_temporal_combined.py
+      - .github/workflows/hitl-core-worker-pg16-combined-disposable.yml
+      - docs/qualification/HITL-CORE-WORKER-PG16-COMBINED-2026-11-01.md
+
+permissions:
+  contents: read
+
+jobs:
+  core-worker-temporal-pg16-disposable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: ubuntu:24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-hitl-ephemeral-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DATABASE_URL: postgresql://aiops:ci-hitl-ephemeral-only@postgres:5432/aiops
+      AIOPS_CI_COMBINED_DISPOSABLE: "YES"
+      AIOPS_CI_OUTBOX_DISPOSABLE: "YES"
+      AIOPS_CI_WORKER_DISPOSABLE: "YES"
+      HITL_DR_ARTIFACT: /tmp/hitl-combined-pg16-dr.dump
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Install pinned PostgreSQL 16 client in disposable container
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv postgresql-client-16
+          pg_dump --version | grep -E ' 16[.]'
+          pg_restore --version | grep -E ' 16[.]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Assert exact HEAD and install pinned test-only clients
+        run: |
+          set -eu
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          python3 -m venv /tmp/hitl-combined-venv
+          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "temporalio==1.16.0"
+          /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_pg16_temporal_combined.py
+      - name: Combined Core ASGI HTTP PG16 and Temporal test Worker restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_pg16_temporal_combined.py' -v 2>&1 | tee /tmp/hitl-combined.log
+      - name: Preserve independent PG16 SQL-model and DR regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v 2>&1 | tee /tmp/hitl-combined-dr.log
+          sha256sum /tmp/hitl-combined-pg16-dr.dump | tee /tmp/hitl-combined-pg16-dr.sha256
+      - name: Write explicit synthetic evidence classification
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          report = {
+              "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+              "core_claim_ack": "ACTUAL_FASTAPI_ASGI_HTTP_AND_POPULATED_PG16_IF_PASS",
+              "http_network": "NOT_TESTED_IN_PROCESS_ASGI",
+              "ownership": "SIGNED_CI_SYNTHETIC_NOT_GLPI_SOURCE_AUTHORITY",
+              "real_oidc_human": "NOT_ATTESTED",
+              "temporal_test_worker_restart": "OBSERVED_IF_TEST_PASS",
+              "temporal_server_restart": "NOT_TESTED",
+              "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT_NOT_NETWORK_LOSS",
+              "real_network_ack_loss": "NOT_TESTED",
+              "decision": "REJECT",
+              "execution_allowed": False,
+              "effect_allowed": False,
+              "effect_receipts_expected": 0,
+              "live": "DISABLED",
+          }
+          with open("/tmp/hitl-combined-report.json", "w") as f:
+              json.dump(report, f, indent=2, sort_keys=True)
+          PY
+      - name: Upload disposable combined test evidence and DR
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-core-worker-temporal-pg16-combined-disposable
+          path: |
+            /tmp/hitl-combined.log
+            /tmp/hitl-combined-dr.log
+            /tmp/hitl-combined-report.json
+            /tmp/hitl-combined-pg16-dr.dump
+            /tmp/hitl-combined-pg16-dr.sha256
+          retention-days: 7
+          if-no-files-found: warn
