@@ -474,12 +474,12 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
 
         app = FastAPI()
         app.include_router(core_xref.router)
-        with TestClient(app) as client, \\
+        with TestClient(app) as client, \
              patch.object(core_xref, "_auth", return_value=(
                  {"permissions": ["actor:resource:authorize"],
-                  "tenant_ids": ["ACME"]}, 200)), \\
+                  "tenant_ids": ["ACME"]}, 200)), \
              patch.object(core_actor, "_actor_introspection",
-                          return_value=None) as introspect, \\
+                          return_value=None) as introspect, \
              patch.object(core_xref, "db",
                           side_effect=AssertionError("no Core DB")) as database:
             response = client.post(plan.path, json=json.loads(plan.body),
@@ -516,8 +516,8 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
             self.actor(), self.binding(), env=self.authz_settings())
         app = FastAPI()
         app.include_router(core_xref.router)
-        with TestClient(app) as client, \\
-             patch.object(core_actor, "_actor_introspection") as introspect, \\
+        with TestClient(app) as client, \
+             patch.object(core_actor, "_actor_introspection") as introspect, \
              patch.object(core_xref, "db",
                           side_effect=AssertionError("no Core DB")) as database:
             for auth, path, status in (
@@ -528,7 +528,7 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
                    "tenant_ids": ["ACME"]}, 200),
                  plan.path.replace("/ACME/", "/OTHER/"), 403),
             ):
-                with self.subTest(status=status, path=path), \\
+                with self.subTest(status=status, path=path), \
                      patch.object(core_xref, "_auth", return_value=auth):
                     response = client.post(path, json=json.loads(plan.body),
                                            headers=plan.headers)
@@ -582,7 +582,7 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
                     code, body, headers))
         self.session()
         with patch.object(acme_run_detail, "_read_core_run",
-                          side_effect=AssertionError("Core read forbidden")) as core, \\
+                          side_effect=AssertionError("Core read forbidden")) as core, \
              patch.object(main, "get_json",
                           side_effect=AssertionError("upstream forbidden")) as upstream:
             for rid in (RUN, OTHER, "RUN-NOT-FOUND", "RUN-forged!"):
