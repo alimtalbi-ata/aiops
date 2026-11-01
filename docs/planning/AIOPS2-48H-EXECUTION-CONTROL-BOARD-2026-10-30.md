@@ -929,3 +929,18 @@ Debian read-only GitHub report collected_at `2026-11-01T16:14:01.923569+00:00` =
 
 
 **Correction and integration update 21:31 CET:** provisional #320 trusted-issuer equality objection above is withdrawn: Core source issuer != actor IdP issuer by design. [Correction](https://github.com/alimtalbi-ata/aiops/pull/320#issuecomment-6563460786). Four Core-owned exact source blobs from #320 HEAD `4feee6138545a4a77be906ac5a454a324cfdd450` selectively ported in candidate commit `bc649e36c93156b4c3787f16e5dc11b80040cd7c`; source Quality 3/3 + PG16 15/15. New candidate exact-head CI **PENDING**; release remains NO_GO, no Debian deploy. P0 Core next: expose an independently authenticated, read-only receipt to ACME consumer without treating portable JSON as authority.
+
+
+
+## Architect cycle — 2026-11-01 22:25 CET — selected product code, host gate NO_GO
+**Main:** `ae7c3e5102b99a66bd7806d602146f1309a9749d` (freshly fetched). **Sole Draft candidate:** [#234](https://github.com/alimtalbi-ata/aiops/pull/234), selective 12-file commit `22925d423c2292235af952ce169925624d8d426f`, base main. **No merge**: Draft, 199+ paths, combined exact-head qualification pending. Selected from source-only Drafts #321/#322/#323 after review and source exact-head green; source histories never merged.
+
+| Owner / WIP | Goal until next cycle | Source HEAD / PR | Source exact-head / blocker / next |
+|---|---|---|---|
+| Architect / Debian P0 | Safe installed cron reporter v1.1 handshake; verify fresh `runtime_contract`, checkout/image/HTTP receipts without stable poller | #234 reporter, #318 HOLD | CI 3/3 no-Docker only; installed 1.0.0; no safe update path, avoid destructive stable installer |
+| Core/NOC / P0 | Fix missing `run_events.event_key` migration and native Core writer, 001/004/009→014 + rollback, exact seven `SYN-EVT-*` PG16 actor/tenant Run readback | #320 source already ported | Source 15/15, new writer NOT_TESTED; Core owns migration |
+| Portal/GLPI / P0 | Independently governed native GLPI User/Profile/Entity/Ticket READMY and Core-signed Run trust, 401/403/503 and browser receipt | #323 `b7eb1167fe92ebccc21fb9aff15062df8d6ec7f1` | Quality 3/3, Chromium/API 63/63; native human GLPI NOT_ATTESTED |
+| Worker/Policy / P1 | Consume Core real event-key writer for REJECT→SIMULATE suppressed→VERIFY unresolved, no effect | #321 `8bdbeb6a58c49f8049ccf144e1451d83807456ec` | Quality 3/3 + dedicated 1/1, DR 5/5; fixture only, no Core event writer |
+| ACME/Twin / P1 | Align seven `SYN-EVT-*` with Core canonical PG16 Incident/Run; preserve sourced SAN→Payments and 15-stage truth | #322 `9dd41e948c15fa59a6bf8a0c7df2247507cd8f3f` | Quality 3/3, ACME 249/249; Incident NOT_CREATED, Core readback UNKNOWN |
+
+**Host evidence:** latest GitHub report `2026-11-01T21:19:02.088627+00:00`, **61 / 53 running / 8 exited**, agent 1.0.0 without `runtime_contract`. Operator-local 7777 binding/health verified; external TLS/SSO/GLPI and single public portal NOT_VERIFIED. Candidate portal running; no stop without traffic/dependency/backup proof. Stable poller `deploy/deploy-demo-studio-v2.sh` stop/rename/docker-run remains unsafe, #318 Draft not deployable. **CODE=YES, INTEGRE=YES (Draft code only), DEPLOYE_DEBIAN=NO, E2E=NOT_EXECUTED, RELEASE_STABLE=NO_GO.** SOURCE_REVIEWED=12/12 blobs; source CI_PASS; INTEGRATION_PASS=PENDING exact new head; RUNTIME_OBSERVED=old reporter/operator-local only. Next: exact candidate CI, Core migration, safe cron install path, native GLPI human. Rollback selective forward-revert `22925d`, never reset main or delete volumes.

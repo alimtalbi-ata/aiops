@@ -812,3 +812,14 @@ Core #302 HEAD 990b1f8f6ce14a1e4d191a8fb062ada1fd990039, four files, canonical C
 
 
 **Correction 21:31 CET:** #320 is **selectively PORTED** (4 exact Core blobs, `bc649e36c93156b4c3787f16e5dc11b80040cd7c`), not blocked by issuer equality. Core source issuer and IdP actor issuer are separate; earlier provisional HOLD is superseded. Source PG16 15/15 and Quality 3/3; integrated exact-head CI pending, no GLPI ALLOW.
+
+
+
+## Reuse convergence — 2026-11-01 22:25 CET — focused sources #321/#322/#323
+| Source | Exact HEAD, source gate | Selected contract / integration | Remaining blocker |
+|---|---|---|---|
+| Worker #321 | `8bdbeb6a58c49f8049ccf144e1451d83807456ec`; Quality 3/3; dedicated PG16/Temporal 1/1 + DR 5/5 | 4 Worker-only blobs in `22925d423c2292235af952ce169925624d8d426f`; synthetic REJECT, no effects | Core `run_events.event_key` absent from 001/004/009–014 migration chain; actual writer NOT_TESTED |
+| ACME #322 | `9dd41e948c15fa59a6bf8a0c7df2247507cd8f3f`; Quality 3/3; ACME 249/249 | 4 ACME-owned blobs in same commit; sourced SAN→Payments, one candidate NOT_CREATED | Core seven `SYN-EVT-*` readback vs disposable `EVT-SOURCE-*` mismatch, actor/tenant attestation missing |
+| Portal #323 | `b7eb1167fe92ebccc21fb9aff15062df8d6ec7f1`; Quality 3/3; Chromium/API 63/63 | 4 Portal-owned blobs in same commit; four-source GLPI UNKNOWN and forged-positive fence | Native GLPI READMY/User/Profile/Entity/Ticket, independent IdP signer, nonce/revocation missing |
+
+**Nonduplication:** no second CMDB/Incident ledger, no source-history merge, no replacement of previous #316/#317/#319/#320 ports. Sole candidate #234; stacked source Drafts retained for audit. Integration exact-head CI is separate from source CI and must be requalified after `22925d` and documentation update. Debian installed reporter 1.0.0 remains distinct from GitHub source v1.1; no host execution receipt. Operator-local 7777 verified, external and uniqueness UNKNOWN; `RELEASE_STABLE=NO_GO`. Rollback selective forward-revert; no stable, host Docker or volume mutation.
