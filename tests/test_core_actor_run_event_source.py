@@ -48,8 +48,9 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, response):
+    def __init__(self, response, request=REQUEST):
         self.response = response
+        self.request = request
         self.trust_env = True
         self.calls = []
     def __enter__(self):
@@ -60,7 +61,7 @@ class FakeSession:
         assert self.trust_env is False
         assert url == CONFIG["url"]
         assert kwargs["auth"] == (CONFIG["client_id"], CONFIG["client_secret"])
-        assert kwargs["json"] == REQUEST
+        assert kwargs["json"] == self.request
         assert kwargs["allow_redirects"] is False
         assert kwargs["stream"] is True
         assert kwargs["verify"] is True
@@ -78,7 +79,10 @@ class CoreActorSourceBindingTests(unittest.TestCase):
 
     def read(self, proof=None, claims=None, expected=None, record=None,
              response=None):
-        session = FakeSession(response or FakeResponse(proof))
+        scope = RECORD if record is None else record
+        request = {**REQUEST, "source_event_id": scope.get("source_event_id"),
+                   "source_event_hash": scope.get("source_payload_hash")}
+        session = FakeSession(response or FakeResponse(proof), request=request)
         with patch.object(requests, "Session", return_value=session):
             result = binding._source_run_event_preflight(
                 CLAIMS if claims is None else claims,
