@@ -27,6 +27,8 @@ from cryptography.x509.oid import NameOID
 from playwright.sync_api import sync_playwright
 import uvicorn
 
+from portal_core_unknown_tcp_fixture import DisposableCoreUnknownTCP
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
@@ -286,3 +288,104 @@ class PortalACLChromiumE2E(unittest.TestCase):
                 self.assertNotIn(token, str(headers))
                 self.assertNotIn(token, self.page.content())
         self.assertFalse(self.blocked)
+
+    def test_06_independent_tls_core_tcp_unknown_parity_no_browser_dispatch(self):
+        """A test-only TCP Core authz POST never enables Portal business reads."""
+        from portal.core_acl_consumer import ServerXref
+        actor, _ = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=int(time.time()))
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        with DisposableCoreUnknownTCP() as core:
+            status, payload, headers = core.send(plan)
+            self.assertEqual(status, 200)
+            self.assertEqual(payload, {
+                "schema": "aiops.core-actor-resource-authorization.v1",
+                "decision": "UNKNOWN"})
+            assessment = self.wire.assess_core_authz_reply_offline(
+                status, payload, headers, None, actor=actor, binding=binding,
+                plan=plan, env=self.settings, now=int(time.time()))
+            self.assertEqual(assessment.kind, "CURRENT_CORE_NEGATIVE")
+            self.assertEqual(assessment.portal_status, 503)
+            self.assertFalse(assessment.read_permitted)
+            self.assertFalse(self.wire.core_authz_read_permitted(payload))
+            self.assertEqual(len(core.observations), 1)
+            sent = core.observations[0]
+            self.assertEqual(sent["method"], "POST")
+            self.assertEqual(sent["path"], plan.path)
+            self.assertEqual(sent["host"], "core.example.test:8443")
+            self.assertEqual(sent["authorization"],
+                             "Bearer " + self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"])
+            self.assertEqual(json.loads(sent["body"]), {
+                "incident_id": "INC-ACME-123", "glpi_instance_id": "glpi-acme",
+                "ticket_id": "123", "glpi_entity_id": "42",
+                "permission": "run:read", "nonce": plan.nonce})
+            self.assertNotIn("actor_subject", json.loads(sent["body"]))
+            # The actual Portal is *not* wired to this test-only transport.
+            for rid in ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999"):
+                self.assert_denied(self.context.request.get(
+                    self.base + "/api/portal/runs/" + rid), 503)
+            self.assert_denied(self.page.goto(self.base + "/runs/RUN-ACME-123"), 503)
+            self.assertEqual(len(core.observations), 1,
+                             "Portal attempted an upstream Core read on UNKNOWN")
+            for url, request_headers in self.observed:
+                self.assertTrue(url.startswith(self.base + "/"))
+                self.assertNotIn(self.settings[
+                    "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], str(request_headers))
+                self.assertNotIn("core.example.test", url)
+            self.assertNotIn(self.settings[
+                "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], self.page.content())
+            self.assertFalse(self.blocked)
+
+    def test_07_tcp_unknown_replay_foreign_revocation_and_forged_allow(self):
+        """No replay or unsigned ALLOW can grant access; no GLPI identity inference."""
+        from portal.core_acl_consumer import ServerXref
+        actor, handle = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        now = int(time.time())
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=now)
+        self.assertIsNotNone(plan)
+        with DisposableCoreUnknownTCP() as core:
+            first = core.send(plan)
+            replay = core.send(plan)  # synthetic peer has NO durable nonce ledger
+            self.assertEqual(first[:2], replay[:2])
+            self.assertEqual(len(core.observations), 2)
+            for status, payload, headers in (first, replay):
+                assessment = self.wire.assess_core_authz_reply_offline(
+                    status, payload, headers, None, actor=actor, binding=binding,
+                    plan=plan, env=self.settings, now=now)
+                self.assertEqual(assessment.kind, "CURRENT_CORE_NEGATIVE")
+                self.assertFalse(assessment.read_permitted)
+            fresh = self.wire.prepare_core_authz_wire(
+                actor, binding, env=self.settings, now=now)
+            self.assertNotEqual(plan.nonce, fresh.nonce)
+            foreign = ServerXref("FOREIGN", "RUN-FOREIGN-999",
+                                 "INC-FOREIGN-999", "glpi-foreign", "999", "99")
+            self.assertIsNone(self.wire.prepare_core_authz_wire(
+                actor, foreign, env=self.settings, now=now))
+            self.assertEqual(len(core.observations), 2)
+            core.reply = "ALLOW"  # forged, unsigned mock; NEVER positive ACL
+            forged_status, forged_payload, forged_headers = core.send(fresh)
+            assessment = self.wire.assess_core_authz_reply_offline(
+                forged_status, forged_payload, forged_headers, None,
+                actor=actor, binding=binding, plan=fresh,
+                env=self.settings, now=now)
+            self.assertEqual(assessment.kind, "INVALID")
+            self.assertFalse(assessment.read_permitted)
+            self.assertFalse(self.wire.core_authz_read_permitted(forged_payload))
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/runs/RUN-ACME-123"), 503)
+            with self.sessions._lock:
+                self.sessions._sessions.pop(self.sessions._digest(handle), None)
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/runs/RUN-ACME-123"), 401)
+            self.assert_denied(self.page.goto(
+                self.base + "/runs/RUN-ACME-123"), 401)
+            self.assertEqual(len(core.observations), 3,
+                             "revoked session unexpectedly reached Core")
+            self.assertTrue(all(x["method"] == "POST" for x in core.observations))
