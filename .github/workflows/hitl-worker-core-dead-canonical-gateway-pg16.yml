@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - tests/test_worker_core_dead_canonical_gateway_pg16.py
+      - tests/test_worker_core_dead_revocation_pg16.py
       - .github/workflows/hitl-worker-core-dead-canonical-gateway-pg16.yml
       - docs/qualification/HITL-WORKER-CORE-DEAD-CANONICAL-GATEWAY-2026-11-01.md
 
@@ -58,12 +59,17 @@ jobs:
           test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
           python3 -m venv /tmp/hitl-combined-venv
           /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "uvicorn==0.35.0"
-          /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_dead_canonical_gateway_pg16.py
+          /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_dead_canonical_gateway_pg16.py tests/test_worker_core_dead_revocation_pg16.py
       - name: Canonical Core HTTP DEAD gateway replay and concurrent post-commit retry after Temporal restart
         shell: bash
         run: |
           set -euo pipefail
           PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_canonical_gateway_pg16.py' -v 2>&1 | tee /tmp/hitl-core-dead-canonical.log
+      - name: Adversarial post-DEAD tenant provenance and actor revocation after persisted restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_revocation_pg16.py' -v 2>&1 | tee /tmp/hitl-core-dead-revocation.log
       - name: Validate redacted exact-head machine-readable receipt
         shell: bash
         run: |
@@ -126,6 +132,37 @@ jobs:
           assert evidence["universal_exactly_once"] == "NOT_CLAIMED"
           assert not any(s in race.read_text().lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
           print("CANONICAL_DEAD_CONCURRENT_RETRY_RECEIPT_PASS", race_digest)
+          revoked = Path(os.environ["AIOPS_CI_CANONICAL_DEAD_RECEIPT_DIR"]) / "canonical-dead-revocation.json"
+          evidence = json.loads(revoked.read_text())
+          digest = evidence.pop("payload_sha256")
+          payload = json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode()
+          assert hashlib.sha256(payload).hexdigest() == digest
+          assert evidence["schema"] == "aiops.worker-postdead-revocation-fencing.v1"
+          assert evidence["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert evidence["core_http"] == "CANONICAL_CORE_MAIN_TCP_OBSERVED"
+          assert evidence["migration_014"] == "CORE_OWNED_RUNTIME_OBSERVED"
+          assert evidence["dead_status"] == "DEAD" and evidence["dead_attempts"] == 8
+          assert evidence["pending_status"] == "PENDING" and evidence["pending_attempts"] == 0
+          assert evidence["audit_rows_before"] == evidence["audit_rows_after"] == 1
+          assert evidence["receipt_sha256_before"] == evidence["receipt_sha256_after"]
+          assert evidence["tenant_run_provenance_revoked"] is True
+          assert evidence["provenance_revocation_sql"] == "CI_SYNTHETIC_VERIFIED_FALSE_ONLY"
+          assert evidence["actor_acl_revoked_on_core_restart"] is True
+          assert evidence["provenance_denied_dead"] == evidence["provenance_denied_ack"] == evidence["provenance_denied_claim"] == 4
+          assert evidence["actor_denied_dead"] == evidence["actor_denied_ack"] == evidence["actor_denied_claim"] == 4
+          assert evidence["delivery_only_terminal_denied"] is True
+          assert evidence["foreign_tenant_terminal_denied"] is True
+          assert evidence["temporal_persisted_restarts"] == evidence["core_tcp_restarts"] == 1
+          assert evidence["gateway_close"] == "INJECTED_AFTER_CORE_TCP_DEAD_COMMIT"
+          assert evidence["physical_packet_loss"] == "NOT_TESTED"
+          assert evidence["temporal_signal_count"] == evidence["approve_count"] == evidence["delivered_count"] == evidence["effect_receipt_count"] == 0
+          assert evidence["execution_allowed"] is False and evidence["effect_allowed"] is False
+          assert evidence["sql_dead_injection"] is False
+          assert evidence["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert evidence["host_7777"] == "NOT_VERIFIED"
+          assert evidence["universal_exactly_once"] == "NOT_CLAIMED"
+          assert not any(s in revoked.read_text().lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
+          print("CANONICAL_DEAD_REVOCATION_RECEIPT_PASS", digest)
           PY
           sha256sum "$AIOPS_CI_CANONICAL_DEAD_RECEIPT_DIR"/canonical-dead-*.json > /tmp/hitl-core-dead-canonical.sha256
           sha256sum --check /tmp/hitl-core-dead-canonical.sha256
