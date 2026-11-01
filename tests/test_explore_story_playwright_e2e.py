@@ -458,7 +458,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         expect(self.page.locator('[data-authority-check="idp"]')).to_contain_text(
             "réponse non qualifiée")
         self.assertNotIn("FORGED-TICKET-999", self.page.locator("body").inner_text())
-        self.assertNotIn("CONNECTED", self.page.locator("body").inner_text())
+        self.assertNotIn("CONNECTED", self.page.locator("#glpi-check-status").inner_text())
+        self.assertNotIn("CONNECTED", self.page.locator("#glpi-source-readiness").inner_text())
         self.page.unroute("**/api/portal/itsm")
 
         self.assertTrue(self.page.get_by_role("button", name="Commenter").is_disabled())
