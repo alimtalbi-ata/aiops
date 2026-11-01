@@ -1,0 +1,32 @@
+# PLAN_ONLY: NOT A DEPLOYABLE DOCKER COMPOSE FILE. DO NOT RUN docker compose up/down.
+# The reporter does not provide PortBindings, compose labels, internal portal port,
+# networks, volumes, image digests, DB ownership or backup attestations.
+# A valid deployable manifest must be generated only after authorized read-only
+# host inspection and explicit change approval. No extra permanent stack.
+x-aiops2-canonical-plan:
+  schema: aiops2.single-dev-stack.v1
+  status: NOT_DEPLOYABLE
+  host: SRV-DEB-05
+  desired_single_ui_host_tcp_port: 7777
+  explicitly_not_equivalent_to: 17777
+  preferred_existing_portal_container: aiops2-rebuild-portal
+  preferred_existing_core_container: aiops2-rebuild-core
+  compose_project_label: UNKNOWN
+  portal_internal_port: UNKNOWN
+  portal_host_port_binding_verified: false
+  portal_tls_host_firewall_verified: false
+  image_digests_verified: false
+  existing_networks_verified: false
+  existing_volumes_verified: false
+  db_ownership_verified: false
+  backups_and_restore_verified: false
+  migration_mode: IN_PLACE_ONLY_AFTER_GATES
+  rollback: KEEP_EXISTING_VOLUMES_AND_013_014_AUDIT
+  forbidden:
+    - second_persistent_stack
+    - second_portal
+    - docker_compose_down_v
+    - docker_prune
+    - volume_or_db_deletion
+    - push_deploy_aiops2_stable
+# Intentionally no 'services' or 'volumes' definitions: cannot be applied.
