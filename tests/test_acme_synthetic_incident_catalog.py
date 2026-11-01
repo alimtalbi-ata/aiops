@@ -847,7 +847,7 @@ class AcmeTwinAuthorityBoundaryContractTests(unittest.TestCase):
         changes = (
             raw.replace(b"'PARIS'", b"'REMOTE'", 1),
             raw.replace(b"'HEALTHY',5,", b"'HEALTHY',4,", 1),
-            raw + b"\\n-- synthetic forged service_owner_id=FAKE\\n",
+            raw + b"\n-- synthetic forged service_owner_id=FAKE\n",
         )
         from unittest import mock
         with tempfile.TemporaryDirectory() as directory:
@@ -866,12 +866,12 @@ class AcmeTwinAuthorityBoundaryContractTests(unittest.TestCase):
     def test_golden_replay_bytes_are_unchanged_by_provenance_projection(self):
         baseline = gen.replay(seed=20261018)
         raw = (json.dumps(baseline, sort_keys=True, indent=2, ensure_ascii=True)
-               + "\\n").encode("utf-8")
+               + "\n").encode("utf-8")
         self.assertEqual(hashlib.sha256(raw).hexdigest(),
                          "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
         gen.storyboard_offline(baseline)
         self.assertEqual((json.dumps(baseline, sort_keys=True, indent=2,
-                                     ensure_ascii=True) + "\\n").encode("utf-8"), raw)
+                                     ensure_ascii=True) + "\n").encode("utf-8"), raw)
         self.assertEqual(baseline["seed"], 20261018)
         self.assertEqual(baseline["event_count"], 7)
         self.assertFalse(baseline["publishable_to_core_or_glpi"])
