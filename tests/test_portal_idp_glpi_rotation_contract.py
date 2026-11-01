@@ -346,7 +346,7 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
             "nonce_jti_ledger": "TEST_ONLY_NOT_DURABLE",
             "dispatch_allowed": False, "read_permitted": False,
             "portal_default": {"http_status": 503, "state": "UNKNOWN"},
-            "revoked_oidc": {"http_status": 401, "state": "UNKNOWN"},
+            "revoked_oidc": {"http_status": 401, "state": "UNAUTHORIZED"},
             "checks": checks, "observations": observations,
             "result": "NEGATIVE_CONTRACT_PASS",
         }
