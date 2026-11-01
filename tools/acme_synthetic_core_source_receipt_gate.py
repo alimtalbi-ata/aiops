@@ -161,9 +161,10 @@ def inspect_untrusted_receipt(manifest, *, candidate=None, now=None,
             _fail("ACME and Core domains conflated")
     if candidate["source_event_id"] not in result["source_event_ids"]:
         _fail("source event outside pinned replay")
-    if candidate["source_payload_hash"] not in {
-            e["payload_sha256"] for e in events}:
-        _fail("source payload not in seven-event candidate")
+    selected = next(e for e in events
+                    if e["source_event_id"] == candidate["source_event_id"])
+    if candidate["source_payload_hash"] != selected["payload_sha256"]:
+        _fail("source payload not bound to selected event")
     unsigned = {k: v for k, v in candidate.items() if k != "receipt_sha256"}
     if candidate["receipt_sha256"] != core_receipt_digest(unsigned):
         _fail("Core-style digest mismatch")
