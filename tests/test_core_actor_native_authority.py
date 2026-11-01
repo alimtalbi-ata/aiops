@@ -65,7 +65,7 @@ class Session:
         path = url.split("/apirest.php/", 1)[1]
         data = {"getFullSession": {"session": {"glpiID": 47,
                     "glpiactiveprofile": {"id": 2}, "glpiactiveentities": [7]}},
-                "User/47": {"id": 47}, "Profile/2": {"id": 2},
+                "User/47": {"id": 47, "is_active": 1}, "Profile/2": {"id": 2, "ticket": 1},
                 "Entity/7": {"id": 7},
                 "Ticket/123": {"id": 123, "entities_id": 7}}[path]
         return Response(self.overrides.get(path, data))
@@ -142,8 +142,18 @@ class NativeActorRightsTests(unittest.TestCase):
             "glpiactiveprofile": {"id": 2}, "glpiactiveentities": [8]}}
         self.assertFalse(self.check())
     def test_native_profile_mismatch(self):
-        self.s.overrides["Profile/2"] = {"id": 3}
+        self.s.overrides["Profile/2"] = {"id": 3, "ticket": 1}
         self.assertFalse(self.check())
+    def test_profile_id_without_ticket_read_is_not_permission(self):
+        for rights in (None, 0, 1024, True, "1"):
+            with self.subTest(rights=rights):
+                self.s.overrides["Profile/2"] = {"id": 2, "ticket": rights}
+                self.assertFalse(self.check())
+    def test_inactive_or_untyped_glpi_user_is_not_human_authority(self):
+        for active in (0, None, True, "1"):
+            with self.subTest(active=active):
+                self.s.overrides["User/47"] = {"id": 47, "is_active": active}
+                self.assertFalse(self.check())
     def test_native_ticket_entity_mismatch(self):
         self.s.overrides["Ticket/123"] = {"id": 123, "entities_id": 8}
         self.assertFalse(self.check())

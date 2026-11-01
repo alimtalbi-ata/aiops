@@ -175,6 +175,17 @@ def _native_glpi_preflight(claims, expected, now):
                 obj = _read_json(session, "GET", base + "/" + path + "/" + str(number), headers)
                 if not isinstance(obj, dict) or type(obj.get(key)) is not int or obj[key] != number:
                     return False
+                # A profile identifier is not a permission. Require GLPI's
+                # native READ bit (1) on the ticket right, plus a successful
+                # human-session GET of this exact Ticket and Entity. READMY
+                # or a synthetic mapping/HMAC alone cannot satisfy this gate.
+                if path == "Profile":
+                    rights = obj.get("ticket")
+                    if type(rights) is not int or (rights & 1) != 1:
+                        return False
+                if path == "User" and (type(obj.get("is_active")) is not int
+                                       or obj["is_active"] != 1):
+                    return False
                 if path == "Ticket" and (type(obj.get("entities_id")) is not int
                                          or obj["entities_id"] != int(expected["glpi_entity_id"])):
                     return False
