@@ -135,7 +135,7 @@ class RejectNotificationContract(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(UnqualifiedNotification):
                     verify_delivery_ack(bad, event_id, request)
 
-    def test_empty_batch_no_effect(self):
+    async def test_empty_batch_no_effect(self):
         empty = snapshot()
         empty["items"] = []
         self.assertEqual(prepare_reject(empty, OWNER), [])
