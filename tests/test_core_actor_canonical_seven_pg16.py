@@ -395,6 +395,14 @@ class CanonicalSevenSourcePG16(unittest.TestCase):
             conn.rollback()
         self.assertTrue(self.read(7))
 
+    def test_future_observation_fails_source_freshness_without_mutation(self):
+        # Shift only the disposable authority's clock backwards: the seven
+        # immutable source observations now lie in its future and must fail.
+        with patch(__name__ + "._now",
+                   return_value=datetime.now(timezone.utc)-timedelta(minutes=2)):
+            self.assertFalse(self.read())
+        self.assertTrue(self.read())
+
     def test_tls_untrusted_ca_rejected_and_audit_013_unchanged(self):
         with self.psycopg.connect(self.db_url) as conn:
             before = (conn.execute(
