@@ -716,3 +716,8 @@ At source/document HEAD f9b1dd88406b8b7cc47d072d7b69f4a3946867fd all four PR wor
 | 4 Policy P0 | #259 `caab0842911f44d59c274cabaf2a667b4d582094`, Quality #41274206608 3/3 + combined #41274206599 1/1 | Loopback TCP gateway closes committed ACK, Worker Temporal test restart, REJECT only | No deployed Core TCP or Temporal server restart; next isolated multi-process boundary |
 
 **Gates:** D0 source-only CI_PASS, integrated exact-head PENDING; D1 combined business path NOT_QUALIFIED (REJECT subpath only); D2 browser/API ITIL same SHA NOT_QUALIFIED; D3 clean install/upgrade/rollback NO_GO; D4 sign-off NOT_ATTESTED. No green-by-proxy. Artifacts: source #259 combined #13070581531 GitHub digest provider-reported; source #258 Quality ACME #13069418598, Chromium #13069049527; independent ZIP hash not recomputed this cycle. Revert `74fe37e` if integrated CI fails; never drop ledger 013 outside disposable environment. Owners' four hourly prompts updated; `next_run_time=null` for all five, cadence not guaranteed.
+
+
+### Automation delta — 2026-11-01 05:50 Europe/Paris
+
+A genuine GitHub Actions `schedule` event is now **OBSERVED**, correcting previous `0 schedule` snapshots: [Quality #41267926085](https://github.com/alimtalbi-ata/aiops/actions/runs/41267926085), created 03:08:05 UTC on main `ae7c3e5102b99a66bd7806d602146f1309a9749d`, 3/3 SUCCESS, synthetic artifact #13067643872. Configured `23 2 * * *` UTC is not the actual run start; do not infer punctuality or future heartbeat. Debian `*/1` remains UNATTESTED; ChatGPT five next_run_time remain null; lab remains synthetic. This scheduled main success is **not** exact-head qualification for Draft candidate #234.
