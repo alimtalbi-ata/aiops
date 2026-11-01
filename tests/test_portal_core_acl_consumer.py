@@ -854,8 +854,12 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
                     changed[section][key] = value
                     self.assertFalse(synthetic_native_glpi_shape_matches(
                         changed, binding, glpi_user_id=77))
-            self.assertFalse(synthetic_native_glpi_shape_matches(
+            # Native GLPI records have no tenant claim: their shape alone
+            # cannot prove tenant ownership, even when all IDs match.
+            self.assertTrue(synthetic_native_glpi_shape_matches(
                 rows, self.binding("OTHER"), glpi_user_id=77))
+            self.assertFalse(core_acl_consumer.exact_binding_valid(
+                actor, self.binding("OTHER")))
 
             # Portal remains unable to dispatch even with a reachable,
             # independently signed synthetic Core and GLPI human-session peer.
@@ -878,7 +882,7 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
                             "X-GLPI-Profile": "manager"})
                         self.assert_fence(response, 503)
                         self.assertNotIn(plan.service_bearer, response.text)
-                        self.assertNotIn(binding.ticket_id, response.text)
+                        self.assertNotIn(binding.glpi_instance_id, response.text)
                         self.assertNotIn(binding.incident_id, response.text)
                         if prefix.startswith("/api/"):
                             projections.append(response.json())
