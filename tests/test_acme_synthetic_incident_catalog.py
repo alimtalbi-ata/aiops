@@ -3,6 +3,7 @@ import copy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -695,6 +696,185 @@ class AcmeTwinSourcedServiceContextTests(unittest.TestCase):
             {"stage": stage, "status": "NOT_EXECUTED", "id": None}
             for stage in gen.CHECKPOINTS
         ])
+
+
+
+class AcmeTwinAuthorityBoundaryContractTests(unittest.TestCase):
+    """Source-pinned Twin contract: synthetic facts are not runtime authority."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.graph = gen.load_graph()
+        cls.catalog, _ = gen.load_catalog()
+        raw = gen.SEED_FILE.read_bytes()
+        cls.seed_sha = gen._git_blob(raw)
+        cls.node_rows = {
+            node: {"site": site, "criticality": int(criticality)}
+            for node, site, criticality in re.findall(
+                r"^\\('(ACME-[^']+)','(?:BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','([^']+)','[^']+',([1-5]),",
+                raw.decode("utf-8"), re.M)
+        }
+
+    def _supported(self):
+        return [s for s in self.catalog["scenarios"]
+                if s["status"] == "SUPPORTED_BY_SEED"]
+
+    def test_all_supported_sites_and_service_criticality_are_pinned_node_facts(self):
+        self.assertEqual(self.seed_sha, gen.SEED_GIT_BLOB)
+        self.assertEqual(len(self.node_rows), 18)
+        for scenario in self._supported():
+            with self.subTest(scenario=scenario["key"]):
+                manifest = gen.replay(scenario["key"], seed=20261018)
+                context = gen.storyboard_offline(manifest)["twin_service_context"]
+                nodes = manifest["impact_estimate"]["path_node_ids"]
+                expected_sites = {ci: self.node_rows[ci]["site"] for ci in nodes}
+                self.assertEqual(context["site_by_path_ci_id"], expected_sites)
+                self.assertEqual(context["site"], next(iter(set(expected_sites.values())))
+                                 if len(set(expected_sites.values())) == 1 else "UNKNOWN")
+                self.assertEqual(context["service_criticality_synthetic_1_to_5"],
+                                 self.node_rows[manifest["service_id"]]["criticality"])
+                self.assertEqual(context["source_git_blob"], self.seed_sha)
+                self.assertEqual(context["source"], "db/migrations/005_seed_acme.sql")
+                self.assertEqual(context["freshness"], "PINNED_FIXTURE_NOT_LIVE")
+                self.assertEqual(context["provenance"], "SYNTHETIC_FIXTURE")
+
+    def test_absent_governance_authorities_never_become_contracts_or_assignments(self):
+        absent = ("datacenter_id", "datacenter_relation", "service_owner_id",
+                  "service_team_id", "sla_id", "ola_id", "change_id",
+                  "maintenance_actual", "blast_radius_observed",
+                  "impact_observed", "itil_priority_confirmed")
+        for scenario in self._supported():
+            with self.subTest(scenario=scenario["key"]):
+                manifest = gen.replay(scenario["key"], seed=20261018)
+                story = gen.storyboard_offline(manifest)
+                context = story["twin_service_context"]
+                for key in absent:
+                    self.assertEqual(context[key], "UNKNOWN", key)
+                self.assertEqual(context["maintenance_window_synthetic"],
+                                 scenario["maintenance_window"])
+                self.assertEqual(context["runtime_readback"], "NOT_EXECUTED")
+                self.assertEqual(context["tenant_scope"], "UNKNOWN")
+                self.assertIsNone(story["incident_id"])
+                self.assertIsNone(story["run_id"])
+                self.assertIsNone(story["ticket_id"])
+                self.assertEqual(story["evidence_ids"], [])
+                self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                                    for c in story["checkpoints"]))
+
+    def test_blast_radius_is_independently_reverse_reachable_not_observed(self):
+        for scenario in self._supported():
+            with self.subTest(scenario=scenario["key"]):
+                manifest = gen.replay(scenario["key"], seed=20261018)
+                context = gen.twin_service_context_offline(manifest)
+                reached = {manifest["ci_id"]}
+                while True:
+                    new = {edge["source_id"] for edge in self.graph["edges"].values()
+                           if edge["target_id"] in reached}
+                    if new <= reached:
+                        break
+                    reached |= new
+                services = sorted(ci for ci in reached
+                                  if self.graph["nodes"][ci]["type"] == "SERVICE")
+                self.assertEqual(context["blast_radius_candidate_service_ids"], services)
+                self.assertEqual(context["blast_radius_candidate_ci_count"], len(reached))
+                self.assertEqual(context["dependency_direction"],
+                                 "REVERSE_CONSUMER_TO_DEPENDENCY")
+                nodes = context["dependency_path_node_ids"]
+                for edge_id, dependency, consumer in zip(
+                        context["dependency_path_edge_ids"], nodes, nodes[1:]):
+                    edge = self.graph["edges"][edge_id]
+                    self.assertEqual((edge["target_id"], edge["source_id"]),
+                                     (dependency, consumer))
+                criticality = max(self.graph["nodes"][ci]["criticality"]
+                                  for ci in services)
+                estimated = "HIGH" if criticality >= 5 else (
+                    "MEDIUM" if criticality >= 3 else "LOW")
+                self.assertEqual(context["impact_estimated"], estimated)
+                self.assertEqual(context["itil_priority_candidate"],
+                                 manifest["itil"]["priority_candidate"])
+                self.assertEqual(context["impact_observed"], "UNKNOWN")
+                self.assertEqual(context["itil_priority_confirmed"], "UNKNOWN")
+                self.assertFalse(context["causality_verified"])
+                self.assertFalse(context["redundancy_evaluated"])
+
+    def test_maintenance_and_false_positive_do_not_authorize_itil_priority(self):
+        scenario = next(s for s in self._supported()
+                        if s["key"] == "APPLICATION_DEGRADATION")
+        manifest = gen.replay(scenario["key"], seed=20261018)
+        context = gen.twin_service_context_offline(manifest)
+        self.assertEqual(context["maintenance_window_synthetic"],
+                         {"start_offset_seconds": 0, "end_offset_seconds": 120})
+        self.assertTrue(any(e["maintenance_window_active"] for e in manifest["events"]))
+        self.assertEqual(context["itil_priority_candidate"], "UNKNOWN")
+        self.assertEqual(context["maintenance_actual"], "UNKNOWN")
+        self.assertEqual(context["change_lookup"], "NOT_PRESENT_IN_SCENARIO")
+        self.assertEqual(context["itil_priority_confirmed"], "UNKNOWN")
+        false_alarm = gen.replay("NETWORK_FAILURE", seed=20261018, false_positive=True)
+        with self.assertRaises(ValueError):
+            gen.twin_service_context_offline(false_alarm)
+        noise = gen.twin_service_context_offline(false_alarm, false_positive=True)
+        self.assertEqual(noise["itil_priority_candidate"], "UNKNOWN")
+        self.assertEqual(noise["impact_observed"], "UNKNOWN")
+        self.assertEqual(noise["maintenance_actual"], "UNKNOWN")
+
+    def test_rehashed_forged_authorities_and_blast_radius_fail_closed(self):
+        baseline = gen.replay(seed=20261018)
+        for field, value in (
+            ("site", "REMOTE"), ("datacenter_id", "FAKE-DC"),
+            ("service_owner_id", "FAKE-OWNER"), ("service_team_id", "FAKE-TEAM"),
+            ("sla_id", "FAKE-SLA"), ("ola_id", "FAKE-OLA"),
+            ("change_id", "FAKE-CHANGE"), ("maintenance_actual", "APPROVED"),
+            ("blast_radius_observed", ["ACME-SVC-PAYMENTS"]),
+            ("impact_observed", "HIGH"), ("itil_priority_confirmed", "P1")
+        ):
+            with self.subTest(field=field):
+                forged = copy.deepcopy(baseline)
+                forged[field] = value
+                unsigned = {k: v for k, v in forged.items() if k != "dataset_sha256"}
+                forged["dataset_sha256"] = hashlib.sha256(gen._canonical(unsigned)).hexdigest()
+                with self.assertRaises(ValueError):
+                    gen.twin_service_context_offline(forged)
+                with self.assertRaises(ValueError):
+                    gen.storyboard_offline(forged)
+        forged = copy.deepcopy(baseline)
+        forged["impact_estimate"]["candidate_ci_count"] += 1
+        with self.assertRaises(ValueError):
+            gen.twin_service_context_offline(forged)
+
+    def test_changed_seed_site_criticality_or_forged_owner_relation_is_rejected(self):
+        baseline = gen.replay(seed=20261018)
+        raw = gen.SEED_FILE.read_bytes()
+        changes = (
+            raw.replace(b"'PARIS'", b"'REMOTE'", 1),
+            raw.replace(b"'HEALTHY',5,", b"'HEALTHY',4,", 1),
+            raw + b"\\n-- synthetic forged service_owner_id=FAKE\\n",
+        )
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as directory:
+            for i, changed in enumerate(changes):
+                with self.subTest(mutation=i):
+                    altered = Path(directory) / f"changed-{i}.sql"
+                    altered.write_bytes(changed)
+                    self.assertNotEqual(gen._git_blob(changed), gen.SEED_GIT_BLOB)
+                    with self.assertRaisesRegex(ValueError, "seed graph Git blob mismatch"):
+                        gen.load_graph(altered)
+                    with mock.patch.object(gen, "SEED_FILE", altered):
+                        with self.assertRaises(ValueError):
+                            gen.twin_service_context_offline(baseline)
+        self.assertEqual(gen.replay(seed=20261018), baseline)
+
+    def test_golden_replay_bytes_are_unchanged_by_provenance_projection(self):
+        baseline = gen.replay(seed=20261018)
+        raw = (json.dumps(baseline, sort_keys=True, indent=2, ensure_ascii=True)
+               + "\\n").encode("utf-8")
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        gen.storyboard_offline(baseline)
+        self.assertEqual((json.dumps(baseline, sort_keys=True, indent=2,
+                                     ensure_ascii=True) + "\\n").encode("utf-8"), raw)
+        self.assertEqual(baseline["seed"], 20261018)
+        self.assertEqual(baseline["event_count"], 7)
+        self.assertFalse(baseline["publishable_to_core_or_glpi"])
 
 
 if __name__ == "__main__":
