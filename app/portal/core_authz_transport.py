@@ -16,6 +16,9 @@ import time
 from dataclasses import dataclass
 from typing import Mapping
 
+from fastapi import Request
+from portal.oidc_session import _session_from_cookie
+
 from portal.core_acl_consumer import (
     ServerXref, configured_core_authz_target, core_v1_envelope_matches,
     exact_binding_valid,
@@ -290,3 +293,32 @@ def assess_core_authz_reply_offline(
                 env=env, now=clock)):
         return OfflineCoreReplyAssessment("SIGNED_SHAPE_UNQUALIFIED")
     return invalid
+
+
+def assess_core_negative_for_session(
+        request: Request, *, binding: ServerXref, plan: CoreAuthzWirePlan,
+        status_code: object, payload: object, headers: Mapping[str, str],
+        env: Mapping[str, str] | None = None,
+        now: int | None = None) -> OfflineCoreReplyAssessment:
+    """Server-side *negative-only* consumer for a disposable Core reply.
+
+    Re-resolve the identity from the revocable server session at consumption
+    time, not from a browser-supplied actor/tenant or a previously captured
+    actor object. A Core 200 UNKNOWN is never a grant. This function performs
+    NO I/O, does not dispatch the plan, and cannot authorize business GETs.
+    In particular, even a valid future signed ALLOW is INVALID here.
+    """
+    clock = int(time.time()) if now is None else now
+    if type(clock) is not int or not isinstance(request, Request):
+        return OfflineCoreReplyAssessment("SESSION_REQUIRED", portal_status=401)
+    session = _session_from_cookie(request)
+    if (session is None or session.expires <= clock
+            or session.identity.expires_at <= clock):
+        return OfflineCoreReplyAssessment("SESSION_REQUIRED", portal_status=401)
+    # Never accept a detached signature/ALLOW or infer native GLPI rights.
+    assessment = assess_core_authz_reply_offline(
+        status_code, payload, headers, None, actor=session.identity,
+        binding=binding, plan=plan, env=env, now=clock)
+    if assessment.kind != "CURRENT_CORE_NEGATIVE":
+        return OfflineCoreReplyAssessment("INVALID")
+    return assessment
