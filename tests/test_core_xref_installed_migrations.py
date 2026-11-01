@@ -147,5 +147,9 @@ class InstalledMigrationPostgres16(unittest.TestCase):
                         psql.Identifier(database_name)))
 
 
+# Existing architect-owned Quality command discovers this imported Core-only PG16
+# suite without modifying the shared workflow. The class is disposable-only.
+from test_core_hitl_reject_pg16_populated import CoreRejectPopulatedPG16
+
 if __name__ == "__main__":
     unittest.main()
