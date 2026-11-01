@@ -19,6 +19,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 import test_worker_core_pg16_temporal_combined as base
+import test_worker_core_dead_positive_pg16 as positive
 from test_worker_hitl_reject_notification import SyntheticRejectSink
 from policy.main import Decision, evaluate
 from worker.hitl_reject_vertical_projection import (
@@ -33,10 +34,10 @@ from worker.hitl_reject_vertical_projection import (
     and os.getenv("AIOPS_CI_VERTICAL_REJECT") == "YES",
     "isolated PG16 + Temporal CI only",
 )
-class WorkerRejectVerticalPG16(base.CombinedCoreWorkerPG16):
+class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
     # Base owns PG16 migration setup and synthetic immutable fixture. No
     # historical SQL-injected DEAD tests or inherited base.setUp are run.
-    for _old in dir(base.CombinedCoreWorkerPG16):
+    for _old in dir(positive.CoreDeadPositiveWorkerContract):
         if _old.startswith("test_"):
             locals()[_old] = None
     del _old
