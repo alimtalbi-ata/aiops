@@ -114,7 +114,7 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                     env=env, check=True, timeout=90,
                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                 script = sqlfile.read_text(encoding="utf-8")
-                incompatible = "SET transaction_timeout = 0;\\n"
+                incompatible = "SET transaction_timeout = 0;\n"
                 self.assertLessEqual(script.count(incompatible), 1)
                 # PostgreSQL 16 does not support the PG18-only SET; no data,
                 # DDL or immutable ledger statement is changed.
