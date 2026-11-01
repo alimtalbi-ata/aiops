@@ -13,6 +13,9 @@ import json
 import socket
 import os
 import secrets
+import subprocess
+import sys
+import time
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -507,6 +510,181 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
             thread.join(timeout=5)
             self.assertFalse(thread.is_alive(), "TCP gateway did not stop")
 
+
+
+    async def test_05_independent_core_tcp_temporal_server_restart_persistent_reject(self):
+        """T1 disposable: separate Core TCP PID and persistent Temporal server restart.
+
+        The ACK reply is dropped by a deterministic loopback gateway after the
+        independent Core HTTP process commits to PG16. This is NOT packet loss
+        on the wire or an external identity attestation.
+        """
+        import httpx
+        from temporalio.testing import WorkflowEnvironment
+        from temporalio.worker import Worker
+
+        first = self._fixture()
+        self._write_synthetic_proofs()
+        # Pick a local-only ephemeral port. Core is a separate OS process;
+        # unlike TestClient, requests cross a real TCP Core HTTP boundary.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        code = (
+            "from fastapi import FastAPI\n"
+            "from core.hitl_reject_delivery import router\n"
+            "import uvicorn\n"
+            "app = FastAPI()\n"
+            "app.include_router(router)\n"
+            f"uvicorn.run(app, host='127.0.0.1', port={port}, "
+            "access_log=False, log_level='error')\n"
+        )
+        env_vars = dict(os.environ)
+        env_vars["DATABASE_URL"] = self.url
+        core_process = subprocess.Popen(
+            [sys.executable, "-c", code], cwd=str(ROOT), env=env_vars,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        gateway = None
+        gateway_thread = None
+        upstream = None
+        try:
+            for _ in range(100):
+                if core_process.poll() is not None:
+                    self.fail("independent Core TCP service exited before ready")
+                try:
+                    with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                        break
+                except OSError:
+                    await asyncio.sleep(0.1)
+            else:
+                self.fail("independent Core TCP service did not start")
+
+            upstream = httpx.Client(
+                base_url=f"http://127.0.0.1:{port}",
+                timeout=10.0, trust_env=False,
+            )
+            gateway = ThreadingHTTPServer(("127.0.0.1", 0), _LoopbackAckDropGateway)
+            gateway.core_client = upstream
+            gateway.drop_once = True
+            gateway.dropped_ack = None
+            gateway_thread = threading.Thread(
+                target=gateway.serve_forever, daemon=True)
+            gateway_thread.start()
+            queue = "ci-core-tcp-restart-" + uuid.uuid4().hex
+            sqlite_path = str(Path(self.temp.name) / ("temporal-" + queue + ".sqlite"))
+            signals_seen = []
+
+            async with httpx.AsyncClient(
+                    base_url=f"http://127.0.0.1:{gateway.server_port}",
+                    timeout=10.0, trust_env=False) as tcp:
+                async def post(path, body):
+                    response = await tcp.post(
+                        path, json=body,
+                        headers={"Authorization": "Bearer " + self.bearer})
+                    data = response.json()
+                    self.assertIs(data["execution_allowed"], False)
+                    self.assertIs(data["effect_allowed"], False)
+                    return response.status_code, data
+
+                handle = None
+
+                async def signal(run_id, payload):
+                    self.assertEqual(payload["decision"], "REJECT")
+                    self.assertEqual(payload["run_id"], run_id)
+                    self.assertIs(payload["notification_only"], True)
+                    self.assertIs(payload["execution_allowed"], False)
+                    self.assertIs(payload["effect_allowed"], False)
+                    self.assertNotIn("lease_token", payload)
+                    signals_seen.append(payload["event_id"])
+                    await handle.signal(
+                        SyntheticRejectSink.reject_notification, payload)
+
+                # First real Temporal dev server, with durable disposable SQLite.
+                async with await WorkflowEnvironment.start_local(
+                        dev_server_database_filename=sqlite_path) as temporal_first:
+                    handle = await temporal_first.client.start_workflow(
+                        SyntheticRejectSink.run, id=queue, task_queue=queue)
+                    async with Worker(
+                            temporal_first.client, task_queue=queue,
+                            workflows=[SyntheticRejectSink]):
+                        with self.assertRaises(httpx.TransportError):
+                            await deliver_core_reject_once(
+                                tenant_id=TENANT, owner=OWNER,
+                                post=post, signal=signal)
+                        for _ in range(60):
+                            if await handle.query(SyntheticRejectSink.count) == 1:
+                                break
+                            await asyncio.sleep(0.1)
+                        else:
+                            self.fail("first durable Temporal REJECT not observed")
+                    self.assertEqual(len(signals_seen), 1)
+                    with self.psycopg.connect(self.url) as db:
+                        self.assertEqual(db.execute(
+                            "select status,attempts from aiops.hitl_decision_outbox "
+                            "where event_id=%s", (first["event"],)).fetchone(),
+                            ("DELIVERED", 1))
+                    self.assertEqual(gateway.dropped_ack["response"]["status"],
+                                     "DELIVERED")
+                # The Temporal SERVER has now shut down, not merely its Worker.
+                # Its SQLite file is reused by a newly launched server.
+                self.assertTrue(Path(sqlite_path).is_file())
+                second = self._fixture()
+                self._write_synthetic_proofs()
+                async with await WorkflowEnvironment.start_local(
+                        dev_server_database_filename=sqlite_path) as temporal_second:
+                    handle = temporal_second.client.get_workflow_handle(queue)
+                    async with Worker(
+                            temporal_second.client, task_queue=queue,
+                            workflows=[SyntheticRejectSink]):
+                        # Exact committed ACK replay: idempotent, no new signal.
+                        dropped = gateway.dropped_ack
+                        code, replay = await post(dropped["path"], dropped["body"])
+                        self.assertEqual((code, replay["status"], replay["idempotent"]),
+                                         (200, "DELIVERED", True))
+                        stale = dict(dropped["body"])
+                        stale["lease_token"] = "Z" * 48
+                        code, denied = await post(dropped["path"], stale)
+                        self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+                        self.assertEqual(len(signals_seen), 1)
+                        receipts = await deliver_core_reject_once(
+                            tenant_id=TENANT, owner=OWNER, post=post, signal=signal)
+                        self.assertEqual(len(receipts), 1)
+                        self.assertEqual(receipts[0]["status"], "DELIVERED")
+                        result = await asyncio.wait_for(handle.result(), timeout=30)
+                        self.assertEqual(
+                            [v["run_id"] for v in result],
+                            [first["run"], second["run"]])
+                        self.assertEqual(
+                            len({v["event_id"] for v in result}), 2)
+                        self.assertEqual(
+                            signals_seen, [first["event"], second["event"]])
+                with self.psycopg.connect(self.url) as db:
+                    self.assertEqual(db.execute(
+                        "select status,attempts from aiops.hitl_decision_outbox "
+                        "where event_id=%s", (first["event"],)).fetchone(),
+                        ("DELIVERED", 1))
+                    self.assertEqual(db.execute(
+                        "select status,attempts from aiops.hitl_decision_outbox "
+                        "where event_id=%s", (second["event"],)).fetchone(),
+                        ("DELIVERED", 1))
+                self.assertEqual(self._claim()[1]["items"], [])
+                self._no_effect()
+        finally:
+            if gateway is not None:
+                gateway.shutdown()
+                gateway.server_close()
+            if gateway_thread is not None:
+                gateway_thread.join(timeout=5)
+            if upstream is not None:
+                upstream.close()
+            core_process.terminate()
+            try:
+                core_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                core_process.kill()
+                core_process.wait(timeout=5)
 
 
 if __name__ == "__main__":

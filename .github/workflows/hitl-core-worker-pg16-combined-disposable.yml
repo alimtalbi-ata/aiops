@@ -54,7 +54,7 @@ jobs:
           set -eu
           test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
           python3 -m venv /tmp/hitl-combined-venv
-          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0"
+          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "uvicorn==0.35.0"
           /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_pg16_temporal_combined.py
       - name: Combined Core ASGI HTTP PG16 and Temporal test Worker restart
         shell: bash
@@ -76,17 +76,19 @@ jobs:
           log_path = "/tmp/hitl-combined.log"
           log = open(log_path).read() if os.path.isfile(log_path) else ""
           combined_ok = bool(
-              re.search(r"(?m)^Ran 4 tests in [0-9.]+s$", log)
+              re.search(r"(?m)^Ran 5 tests in [0-9.]+s$", log)
               and re.search(r"(?m)^OK$", log))
           tcp_boundary_pass = (combined_ok and
               "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
+          independent_core_temporal_restart_pass = (combined_ok and
+              "test_05_independent_core_tcp_temporal_server_restart_persistent_reject" in log)
           worker_restart_pass = (combined_ok and
               "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
           report = {
               "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
               "core_claim_ack": "ACTUAL_FASTAPI_ASGI_HTTP_AND_POPULATED_PG16_IF_PASS",
-              "core_http": "ASGI_TESTCLIENT_UPSTREAM_NOT_DEPLOYED_TCP_CORE",
-              "http_network": "LOOPBACK_TCP_GATEWAY_IF_PASS" if tcp_boundary_pass else "NOT_QUALIFIED",
+              "core_http": ("INDEPENDENT_LOOPBACK_CORE_TCP_PROCESS" if independent_core_temporal_restart_pass else "ASGI_TESTCLIENT_UPSTREAM_NOT_DEPLOYED_TCP_CORE"),
+              "http_network": ("LOOPBACK_TCP_GATEWAY_AND_INDEPENDENT_CORE" if independent_core_temporal_restart_pass else ("LOOPBACK_TCP_GATEWAY_IF_PASS" if tcp_boundary_pass else "NOT_QUALIFIED")),
               "tcp_ack_response_drop": (
                   "OBSERVED_CI_DISPOSABLE_GATEWAY_CLOSE_AFTER_CORE_COMMIT"
                   if tcp_boundary_pass else "NOT_TESTED_OR_FAILED"),
@@ -95,10 +97,13 @@ jobs:
               "temporal_test_worker_restart": (
                   "OBSERVED_CI_DISPOSABLE" if worker_restart_pass
                   else "NOT_TESTED_OR_FAILED"),
-              "temporal_server_restart": "NOT_TESTED",
+              "temporal_server_restart": ("OBSERVED_CI_DISPOSABLE_SQLITE_PERSISTED" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "independent_core_tcp_service": ("OBSERVED_CI_DISPOSABLE_SEPARATE_PID" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "temporal_partition": "CONTROLLED_SERVER_STOP_START_NOT_NETWORK_PARTITION",
               "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT",
-              "boundary_scope": "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER",
+              "boundary_scope": ("GATEWAY_CLOSE_AFTER_INDEPENDENT_CORE_TCP_COMMIT_NOT_PACKET_LOSS" if independent_core_temporal_restart_pass else "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER"),
               "real_network_ack_loss": "NOT_TESTED",
+              "ack_gateway_close_upstream": ("INDEPENDENT_CORE_TCP_AFTER_DB_COMMIT" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
               "decision": "REJECT",
               "execution_allowed": False,
               "effect_allowed": False,
