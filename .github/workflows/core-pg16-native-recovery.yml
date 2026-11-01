@@ -57,7 +57,7 @@ jobs:
           AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
           /usr/lib/postgresql/16/bin/pg_dump --version | grep -F '(PostgreSQL) 16.'
           /usr/lib/postgresql/16/bin/pg_restore --version | grep -F '(PostgreSQL) 16.'
       - name: Establish disposable loopback-only PostgreSQL connection
