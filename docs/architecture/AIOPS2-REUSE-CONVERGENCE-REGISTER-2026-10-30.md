@@ -581,3 +581,17 @@ Reuse decision: source #244/#245/#246/#247 are focused source branches; copy exa
 ## 2026-11-01 03:48 CET reuse register delta
 
 Architect selectively ported source PR #250 Core (6 paths), #251 Worker (4), #249 Portal (3), #248 ACME (4) into sole Draft #234. No wholesale history or duplicated migrations. Exact source and candidate commit references, CI, scope, dependency, rollback and four-plane automation status: `docs/release/AIOPS2-INTEGRATION-CYCLE-2026-11-01-0348.md`. Source CI cannot qualify final candidate. Core native GLPI actor rights and real PG16 claim/ACK unqualified; Portal dispatch=false, Worker mock Core wire, ACME synthetic UNKNOWN governance. D1/D2 NOT_QUALIFIED, D3 NO_GO, D4 NOT_ATTESTED; #196 FAIL, cost UNKNOWN. RELEASE_STABLE=NO_GO.
+
+## Architect integration checkpoint — 2026-11-01 04:50 CET (Europe/Paris)
+
+Decision: sole DEV Draft candidate #234, RELEASE_STABLE=NO_GO. No main merge/push, real GLPI write, Debian/SSH, LIVE or executor. Main SHA ae7c3e5102b99a66bd7806d602146f1309a9749d. Candidate after product port 7321d140ae6658c7e7853422f3af7528c59d97b0 (29 ahead / 0 behind, 81 paths).
+
+Selective SOURCE_REVIEWED port, not source-branch merge: ACME #252 HEAD 6914360b032a5a9a36e5470da395a96bd29afbcc (4 paths, 15-stage ITIL plan NOT_EXECUTED); Portal #253 HEAD 8751db0a2459d29fd3cd3d4ff562289dbed5301d (3 paths, Core UNKNOWN wire, no ALLOW); Core #254 HEAD db3ea1185eb3a991dade183ed7c24587d376317a (3 paths, PG16 populated REJECT tests, synthetic owner HMAC); HITL #255 HEAD c8f135d458b4527210431a5ea5f344495e854616 (3 paths, ASGI HTTP/PG16/Temporal test Worker, REJECT only). Thirteen disjoint owner paths selected by pinned blob SHA. Source CI successful on their own heads; candidate new-head CI PENDING.
+
+Contract order: installed 001/004/009 AI/010 Evidence/011 HITL/012 xref -> Core REJECT claim/ACK -> Worker Temporal test Worker -> Portal negative wire -> ACME synthetic planned vertical. Actor+tenant ALLOW blocked on native GLPI User/Profile/Entity rights, independent OIDC-to-GLPI mapping, nonce/revocation and signed-response contract. Fifteen planned steps are NOT_EXECUTED, no runtime E2E claim.
+
+WIP <=3 P0: Portal ACL (Portal paths); Core GLPI rights, durable replay and migrations (Core paths); Policy/HITL Core-Worker REJECT (Worker paths). ACME P1 fixtures/tools. Architect owns shared workflows, release docs, candidate ref. No overlapping owner paths.
+
+Gates: D0 candidate exact-head CI NOT_VERIFIED after port; D1 combined business integration NOT_QUALIFIED; D2 same-SHA browser/API lifecycle NOT_QUALIFIED; D3 semantic kit and install/upgrade/rollback NO_GO; D4 client signoff NOT_ATTESTED. SOURCE_REVIEWED != CI_PASS != INTEGRATION_PASS != RUNTIME_OBSERVED. #196 FAIL; provider-reported tokens only, cost UNKNOWN.
+
+Rollback: revert candidate-only port commit 7321d140ae6658c7e7853422f3af7528c59d97b0 on a fresh branch, rerun exact-head CI. Never rewrite main. Evidence in source PRs #252/#253/#254/#255 and issue #186.

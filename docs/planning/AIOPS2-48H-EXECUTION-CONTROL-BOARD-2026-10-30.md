@@ -684,3 +684,17 @@ Board checkpoint: owner P0 Core/Portal/HITL, ACME P1; no promotion until combine
 ## 2026-11-01 03:48 CET architect control-board checkpoint
 
 One Draft candidate #234, DEV main base `ae7c3e5102b99a66bd7806d602146f1309a9749d`. Focused ports: Core #250 → `c006d1be` (6 paths), Worker #251 → `cd35d584` (4), Portal #249 → `0938315d` (3), ACME #248 → `d1372c4e` (4). Source Quality all 3/3, Worker dedicated 2/2; final candidate CI pending, no green-by-proxy. WIP P0 3: Core native GLPI actor ACL + PG16 claim/ACK; Portal signed wire (dispatch false); Policy Core+Worker real disposable integration. ACME P1 pinned Twin source/UNKNOWN. D1/D2 NOT_QUALIFIED; D3 NO_GO; D4 NOT_ATTESTED; #196 FAIL, cost UNKNOWN. Detailed exact SHAs, CI, A/B/C/D automation, rollback: `docs/release/AIOPS2-INTEGRATION-CYCLE-2026-11-01-0348.md`. RELEASE_STABLE=NO_GO.
+
+## Architect integration checkpoint — 2026-11-01 04:50 CET (Europe/Paris)
+
+Decision: sole DEV Draft candidate #234, RELEASE_STABLE=NO_GO. No main merge/push, real GLPI write, Debian/SSH, LIVE or executor. Main SHA ae7c3e5102b99a66bd7806d602146f1309a9749d. Candidate after product port 7321d140ae6658c7e7853422f3af7528c59d97b0 (29 ahead / 0 behind, 81 paths).
+
+Selective SOURCE_REVIEWED port, not source-branch merge: ACME #252 HEAD 6914360b032a5a9a36e5470da395a96bd29afbcc (4 paths, 15-stage ITIL plan NOT_EXECUTED); Portal #253 HEAD 8751db0a2459d29fd3cd3d4ff562289dbed5301d (3 paths, Core UNKNOWN wire, no ALLOW); Core #254 HEAD db3ea1185eb3a991dade183ed7c24587d376317a (3 paths, PG16 populated REJECT tests, synthetic owner HMAC); HITL #255 HEAD c8f135d458b4527210431a5ea5f344495e854616 (3 paths, ASGI HTTP/PG16/Temporal test Worker, REJECT only). Thirteen disjoint owner paths selected by pinned blob SHA. Source CI successful on their own heads; candidate new-head CI PENDING.
+
+Contract order: installed 001/004/009 AI/010 Evidence/011 HITL/012 xref -> Core REJECT claim/ACK -> Worker Temporal test Worker -> Portal negative wire -> ACME synthetic planned vertical. Actor+tenant ALLOW blocked on native GLPI User/Profile/Entity rights, independent OIDC-to-GLPI mapping, nonce/revocation and signed-response contract. Fifteen planned steps are NOT_EXECUTED, no runtime E2E claim.
+
+WIP <=3 P0: Portal ACL (Portal paths); Core GLPI rights, durable replay and migrations (Core paths); Policy/HITL Core-Worker REJECT (Worker paths). ACME P1 fixtures/tools. Architect owns shared workflows, release docs, candidate ref. No overlapping owner paths.
+
+Gates: D0 candidate exact-head CI NOT_VERIFIED after port; D1 combined business integration NOT_QUALIFIED; D2 same-SHA browser/API lifecycle NOT_QUALIFIED; D3 semantic kit and install/upgrade/rollback NO_GO; D4 client signoff NOT_ATTESTED. SOURCE_REVIEWED != CI_PASS != INTEGRATION_PASS != RUNTIME_OBSERVED. #196 FAIL; provider-reported tokens only, cost UNKNOWN.
+
+Rollback: revert candidate-only port commit 7321d140ae6658c7e7853422f3af7528c59d97b0 on a fresh branch, rerun exact-head CI. Never rewrite main. Evidence in source PRs #252/#253/#254/#255 and issue #186.

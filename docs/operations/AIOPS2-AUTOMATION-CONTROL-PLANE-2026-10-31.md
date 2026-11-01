@@ -133,3 +133,12 @@ Automation planes: A Debian SRV-DEB-05 cron */1 requested but UNATTESTED (no SSH
 ## 2026-11-01 03:48 CET A/B/C/D control-plane observation
 
 A Debian SRV-DEB-05 cron */1 requested, UNATTESTED; host user, working dir, PATH, flock, timeout, exit, retries, logs, heartbeat, last success and next execution UNKNOWN; no host access. B GitHub Quality on main has `23 2 * * *` UTC plus PR/push/dispatch; PR exact-head runs are not schedule runs, no schedule-triggered success attested. C five ChatGPT owner/architect schedules enabled HOURLY, all five `next_run_time=null`; future cadence NEXT_UNKNOWN; latest owner handoffs on #248/#249/#250/#251 reviewed. D ACME/Chromium/PostgreSQL 16/Temporal disposable lab, no Debian/NGX/real GLPI runtime evidence. Offline heartbeat gate is not installed on Debian and cannot assert missed host runs. New integration #234 source ports and gates documented in `docs/release/AIOPS2-INTEGRATION-CYCLE-2026-11-01-0348.md`. No second cron, host/runner mutation, GLPI write, LIVE or executor. RELEASE_STABLE=NO_GO.
+
+### Automation control checkpoint — 2026-11-01 04:50 CET
+| Plane | Owner / cadence / command | Environment | Last success | Next | Evidence / alert / recovery |
+|---|---|---|---|---|---|
+| A Debian SRV-DEB-05 | Host operator, requested */1; actual cron/systemd/user/cwd/PATH/flock/timeout/retry UNKNOWN | Debian host | UNATTESTED | UNKNOWN | No host heartbeat. Inventory logs/secrets/idempotence before any second scheduler; missed-run NO_SUCCESS_EVIDENCE. |
+| B GitHub | CI architect, main Quality 23 2 * * * UTC, PR/push/dispatch; new #255 dedicated path-scoped PR workflow | Hosted disposable | Prior #234 6/6 on 98659d95; new candidate CI PENDING | Schedule next not independently observed | Verify event=schedule, exact checkout, artifact retention and conclusion; PR green is not schedule heartbeat. |
+| C ChatGPT 1/5–5/5 | Four owners + architect, hourly configured | ChatGPT | Five enabled, last_run present | Five next_run_time=null | NEXT_UNKNOWN; check completed handoffs, missed run after 1h+grace, duplicates. |
+| D Lab | ACME seed 20261018, Chromium, PG16, Temporal test Worker, on demand | Synthetic/disposable | Source #252–#255 isolated CI SUCCESS | N/A | Record seed/version/source SHA/artifact; no Debian/NGX/GLPI runtime inference. |
+No Debian heartbeat agent installed. Offline scripts/automation_heartbeat_gate.py remains the versioned missed-run gate.
