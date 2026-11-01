@@ -361,6 +361,24 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
             self.assertIn("HttpOnly", response.headers["set-cookie"])
             self.assertNotIn(VIEWER, response.headers["location"])
             self.assertNotIn(SERVICE, response.headers["location"])
+            state = parse_qs(urlsplit(response.headers["location"]).query)["state"][0]
+            state_cookie = response.headers["set-cookie"].split(";", 1)[0]
+            # Cookies are not port-scoped. Even a copied secure state cookie
+            # cannot authorize a callback on :17777 or an HTTP downgrade.
+            with patch.object(oidc_session, "_exchange",
+                              side_effect=AssertionError("IdP exchange")) as exchange:
+                for wrong_url in (
+                    "https://portal.example.test:17777/auth/oidc/callback",
+                    "http://portal.example.test:7777/auth/oidc/callback",
+                ):
+                    with self.subTest(callback=wrong_url):
+                        wrong = self.client.get(
+                            wrong_url, params={"code": "fixture", "state": state},
+                            headers={"Cookie": state_cookie})
+                        self.assertEqual(wrong.status_code, 401)
+                        self.assertEqual(wrong.json()["state"], "UNKNOWN")
+                        self.assertNotIn("set-cookie", wrong.headers)
+                exchange.assert_not_called()
         for rejected in (
             "https://portal.example.test:17777/auth/oidc/callback",
             "https://portal.example.test:8443/auth/oidc/callback",
@@ -379,6 +397,8 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
             "https_17777_redirect": 503,
             "https_other_port_redirect": 503,
             "http_7777_redirect": 503,
+            "https_17777_callback": 401,
+            "http_7777_callback": 401,
             "host_port_binding_verified": False,
             "real_idp_or_glpi_attested": False,
         })
