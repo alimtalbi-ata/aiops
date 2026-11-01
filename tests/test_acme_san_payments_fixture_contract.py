@@ -163,5 +163,225 @@ class AcmeSanPaymentsFixtureContractTests(unittest.TestCase):
         self.assertNotIn("ACME-DEMO-PAY-002", sql)
 
 
+
+# Core #291 informational source receipt: offline, adversarial shape ONLY.
+# These TEST_ONLY placeholders are not Core/GLPI/PG16 receipts or runtime IDs.
+import copy as _copy
+from tools import generate_acme_incidents as _acme_gen
+from tools import acme_synthetic_three_domain_receipt as _three
+from tools import acme_synthetic_core_source_receipt_gate as _receipt_gate
+
+
+class AcmeCoreSourceReceiptShapeGapTests(unittest.TestCase):
+    NOW = 2_000_000_000
+    TEST_TENANT = "TEST_ONLY_TENANT_A"
+    TEST_ACTOR = "TEST_ONLY_ACTOR_A"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest = _acme_gen.replay(seed=20261018)
+        cls.local = _three.build_receipt(cls.manifest)
+
+    def candidate(self):
+        rows = self.local["source_event_rows"]
+        events = [{
+            "sequence": i,
+            "source_event_id": r["source_event_id"],
+            "evidence_id": "TEST_ONLY_EVIDENCE_" + str(i),
+            "payload_sha256": format(i + 10, "064x"),
+            "full_event_sha256": format(i + 20, "064x"),
+        } for i, r in enumerate(rows, 1)]
+        candidate = {
+            "schema": _receipt_gate.CORE_RECEIPT_SCHEMA,
+            "decision": "UNKNOWN", "link_status": "UNKNOWN",
+            "source_preflight": "PASS_SYNTHETIC_ONLY",
+            "transport": "TLS_AUTHENTICATED_NONPORTABLE",
+            "portable_signature": "NONE",
+            "issuer": "TEST_ONLY_ISSUER",
+            "source_system": "CORE_CANONICAL_READBACK",
+            "tenant_id": self.TEST_TENANT,
+            "incident_id": "TEST_ONLY_INCIDENT",
+            "run_id": "TEST_ONLY_RUN",
+            "glpi_instance_id": "TEST_ONLY_GLPI_INSTANCE",
+            "ticket_id": "TEST_ONLY_TICKET",
+            "glpi_entity_id": "TEST_ONLY_ENTITY",
+            "permission": "run:read",
+            "actor_issuer": "TEST_ONLY_ACTOR_ISSUER",
+            "actor_subject_sha256": hashlib.sha256(self.TEST_ACTOR.encode()).hexdigest(),
+            "source_event_id": events[0]["source_event_id"],
+            "source_payload_hash": events[0]["payload_sha256"],
+            "observed_at": self.NOW - 60,
+            "known_at": self.NOW - 30,
+            "expires_at": self.NOW + 120,
+            "event_count": 7,
+            "hash_domains": {
+                "payload": _receipt_gate.CORE_PAYLOAD_DOMAIN,
+                "full_event": _receipt_gate.CORE_FULL_DOMAIN,
+                "acme_full_event_equivalence": "NOT_VERIFIED",
+            },
+            "events": events,
+            "source_proof_sha256": "c" * 64,
+        }
+        self.rehash(candidate)
+        return candidate
+
+    @staticmethod
+    def rehash(candidate):
+        candidate["receipt_sha256"] = _receipt_gate.core_receipt_digest({
+            k: v for k, v in candidate.items() if k != "receipt_sha256"})
+
+    def inspect(self, candidate):
+        return _receipt_gate.inspect_untrusted_receipt(
+            self.manifest, candidate=candidate, now=self.NOW,
+            expected_test_tenant=self.TEST_TENANT,
+            expected_test_actor_sha256=hashlib.sha256(
+                self.TEST_ACTOR.encode()).hexdigest())
+
+    def test_absent_core_receipt_stays_unavailable_and_all_stages_not_executed(self):
+        result = _receipt_gate.inspect_untrusted_receipt(self.manifest)
+        self.assertEqual(result["result"], "UNAVAILABLE")
+        self.assertEqual(result["core_receipt_shape"], "NOT_SUPPLIED")
+        self.assertEqual(len(result["source_event_ids"]), 7)
+        self.assertEqual(len(result["itil_stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(x["status"] == "NOT_EXECUTED"
+                            for x in result["itil_stages"] + result["checkpoints"]))
+
+    def test_test_only_core_style_shape_never_promotes_authority(self):
+        result = self.inspect(self.candidate())
+        self.assertEqual(result["core_receipt_shape"], "PASS_UNTRUSTED_TEST_INPUT_ONLY")
+        self.assertEqual(result["result"], "UNAVAILABLE")
+        self.assertEqual(result["cross_domain_equivalence"], "NOT_VERIFIED")
+        for field in ("tenant_id", "actor_subject", "incident_id", "run_id",
+                      "glpi_ticket_id", "hitl_approval"):
+            self.assertIsNone(result[field])
+        self.assertEqual(result["evidence_ids"], [])
+        self.assertFalse(result["transport_authenticated"])
+        self.assertFalse(result["tenant_authorized"])
+        self.assertFalse(result["revocation_checked"])
+
+    def test_foreign_tenant_denied_even_with_rehashed_shape(self):
+        c = self.candidate()
+        c["tenant_id"] = "TEST_ONLY_TENANT_B"
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "foreign TEST_ONLY tenant"):
+            self.inspect(c)
+
+    def test_foreign_actor_denied_even_with_rehashed_shape(self):
+        c = self.candidate()
+        c["actor_subject_sha256"] = hashlib.sha256(b"TEST_ONLY_ACTOR_B").hexdigest()
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "foreign TEST_ONLY actor"):
+            self.inspect(c)
+
+    def test_missing_or_duplicate_event_denied(self):
+        for change in ("missing", "duplicate"):
+            with self.subTest(change=change):
+                c = self.candidate()
+                if change == "missing":
+                    c["events"].pop()
+                else:
+                    c["events"][1]["source_event_id"] = c["events"][0]["source_event_id"]
+                self.rehash(c)
+                with self.assertRaisesRegex(ValueError, "seven events|foreign, missing"):
+                    self.inspect(c)
+
+    def test_reordered_event_denied(self):
+        c = self.candidate()
+        c["events"][0], c["events"][1] = c["events"][1], c["events"][0]
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "reordered event"):
+            self.inspect(c)
+
+    def test_swapped_core_hash_domains_denied(self):
+        c = self.candidate()
+        c["events"][0]["payload_sha256"], c["events"][0]["full_event_sha256"] = (
+            c["events"][0]["full_event_sha256"], c["events"][0]["payload_sha256"])
+        c["source_payload_hash"] = c["events"][0]["payload_sha256"]
+        self.rehash(c)
+        # Swapping two opaque valid Core-shaped hashes cannot be authenticated
+        # by an offline ACME parser: it MUST remain UNAVAILABLE, not VERIFIED.
+        self.assertEqual(self.inspect(c)["result"], "UNAVAILABLE")
+
+    def test_acme_hash_masquerading_as_core_hash_denied(self):
+        c = self.candidate()
+        c["events"][0]["payload_sha256"] = self.local["source_event_rows"][0][
+            "acme_full_event_sha256"]
+        c["source_payload_hash"] = c["events"][0]["payload_sha256"]
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "domains conflated"):
+            self.inspect(c)
+
+    def test_stale_and_future_receipts_denied(self):
+        for key, value in (("observed_at", self.NOW - 301),
+                           ("known_at", self.NOW + 1),
+                           ("expires_at", self.NOW - 1)):
+            with self.subTest(key=key):
+                c = self.candidate()
+                c[key] = value
+                self.rehash(c)
+                with self.assertRaisesRegex(ValueError, "stale, future"):
+                    self.inspect(c)
+
+    def test_boolean_timestamp_denied(self):
+        c = self.candidate()
+        c["known_at"] = True
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "boolean timestamp"):
+            self.inspect(c)
+
+    def test_revocation_cannot_be_inferred_from_core_receipt_shape(self):
+        c = self.candidate()
+        c["revoked"] = False  # forged field: Core informational receipt has no revocation proof
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "missing or extra"):
+            self.inspect(c)
+
+    def test_fake_portable_signature_or_allow_denied(self):
+        for field, value in (("portable_signature", "SIGNED"),
+                             ("decision", "ALLOW"),
+                             ("source_preflight", "PASS_LIVE")):
+            with self.subTest(field=field):
+                c = self.candidate()
+                c[field] = value
+                self.rehash(c)
+                with self.assertRaisesRegex(ValueError, "forged authority"):
+                    self.inspect(c)
+
+    def test_receipt_digest_tampering_denied(self):
+        c = self.candidate()
+        c["receipt_sha256"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            self.inspect(c)
+
+    def test_source_payload_must_bind_same_selected_event(self):
+        c = self.candidate()
+        c["source_payload_hash"] = c["events"][1]["payload_sha256"]
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "not bound to selected event"):
+            self.inspect(c)
+
+    def test_source_event_outside_seven_denied(self):
+        c = self.candidate()
+        c["source_event_id"] = "TEST_ONLY_FOREIGN_EVENT"
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "outside pinned replay"):
+            self.inspect(c)
+
+    def test_duplicate_test_only_evidence_denied(self):
+        c = self.candidate()
+        c["events"][1]["evidence_id"] = c["events"][0]["evidence_id"]
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "duplicate TEST_ONLY evidence"):
+            self.inspect(c)
+
+    def test_unpinned_replay_tamper_denied_before_receipt_comparison(self):
+        changed = _copy.deepcopy(self.manifest)
+        changed["events"][0]["payload"]["tampered"] = True
+        with self.assertRaises(ValueError):
+            _receipt_gate.inspect_untrusted_receipt(changed, candidate=self.candidate(),
+                                                     now=self.NOW)
+
+
 if __name__ == "__main__":
     unittest.main()
