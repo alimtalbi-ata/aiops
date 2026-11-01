@@ -108,6 +108,51 @@ class ActorLedgerPopulatedPG16(unittest.TestCase):
             self.assertEqual(conn.execute(
                 "select count(*) from aiops.actor_delegation_revocations").fetchone()[0], 2)
 
+    def test_populated_logical_backup_restore_without_dropping_audit(self):
+        """Disposable COPY snapshot/restore into an isolated schema, then rollback.
+
+        This qualifies data round-trip, NOT a destructive persistent downgrade.
+        Production rollback must keep immutable 013 audit tables and restore
+        from a separately verified pg_dump archive if recovery is needed.
+        """
+        from io import BytesIO
+        with self.psycopg.connect(self.url) as conn:
+            self.assertTrue(self.consume(conn, "jti-backup-unique", "nonce-backup-unique"))
+            self.assertTrue(self.revoke(conn, "jti-backup-revoked-unique"))
+            conn.execute("create schema ci_actor_restore")
+            for table, ordering in (
+                ("actor_delegation_nonce_ledger", "issuer, jti_sha256"),
+                ("actor_delegation_revocations", "issuer, jti_sha256"),
+            ):
+                with self.subTest(table=table):
+                    source = "aiops." + table
+                    target = "ci_actor_restore." + table
+                    before = conn.execute(
+                        "select * from " + source + " order by " + ordering).fetchall()
+                    self.assertGreaterEqual(len(before), 1)
+                    snapshot = BytesIO()
+                    with conn.cursor().copy("copy " + source + " to stdout") as copier:
+                        for chunk in copier:
+                            snapshot.write(bytes(chunk))
+                    self.assertGreater(len(snapshot.getvalue()), 0)
+                    conn.execute("create table " + target +
+                                 " (like " + source + " including all)")
+                    with conn.cursor().copy("copy " + target + " from stdin") as copier:
+                        copier.write(snapshot.getvalue())
+                    restored = conn.execute(
+                        "select * from " + target + " order by " + ordering).fetchall()
+                    self.assertEqual(restored, before)
+            # A simulated downgrade must not DROP or mutate the 013 audit
+            # source. Roll back the disposable restore transaction only.
+            conn.rollback()
+        with self.psycopg.connect(self.url) as conn:
+            self.assertIsNone(conn.execute(
+                "select to_regclass('ci_actor_restore.actor_delegation_nonce_ledger')"
+            ).fetchone()[0])
+            self.assertIsNotNone(conn.execute(
+                "select to_regclass('aiops.actor_delegation_nonce_ledger')"
+            ).fetchone()[0])
+
     def test_concurrent_single_winner_and_populated_transaction_rollback(self):
         def compete(_):
             with self.psycopg.connect(self.url) as conn:
