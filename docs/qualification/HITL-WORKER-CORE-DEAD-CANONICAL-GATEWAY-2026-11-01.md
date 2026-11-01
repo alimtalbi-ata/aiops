@@ -34,3 +34,26 @@ Machine-readable receipt schema: aiops.worker-canonical-dead-gateway-replay.v1, 
 Dependency: Core-owned canonical core.main.app route, migrations 001/004/009–014 and immutable Core 014 terminal audit. Any Core API/schema defect belongs to Core; Worker must fail closed, not patch the Core route. CI exact-head run, N/N, artifact URL/checksum and final HEAD are reported separately after verification and posted to issue #186. A green source PR is not a host runtime attestation.
 
 Rollback: close the focused Draft or revert its three Worker-owned files only. Never revert/drop Core 013/014, delete a PG16 volume, or alter the sole candidate directly. Architect alone decides selective port/merge. No shared Quality, architecture board, Portal, ACME, host 7777 or deploy/aiops2-stable edits.
+
+
+## Focused follow-up — concurrent retry after Core DEAD commit (2026-11-01 ~17:30 CET)
+
+**Owner:** Worker tests/workflow/qualification only. **Source base:** sole Draft #234 at `e484f2e17bf4c72e4c5319e2e92f32430b4ec3b0`; **main reference:** `ae7c3e5102b99a66bd7806d602146f1309a9749d`. Prior source #303 has already been selectively ported by the architect: do not re-port. No Core, Portal, ACME, shared Quality, architecture board, candidate or main edit.
+
+A single additional adversarial test `test_13_concurrent_postdead_retry_fencing_after_temporal_restart` uses the **canonical Core main app on independent TCP**, disposable PG16 and migration 014. It acquires eight real Core REJECT claims for one synthetic event; SQL accelerates **lease expiry only**, never writes `DEAD`. Core alone atomically transitions to DEAD and writes one immutable 014 audit receipt. The gateway closes the downstream connection **after Core commits**. This is `INJECTED_GATEWAY_CLOSE`, not a physical packet loss or partition test.
+
+After stopping Temporal and restarting its server with the same persisted SQLite history, the test issues **18 concurrent Core HTTP calls** against that event: six `/dead` replays (all 200 DEAD, idempotent and same 014 SHA256), six late `/ack` calls (all UNKNOWN), and six `/claim` attempts (all empty). Delivery-only service identity cannot use the distinct terminal permission; forged lease token is rejected. The test reads the immutable audit before and after the race, validates canonical SHA256, one receipt row, status DEAD/attempts=8/REJECT, zero DELIVERED, zero Temporal signals and zero effects. `execution_allowed=false` and `effect_allowed=false` on all tested paths; no APPROVE or LIVE.
+
+The dedicated workflow now expects **2/2 combined Worker tests** (historical gateway replay plus new concurrent post-commit race) and **5/5 PG16 DR**. Both JSON receipts are checked against exact `AIOPS_EXPECTED_HEAD_SHA`, canonical payload digests and explicit safety counters. Only **redacted JSON and SHA256 manifests** are uploaded. The raw PG16 dump remains ephemeral on the runner for mandatory `pg_restore 16.15` regression and is NEVER uploaded. No Bearer, lease token, HMAC secret, or raw 014 receipt payload in the uploaded artifacts. Receipt schema `aiops.worker-canonical-dead-concurrent-retry.v1`, file `/tmp/hitl-core-dead-canonical-receipts/canonical-dead-concurrent-retry.json`.
+
+**Proof boundaries:** a deterministic race over one synthetic exhausted event is not universal exactly-once; `physical_packet_loss=NOT_TESTED`, `oidc_glpi_identity=NOT_ATTESTED`, `host_7777=NOT_VERIFIED`, `sql_dead_injection=false`. CI is disposable, not Debian. `RELEASE_STABLE=NO_GO`.
+
+**Commands** (CI, exact-head only after run):
+```bash
+PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_canonical_gateway_pg16.py' -v
+/tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v
+sha256sum --check /tmp/hitl-core-dead-canonical.sha256
+sha256sum --check /tmp/hitl-core-dead-canonical-dr.sha256
+```
+
+**Rollback:** close the focused Draft or revert only this cycle's three Worker-owned file edits. Preserve Core 013/014 immutable audit, migrations and sole candidate. CI URL, exact HEAD, N/N and checksum are reported only after verification and handed to issue #186. No persistent Debian stack, host access, GLPI write, executor or deploy.
