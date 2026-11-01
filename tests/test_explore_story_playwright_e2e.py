@@ -610,6 +610,86 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
 
 
 
+    def test_11_glpi_explicit_403_denial_browser_and_no_positive_authority(self):
+        """Real disposable Chromium: 401/403/503 are distinct; 200 never grants."""
+        anonymous = self.context.request.get(self.base + "/api/portal/itsm")
+        self.assertEqual(anonymous.status, 401)
+        viewer = self.context.request.get(
+            self.base + "/api/portal/itsm",
+            headers={"Authorization": "Bearer " + VIEWER,
+                     "X-GLPI-Permission": "READMY",
+                     "X-Core-Decision": "ALLOW"})
+        self.assertEqual(viewer.status, 503)
+        self.assertFalse(viewer.json()["human_authority"]["human_allow"])
+        self.assertEqual(viewer.json()["authority_sources"]["freshness"], "UNKNOWN")
+
+        observed = []
+        self.page.on("request", lambda request: observed.append(request.url))
+        self.page.goto(self.base + "/itsm")
+        self.assertTrue(self.page.get_by_role("button", name="Approuver HITL").is_disabled())
+        def route_for(code, body):
+            def handler(route):
+                route.fulfill(status=code, content_type="application/json",
+                              body=json.dumps(body))
+            return handler
+
+        cases = (
+            (401, {"state": "UNAUTHORIZED"}, "401 UNAUTHORIZED", "session non autorisée"),
+            (403, {"state": "UNAUTHORIZED"}, "403 FORBIDDEN", "accès refusé"),
+            (503, {"state": "UNKNOWN"}, "503 UNKNOWN", "contrat de source non qualifié"),
+            (200, {"state": "CONNECTED", "decision": "ALLOW",
+                   "ticket_id": "FORGED-TICKET-999",
+                   "run_id": "RUN-FORGED-999"}, "503 UNKNOWN", "réponse non qualifiée"),
+        )
+        for code, body, status_text, source_text in cases:
+            with self.subTest(injected_http=code):
+                handler = route_for(code, body)
+                self.page.route("**/api/portal/itsm", handler)
+                self.page.locator("#glpi-check").click()
+                expect(self.page.locator("#glpi-check-status")).to_contain_text(status_text)
+                expect(self.page.locator('[data-authority-check="idp"]')).to_contain_text(
+                    source_text)
+                expect(self.page.locator("#glpi-check")).to_be_enabled()
+                for action in ("Commenter", "Assigner", "Approuver HITL"):
+                    self.assertTrue(self.page.get_by_role("button", name=action).is_disabled())
+                self.assertNotIn("FORGED-TICKET-999", self.page.locator("body").inner_text())
+                self.assertNotIn("RUN-FORGED-999", self.page.locator("body").inner_text())
+                self.page.unroute("**/api/portal/itsm", handler)
+
+        self.assertFalse(any("/api/core/" in url or "/api/glpi/" in url
+                             or "/api/noc/runs/" in url or "token=" in url
+                             for url in observed))
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")))
+        output.mkdir(parents=True, exist_ok=True)
+        head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        expected = os.environ.get("AIOPS_EXPECTED_HEAD_SHA")
+        if expected:
+            self.assertEqual(head, expected)
+        receipt = {
+            "schema": "aiops.portal.glpi-explicit-denial-browser.v1",
+            "source_head": head,
+            "provenance": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+            "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+            "api_anonymous_http": 401,
+            "api_viewer_without_native_glpi_http": 503,
+            "browser_injected_statuses": [401, 403, 503, 200],
+            "explicit_403_displayed_as": "403 FORBIDDEN",
+            "forged_positive_visible": False,
+            "human_allow": False,
+            "business_upstream_requests": 0,
+            "host_local_7777_operator_reported": True,
+            "external_tls_sso_glpi_unique_entrypoint_attested": False,
+            "release_stable": "NO_GO",
+        }
+        canonical = json.dumps(receipt, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")
+        receipt["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+        (output / "portal-glpi-explicit-denial-browser.json").write_text(
+            json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
 # Quality browser entry point also runs the disposable negative Portal ACL suite.
 from test_portal_acl_browser_e2e import PortalACLChromiumE2E
 # Run the Portal actor-resource contract suite at the same exact CI SHA.
