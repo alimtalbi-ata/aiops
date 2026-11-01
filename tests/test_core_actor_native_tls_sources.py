@@ -164,7 +164,7 @@ class DisposableNativeTLSAuthorityTests(unittest.TestCase):
     def test_actor_subject_to_glpi_user_mismatch_rejected(self):
         self.servers["idp"][0].claims = {**self.claims, "glpi_user_id": 48}
         self.assertFalse(self.preflight()[1])
-        self.assertEqual(self.calls("glpi"), 2)  # getFullSession, then mismatch
+        self.assertEqual(self.calls("glpi"), 1)  # getFullSession rejects wrong actor
 
     def test_native_ticket_read_bit_required(self):
         self.servers["glpi"][0].ticket_right = 0
