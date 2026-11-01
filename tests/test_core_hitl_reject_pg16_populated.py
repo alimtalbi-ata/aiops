@@ -1,4 +1,4 @@
-"""Real Core REJECT claim/ACK HTTP on populated disposable PostgreSQL 16.
+"""Real Core REJECT claim/ACK handlers on populated disposable PostgreSQL 16.
 
 No GLPI network, human approval, executor or LIVE effects. This module is
 imported by the existing installed-migration Quality test (no workflow edits).
@@ -19,8 +19,6 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from core import hitl_reject_delivery as delivery
 from core import itsm_xref as x
 
@@ -79,9 +77,6 @@ class CoreRejectPopulatedPG16(unittest.TestCase):
             cls.env.start()
             cls.db_patch = patch.object(x, "db", side_effect=lambda: psycopg.connect(cls.url))
             cls.db_patch.start()
-            app = FastAPI()
-            app.include_router(delivery.router)
-            cls.app = app
         except Exception:
             cls.tearDownClass()
             raise
@@ -190,11 +185,18 @@ class CoreRejectPopulatedPG16(unittest.TestCase):
 
     def _post(self, suffix, body, token=None, tenant="TEN-A"):
         headers = {"Authorization": "Bearer " + (token or self.token_a)}
-        with TestClient(self.app) as client:
-            response = client.post(
-                "/api/tenants/" + tenant + "/hitl/reject-delivery/" + suffix,
-                json=body, headers=headers)
-        return response.status_code, response.json()
+        # Exercise the real Core route handler and PostgreSQL transaction.
+        # No httpx/TestClient dependency in the isolated PG16 CI job.
+        if suffix == "claim":
+            response = delivery.claim_reject(
+                tenant, body, authorization=headers["Authorization"])
+        else:
+            event, sep, action = suffix.partition("/")
+            if not sep or action != "ack":
+                raise AssertionError("unexpected Core route")
+            response = delivery.ack_reject(
+                tenant, event, body, authorization=headers["Authorization"])
+        return response.status_code, json.loads(response.body)
 
     def _claim(self, token=None, tenant="TEN-A"):
         return self._post("claim", {"owner": "svc-" + tenant, "limit": 1},
@@ -215,7 +217,7 @@ class CoreRejectPopulatedPG16(unittest.TestCase):
                 "select count(*) from aiops.hitl_decision_outbox "
                 "where decision='APPROVE'").fetchone()[0], 0)
 
-    def test_concurrent_real_core_http_one_lease(self):
+    def test_concurrent_real_core_handler_one_lease(self):
         ids, digest = self._fixture()
         barrier = threading.Barrier(2)
         def contender():
