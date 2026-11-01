@@ -413,7 +413,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 "proposal_revision,target_ci_id,action_type,risk_tier,evidence_ids,"
                 "preconditions,expected_postconditions,proposal_hash,status,expires_at) "
                 "values(%s,%s,%s,%s,'CI-SOURCE',1,'CI-SYNTHETIC',"
-                "'COLLECT_DIAGNOSTICS','LOW',%s,'[]','[]',%s,'REJECTED',"
+                "'COLLECT_DIAGNOSTICS','LOW',%s,'[]','[]',%s,'PROPOSED',"
                 "now()+interval '1 hour')",
                 (ids["proposal"], fixture.RUN, ids["analysis"],
                  ids["critique"], evidence_ids, digest))
@@ -425,6 +425,8 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 "%s,now()+interval '1 hour',%s::jsonb)",
                 (ids["approval"], ids["proposal"], digest, "nonce-" + suffix,
                  json.dumps({"synthetic": True, "identity_attested": False})))
+            db.execute("update aiops.action_proposals set status='REJECTED' "
+                       "where proposal_id=%s", (ids["proposal"],))
             db.execute(
                 "insert into aiops.hitl_decision_outbox "
                 "(event_id,proposal_id,run_id,proposal_hash,proposal_revision,"
