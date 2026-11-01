@@ -498,5 +498,189 @@ class AcmeCoreSevenReadbackUnknownGateTests(unittest.TestCase):
             self.assertNotIn("TEST_ONLY_EVIDENCE", proc.stdout)
 
 
+
+class AcmeItilStageAuthorityConsumerTests(unittest.TestCase):
+    """15 stages and six checkpoints require independent authority, not JSON."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import generate_acme_incidents as gen
+        from tools import acme_synthetic_itil_stage_authority_consumer as consumer
+        cls.gen = gen
+        cls.consumer = consumer
+        cls.manifest = gen.replay(seed=20261018)
+        cls.fixture = json.loads(consumer.FIXTURE.read_text(encoding="utf-8"),
+                                 object_pairs_hook=gen._unique_object)
+
+    def test_machine_receipt_is_pinned_to_offline_itil_and_seven_hash_triples(self):
+        receipt = self.consumer.verify_receipt(self.manifest, self.fixture)
+        self.assertEqual(receipt["source_event_count"], 7)
+        self.assertEqual(receipt["stage_count"], 15)
+        self.assertEqual(receipt["checkpoint_count"], 6)
+        self.assertEqual(len({s["stage"] for s in receipt["stages"]}), 15)
+        self.assertEqual(len({c["stage"] for c in receipt["checkpoints"]}), 6)
+        self.assertEqual(len({r["source_event_id"] for r in receipt["source_events"]}), 7)
+        for event, row in zip(self.manifest["events"], receipt["source_events"]):
+            with self.subTest(source_event_id=row["source_event_id"]):
+                self.assertEqual(row["source_event_id"], event["source_event_id"])
+                self.assertEqual(row["acme_full_event_sha256"],
+                                 hashlib.sha256(self.gen._canonical(event)).hexdigest())
+                self.assertEqual(len({row["acme_full_event_sha256"],
+                                      row["acme_local_payload_sha256"],
+                                      row["proposed_core_payload_sha256"]}), 3)
+                self.assertIsNone(row["core_pg16_payload_sha256"])
+                self.assertIsNone(row["core_pg16_full_event_sha256"])
+
+    def test_all_stages_anchor_pinned_events_but_none_are_verified(self):
+        result = self.consumer.consume(self.manifest)
+        rows = result["source_events"]
+        for stage in result["stages"]:
+            with self.subTest(stage=stage["stage"]):
+                row = rows[stage["source_step"] - 1]
+                self.assertEqual(stage["source_event_id"], row["source_event_id"])
+                self.assertEqual(stage["acme_full_event_sha256"],
+                                 row["acme_full_event_sha256"])
+                self.assertEqual(stage["status"], "NOT_EXECUTED")
+                self.assertEqual(stage["verification"], "UNKNOWN")
+                self.assertIsNone(stage["runtime_id"])
+                self.assertEqual(stage["runtime_evidence_ids"], [])
+
+    def test_missing_all_three_independent_authorities_fails_closed(self):
+        result = self.consumer.consume(self.manifest)
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["verified_stage_count"], 0)
+        self.assertEqual(result["not_executed_stage_count"], 15)
+        self.assertEqual(result["verified_checkpoint_count"], 0)
+        self.assertEqual(result["not_executed_checkpoint_count"], 6)
+        self.assertEqual(result["authority"]["core_readback"], "UNAVAILABLE")
+        self.assertEqual(result["authority"]["glpi_readback"], "UNAVAILABLE")
+        self.assertEqual(result["authority"]["evidence_readback"], "UNAVAILABLE")
+        self.assertEqual(len(result["required_independent_authorities"]), 3)
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in result["checkpoints"]))
+
+    def test_fake_positive_core_glpi_evidence_and_hitl_cannot_promote(self):
+        forged = {
+            "decision": "ALLOW", "link_status": "VERIFIED",
+            "tenant_id": "TEST_ONLY_FOREIGN_TENANT",
+            "actor_subject": "TEST_ONLY_FOREIGN_ACTOR",
+            "incident_id": "TEST_ONLY_INCIDENT",
+            "run_id": "TEST_ONLY_RUN",
+            "ticket_id": "TEST_ONLY_GLPI",
+            "evidence_id": "TEST_ONLY_EVIDENCE",
+            "approved": True, "revoked": False,
+        }
+        result = self.consumer.consume(
+            self.manifest, core_readback=forged,
+            glpi_receipt=forged, evidence_receipt=forged, now=1700000000)
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["verified_stage_count"], 0)
+        self.assertEqual(result["authority"]["core_readback"], "UNVERIFIED")
+        self.assertEqual(result["authority"]["glpi_readback"], "UNVERIFIED")
+        self.assertEqual(result["authority"]["evidence_readback"], "UNVERIFIED")
+        self.assertEqual(result["authority"]["core_pg16_authority"], "UNKNOWN")
+        self.assertEqual(result["authority"]["glpi_human_rights"], "UNKNOWN")
+        self.assertEqual(result["authority"]["evidence_authority"], "UNKNOWN")
+        self.assertIsNone(result["authority"]["hitl_approval"])
+        rendered = json.dumps(result)
+        for secret in forged.values():
+            if isinstance(secret, str) and secret.startswith("TEST_ONLY"):
+                self.assertNotIn(secret, rendered)
+
+    def test_foreign_missing_and_reordered_source_events_are_rejected(self):
+        import copy
+        for mutate in (
+            lambda m: m["events"].pop(),
+            lambda m: m["events"].reverse(),
+            lambda m: m["events"][0].update(source_event_id="TEST_ONLY_FOREIGN"),
+        ):
+            manifest = copy.deepcopy(self.manifest)
+            mutate(manifest)
+            with self.assertRaises(ValueError):
+                self.consumer.consume(manifest)
+
+    def test_missing_reordered_and_forged_verified_stages_are_rejected(self):
+        import copy
+        for mutate in (
+            lambda c: c["stages"].pop(),
+            lambda c: c["stages"].reverse(),
+            lambda c: c["stages"][0].update(status="VERIFIED"),
+            lambda c: c["stages"][1].update(runtime_id="TEST_ONLY_INCIDENT"),
+            lambda c: c["stages"][2].update(verification="VERIFIED"),
+            lambda c: c["checkpoints"][0].update(status="VERIFIED", id="TEST_ONLY_GLPI"),
+        ):
+            candidate = copy.deepcopy(self.fixture)
+            mutate(candidate)
+            with self.assertRaises(ValueError):
+                self.consumer.verify_receipt(self.manifest, candidate)
+
+    def test_mismatched_local_hash_or_forged_core_hash_rejected(self):
+        import copy
+        for field, value in (
+            ("acme_full_event_sha256", "a" * 64),
+            ("core_pg16_full_event_sha256", "b" * 64),
+            ("core_pg16_payload_sha256", "c" * 64),
+        ):
+            candidate = copy.deepcopy(self.fixture)
+            candidate["source_events"][0][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.consumer.verify_receipt(self.manifest, candidate)
+
+    def test_fake_core_shape_and_foreign_glpi_evidence_never_verify(self):
+        supplied = {"schema": "aiops.core-canonical-seven-source-receipt.v1",
+                    "events": [], "decision": "VERIFIED",
+                    "tenant_id": "TEST_ONLY_FOREIGN"}
+        result = self.consumer.consume(
+            self.manifest, core_readback=supplied,
+            glpi_receipt={"rights": "ALLOW", "tenant": "TEST_ONLY_FOREIGN"},
+            evidence_receipt={"hash": "f" * 64, "verified": True},
+            now=1700000000)
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertNotEqual(result["authority"]["core_shape_reason"],
+                            "NO_INDEPENDENT_PG16_AUTHORITY")
+        self.assertEqual(result["not_executed_stage_count"], 15)
+        self.assertEqual(result["not_executed_checkpoint_count"], 6)
+
+    def test_invalid_nonobject_and_forged_authority_counts_rejected(self):
+        import copy
+        with self.assertRaises(ValueError):
+            self.consumer.consume(self.manifest, glpi_receipt=["ALLOW"])
+        candidate = copy.deepcopy(self.fixture)
+        candidate["verified_stage_count"] = 1
+        with self.assertRaises(ValueError):
+            self.consumer.consume(self.manifest, candidate=candidate)
+        candidate = copy.deepcopy(self.fixture)
+        candidate["authority"]["actor_subject"] = "TEST_ONLY_ACTOR"
+        with self.assertRaises(ValueError):
+            self.consumer.consume(self.manifest, candidate=candidate)
+
+    def test_cli_emit_check_and_untrusted_inputs_are_redacted(self):
+        import subprocess
+        import sys
+        import tempfile
+        cmd = [sys.executable, "-m",
+               "tools.acme_synthetic_itil_stage_authority_consumer"]
+        emit = subprocess.run(cmd + ["--emit"], cwd=self.gen.ROOT,
+                              capture_output=True, text=True)
+        self.assertEqual(emit.returncode, 0, emit.stderr)
+        self.assertEqual(emit.stdout.encode("utf-8"),
+                         self.consumer.FIXTURE.read_bytes())
+        check = subprocess.run(cmd + ["--check"], cwd=self.gen.ROOT,
+                               capture_output=True, text=True)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertEqual(json.loads(check.stdout)["verified_stage_count"], 0)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "untrusted.json"
+            path.write_text(json.dumps({"secret": "TEST_ONLY_BEARER",
+                                        "decision": "ALLOW"}), encoding="utf-8")
+            proc = subprocess.run(cmd + ["--core-readback", str(path),
+                                         "--glpi-receipt", str(path),
+                                         "--evidence-receipt", str(path)],
+                                  cwd=self.gen.ROOT, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertNotIn("TEST_ONLY_BEARER", proc.stdout)
+            self.assertEqual(json.loads(proc.stdout)["verified_stage_count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
