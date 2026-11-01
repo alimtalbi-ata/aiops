@@ -1523,6 +1523,17 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                     code, empty = await post_b(
                         path_claim_b, {"owner": owner_b, "limit": 1})
                     self.assertEqual((code, empty["items"]), (200, []))
+                    # Negative Core runtime qualification: exhausting the
+                    # eighth lease prevents another claim, but does NOT move
+                    # the row to DEAD. SQL fault injection below is separate.
+                    with self.psycopg.connect(self.url) as db:
+                        before_injection = db.execute(
+                            "select status,attempts,lease_until<now(),"
+                            "delivered_at,last_error "
+                            "from aiops.hitl_decision_outbox where event_id=%s",
+                            (dead["event"],)).fetchone()
+                    self.assertEqual(
+                        before_injection, ("LEASED", 8, True, None, None))
                     with self.psycopg.connect(self.url) as db:
                         terminal = db.execute(
                             "update aiops.hitl_decision_outbox "
@@ -1617,6 +1628,69 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                 core.kill()
                 core.wait(timeout=5)
             auth_patch.stop()
+
+
+    async def test_09_no_core_runtime_dead_transition_after_eighth_lease(self):
+        """Negative contract: Core claim/ACK exhausts retry without DEAD.
+
+        Only the existing disposable SQL fault controller can mark DEAD.
+        No Temporal notification is emitted for this never-delivered event.
+        """
+        ids = self._fixture()
+        self._write_synthetic_proofs()
+        with self.psycopg.connect(self.url) as db:
+            db.execute(
+                "update aiops.hitl_decision_outbox "
+                "set status='LEASED',attempts=7,lease_owner=%s,"
+                "lease_token=%s,lease_until=now()-interval '1 second' "
+                "where event_id=%s",
+                (OWNER, secrets.token_urlsafe(32), ids["event"]))
+        code, claim = self._claim()
+        self.assertEqual((code, claim["status"]), (200, "LEASED"))
+        self.assertEqual(len(claim["items"]), 1)
+        lease = claim["items"][0]
+        self.assertEqual(lease["event_id"], ids["event"])
+        self.assertEqual(lease["decision"], "REJECT")
+        self.assertIs(lease["execution_allowed"], False)
+        self.assertIs(lease["effect_allowed"], False)
+        with self.psycopg.connect(self.url) as db:
+            db.execute(
+                "update aiops.hitl_decision_outbox "
+                "set lease_until=now()-interval '1 second' "
+                "where event_id=%s", (ids["event"],))
+        code, denied = self._ack(ids["event"], lease)
+        self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+        for _ in range(2):
+            code, empty = self._claim()
+            self.assertEqual((code, empty["items"]), (200, []))
+            code, denied = self._ack(ids["event"], lease)
+            self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+        # Wrong tenant and a forged token cannot bypass retry exhaustion.
+        ack_path = (
+            f"/api/tenants/{TENANT}/hitl/reject-delivery/{ids['event']}/ack")
+        ack = {
+            "owner": OWNER, "run_id": lease["run_id"],
+            "proposal_id": lease["proposal_id"],
+            "proposal_hash": lease["proposal_hash"],
+            "proposal_revision": lease["proposal_revision"],
+            "lease_token": "Z" * 48,
+            "execution_allowed": False, "effect_allowed": False,
+        }
+        code, forged = self._http(ack_path, ack)
+        self.assertEqual((code, forged["status"]), (200, "UNKNOWN"))
+        code, foreign = self._http(
+            f"/api/tenants/FOREIGN-CI/hitl/reject-delivery/"
+            f"{ids['event']}/ack", dict(ack, lease_token=lease["lease_token"]))
+        self.assertEqual((code, foreign["status"]), (403, "UNKNOWN"))
+        with self.psycopg.connect(self.url) as db:
+            state = db.execute(
+                "select status,attempts,lease_until<now(),"
+                "delivered_at,last_error,decision "
+                "from aiops.hitl_decision_outbox where event_id=%s",
+                (ids["event"],)).fetchone()
+        self.assertEqual(
+            state, ("LEASED", 8, True, None, None, "REJECT"))
+        self._no_effect()
 
 if __name__ == "__main__":
     unittest.main()

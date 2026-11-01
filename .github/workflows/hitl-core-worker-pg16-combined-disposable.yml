@@ -76,7 +76,7 @@ jobs:
           log_path = "/tmp/hitl-combined.log"
           log = open(log_path).read() if os.path.isfile(log_path) else ""
           combined_ok = bool(
-              re.search(r"(?m)^Ran 8 tests in [0-9.]+s$", log)
+              re.search(r"(?m)^Ran 9 tests in [0-9.]+s$", log)
               and re.search(r"(?m)^OK$", log))
           tcp_boundary_pass = (combined_ok and
               "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
@@ -89,6 +89,8 @@ jobs:
           cross_tenant_pass = (combined_ok and
               "test_08_cross_tenant_run_fencing_after_two_os_worker_restarts" in log)
           multi_server_dead_retry_pass = cross_tenant_pass  # asserted inside case 08
+          core_dead_negative_pass = (combined_ok and
+              "test_09_no_core_runtime_dead_transition_after_eighth_lease" in log)
           worker_restart_pass = (combined_ok and
               "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
           report = {
@@ -119,6 +121,11 @@ jobs:
               "worker_os_restart_count": ("THREE_RESTARTS_FOUR_PIDS_IN_CASE_08" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
               "core_eighth_lease_retry": ("OBSERVED_CI_DISPOSABLE_CORE_HTTP_PG16" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
               "terminal_dead_transition": ("CI_INJECTED_SQL_AFTER_EIGHTH_EXPIRED_LEASE_NOT_CORE_RUNTIME_DEAD_LETTER" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "core_runtime_dead_negative": ("OBSERVED_CI_DISPOSABLE_LEASED_ATTEMPTS_8_NOT_DEAD" if core_dead_negative_pass else "NOT_TESTED_OR_FAILED"),
+              "core_runtime_dead_contract": "BLOCKED_CORE_OWNS_TERMINAL_DEAD_TRANSITION_NO_WORKER_ENDPOINT",
+              "core_dead_after_eighth_claim_in_test_08": ("NEGATIVE_OBSERVED_LEASED_ATTEMPTS_8_BEFORE_SQL_INJECTION" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "dead_transition_evidence_class": "SQL_INJECTED_NOT_RUNTIME",
+              "core_dead_test_09_sql_injection": False,
               "dead_event_temporal_signal_count": 0,
               "durable_delivered_event_count": (2 if multi_server_dead_retry_pass else None),
               "forged_and_stale_ack_after_second_server_restart": ("FENCED_CI_DISPOSABLE" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
