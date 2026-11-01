@@ -21,7 +21,7 @@ FULL_DOMAIN = "aiops.core-full-run-event.v1"
 _HEX = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z", re.ASCII)
 _SCOPE = ("tenant_id", "incident_id", "run_id", "glpi_instance_id",
-          "ticket_id", "glpi_entity_id", "permission", "actor_subject")
+          "ticket_id", "glpi_entity_id", "permission", "actor_subject", "actor_issuer")
 _FULL = ("event_id", "run_id", "incident_id", "tenant_id", "sequence",
          "stage", "event_type", "status", "evidence_id",
          "source_event_id", "source_payload_hash", "observed_at", "known_at")
@@ -136,13 +136,14 @@ def canonical_seven_preflight(claims, expected, record, now):
                 or not isinstance(record, dict) or type(now) is not int
                 or type(claims.get("exp")) is not int or claims["exp"] <= now
                 or not isinstance(claims.get("sub"), str) or not claims["sub"]
+                or not isinstance(claims.get("iss"), str) or not claims["iss"]
                 or not isinstance(record.get("source_event_id"), str)
                 or not _ID.fullmatch(record["source_event_id"])
                 or not isinstance(record.get("source_payload_hash"), str)
                 or not _HEX.fullmatch(record["source_payload_hash"])):
             return False
         if any(record.get(k) != expected.get(k)
-               for k in ("run_id", "incident_id", "glpi_entity_id")):
+               for k in ("tenant_id", "run_id", "incident_id", "glpi_entity_id")):
             return False
         cfgs = json.loads(raw)
         if not isinstance(cfgs, list) or not 1 <= len(cfgs) <= 16:
@@ -163,6 +164,7 @@ def canonical_seven_preflight(claims, expected, record, now):
             return False
         request = {k: expected[k] for k in _SCOPE if k in expected}
         request["actor_subject"] = claims["sub"]
+        request["actor_issuer"] = claims["iss"]
         if (set(request) != set(_SCOPE)
                 or any(not isinstance(v, str) or not v for v in request.values())
                 or request["permission"] != "run:read"):
