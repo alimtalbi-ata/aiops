@@ -271,5 +271,57 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
                                 for row in peers.core_observations))
 
 
+    def test_revoked_oidc_session_rechecked_after_core_unknown_no_upstream(self):
+        from starlette.requests import Request
+        actor = self.actor()
+        plan = wire.prepare_core_authz_wire(
+            actor, self.binding, env=self.settings, now=self.now)
+        handle = "A" * 43
+        scope = {
+            "type": "http", "method": "GET",
+            "path": "/api/portal/runs/RUN-ACME-123",
+            "headers": [(b"cookie", (oidc_session._SESSION_COOKIE + "="
+                                      + handle).encode("ascii"))],
+            "query_string": b"", "scheme": "https",
+            "server": ("portal.example.test", 443),
+        }
+        request = Request(scope)
+        unknown = {"schema": "aiops.core-actor-resource-authorization.v1",
+                   "decision": "UNKNOWN"}
+        with oidc_session._lock:
+            oidc_session._sessions[oidc_session._digest(handle)] = (
+                oidc_session._Session(actor, self.now + 200))
+        try:
+            with patch("urllib.request.urlopen",
+                       side_effect=AssertionError("no upstream")) as upstream:
+                first = wire.assess_core_negative_for_session(
+                    request, binding=self.binding, plan=plan, status_code=200,
+                    payload=unknown, headers=HEADERS, env=self.settings,
+                    now=self.now)
+                self.assertEqual((first.kind, first.portal_status,
+                                  first.read_permitted),
+                                 ("CURRENT_CORE_NEGATIVE", 503, False))
+                # Signed/unsigned ALLOW is never consumed by this session gate.
+                forged = wire.assess_core_negative_for_session(
+                    request, binding=self.binding, plan=plan, status_code=200,
+                    payload={"schema": unknown["schema"], "decision": "ALLOW"},
+                    headers=HEADERS, env=self.settings, now=self.now)
+                self.assertEqual((forged.kind, forged.portal_status,
+                                  forged.read_permitted), ("INVALID", 503, False))
+                with oidc_session._lock:
+                    oidc_session._sessions.pop(oidc_session._digest(handle), None)
+                revoked = wire.assess_core_negative_for_session(
+                    request, binding=self.binding, plan=plan, status_code=200,
+                    payload=unknown, headers=HEADERS, env=self.settings,
+                    now=self.now)
+                self.assertEqual((revoked.kind, revoked.portal_status,
+                                  revoked.read_permitted),
+                                 ("SESSION_REQUIRED", 401, False))
+                upstream.assert_not_called()
+        finally:
+            with oidc_session._lock:
+                oidc_session._sessions.pop(oidc_session._digest(handle), None)
+
+
 if __name__ == "__main__":
     unittest.main()
