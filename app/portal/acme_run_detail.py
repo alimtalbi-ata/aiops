@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from portal.core_acl_consumer import consume_run_acl
-from portal.oidc_session import _session_from_cookie
+from portal.oidc_session import _SESSION_COOKIE, _session_from_cookie
 from portal.noc_correlation import _read_core_run
 from portal.noc_runtime import IDENTIFIER, _require_portal_read_auth
 from shared.domain import STATUSES
@@ -107,6 +107,16 @@ def _unqualified_run() -> dict:
     }
 
 
+def _oidc_cookie_supplied(request: Request) -> bool:
+    """A supplied OIDC cookie must never downgrade to shared viewer auth.
+
+    Invalid, expired and revoked handles are still an explicit attempt to use
+    the server-side identity channel. consume_run_acl returns 401 for them.
+    The viewer bearer remains identity-only and cannot rescue this attempt.
+    """
+    return _SESSION_COOKIE in request.cookies
+
+
 def _session_failure(status: int, detail: str, headers: dict | None = None) -> JSONResponse:
     # Preserve HTTP auth status while applying the same response protections as
     # the read-only Run page and JSON projection, including rejected exchanges.
@@ -165,7 +175,7 @@ def run_detail_api(rid: str, request: Request,
                    authorization: str | None = Header(default=None)):
     # A server-stored OIDC session is identity, never an exact-Run grant.
     # Retain the legacy bearer refusal for clients without such a session.
-    if _session_from_cookie(request) is not None:
+    if _oidc_cookie_supplied(request):
         status, reason = consume_run_acl(request, rid)
         data = _unqualified_run() if status == 503 else {"state": "UNAUTHORIZED", "reason": reason}
     else:
@@ -179,7 +189,7 @@ def run_detail_page(rid: str, request: Request,
                      authorization: str | None = Header(default=None)):
     # Previously minted viewer cookies are not actor+tenant authority.
     # Do not upgrade them into a bearer identity, even during their TTL.
-    if _session_from_cookie(request) is not None:
+    if _oidc_cookie_supplied(request):
         status, reason = consume_run_acl(request, rid)
         data = _unqualified_run() if status == 503 else {"state": "UNAUTHORIZED", "reason": reason}
     else:
