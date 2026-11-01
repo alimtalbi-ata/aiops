@@ -34,6 +34,8 @@ jobs:
       PGPASSWORD: ci-terminal-disposable-only
       AIOPS_XREF_CI_DISPOSABLE: "1"
       PYTHONPATH: app:tests
+      AIOPS_CORE_TERMINAL_RECEIPT_DIR: /tmp/core-terminal-receipts
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Install isolated test dependencies
         shell: bash
@@ -71,10 +73,38 @@ jobs:
           grep -x 'OK' /tmp/core-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-terminal-tests.log
           echo "SYNTHETIC_ONLY=TRUE; HUMAN_GLPI_AUTH=UNKNOWN; EFFECT_ALLOWED=FALSE; HOST_DEPLOY=FALSE"
+      - name: Verify redacted Core DEAD receipt and SHA256 manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-dead.json"
+          payload = json.loads(path.read_text())
+          expected = payload.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert actual == expected
+          assert payload["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert payload["schema"] == "aiops.core-terminal-pg16-ci-receipt.v1"
+          assert payload["terminal_status"] == "DEAD" and payload["attempts"] == 8
+          assert payload["actor_authorization"] == "UNKNOWN"
+          assert payload["human_glpi_attested"] is False
+          assert payload["execution_allowed"] is False and payload["effect_allowed"] is False
+          assert payload["synthetic_disposable"] is True
+          assert len(payload["receipt_sha256"]) == 64
+          assert not any(x in path.read_text() for x in ("lease_token", "Bearer ", "signed-synthetic-owner"))
+          print("CORE_TERMINAL_RECEIPT_PASS", expected)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-dead.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-dead.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-dead.sha256"
       - name: Preserve redacted exact-head qualification
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: core-terminal-pg16-redacted-${{ github.run_id }}
-          path: /tmp/core-terminal-tests.log
+          path: |
+            /tmp/core-terminal-tests.log
+            /tmp/core-terminal-receipts/terminal-dead.json
+            /tmp/core-terminal-receipts/terminal-dead.sha256
           retention-days: 7
