@@ -70,6 +70,30 @@ transaction rollback. Synthetic HMAC owner proofs only establish fixture
 integrity; they do not attest real human GLPI rights. No Core runtime
 on SRV-DEB-05 or port 7777 is modified or observed.
 
+## Native same-major PostgreSQL 16 recovery extension (source PR #295)
+
+The dedicated Core test now adds a **separate** native `pg_dump 16` custom
+archive and `pg_restore 16 --single-transaction --exit-on-error` into a
+**new** disposable database after populating an actual exhausted REJECT
+lease, a DEAD outbox row, one immutable 014 terminal receipt, one consumed
+013 nonce/JTI and one 013 revocation. The test verifies the archive SHA256
+before restore, rejects a deliberately corrupted archive, compares the
+restored 013/014 rows byte-for-byte at the SQL value level, refuses replay
+and revoked JTI, re-applies 013/014 idempotently, and proves immutable rows
+still reject UPDATE/DELETE. The source database remains untouched; only the
+newly created target database is dropped in test cleanup.
+
+The archive itself is **not uploaded** because it contains synthetic raw
+outbox lease tokens. Only `terminal-native-restore.json` and its SHA256
+manifest are retained as redacted machine-readable CI evidence, including
+exact HEAD, PG16 client/server major, installed 001/004/009–014 order,
+archive digest and audit row counts. This is a disposable restore rehearsal,
+not a persistent in-place downgrade, host attestation, or GLPI authorization.
+The test must report **12/12 PASS, zero SKIP** before this extension is
+qualified on the exact source HEAD; an earlier 11/11 success does not
+qualify the new restore test. On code rollback, preserve both 013 and 014
+audit tables and all immutable rows; never run a DOWN migration or DROP.
+
 ## Worker coordination and Debian consolidation
 
 Worker #292 may consume this route only after architect selectively
