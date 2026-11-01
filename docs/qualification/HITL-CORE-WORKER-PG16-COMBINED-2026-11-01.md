@@ -22,7 +22,7 @@ pg_restore --version
 sha256sum /tmp/hitl-combined-pg16-dr.dump
 ```
 
-Only run in GitHub Actions with `AIOPS_CI_COMBINED_DISPOSABLE=YES`, `AIOPS_CI_OUTBOX_DISPOSABLE=YES`, an isolated PostgreSQL 16 service `postgres:5432/aiops`, and pinned `psycopg[binary]==3.2.13`, `fastapi==0.116.1`, `httpx==0.28.1`, `temporalio==1.16.0`. PostgreSQL client `pg_dump/pg_restore` must be version 16; **do not remove DR if installation fails**. Alternative on package failure: use a separately versioned `postgres:16-alpine` client service/container with explicit version check, then rerun both tests and DR. No shared Quality workflow changes.
+Only run in GitHub Actions with `AIOPS_CI_COMBINED_DISPOSABLE=YES`, `AIOPS_CI_OUTBOX_DISPOSABLE=YES`, an isolated PostgreSQL 16 service `postgres:5432/aiops`, and pinned `psycopg[binary]==3.2.13`, `fastapi==0.116.1`, `httpx==0.28.1`, `requests==2.32.4`, `temporalio==1.16.0`. PostgreSQL client `pg_dump/pg_restore` must be version 16; **do not remove DR if installation fails**. Alternative on package failure: use a separately versioned `postgres:16-alpine` client service/container with explicit version check, then rerun both tests and DR. No shared Quality workflow changes.
 
 Dedicated workflow: `.github/workflows/hitl-core-worker-pg16-combined-disposable.yml`. Evidence: combined test log, SQL-model/DR 5/5 log, synthetic classification JSON, dump and SHA256; GitHub artifact only if workflow executes successfully. Never claim N/N or runtime observed from source alone. The exact-head workflow status and artifact digest must be captured after CI.
 
