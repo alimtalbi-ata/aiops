@@ -14,6 +14,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
+from urllib.parse import parse_qs
 
 import requests
 from core import actor_native_authority as native
@@ -56,7 +57,9 @@ class AuthorityHandler(BaseHTTPRequestHandler):
         size = int(self.headers.get("Content-Length", "0"))
         if not 0 < size < 8192:
             return self.respond({}, 400)
-        payload = json.loads(self.rfile.read(size))
+        raw = self.rfile.read(size)
+        payload = (parse_qs(raw.decode("utf-8")) if self.server.role == "idp"
+                   else json.loads(raw))
         server.calls.append((self.path, payload))
         auth = self.headers.get("Authorization", "")
         if server.role == "idp":
