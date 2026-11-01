@@ -277,5 +277,226 @@ class AcmeSevenSourceAuthorityNegativeContractTests(unittest.TestCase):
         self.assertEqual(json.loads(check.stdout)["result"], "UNAVAILABLE")
 
 
+class AcmeCoreSevenReadbackUnknownGateTests(unittest.TestCase):
+    """Only offline Core receipt shape checks; never an authenticated readback."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import generate_acme_incidents as gen
+        from tools import acme_synthetic_core_readback_unknown_gate as gate
+        cls.gen = gen
+        cls.gate = gate
+        cls.manifest = gen.replay(seed=20261018)
+        cls.expected = gate.build_fixture(cls.manifest)
+        cls.fixture = json.loads(gate.FIXTURE.read_text(encoding="utf-8"),
+                                 object_pairs_hook=gen._unique_object)
+        cls.now = 1700000000
+        cls.tenant = "TEST_ONLY_TENANT_A"
+        cls.actor_hash = hashlib.sha256(b"TEST_ONLY_ACTOR_A").hexdigest()
+
+    def test_redacted_fixture_pins_seven_distinct_local_hash_domains(self):
+        self.assertEqual(self.gate.verify_fixture(self.manifest, self.fixture),
+                         self.expected)
+        self.assertEqual(self.fixture["event_count"], 7)
+        self.assertIsNone(self.fixture["core_readback"])
+        self.assertEqual(self.fixture["core_pg16_authority"], "UNKNOWN")
+        for event, row in zip(self.manifest["events"], self.fixture["events"]):
+            with self.subTest(source_event_id=row["source_event_id"]):
+                self.assertEqual(row["source_event_id"], event["source_event_id"])
+                self.assertEqual(row["acme_full_event_sha256"],
+                                 hashlib.sha256(self.gen._canonical(event)).hexdigest())
+                self.assertEqual(len({row["acme_full_event_sha256"],
+                                      row["acme_local_payload_sha256"],
+                                      row["proposed_core_payload_sha256"]}), 3)
+                self.assertIsNone(row["core_pg16_payload_sha256"])
+                self.assertIsNone(row["core_pg16_full_event_sha256"])
+                self.assertEqual(row["mapping_status"], "UNKNOWN")
+
+    def _test_only_shape(self):
+        # In-memory adversarial input, NOT a Core receipt or PG16 assertion.
+        return {
+            "schema": self.gate.CORE_SCHEMA,
+            "decision": "UNKNOWN", "link_status": "UNKNOWN",
+            "source_preflight": "PASS_SYNTHETIC_ONLY",
+            "transport": "TLS_AUTHENTICATED_NONPORTABLE",
+            "portable_signature": "NONE",
+            "issuer": "TEST_ONLY_ISSUER",
+            "source_system": "TEST_ONLY_SOURCE",
+            "tenant_id": self.tenant,
+            "incident_id": "TEST_ONLY_INCIDENT",
+            "run_id": "TEST_ONLY_RUN",
+            "glpi_instance_id": "TEST_ONLY_GLPI",
+            "ticket_id": "TEST_ONLY_TICKET",
+            "glpi_entity_id": "TEST_ONLY_ENTITY",
+            "permission": "run:read",
+            "actor_issuer": "TEST_ONLY_IDP",
+            "actor_subject_sha256": self.actor_hash,
+            "source_event_id": self.fixture["events"][0]["source_event_id"],
+            "source_payload_hash": "c" * 64,
+            "observed_at": self.now - 60,
+            "known_at": self.now - 30,
+            "expires_at": self.now + 120,
+            "event_count": 7,
+            "hash_domains": {
+                "payload": self.gate.CORE_PAYLOAD_DOMAIN,
+                "full_event": self.gate.CORE_FULL_DOMAIN,
+                "acme_full_event_equivalence": "NOT_VERIFIED",
+            },
+            "events": [{
+                "sequence": i,
+                "source_event_id": row["source_event_id"],
+                "evidence_id": "TEST_ONLY_EVIDENCE_" + str(i),
+                "payload_sha256": hashlib.sha256(
+                    ("TEST_ONLY_CORE_PAYLOAD_" + str(i)).encode()).hexdigest(),
+                "full_event_sha256": hashlib.sha256(
+                    ("TEST_ONLY_CORE_FULL_" + str(i)).encode()).hexdigest(),
+            } for i, row in enumerate(self.fixture["events"], 1)],
+            "source_proof_sha256": "a" * 64,
+            "receipt_sha256": "b" * 64,
+        }
+
+    def _assess(self, supplied=None, *, with_context=True):
+        return self.gate.assess_readback(
+            self.manifest, supplied,
+            expected_tenant=self.tenant if with_context else None,
+            expected_actor_sha256=self.actor_hash if with_context else None,
+            now=self.now)
+
+    def test_missing_readback_is_unknown_and_unavailable(self):
+        result = self._assess()
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["reason"], "NO_INDEPENDENT_CORE_READBACK")
+        self.assertEqual(result["core_readback"], "UNAVAILABLE")
+        self.assertEqual(result["hash_domain_equivalence"], "UNKNOWN")
+
+    def test_foreign_schema_and_forged_positive_decisions_rejected(self):
+        import copy
+        for field, value, reason in (
+            ("schema", "TEST_ONLY_FOREIGN_SCHEMA", "FOREIGN_CORE_SCHEMA"),
+            ("decision", "ALLOW", "UNTRUSTED_AUTHORITY_ASSERTION"),
+            ("link_status", "VERIFIED", "UNTRUSTED_AUTHORITY_ASSERTION"),
+            ("portable_signature", "SIGNED", "UNTRUSTED_AUTHORITY_ASSERTION"),
+        ):
+            candidate = copy.deepcopy(self._test_only_shape())
+            candidate[field] = value
+            with self.subTest(field=field):
+                self.assertEqual(self._assess(candidate)["reason"], reason)
+                self.assertEqual(self._assess(candidate)["result"], "UNKNOWN")
+
+    def test_missing_reordered_duplicate_and_foreign_events_unknown(self):
+        import copy
+        for mutate in (
+            lambda c: c["events"].pop(),
+            lambda c: c["events"].reverse(),
+            lambda c: c["events"].__setitem__(1, copy.deepcopy(c["events"][0])),
+            lambda c: c["events"][0].update(source_event_id="TEST_ONLY_FOREIGN_EVENT"),
+        ):
+            candidate = self._test_only_shape()
+            mutate(candidate)
+            result = self._assess(candidate)
+            self.assertEqual(result["result"], "UNKNOWN")
+            self.assertIn(result["reason"], (
+                "MISSING_OR_EXTRA_EVENTS",
+                "FOREIGN_DUPLICATE_OR_REORDERED_EVENTS"))
+
+    def test_foreign_tenant_actor_and_missing_run_glpi_evidence_unknown(self):
+        import copy
+        for field, value, reason in (
+            ("tenant_id", "TEST_ONLY_FOREIGN_TENANT", "FOREIGN_TENANT"),
+            ("actor_subject_sha256", "f" * 64, "FOREIGN_ACTOR"),
+            ("run_id", "", "MISSING_RUNTIME_SCOPE"),
+            ("ticket_id", "", "MISSING_RUNTIME_SCOPE"),
+            ("incident_id", "", "MISSING_RUNTIME_SCOPE"),
+        ):
+            candidate = copy.deepcopy(self._test_only_shape())
+            candidate[field] = value
+            with self.subTest(field=field):
+                self.assertEqual(self._assess(candidate)["reason"], reason)
+        candidate = self._test_only_shape()
+        candidate["events"][2]["evidence_id"] = ""
+        self.assertEqual(self._assess(candidate)["reason"],
+                         "MISSING_EVIDENCE_OR_INVALID_CORE_HASH_DOMAINS")
+
+    def test_hash_domain_swaps_and_missing_core_digests_unknown(self):
+        import copy
+        candidate = self._test_only_shape()
+        row = candidate["events"][0]
+        row["payload_sha256"], row["full_event_sha256"] = (
+            row["full_event_sha256"], row["payload_sha256"])
+        # Both are syntactically valid but cannot establish cross-domain equality.
+        self.assertEqual(self._assess(candidate)["result"], "UNKNOWN")
+        candidate = copy.deepcopy(self._test_only_shape())
+        candidate["events"][0]["full_event_sha256"] = None
+        self.assertEqual(self._assess(candidate)["reason"],
+                         "MISSING_EVIDENCE_OR_INVALID_CORE_HASH_DOMAINS")
+        candidate = copy.deepcopy(self._test_only_shape())
+        candidate["hash_domains"]["acme_full_event_equivalence"] = "VERIFIED"
+        self.assertEqual(self._assess(candidate)["reason"], "FOREIGN_HASH_DOMAIN")
+
+    def test_stale_future_expired_and_revocation_claims_unknown(self):
+        for field, value in (
+            ("observed_at", self.now - 900),
+            ("known_at", self.now + 20),
+            ("expires_at", self.now - 1),
+        ):
+            candidate = self._test_only_shape()
+            candidate[field] = value
+            with self.subTest(field=field):
+                self.assertEqual(self._assess(candidate)["reason"],
+                                 "STALE_FUTURE_OR_EXPIRED")
+        candidate = self._test_only_shape()
+        candidate["revoked"] = False  # not part of Core receipt; no revocation proof
+        self.assertEqual(self._assess(candidate)["reason"],
+                         "MISSING_OR_UNEXPECTED_CORE_FIELDS")
+
+    def test_even_complete_test_only_shape_never_promotes_core_authority(self):
+        result = self._assess(self._test_only_shape())
+        self.assertEqual(result["reason"], "NO_INDEPENDENT_PG16_AUTHORITY")
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["core_pg16_authority"], "UNKNOWN")
+        for key in ("tenant_id", "actor_subject", "incident_id", "run_id",
+                    "glpi_ticket_id", "hitl_approval"):
+            self.assertIsNone(result[key])
+        self.assertEqual(result["evidence_ids"], [])
+        self.assertEqual(result["itil_stages"],
+                         {"count": 15, "status": "NOT_EXECUTED"})
+        self.assertEqual(result["checkpoints"],
+                         {"count": 6, "status": "NOT_EXECUTED"})
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+
+    def test_supplied_shape_without_independent_actor_tenant_context_unknown(self):
+        result = self._assess(self._test_only_shape(), with_context=False)
+        self.assertEqual(result["reason"], "NO_INDEPENDENT_ACTOR_TENANT_CONTEXT")
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["freshness"], "UNKNOWN")
+        self.assertEqual(result["revocation"], "UNKNOWN")
+
+    def test_cli_emit_check_and_readback_redact_test_only_identifiers(self):
+        import subprocess
+        import sys
+        import tempfile
+        cmd = [sys.executable, "-m",
+               "tools.acme_synthetic_core_readback_unknown_gate"]
+        emit = subprocess.run(cmd + ["--emit"], cwd=self.gen.ROOT,
+                              capture_output=True, text=True)
+        self.assertEqual(emit.returncode, 0, emit.stderr)
+        self.assertEqual(json.loads(emit.stdout), self.fixture)
+        check = subprocess.run(cmd + ["--check"], cwd=self.gen.ROOT,
+                               capture_output=True, text=True)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertEqual(json.loads(check.stdout)["result"], "UNKNOWN")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "TEST_ONLY_readback.json"
+            path.write_text(json.dumps(self._test_only_shape()), encoding="utf-8")
+            proc = subprocess.run(cmd + ["--readback", str(path)],
+                                  cwd=self.gen.ROOT, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(json.loads(proc.stdout)["result"], "UNKNOWN")
+            self.assertNotIn("TEST_ONLY_TENANT_A", proc.stdout)
+            self.assertNotIn("TEST_ONLY_INCIDENT", proc.stdout)
+            self.assertNotIn("TEST_ONLY_EVIDENCE", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
