@@ -134,6 +134,10 @@ def create_run_session(request: Request, authorization: str | None = Header(defa
     # Even a valid/forged Run ID must not produce a browser capability.
     origin = request.headers.get("origin")
     if origin:
+        # An HTTPS Origin does not upgrade an HTTP request. Never trust
+        # browser-supplied Forwarded/X-Forwarded-Proto as TLS evidence.
+        if request.url.scheme != "https":
+            return _session_failure(403, "same_origin_required")
         try:
             parsed = urllib.parse.urlsplit(origin)
             host = request.headers.get("host", "")
