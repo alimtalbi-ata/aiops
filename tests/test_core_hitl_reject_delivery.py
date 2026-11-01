@@ -7,6 +7,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from core import hitl_reject_delivery as m
+from core import itsm_xref as x
 
 NOW = datetime.now(timezone.utc)
 OWNER = ('run', 'RUN-A', 'TEN-A', True, 'SRC-A',
@@ -60,11 +61,11 @@ class RejectDeliveryTests(unittest.TestCase):
 
     def setUp(self):
         self.fake = FakeDB()
-        self.db_patch = patch.object(m.x, 'db', self.fake.db)
+        self.db_patch = patch.object(x, 'db', self.fake.db)
         self.db_patch.start()
-        self.auth_patch = patch.object(m.x, '_auth', side_effect=self.auth)
+        self.auth_patch = patch.object(x, '_auth', side_effect=self.auth)
         self.auth_patch.start()
-        self.proof_patch = patch.object(m.x, '_owners_attested', return_value=True)
+        self.proof_patch = patch.object(x, '_owners_attested', return_value=True)
         self.proof_patch.start()
 
     def tearDown(self):
@@ -120,7 +121,7 @@ class RejectDeliveryTests(unittest.TestCase):
 
     def test_claim_no_source_proof_is_unknown(self):
         self.proof_patch.stop()
-        self.proof_patch = patch.object(m.x, '_owners_attested', return_value=False)
+        self.proof_patch = patch.object(x, '_owners_attested', return_value=False)
         self.proof_patch.start()
         r = self.post('claim', {'owner': 'svc-A', 'limit': 1})
         self.assertEqual(r.json()['status'], 'UNKNOWN')
