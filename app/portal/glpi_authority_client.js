@@ -35,6 +35,11 @@
         paintUnknown("session non autorisée");
         return;
       }
+      if (response.status === 403) {
+        status.textContent = "403 FORBIDDEN — accès explicitement refusé ; aucun droit accordé.";
+        paintUnknown("accès refusé");
+        return;
+      }
       if (response.status !== 503) {
         status.textContent = "503 UNKNOWN — réponse non qualifiée ; aucun droit accordé.";
         paintUnknown("réponse non qualifiée");
