@@ -388,5 +388,8 @@ from test_portal_core_acl_consumer import PortalCoreACLConsumerTests
 # Focused disposable IdP/GLPI/Core signer rotation suite (no shared CI edit).
 from test_portal_idp_glpi_rotation_contract import PortalIdpGlpiRotationContract
 
+# Portal-only Host/OIDC downgrade contract: imported into existing Quality browser entry.
+from test_portal_host_cookie_negative_contract import PortalHostCookieNegativeContract
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
