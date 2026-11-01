@@ -473,7 +473,11 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                         {"owner": OWNER, "limit": 1})
                     self.assertEqual((code, empty["status"], empty["items"]),
                                      (200, "UNKNOWN", []))
-                    # No query while the test Worker is down: Temporal cannot\n                    # serve workflow queries without a poller. Final two unique\n                    # notifications and one DB attempt prove no duplicate.\n\n                    second = self._fixture()
+                    # No query while the test Worker is down: Temporal cannot
+                    # serve workflow queries without a poller. Final two unique
+                    # notifications and one DB attempt prove no duplicate.
+
+                    second = self._fixture()
                     self._write_synthetic_proofs()
                     # Temporal *test Worker* is restarted; server stays alive.
                     async with Worker(env.client, task_queue=queue,
@@ -481,7 +485,8 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                         receipts = await deliver_core_reject_once(
                             tenant_id=TENANT, owner=OWNER,
                             post=post, signal=signal)
-                        self.assertEqual(len(receipts), 1, repr(trace[-3:]))\n                        self.assertEqual(receipts[0]["status"], "DELIVERED")
+                        self.assertEqual(len(receipts), 1, repr(trace[-3:]))
+                        self.assertEqual(receipts[0]["status"], "DELIVERED")
                         signals = await asyncio.wait_for(handle.result(), timeout=20)
                         self.assertEqual(len(signals), 2)
                         self.assertEqual(
