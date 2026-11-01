@@ -54,7 +54,7 @@ jobs:
           set -eu
           test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
           python3 -m venv /tmp/hitl-combined-venv
-          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "temporalio==1.16.0"
+          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0"
           /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_pg16_temporal_combined.py
       - name: Combined Core ASGI HTTP PG16 and Temporal test Worker restart
         shell: bash
