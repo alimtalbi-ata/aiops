@@ -1259,3 +1259,218 @@ class AcmePg16TwinImpactHandoffTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AcmeCorePg16SevenBridgeTests(unittest.TestCase):
+    """Actual Core-owned PG16 proof *shape* only; never portable authorization."""
+
+    def setUp(self):
+        from tools import acme_synthetic_pg16_seven_bridge as bridge
+        from tools import acme_synthetic_pg16_twin_impact_handoff as twin
+        from tools import generate_acme_incidents as gen
+        self.bridge, self.twin, self.gen = bridge, twin, gen
+        self.manifest = gen.replay(seed=20261018)
+        self.now = 1793538000  # deterministic disposable clock, not live
+
+    def proof(self):
+        scope = {
+            "tenant_id": "TEST_ONLY_tenant",
+            "incident_id": "TEST_ONLY_incident",
+            "run_id": "TEST_ONLY_run",
+            "ticket_id": "TEST_ONLY_ticket",
+            "glpi_entity_id": "TEST_ONLY_entity",
+        }
+        rows = self.twin.disposable_core_payloads(self.manifest, scope)
+        events = []
+        for row in rows:
+            sequence = row["sequence"]
+            payload = row["payload"]
+            payload_hash = self.bridge._digest(
+                self.bridge.CORE_PAYLOAD_DOMAIN, payload)
+            evidence_id = "TEST_ONLY_evidence_" + str(sequence)
+            full = {
+                "event_id": "TEST_ONLY_core_event_" + str(sequence),
+                "run_id": scope["run_id"],
+                "incident_id": scope["incident_id"],
+                "tenant_id": scope["tenant_id"],
+                "sequence": sequence,
+                "stage": "SOURCE",
+                "event_type": "OBSERVED",
+                "status": "PASS",
+                "evidence_id": evidence_id,
+                "source_event_id": row["source_event_id"],
+                "source_payload_hash": payload_hash,
+                "observed_at": self.now - 40,
+                "known_at": self.now - 30 + sequence,
+            }
+            events.append({
+                "sequence": sequence,
+                "source_event_id": row["source_event_id"],
+                "evidence_id": evidence_id,
+                "payload": payload,
+                "payload_hash": payload_hash,
+                "full_event": full,
+                "full_event_hash": self.bridge._digest(
+                    self.bridge.CORE_FULL_DOMAIN, full),
+            })
+        return {
+            "schema": self.bridge.CORE_SCHEMA,
+            "issuer": "core-source-disposable-authority",
+            "source_system": "CORE_CANONICAL_READBACK",
+            **scope,
+            "glpi_instance_id": "TEST_ONLY_glpi_instance",
+            "permission": "run:read",
+            "actor_subject": "TEST_ONLY_actor",
+            "actor_issuer": "https://idp.synthetic.invalid",
+            "observed_at": self.now - 40,
+            "known_at": self.now - 20,
+            "expires_at": self.now + 40,
+            "revoked": False,
+            "events": events,
+        }
+
+    def assert_closed(self, receipt, *, shape=None):
+        self.assertEqual(receipt["core_pg16_authority"], "UNKNOWN")
+        self.assertEqual(receipt["actor_tenant_acl"], "UNKNOWN")
+        self.assertEqual(receipt["immutable_audit_013_014"], "UNKNOWN")
+        self.assertEqual(receipt["glpi_human_rights"], "UNKNOWN")
+        self.assertEqual(receipt["itil_stages"]["verified"], 0)
+        self.assertEqual(receipt["itil_stages"]["not_executed"], 15)
+        self.assertEqual(receipt["checkpoints"]["verified"], 0)
+        self.assertEqual(receipt["checkpoints"]["not_executed"], 6)
+        self.assertIsNone(receipt["runtime"]["incident_id"])
+        self.assertIsNone(receipt["runtime"]["run_id"])
+        self.assertFalse(receipt["publishable_to_core_or_glpi"])
+        self.assertFalse(receipt["live_effects_authorized"])
+        if shape is not None:
+            self.assertEqual(receipt["core_proof_shape"], shape)
+
+    def test_01_pinned_receipt_and_sourced_twin_path(self):
+        expected = self.bridge.build_receipt(self.manifest)
+        pinned = self.bridge._read_untrusted(self.bridge.FIXTURE)
+        self.assertEqual(self.gen._canonical(expected),
+                         self.gen._canonical(pinned))
+        self.assertEqual(len(expected["events"]), 7)
+        self.assertTrue(all(row["source_event_id"].startswith("SYN-EVT-")
+                            for row in expected["events"]))
+        self.assertEqual(expected["twin_impact"]["path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertEqual(expected["candidate_incident_status"], "NOT_CREATED")
+        self.assert_closed(expected, shape="UNAVAILABLE")
+
+    def test_02_absent_core_producer_keeps_unknown(self):
+        result = self.bridge.consume(self.manifest, now=self.now)
+        self.assertEqual(result["compared_event_count"], 0)
+        self.assertEqual(result["core_proof_reason"],
+                         "NO_INDEPENDENT_CORE_PG16_READBACK")
+        self.assert_closed(result, shape="UNAVAILABLE")
+
+    def test_03_seven_synthetic_core_hash_pairs_are_not_authority(self):
+        proof = self.proof()
+        self.assertNotEqual(proof["issuer"], proof["actor_issuer"])
+        result = self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)
+        self.assertEqual(result["core_proof_reason"],
+                         "SHAPE_CONSISTENT_BUT_NONPORTABLE_AUTHORITY")
+        self.assertEqual(result["compared_event_count"], 7)
+        self.assertTrue(all(r["core_full_vs_acme_full"] != "UNKNOWN"
+                            for r in result["events"]))
+        self.assert_closed(result, shape="CONSISTENT_UNTRUSTED")
+        dumped = json.dumps(result)
+        for forbidden in ("TEST_ONLY_actor", "TEST_ONLY_incident",
+                          "TEST_ONLY_run", "TEST_ONLY_ticket"):
+            self.assertNotIn(forbidden, dumped)
+
+    def test_04_foreign_evt_source_and_reordered_ids(self):
+        proof = self.proof()
+        proof["events"][0]["source_event_id"] = "EVT-SOURCE-01"
+        result = self.bridge.consume(self.manifest, core_proof=proof,
+                                     now=self.now)
+        self.assertEqual(result["core_proof_reason"],
+                         "FOREIGN_DUPLICATE_OR_REORDERED_SOURCE_IDS")
+        self.assert_closed(result, shape="REJECTED")
+        proof = self.proof()
+        proof["events"][0], proof["events"][1] = (
+            proof["events"][1], proof["events"][0])
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["compared_event_count"], 0)
+
+    def test_05_missing_duplicate_and_foreign_evidence(self):
+        proof = self.proof()
+        proof["events"].pop()
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+            "MISSING_OR_EXTRA_CORE_EVENTS")
+        proof = self.proof()
+        proof["events"][1]["evidence_id"] = proof["events"][0]["evidence_id"]
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+            "MISSING_EVIDENCE_OR_PAYLOAD_FIELDS")
+
+    def test_06_payload_hash_swap_and_full_event_tamper(self):
+        proof = self.proof()
+        proof["events"][0]["payload_hash"] = proof["events"][1]["payload_hash"]
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+            "CORE_FULL_PAYLOAD_HASH_DOMAIN_MISMATCH")
+        proof = self.proof()
+        proof["events"][0]["full_event_hash"] = proof["events"][0]["payload_hash"]
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["compared_event_count"], 0)
+
+    def test_07_cross_tenant_run_and_forged_glpi_authority(self):
+        proof = self.proof()
+        proof["events"][0]["payload"]["tenant_id"] = "TEST_ONLY_foreign"
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+            "CROSS_SCOPE_CORE_PAYLOAD")
+        proof = self.proof()
+        proof["human_glpi_allow"] = True
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+            "MALFORMED_OR_EXTRA_CORE_PROOF_FIELDS")
+
+    def test_08_revoked_stale_and_expired_fail_closed(self):
+        for change, reason in (
+            ({"revoked": True}, "REVOKED_OR_UNTRUSTED_REVOCATION"),
+            ({"observed_at": self.now - 400},
+             "STALE_EXPIRED_OR_FUTURE_CORE_PROOF"),
+            ({"expires_at": self.now - 1},
+             "STALE_EXPIRED_OR_FUTURE_CORE_PROOF"),
+        ):
+            with self.subTest(change=change):
+                proof = self.proof()
+                proof.update(change)
+                result = self.bridge.consume(
+                    self.manifest, core_proof=proof, now=self.now)
+                self.assertEqual(result["core_proof_reason"], reason)
+                self.assert_closed(result, shape="REJECTED")
+
+    def test_09_wrong_ci_action_timestamp_or_event_clock(self):
+        for key, value in (("ci_id", "ACME-FOREIGN-CI"),
+                           ("action", "LIVE"),
+                           ("source_event_time", "2099-01-01T00:00:00Z")):
+            with self.subTest(key=key):
+                proof = self.proof()
+                proof["events"][0]["payload"][key] = value
+                self.assertEqual(self.bridge.consume(
+                    self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+                    "FOREIGN_TWIN_SOURCE_PAYLOAD")
+        proof = self.proof()
+        proof["events"][0]["full_event"]["known_at"] = self.now + 1
+        self.assertEqual(self.bridge.consume(
+            self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
+            "STALE_OR_REORDERED_EVENT_CLOCK")
+
+    def test_10_cli_check_emit_and_no_runtime_authority(self):
+        import subprocess
+        import sys
+        for mode in ("--check", "--emit"):
+            with self.subTest(mode=mode):
+                proc = subprocess.run(
+                    [sys.executable, "-m",
+                     "tools.acme_synthetic_pg16_seven_bridge", mode],
+                    capture_output=True, text=True, check=True)
+                receipt = json.loads(proc.stdout)
+                self.assert_closed(receipt, shape="UNAVAILABLE")
+                self.assertEqual(receipt["source_event_count"], 7)
