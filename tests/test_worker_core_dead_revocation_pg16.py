@@ -1,7 +1,7 @@
 """Worker-only negative revocation regression after canonical Core-owned DEAD.
 
 CI disposable PG16 + Core TCP + persisted Temporal. No SQL DEAD mutation.
-Synthetic tenant ownership revocation is NOT a real GLPI/OIDC revocation.
+Synthetic ownership proof withdrawal is NOT a real GLPI/OIDC revocation.
 """
 import asyncio
 import hashlib
@@ -213,19 +213,23 @@ class CanonicalPostDeadRevocation(previous.CanonicalCoreDeadGatewayReplay):
                         "select status,attempts from aiops.hitl_decision_outbox "
                         "where event_id=%s", (second["event"],)).fetchone(),
                         ("PENDING", 0))
-                    db.execute(
-                        "update aiops.tenant_resource_ownership "
-                        "set verified=false where resource_kind='run' "
-                        "and resource_id=any(%s)",
-                        ([first["run"], second["run"]],))
+                    # The Core 012 provenance ledger is append-only.
+                    # Never mutate its rows: withdraw only the CI-signed
+                    # synthetic ownership proof manifest outside PostgreSQL.
                     self.assertEqual(db.execute(
                         "select count(*) from aiops.tenant_resource_ownership "
                         "where resource_kind='run' and resource_id=any(%s) "
-                        "and verified=false",
+                        "and verified=true",
                         ([first["run"], second["run"]],)).fetchone()[0], 2)
+                Path(self.proof_path).write_text(json.dumps({
+                    "schema": "aiops.core-ownership-proof.v1",
+                    "proofs": {},
+                }))
+                self.assertEqual(json.loads(
+                    Path(self.proof_path).read_text())["proofs"], {})
 
                 # Phase 1: actor remains ACL-authorized, but synthetic
-                # tenant/Run ownership provenance is explicitly revoked.
+                # tenant/Run proof manifest is explicitly withdrawn.
                 async with httpx.AsyncClient(
                     base_url=f"http://127.0.0.1:{gateway.server_port}",
                     timeout=20.0, trust_env=False,
@@ -337,7 +341,8 @@ class CanonicalPostDeadRevocation(previous.CanonicalCoreDeadGatewayReplay):
                     "receipt_sha256_before": before,
                     "receipt_sha256_after": after,
                     "tenant_run_provenance_revoked": True,
-                    "provenance_revocation_sql": "CI_SYNTHETIC_VERIFIED_FALSE_ONLY",
+                    "provenance_revocation_method": "CI_SIGNED_PROOF_MANIFEST_WITHDRAWAL",
+                    "provenance_sql_mutation": False,
                     "provenance_denied_dead": n,
                     "provenance_denied_ack": n,
                     "provenance_denied_claim": n,
