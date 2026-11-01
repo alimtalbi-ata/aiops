@@ -1,5 +1,6 @@
 """Portal GLPI handoff: no invented ticket, no upstream, no role bypass."""
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -31,6 +32,17 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertEqual(response.headers["x-content-type-options"], "nosniff")
         self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
         self.assertIn("default-src 'none'", response.headers["content-security-policy"])
+
+    def assert_only_status_check_and_disabled_actions(self, page):
+        """No ticket mutation controls: one status GET and three inert actions."""
+        buttons = re.findall(r"<button\\b[^>]*>", page)
+        self.assertEqual(len(buttons), 4)
+        self.assertEqual(sum('id="glpi-check"' in button for button in buttons), 1)
+        for button in buttons:
+            if 'id="glpi-check"' not in button:
+                self.assertIn('disabled aria-disabled="true"', button)
+        self.assertNotIn("<form", page)
+        self.assertIn('src="/assets/portal-glpi-authority.js"', page)
 
     def test_single_portal_native_handoff_shell_is_accessible_and_synthetic(self):
         with patch.object(main, "get_json", side_effect=AssertionError("Core read")) as core, \
@@ -68,7 +80,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertIn('href="/itsm" aria-current="page"', page)
         self.assertNotIn('href="/runs/', page)
         self.assertIn("Aucun deep link vers un ticket ou Run non autorisé", page)
-        self.assertNotIn("<button", page)
+        self.assert_only_status_check_and_disabled_actions(page)
         core.assert_not_called()
         write.assert_not_called()
 
@@ -82,7 +94,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
                 self.assertIn(label, page)
         self.assertIn('disabled aria-disabled="true"', page)
         self.assertNotIn("<form", page)
-        self.assertNotIn("<button", page)
+        self.assert_only_status_check_and_disabled_actions(page)
         self.assertNotIn("ticket_id", page)
         self.assertNotIn("evidence_id", page)
         self.assertNotIn(">CONNECTED<", page)
@@ -101,7 +113,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
         self.assertIn("NOT_INSTALLED", page.text)
         self.assertIn("Aucun ticket ni compteur", page.text)
         self.assertIn("Calendrier de maintenance : UNKNOWN", page.text)
-        self.assertNotIn("<button", page.text)
+        self.assert_only_status_check_and_disabled_actions(page.text)
         self.assertNotIn("<form", page.text)
         core.assert_not_called()
         write.assert_not_called()
