@@ -152,15 +152,12 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             conn.execute("update public.ci_actor_source_grants set revoked=true")
         negatives["revoked_grant"] = "UNKNOWN" if produce(request) is None else "ERROR"
         with self.psycopg.connect(self.db_url) as conn:
-            conn.execute("update public.ci_actor_source_grants set revoked=false")
-            conn.execute("update aiops.tenant_resource_ownership "
-                         "set observed_at=clock_timestamp()-interval '10 minutes' "
-                         "where resource_kind='run'")
-        negatives["stale_ownership"] = "UNKNOWN" if produce(request) is None else "ERROR"
+            conn.execute("update public.ci_actor_source_grants set revoked=false,"
+                         "expires_at=clock_timestamp()-interval '1 second'")
+        negatives["expired_grant"] = "UNKNOWN" if produce(request) is None else "ERROR"
         with self.psycopg.connect(self.db_url) as conn:
-            conn.execute("update aiops.tenant_resource_ownership "
-                         "set observed_at=clock_timestamp()-interval '40 seconds' "
-                         "where resource_kind='run'")
+            conn.execute("update public.ci_actor_source_grants "
+                         "set expires_at=clock_timestamp()+interval '3 minutes'")
         self.assertEqual(negatives, {key: "UNKNOWN" for key in negatives})
         self.assertIsNotNone(produce(request))
         with self.psycopg.connect(self.db_url) as conn:
