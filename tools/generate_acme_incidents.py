@@ -25,6 +25,8 @@ GOVERNANCE_SOURCE_FILE = ROOT / "tests/fixtures/acme_twin_governance_source_inde
 GOVERNANCE_SOURCE_GIT_BLOB = "e77a0abbb53176488ec49d7c0c9f8581d4620b3f"
 VERTICAL_CONTRACT_FILE = ROOT / "tests/fixtures/acme_synthetic_vertical_contract_v1.json"
 VERTICAL_CONTRACT_GIT_BLOB = "e74e7b67d0d58e8eb1c2e4b54b1b0bf688694d13"
+EVENT_IMPACT_CONTRACT_FILE = ROOT / "tests/fixtures/acme_synthetic_event_impact_contract_v1.json"
+EVENT_IMPACT_CONTRACT_GIT_BLOB = "10a0dac5d41d39ce115e29d6363c458148361496"
 SOURCE = "ACME_OFFLINE_SYNTHETIC_REPLAY_V1"
 ANCHOR = datetime(2026, 10, 31, 9, 42, tzinfo=timezone.utc)  # fixture clock, NOT wall clock
 NODE_RE = re.compile(r"^\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','[^']+','[^']+',([1-5]),", re.M)
@@ -708,6 +710,165 @@ def vertical_contract_offline(manifest, *, fixture=None):
     }
 
 
+
+def load_event_impact_contract_fixture(path=None):
+    """Pin Golden event/dedupe/correlation identities to reviewed fixture bytes.
+
+    A synthetic source_event_id is not an ITSM Incident, Core Run or Evidence ID.
+    The fixture cannot supply tenant authority, a real observation or a receipt.
+    """
+    path = EVENT_IMPACT_CONTRACT_FILE if path is None else path
+    raw = Path(path).read_bytes()
+    if _git_blob(raw) != EVENT_IMPACT_CONTRACT_GIT_BLOB:
+        raise ValueError("event impact contract Git blob mismatch")
+    data = json.loads(raw, object_pairs_hook=_unique_object)
+    expected_keys = {
+        "schema", "provenance", "authority", "scenario_id", "scenario_category",
+        "seed", "graph_git_blob", "governance_index_git_blob",
+        "vertical_contract_git_blob", "source_dataset_sha256", "tenant_scope",
+        "correlation_key", "events", "blast_radius_candidate",
+    }
+    if (not isinstance(data, dict) or set(data) != expected_keys or
+            data["schema"] != "aiops.acme.synthetic-event-impact-contract.v1" or
+            data["provenance"] != "SYNTHETIC_FIXTURE" or
+            data["authority"] != "OFFLINE_SCRIPT_ONLY" or
+            data["scenario_id"] != "SCN-GOLDEN-PAYMENT-P1" or
+            data["scenario_category"] != "REDUNDANT_SAN_PATH_LOSS" or
+            type(data["seed"]) is not int or data["seed"] != 20261018 or
+            data["graph_git_blob"] != SEED_GIT_BLOB or
+            data["governance_index_git_blob"] != GOVERNANCE_SOURCE_GIT_BLOB or
+            data["vertical_contract_git_blob"] != VERTICAL_CONTRACT_GIT_BLOB or
+            data["tenant_scope"] != "UNKNOWN"):
+        raise ValueError("event impact contract provenance or identity mismatch")
+    load_governance_source_index()
+    load_vertical_contract_fixture()
+    golden = replay(seed=20261018)
+    expected_events = [
+        {"step": step, "source_event_id": event["source_event_id"],
+         "offset_seconds": event["at_seconds"], "event_time": event["event_time"],
+         "action": event["action"], "ci_id": event["ci_id"],
+         "dedupe_key": event["dedupe_key"]}
+        for step, event in enumerate(golden["events"], 1)
+    ]
+    impact = golden["impact_estimate"]
+    expected_blast = {
+        "source_ci_id": golden["ci_id"],
+        "selected_service_id": golden["service_id"],
+        "candidate_service_ids": impact["candidate_service_ids"],
+        "candidate_ci_count": impact["candidate_ci_count"],
+        "path_edge_ids": impact["path_edge_ids"],
+        "path_node_ids": impact["path_node_ids"],
+        "estimated_impact_level": impact["estimated_impact_level"],
+        "observed_service_impact": "UNKNOWN",
+    }
+    if (data["source_dataset_sha256"] != golden["dataset_sha256"] or
+            data["correlation_key"] != golden["events"][0]["correlation_key"] or
+            _canonical(data["events"]) != _canonical(expected_events) or
+            _canonical(data["blast_radius_candidate"]) != _canonical(expected_blast) or
+            len({e["source_event_id"] for e in expected_events}) != 7 or
+            len({e["dedupe_key"] for e in expected_events}) != 7):
+        raise ValueError("event impact contract not backed by pinned Golden source")
+    return data
+
+
+def event_impact_contract_offline(manifest, *, fixture=None):
+    """Deterministic Event->correlation->Twin candidate impact, never runtime ITIL.
+
+    Validates the full Golden manifest (including seed, tenant and timestamps)
+    before projection. The correlation group is fixture-local, not a ticket.
+    """
+    correlated = correlate_golden_manifest_offline(manifest)
+    vertical = vertical_contract_offline(manifest)
+    pinned = load_event_impact_contract_fixture()
+    if fixture is None:
+        fixture = pinned
+    elif _canonical(fixture) != _canonical(pinned):
+        raise ValueError("untrusted event impact contract override")
+    events = manifest["events"]
+    if (len(events) != 7 or correlated["event_count"] != 7 or
+            correlated["correlation_key"] != fixture["correlation_key"]):
+        raise ValueError("event impact correlation mismatch")
+    timeline = []
+    for expected, event in zip(fixture["events"], events):
+        if (event["source_event_id"] != expected["source_event_id"] or
+                event["dedupe_key"] != expected["dedupe_key"] or
+                event["correlation_key"] != fixture["correlation_key"] or
+                event["event_time"] != _stamp(expected["offset_seconds"]) or
+                event["known_at"] != _stamp(expected["offset_seconds"] + 1) or
+                event["observed_at"] != event["event_time"] or
+                event["at_seconds"] != expected["offset_seconds"] or
+                event["ci_id"] != expected["ci_id"] or
+                event["action"] != expected["action"]):
+            raise ValueError("untrusted event impact chronology or source")
+        timeline.append({
+            "step": expected["step"], "source_event_id": event["source_event_id"],
+            "event_time": event["event_time"], "known_at": event["known_at"],
+            "ci_id": event["ci_id"], "action": event["action"],
+            "dedupe_key": event["dedupe_key"],
+            "correlation_key": event["correlation_key"],
+            "source": SOURCE, "provenance": "SYNTHETIC_FIXTURE",
+            "tenant_scope": "UNKNOWN", "runtime_incident_id": None,
+            "runtime_evidence_id": None, "runtime_readback": "NOT_EXECUTED",
+        })
+    impact = dependency_candidates(load_graph(), manifest["ci_id"], manifest["service_id"])
+    expected_impact = fixture["blast_radius_candidate"]
+    if (_canonical(impact["candidate_service_ids"]) !=
+            _canonical(expected_impact["candidate_service_ids"]) or
+            impact["candidate_ci_count"] != expected_impact["candidate_ci_count"] or
+            _canonical(impact["path_edge_ids"]) !=
+            _canonical(expected_impact["path_edge_ids"]) or
+            _canonical(impact["path_node_ids"]) !=
+            _canonical(expected_impact["path_node_ids"]) or
+            impact["estimated_impact_level"] != expected_impact["estimated_impact_level"]):
+        raise ValueError("untrusted Twin reverse-reachable blast radius")
+    return {
+        "schema": "aiops.acme.synthetic-event-impact-projection.v1",
+        "synthetic": True, "provenance": "SYNTHETIC_FIXTURE",
+        "authority": "OFFLINE_SCRIPT_ONLY",
+        "scenario_id": manifest["scenario_id"], "seed": manifest["seed"],
+        "graph_version": SEED_GIT_BLOB,
+        "contract_fixture_git_blob": EVENT_IMPACT_CONTRACT_GIT_BLOB,
+        "source_dataset_sha256": manifest["dataset_sha256"],
+        "source_event_ids": [e["source_event_id"] for e in events],
+        "event_count": len(events), "timeline": timeline,
+        "correlation": {
+            "key": fixture["correlation_key"], "scope": "LOCAL_FIXTURE_ONLY",
+            "event_count": correlated["event_count"],
+            "ci_ids": correlated["ci_ids"],
+            "dedupe_keys": [e["dedupe_key"] for e in events],
+            "deduplication": "SOURCE_EVENT_ID_AND_DEDUPE_KEY_ONLY",
+            "tenant_scope": "UNKNOWN", "runtime_incident_id": None,
+            "runtime_readback": "NOT_EXECUTED",
+        },
+        "blast_radius_candidate": {
+            **expected_impact, "classification": "REVERSE_REACHABLE_CANDIDATE_ONLY",
+            "causality_verified": False, "redundancy_evaluated": False,
+            "observed_at": None, "known_at": None,
+            "source": "db/migrations/005_seed_acme.sql",
+            "source_git_blob": SEED_GIT_BLOB,
+        },
+        "itil": {
+            "priority_candidate": manifest["itil"]["priority_candidate"],
+            "priority_confirmed": "UNKNOWN",
+            "impact_estimated": impact["estimated_impact_level"],
+            "impact_observed": "UNKNOWN",
+            "urgency_synthetic": manifest["itil"]["urgency_input"],
+            "roles_planned": list(manifest["itil"]["roles_planned"]),
+            "roles_authenticated": False,
+        },
+        "service_id": manifest["service_id"], "ci_id": manifest["ci_id"],
+        "tenant_scope": "UNKNOWN", "tenant_id": None,
+        "ticket_id": None, "incident_id": None, "run_id": None,
+        "evidence_ids": [], "analyst_receipt": None, "critic_receipt": None,
+        "policy_receipt": None, "hitl_receipt": None, "simulation_receipt": None,
+        "runtime_readback": "NOT_EXECUTED",
+        "checkpoints": vertical["checkpoints"],
+        "stages": vertical["stages"],
+        "governance_unknowns": vertical["governance_unknowns"],
+        "publishable_to_core_or_glpi": False, "live_effects_authorized": False,
+    }
+
+
 def correlate_offline(events):
     """Dedup *fixture-only* events; reject untrusted IDs, CIs and evidence.
 
@@ -789,14 +950,16 @@ def main(argv=None):
     parser.add_argument("--false-positive", action="store_true")
     parser.add_argument("--vertical-contract", action="store_true",
                         help="export no-effect SYNTHETIC ITIL lifecycle contract")
+    parser.add_argument("--event-impact-contract", action="store_true",
+                        help="export pinned no-effect event/correlation/Twin impact contract")
     parser.add_argument("--storyboard", action="store_true",
                         help="export strict read-only SYNTHETIC timeline, not Core Evidence")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.stochastic and args.seed is None:
         parser.error("--stochastic requires explicit --seed")
-    if args.storyboard and args.vertical_contract:
-        parser.error("--storyboard and --vertical-contract are exclusive")
+    if sum((args.storyboard, args.vertical_contract, args.event_impact_contract)) > 1:
+        parser.error("--storyboard, --vertical-contract and --event-impact-contract are exclusive")
     try:
         result = replay(args.scenario, 20261018 if args.seed is None else args.seed, stochastic=args.stochastic,
                         false_positive=args.false_positive)
@@ -804,6 +967,8 @@ def main(argv=None):
             result = storyboard_offline(result, false_positive=args.false_positive)
         if args.vertical_contract:
             result = vertical_contract_offline(result)
+        if args.event_impact_contract:
+            result = event_impact_contract_offline(result)
     except (ValueError, OSError, UnicodeError) as exc:
         parser.error(str(exc))
     data = json.dumps(result, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
