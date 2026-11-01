@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_hitl_vertical_reject_pg16.py' -v 2>&1 | tee /tmp/hitl-worker-vertical.log
-          grep -q "Ran 1 test" /tmp/hitl-worker-vertical.log
+          grep -q "Ran 2 tests" /tmp/hitl-worker-vertical.log
           grep -q "^OK$" /tmp/hitl-worker-vertical.log
           ! grep -q "skipped=" /tmp/hitl-worker-vertical.log
       - name: Validate redacted exact-head machine-readable receipt
@@ -106,8 +106,46 @@ jobs:
           assert data["universal_exactly_once"] == "NOT_CLAIMED"
           assert not any(s in raw.lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
           print("VERTICAL_REJECT_RECEIPT_PASS", digest)
+          gate_path = path.with_name("worker-core-writer-rollback-gate.json")
+          gate_raw = gate_path.read_text()
+          gate = json.loads(gate_raw)
+          gate_digest = gate.pop("payload_sha256")
+          gate_canonical = json.dumps(gate, sort_keys=True, separators=(",", ":")).encode()
+          assert hashlib.sha256(gate_canonical).hexdigest() == gate_digest
+          assert gate["schema"] == "aiops.worker-core-writer-rollback-gate.v1"
+          assert gate["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert gate["environment"] == "CI_DISPOSABLE_SYNTHETIC_ONLY"
+          assert gate["core_unauthorized_event_http"] == 401
+          assert gate["core_terminal_014_rows_for_run"] == 0
+          assert gate["approve_count"] == gate["effect_receipt_count"] == 0
+          assert gate["execution_allowed"] is False and gate["effect_allowed"] is False
+          assert gate["sql_dead_injection"] is False
+          assert gate["immutable_012_013_014_mutation"] is False
+          assert gate["temporal_restart"] == "COVERED_BY_SIBLING_VERTICAL_TEST"
+          assert gate["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert gate["host_7777_local_operator"] == "REPORTED_VERIFIED"
+          assert gate["host_7777_external"] == "NOT_ATTESTED"
+          assert gate["universal_exactly_once"] == "NOT_CLAIMED"
+          if gate["migration_event_key_present"]:
+              assert gate["core_writer_status"] == "CORE_WRITER_IDEMPOTENT_OBSERVED"
+              assert gate["core_event_http"] == gate["core_command_http"] == 200
+              assert gate["core_run_status_after"] == "RUNNING"
+              assert gate["core_run_version_delta"] == 2
+              assert gate["core_event_rows_after"] == 2
+              assert gate["core_command_receipts_after"] == 1
+          else:
+              assert gate["core_writer_status"] == "BLOCKED_MISSING_EVENT_KEY_MIGRATION"
+              assert gate["core_event_http"] == gate["core_command_http"] == 500
+              assert gate["core_run_status_after"] == "CREATED"
+              assert gate["core_run_version_delta"] == 0
+              assert gate["core_event_rows_after"] == 0
+              assert gate["core_command_receipts_after"] == 0
+          assert not any(s in gate_raw.lower() for s in
+                         ("bearer", "lease_token", "hmac_secret", "postgresql://"))
+          print("CORE_WRITER_ROLLBACK_GATE_PASS", gate_digest,
+                gate["core_writer_status"])
           PY
-          sha256sum "$AIOPS_CI_VERTICAL_REJECT_RECEIPT_DIR"/worker-vertical-reject.json > /tmp/hitl-worker-vertical.sha256
+          sha256sum "$AIOPS_CI_VERTICAL_REJECT_RECEIPT_DIR"/*.json > /tmp/hitl-worker-vertical.sha256
           sha256sum --check /tmp/hitl-worker-vertical.sha256
       - name: PostgreSQL 16 outbox DR restore regression
         shell: bash
@@ -128,6 +166,7 @@ jobs:
           name: hitl-worker-vertical-reject-pg16-receipts-only
           path: |
             /tmp/hitl-worker-vertical-receipts/worker-vertical-reject.json
+            /tmp/hitl-worker-vertical-receipts/worker-core-writer-rollback-gate.json
             /tmp/hitl-worker-vertical.sha256
             /tmp/hitl-worker-vertical-dr.sha256
           retention-days: 7
