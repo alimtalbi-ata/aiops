@@ -1477,3 +1477,207 @@ class AcmeCorePg16SevenBridgeTests(unittest.TestCase):
                 receipt = json.loads(proc.stdout)
                 self.assert_closed(receipt, shape="UNAVAILABLE")
                 self.assertEqual(receipt["source_event_count"], 7)
+
+
+class AcmeCoreHttpsSevenTwinConcordanceTests(unittest.TestCase):
+    """Real Core HTTPS adapter dispatch, TEST_ONLY SQL stub, no PG16 authority."""
+
+    def setUp(self):
+        import sys
+        from tools import acme_synthetic_https_seven_concordance as concordance
+        from tools import generate_acme_incidents as gen
+        self.concordance, self.gen = concordance, gen
+        self.manifest = gen.replay(seed=20261018)
+        self.now = 1793538000
+        self.fixture_builder = AcmeCorePg16SevenBridgeTests(
+            "test_01_pinned_receipt_and_sourced_twin_path")
+        self.fixture_builder.setUp()
+        app_path = str(Path(__file__).resolve().parents[1] / "app")
+        if app_path not in sys.path:
+            sys.path.insert(0, app_path)
+        from core import canonical_seven_https_adapter as adapter
+        from core import actor_canonical_seven_source as actor
+        self.adapter, self.actor = adapter, actor
+
+    def proof(self):
+        return self.fixture_builder.proof()
+
+    def dispatch(self, proof, *, tls=True, auth_valid=True, sql_failure=False):
+        import base64
+        from contextlib import nullcontext
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        client_id = "TEST_ONLY_service_client"
+        client_secret = "TEST_ONLY_" + "z" * 40
+        authorization = "Basic " + base64.b64encode(
+            (client_id + ":" + client_secret).encode()).decode()
+        if not auth_valid:
+            authorization = "Basic invalid"
+        body = json.dumps({k: proof[k] for k in self.actor._SCOPE},
+                          sort_keys=True).encode()
+        with patch.object(self.adapter, "read_canonical_seven",
+                          side_effect=RuntimeError("TEST_ONLY_SQL_FAILURE")
+                          if sql_failure else None,
+                          return_value=None if sql_failure else proof) as reader:
+            status, response = self.adapter.dispatch_canonical_seven(
+                method="POST", path=self.adapter.PATH, tls=tls,
+                authorization=authorization, body=body,
+                client_id=client_id, client_secret=client_secret,
+                connect=lambda: nullcontext(object()),
+                source="TEST_ONLY_source",
+                source_issuer="core-source-disposable-authority",
+                now=datetime.fromtimestamp(self.now, timezone.utc))
+            self.assertEqual(reader.call_count, 1 if tls and auth_valid else 0)
+            if reader.call_count:
+                self.assertEqual(reader.call_args.kwargs["issuer"],
+                                 "core-source-disposable-authority")
+        return status, response
+
+    def compare(self, status, response, **overrides):
+        proof = self.proof()
+        args = {
+            "source_issuer": proof["issuer"],
+            "actor_issuer": proof["actor_issuer"],
+            "expected_source_issuer": proof["issuer"],
+            "expected_actor_issuer": proof["actor_issuer"],
+            "now": self.now,
+        }
+        args.update(overrides)
+        return self.concordance.consume_adapter_response(
+            self.manifest, http_status=status, response=response, **args)
+
+    def assert_unknown(self, result):
+        self.assertEqual(result["core_pg16_authority"], "UNKNOWN")
+        self.assertEqual(result["actor_tenant_acl"], "UNKNOWN")
+        self.assertEqual(result["immutable_audit_013_014"], "UNKNOWN")
+        self.assertEqual(result["itil_stages"]["not_executed"], 15)
+        self.assertEqual(result["itil_stages"]["verified"], 0)
+        self.assertEqual(result["checkpoints"]["not_executed"], 6)
+        self.assertEqual(result["checkpoints"]["verified"], 0)
+        self.assertEqual(result["candidate_incident"]["status"], "NOT_CREATED")
+        self.assertIsNone(result["runtime"]["incident_id"])
+        self.assertIsNone(result["runtime"]["run_id"])
+        self.assertFalse(result["glpi_human_allow"])
+        self.assertIsNone(result["hitl_approval"])
+        self.assertFalse(result["live_effects_authorized"])
+        dumped = json.dumps(result)
+        for secret in ("TEST_ONLY_actor", "TEST_ONLY_incident", "TEST_ONLY_run",
+                       "TEST_ONLY_ticket", "TEST_ONLY_service_client"):
+            self.assertNotIn(secret, dumped)
+
+    def test_01_pinned_graph_seven_domains_and_unknown_receipt(self):
+        receipt = self.concordance.build_receipt(self.manifest)
+        pinned = json.loads(self.concordance.FIXTURE.read_text(),
+                            object_pairs_hook=self.gen._unique_object)
+        self.assertEqual(receipt, pinned)
+        self.assertEqual(receipt["twin_impact"]["path_edge_ids"],
+                         list(self.concordance.PATH_EDGES))
+        self.assertEqual(receipt["twin_impact"]["path_node_ids"],
+                         list(self.concordance.PATH_NODES))
+        self.assertEqual(len(receipt["events"]), 7)
+        self.assertTrue(all(e["source_event_id"].startswith("SYN-EVT-")
+                            and len({e["acme_full_event_sha256"],
+                                     e["acme_local_payload_sha256"],
+                                     e["proposed_core_payload_sha256"]}) == 3
+                            for e in receipt["events"]))
+        self.assert_unknown(receipt)
+
+    def test_02_test_controlled_https_200_is_consistent_untrusted(self):
+        proof = self.proof()
+        self.assertNotEqual(proof["issuer"], proof["actor_issuer"])
+        status, body = self.dispatch(proof)
+        self.assertEqual(status, 200)
+        result = self.compare(status, body)
+        self.assertEqual(result["core_source_shape"], "CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["compared_event_count"], 7)
+        self.assertEqual(result["core_https_response"],
+                         "TEST_CONTROLLED_200_NOT_AUTHORITY")
+        self.assertTrue(all(e["comparison"] != "UNKNOWN"
+                            for e in result["events"]))
+        self.assert_unknown(result)
+
+    def test_03_tls_basic_and_sql_fail_closed(self):
+        for options, expected in (({"tls": False}, 503),
+                                  ({"auth_valid": False}, 401),
+                                  ({"sql_failure": True}, 503)):
+            with self.subTest(options=options):
+                status, body = self.dispatch(self.proof(), **options)
+                self.assertEqual(status, expected)
+                self.assertEqual(body, {"decision": "UNKNOWN"})
+                result = self.compare(status, body)
+                self.assertEqual(result["compared_event_count"], 0)
+                self.assert_unknown(result)
+
+    def test_04_actor_idp_and_core_source_issuer_are_distinct_pins(self):
+        proof = self.proof()
+        status, body = self.dispatch(proof)
+        for change in ({"expected_source_issuer": "TEST_ONLY_foreign_source"},
+                       {"expected_actor_issuer": "TEST_ONLY_foreign_idp"},
+                       {"actor_issuer": proof["issuer"]},
+                       {"expected_actor_issuer": proof["issuer"]}):
+            with self.subTest(change=change):
+                result = self.compare(status, body, **change)
+                self.assertEqual(result["compared_event_count"], 0)
+                self.assert_unknown(result)
+
+    def test_05_reordered_missing_and_foreign_synthetic_event(self):
+        import copy
+        for mutate in (
+            lambda p: p["events"].reverse(),
+            lambda p: p["events"].pop(),
+            lambda p: p["events"][0].update(source_event_id="EVT-SOURCE-01"),
+        ):
+            with self.subTest(mutation=mutate.__code__.co_firstlineno):
+                proof = self.proof()
+                mutate(proof)
+                result = self.compare(200, proof)
+                self.assertEqual(result["core_source_shape"], "REJECTED")
+                self.assertEqual(result["compared_event_count"], 0)
+                self.assert_unknown(result)
+
+    def test_06_foreign_tenant_run_and_hash_mismatch(self):
+        for field, value in (("tenant_id", "TEST_ONLY_foreign_tenant"),
+                             ("run_id", "TEST_ONLY_foreign_run"),
+                             ("payload_hash", "0" * 64)):
+            with self.subTest(field=field):
+                proof = self.proof()
+                if field == "payload_hash":
+                    proof["events"][0][field] = value
+                else:
+                    proof["events"][0]["payload"][field] = value
+                result = self.compare(200, proof)
+                self.assertEqual(result["compared_event_count"], 0)
+                self.assert_unknown(result)
+
+    def test_07_stale_revoked_and_expired(self):
+        for field, value in (("observed_at", self.now - 600),
+                             ("revoked", True),
+                             ("expires_at", self.now - 1)):
+            with self.subTest(field=field):
+                proof = self.proof()
+                proof[field] = value
+                result = self.compare(200, proof)
+                self.assertEqual(result["core_source_shape"], "REJECTED")
+                self.assert_unknown(result)
+
+    def test_08_forged_glpi_allow_or_hitl_cannot_promote(self):
+        for field in ("glpi_human_allow", "hitl_approval"):
+            proof = self.proof()
+            proof[field] = True
+            result = self.compare(200, proof)
+            self.assertEqual(result["core_source_shape"], "REJECTED")
+            self.assert_unknown(result)
+
+    def test_09_cli_check_and_no_http_or_pg16_claim(self):
+        import subprocess
+        import sys
+        proc = subprocess.run(
+            [sys.executable, "-m",
+             "tools.acme_synthetic_https_seven_concordance", "--check"],
+            capture_output=True, text=True, check=True)
+        result = json.loads(proc.stdout)
+        self.assertEqual(result["check"], "PASS_SYNTHETIC_ONLY")
+        self.assertEqual(result["events"], 7)
+        self.assertEqual(result["itil_not_executed"], 15)
+        self.assertEqual(result["checkpoints_not_executed"], 6)
+        self.assert_unknown(self.concordance.build_receipt(self.manifest))
