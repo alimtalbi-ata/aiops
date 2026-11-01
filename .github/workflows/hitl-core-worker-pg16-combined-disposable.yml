@@ -76,12 +76,14 @@ jobs:
           log_path = "/tmp/hitl-combined.log"
           log = open(log_path).read() if os.path.isfile(log_path) else ""
           combined_ok = bool(
-              re.search(r"(?m)^Ran 5 tests in [0-9.]+s$", log)
+              re.search(r"(?m)^Ran 6 tests in [0-9.]+s$", log)
               and re.search(r"(?m)^OK$", log))
           tcp_boundary_pass = (combined_ok and
               "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
           independent_core_temporal_restart_pass = (combined_ok and
               "test_05_independent_core_tcp_temporal_server_restart_persistent_reject" in log)
+          multiworker_race_pass = (combined_ok and
+              "test_06_two_temporal_workers_race_one_core_lease_and_restart_server" in log)
           worker_restart_pass = (combined_ok and
               "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
           report = {
@@ -100,6 +102,9 @@ jobs:
               "temporal_server_restart": ("OBSERVED_CI_DISPOSABLE_SQLITE_PERSISTED" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
               "independent_core_tcp_service": ("OBSERVED_CI_DISPOSABLE_SEPARATE_PID" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
               "temporal_partition": "CONTROLLED_SERVER_STOP_START_NOT_NETWORK_PARTITION",
+              "two_worker_lease_race": ("OBSERVED_CI_DISPOSABLE_ONE_CORE_LEASE_ONE_SIGNAL" if multiworker_race_pass else "NOT_TESTED_OR_FAILED"),
+              "durable_ack_fencing_after_server_restart": ("OBSERVED_CI_DISPOSABLE" if multiworker_race_pass else "NOT_TESTED_OR_FAILED"),
+              "exactly_once_scope": "SINGLE_CI_EVENT_NOTIFICATION_ONLY_NOT_GLOBAL_EXACTLY_ONCE",
               "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT",
               "boundary_scope": ("GATEWAY_CLOSE_AFTER_INDEPENDENT_CORE_TCP_COMMIT_NOT_PACKET_LOSS" if independent_core_temporal_restart_pass else "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER"),
               "real_network_ack_loss": "NOT_TESTED",
