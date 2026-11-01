@@ -606,5 +606,161 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
              "revoked_session_http": 401, "upstream_business_gets": 0})
 
 
+    def test_p0_disposable_glpi_human_readmy_core_expiry_never_promotes(self):
+        """Independent disposable TLS peers are NOT independent human authority.
+
+        The positive-shaped GLPI READ and signed Core ALLOW are MOCK inputs;
+        only a real governed IdP->GLPI mapping, human session/ownership and
+        Core signer/nonce/revocation proof could ever qualify a positive read.
+        """
+        from starlette.requests import Request
+        actor = self.actor()
+        self.assertFalse(actor.tenant_acl_qualified)
+        plan = wire.prepare_core_authz_wire(
+            actor, self.binding, env=self.settings, now=self.now)
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        self.assertEqual(
+            self.synthetic_mapping.get((actor.issuer, actor.subject,
+                                        actor.tenant_id)), 77)
+
+        # Two separate pinned, disposable TLS origins. The records and
+        # signing keys are still test-controlled, not genuine GLPI/Core.
+        native_mutations = (
+            ("readmy_is_not_read", "Profile", {"id": 4, "ticket": 2}),
+            ("no_ticket_read", "Profile", {"id": 4, "ticket": 0}),
+            ("inactive_user", "User", {"id": 77, "is_active": 0}),
+            ("foreign_ticket_entity", "Ticket",
+             {"id": 123, "entities_id": 99}),
+            ("wrong_active_profile", "getFullSession", {"session": {
+                "glpiID": 77, "glpiactiveprofile": {"id": 9},
+                "glpiactiveentities": [42]}}),
+            ("foreign_human_user", "getFullSession", {"session": {
+                "glpiID": 78, "glpiactiveprofile": {"id": 4},
+                "glpiactiveentities": [42]}}),
+            ("missing_active_entity", "getFullSession", {"session": {
+                "glpiID": 77, "glpiactiveprofile": {"id": 4},
+                "glpiactiveentities": []}}),
+        )
+        signed_mutations = (
+            ("expired_core_decision", {"expires_at": self.now - 1}),
+            ("foreign_run", {"run_id": "RUN-FOREIGN-999"}),
+            ("foreign_ticket", {"ticket_id": "999"}),
+            ("foreign_tenant", {"tenant_id": "FOREIGN"}),
+            ("revoked_core", {"revoked": True}),
+            ("wrong_nonce", {"request_nonce": "replayed-foreign-nonce"}),
+        )
+        with DisposableSignedCoreNativeGlpi(plan.service_bearer) as peers:
+            native = peers.read_native_glpi()
+            # This is a deliberately positive-shaped *synthetic mock*.
+            self.assertTrue(synthetic_native_glpi_shape_matches(
+                native, self.binding, glpi_user_id=77))
+            self.assertFalse(synthetic_native_glpi_shape_matches(
+                native, self.binding, glpi_user_id=78))
+            self.assertNotIn((actor.issuer, actor.subject, "FOREIGN"),
+                             self.synthetic_mapping)
+            for label, key, replacement in native_mutations:
+                with self.subTest(native_case=label):
+                    peers.native_rows = copy.deepcopy(native)
+                    peers.native_rows[key] = replacement
+                    changed = peers.read_native_glpi()
+                    self.assertFalse(synthetic_native_glpi_shape_matches(
+                        changed, self.binding, glpi_user_id=77))
+            peers.native_rows = copy.deepcopy(native)
+
+            settings = {**self.settings,
+                        "AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON":
+                            json.dumps(peers.jwks)}
+            # A valid test signature + matching mock GLPI READ still never
+            # promotes a Portal authorization or causes business GET.
+            positive_mock = self.envelope(actor, plan.nonce)
+            peers.payload = positive_mock
+            response = peers.send_core(plan)
+            assessment = self.assess(response, actor, plan, settings)
+            self.assertEqual((assessment.kind, assessment.portal_status,
+                              assessment.read_permitted),
+                             ("SIGNED_SHAPE_UNQUALIFIED", 503, False))
+            for label, changes in signed_mutations:
+                with self.subTest(core_case=label):
+                    peers.payload = {**positive_mock, **changes}
+                    negative = self.assess(
+                        peers.send_core(plan), actor, plan, settings)
+                    self.assertEqual((negative.kind, negative.portal_status,
+                                      negative.read_permitted),
+                                     ("INVALID", 503, False))
+            self.assertEqual(len(peers.glpi_observations),
+                             5 * (1 + len(native_mutations)))
+            self.assertTrue(all(x["method"] == "GET"
+                                for x in peers.glpi_observations))
+            self.assertEqual(len(peers.core_observations),
+                             1 + len(signed_mutations))
+            self.assertTrue(all(x["method"] == "POST"
+                                for x in peers.core_observations))
+            self.assertFalse(wire.core_authz_read_permitted())
+
+        # Session revocation is rechecked AFTER a negative Core response.
+        # A browser bearer is never a fallback for an explicit OIDC cookie.
+        handle = "N" * 43
+        request = Request({
+            "type": "http", "method": "GET",
+            "path": "/api/portal/runs/RUN-ACME-123",
+            "headers": [(b"cookie", (oidc_session._SESSION_COOKIE + "="
+                                      + handle).encode("ascii")),
+                        (b"authorization", ("Bearer " +
+                         self.settings["AIOPS_PORTAL_READ_TOKEN"]).encode())],
+            "query_string": b"", "scheme": "https",
+            "server": ("portal.example.test", 7777),
+        })
+        unknown = {"schema": "aiops.core-actor-resource-authorization.v1",
+                   "decision": "UNKNOWN"}
+        with oidc_session._lock:
+            oidc_session._sessions[oidc_session._digest(handle)] = (
+                oidc_session._Session(actor, self.now + 120))
+        try:
+            with patch("urllib.request.urlopen",
+                       side_effect=AssertionError("unexpected upstream")) as upstream:
+                valid = wire.assess_core_negative_for_session(
+                    request, binding=self.binding, plan=plan,
+                    status_code=200, payload=unknown, headers=HEADERS,
+                    env=self.settings, now=self.now)
+                self.assertEqual((valid.portal_status, valid.read_permitted),
+                                 (503, False))
+                with oidc_session._lock:
+                    oidc_session._sessions.pop(
+                        oidc_session._digest(handle), None)
+                revoked = wire.assess_core_negative_for_session(
+                    request, binding=self.binding, plan=plan,
+                    status_code=200, payload=unknown, headers=HEADERS,
+                    env=self.settings, now=self.now)
+                self.assertEqual((revoked.portal_status, revoked.read_permitted),
+                                 (401, False))
+                upstream.assert_not_called()
+        finally:
+            with oidc_session._lock:
+                oidc_session._sessions.pop(
+                    oidc_session._digest(handle), None)
+
+        self._emit_negative_receipt(
+            "disposable-native-human-boundary",
+            ["pinned_separate_disposable_core_glpi_tls_origins",
+             "synthetic_read_bit_not_human_authority",
+             "readmy_not_read_and_seven_native_negative_readbacks",
+             "foreign_idp_subject_tenant_mapping_absent",
+             "signed_positive_mock_shape_unqualified_no_allow",
+             "six_expired_foreign_revoked_core_shapes_rejected",
+             "revoked_oidc_with_viewer_is_401_not_downgrade",
+             "https_7777_is_test_origin_not_host_listener",
+             "https_17777_is_never_callback_alias",
+             "no_portal_business_get_or_positive_dispatch"],
+            {"native_fixture_gets": 5 * (1 + len(native_mutations)),
+             "synthetic_core_fixture_posts": 1 + len(signed_mutations),
+             "native_negative_variants": len(native_mutations),
+             "signed_core_negative_variants": len(signed_mutations),
+             "signed_mock_http": 503, "revoked_session_http": 401,
+             "host_7777_local_operator_reported": True,
+             "external_tls_and_single_portal_attested": False})
+
+
+
 if __name__ == "__main__":
     unittest.main()
