@@ -137,7 +137,7 @@ def create_run_session(request: Request, authorization: str | None = Header(defa
         try:
             parsed = urllib.parse.urlsplit(origin)
             host = request.headers.get("host", "")
-            if (parsed.scheme not in ("http", "https") or not parsed.netloc
+            if (parsed.scheme != "https" or not parsed.netloc
                     or parsed.netloc.lower() != host.lower()
                     or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
                 return _session_failure(403, "same_origin_required")
