@@ -70,6 +70,9 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_revocation_pg16.py' -v 2>&1 | tee /tmp/hitl-core-dead-revocation.log
+          grep -q "Ran 1 test" /tmp/hitl-core-dead-revocation.log
+          grep -q "^OK$" /tmp/hitl-core-dead-revocation.log
+          ! grep -q "skipped=" /tmp/hitl-core-dead-revocation.log
       - name: Validate redacted exact-head machine-readable receipt
         shell: bash
         run: |
@@ -151,6 +154,9 @@ jobs:
           assert evidence["actor_acl_revoked_on_core_restart"] is True
           assert evidence["provenance_denied_dead"] == evidence["provenance_denied_ack"] == evidence["provenance_denied_claim"] == 4
           assert evidence["actor_denied_dead"] == evidence["actor_denied_ack"] == evidence["actor_denied_claim"] == 4
+          assert evidence["disposable_worker_processes"] == 2
+          assert evidence["distinct_worker_processes"] is True
+          assert evidence["revoked_worker_retry_requests"] == 24
           assert evidence["delivery_only_terminal_denied"] is True
           assert evidence["foreign_tenant_terminal_denied"] is True
           assert evidence["temporal_persisted_restarts"] == evidence["core_tcp_restarts"] == 1
@@ -160,7 +166,8 @@ jobs:
           assert evidence["execution_allowed"] is False and evidence["effect_allowed"] is False
           assert evidence["sql_dead_injection"] is False
           assert evidence["oidc_glpi_identity"] == "NOT_ATTESTED"
-          assert evidence["host_7777"] == "NOT_VERIFIED"
+          assert evidence["host_7777"] == "NOT_VERIFIED_BY_CI"
+          assert evidence["host_7777_local_operator"] == "REPORTED_VERIFIED"
           assert evidence["universal_exactly_once"] == "NOT_CLAIMED"
           assert not any(s in revoked.read_text().lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
           print("CANONICAL_DEAD_REVOCATION_RECEIPT_PASS", digest)
@@ -172,6 +179,9 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v 2>&1 | tee /tmp/hitl-core-dead-canonical-dr.log
+          grep -q "Ran 5 tests" /tmp/hitl-core-dead-canonical-dr.log
+          grep -q "^OK$" /tmp/hitl-core-dead-canonical-dr.log
+          ! grep -q "skipped=" /tmp/hitl-core-dead-canonical-dr.log
           test -s "$HITL_DR_ARTIFACT"
           pg_restore --version | grep -E ' 16[.]'
           sha256sum "$HITL_DR_ARTIFACT" > /tmp/hitl-core-dead-canonical-dr.sha256
