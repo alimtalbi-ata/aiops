@@ -472,10 +472,15 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         output = Path(os.environ.get(
             "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")))
         output.mkdir(parents=True, exist_ok=True)
+        checked_out_head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        expected_head = os.environ.get("AIOPS_EXPECTED_HEAD_SHA")
+        if expected_head:
+            self.assertEqual(checked_out_head, expected_head)
         receipt = {
             "schema": "aiops.portal.glpi-source-freshness-negative.v1",
             "provenance": "CI_DISPOSABLE_SYNTHETIC_ONLY",
-            "source_head": os.environ.get("GITHUB_SHA", "LOCAL_UNVERIFIED"),
+            "source_head": checked_out_head,
             "observed_at_utc": datetime.now(timezone.utc).isoformat(),
             "portal_api_http": 503,
             "portal_source_provenance": "PORTAL_CONTRACT_ONLY",
