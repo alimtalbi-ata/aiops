@@ -89,6 +89,109 @@ def _owners_attested(owned):
     except (OSError,UnicodeError,ValueError,TypeError,KeyError):
         return False
 
+
+def _glpi_readback(e, tenant, instance, ticket):
+    """Independent GLPI REST read: ticket, entity and at least one attached CI.
+
+    Credentials are server-held and pinned to an exact tenant/instance/HTTPS
+    origin. This is NOT an actor OIDC grant or proof of a GLPI-to-Run relation;
+    the separate signed association and Core Run/Incident checks remain mandatory.
+    Fail closed on any absent/ambiguous/stale source or transport failure.
+    """
+    from urllib.parse import urlsplit
+    import requests
+
+    raw = os.getenv("AIOPS_XREF_GLPI_READBACK_JSON", "")
+    if not raw or len(raw) > 16384:
+        return False
+    try:
+        configs = json.loads(raw)
+        if not isinstance(configs, list) or not 1 <= len(configs) <= 16:
+            return False
+        matches = [c for c in configs if isinstance(c, dict)
+                   and c.get("tenant_id") == tenant and c.get("instance_id") == instance]
+        if len(matches) != 1:
+            return False
+        cfg = matches[0]
+        if set(cfg) != {"tenant_id", "instance_id", "origin", "app_token", "session_token"}:
+            return False
+        origin = cfg["origin"]
+        if not isinstance(origin, str) or len(origin) > 256:
+            return False
+        parsed = urlsplit(origin)
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username
+                or parsed.password or parsed.query or parsed.fragment
+                or parsed.path not in ("", "/") or origin.rstrip("/") !=
+                parsed.geturl().rstrip("/")):
+            return False
+        if any(not isinstance(cfg[k], str) or not 16 <= len(cfg[k]) <= 512
+               or any(ch in cfg[k] for ch in "\r\n") for k in ("app_token", "session_token")):
+            return False
+        if not _valid(tenant) or not _valid(instance) or not _valid(ticket, _TICKET):
+            return False
+        entity_id = e["glpi_entity_id"]
+        if not re.fullmatch(r"[0-9]{1,18}", entity_id):
+            return False
+
+        headers = {"App-Token": cfg["app_token"],
+                   "Session-Token": cfg["session_token"], "Accept": "application/json"}
+        base = origin.rstrip("/") + "/apirest.php"
+
+        def read(session, path):
+            # No redirects, ambient proxy credentials, unbounded responses or
+            # caller-controlled URLs. TLS verification remains enabled.
+            with session.get(base + path, headers=headers, timeout=(2, 3),
+                             allow_redirects=False, stream=True, verify=True) as response:
+                if response.status_code != 200:
+                    raise ValueError("GLPI read refused")
+                content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                if content_type != "application/json":
+                    raise ValueError("GLPI content type")
+                data = bytearray()
+                for chunk in response.iter_content(chunk_size=4096):
+                    data.extend(chunk)
+                    if len(data) > 65536:
+                        raise ValueError("GLPI response too large")
+                return json.loads(data.decode("utf-8"))
+
+        def exact_number(value, expected):
+            return type(value) is int and str(value) == expected
+
+        with requests.Session() as session:
+            session.trust_env = False
+            ticket_data = read(session, "/Ticket/" + ticket)
+            if (not isinstance(ticket_data, dict)
+                    or not exact_number(ticket_data.get("id"), ticket)
+                    or not exact_number(ticket_data.get("entities_id"), entity_id)):
+                return False
+            entity = read(session, "/Entity/" + entity_id)
+            if not isinstance(entity, dict) or not exact_number(entity.get("id"), entity_id):
+                return False
+            items = read(session, "/Ticket/" + ticket + "/Item_Ticket")
+            if not isinstance(items, list) or not 1 <= len(items) <= 32:
+                return False
+            allowed = {"Computer", "NetworkEquipment", "Server", "Monitor",
+                       "Printer", "Phone", "Peripheral"}
+            seen = set()
+            for item in items:
+                if not isinstance(item, dict) or item.get("itemtype") not in allowed:
+                    return False
+                ci_id = item.get("items_id")
+                if type(ci_id) is not int or ci_id < 1:
+                    return False
+                pair = (item["itemtype"], ci_id)
+                if pair in seen:
+                    return False
+                seen.add(pair)
+                ci = read(session, "/" + pair[0] + "/" + str(ci_id))
+                if (not isinstance(ci, dict)
+                        or not exact_number(ci.get("id"), str(ci_id))
+                        or not exact_number(ci.get("entities_id"), entity_id)):
+                    return False
+        return True
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, requests.RequestException):
+        return False
+
 def _auth(header):
     """Server-only digest ACL; never use shared ADMIN or caller actor/tenant claims."""
     raw = os.getenv("AIOPS_XREF_READ_AUTHZ_JSON","")
@@ -182,6 +285,9 @@ def _evaluate(c,rows,tenant,instance,ticket,key,now):
     # Ownership rows alone are not an independent tenant/GLPI attestation.
     # No attestor configured => UNKNOWN, even for a fully signed xref event.
     if not _owners_attested(owned): return "UNKNOWN",None
+    # HMAC fixture/verified=true is never a substitute for independently
+    # authenticated, tenant-scoped GLPI Ticket/Entity/CI source readback.
+    if not _glpi_readback(e, tenant, instance, ticket): return "UNKNOWN",None
     return "VERIFIED",e
 
 @router.get("/api/tenants/{tenant_id}/itsm/glpi/{instance_id}/tickets/{ticket_id}/xref")
