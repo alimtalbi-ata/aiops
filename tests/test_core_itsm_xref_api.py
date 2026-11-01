@@ -420,4 +420,6 @@ def load_tests(loader, tests, pattern):
     tests.addTests(loader.loadTestsFromTestCase(ActorReplayFenceTests))
     from test_core_actor_disposable_sources import DisposableHumanAuthorityTests
     tests.addTests(loader.loadTestsFromTestCase(DisposableHumanAuthorityTests))
+    from test_core_actor_native_tls_sources import DisposableNativeTLSAuthorityTests
+    tests.addTests(loader.loadTestsFromTestCase(DisposableNativeTLSAuthorityTests))
     return tests
