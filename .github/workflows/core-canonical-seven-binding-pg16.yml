@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
-          grep -E '^Ran 13 tests in ' /tmp/core-seven-results.log
+          grep -E '^Ran 14 tests in ' /tmp/core-seven-results.log
           grep -x 'OK' /tmp/core-seven-results.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
           echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
@@ -110,16 +110,40 @@ jobs:
           for secret in ("DISPOSABLE-LEASE-", "ci-seven-source-disposable-only",
                          "idp|alice", "source-reader-disposable"):
               assert secret not in raw
-          print("CORE_SEVEN_014_REDACTED_RECEIPT=PASS", expected)
+          neg = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "freshness-expiry-negative.json"
+          n = json.loads(neg.read_text())
+          ndigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in n.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert n["receipt_sha256"] == ndigest
+          assert n["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert n["schema"] == "aiops.core-seven-freshness-negative.v1"
+          assert n["decision"] == n["link_status"] == "UNKNOWN"
+          assert n["negative_cases"] == {
+              "stale_attestation": "UNKNOWN", "expired_attestation": "UNKNOWN"}
+          assert n["audit_before"] == n["audit_after"] == {
+              "nonce_013": 1, "revocation_013": 1, "terminal_014": 0}
+          assert n["valid_source_recovery"] is True
+          assert n["portable_signature"] == "NONE"
+          assert n["human_glpi_attested"] is False
+          assert n["execution_allowed"] is n["effect_allowed"] is False
+          for secret in ("idp|alice", "source-reader-disposable",
+                         "ci-seven-source-disposable-only"):
+              assert secret not in neg.read_text()
+          print("CORE_SEVEN_FRESHNESS_NEGATIVE=PASS", ndigest)
           PY
           sha256sum "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.json" \
             > "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.sha256"
           cd "$AIOPS_CORE_SEVEN_RECEIPT_DIR"
           sha256sum --check seven-014-recovery.sha256
+          sha256sum freshness-expiry-negative.json > freshness-expiry-negative.sha256
+          sha256sum --check freshness-expiry-negative.sha256
       - name: Upload synthetic redacted receipt only
         uses: actions/upload-artifact@v4
         with:
           name: core-seven-014-redacted-${{ github.event.pull_request.head.sha || github.sha }}
-          path: /tmp/core-seven-redacted-receipts/seven-014-recovery.*
+          path: |
+            /tmp/core-seven-redacted-receipts/seven-014-recovery.*
+            /tmp/core-seven-redacted-receipts/freshness-expiry-negative.*
           retention-days: 7
           if-no-files-found: error
