@@ -204,6 +204,18 @@ def oidc_callback(request: Request, code: str = "", state: str = "",
             or not hmac.compare_digest(state, cookie)
             or _CODE.fullmatch(code) is None):
         return _unknown(401, "OIDC_CALLBACK_REJECTED")
+    # Cookie security is not port-scoped: a second HTTPS listener on the
+    # same hostname must not consume the configured :7777 callback state.
+    # This validates the ASGI request shape, not actual Debian TLS/PortBindings.
+    try:
+        config = _config()
+    except IdentityUnavailable:
+        return _unknown(503, "OIDC_UNAVAILABLE")
+    expected = urllib.parse.urlsplit(config.redirect)
+    if (request.url.scheme != "https"
+            or request.headers.get("host", "").lower() != expected.netloc.lower()
+            or request.url.path != "/auth/oidc/callback"):
+        return _unknown(401, "OIDC_CALLBACK_REJECTED")
     now = int(time.time())
     with _lock:
         _cleanup(now)
@@ -211,7 +223,6 @@ def oidc_callback(request: Request, code: str = "", state: str = "",
     if pending is None or pending.expires <= now:
         return _unknown(401, "OIDC_CALLBACK_REJECTED")
     try:
-        config = _config()
         id_token = _exchange(config, code, pending.verifier)
         actor = verify_server_oidc_assertion(id_token, now=now,
                                              expected_nonce=pending.nonce)
