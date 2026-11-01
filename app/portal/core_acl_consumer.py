@@ -96,23 +96,64 @@ def exact_binding_valid(actor: PortalActorContext, binding: ServerXref) -> bool:
             and bool(_ENTITY.fullmatch(binding.glpi_entity_id)))
 
 
-def positive_core_contract_matches(payload: object, actor: PortalActorContext,
-                                   binding: ServerXref, *, now: int | None = None) -> bool:
-    """Future contract gate. Current Core xref v1 MUST fail this validation.
+def core_v1_claims_match(payload: object, actor: PortalActorContext,
+                         binding: ServerXref, *, nonce: str,
+                         now: int | None = None) -> bool:
+    """Strict *shape-only* review of a proposed v1 Core decision.
 
-    A matching envelope alone never enables an upstream business read:
-    Core's authenticated actor delegation and independent GLPI ownership
-    still require an architect-qualified transport and provenance contract.
+    A JSON envelope, even with every field set to ALLOW, is NOT authenticated
+    Core delegation or GLPI source readback. Never use this function to grant
+    access, select a Run, or initiate an upstream read. The Core owner must
+    publish and qualify the actual transport, response authenticity and
+    revocation semantics before any network consumer is enabled.
     """
     if not exact_binding_valid(actor, binding) or not isinstance(payload, dict):
         return False
+    if not isinstance(nonce, str) or not 32 <= len(nonce) <= 128 or not nonce.isascii():
+        return False
     clock = int(time.time()) if now is None else now
+    if type(clock) is not int or actor.expires_at <= clock:
+        return False
     expected = {
         "actor_subject": actor.subject, "tenant_id": binding.tenant_id,
         "run_id": binding.run_id, "incident_id": binding.incident_id,
         "glpi_instance_id": binding.glpi_instance_id,
         "ticket_id": binding.ticket_id, "glpi_entity_id": binding.glpi_entity_id,
+        "request_nonce": nonce,
     }
+    required = set(expected) | {
+        "schema", "decision", "permission", "tenant_acl_qualified",
+        "glpi_owner_attested", "provenance", "acl_version",
+        "authorized_at", "expires_at", "revocation_checked_at",
+        "decision_id", "delegation", "glpi_readback",
+    }
+    if set(payload) != required:
+        return False
+    issued, expires, checked = (payload.get(k) for k in (
+        "authorized_at", "expires_at", "revocation_checked_at"))
+    if (any(type(v) is not int for v in (issued, expires, checked))
+            or not clock - 30 <= issued <= checked <= clock
+            or not clock < expires <= min(clock + 60, actor.expires_at)):
+        return False
+    delegation = payload.get("delegation")
+    glpi = payload.get("glpi_readback")
+    if (not isinstance(delegation, dict)
+            or set(delegation) != {"subject", "tenant_id", "issuer",
+                                   "audience", "status", "revoked"}
+            or delegation.get("status") != "VERIFIED"
+            or delegation.get("revoked") is not False
+            or not isinstance(glpi, dict)
+            or set(glpi) != {"instance_id", "ticket_id", "entity_id",
+                             "source", "verified"}
+            or glpi.get("source") != "AUTHENTICATED_GLPI_READBACK"
+            or glpi.get("verified") is not True):
+        return False
+    delegation_expected = {"subject": actor.subject,
+                           "tenant_id": binding.tenant_id,
+                           "issuer": actor.issuer, "audience": actor.audience}
+    glpi_expected = {"instance_id": binding.glpi_instance_id,
+                     "ticket_id": binding.ticket_id,
+                     "entity_id": binding.glpi_entity_id}
     return (payload.get("schema") == _SCHEMA
             and payload.get("decision") == "ALLOW"
             and payload.get("permission") == "run:read"
@@ -120,13 +161,31 @@ def positive_core_contract_matches(payload: object, actor: PortalActorContext,
             and payload.get("glpi_owner_attested") is True
             and payload.get("provenance") == "AUTHENTICATED_GLPI_READBACK"
             and isinstance(payload.get("acl_version"), str)
-            and bool(payload["acl_version"])
-            and type(payload.get("expires_at")) is int
-            and clock < payload["expires_at"] <= clock + 300
+            and bool(_RESOURCE.fullmatch(payload["acl_version"]))
+            and isinstance(payload.get("decision_id"), str)
+            and bool(_RESOURCE.fullmatch(payload["decision_id"]))
             and all(isinstance(payload.get(k), str)
                     and hmac.compare_digest(payload[k], v)
-                    for k, v in expected.items()))
+                    for k, v in expected.items())
+            and all(isinstance(delegation.get(k), str)
+                    and hmac.compare_digest(delegation[k], v)
+                    for k, v in delegation_expected.items())
+            and all(isinstance(glpi.get(k), str)
+                    and hmac.compare_digest(glpi[k], v)
+                    for k, v in glpi_expected.items()))
 
+
+def positive_core_contract_matches(payload: object, actor: PortalActorContext,
+                                   binding: ServerXref, *, now: int | None = None) -> bool:
+    """No positive Core actor authorization exists on the current candidate.
+
+    The legacy helper used to accept an entirely client-forgeable JSON shape.
+    Keep its API but make it unconditionally fail-closed until the Core owner
+    publishes an authenticated, nonce-bound and revocation-aware v1 contract
+    with independently verified GLPI ownership.
+    """
+    _ = (payload, actor, binding, now)
+    return False
 
 def consume_run_acl(request: Request, run_id: str, *,
                     env: Mapping[str, str] | None = None) -> tuple[int, str]:
