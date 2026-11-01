@@ -408,13 +408,18 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
         thread = threading.Thread(target=gateway.serve_forever, daemon=True)
         thread.start()
         try:
-            trace = []  # Redacted route/status only; never log lease or bearer.\n            async with httpx.AsyncClient(\n                    base_url=f"http://127.0.0.1:{gateway.server_port}",
+            trace = []  # Redacted route/status only; never log lease or bearer.
+            async with httpx.AsyncClient(
+                    base_url=f"http://127.0.0.1:{gateway.server_port}",
                     timeout=10.0, trust_env=False) as tcp:
                 async def post(path, body):
                     response = await tcp.post(
                         path, json=body,
                         headers={"Authorization": "Bearer " + self.bearer})
-                    payload = response.json()\n                    trace.append((path.rsplit("/", 1)[-1], response.status_code,\n                                  payload.get("status"), len(payload.get("items", []))))\n                    self.assertIs(payload["execution_allowed"], False)
+                    payload = response.json()
+                    trace.append((path.rsplit("/", 1)[-1], response.status_code,
+                                  payload.get("status"), len(payload.get("items", []))))
+                    self.assertIs(payload["execution_allowed"], False)
                     self.assertIs(payload["effect_allowed"], False)
                     return response.status_code, payload
 
