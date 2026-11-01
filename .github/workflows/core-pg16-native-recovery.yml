@@ -55,8 +55,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
-          /usr/lib/postgresql/16/bin/pg_dump --version | grep -E 'PostgreSQL\\) 16\\.'
-          /usr/lib/postgresql/16/bin/pg_restore --version | grep -E 'PostgreSQL\\) 16\\.'
+          /usr/lib/postgresql/16/bin/pg_dump --version | grep -F '(PostgreSQL) 16.'
+          /usr/lib/postgresql/16/bin/pg_restore --version | grep -F '(PostgreSQL) 16.'
       - name: Establish disposable loopback-only PostgreSQL connection
         shell: bash
         run: |
