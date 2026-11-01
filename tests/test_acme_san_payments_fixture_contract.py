@@ -297,6 +297,7 @@ class AcmeCoreSourceReceiptShapeGapTests(unittest.TestCase):
         c = self.candidate()
         c["events"][0]["payload_sha256"], c["events"][0]["full_event_sha256"] = (
             c["events"][0]["full_event_sha256"], c["events"][0]["payload_sha256"])
+        c["source_payload_hash"] = c["events"][0]["payload_sha256"]
         self.rehash(c)
         # Swapping two opaque valid Core-shaped hashes cannot be authenticated
         # by an offline ACME parser: it MUST remain UNAVAILABLE, not VERIFIED.
