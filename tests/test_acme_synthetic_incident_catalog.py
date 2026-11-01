@@ -2581,3 +2581,201 @@ class AcmeCoreCanonicalCrossDomainTests(unittest.TestCase):
         self.assertFalse(result["publishable_to_core_or_glpi"])
         self.assertFalse(result["live_effects_authorized"])
         self.assertEqual(result, self._verify(self._proposal()))
+
+
+class AcmeSevenEventThreeDomainReceiptTests(unittest.TestCase):
+    """Pinned machine receipt is a source fixture, never a Core v2 response."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_three_domain_receipt as receipt
+        from tools import acme_synthetic_core_canonical_cross_domain as cross
+        cls.receipt = receipt
+        cls.cross = cross
+        cls.manifest = gen.replay(seed=20261018)
+        cls.now = 1793520000
+        cls.expected = receipt.build_receipt(cls.manifest)
+
+    def _proposal(self):
+        return {
+            "schema": self.cross.SCHEMA, "source": self.cross.SOURCE,
+            "authority": self.cross.AUTHORITY,
+            "test_partition": self.cross.TEST_PARTITION,
+            "tenant_id": self.cross.TEST_TENANT,
+            "actor_subject": self.cross.TEST_ACTOR,
+            "observed_at": self.now - 30, "known_at": self.now - 20,
+            "expires_at": self.now + 60,
+            "revoked": False, "verified": False,
+            "bindings": copy.deepcopy(
+                self.cross.proposed_cross_domain_rows(self.manifest)),
+        }
+
+    def test_receipt_is_independently_sha256_pinned_and_reproducible(self):
+        raw = self.receipt.RECEIPT_FILE.read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                         self.receipt.PINNED_RECEIPT_SHA256)
+        pinned = self.receipt.read_pinned_receipt()
+        self.assertEqual(gen._canonical(pinned), gen._canonical(self.expected))
+        self.assertEqual(self.expected, self.receipt.build_receipt(gen.replay()))
+        self.assertEqual(self.expected["seed"], 20261018)
+        self.assertEqual(self.expected["source_replay_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(self.expected["graph_version"], gen.SEED_GIT_BLOB)
+
+    def test_seven_source_ids_and_three_sha256_domains_are_distinct(self):
+        rows = self.expected["source_event_rows"]
+        self.assertEqual(len(rows), 7)
+        self.assertEqual([r["source_event_id"] for r in rows],
+                         [e["source_event_id"] for e in self.manifest["events"]])
+        self.assertEqual([r["sequence"] for r in rows], list(range(1, 8)))
+        for event, row in zip(self.manifest["events"], rows):
+            digests = (row["acme_full_event_sha256"],
+                       row["acme_local_payload_sha256"],
+                       row["proposed_core_payload_sha256"])
+            self.assertEqual(len(set(digests)), 3)
+            self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in digests))
+            self.assertEqual(digests[0], hashlib.sha256(gen._canonical(event)).hexdigest())
+            self.assertEqual(digests[1],
+                             hashlib.sha256(gen._canonical(event["payload"])).hexdigest())
+            self.assertEqual(row["mapping_status"], "UNVERIFIED_CROSS_DOMAIN")
+
+    def test_core_v2_manifest_domain_mapping_is_explicitly_not_equivalent(self):
+        core = (gen.ROOT / "app/core/actor_canonical_seven_source.py").read_text()
+        self.assertIn('SCHEMA = "aiops.core-canonical-seven-source-binding.v1"', core)
+        self.assertIn('PAYLOAD_DOMAIN = "aiops.core-source-event-payload.v1"', core)
+        self.assertIn('FULL_DOMAIN = "aiops.core-full-run-event.v1"', core)
+        self.assertEqual(self.expected["core_manifest_schema"],
+                         "aiops.core-canonical-seven-source-binding.v1")
+        self.assertEqual(self.expected["core_v2_mapping"]["events[].full_event_hash"],
+                         "UNAVAILABLE")
+        self.assertFalse(self.expected["hash_domains_equivalent"])
+        self.assertFalse(self.expected["core_runtime_source_hashes_verified"])
+        for row in self.expected["source_event_rows"]:
+            self.assertIsNone(row["core_full_run_event_sha256"])
+            self.assertIsNone(row["core_event_id"])
+            self.assertIsNone(row["core_evidence_id"])
+
+    def test_missing_and_matching_test_proposal_both_remain_unavailable(self):
+        for proposal in (None, self._proposal()):
+            with self.subTest(proposal=proposal is not None):
+                result = self.receipt.verify_receipt(
+                    self.manifest, proposal=proposal, now=self.now)
+                self.assertEqual(result["result"], "UNAVAILABLE")
+                self.assertFalse(result["actor_authenticated"])
+                self.assertFalse(result["tenant_acl_qualified"])
+                self.assertFalse(result["core_v2_full_event_hash_available"])
+                self.assertIsNone(result["incident_id"])
+                self.assertIsNone(result["run_id"])
+                self.assertIsNone(result["glpi_ticket_id"])
+                self.assertIsNone(result["hitl_approval"])
+                self.assertEqual(result["evidence_ids"], [])
+                self.assertFalse(result["publishable_to_core_or_glpi"])
+
+    def test_all_fifteen_itil_stages_and_six_checkpoints_are_unexecuted(self):
+        self.assertEqual(len(self.expected["itil_stages"]), 15)
+        self.assertEqual(len(self.expected["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED"
+                            for s in self.expected["itil_stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in self.expected["checkpoints"]))
+        self.assertEqual(self.expected["runtime_authority"]["tenant_id"], None)
+        self.assertEqual(self.expected["runtime_authority"]["actor_subject"], None)
+        self.assertEqual(self.expected["runtime_authority"]["impact_observed"],
+                         "UNKNOWN")
+        self.assertEqual(self.expected["runtime_authority"]["priority_confirmed"],
+                         "UNKNOWN")
+        self.assertEqual(self.expected["runtime_readback"], "NOT_EXECUTED")
+
+    def test_forged_or_swapped_digest_domain_fails_closed(self):
+        for field in ("acme_full_event_sha256", "acme_local_payload_sha256",
+                      "proposed_core_payload_sha256"):
+            candidate = copy.deepcopy(self.expected)
+            candidate["source_event_rows"][0][field] = "0" * 64
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.receipt.verify_receipt(self.manifest, receipt=candidate)
+        candidate = copy.deepcopy(self.expected)
+        row = candidate["source_event_rows"][0]
+        row["acme_full_event_sha256"], row["proposed_core_payload_sha256"] = (
+            row["proposed_core_payload_sha256"], row["acme_full_event_sha256"])
+        with self.assertRaises(ValueError):
+            self.receipt.verify_receipt(self.manifest, receipt=candidate)
+
+    def test_missing_duplicate_reordered_and_foreign_source_event_fail(self):
+        for mutation in (
+            lambda r: r["source_event_rows"].pop(),
+            lambda r: r["source_event_rows"].reverse(),
+            lambda r: r["source_event_rows"].__setitem__(
+                1, copy.deepcopy(r["source_event_rows"][0])),
+            lambda r: r["source_event_rows"][0].update(
+                source_event_id="SYN-EVT-FOREIGN"),
+        ):
+            candidate = copy.deepcopy(self.expected)
+            mutation(candidate)
+            with self.assertRaises(ValueError):
+                self.receipt.verify_receipt(self.manifest, receipt=candidate)
+
+    def test_foreign_actor_tenant_and_partition_are_rejected(self):
+        for field, value in (("actor_subject", "TEST_ONLY_ACTOR_B"),
+                             ("tenant_id", "TEST_ONLY_TENANT_B"),
+                             ("test_partition", "SYNTHETIC_TEST_PARTITION_B")):
+            proposal = self._proposal()
+            proposal[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.receipt.verify_receipt(
+                    self.manifest, proposal=proposal, now=self.now)
+
+    def test_stale_future_expired_revoked_or_fake_authority_is_rejected(self):
+        for field, value in (("observed_at", self.now - 301),
+                             ("known_at", self.now + 1),
+                             ("expires_at", self.now),
+                             ("revoked", True),
+                             ("verified", True),
+                             ("source", "CORE_CANONICAL_READBACK"),
+                             ("authority", "INDEPENDENTLY_VERIFIED")):
+            proposal = self._proposal()
+            proposal[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.receipt.verify_receipt(
+                    self.manifest, proposal=proposal, now=self.now)
+
+    def test_runtime_ids_or_core_full_hash_cannot_be_promoted(self):
+        for field, value in (("incident_id", "INC-FORGED"),
+                             ("run_id", "RUN-FORGED"),
+                             ("hitl_approval", "APPROVED"),
+                             ("actor", "VERIFIED")):
+            candidate = copy.deepcopy(self.expected)
+            candidate["runtime_authority"][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.receipt.verify_receipt(self.manifest, receipt=candidate)
+        candidate = copy.deepcopy(self.expected)
+        candidate["source_event_rows"][0]["core_full_run_event_sha256"] = "a" * 64
+        with self.assertRaises(ValueError):
+            self.receipt.verify_receipt(self.manifest, receipt=candidate)
+
+    def test_seed_replay_timestamp_and_fixture_tampering_fail(self):
+        for field, value in (("seed", 20261019), ("graph_version", "FAKE")):
+            manifest = copy.deepcopy(self.manifest)
+            manifest[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.receipt.build_receipt(manifest)
+        manifest = copy.deepcopy(self.manifest)
+        manifest["events"][0]["known_at"] = "2026-10-31T09:41:00Z"
+        with self.assertRaises(ValueError):
+            self.receipt.build_receipt(manifest)
+        with tempfile.TemporaryDirectory() as tmp:
+            forged = Path(tmp) / "receipt.json"
+            forged.write_bytes(self.receipt.RECEIPT_FILE.read_bytes() + b" ")
+            with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                self.receipt.read_pinned_receipt(forged)
+
+    def test_cli_emit_matches_pinned_json_and_check_never_claims_core(self):
+        cmd = [sys.executable, "-m", "tools.acme_synthetic_three_domain_receipt"]
+        emitted = subprocess.run(cmd + ["--emit"], cwd=gen.ROOT,
+                                 capture_output=True, text=True)
+        self.assertEqual(emitted.returncode, 0, emitted.stderr)
+        self.assertEqual(emitted.stdout.encode("utf-8"),
+                         self.receipt.RECEIPT_FILE.read_bytes())
+        checked = subprocess.run(cmd + ["--check"], cwd=gen.ROOT,
+                                 capture_output=True, text=True)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["result"], "UNAVAILABLE")

@@ -18,6 +18,9 @@ import requests
 SCHEMA = "aiops.core-canonical-seven-source-binding.v1"
 PAYLOAD_DOMAIN = "aiops.core-source-event-payload.v1"
 FULL_DOMAIN = "aiops.core-full-run-event.v1"
+RECEIPT_SCHEMA = "aiops.core-canonical-seven-source-receipt.v1"
+RECEIPT_PROOF_DOMAIN = "aiops.core-canonical-seven-transport-proof.v1"
+RECEIPT_HASH_DOMAIN = "aiops.core-canonical-seven-receipt-hash.v1"
 _HEX = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z", re.ASCII)
 _SCOPE = ("tenant_id", "incident_id", "run_id", "glpi_instance_id",
@@ -121,7 +124,56 @@ def _validate(proof, request, record, issuer, now, actor_exp):
     return matching == 1
 
 
-def canonical_seven_preflight(claims, expected, record, now):
+def _source_receipt(proof, request, record):
+    """Machine-readable digest of an already TLS-authenticated source readback.
+
+    This is NOT a portable signature, GLPI human permission, ticket linkage,
+    or a replayable authorization credential. Never promote it to ALLOW.
+    """
+    receipt = {
+        "schema": RECEIPT_SCHEMA,
+        "decision": "UNKNOWN",
+        "link_status": "UNKNOWN",
+        "source_preflight": "PASS_SYNTHETIC_ONLY",
+        "transport": "TLS_AUTHENTICATED_NONPORTABLE",
+        "portable_signature": "NONE",
+        "issuer": proof["issuer"],
+        "source_system": proof["source_system"],
+        "tenant_id": request["tenant_id"],
+        "incident_id": request["incident_id"],
+        "run_id": request["run_id"],
+        "glpi_instance_id": request["glpi_instance_id"],
+        "ticket_id": request["ticket_id"],
+        "glpi_entity_id": request["glpi_entity_id"],
+        "permission": request["permission"],
+        "actor_issuer": request["actor_issuer"],
+        "actor_subject_sha256": hashlib.sha256(
+            request["actor_subject"].encode("utf-8")).hexdigest(),
+        "source_event_id": record["source_event_id"],
+        "source_payload_hash": record["source_payload_hash"],
+        "observed_at": proof["observed_at"],
+        "known_at": proof["known_at"],
+        "expires_at": proof["expires_at"],
+        "event_count": 7,
+        "hash_domains": {
+            "payload": PAYLOAD_DOMAIN,
+            "full_event": FULL_DOMAIN,
+            "acme_full_event_equivalence": "NOT_VERIFIED",
+        },
+        "events": [{
+            "sequence": e["sequence"],
+            "source_event_id": e["source_event_id"],
+            "evidence_id": e["evidence_id"],
+            "payload_sha256": e["payload_hash"],
+            "full_event_sha256": e["full_event_hash"],
+        } for e in proof["events"]],
+        "source_proof_sha256": _digest(RECEIPT_PROOF_DOMAIN, proof),
+    }
+    receipt["receipt_sha256"] = _digest(RECEIPT_HASH_DOMAIN, receipt)
+    return receipt
+
+
+def canonical_seven_preflight(claims, expected, record, now, *, receipt=False):
     """Return source preflight bool only; NEVER a positive actor decision.
 
     Source HTTPS/TLS + Basic service authentication is independently configured.
@@ -188,7 +240,20 @@ def canonical_seven_preflight(claims, expected, record, now):
                     if len(body) > 65536:
                         return False
                 proof = json.loads(body.decode("utf-8"))
-        return _validate(proof, request, record, cfg["issuer"], now, claims["exp"])
+        if not _validate(proof, request, record, cfg["issuer"], now, claims["exp"]):
+            return False
+        return _source_receipt(proof, request, record) if receipt else True
     except (OSError, ValueError, TypeError, KeyError, UnicodeError,
             OverflowError, requests.RequestException):
         return False
+
+
+def canonical_seven_source_receipt(claims, expected, record, now):
+    """Return an informational source receipt, or None for UNKNOWN preflight.
+
+    The receipt cannot be used as a bearer token, native GLPI attestation,
+    ACME hash-domain equivalence, or actor authorization.
+    """
+    result = canonical_seven_preflight(
+        claims, expected, record, now, receipt=True)
+    return result if isinstance(result, dict) else None

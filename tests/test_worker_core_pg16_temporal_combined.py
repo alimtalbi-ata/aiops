@@ -1843,6 +1843,9 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
 
             # Three separate disposable Temporal server instances reuse one
             # persisted SQLite store. No Worker-side DEAD mutation or signal.
+            # Persist a redacted machine-readable receipt from *actual* PG16
+            # readbacks, never from expected values or unittest log parsing.
+            generation_receipts = []
             for generation in range(3):
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
                     probe.bind(("127.0.0.1", 0))
@@ -1871,9 +1874,79 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(
                             await handle.query(SyntheticRejectSink.count), 0)
                         assert_exhausted()
+                        with self.psycopg.connect(self.url) as db:
+                            observed = db.execute(
+                                "select event_id,status,attempts,lease_owner,"
+                                "lease_token,lease_until<now(),delivered_at,"
+                                "last_error,decision,proposal_hash,"
+                                "proposal_revision from aiops.hitl_decision_outbox "
+                                "where event_id in (%s,%s) order by event_id",
+                                (first["event"], second["event"])).fetchall()
+                        # No event IDs, raw bearer, HMAC proof, owner or lease
+                        # token are emitted to the artifact.
+                        digest_input = json.dumps([
+                            [hashlib.sha256(row[0].encode()).hexdigest(),
+                             row[1], row[2], row[5], row[6] is None,
+                             row[7] is None, row[8], row[10]]
+                            for row in observed
+                        ], separators=(",", ":"), sort_keys=True)
+                        generation_receipts.append({
+                            "generation": generation,
+                            "postgres_state_sha256": hashlib.sha256(
+                                digest_input.encode()).hexdigest(),
+                            "rows": len(observed),
+                            "temporal_signal_count": await handle.query(
+                                SyntheticRejectSink.count),
+                            "effect_receipts": 0,
+                            "approve_outbox": 0,
+                        })
                 self.assertTrue(Path(sqlite_path).is_file())
             # This is a negative Core runtime qualification, NOT DEAD success.
             assert_exhausted()
+            self.assertEqual(len(generation_receipts), 3)
+            self.assertEqual(len({
+                item["postgres_state_sha256"]
+                for item in generation_receipts}), 1)
+            self.assertTrue(all(
+                item["rows"] == 2 and item["temporal_signal_count"] == 0
+                and item["effect_receipts"] == 0 and item["approve_outbox"] == 0
+                for item in generation_receipts))
+            receipt_dir = Path(os.environ["AIOPS_CI_COMBINED_RECEIPT_DIR"])
+            if not str(receipt_dir).startswith("/tmp/hitl-combined-receipts"):
+                raise RuntimeError("refuse_non_disposable_receipt_destination")
+            receipt_dir.mkdir(parents=True, exist_ok=True)
+            receipt = {
+                "schema": "aiops.worker-core-dead-negative-receipt.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "environment": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+                "core_dead_runtime": "NEGATIVE_OBSERVED_LEASED_ATTEMPTS_8",
+                "dead_sql_injection_in_this_case": False,
+                "core_dead_transition": "BLOCKED_CORE_OWNER",
+                "tenant_count": 2,
+                "event_count": 2,
+                "event_decisions": ["REJECT", "REJECT"],
+                "lease_attempts": [8, 8],
+                "lease_expired": [True, True],
+                "terminal_status": ["LEASED", "LEASED"],
+                "delivered_receipts": 0,
+                "temporal_server_instances": 3,
+                "temporal_persisted_restarts": 2,
+                "generations": generation_receipts,
+                "execution_allowed": False,
+                "effect_allowed": False,
+                "approve_count": 0,
+                "effect_receipt_count": 0,
+                "gateway_close": "INJECTED_IN_PRIOR_CASES_NOT_THIS_CASE",
+                "physical_packet_loss": "NOT_TESTED",
+                "oidc_glpi_identity": "NOT_ATTESTED",
+                "universal_exactly_once": "NOT_CLAIMED",
+            }
+            canonical = json.dumps(receipt, sort_keys=True,
+                                   separators=(",", ":")).encode()
+            receipt["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+            target = receipt_dir / "dead-negative-matrix.json"
+            target.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+            self.assertEqual(json.loads(target.read_text()), receipt)
         finally:
             auth_patch.stop()
 

@@ -233,5 +233,98 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
         self.assertEqual(after, before)
 
 
+    def test_v2_receipt_is_machine_readable_and_never_authorizes(self):
+        event = fixture.event_at(1)
+        record = {
+            "tenant_id": fixture.TENANT, "run_id": fixture.RUN,
+            "incident_id": fixture.INCIDENT, "glpi_entity_id": fixture.ENTITY,
+            "source_event_id": event["source_event_id"],
+            "source_payload_hash": fixture.canonical_hash(event),
+        }
+        receipt = binding.canonical_seven_source_receipt(
+            self.claims, self.expected, record, int(time.time()))
+        self.assertIsInstance(receipt, dict)
+        self.assertEqual(receipt["schema"], binding.RECEIPT_SCHEMA)
+        self.assertEqual(receipt["decision"], "UNKNOWN")
+        self.assertEqual(receipt["link_status"], "UNKNOWN")
+        self.assertEqual(receipt["source_preflight"], "PASS_SYNTHETIC_ONLY")
+        self.assertEqual(receipt["portable_signature"], "NONE")
+        self.assertEqual(receipt["event_count"], 7)
+        self.assertEqual([e["sequence"] for e in receipt["events"]], list(range(1, 8)))
+        self.assertEqual(receipt["hash_domains"]["payload"], binding.PAYLOAD_DOMAIN)
+        self.assertEqual(receipt["hash_domains"]["full_event"], binding.FULL_DOMAIN)
+        self.assertEqual(receipt["hash_domains"]["acme_full_event_equivalence"],
+                         "NOT_VERIFIED")
+        self.assertEqual(receipt["source_event_id"], event["source_event_id"])
+        self.assertEqual(receipt["source_payload_hash"], fixture.canonical_hash(event))
+        self.assertEqual(receipt["actor_subject_sha256"],
+                         hashlib.sha256(self.claims["sub"].encode()).hexdigest())
+        self.assertNotIn(self.claims["sub"], json.dumps(receipt))
+        digest = receipt["receipt_sha256"]
+        self.assertEqual(digest, binding._digest(
+            binding.RECEIPT_HASH_DOMAIN,
+            {k: v for k, v in receipt.items() if k != "receipt_sha256"}))
+        self.assertEqual(len({e["payload_sha256"] for e in receipt["events"]}), 7)
+        self.assertEqual(len({e["full_event_sha256"] for e in receipt["events"]}), 7)
+        self.assertTrue(all(e["payload_sha256"] != e["full_event_sha256"]
+                            for e in receipt["events"]))
+        self.assertNotIn("ALLOW", json.dumps(receipt))
+        self.assertNotIn("VERIFIED", receipt["source_preflight"])
+
+    def test_v2_receipt_fail_closed_and_013_replay_audit_unchanged(self):
+        event = fixture.event_at(1)
+        record = {
+            "tenant_id": fixture.TENANT, "run_id": fixture.RUN,
+            "incident_id": fixture.INCIDENT, "glpi_entity_id": fixture.ENTITY,
+            "source_event_id": event["source_event_id"],
+            "source_payload_hash": fixture.canonical_hash(event),
+        }
+        def receipt(claims=None, expected=None):
+            return binding.canonical_seven_source_receipt(
+                self.claims if claims is None else claims,
+                self.expected if expected is None else expected,
+                record, int(time.time()))
+        self.assertIsNotNone(receipt())
+        for attack in ("hash", "payload", "order", "missing", "domain",
+                       "issuer", "future", "revoked"):
+            with self.subTest(attack=attack):
+                self.server.tamper = attack
+                self.assertIsNone(receipt())
+        self.server.tamper = None
+        self.assertIsNone(receipt(claims={**self.claims, "sub": "idp|foreign"}))
+        self.assertIsNone(receipt(expected={**self.expected, "tenant_id": "TEN-B"}))
+        self.assertIsNone(receipt(expected={**self.expected, "ticket_id": "999"}))
+        self.assertIsNone(receipt(expected={**self.expected, "glpi_entity_id": "8"}))
+        self.assertIsNone(receipt(expected={**self.expected, "run_id": "RUN-B"}))
+        digest = lambda s: hashlib.sha256(s.encode()).hexdigest()
+        with self.psycopg.connect(self.db_url) as conn:
+            before = (
+                conn.execute("select count(*) from aiops.actor_delegation_nonce_ledger").fetchone()[0],
+                conn.execute("select count(*) from aiops.actor_delegation_revocations").fetchone()[0])
+            replay = conn.execute(
+                "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,%s)",
+                (fixture.TENANT, fixture.ISSUER, digest(fixture.SUBJECT),
+                 digest("ci-source-jti"), digest("ci-source-nonce"),
+                 digest("ci-source-resource"),
+                 datetime.now(timezone.utc) + timedelta(minutes=2))).fetchone()[0]
+            revoked = conn.execute(
+                "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,%s)",
+                (fixture.TENANT, fixture.ISSUER, digest(fixture.SUBJECT),
+                 digest("ci-source-revoked-jti"), digest("fresh-nonce"),
+                 digest("ci-source-resource"),
+                 datetime.now(timezone.utc) + timedelta(minutes=2))).fetchone()[0]
+            after = (
+                conn.execute("select count(*) from aiops.actor_delegation_nonce_ledger").fetchone()[0],
+                conn.execute("select count(*) from aiops.actor_delegation_revocations").fetchone()[0])
+        self.assertFalse(replay)
+        self.assertFalse(revoked)
+        self.assertEqual(before, (1, 1))
+        self.assertEqual(after, before)
+        # Source evidence is not an actor permission or a nonce authorization.
+        self.assertIsNotNone(receipt())
+        self.assertEqual(json.loads(fixture.actor_resource_authz._reply().body)["decision"],
+                         "UNKNOWN")
+
+
 if __name__ == "__main__":
     unittest.main()

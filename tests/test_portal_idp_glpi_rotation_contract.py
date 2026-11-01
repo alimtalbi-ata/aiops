@@ -323,5 +323,288 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
                 oidc_session._sessions.pop(oidc_session._digest(handle), None)
 
 
+    def _emit_negative_receipt(self, name, checks, observations):
+        """CI-only JSON receipt: synthetic negative assertions, never authority."""
+        import hashlib
+        import subprocess
+        from datetime import datetime, timezone
+        destination = os.environ.get("AIOPS_E2E_ARTIFACT_DIR")
+        if not destination:
+            return
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1],
+            text=True).strip()
+        self.assertRegex(sha, r"^[0-9a-f]{40}$")
+        payload = {
+            "schema": "aiops.portal.negative-authority-receipt.v1",
+            "case": name, "source_head": sha,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
+            "provenance": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+            "authority": "NOT_INDEPENDENTLY_ATTESTED",
+            "identity_only_is_glpi_permission": False,
+            "core_signed_shape_is_authorization": False,
+            "nonce_jti_ledger": "TEST_ONLY_NOT_DURABLE",
+            "dispatch_allowed": False, "read_permitted": False,
+            "portal_default": {"http_status": 503, "state": "UNKNOWN"},
+            "revoked_oidc": {"http_status": 401, "state": "UNAUTHORIZED"},
+            "checks": checks, "observations": observations,
+            "result": "NEGATIVE_CONTRACT_PASS",
+        }
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=True).encode("ascii")
+        receipt = {"receipt": payload, "sha256": hashlib.sha256(raw).hexdigest()}
+        output = Path(destination)
+        output.mkdir(parents=True, exist_ok=True)
+        file = output / ("portal-authority-" + name + ".json")
+        file.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+                        encoding="utf-8")
+        self.assertEqual(hashlib.sha256(json.dumps(
+            receipt["receipt"], sort_keys=True, separators=(",", ":"),
+            ensure_ascii=True).encode("ascii")).hexdigest(), receipt["sha256"])
+
+    def test_p0_source_owned_idp_glpi_native_shape_receipt(self):
+        """Test-only source ownership is explicit; GLPI native shape alone is not."""
+        actor = self.actor()
+        self.assertEqual((actor.issuer, actor.subject, actor.tenant_id),
+                         (ISSUER, "operator-123", "ACME"))
+        self.assertFalse(actor.tenant_acl_qualified)
+        source = {
+            "provenance": "SYNTHETIC_TEST_ONLY", "tenant_id": "ACME",
+            "actor_issuer": ISSUER, "actor_subject": "operator-123",
+            "glpi_user_id": 77, "run_id": self.binding.run_id,
+            "incident_id": self.binding.incident_id,
+            "glpi_instance_id": self.binding.glpi_instance_id,
+            "ticket_id": self.binding.ticket_id,
+            "glpi_entity_id": self.binding.glpi_entity_id,
+        }
+        def shape_matches(proof, native, mapping):
+            # Deliberately test-only: no independent source attestation exists.
+            expected = {
+                "provenance": "SYNTHETIC_TEST_ONLY",
+                "tenant_id": actor.tenant_id,
+                "actor_issuer": actor.issuer, "actor_subject": actor.subject,
+                "glpi_user_id": 77, "run_id": self.binding.run_id,
+                "incident_id": self.binding.incident_id,
+                "glpi_instance_id": self.binding.glpi_instance_id,
+                "ticket_id": self.binding.ticket_id,
+                "glpi_entity_id": self.binding.glpi_entity_id,
+            }
+            return (proof == expected
+                    and mapping.get((actor.issuer, actor.subject,
+                                     actor.tenant_id)) == 77
+                    and synthetic_native_glpi_shape_matches(
+                        native, self.binding, glpi_user_id=77))
+        changes = [
+            ("tenant_id", "FOREIGN"), ("actor_issuer", "https://foreign.test"),
+            ("actor_subject", "foreign-operator"), ("glpi_user_id", 78),
+            ("run_id", "RUN-FOREIGN-999"),
+            ("incident_id", "INC-FOREIGN-999"),
+            ("glpi_instance_id", "glpi-foreign"), ("ticket_id", "999"),
+            ("glpi_entity_id", "99"),
+        ]
+        with DisposableSignedCoreNativeGlpi(self.settings[
+                "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]) as peers:
+            native = peers.read_native_glpi()
+            self.assertTrue(shape_matches(source, native, self.synthetic_mapping))
+            for field, foreign in changes:
+                with self.subTest(field=field):
+                    self.assertFalse(shape_matches(
+                        {**source, field: foreign}, native,
+                        self.synthetic_mapping))
+            for field, value in (
+                ("User", {"id": 77, "is_active": 0}),
+                ("Profile", {"id": 4, "ticket": 2}),  # READMY != READ
+                ("Entity", {"id": 99}),
+                ("Ticket", {"id": 123, "entities_id": 99}),
+            ):
+                with self.subTest(native=field):
+                    changed = copy.deepcopy(native)
+                    changed[field] = value
+                    self.assertFalse(shape_matches(
+                        source, changed, self.synthetic_mapping))
+            self.assertFalse(shape_matches(
+                source, native, {(ISSUER, "operator-123", "FOREIGN"): 77}))
+            # GLPI native rows have no tenant ownership proof. Even this
+            # perfectly matching test-only tuple cannot promote an ACL.
+            self.assertFalse(wire.core_authz_read_permitted())
+            self.assertEqual(peers.core_observations, [])
+            self.assertEqual(len(peers.glpi_observations), 5)
+        self._emit_negative_receipt(
+            "source-binding",
+            ["verified_oidc_issuer_audience_subject",
+             "explicit_synthetic_subject_glpi_user_mapping",
+             "nine_foreign_source_binding_variants_rejected",
+             "native_readmy_inactive_user_foreign_entity_ticket_rejected",
+             "no_independent_glpi_tenant_ownership",
+             "no_core_authorization_or_business_get"],
+            {"foreign_source_variants": len(changes),
+             "native_negative_variants": 4, "glpi_fixture_gets": 5})
+
+    def test_p0_signed_unknown_rotation_nonce_jti_receipt(self):
+        """Signed UNKNOWN and disposable atomic ledger never create ALLOW."""
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Lock
+        from portal.oidc_identity import _decode, _verify_rs256
+        actor = self.actor()
+        plan = wire.prepare_core_authz_wire(
+            actor, self.binding, env=self.settings, now=self.now)
+        self.assertIsNotNone(plan)
+        self.assertIs(plan.dispatch_allowed, False)
+        # No synthetic ALLOW is constructed in this cycle.
+        unknown = {"schema": "aiops.core-actor-resource-authorization.v1",
+                   "decision": "UNKNOWN", "request_nonce": plan.nonce,
+                   "tenant_id": actor.tenant_id, "run_id": self.binding.run_id}
+        with DisposableSignedCoreNativeGlpi(plan.service_bearer) as peers:
+            peers.payload = unknown
+            first = peers.send_core(plan)
+            def pinned_signature_valid(reply, jwks):
+                payload, signature = reply[1]["payload"], reply[1]["signature"]
+                try:
+                    _verify_rs256(
+                        wire._canonical_signed_bytes(plan.origin, payload),
+                        _decode(signature["signature"]), signature["kid"], jwks)
+                    return True
+                except (IdentityRejected, IdentityUnavailable, ValueError,
+                        TypeError, KeyError):
+                    return False
+            from portal.oidc_identity import IdentityUnavailable
+            self.assertTrue(pinned_signature_valid(first, peers.jwks))
+            peers.rotate_signer(kid="disposable-core-signer-v2",
+                                retain_previous=True)
+            second = peers.send_core(plan)
+            self.assertTrue(pinned_signature_valid(first, peers.jwks))
+            self.assertTrue(pinned_signature_valid(second, peers.jwks))
+            peers.rotate_signer(kid="disposable-core-signer-v3")
+            third = peers.send_core(plan)
+            self.assertFalse(pinned_signature_valid(first, peers.jwks))
+            self.assertFalse(pinned_signature_valid(second, peers.jwks))
+            self.assertTrue(pinned_signature_valid(third, peers.jwks))
+            settings = {**self.settings,
+                        "AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON":
+                            json.dumps(peers.jwks)}
+            for reply in (first, second, third):
+                assessed = self.assess(reply, actor, plan, settings)
+                self.assertEqual((assessed.kind, assessed.portal_status,
+                                  assessed.read_permitted), ("INVALID", 503, False))
+            # This lock/set is disposable and cannot qualify a durable
+            # cross-worker Core ledger. It only checks the replay requirement.
+            lock, consumed = Lock(), set()
+            key = (actor.issuer, actor.subject, self.claims["jti"], plan.nonce)
+            def consume_once():
+                with lock:
+                    if key in consumed:
+                        return False
+                    consumed.add(key)
+                    return True
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                outcomes = list(executor.map(lambda _: consume_once(), range(16)))
+            self.assertEqual(outcomes.count(True), 1)
+            self.assertEqual(outcomes.count(False), 15)
+            next_plan = wire.prepare_core_authz_wire(
+                actor, self.binding, env=settings, now=self.now)
+            self.assertNotEqual(next_plan.nonce, plan.nonce)
+            for foreign in (
+                {**unknown, "tenant_id": "FOREIGN"},
+                {**unknown, "run_id": "RUN-FOREIGN-999"},
+                {**unknown, "request_nonce": next_plan.nonce},
+                {**unknown, "revoked": True},
+            ):
+                peers.payload = foreign
+                signed_foreign = peers.send_core(plan)
+                self.assertEqual(self.assess(
+                    signed_foreign, actor, plan, settings).portal_status, 503)
+            self.assertEqual(peers.glpi_observations, [])
+            self.assertTrue(all(row["method"] == "POST"
+                                for row in peers.core_observations))
+            self.assertFalse(wire.core_authz_read_permitted())
+        self._emit_negative_receipt(
+            "signed-unknown-replay",
+            ["synthetic_core_signed_unknown_only",
+             "pinned_signer_overlap_and_retirement",
+             "expired_retired_key_rejected",
+             "nonce_jti_concurrent_duplicate_rejected_in_disposable_set",
+             "foreign_tenant_run_nonce_revoked_shapes_no_read",
+             "no_glpi_business_get_no_positive_allow"],
+            {"signed_unknown_requests": 7, "concurrent_attempts": 16,
+             "disposable_unique_consumptions": 1,
+             "durable_core_ledger_attested": False})
+
+    def test_p0_api_revocation_presence_and_bearer_receipt(self):
+        """Actual Portal ASGI API refuses without disclosing resource presence."""
+        from fastapi.testclient import TestClient
+        from portal import main, acme_run_detail
+        handle = "R" * 43
+        actor = self.actor()
+        now = int(time.time())
+        runs = ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999")
+        with patch.dict(os.environ, self.settings):
+            with oidc_session._lock:
+                oidc_session._sessions[oidc_session._digest(handle)] = (
+                    oidc_session._Session(actor, now + 200))
+            try:
+                with TestClient(main.app, base_url="https://portal.example.test") as client, \
+                     patch.object(acme_run_detail, "_read_core_run",
+                                  side_effect=AssertionError("Core GET forbidden")) as core, \
+                     patch.object(main, "get_json",
+                                  side_effect=AssertionError("upstream forbidden")) as upstream, \
+                     patch("urllib.request.urlopen",
+                           side_effect=AssertionError("network forbidden")) as network:
+                    client.cookies.set(oidc_session._SESSION_COOKIE, handle)
+                    replies = []
+                    for run in runs:
+                        response = client.get("/api/portal/runs/" + run,
+                            headers={"X-Actor-ID": "admin", "X-Tenant-ID": "FOREIGN",
+                                     "X-GLPI-Ticket": "999"})
+                        self.assertEqual(response.status_code, 503)
+                        self.assertEqual(response.headers["cache-control"], "no-store")
+                        self.assertIn("frame-ancestors 'none'",
+                                      response.headers["content-security-policy"])
+                        self.assertEqual(response.json()["state"], "UNKNOWN")
+                        replies.append(response.json())
+                        for secret in (
+                            self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"],
+                            self.settings["AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN"],
+                            "operator-123", "glpi-acme", "INC-ACME-123"):
+                            self.assertNotIn(secret, response.text)
+                            self.assertNotIn(secret, str(response.headers))
+                    self.assertEqual(replies[0], replies[1])
+                    self.assertEqual(replies[1], replies[2])
+                    viewer = client.get("/api/portal/itsm", headers={
+                        "Authorization": "Bearer " +
+                        self.settings["AIOPS_PORTAL_READ_TOKEN"]})
+                    self.assertEqual(viewer.status_code, 503)
+                    self.assertFalse(viewer.json()["glpi_write_enabled"])
+                    with oidc_session._lock:
+                        oidc_session._sessions.pop(
+                            oidc_session._digest(handle), None)
+                    revoked = []
+                    for run in runs:
+                        response = client.get("/api/portal/runs/" + run)
+                        self.assertEqual(response.status_code, 401)
+                        # Run endpoint uses a uniform UNAUTHORIZED state for
+                        # missing/revoked identity; it is not a presence oracle.
+                        self.assertEqual(response.json()["state"], "UNAUTHORIZED")
+                        revoked.append(response.json())
+                    self.assertEqual(revoked[0], revoked[1])
+                    self.assertEqual(revoked[1], revoked[2])
+                    core.assert_not_called()
+                    upstream.assert_not_called()
+                    network.assert_not_called()
+            finally:
+                with oidc_session._lock:
+                    oidc_session._sessions.pop(
+                        oidc_session._digest(handle), None)
+        self._emit_negative_receipt(
+            "api-revocation",
+            ["server_oidc_session_revalidated",
+             "present_foreign_forged_run_same_503_unknown",
+             "revoked_session_same_401_unknown",
+             "viewer_bearer_not_glpi_human_permission",
+             "no_core_business_get_or_foreign_origin",
+             "no_service_bearer_or_ticket_disclosure"],
+            {"run_variants": len(runs), "valid_session_http": 503,
+             "revoked_session_http": 401, "upstream_business_gets": 0})
+
+
 if __name__ == "__main__":
     unittest.main()
