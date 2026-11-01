@@ -321,5 +321,282 @@ class CanonicalCoreDeadGatewayReplay(positive.CoreDeadPositiveWorkerContract):
                         core.wait(timeout=5)
 
 
+    async def test_13_concurrent_postdead_retry_fencing_after_temporal_restart(self):
+        """Race canonical Core claim, late ACK and terminal replay after 014 commit.
+
+        The response loss is an injected gateway close, not packet loss.
+        Only lease expiry is accelerated by SQL; Core alone writes DEAD/014.
+        """
+        head = os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+        self.assertEqual(len(head), 40)
+        delivery_only = secrets.token_urlsafe(32)
+
+        def principal(token, permissions):
+            return {
+                "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                "actor_id": base.OWNER, "tenant_ids": [base.TENANT],
+                "permissions": permissions,
+            }
+
+        authz = json.dumps([
+            principal(self.bearer, ["hitl:reject:deliver",
+                                    "hitl:reject:terminal"]),
+            principal(delivery_only, ["hitl:reject:deliver"]),
+        ])
+
+        def free_port():
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.bind(("127.0.0.1", 0))
+                return sock.getsockname()[1]
+
+        def ack_body(lease):
+            return {
+                "owner": base.OWNER, "run_id": lease["run_id"],
+                "proposal_id": lease["proposal_id"],
+                "proposal_hash": lease["proposal_hash"],
+                "proposal_revision": lease["proposal_revision"],
+                "lease_token": lease["lease_token"],
+                "execution_allowed": False, "effect_allowed": False,
+            }
+
+        core = gateway = upstream = gateway_thread = None
+        with patch.dict(os.environ, {"AIOPS_XREF_READ_AUTHZ_JSON": authz}):
+            ids = self._fixture()
+            self._write_synthetic_proofs()
+            lease = None
+            for attempt in range(8):
+                code, result = self._claim()
+                self.assertEqual((code, result["status"]), (200, "LEASED"))
+                self.assertEqual(len(result["items"]), 1)
+                lease = result["items"][0]
+                self.assertEqual(lease["event_id"], ids["event"])
+                self.assertEqual(lease["decision"], "REJECT")
+                self.assertIs(lease["execution_allowed"], False)
+                self.assertIs(lease["effect_allowed"], False)
+                # CI-only clock acceleration; never mutate status or audit.
+                with self.psycopg.connect(self.url) as db:
+                    db.execute(
+                        "update aiops.hitl_decision_outbox "
+                        "set lease_until=now()-interval '2 seconds' "
+                        "where event_id=%s and status='LEASED'",
+                        (ids["event"],))
+            self.assertEqual(self._claim()[1]["items"], [])
+            with self.psycopg.connect(self.url) as db:
+                self.assertEqual(db.execute(
+                    "select status,attempts from aiops.hitl_decision_outbox "
+                    "where event_id=%s", (ids["event"],)).fetchone(),
+                    ("LEASED", 8))
+
+            port = free_port()
+            script = (
+                "import uvicorn\nfrom core.main import app\n"
+                f"uvicorn.run(app,host='127.0.0.1',port={port},"
+                "access_log=False,log_level='error')\n"
+            )
+            core = subprocess.Popen(
+                [sys.executable, "-c", script], cwd=str(base.ROOT),
+                env=dict(os.environ, DATABASE_URL=self.url,
+                         AIOPS_INTERNAL_TOKEN=secrets.token_urlsafe(32)),
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+            try:
+                for _ in range(100):
+                    self.assertIsNone(core.poll(), "canonical Core TCP failed")
+                    try:
+                        with socket.create_connection(("127.0.0.1", port), 0.1):
+                            break
+                    except OSError:
+                        await asyncio.sleep(0.1)
+                else:
+                    self.fail("canonical Core TCP not ready")
+
+                upstream = httpx.Client(
+                    base_url=f"http://127.0.0.1:{port}",
+                    timeout=15.0, trust_env=False)
+                route = ("/api/tenants/{tenant_id}/hitl/"
+                         "reject-delivery/{event_id}/dead")
+                self.assertIn(route, upstream.get("/openapi.json").json()["paths"])
+                gateway = ThreadingHTTPServer(
+                    ("127.0.0.1", 0), positive.TerminalResponseClose)
+                gateway.upstream = upstream
+                gateway.drop_once = True
+                gateway.dropped = None
+                gateway_thread = threading.Thread(
+                    target=gateway.serve_forever, daemon=True)
+                gateway_thread.start()
+
+                path = (f"/api/tenants/{base.TENANT}/hitl/"
+                        f"reject-delivery/{ids['event']}")
+                headers = lambda token: {"Authorization": "Bearer " + token}
+                queue = "ci-postdead-race-" + secrets.token_hex(8)
+                sqlite = str(Path(self.temp.name) / (queue + ".sqlite"))
+                async with httpx.AsyncClient(
+                    base_url=f"http://127.0.0.1:{gateway.server_port}",
+                    timeout=20.0, trust_env=False,
+                    limits=httpx.Limits(max_connections=24)) as client:
+
+                    async def request(suffix, payload, token=None):
+                        response = await client.post(
+                            path + suffix if suffix != "/claim" else
+                            f"/api/tenants/{base.TENANT}/hitl/reject-delivery/claim",
+                            json=payload, headers=headers(token or self.bearer))
+                        data = response.json()
+                        self.assertIs(data["execution_allowed"], False)
+                        self.assertIs(data["effect_allowed"], False)
+                        return response.status_code, data
+
+                    async with await WorkflowEnvironment.start_local(
+                        port=free_port(),
+                        dev_server_database_filename=sqlite) as env:
+                        handle = await env.client.start_workflow(
+                            SyntheticRejectSink.run, id=queue, task_queue=queue)
+                        async with Worker(env.client, task_queue=queue,
+                                          workflows=[SyntheticRejectSink]):
+                            # Core commits DEAD+014, gateway hides the response.
+                            with self.assertRaises(httpx.TransportError):
+                                await request("/dead", ack_body(lease))
+                            self.assertEqual(gateway.dropped, {
+                                "status": "DEAD", "event_id": ids["event"],
+                                "idempotent": False})
+                            self.assertEqual(
+                                await handle.query(SyntheticRejectSink.count), 0)
+
+                    def audit_snapshot():
+                        with self.psycopg.connect(self.url) as db:
+                            rows = db.execute(
+                                "select o.status,o.attempts,o.decision,"
+                                "t.receipt_payload,t.receipt_sha256 "
+                                "from aiops.hitl_decision_outbox o "
+                                "join aiops.hitl_reject_terminal_receipts t "
+                                "on t.event_id=o.event_id where o.event_id=%s",
+                                (ids["event"],)).fetchall()
+                            self.assertEqual(len(rows), 1)
+                            status, attempts, decision, audit, digest = rows[0]
+                            self.assertEqual(
+                                (status, attempts, decision),
+                                ("DEAD", 8, "REJECT"))
+                            self.assertIs(audit["execution_allowed"], False)
+                            self.assertIs(audit["effect_allowed"], False)
+                            self.assertEqual(audit["decision"], "REJECT")
+                            canonical = json.dumps(
+                                audit, sort_keys=True, separators=(",", ":"),
+                                ensure_ascii=True).encode()
+                            self.assertEqual(
+                                hashlib.sha256(canonical).hexdigest(), digest)
+                            return digest
+
+                    before = audit_snapshot()
+                    # A genuinely restarted disposable Temporal server reads
+                    # the same SQLite history. Concurrent requests race at Core.
+                    async with await WorkflowEnvironment.start_local(
+                        port=free_port(),
+                        dev_server_database_filename=sqlite) as restarted:
+                        handle = restarted.client.get_workflow_handle(queue)
+                        async with Worker(restarted.client, task_queue=queue,
+                                          workflows=[SyntheticRejectSink]):
+                            self.assertEqual(
+                                await handle.query(SyntheticRejectSink.count), 0)
+                            retry_count = 6
+                            operations = (
+                                [request("/dead", ack_body(lease))
+                                 for _ in range(retry_count)] +
+                                [request("/ack", ack_body(lease))
+                                 for _ in range(retry_count)] +
+                                [request("/claim", {
+                                    "owner": base.OWNER, "limit": 1})
+                                 for _ in range(retry_count)]
+                            )
+                            responses = await asyncio.gather(*operations)
+                            for code, data in responses[:retry_count]:
+                                self.assertEqual(
+                                    (code, data["status"], data["idempotent"],
+                                     data["receipt_sha256"]),
+                                    (200, "DEAD", True, before))
+                            for code, data in responses[
+                                    retry_count:2 * retry_count]:
+                                self.assertEqual(data["status"], "UNKNOWN")
+                            for code, data in responses[2 * retry_count:]:
+                                self.assertEqual((code, data["status"],
+                                                  data["items"]),
+                                                 (200, "UNKNOWN", []))
+                            code, denied = await request(
+                                "/dead", ack_body(lease), delivery_only)
+                            self.assertEqual((code, denied["status"]),
+                                             (403, "UNKNOWN"))
+                            forged = ack_body(lease)
+                            forged["lease_token"] = secrets.token_urlsafe(32)
+                            code, denied = await request("/dead", forged)
+                            self.assertEqual(denied["status"], "UNKNOWN")
+                            self.assertEqual(
+                                await handle.query(SyntheticRejectSink.count), 0)
+
+                    after = audit_snapshot()
+                    self.assertEqual(before, after)
+                    with self.psycopg.connect(self.url) as db:
+                        self.assertEqual(db.execute(
+                            "select count(*) from aiops.hitl_reject_terminal_receipts "
+                            "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+                        self.assertEqual(db.execute(
+                            "select count(*) from aiops.hitl_decision_outbox "
+                            "where event_id=%s and status='DELIVERED'",
+                            (ids["event"],)).fetchone()[0], 0)
+                    self._no_effect()
+                    receipt = {
+                        "schema": "aiops.worker-canonical-dead-concurrent-retry.v1",
+                        "source_head": head,
+                        "environment": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+                        "core_http": "CANONICAL_CORE_MAIN_TCP_OBSERVED",
+                        "migration_014": "CORE_OWNED_RUNTIME_OBSERVED",
+                        "event_id": ids["event"],
+                        "decision": "REJECT", "status": "DEAD",
+                        "attempts": 8, "audit_rows_before": 1,
+                        "audit_rows_after": 1,
+                        "receipt_sha256_before": before,
+                        "receipt_sha256_after": after,
+                        "concurrent_terminal_replays": retry_count,
+                        "idempotent_terminal_replays": retry_count,
+                        "concurrent_late_acks_denied": retry_count,
+                        "concurrent_claims_empty": retry_count,
+                        "delivery_only_terminal_denied": True,
+                        "forged_terminal_token_denied": True,
+                        "gateway_close": "INJECTED_AFTER_CORE_TCP_DEAD_COMMIT",
+                        "physical_packet_loss": "NOT_TESTED",
+                        "temporal_persisted_restarts": 1,
+                        "temporal_signal_count": 0, "approve_count": 0,
+                        "delivered_count": 0, "effect_receipt_count": 0,
+                        "execution_allowed": False, "effect_allowed": False,
+                        "sql_dead_injection": False,
+                        "lease_expiry": "CI_SQL_TIME_ACCELERATION_ONLY",
+                        "oidc_glpi_identity": "NOT_ATTESTED",
+                        "host_7777": "NOT_VERIFIED",
+                        "universal_exactly_once": "NOT_CLAIMED",
+                    }
+                    canonical = json.dumps(
+                        receipt, sort_keys=True, separators=(",", ":")).encode()
+                    receipt["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+                    target = Path(os.environ["AIOPS_CI_CANONICAL_DEAD_RECEIPT_DIR"])
+                    if not str(target).startswith("/tmp/hitl-core-dead-canonical-"):
+                        raise RuntimeError("non_disposable_receipt_path")
+                    target.mkdir(parents=True, exist_ok=True)
+                    (target / "canonical-dead-concurrent-retry.json").write_text(
+                        json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+            finally:
+                if gateway is not None:
+                    gateway.shutdown()
+                    gateway.server_close()
+                if gateway_thread is not None:
+                    gateway_thread.join(timeout=5)
+                if upstream is not None:
+                    upstream.close()
+                if core is not None:
+                    core.terminate()
+                    try:
+                        core.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        core.kill()
+                        core.wait(timeout=5)
+
+
+
 if __name__ == "__main__":
     unittest.main()
