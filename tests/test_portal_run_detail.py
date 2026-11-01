@@ -371,12 +371,15 @@ class RunDetailTests(unittest.TestCase):
     def test_authenticated_unqualified_session_never_issues_cookie_or_reads_core(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
-            response = self.client.post(
-                "/api/portal/run-session",
-                headers={"Authorization": "Bearer " + TOKEN, "Origin": "https://testserver",
-                         "X-Portal-Run-ID": RID, "X-Tenant-ID": "foreign",
-                         "X-Actor-ID": "forged"},
-            )
+            # The positive same-origin shape is HTTPS at the ASGI boundary;
+            # an HTTP request with a forged HTTPS Origin is separately denied.
+            with TestClient(main.app, base_url="https://testserver") as tls_client:
+                response = tls_client.post(
+                    "/api/portal/run-session",
+                    headers={"Authorization": "Bearer " + TOKEN, "Origin": "https://testserver",
+                             "X-Portal-Run-ID": RID, "X-Tenant-ID": "foreign",
+                             "X-Actor-ID": "forged"},
+                )
             page = self.client.get("/runs/" + RID)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["state"], "UNKNOWN")

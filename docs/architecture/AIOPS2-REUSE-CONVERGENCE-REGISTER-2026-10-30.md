@@ -753,3 +753,10 @@ Source #299 HEAD 507899f18d38a083f1bedc5a8603d17160612c83, CI 41316946503 (1/1 p
 ### 2026-11-01 16:25 CET — selective source #302/#301
 
 Core #302 HEAD 990b1f8f6ce14a1e4d191a8fb062ada1fd990039, four files, canonical Core route mounted, source PG16 14/14 and native recovery CI 41320750573 SUCCESS, Quality 41320750574 SUCCESS. Portal #301 HEAD 604c704bde3291615350cc4623040dea8273a14c, five files, invalid OIDC cookie cannot downgrade, source Chromium/API 54/54 and Quality 41320526303 SUCCESS. Both selectively imported into sole Draft #234 without merging source history. Candidate exact-head CI pending; real GLPI human rights and host 7777 NOT_VERIFIED. NO_GO; forward revert targeted commits, preserve audit 013/014 and volumes.
+
+## 2026-11-01 17:18 CET — Selective reuse decision
+
+- #303 Worker: import three new files, change only its workflow trigger to include `main`; Core remains sole owner of DEAD/014; gateway-close injection != physical partition. Source CI 41321920299 (1/1 + DR 5/5), Quality 41321920306 3/3.
+- #304 ACME: import four paths, including one additive test change, preserving synthetic seven-event `UNAVAILABLE` rather than fabricating Core PG16 equality. Source Quality 41324447715 3/3, targeted 200/200.
+- #305 Portal: import five paths, including explicit duplicate OIDC cookie denial and forged HTTPS Origin refusal, no viewer fallback. Source Quality 41324950012 3/3, browser/API 56/56.
+- All three source PRs remain Draft, unmerged; candidate #234 is the sole main-based Draft. No historic branch merges, no Core/Worker schema collision. Integrated CI on new HEAD is a separate gate; no main merge before all required exact-head jobs succeed and D1–D4 qualify. Rollback forward revert the focused integration commit only; preserve 013/014 audit and host volumes.
