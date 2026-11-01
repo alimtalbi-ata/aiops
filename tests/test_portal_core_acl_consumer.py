@@ -877,7 +877,7 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
                 for rid in (RUN, OTHER, "RUN-NOT-FOUND", "RUN-forged!"):
                     for prefix in ("/api/portal/runs/", "/runs/"):
                         response = self.client.get(prefix + rid, headers={
-                            "Authorization": "Bearer " + plan.service_bearer,
+                            "Authorization": "Bearer forged-browser-token",
                             "X-Actor-ID": "forged", "X-Tenant-ID": "FOREIGN",
                             "X-GLPI-Profile": "manager"})
                         self.assert_fence(response, 503)
