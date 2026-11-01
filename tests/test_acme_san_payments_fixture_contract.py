@@ -1410,6 +1410,9 @@ class AcmeCorePg16SevenBridgeTests(unittest.TestCase):
     def test_06_payload_hash_swap_and_full_event_tamper(self):
         proof = self.proof()
         proof["events"][0]["payload_hash"] = proof["events"][1]["payload_hash"]
+        proof["events"][0]["full_event"]["source_payload_hash"] = proof["events"][0]["payload_hash"]
+        proof["events"][0]["full_event_hash"] = self.bridge._digest(
+            self.bridge.CORE_FULL_DOMAIN, proof["events"][0]["full_event"])
         self.assertEqual(self.bridge.consume(
             self.manifest, core_proof=proof, now=self.now)["core_proof_reason"],
             "CORE_FULL_PAYLOAD_HASH_DOMAIN_MISMATCH")
