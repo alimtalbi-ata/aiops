@@ -382,6 +382,9 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
 
 # Quality browser entry point also runs the disposable negative Portal ACL suite.
 from test_portal_acl_browser_e2e import PortalACLChromiumE2E
+# Run the Portal actor-resource contract suite at the same exact CI SHA.
+# This is test-only wiring; no shared Quality workflow is modified.
+from test_portal_core_acl_consumer import PortalCoreACLConsumerTests
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
