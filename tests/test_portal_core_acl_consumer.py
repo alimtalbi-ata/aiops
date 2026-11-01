@@ -604,5 +604,133 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         self.session(ttl=-1)
         self.assert_fence(self.client.get("/runs/" + RUN), 401)
 
+
+    def test_offline_core_v1_signed_shape_and_real_denial_parity(self):
+        """Disposable RSA signs proposed ALLOW; neither it nor 200 UNKNOWN grants."""
+        import base64
+        import json
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding, rsa
+        from portal import core_authz_transport as wire
+
+        now = int(time.time())
+        actor, binding, _, payload = self.future_envelope(now)
+        settings = self.authz_settings()
+        plan = wire.prepare_core_authz_wire(actor, binding, env=settings, now=now)
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        payload["request_nonce"] = plan.nonce
+        private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        numbers = private.public_key().public_numbers()
+
+        def b64(number):
+            return base64.urlsafe_b64encode(number.to_bytes(
+                (number.bit_length() + 7) // 8, "big")).rstrip(b"=").decode()
+
+        settings["AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON"] = json.dumps({
+            "keys": [{"kid": "core-fixture", "kty": "RSA", "alg": "RS256",
+                      "use": "sig", "n": b64(numbers.n), "e": b64(numbers.e)}]
+        })
+        def sign(body):
+            signed = wire._canonical_signed_bytes(plan.origin, body)
+            return {"alg": "RS256", "kid": "core-fixture",
+                    "signature": base64.urlsafe_b64encode(private.sign(
+                        signed, padding.PKCS1v15(), hashes.SHA256()
+                    )).rstrip(b"=").decode()}
+
+        headers = {"Cache-Control": "no-store", "Pragma": "no-cache",
+                   "X-Content-Type-Options": "nosniff",
+                   "Referrer-Policy": "no-referrer"}
+        def assess(code, body, sig=None, *, target=plan, who=actor, resource=binding,
+                   response_headers=headers):
+            return wire.assess_core_authz_reply_offline(
+                code, body, response_headers, sig, actor=who, binding=resource,
+                plan=target, env=settings, now=now)
+
+        schema = "aiops.core-actor-resource-authorization.v1"
+        with patch("urllib.request.urlopen",
+                   side_effect=AssertionError("no upstream")) as network:
+            for code, decision in ((200, "UNKNOWN"), (401, "UNKNOWN"),
+                                   (403, "UNAUTHORIZED"), (503, "UNKNOWN")):
+                with self.subTest(core_status=code):
+                    h = {**headers, **({"WWW-Authenticate": "Bearer"}
+                                      if code == 401 else {})}
+                    result = assess(code, {"schema": schema, "decision": decision},
+                                    response_headers=h)
+                    self.assertEqual(result.kind, "CURRENT_CORE_NEGATIVE")
+                    self.assertEqual((result.portal_status, result.state,
+                                      result.read_permitted), (503, "UNKNOWN", False))
+            signature = sign(payload)
+            valid = assess(200, payload, signature)
+            self.assertEqual(valid.kind, "SIGNED_SHAPE_UNQUALIFIED")
+            self.assertEqual((valid.portal_status, valid.state,
+                              valid.read_permitted), (503, "UNKNOWN", False))
+            self.assertFalse(wire.core_authz_read_permitted(payload, signature))
+            # An unsigned or altered ALLOW, even on HTTP 200, is invalid.
+            for changes in (
+                {"tenant_id": "OTHER"}, {"actor_subject": "admin"},
+                {"actor_issuer": "https://forged.example.test"},
+                {"actor_audience": "core-other"},
+                {"run_id": OTHER}, {"incident_id": "INC-FOREIGN"},
+                {"ticket_id": "999"}, {"glpi_entity_id": "99"},
+                {"revoked": True}, {"expires_at": now - 1},
+                {"request_nonce": "r" * 43},
+                {"delegation": {**payload["delegation"], "revoked": True}},
+                {"glpi_readback": {**payload["glpi_readback"],
+                                   "actor_permission_confirmed": False}},
+            ):
+                with self.subTest(forgery=changes):
+                    forged = {**payload, **changes}
+                    self.assertEqual(assess(200, forged, sign(forged)).kind,
+                                     "INVALID")
+            self.assertEqual(assess(200, payload).kind, "INVALID")
+            self.assertEqual(assess(503, payload, signature).kind, "INVALID")
+            self.assertEqual(assess(200, payload, {**signature,
+                                                  "signature": "x" * 40}).kind,
+                             "INVALID")
+            # A replayed response cannot satisfy a *new* nonce challenge.
+            fresh = wire.prepare_core_authz_wire(
+                actor, binding, env=settings, now=now)
+            self.assertNotEqual(plan.nonce, fresh.nonce)
+            self.assertEqual(assess(200, payload, signature, target=fresh).kind,
+                             "INVALID")
+            for altered_headers in (
+                {**headers, "Cache-Control": "public"},
+                {**headers, "Set-Cookie": "sid=forged"},
+                {**headers, "Access-Control-Allow-Origin": "*"},
+                {**headers, "Location": "https://evil.test"},
+            ):
+                self.assertEqual(assess(200, payload, signature,
+                                        response_headers=altered_headers).kind,
+                                 "INVALID")
+            self.assertEqual(assess(200, payload, signature,
+                                    who=self.actor(expiry=-1)).kind, "INVALID")
+            self.assertEqual(assess(200, payload, signature,
+                                    resource=self.binding("OTHER")).kind, "INVALID")
+            network.assert_not_called()
+
+    def test_signed_fixture_cannot_bypass_revoked_oidc_browser_api_fence(self):
+        """A browser replaying an opaque revoked cookie cannot fetch a Run."""
+        from portal import core_authz_transport as wire
+        self.session()
+        with oidc_session._lock:
+            oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
+        with patch.object(wire, "assess_core_authz_reply_offline",
+                          side_effect=AssertionError("offline-only")) as contract, \
+             patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("no Core read")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("no upstream")) as upstream:
+            for rid in (RUN, OTHER, "RUN-NOT-FOUND", "RUN-forged!"):
+                for prefix in ("/api/portal/runs/", "/runs/"):
+                    response = self.client.get(prefix + rid, headers={
+                        "Authorization": "Bearer forged-allow",
+                        "X-Actor-ID": "admin", "X-Tenant-ID": "OTHER"})
+                    self.assert_fence(response, 401)
+            contract.assert_not_called()
+            core.assert_not_called()
+            upstream.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

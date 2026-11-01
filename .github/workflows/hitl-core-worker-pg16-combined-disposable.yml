@@ -72,16 +72,32 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re
+          log_path = "/tmp/hitl-combined.log"
+          log = open(log_path).read() if os.path.isfile(log_path) else ""
+          combined_ok = bool(
+              re.search(r"(?m)^Ran 4 tests in [0-9.]+s$", log)
+              and re.search(r"(?m)^OK$", log))
+          tcp_boundary_pass = (combined_ok and
+              "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
+          worker_restart_pass = (combined_ok and
+              "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
           report = {
               "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
               "core_claim_ack": "ACTUAL_FASTAPI_ASGI_HTTP_AND_POPULATED_PG16_IF_PASS",
-              "http_network": "NOT_TESTED_IN_PROCESS_ASGI",
+              "core_http": "ASGI_TESTCLIENT_UPSTREAM_NOT_DEPLOYED_TCP_CORE",
+              "http_network": "LOOPBACK_TCP_GATEWAY_IF_PASS" if tcp_boundary_pass else "NOT_QUALIFIED",
+              "tcp_ack_response_drop": (
+                  "OBSERVED_CI_DISPOSABLE_GATEWAY_CLOSE_AFTER_CORE_COMMIT"
+                  if tcp_boundary_pass else "NOT_TESTED_OR_FAILED"),
               "ownership": "SIGNED_CI_SYNTHETIC_NOT_GLPI_SOURCE_AUTHORITY",
               "real_oidc_human": "NOT_ATTESTED",
-              "temporal_test_worker_restart": "OBSERVED_IF_TEST_PASS",
+              "temporal_test_worker_restart": (
+                  "OBSERVED_CI_DISPOSABLE" if worker_restart_pass
+                  else "NOT_TESTED_OR_FAILED"),
               "temporal_server_restart": "NOT_TESTED",
-              "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT_NOT_NETWORK_LOSS",
+              "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT",
+              "boundary_scope": "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER",
               "real_network_ack_loss": "NOT_TESTED",
               "decision": "REJECT",
               "execution_allowed": False,

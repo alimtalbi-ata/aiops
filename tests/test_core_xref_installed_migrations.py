@@ -150,6 +150,7 @@ class InstalledMigrationPostgres16(unittest.TestCase):
 # Existing architect-owned Quality command discovers this imported Core-only PG16
 # suite without modifying the shared workflow. The class is disposable-only.
 from test_core_hitl_reject_pg16_populated import CoreRejectPopulatedPG16
+from test_core_actor_nonce_pg16 import ActorLedgerStaticTests, ActorLedgerPopulatedPG16
 
 if __name__ == "__main__":
     unittest.main()

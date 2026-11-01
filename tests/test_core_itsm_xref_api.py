@@ -414,4 +414,6 @@ def load_tests(loader, tests, pattern):
     tests.addTests(loader.loadTestsFromTestCase(ActorDelegationTests))
     from test_core_hitl_reject_delivery import RejectDeliveryTests
     tests.addTests(loader.loadTestsFromTestCase(RejectDeliveryTests))
+    from test_core_actor_native_authority import NativeActorRightsTests
+    tests.addTests(loader.loadTestsFromTestCase(NativeActorRightsTests))
     return tests
