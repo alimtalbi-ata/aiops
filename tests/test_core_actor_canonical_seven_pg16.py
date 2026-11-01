@@ -25,6 +25,7 @@ from unittest.mock import patch
 
 import requests
 
+from core import itsm_xref as _xref  # initialize xref router before actor circular registration
 from core import actor_resource_authz, actor_run_event_source
 
 MIG = Path(__file__).resolve().parents[1] / "db" / "migrations"
