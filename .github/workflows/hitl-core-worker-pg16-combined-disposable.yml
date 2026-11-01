@@ -99,6 +99,43 @@ jobs:
           PY
           sha256sum "$AIOPS_CI_COMBINED_RECEIPT_DIR/dead-negative-matrix.json" > /tmp/hitl-dead-negative-receipt.sha256
           sha256sum --check /tmp/hitl-dead-negative-receipt.sha256
+      - name: Validate unprivileged Core terminal gate receipt (negative only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CI_COMBINED_RECEIPT_DIR"]) / "terminal-unprivileged-gate.json"
+          receipt = json.loads(path.read_text())
+          digest = receipt.pop("payload_sha256")
+          canonical = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+          assert hashlib.sha256(canonical).hexdigest() == digest
+          assert receipt["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert receipt["schema"] == "aiops.worker-core-terminal-unprivileged-gate.v1"
+          assert receipt["terminal_route_result"] in (
+              "ABSENT_404", "DELIVERY_ONLY_PERMISSION_DENIED_403")
+          expected = 404 if receipt["terminal_route_result"] == "ABSENT_404" else 403
+          assert receipt["http_status_codes"] == [expected, expected]
+          assert receipt["runtime_state"] == "LEASED" and receipt["attempts"] == 8
+          assert receipt["lease_expired"] is True and receipt["decision"] == "REJECT"
+          assert receipt["terminal_permission_in_fixture"] is False
+          assert receipt["core_terminal_positive_qualification"] == "NOT_TESTED"
+          assert receipt["worker_terminal_requests"] == 0
+          assert receipt["worker_claim_requests"] == 1
+          assert receipt["temporal_signals"] == receipt["approve_count"] == receipt["effect_receipts"] == 0
+          assert receipt["execution_allowed"] is False and receipt["effect_allowed"] is False
+          assert receipt["sql_dead_injected"] is False
+          assert receipt["physical_packet_loss"] == "NOT_TESTED"
+          assert receipt["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert receipt["universal_exactly_once"] == "NOT_CLAIMED"
+          assert not any(secret in path.read_text() for secret in (
+              "lease_token", "Bearer ", "owner_key", "signed-synthetic-owner"))
+          receipt["payload_sha256"] = digest
+          print("CORE_TERMINAL_UNPRIVILEGED_GATE_PASS", digest, receipt["source_head"])
+          PY
+          sha256sum "$AIOPS_CI_COMBINED_RECEIPT_DIR/terminal-unprivileged-gate.json" > /tmp/hitl-terminal-unprivileged-gate.sha256
+          sha256sum --check /tmp/hitl-terminal-unprivileged-gate.sha256
       - name: Preserve independent PG16 SQL-model and DR regression
         shell: bash
         run: |
@@ -114,7 +151,7 @@ jobs:
           log_path = "/tmp/hitl-combined.log"
           log = open(log_path).read() if os.path.isfile(log_path) else ""
           combined_ok = bool(
-              re.search(r"(?m)^Ran 10 tests in [0-9.]+s$", log)
+              re.search(r"(?m)^Ran 11 tests in [0-9.]+s$", log)
               and re.search(r"(?m)^OK$", log))
           tcp_boundary_pass = (combined_ok and
               "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
@@ -129,6 +166,8 @@ jobs:
           multi_server_dead_retry_pass = cross_tenant_pass  # asserted inside case 08
           core_dead_negative_pass = (combined_ok and
               "test_09_no_core_runtime_dead_transition_after_eighth_lease" in log)
+          terminal_gate_pass = (combined_ok and
+              "test_11_terminal_unprivileged_gate_never_mutates_exhausted_reject" in log)
           dead_matrix_pass = (combined_ok and
               "test_10_core_dead_contract_matrix_no_signal_across_temporal_restarts" in log)
           worker_restart_pass = (combined_ok and
@@ -163,6 +202,7 @@ jobs:
               "terminal_dead_transition": ("CI_INJECTED_SQL_AFTER_EIGHTH_EXPIRED_LEASE_NOT_CORE_RUNTIME_DEAD_LETTER" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
               "core_runtime_dead_negative": ("OBSERVED_CI_DISPOSABLE_LEASED_ATTEMPTS_8_NOT_DEAD" if core_dead_negative_pass else "NOT_TESTED_OR_FAILED"),
               "core_runtime_dead_contract": "BLOCKED_CORE_OWNS_TERMINAL_DEAD_TRANSITION_NO_WORKER_ENDPOINT",
+              "core_dead_terminal_permission_gate": ("NEGATIVE_CI_DISPOSABLE_NO_TERMINAL_MUTATION" if terminal_gate_pass else "NOT_TESTED_OR_FAILED"),
               "core_dead_negative_contract_matrix": ("OBSERVED_CI_DISPOSABLE_TWO_TENANTS_EIGHTH_LEASE_FENCED" if dead_matrix_pass else "NOT_TESTED_OR_FAILED"),
               "core_dead_negative_matrix_temporal": ("TWO_PERSISTED_SERVER_RESTARTS_ZERO_SIGNALS" if dead_matrix_pass else "NOT_TESTED_OR_FAILED"),
               "core_dead_negative_matrix_dimensions": ["tenant", "run", "proposal_id", "proposal_hash", "proposal_revision", "lease_owner", "lease_token", "lease_expiry", "execution_allowed", "effect_allowed"],
@@ -197,6 +237,8 @@ jobs:
             /tmp/hitl-combined-dr.log
             /tmp/hitl-combined-report.json
             /tmp/hitl-combined-receipts/dead-negative-matrix.json
+            /tmp/hitl-combined-receipts/terminal-unprivileged-gate.json
+            /tmp/hitl-terminal-unprivileged-gate.sha256
             /tmp/hitl-dead-negative-receipt.sha256
             /tmp/hitl-combined-pg16-dr.dump
             /tmp/hitl-combined-pg16-dr.sha256
