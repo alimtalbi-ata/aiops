@@ -909,3 +909,20 @@ Debian read-only GitHub report collected_at `2026-11-01T16:14:01.923569+00:00` =
 - **Ownership:** Core P0 independent seven-event PG16 actor/tenant/Run+013/014 audit; Portal P0 native human GLPI trust; Worker P0 post-DEAD concurrent no-effect; ACME P1 honest offline ITIL comparison. Only 7 selected source Git blobs plus these 3 docs, no source history, migration or cross-owner files.
 - **Truth/gates:** SOURCE_REVIEWED=2 PR diffs, source CI_PASS=2/2, new integrated D0 CI_PENDING; INTEGRATION_PASS=NOT_VERIFIED until new exact-head jobs. RUNTIME_OBSERVED=operator-local 7777 + published reporter only, NOT new code. D1 partial negative-only; D2 GLPI HITL/ITIL full journey NO_GO, D3 cumulative kit NO_GO, D4 client signoff NOT_ATTESTED; **RELEASE_STABLE=NO_GO**. No deploy/aiops2-stable push, SSH/Docker, GLPI write, LIVE, new persistent stack, DB/volume deletion.
 - **Rollback:** forward-revert only this focused candidate commit, rerun exact-head CI, preserve Core 013/014 immutable audit, Docker volumes and main history; no force-push/reset.
+
+
+## Cycle architecte 2026-11-01 21:27 CET — integration/host delivery gates
+
+**Current base:** main `ae7c3e5102b99a66bd7806d602146f1309a9749d`; sole Draft #234 previously `b31cdbae926f8feb80af2fb42e05900286c28457`, now advanced by selective product commit `b4cd7c4b7ff63e58fde034071e104895a826c039`, reporter source commit `1735126151e585aeaf7823414c8a3b4a1716a682`, exact-head workflow fix `39c8d4305427fe39257c178e37ecbc0b65c6d9fe`, Portal source port `bca0dc699a8b498a6d22dfcae0a2eb293bb8d7f0`, and this board commit. No source history merge, no migration, no main/stable push.
+
+| Owner/Priority | Goal/PR/source HEAD | Exact source CI | Dependency/blocker/next |
+|---|---|---|---|
+| Core P0 | #320 `4feee6138545a4a77be906ac5a454a324cfdd450` | Quality 3/3, dedicated PG16 15/15 | Trusted issuer vs request issuer missing equality; fix and rerun negative PG16, then selective port |
+| Portal P0 | #319 `8030f91ac1d49d78766280a39b454782daa95347` | Quality #41346578653 3/3 | Ported 7 blobs; next independently governed native GLPI User/Profile/Entity/Ticket READMY + browser evidence |
+| Worker/Policy P0 | #316 `9cd702e52a44d480a3c341437c8f00669a45d394` | Quality 3/3 + dedicated 1/1, PG16 DR 5/5 | Ported 3 blobs; next SIMULATE/verification/reopen without effect, zero LIVE |
+| ACME/Twin P1 | #317 `584ff7d6fa657d3f0aeb9ecb4906a171486439c4` | Quality 3/3, 239/239 targeted | Ported 4 blobs; next Core source receipt and single incident + Twin blast radius; 15/15 ITIL stages still NOT_EXECUTED |
+| Architect Debian P0 transversal | #318 stable Draft, new candidate reporter probe | Probe CI #41346794088 1/1 and 3/3 synthetic | Installed reporter v1.0 lacks probe, stable poller unsafe, no safe auto-update channel; NO host action |
+
+**Scorecard:** CODE=source patches and 4-file reporter probe; INTEGRE=selective #316/#317/#319 into Draft #234, latest exact-head CI **PENDING**; DEPLOYE_DEBIAN=NO (existing host portal is older Compose healthy); E2E_ACME_GLPI_HITL_PORTAL=NOT_EXECUTED. Debian published collected_at 2026-11-01T20:24:01.392745Z, 61/53/8. Local port 7777 operator VERIFIED; external and unique entrypoint NOT_VERIFIED. SOURCE_REVIEWED yes, source CI_PASS yes for selected lots, INTEGRATION_PASS pending new HEAD, RUNTIME_OBSERVED limited existing host report/operator, candidate runtime NOT_VERIFIED. D0 pending; D1 partial negative, D2-D4 NO_GO. **RELEASE_STABLE=NO_GO.**
+
+**Rollback:** forward-revert only selective product `b4cd7c4b`, reporter `17351261`, workflow `39c8d430`, Portal `bca0dc69` as appropriate; requalify exact-head. Preserve immutable Core 013/014, main history, Compose project, DB and volumes. No stop/rename/down/prune, no deploy stable. Next: qualify exact candidate workflows, fix #320 issuer, prove host cron reporter via safe reviewed channel and publish machine-readable host receipt; no operator command request when existing cron can be safely extended.

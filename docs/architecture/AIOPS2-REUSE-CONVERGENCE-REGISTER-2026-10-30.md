@@ -795,3 +795,17 @@ Core #302 HEAD 990b1f8f6ce14a1e4d191a8fb062ada1fd990039, four files, canonical C
 - **Ownership:** Core P0 independent seven-event PG16 actor/tenant/Run+013/014 audit; Portal P0 native human GLPI trust; Worker P0 post-DEAD concurrent no-effect; ACME P1 honest offline ITIL comparison. Only 7 selected source Git blobs plus these 3 docs, no source history, migration or cross-owner files.
 - **Truth/gates:** SOURCE_REVIEWED=2 PR diffs, source CI_PASS=2/2, new integrated D0 CI_PENDING; INTEGRATION_PASS=NOT_VERIFIED until new exact-head jobs. RUNTIME_OBSERVED=operator-local 7777 + published reporter only, NOT new code. D1 partial negative-only; D2 GLPI HITL/ITIL full journey NO_GO, D3 cumulative kit NO_GO, D4 client signoff NOT_ATTESTED; **RELEASE_STABLE=NO_GO**. No deploy/aiops2-stable push, SSH/Docker, GLPI write, LIVE, new persistent stack, DB/volume deletion.
 - **Rollback:** forward-revert only this focused candidate commit, rerun exact-head CI, preserve Core 013/014 immutable audit, Docker volumes and main history; no force-push/reset.
+
+
+## Convergence checkpoint — 2026-11-01 21:27 CET
+
+| Slice | Provenance/source | Architect disposition | Missing gate |
+|---|---|---|---|
+| Worker two OS processes after Core DEAD | Draft #316 `9cd702e52a44d480a3c341437c8f00669a45d394`; exact source Quality 3/3 and dedicated 1/1, DR 5/5 | Seven-path combined selective port commit `b4cd7c4b7ff63e58fde034071e104895a826c039` with ACME; no merge | Candidate exact-head CI, real GLPI/OIDC revocation |
+| ACME independently supplied seven-event intake | Draft #317 `584ff7d6fa657d3f0aeb9ecb4906a171486439c4`, Quality 3/3, targeted 239/239 | Same selective port `b4cd7c4b`; portable JSON remains untrusted | Independently authenticated Core producer, real ITIL stages |
+| Portal native human READMY readiness UX | Draft #319 `8030f91ac1d49d78766280a39b454782daa95347`, Quality #41346578653 3/3 after 401/503 regression | Seven exact blobs selectively ported in `bca0dc699a8b498a6d22dfcae0a2eb293bb8d7f0` | Native human GLPI rights and external SSO/E2E |
+| Core-owned PG16 seven source | Draft #320 `4feee6138545a4a77be906ac5a454a324cfdd450`, source Quality and dedicated green | **HOLD**, issuer parameter mismatch (see PR #320 review) | Match trusted issuer to request issuer; adversarial PG16 test |
+| Existing-host reporter | Historical `scripts/debian-readonly-reporter.py` + new bounded `debian_runtime_probe.py` in candidate; dedicated CI 3/3 | SOURCE_ONLY, no installed cron change | Safe installation channel + fresh GitHub `runtime_contract` host receipt |
+| Stable deploy guard | Draft #318 `61af58862b9aa7abd648a0743fe0325eb7f58101`, Quality FAILED | **HOLD**, no stable push | Fail closed on unknown Compose label; replace unsafe stop/rename/docker run path |
+
+**Do not re-port historic stacked branches or merge Drafts.** Only #234 candidate is integration target. Source CI and candidate CI never attest Debian deployment. No new persistent stack. Revert focused candidate commits only; preserve main, 013/014 audit, host volumes and Compose portal.
