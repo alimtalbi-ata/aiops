@@ -1,0 +1,29 @@
+name: Debian legacy portal deploy hard-stop (disposable, no Docker)
+on:
+  pull_request:
+    branches:
+      - deploy/aiops2-stable
+    paths:
+      - deploy/deploy-demo-studio-v2.sh
+      - tests/test_debian_legacy_portal_guard.py
+      - .github/workflows/debian-legacy-portal-guard.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  legacy-portal-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source head and two no-Docker regressions
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          bash -n deploy/deploy-demo-studio-v2.sh
+          python3 -m unittest discover -s tests -p 'test_debian_legacy_portal_guard.py' -v

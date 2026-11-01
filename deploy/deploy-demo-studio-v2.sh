@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # One-shot V2 install. Does not change other containers.
 set -Eeuo pipefail
+# Hard stop until a separately qualified in-place Compose upgrade is approved.
+# Historical installer contains docker stop/rename/run and must NEVER replace
+# the healthy aiops2-rebuild-portal, even when Compose labels are absent.
+echo "BLOCKED: legacy standalone portal replacement disabled; use reviewed Compose in-place upgrade" >&2
+exit 78
 SRC="${SRC:-/home/aiops/aiops-v28-demo}"
 DELIVERY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV=/home/aiops/aiops-v28-test-venv/bin/python
