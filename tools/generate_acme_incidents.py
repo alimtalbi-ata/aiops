@@ -162,12 +162,13 @@ def load_catalog(path=CATALOG_FILE):
     return data, hashlib.sha256(raw).hexdigest()
 
 
-def load_governance_source_index(path=GOVERNANCE_SOURCE_FILE):
+def load_governance_source_index(path=None):
     """Read only pinned source *pointers*, never invented governance records.
 
     A source pointer is not a real DC/owner/SLA/OLA/Change authority.
     Changes require review of this exact Git blob and the underlying source.
     """
+    path = GOVERNANCE_SOURCE_FILE if path is None else path
     raw = Path(path).read_bytes()
     if _git_blob(raw) != GOVERNANCE_SOURCE_GIT_BLOB:
         raise ValueError("governance source index Git blob mismatch")
