@@ -642,3 +642,17 @@ The five RRULEs were reset with future local DTSTART values to avoid a first DTS
 | 4 Policy/HITL P0 | #239 `32864c175957a56dfdd039a0ec4ba3bb519c85ed`, strict public HTTP/no-effect internal verdict | #41252996008 3/3, 26/26 Policy + 9/9 HTTP; next disposable outbox/DR/Temporal after Core PG16 gate |
 
 **Exact integrated candidate Quality:** [#41253703233](https://github.com/alimtalbi-ata/aiops/actions/runs/41253703233) IN_PROGRESS at documentation checkpoint. D0 pending; D1 disposable combined, D2 same-SHA full ITIL browser/API, D3 semantic kit install/upgrade/rollback, D4 client sign-off all NOT_QUALIFIED/NO_GO. ACME synthetic is not a runtime Incident/GLPI receipt. Owners' hourly prompts updated; 3 P0 WIP cap enforced. Rollback revert #239 Policy → #233/#238 Core → #237 Portal → #236 ACME selective commits, discard disposable DB/artifacts, no main reset or LIVE.
+
+
+## 2026-11-01 01:48 CET — architect cycle, four focused product ports
+
+**Decision:** single Draft [candidate #234](https://github.com/alimtalbi-ata/aiops/pull/234), main `ae7c3e5102b99a66bd7806d602146f1309a9749d`, code checkpoint `a44d6aed751b2e4c4cf8ec6e5b00fde29cd1cec3`; 11 ahead / 0 behind before documentation. No main merge. D0 final candidate **PENDING** new exact-head checks; previous #234 [Quality 41253781380](https://github.com/alimtalbi-ata/aiops/actions/runs/41253781380) 3/3 is **OLD SHA ONLY**. Four focused source PRs remain Draft, not directly merged.
+
+| Owner / WIP | Objective / PR / source exact SHA | Source proof / dependency / next action |
+|---|---|---|
+| 1 ACME P1 | #240 `809d31bb7b3fe1e3d214e75a36ac2bbc20dd0d82`; Twin service context / commit `ef47f05` | 78/78 source; require governed owner, SLA/OLA, maintenance and blast-radius source records, no invented runtime |
+| 2 Portal P0 | #241 `1d5b6a4fb02e970bde46bceff4212e120f336f89`; fail-closed Run ACL consumer / `e73ad957` | Negative 9/9; Core actor+tenant+Run→Incident→GLPI ticket/entity authorization needed before positive read |
+| 3 Core P0 | #242 `00dd0443d4d36d7aeb36bb77490777ac6ef5785d`; GLPI independent readback gate / `dfc4f122` | PG16 009→012 installed 3/3 on prior candidate; require real authenticated GLPI readback and actor delegation, populated DB downgrade still unqualified |
+| 4 HITL P0 | #243 `e4e4c7c09b96d911184f80dbb6249cd191fa8390`; disposable PG16/DR SQL-model / `a44d6aed` | Source 5/5 PG16 SQL, dump/restore 16; Core claim/ACK and Worker/Temporal restart not tested; architect owns shared CI |
+
+**Tests:** source CI #240 3/3, #241 3/3, #242 3/3, #243 Quality 3/3 + dedicated HITL 1/1; candidate new SHA requires D0 requalification. D1 full combined disposable NOT_QUALIFIED; D2 same-SHA browser/API story NOT_QUALIFIED; D3 kit semantic/install/upgrade/rollback NO_GO; D4 client NOT_ATTESTED. #196 FAIL and cost UNKNOWN without versioned pricing/provider-reported tokens. WIP P0=3. Rollback: revert #243→#242→#241→#240 commits in reverse order, drop disposable databases; no main reset or LIVE.

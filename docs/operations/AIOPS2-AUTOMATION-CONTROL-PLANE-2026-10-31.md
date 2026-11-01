@@ -93,3 +93,15 @@ A Debian SRV-DEB-05: requested `*/1`, but command/user/PATH/working directory/fl
 | D Internal lab | ACME seed 20261018, Portal RSA/Chromium, Core PG16, Policy HTTP synthetic/jetable | Source exact-head CIs isolated; combined candidate D0 pending | On-demand only; record seed/version/SHA/artifact, never classify as Debian/NGX/GLPI runtime |
 
 The offline `scripts/automation_heartbeat_gate.py` is not installed on Debian and cannot prove host cron cadence. Do not create duplicate scheduler or confuse GitHub daily schedule with ChatGPT hourly cadence. No host access, no GLPI write or LIVE.
+
+
+## 2026-11-01 01:48 CET — automation A/B/C/D checkpoint
+
+| Plane / owner | Cadence / command / environment | Last verified success / next | Logs, missed-run alert, recovery |
+|---|---|---|---|
+| A SRV-DEB-05 / operator | Debian `*/1` requested; cron/systemd inventory NOT_OBSERVED | Last/next UNKNOWN, host heartbeat absent | Inspect user, PATH, working dir, `flock`, timeout, retries, exit/logs/secrets before installing anything; missed-run UNKNOWN; no SSH/sudo |
+| B GitHub / architect | Quality PR/push/dispatch + configured `23 2 * * *` UTC; new dedicated HITL PR workflow, hosted disposable PG16 | Source #243 [HITL 41257528325](https://github.com/alimtalbi-ata/aiops/actions/runs/41257528325) 1/1; new candidate exact-head pending; no actual `schedule` heartbeat attested | Actions run IDs/artifacts 7-day retention; detect missed daily schedule only from event+timestamp receipts, not PR CI; rerun scoped CI if needed |
+| C ChatGPT owners 1–5 / architect | Five HOURLY enabled; independent of Debian cron | 1–4 latest completed 00:00, 00:12, 00:27, 00:39 UTC on 2026-11-01; 5 in progress; **5/5 `next_run_time=null`** | NEXT_UNKNOWN, not cadence guarantee; handoffs in #186 and source PRs, inspect run details, avoid duplicate schedules |
+| D Internal lab / owner | On-demand ACME seed 20261018, OIDC/Chromium, PG16 SQL-model, Policy | Source exact-head CI as above, candidate D0 pending; no Debian/NGX/real GLPI runtime | Record scenario, seed, SHA, test N/N and artifact; synthetic != runtime; no LIVE |
+
+The offline `scripts/automation_heartbeat_gate.py` remains not deployed. No Debian cron changes, runner host access, external mutation, real GLPI write or executor. `RELEASE_STABLE=NO_GO`.
