@@ -23,6 +23,8 @@ SEED_GIT_BLOB = "67f0124a2c3b450e5249165e719a5d943fdd7237"
 CATALOG_GIT_BLOB = "78e749c623d7ee7ea1d33a74577b4f7b696f3207"
 GOVERNANCE_SOURCE_FILE = ROOT / "tests/fixtures/acme_twin_governance_source_index_v1.json"
 GOVERNANCE_SOURCE_GIT_BLOB = "e77a0abbb53176488ec49d7c0c9f8581d4620b3f"
+VERTICAL_CONTRACT_FILE = ROOT / "tests/fixtures/acme_synthetic_vertical_contract_v1.json"
+VERTICAL_CONTRACT_GIT_BLOB = "e74e7b67d0d58e8eb1c2e4b54b1b0bf688694d13"
 SOURCE = "ACME_OFFLINE_SYNTHETIC_REPLAY_V1"
 ANCHOR = datetime(2026, 10, 31, 9, 42, tzinfo=timezone.utc)  # fixture clock, NOT wall clock
 NODE_RE = re.compile(r"^\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','[^']+','[^']+',([1-5]),", re.M)
@@ -590,6 +592,122 @@ def twin_service_context_offline(manifest, *, false_positive=False):
     return context
 
 
+
+def load_vertical_contract_fixture(path=None):
+    """Pinned script plan only. It cannot attest a lifecycle transition."""
+    path = VERTICAL_CONTRACT_FILE if path is None else path
+    raw = Path(path).read_bytes()
+    if _git_blob(raw) != VERTICAL_CONTRACT_GIT_BLOB:
+        raise ValueError("vertical contract Git blob mismatch")
+    data = json.loads(raw, object_pairs_hook=_unique_object)
+    if (data.get("schema") != "aiops.acme.synthetic-vertical-contract.v1" or
+            data.get("provenance") != "SYNTHETIC_FIXTURE" or
+            data.get("authority") != "OFFLINE_SCRIPT_ONLY" or
+            data.get("scenario_id") != "SCN-GOLDEN-PAYMENT-P1" or
+            type(data.get("seed")) is not int or data["seed"] != 20261018 or
+            data.get("graph_git_blob") != SEED_GIT_BLOB or
+            data.get("governance_index_git_blob") != GOVERNANCE_SOURCE_GIT_BLOB or
+            data.get("source") != str(SEED_FILE.relative_to(ROOT)) or
+            data.get("source_selector") != "scenario_steps" or
+            data.get("tenant_scope") != "UNKNOWN" or
+            data.get("runtime_readback") != "NOT_EXECUTED" or
+            data.get("execution_status") != "NOT_EXECUTED" or
+            data.get("live_effects_authorized") is not False):
+        raise ValueError("vertical contract source or authority mismatch")
+    stages = data.get("stages")
+    if not isinstance(stages, list) or len(stages) != 15:
+        raise ValueError("vertical contract must declare fifteen planned stages")
+    names = [row.get("stage") for row in stages if isinstance(row, dict)]
+    if len(names) != 15 or len(set(names)) != 15:
+        raise ValueError("invalid vertical stage identities")
+    graph = load_graph()
+    steps = {n: action for n, _, action, _, _ in graph["steps"]}
+    for row in stages:
+        n = row.get("source_step")
+        cp = row.get("runtime_checkpoint")
+        if (set(row) != {"stage", "itil_practice", "source_step",
+                         "expected_action", "runtime_checkpoint"} or
+                type(n) is not int or n not in steps or
+                row.get("expected_action") != steps[n] or
+                not isinstance(row.get("itil_practice"), str) or
+                not row["itil_practice"] or
+                cp is not None and cp not in CHECKPOINTS):
+            raise ValueError("vertical stage not backed by pinned scenario")
+    return data
+
+
+def vertical_contract_offline(manifest, *, fixture=None):
+    """Project a fully verified Golden replay into an UNEXECUTED ITIL plan.
+
+    Script-event anchors are not Analyst/Critic outputs, Evidence receipts,
+    GLPI tickets, Core Incidents/Runs, HITL decisions or simulated executions.
+    No runtime identity, SLA/OLA, Change or observed impact can be inferred.
+    """
+    story = storyboard_offline(manifest)  # strict canonical replay + source index
+    if (story["scenario_id"] != "SCN-GOLDEN-PAYMENT-P1" or
+            type(story["seed"]) is not int or story["seed"] != 20261018 or
+            story["graph_version"] != SEED_GIT_BLOB):
+        raise ValueError("vertical contract requires canonical Golden replay")
+    pinned = load_vertical_contract_fixture()
+    if fixture is None:
+        fixture = pinned
+    elif _canonical(fixture) != _canonical(pinned):
+        raise ValueError("untrusted vertical contract override")
+    timeline = story["timeline"]
+    if len(timeline) != 7:
+        raise ValueError("untrusted vertical contract timeline")
+    stages = []
+    for row in fixture["stages"]:
+        event = timeline[row["source_step"] - 1]
+        if event["action"] != row["expected_action"]:
+            raise ValueError("vertical contract source event mismatch")
+        stages.append({
+            "stage": row["stage"], "itil_practice": row["itil_practice"],
+            "status": "NOT_EXECUTED", "runtime_id": None,
+            "runtime_evidence_ids": [], "runtime_checkpoint": row["runtime_checkpoint"],
+            "source_event_id": event["source_event_id"],
+            "source_event_time": event["event_time"],
+            "source_event_ci_id": event["ci_id"],
+            "source_action": event["action"], "source_step": row["source_step"],
+            "source_authority": "OFFLINE_SCRIPT_ONLY",
+            "anchor_is_runtime_proof": False,
+            "tenant_scope": "UNKNOWN", "provenance": "SYNTHETIC_FIXTURE",
+        })
+    context = story["twin_service_context"]
+    return {
+        "schema": "aiops.acme.synthetic-vertical-projection.v1",
+        "synthetic": True, "provenance": "SYNTHETIC_FIXTURE",
+        "source": SOURCE, "source_dataset_sha256": story["source_dataset_sha256"],
+        "source_manifest_sha256": story["source_manifest_sha256"],
+        "source_event_ids": [e["source_event_id"] for e in timeline],
+        "scenario_id": story["scenario_id"], "seed": story["seed"],
+        "graph_version": story["graph_version"],
+        "governance_index_git_blob": GOVERNANCE_SOURCE_GIT_BLOB,
+        "contract_fixture_git_blob": VERTICAL_CONTRACT_GIT_BLOB,
+        "event_count": story["event_count"],
+        "tenant_scope": "UNKNOWN", "tenant_id": None,
+        "ticket_id": None, "incident_id": None, "run_id": None,
+        "evidence_ids": [], "runtime_readback": "NOT_EXECUTED",
+        "correlation_status": "OFFLINE_SYNTHETIC_ONLY",
+        "service_id": story["service_id"], "ci_id": story["ci_id"],
+        "dependency_path": story["dependency_path"],
+        "governance_source_records": context["governance_source_records"],
+        "governance_unknowns": {
+            field: context[field] for field in (
+                "datacenter_id", "datacenter_relation", "service_owner_id",
+                "service_team_id", "sla_id", "ola_id", "change_id",
+                "maintenance_actual")
+        },
+        "itil": story["itil"], "observed_impact": "UNKNOWN",
+        "analyst_hypothesis": "UNKNOWN", "critic_disposition": "UNKNOWN",
+        "policy_decision": "UNKNOWN", "hitl_approval": "UNKNOWN",
+        "simulation_executed": False, "post_action_verified": False,
+        "resolution_verified": False, "reopen_verified": False,
+        "checkpoints": story["checkpoints"], "stages": stages,
+        "publishable_to_core_or_glpi": False, "live_effects_authorized": False,
+    }
+
+
 def correlate_offline(events):
     """Dedup *fixture-only* events; reject untrusted IDs, CIs and evidence.
 
@@ -669,17 +787,23 @@ def main(argv=None):
     parser.add_argument("--seed", type=int)
     parser.add_argument("--stochastic", action="store_true")
     parser.add_argument("--false-positive", action="store_true")
+    parser.add_argument("--vertical-contract", action="store_true",
+                        help="export no-effect SYNTHETIC ITIL lifecycle contract")
     parser.add_argument("--storyboard", action="store_true",
                         help="export strict read-only SYNTHETIC timeline, not Core Evidence")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.stochastic and args.seed is None:
         parser.error("--stochastic requires explicit --seed")
+    if args.storyboard and args.vertical_contract:
+        parser.error("--storyboard and --vertical-contract are exclusive")
     try:
         result = replay(args.scenario, 20261018 if args.seed is None else args.seed, stochastic=args.stochastic,
                         false_positive=args.false_positive)
         if args.storyboard:
             result = storyboard_offline(result, false_positive=args.false_positive)
+        if args.vertical_contract:
+            result = vertical_contract_offline(result)
     except (ValueError, OSError, UnicodeError) as exc:
         parser.error(str(exc))
     data = json.dumps(result, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
