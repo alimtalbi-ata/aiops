@@ -41,7 +41,7 @@ OWNER = "svc-CI-WORKER"
 
 
 def git_blob(raw):
-    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\\0" + raw).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
 
 
 @unittest.skipUnless(os.getenv("GITHUB_ACTIONS") == "true"
@@ -139,7 +139,7 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
             db.execute("insert into aiops.evidence "
                        "(evidence_id,source,claim,confidence,provenance,payload_hash,payload) "
                        "values(%s,'ci-fixture','synthetic only',0.5,"
-                       "'{\\\"synthetic\\\":true}',%s,'{}')",
+                       "'{\"synthetic\":true}',%s,'{}')",
                        (ids["evidence"], digest))
             db.execute("insert into aiops.analysis_records "
                        "(analysis_id,run_id,idempotency_key,revision,contract_version,"
@@ -163,8 +163,8 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                        "proposal_revision,target_ci_id,action_type,risk_tier,evidence_ids,"
                        "preconditions,expected_postconditions,proposal_hash,status,expires_at) "
                        "values(%s,%s,%s,%s,'CI-FIXTURE',1,'CI-SYNTHETIC',"
-                       "'COLLECT_DIAGNOSTICS','LOW',%s,'[\\\"ci precondition\\\"]',"
-                       "'[\\\"ci postcondition\\\"]',%s,'PROPOSED',now()+interval '1 hour')",
+                       "'COLLECT_DIAGNOSTICS','LOW',%s,'[\"ci precondition\"]',"
+                       "'[\"ci postcondition\"]',%s,'PROPOSED',now()+interval '1 hour')",
                        (ids["proposal"], ids["run"], ids["analysis"],
                         ids["critique"], evidence_ids, digest))
             db.execute("insert into aiops.approval_records "
