@@ -25,9 +25,9 @@ from portal.oidc_identity import (
     _decode, _json_strict, _verify_rs256,
 )
 
-_TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\\Z", re.ASCII)
-_NONCE = re.compile(r"[A-Za-z0-9_-]{32,128}\\Z", re.ASCII)
-_KID = re.compile(r"[A-Za-z0-9_.-]{1,128}\\Z", re.ASCII)
+_TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,95}\Z", re.ASCII)
+_NONCE = re.compile(r"[A-Za-z0-9_-]{32,128}\Z", re.ASCII)
+_KID = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z", re.ASCII)
 _DOMAIN = b"aiops.portal.core-actor-resource-authorization.v1\n"
 _MAX_BODY = 16384
 
