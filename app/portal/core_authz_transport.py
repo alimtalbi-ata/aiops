@@ -231,6 +231,34 @@ def assess_core_authz_reply_offline(
             or not exact_binding_valid(actor, binding)
             or not isinstance(headers, Mapping)):
         return invalid
+    # Even negative Core parity is tied to the server-built, pinned request.
+    # Never accept a caller-fabricated plan with another tenant/Run or nonce.
+    target = configured_core_authz_target(env)
+    if (target is None or target.origin != plan.origin
+            or target.service_token != plan.service_bearer
+            or plan.path != "/api/tenants/" + binding.tenant_id
+            + "/runs/" + binding.run_id + "/actor-resource-authorization"
+            or not isinstance(plan.nonce, str)
+            or _NONCE.fullmatch(plan.nonce) is None
+            or not isinstance(plan.body, bytes) or len(plan.body) > _MAX_BODY):
+        return invalid
+    try:
+        request_body = _json_strict(plan.body)
+        expected = {
+            "incident_id": binding.incident_id,
+            "glpi_instance_id": binding.glpi_instance_id,
+            "ticket_id": binding.ticket_id,
+            "glpi_entity_id": binding.glpi_entity_id,
+            "permission": "run:read",
+            "nonce": plan.nonce,
+        }
+        if (type(request_body) is not dict or request_body != expected
+                or json.dumps(request_body, sort_keys=True, separators=(",", ":"),
+                              ensure_ascii=True).encode("ascii") != plan.body):
+            return invalid
+    except (IdentityRejected, IdentityUnavailable, ValueError, TypeError,
+            UnicodeError, OverflowError):
+        return invalid
     normalized: dict[str, str] = {}
     for key, value in headers.items():
         if not isinstance(key, str) or not isinstance(value, str):
