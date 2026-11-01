@@ -69,3 +69,18 @@ under the existing Quality environment. Core remains the owner of route,
 introspection, native GLPI rights, nonce/revocation ledger and eventual signed
 response contract. **dispatch_allowed=false**,
 **core_authz_read_permitted=false**, **RELEASE_STABLE=NO_GO**.
+
+
+## Signed proposal / current Core denial parity — 2026-11-01 05:07 CET
+
+`assess_core_authz_reply_offline` is a **non-network contract test adapter**, not a production authorization consumer. It pins the server-built Core route, service bearer, exact six-field request body and nonce to the OIDC actor and server-owned Run→Incident→GLPI ticket/entity binding. It recognizes two disjoint cases:
+
+1. `CURRENT_CORE_NEGATIVE`: real Core v1 `200/401/403/503` negative-only response with exact schema/decision, no signature and mandatory `no-store/no-cache/nosniff/no-referrer`. Even HTTP 200 means `UNKNOWN`, never `ALLOW`.
+2. `SIGNED_SHAPE_UNQUALIFIED`: disposable RSA-signed proposed `ALLOW` shape with pinned origin/key, issuer, audience, subject, tenant, Run, Incident, ticket, entity, expiry and exact nonce. This is **not** an attested Core response and does not consume a durable nonce. A response replayed against a new nonce is invalid; a replay against the same nonce cannot be safely distinguished without the Core-owned atomic ledger. Thus **even a matching signed shape stays 503 UNKNOWN**.
+3. All other shapes, forged ALLOW, foreign tenant, wrong issuer/audience, expired/revoked claims, altered signatures, invalid response headers, or mismatched plan are `INVALID`, also 503 UNKNOWN.
+
+Every assessment has `portal_status=503`, `state=UNKNOWN`, `read_permitted=false`. It is never wired to API/HTML/NOC/Copilot and never performs Core or GLPI I/O. Browser session absence/expiry/revocation continues to return 401 through the existing Portal Run fence. No token from the browser becomes authority; no second ITSM/CMDB is introduced.
+
+**Core-owner dependency:** publish and independently qualify native GLPI human user/profile/entity read rights, exact OIDC subject→GLPI mapping, source-authenticated ticket/Run ownership, durable atomic nonce/JTI/revocation ledger, response signer/issuer and key rotation, and an agreed signed wire schema. A synthetic RS256 signature, Core service bearer, or `verified=true` is insufficient. The Portal activation gate remains hard-coded false pending a separate architect-reviewed PR.
+
+**Focused test command:** `PYTHONPATH=app python -m unittest discover -s tests -p 'test_portal_core_acl_consumer.py' -v`. Tests use in-memory disposable RSA keys and mocked Core/GLPI, including revoked-session browser/API parity and no upstream. No real IdP, GLPI write, host, deployment or LIVE. Rollback: revert this Portal-only PR's commits or close the Draft; do not touch the sole architect candidate.
