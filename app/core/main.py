@@ -35,7 +35,7 @@ def append_event(c,rid,stage,etype,status,eids=None,decision=None,confidence=Non
     return seq,row[0],False
 def set_stage(c,rid,stage,state,attempt=None,error=None):
     if attempt is None:
-        c.execute('select attempt from aiops.run_stage_state where run_id=%s and stage=%s',(rid,stage)); row=c.fetchone(); attempt=(row[0] if row else 0)
+        row=c.execute('select attempt from aiops.run_stage_state where run_id=%s and stage=%s',(rid,stage)).fetchone(); attempt=(row[0] if row else 0)
     c.execute('insert into aiops.run_stage_state(run_id,stage,state,attempt,last_error) values(%s,%s,%s,%s,%s) on conflict(run_id,stage) do update set state=excluded.state,attempt=excluded.attempt,last_error=excluded.last_error,completed_at=case when excluded.state in (\'PASS\',\'BLOCKED\',\'FAIL\') then now() else aiops.run_stage_state.completed_at end,started_at=case when excluded.state=\'RUNNING\' then coalesce(aiops.run_stage_state.started_at,now()) else aiops.run_stage_state.started_at end',(rid,stage,state,attempt,error))
 @app.get('/health')
 def health():
