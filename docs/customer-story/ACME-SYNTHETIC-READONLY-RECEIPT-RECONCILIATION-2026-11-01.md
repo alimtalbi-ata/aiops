@@ -45,7 +45,7 @@ These are **requirements**, not observations or assertions that the correspondin
 ```bash
 python -m unittest discover -s tests -p 'test_acme_synthetic_incident_catalog.py' -v
 python -m unittest discover -s tests -p 'test_find_acme_demo_run.py' -v
-python -m unittest discover -s tests -p 'test_acme_fixture_san_payments.py' -v
+python -m unittest discover -s tests -p 'test_acme_san_payments_fixture_contract.py' -v
 python -m unittest discover -s tests -p 'test_acme_fixture_override_types.py' -v
 ```
 
