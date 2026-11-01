@@ -762,5 +762,202 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
 
 
 
+    def test_p0_readmy_ticket_user_and_core_replay_are_shapes_not_human_allow(self):
+        """Pinned disposable IdP/GLPI/Core peers prove only a negative boundary.
+
+        READMY bit + Ticket_User ownership are necessary test shapes, not a
+        governed GLPI authorization. No positive result reaches Portal.
+        """
+        from fastapi import HTTPException
+        from fastapi.testclient import TestClient
+        from portal import glpi_operator_view, main
+
+        actor = self.actor()  # RS256 IdP JWT against a separately pinned JWKS
+        self.assertEqual(self.synthetic_mapping.get(
+            (actor.issuer, actor.subject, actor.tenant_id)), 77)
+        self.assertFalse(actor.tenant_acl_qualified)
+        plan = wire.prepare_core_authz_wire(
+            actor, self.binding, env=self.settings, now=self.now)
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+
+        def readmy_shape(rows, links):
+            """Synthetic necessary shape only; never native effective rights."""
+            if (not isinstance(rows, dict) or not isinstance(links, list)
+                    or len(links) != 1 or not isinstance(links[0], dict)):
+                return False
+            right = rows.get("Profile")
+            if (not isinstance(right, dict)
+                    or type(right.get("ticket")) is not int
+                    or right["ticket"] & 2 != 2):
+                return False
+            baseline = copy.deepcopy(rows)
+            baseline["Profile"]["ticket"] = 1
+            link = links[0]
+            return (synthetic_native_glpi_shape_matches(
+                        baseline, self.binding, glpi_user_id=77)
+                    and set(link) == {"id", "tickets_id", "users_id", "type"}
+                    and type(link["id"]) is int and link["id"] > 0
+                    and type(link["tickets_id"]) is int
+                    and link["tickets_id"] == 123
+                    and type(link["users_id"]) is int
+                    and link["users_id"] == 77
+                    and type(link["type"]) is int and link["type"] == 1)
+
+        with DisposableSignedCoreNativeGlpi(plan.service_bearer) as peers:
+            native = peers.read_native_glpi()
+            owner_links = peers.read_ticket_users()
+            # READ alone is NOT READMY even for the same ticket requester.
+            self.assertFalse(readmy_shape(native, owner_links))
+            peers.native_rows["Profile"]["ticket"] = 2
+            native_readmy = peers.read_native_glpi()
+            self.assertTrue(readmy_shape(native_readmy, owner_links))
+            # A matching synthetic shape is NOT an independent GLPI grant.
+            self.assertFalse(wire.core_authz_read_permitted())
+            variants = [
+                ("missing_link", []),
+                ("foreign_user", [{"id": 9, "tickets_id": 123,
+                                   "users_id": 78, "type": 1}]),
+                ("foreign_ticket", [{"id": 9, "tickets_id": 999,
+                                     "users_id": 77, "type": 1}]),
+                ("unsupported_role", [{"id": 9, "tickets_id": 123,
+                                       "users_id": 77, "type": 99}]),
+                ("duplicate_links", owner_links + owner_links),
+            ]
+            for label, links in variants:
+                with self.subTest(ownership=label):
+                    peers.ticket_users = copy.deepcopy(links)
+                    self.assertFalse(readmy_shape(
+                        native_readmy, peers.read_ticket_users()))
+            peers.ticket_users = copy.deepcopy(owner_links)
+            for label, key, value in (
+                ("inactive", "User", {"id": 77, "is_active": 0}),
+                ("foreign_entity", "Ticket", {"id": 123, "entities_id": 99}),
+                ("foreign_profile", "Profile", {"id": 99, "ticket": 2}),
+            ):
+                with self.subTest(native=label):
+                    peers.native_rows = copy.deepcopy(native_readmy)
+                    peers.native_rows[key] = value
+                    self.assertFalse(readmy_shape(
+                        peers.read_native_glpi(), peers.read_ticket_users()))
+            peers.native_rows = copy.deepcopy(native_readmy)
+
+            # A test-controlled signed Core ALLOW is still 503, not a grant.
+            positive_shape = self.envelope(actor, plan.nonce)
+            peers.payload = positive_shape
+            pinned = {**self.settings,
+                      "AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON":
+                          json.dumps(peers.jwks)}
+            matching = self.assess(peers.send_core(plan), actor, plan, pinned)
+            self.assertEqual((matching.portal_status, matching.read_permitted),
+                             (503, False))
+            for label, mutation in (
+                ("expired", {"expires_at": self.now - 1}),
+                ("revoked", {"revoked": True}),
+                ("foreign_run", {"run_id": "RUN-FOREIGN-999"}),
+                ("nonce_replay", {"request_nonce": "replayed-nonce"}),
+            ):
+                with self.subTest(core=label):
+                    peers.payload = {**positive_shape, **mutation}
+                    decision = self.assess(peers.send_core(plan), actor,
+                                           plan, pinned)
+                    self.assertEqual((decision.portal_status,
+                                      decision.read_permitted), (503, False))
+            peers.payload = positive_shape
+            peers.rotate_signer()
+            stale_pin = self.assess(peers.send_core(plan), actor, plan, pinned)
+            self.assertEqual((stale_pin.portal_status,
+                              stale_pin.read_permitted), (503, False))
+            repinned = {**self.settings,
+                        "AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON":
+                            json.dumps(peers.jwks)}
+            fresh_shape = self.assess(
+                peers.send_core(plan), actor, plan, repinned)
+            self.assertEqual((fresh_shape.portal_status,
+                              fresh_shape.read_permitted), (503, False))
+            self.assertTrue(all(x["method"] == "GET"
+                                for x in peers.glpi_observations))
+            self.assertTrue(all(x["method"] == "POST"
+                                for x in peers.core_observations))
+
+        # The actual Portal endpoint is still no-upstream and non-enumerating.
+        handle = "Q" * 43
+        with patch.dict(os.environ, self.settings):
+            with TestClient(main.app) as client:
+                with oidc_session._lock:
+                    oidc_session._sessions[oidc_session._digest(handle)] = (
+                        oidc_session._Session(actor, self.now + 120))
+                try:
+                    client.cookies.set(oidc_session._SESSION_COOKIE, handle)
+                    with patch.object(main, "get_json",
+                                      side_effect=AssertionError("Core GET")) as core, \
+                         patch.object(main, "post_json",
+                                      side_effect=AssertionError("business POST")) as post, \
+                         patch("urllib.request.urlopen",
+                               side_effect=AssertionError("external GET")) as network:
+                        responses = []
+                        for run in ("RUN-ACME-123", "RUN-FOREIGN-999",
+                                    "RUN-FORGED-999"):
+                            reply = client.get("/api/portal/runs/" + run,
+                                headers={"X-GLPI-Profile": "manager",
+                                         "X-Tenant-ID": "FOREIGN",
+                                         "X-GLPI-Ticket-User": "77"})
+                            self.assertEqual(reply.status_code, 503)
+                            responses.append(reply.json())
+                        self.assertEqual(responses[0], responses[1])
+                        self.assertEqual(responses[1], responses[2])
+                        itsm = client.get("/api/portal/itsm")
+                        self.assertEqual(itsm.status_code, 503)
+                        self.assertFalse(itsm.json()["human_authority"]["human_allow"])
+                        self.assertEqual(itsm.json()["authority_sources"][
+                            "glpi_native_ticket_user_membership"], "NOT_ATTESTED")
+                        self.assertNotIn("ticket_id", itsm.json())
+                        client.cookies.clear()
+                        with patch.object(glpi_operator_view,
+                                          "_require_portal_read_auth",
+                                          side_effect=HTTPException(
+                                              403, "forbidden_tenant")):
+                            denied = client.get("/api/portal/itsm",
+                                headers={"Authorization": "Bearer " +
+                                         self.settings["AIOPS_PORTAL_READ_TOKEN"]})
+                            self.assertEqual(denied.status_code, 403)
+                        client.cookies.set(oidc_session._SESSION_COOKIE, handle)
+                        with oidc_session._lock:
+                            oidc_session._sessions.pop(
+                                oidc_session._digest(handle), None)
+                        revoked = client.get("/api/portal/itsm",
+                            headers={"Authorization": "Bearer " +
+                                     self.settings["AIOPS_PORTAL_READ_TOKEN"]})
+                        self.assertEqual(revoked.status_code, 401)
+                        self.assertEqual(revoked.json()["state"], "UNAUTHORIZED")
+                        core.assert_not_called()
+                        post.assert_not_called()
+                        network.assert_not_called()
+                finally:
+                    with oidc_session._lock:
+                        oidc_session._sessions.pop(
+                            oidc_session._digest(handle), None)
+
+        self._emit_negative_receipt(
+            "readmy-ticket-user-core-signer-replay",
+            ["idp_rs256_pinned_subject_mapping_test_only",
+             "native_glpi_read_is_not_readmy",
+             "readmy_ticket_user_link_is_necessary_not_authority",
+             "five_foreign_missing_ambiguous_ticket_user_cases",
+             "three_inactive_foreign_native_glpi_cases",
+             "core_signed_shape_expiry_revoke_foreign_run_nonce_replay",
+             "core_signer_rotation_requires_repin_but_never_grants",
+             "portal_present_foreign_forged_runs_indistinguishable",
+             "portal_401_403_503_no_upstream_no_positive_allow"],
+            {"portal_401": 401, "portal_403": 403, "portal_503": 503,
+             "native_ownership_negative_cases": 8,
+             "core_negative_mutations": 4,
+             "signed_shape_grants": 0,
+             "portal_business_upstream_calls": 0,
+             "glpi_native_human_authority_attested": False,
+             "local_7777_operator_reported": True,
+             "external_https_sso_glpi_attested": False})
+
+
 if __name__ == "__main__":
     unittest.main()

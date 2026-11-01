@@ -120,11 +120,17 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                     route = f"/api/runs/{ids['run']}"
                     run = client.get(route).json()["run"]
                     self.assertEqual(run["incident_id"], ids["inc"])
-                    # Core's existing event writer references run_events.event_key
-                    # but the installed 001/004/009-014 chain lacks that
-                    # column. Do NOT invent a Worker-owned migration. Seed
-                    # only mutable CI fixture rows; Core GET and gate API
-                    # remain the actual read/Policy-gate surfaces.
+                    # Core owns Run writes. The missing event_key migration
+                    # forces a fixture-only negative path; NEVER call it E2E.
+                    # Once the Core owner installs the full schema, exercise
+                    # real HTTP writes, replay and BLOCK, without SQL events.
+                    with self.psycopg.connect(self.url) as db:
+                        has_event_key = db.execute(
+                            "select exists(select 1 from "
+                            "information_schema.columns "
+                            "where table_schema='aiops' "
+                            "and table_name='run_events' "
+                            "and column_name='event_key')").fetchone()[0]
                     stages = [
                         ("DGX_ANALYST", "ANALYST_RECORDED", "analysis_id",
                          "PASS", None, {}),
@@ -141,7 +147,17 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                          {"resolution_verified": False,
                           "reopen_recommended": True}),
                     ]
-                    with self.psycopg.connect(self.url) as db:
+                    if has_event_key:
+                        start_command = {
+                            "expected_version": run["version"],
+                            "idempotency_key": "ci-vertical-start-" + ids["run"],
+                            "command": "START",
+                        }
+                        started = post(route + "/command", start_command)
+                        self.assertEqual(started["status"], "RUNNING")
+                        self.assertEqual(
+                            post(route + "/command", start_command), started)
+                        version = started["version"]
                         for seq, (stage, event_type, binding, status,
                                   decision, extra) in enumerate(stages, 1):
                             payload = {
@@ -150,19 +166,66 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                                 "run_id": ids["run"],
                                 "synthetic": True,
                                 "execution_allowed": False,
-                                "effect_allowed": False, **extra}
+                                "effect_allowed": False, **extra,
+                            }
+                            body = {
+                                "expected_version": version,
+                                "stage": stage, "event_type": event_type,
+                                "status": status,
+                                "event_key": "ci-vertical-" + str(seq)
+                                             + "-" + ids["run"],
+                                "evidence_ids": [ids["evidence"]],
+                                "decision": decision, "payload": payload,
+                            }
+                            written = post(route + "/events", body)
+                            self.assertIs(written["idempotent"], False)
+                            version = written["version"]
+                            replay = post(route + "/events",
+                                          dict(body, expected_version=version))
+                            self.assertIs(replay["idempotent"], True)
+                            self.assertEqual(replay["version"], version)
+                        block_command = {
+                            "expected_version": version,
+                            "idempotency_key": "ci-vertical-block-" + ids["run"],
+                            "command": "BLOCK",
+                        }
+                        blocked = post(route + "/command", block_command)
+                        self.assertEqual(blocked["status"], "BLOCKED")
+                        self.assertEqual(
+                            post(route + "/command", block_command), blocked)
+                        self.assertEqual(
+                            len(client.get(route).json()["events"]), 8)
+                        core_event_write = "CORE_WRITTEN_PG16_OBSERVED"
+                        run_events_source = "CORE_HTTP_WRITER_PG16"
+                    else:
+                        # CI mutable fixture only; no Core event write claim.
+                        with self.psycopg.connect(self.url) as db:
+                            for seq, (stage, event_type, binding, status,
+                                      decision, extra) in enumerate(stages, 1):
+                                payload = {
+                                    binding: ids[binding.removesuffix("_id")],
+                                    "tenant_id": base.TENANT,
+                                    "run_id": ids["run"],
+                                    "synthetic": True,
+                                    "execution_allowed": False,
+                                    "effect_allowed": False, **extra,
+                                }
+                                db.execute(
+                                    "insert into aiops.run_events "
+                                    "(event_id,run_id,sequence,stage,event_type,"
+                                    "status,evidence_ids,decision,payload) "
+                                    "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                                    ("CI-VERTICAL-EVT-" + str(seq)
+                                     + "-" + ids["run"],
+                                     ids["run"], seq, stage, event_type, status,
+                                     json.dumps([ids["evidence"]]), decision,
+                                     json.dumps(payload)))
                             db.execute(
-                                "insert into aiops.run_events "
-                                "(event_id,run_id,sequence,stage,event_type,"
-                                "status,evidence_ids,decision,payload) "
-                                "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                                ("CI-VERTICAL-EVT-" + str(seq) + "-" + ids["run"],
-                                 ids["run"], seq, stage, event_type, status,
-                                 json.dumps([ids["evidence"]]), decision,
-                                 json.dumps(payload)))
-                        db.execute(
-                            "update aiops.runs set status='BLOCKED' "
-                            "where run_id=%s and mode='DEMO'", (ids["run"],))
+                                "update aiops.runs set status='BLOCKED' "
+                                "where run_id=%s and mode='DEMO'",
+                                (ids["run"],))
+                        core_event_write = "NOT_TESTED_MISSING_EVENT_KEY_MIGRATION"
+                        run_events_source = "CI_PG16_FIXTURE_ONLY"
                     post(route + "/gates", {
                         "stage": "POLICY", "state": "PASS",
                         "decision": "SIMULATE",
@@ -339,9 +402,11 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                 receipt = {
                     **projection,
                     "source_head": head,
-                    "core_run_api": "READ_ONLY_CORE_ASGI_OBSERVED",
-                    "core_event_write": "NOT_TESTED_MISSING_EVENT_KEY_MIGRATION",
-                    "run_events_source": "CI_PG16_FIXTURE_ONLY",
+                    "core_run_api": ("CORE_HTTP_WRITER_AND_READBACK_OBSERVED"
+                                     if has_event_key else
+                                     "READ_ONLY_CORE_ASGI_OBSERVED"),
+                    "core_event_write": core_event_write,
+                    "run_events_source": run_events_source,
                     "core_terminal_api": "CORE_OWNED_DEAD_OBSERVED",
                     "migration_014": "ONE_IMMUTABLE_RECEIPT_OBSERVED",
                     "temporal_persisted_restarts": 1,
