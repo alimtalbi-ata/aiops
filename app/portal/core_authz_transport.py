@@ -198,3 +198,67 @@ def core_v1_current_unknown_reply_matches(status_code: object, payload: object,
         "referrer-policy": "no-referrer",
     }.items()) and (status_code != 401
                    or normalized.get("www-authenticate") == "Bearer")
+
+
+@dataclass(frozen=True)
+class OfflineCoreReplyAssessment:
+    """Contract-test observation only; never an authorization decision."""
+    kind: str
+    portal_status: int = 503
+    state: str = "UNKNOWN"
+    read_permitted: bool = False
+
+
+def assess_core_authz_reply_offline(
+        status_code: object, payload: object, headers: Mapping[str, str],
+        signature: object, *, actor: PortalActorContext, binding: ServerXref,
+        plan: CoreAuthzWirePlan,
+        env: Mapping[str, str] | None = None,
+        now: int | None = None) -> OfflineCoreReplyAssessment:
+    """Reconcile actual Core denial and proposed signed ALLOW *without I/O*.
+
+    A correctly signed synthetic ALLOW is merely a future wire-shape match.
+    There is no Core-issued signing contract, native GLPI human ACL, or durable
+    replay ledger. Both matching cases remain 503 UNKNOWN, not CONNECTED.
+    """
+    invalid = OfflineCoreReplyAssessment("INVALID")
+    clock = int(time.time()) if now is None else now
+    if (type(clock) is not int
+            or not isinstance(actor, PortalActorContext)
+            or actor.expires_at <= clock
+            or not isinstance(plan, CoreAuthzWirePlan)
+            or plan.dispatch_allowed is not False
+            or not exact_binding_valid(actor, binding)
+            or not isinstance(headers, Mapping)):
+        return invalid
+    normalized: dict[str, str] = {}
+    for key, value in headers.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            return invalid
+        lowered = key.lower()
+        if lowered in normalized:
+            return invalid
+        normalized[lowered] = value
+    if (any(normalized.get(k) != v for k, v in {
+            "cache-control": "no-store",
+            "pragma": "no-cache",
+            "x-content-type-options": "nosniff",
+            "referrer-policy": "no-referrer",
+        }.items())
+            or any(k in normalized for k in (
+                "set-cookie", "location", "access-control-allow-origin",
+                "x-actor-id", "x-tenant-id", "x-glpi-profile"))):
+        return invalid
+    # Current Core replies are *unsigned*, strictly negative, and can include
+    # HTTP 200 UNKNOWN. A 200 is never a positive ACL.
+    if signature is None and core_v1_current_unknown_reply_matches(
+            status_code, payload, headers):
+        return OfflineCoreReplyAssessment("CURRENT_CORE_NEGATIVE")
+    # Future ALLOW is only a proposed signed shape. The Core owner has not
+    # agreed to emit it; no nonce consumption or GLPI proof is implemented.
+    if (type(status_code) is int and status_code == 200
+            and verify_pinned_core_response_signature(
+                payload, signature, actor=actor, binding=binding, plan=plan,
+                env=env, now=clock)):
+        return OfflineCoreReplyAssessment("SIGNED_SHAPE_UNQUALIFIED")
+    return invalid
