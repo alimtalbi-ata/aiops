@@ -423,7 +423,8 @@ class PortalACLChromiumE2E(unittest.TestCase):
             unauth = core.send(replace(plan, service_bearer="forged-" + "x" * 40))
             self.assertEqual(unauth[0], 401)
             self.assertEqual(unauth[1]["decision"], "UNKNOWN")
-            self.assertEqual({k.lower(): v for k, v in unauth[2].items()}.get(\n                "www-authenticate"), "Bearer")
+            self.assertEqual({k.lower(): v for k, v in unauth[2].items()}.get(
+                "www-authenticate"), "Bearer")
             foreign = core.send(replace(
                 plan, path=plan.path.replace("/tenants/ACME/", "/tenants/FOREIGN/")))
             self.assertEqual(foreign[0], 403)
