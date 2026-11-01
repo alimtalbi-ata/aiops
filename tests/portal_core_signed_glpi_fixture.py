@@ -107,6 +107,15 @@ class DisposableSignedCoreNativeGlpi:
             public_exponent=65537, key_size=2048)
         self.signer_kid = "disposable-core-signer"
         self.jwks = {"keys": [self._signer_jwk()]}
+        self.native_rows = {
+            "getFullSession": {"session": {
+                "glpiID": 77, "glpiactiveprofile": {"id": 4},
+                "glpiactiveentities": [42]}},
+            "User": {"id": 77, "is_active": 1},
+            "Profile": {"id": 4, "ticket": 1},
+            "Entity": {"id": 42},
+            "Ticket": {"id": 123, "entities_id": 42},
+        }
 
     def _signer_jwk(self):
         numbers = self.signing_key.public_key().public_numbers()
@@ -123,15 +132,7 @@ class DisposableSignedCoreNativeGlpi:
             public_exponent=65537, key_size=2048)
         self.signer_kid = kid
         self.jwks = {"keys": previous + [self._signer_jwk()]}
-        self.native_rows = {
-            "getFullSession": {"session": {
-                "glpiID": 77, "glpiactiveprofile": {"id": 4},
-                "glpiactiveentities": [42]}},
-            "User": {"id": 77, "is_active": 1},
-            "Profile": {"id": 4, "ticket": 1},
-            "Entity": {"id": 42},
-            "Ticket": {"id": 123, "entities_id": 42},
-        }
+
 
     def __enter__(self):
         self.temp = tempfile.TemporaryDirectory(prefix="signed-core-native-glpi-")
