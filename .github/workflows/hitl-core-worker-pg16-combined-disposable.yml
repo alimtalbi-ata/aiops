@@ -76,7 +76,7 @@ jobs:
           log_path = "/tmp/hitl-combined.log"
           log = open(log_path).read() if os.path.isfile(log_path) else ""
           combined_ok = bool(
-              re.search(r"(?m)^Ran 7 tests in [0-9.]+s$", log)
+              re.search(r"(?m)^Ran 8 tests in [0-9.]+s$", log)
               and re.search(r"(?m)^OK$", log))
           tcp_boundary_pass = (combined_ok and
               "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
@@ -86,6 +86,8 @@ jobs:
               "test_06_two_temporal_workers_race_one_core_lease_and_restart_server" in log)
           multiprocess_restart_pass = (combined_ok and
               "test_07_multiprocess_worker_restart_stale_ack_and_two_durable_rejects" in log)
+          cross_tenant_pass = (combined_ok and
+              "test_08_cross_tenant_run_fencing_after_two_os_worker_restarts" in log)
           worker_restart_pass = (combined_ok and
               "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
           report = {
@@ -109,6 +111,9 @@ jobs:
               "exactly_once_scope": "TWO_CI_REJECT_EVENTS_DETERMINISTIC_ONLY_NOT_GLOBAL_EXACTLY_ONCE",
               "multiprocess_worker_restart": ("OBSERVED_CI_DISPOSABLE_SEPARATE_OS_PIDS" if multiprocess_restart_pass else "NOT_TESTED_OR_FAILED"),
               "stale_ack_after_process_and_server_restart": ("FENCED_CI_DISPOSABLE" if multiprocess_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "cross_tenant_run_lease_fencing": ("OBSERVED_CI_DISPOSABLE_TWO_TENANTS_TWO_OS_RESTARTS" if cross_tenant_pass else "NOT_TESTED_OR_FAILED"),
+              "cross_tenant_actor_scope": ("SEPARATE_SYNTHETIC_SERVICE_BEARERS_NO_REAL_OIDC" if cross_tenant_pass else "NOT_TESTED_OR_FAILED"),
+              "cross_tenant_replay_scope": "TWO_CI_REJECT_EVENTS_ONLY_NO_UNIVERSAL_EXACTLY_ONCE",
               "two_durable_reject_notifications": ("OBSERVED_CI_DISPOSABLE_UNIQUE_EVENT_IDS" if multiprocess_restart_pass else "NOT_TESTED_OR_FAILED"),
               "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT",
               "boundary_scope": ("GATEWAY_CLOSE_AFTER_INDEPENDENT_CORE_TCP_COMMIT_NOT_PACKET_LOSS" if independent_core_temporal_restart_pass else "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER"),
