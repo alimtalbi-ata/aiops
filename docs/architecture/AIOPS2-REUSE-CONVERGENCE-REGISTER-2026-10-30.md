@@ -809,3 +809,6 @@ Core #302 HEAD 990b1f8f6ce14a1e4d191a8fb062ada1fd990039, four files, canonical C
 | Stable deploy guard | Draft #318 `61af58862b9aa7abd648a0743fe0325eb7f58101`, Quality FAILED | **HOLD**, no stable push | Fail closed on unknown Compose label; replace unsafe stop/rename/docker run path |
 
 **Do not re-port historic stacked branches or merge Drafts.** Only #234 candidate is integration target. Source CI and candidate CI never attest Debian deployment. No new persistent stack. Revert focused candidate commits only; preserve main, 013/014 audit, host volumes and Compose portal.
+
+
+**Correction 21:31 CET:** #320 is **selectively PORTED** (4 exact Core blobs, `bc649e36c93156b4c3787f16e5dc11b80040cd7c`), not blocked by issuer equality. Core source issuer and IdP actor issuer are separate; earlier provisional HOLD is superseded. Source PG16 15/15 and Quality 3/3; integrated exact-head CI pending, no GLPI ALLOW.
