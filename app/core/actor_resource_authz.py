@@ -187,7 +187,7 @@ def authorize_actor_resource(
     from core import actor_native_authority as native
     if not native._native_glpi_preflight(claims, expected, now):
         return _reply()
-    # The source-contract pass alone cannot grant rights. Consume a durable,
+    # Independent Core Incident/Run/source-event readback is distinct from\n    # IdP introspection, the signed xref and native GLPI human rights.\n    # Missing/unqualified source => UNKNOWN before any nonce consumption.\n    from core import actor_run_event_source\n    if not actor_run_event_source._source_run_event_preflight(claims, expected, record, now):\n        return _reply()\n    # The source-contract pass alone cannot grant rights. Consume a durable,
     # issuer/JTI-serialized nonce only after the independently authenticated
     # source preflight; revoked, replayed or cross-tenant grants stay UNKNOWN.
     from core import actor_replay_fence
