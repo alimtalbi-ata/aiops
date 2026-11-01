@@ -431,9 +431,9 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
         self.assertFalse(core_authz_transport.core_authz_read_permitted())
         projections = []
         with patch.object(acme_run_detail, "_read_core_run",
-                          side_effect=AssertionError("Core business GET")) as core, \\
+                          side_effect=AssertionError("Core business GET")) as core, \
              patch.object(main, "get_json",
-                          side_effect=AssertionError("GLPI/Core GET")) as get, \\
+                          side_effect=AssertionError("GLPI/Core GET")) as get, \
              patch.object(main, "post_json",
                           side_effect=AssertionError("business POST")) as post:
             for rid in RUNS:
