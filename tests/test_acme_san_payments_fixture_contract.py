@@ -1073,6 +1073,8 @@ class AcmeCorePg16IndependentIntakeTests(unittest.TestCase):
 class AcmePg16TwinImpactHandoffTests(unittest.TestCase):
     """Executable source-to-Core payload bridge; no PG16 authority invented."""
 
+    NOW = 1700000000
+
     @classmethod
     def setUpClass(cls):
         from tools import acme_synthetic_pg16_twin_impact_handoff as handoff
