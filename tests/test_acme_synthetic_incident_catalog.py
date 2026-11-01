@@ -11,6 +11,7 @@ import tempfile
 import unittest
 
 from tools import generate_acme_incidents as gen
+from tools import acme_synthetic_ingest_contract as ingest
 
 
 class AcmeSyntheticIncidentCatalogTests(unittest.TestCase):
@@ -1351,6 +1352,139 @@ class AcmeSyntheticEventImpactContractTests(unittest.TestCase):
         after = json.dumps(gen.replay(seed=20261018), sort_keys=True,
                            indent=2, ensure_ascii=True) + "\n"
         self.assertEqual(before, after)
+
+
+
+class AcmeSyntheticIngestionPreflightTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest = gen.replay(seed=20261018)
+
+    def test_seven_events_and_fifteen_unexecuted_stages(self):
+        r = ingest.ingestion_preflight_offline(self.manifest)
+        self.assertEqual((r["source_event_count"], r["delivery_count"],
+                          r["duplicate_delivery_count"]), (7, 7, 0))
+        self.assertEqual(len(r["itil_stages"]), 15)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and s["runtime_id"] is None
+                            for s in r["itil_stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in r["checkpoints"]))
+        self.assertFalse(r["publishable_to_core_or_glpi"])
+        self.assertFalse(r["content_hash_is_evidence_receipt"])
+
+    def test_hash_provenance_and_no_runtime_ids(self):
+        r = ingest.ingestion_preflight_offline(self.manifest)
+        self.assertEqual(r["graph_version"], gen.SEED_GIT_BLOB)
+        self.assertEqual(r["event_impact_contract_git_blob"],
+                         gen.EVENT_IMPACT_CONTRACT_GIT_BLOB)
+        for e, c in zip(self.manifest["events"], r["local_delivery_checks"]):
+            self.assertEqual(c["content_digest_sha256"],
+                             hashlib.sha256(gen._canonical(e)).hexdigest())
+        i = r["candidate_incident"]
+        self.assertEqual(i["status"], "NOT_CREATED")
+        self.assertTrue(all(i[k] is None for k in ("incident_id", "run_id", "ticket_id")))
+        self.assertEqual(i["evidence_ids"], [])
+        self.assertIsNone(r["tenant_id"])
+        self.assertEqual(r["tenant_scope"], "UNKNOWN")
+        self.assertEqual(i["priority_confirmed"], "UNKNOWN")
+        self.assertEqual(i["observed_impact"], "UNKNOWN")
+        self.assertEqual(r["blast_radius_candidate"]["path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertFalse(r["blast_radius_candidate"]["causality_verified"])
+
+    def test_exact_duplicate_delivery_is_deduped(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        rows.extend((copy.deepcopy(rows[0]), copy.deepcopy(rows[2])))
+        r = ingest.ingestion_preflight_offline(self.manifest, deliveries=rows)
+        self.assertEqual((r["delivery_count"], r["source_event_count"],
+                          r["duplicate_delivery_count"]), (9, 7, 2))
+        self.assertEqual([c["delivery_count"] for c in r["local_delivery_checks"]],
+                         [2, 1, 2, 1, 1, 1, 1])
+        self.assertEqual(r["candidate_incident"]["status"], "NOT_CREATED")
+
+    def test_cross_partition_and_foreign_partition_fail_closed(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        rows[1]["test_partition"] = "SYNTHETIC_TEST_PARTITION_B"
+        with self.assertRaisesRegex(ValueError, "cross-partition"):
+            ingest.ingestion_preflight_offline(self.manifest, deliveries=rows)
+        for bad in ("FOREIGN", "ACME", "", None, True):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                ingest.ingestion_preflight_offline(self.manifest, test_partition=bad)
+
+    def test_partition_isolation_does_not_claim_tenant_authority(self):
+        a = ingest.ingestion_preflight_offline(self.manifest)
+        b = ingest.ingestion_preflight_offline(
+            self.manifest, test_partition="SYNTHETIC_TEST_PARTITION_B")
+        self.assertNotEqual(a["test_partition"], b["test_partition"])
+        self.assertFalse(a["test_partition_is_tenant_authority"])
+        self.assertFalse(b["test_partition_is_tenant_authority"])
+        self.assertIsNone(a["tenant_id"])
+        self.assertIsNone(b["tenant_id"])
+        self.assertEqual(a["candidate_incident"]["source_event_ids"],
+                         b["candidate_incident"]["source_event_ids"])
+
+    def test_forged_source_ci_tenant_dedupe_payload_and_evidence_rejected(self):
+        mutations = (("source", "FORGED"), ("ci_id", "FORGED"),
+                     ("tenant_id", "FAKE_TENANT"), ("tenant_scope", "VERIFIED"),
+                     ("dedupe_key", "FAKE"), ("correlation_key", "FAKE"),
+                     ("evidence_id", "FAKE"), ("payload", {"fake": True}))
+        for field, value in mutations:
+            with self.subTest(field=field):
+                rows = ingest.synthetic_deliveries_offline(self.manifest)
+                rows[0]["event"][field] = value
+                with self.assertRaises(ValueError):
+                    ingest.ingestion_preflight_offline(self.manifest, deliveries=rows)
+
+    def test_forged_seed_digest_and_source_timestamp_rejected(self):
+        for field, value in (("seed", 20261019), ("dataset_sha256", "0" * 64)):
+            with self.subTest(field=field):
+                manifest = copy.deepcopy(self.manifest)
+                manifest[field] = value
+                with self.assertRaises(ValueError):
+                    ingest.ingestion_preflight_offline(manifest)
+        for field, value in (("event_time", "2026-10-31T09:42:01Z"),
+                             ("known_at", "2026-10-31T10:42:00Z"),
+                             ("source", "FORGED")):
+            with self.subTest(field=field):
+                manifest = copy.deepcopy(self.manifest)
+                manifest["events"][0][field] = value
+                with self.assertRaises(ValueError):
+                    ingest.ingestion_preflight_offline(manifest)
+
+    def test_stale_future_and_non_utc_delivery_rejected(self):
+        for stamp in ("2026-10-31T10:00:00Z", "2026-10-31T09:41:00Z",
+                      "2026-10-31T09:42:02+00:00", "not-a-time"):
+            with self.subTest(stamp=stamp):
+                rows = ingest.synthetic_deliveries_offline(self.manifest)
+                rows[0]["synthetic_received_at"] = stamp
+                with self.assertRaises(ValueError):
+                    ingest.ingestion_preflight_offline(self.manifest, deliveries=rows)
+
+    def test_conflicting_duplicate_missing_and_foreign_digest_rejected(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        with self.assertRaises(ValueError):
+            ingest.ingestion_preflight_offline(self.manifest, deliveries=rows[:-1])
+        bad = copy.deepcopy(rows)
+        bad.append(copy.deepcopy(bad[0]))
+        bad[-1]["event"]["payload"] = {"fake": True}
+        with self.assertRaises(ValueError):
+            ingest.ingestion_preflight_offline(self.manifest, deliveries=bad)
+        bad = copy.deepcopy(rows)
+        bad[0]["source_dataset_sha256"] = "0" * 64
+        with self.assertRaises(ValueError):
+            ingest.ingestion_preflight_offline(self.manifest, deliveries=bad)
+
+    def test_determinism_and_canonical_replay_sha(self):
+        before = json.dumps(self.manifest, sort_keys=True, indent=2,
+                            ensure_ascii=True) + "\n"
+        self.assertEqual(hashlib.sha256(before.encode()).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        a = ingest.ingestion_preflight_offline(self.manifest)
+        b = ingest.ingestion_preflight_offline(gen.replay(seed=20261018))
+        self.assertEqual(gen._canonical(a), gen._canonical(b))
+        self.assertEqual(before, json.dumps(gen.replay(seed=20261018),
+                                            sort_keys=True, indent=2,
+                                            ensure_ascii=True) + "\n")
 
 
 if __name__ == "__main__":
