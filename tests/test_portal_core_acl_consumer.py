@@ -426,9 +426,9 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         settings = self.authz_settings()
         with patch.dict(os.environ, settings), patch.object(
                 wire, "prepare_core_authz_wire",
-                side_effect=AssertionError("premature Core authz request")) as prepare, \\
+                side_effect=AssertionError("premature Core authz request")) as prepare, \
              patch.object(acme_run_detail, "_read_core_run",
-                          side_effect=AssertionError("Core business read")) as core, \\
+                          side_effect=AssertionError("Core business read")) as core, \
              patch.object(main, "get_json",
                           side_effect=AssertionError("Core/GLPI fetch")) as upstream:
             for rid in (RUN, OTHER, "RUN-ABSENT", "RUN-forged!"):
