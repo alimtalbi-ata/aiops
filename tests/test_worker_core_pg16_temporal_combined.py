@@ -408,15 +408,13 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
         thread = threading.Thread(target=gateway.serve_forever, daemon=True)
         thread.start()
         try:
-            async with httpx.AsyncClient(
-                    base_url=f"http://127.0.0.1:{gateway.server_port}",
+            trace = []  # Redacted route/status only; never log lease or bearer.\n            async with httpx.AsyncClient(\n                    base_url=f"http://127.0.0.1:{gateway.server_port}",
                     timeout=10.0, trust_env=False) as tcp:
                 async def post(path, body):
                     response = await tcp.post(
                         path, json=body,
                         headers={"Authorization": "Bearer " + self.bearer})
-                    payload = response.json()
-                    self.assertIs(payload["execution_allowed"], False)
+                    payload = response.json()\n                    trace.append((path.rsplit("/", 1)[-1], response.status_code,\n                                  payload.get("status"), len(payload.get("items", []))))\n                    self.assertIs(payload["execution_allowed"], False)
                     self.assertIs(payload["effect_allowed"], False)
                     return response.status_code, payload
 
@@ -478,8 +476,7 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                         receipts = await deliver_core_reject_once(
                             tenant_id=TENANT, owner=OWNER,
                             post=post, signal=signal)
-                        self.assertEqual(len(receipts), 1)
-                        self.assertEqual(receipts[0]["status"], "DELIVERED")
+                        self.assertEqual(len(receipts), 1, repr(trace[-3:]))\n                        self.assertEqual(receipts[0]["status"], "DELIVERED")
                         signals = await asyncio.wait_for(handle.result(), timeout=20)
                         self.assertEqual(len(signals), 2)
                         self.assertEqual(
