@@ -1,6 +1,9 @@
 name: Core PG16 native audit recovery (disposable only)
 
 on:
+  push:
+    branches:
+      - 'fix/core-pg16-native-recovery-*'
   pull_request:
     branches:
       - integration/enterprise-slice-main-20261031-2230
