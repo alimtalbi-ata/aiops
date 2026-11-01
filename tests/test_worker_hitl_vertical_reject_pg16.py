@@ -145,7 +145,7 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                         for seq, (stage, event_type, binding, status,
                                   decision, extra) in enumerate(stages, 1):
                             payload = {
-                                binding: ids[binding],
+                                binding: ids[binding.removesuffix("_id")],
                                 "tenant_id": base.TENANT,
                                 "run_id": ids["run"],
                                 "synthetic": True,
