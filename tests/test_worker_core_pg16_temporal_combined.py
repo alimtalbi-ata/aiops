@@ -1692,5 +1692,191 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
             state, ("LEASED", 8, True, None, None, "REJECT"))
         self._no_effect()
 
+
+    async def test_10_core_dead_contract_matrix_no_signal_across_temporal_restarts(self):
+        """Negative-only future Core DEAD contract: exhausted leases stay LEASED.
+
+        Two synthetic tenants, actual Core claim/ACK and PG16, exact owner/token/
+        expiry/Run/proposal fencing. The never-signalled REJECT events remain
+        LEASED at attempts=8 across TWO persisted Temporal server restarts.
+        This does not implement, inject or attest a runtime DEAD transition.
+        """
+        from temporalio.testing import WorkflowEnvironment
+        from temporalio.worker import Worker
+
+        tenant_b = "TEN-CI-DEAD-MATRIX-B"
+        owner_b = "svc-CI-DEAD-MATRIX-B"
+        bearer_b = secrets.token_urlsafe(32)
+        first = self._fixture()
+        second = self._fixture(tenant_id=tenant_b)
+        self._write_synthetic_proofs()
+        authz = [
+            {"token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+             "actor_id": actor, "tenant_ids": [tenant],
+             "permissions": ["hitl:reject:deliver"]}
+            for token, actor, tenant in (
+                (self.bearer, OWNER, TENANT),
+                (bearer_b, owner_b, tenant_b))
+        ]
+        auth_patch = patch.dict(os.environ, {
+            "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps(authz)})
+        auth_patch.start()
+        try:
+            cases = ((TENANT, OWNER, self.bearer, first),
+                     (tenant_b, owner_b, bearer_b, second))
+            # The seven earlier attempts are a disposable SQL fault fixture.
+            # Attempt eight is acquired ONLY through the actual Core handler.
+            with self.psycopg.connect(self.url) as db:
+                for tenant, owner, token, ids in cases:
+                    db.execute(
+                        "update aiops.hitl_decision_outbox "
+                        "set status='LEASED',attempts=7,lease_owner=%s,"
+                        "lease_token=%s,lease_until=now()-interval '1 second' "
+                        "where event_id=%s",
+                        (owner, secrets.token_urlsafe(32), ids["event"]))
+            leased = []
+            for tenant, owner, token, ids in cases:
+                claim_path = f"/api/tenants/{tenant}/hitl/reject-delivery/claim"
+                code, claim = self._http(
+                    claim_path, {"owner": owner, "limit": 1}, bearer=token)
+                self.assertEqual((code, claim["status"]), (200, "LEASED"))
+                self.assertEqual(len(claim["items"]), 1)
+                item = claim["items"][0]
+                self.assertEqual(
+                    (item["event_id"], item["tenant_id"], item["run_id"],
+                     item["proposal_id"], item["proposal_revision"],
+                     item["lease_owner"], item["decision"]),
+                    (ids["event"], tenant, ids["run"], ids["proposal"],
+                     1, owner, "REJECT"))
+                self.assertEqual(item["proposal_hash"],
+                                 hashlib.sha256(
+                                     ("CI-SYNTHETIC-REJECT:" +
+                                      ids["run"].split("-")[-1]).encode()
+                                 ).hexdigest())
+                self.assertTrue(item["lease_token"])
+                self.assertTrue(item["lease_until"])
+                self.assertIs(item["execution_allowed"], False)
+                self.assertIs(item["effect_allowed"], False)
+                path = (f"/api/tenants/{tenant}/hitl/reject-delivery/"
+                        f"{ids['event']}/ack")
+                body = {
+                    "owner": owner, "run_id": item["run_id"],
+                    "proposal_id": item["proposal_id"],
+                    "proposal_hash": item["proposal_hash"],
+                    "proposal_revision": item["proposal_revision"],
+                    "lease_token": item["lease_token"],
+                    "execution_allowed": False, "effect_allowed": False,
+                }
+                leased.append((tenant, owner, token, ids, item, path, body))
+
+            self.assertNotEqual(first["event"], second["event"])
+            self.assertNotEqual(leased[0][4]["lease_token"],
+                                leased[1][4]["lease_token"])
+            for i, (tenant, owner, token, ids, item, path, body) in enumerate(leased):
+                other = leased[1-i]
+                # Each mutation is validly shaped: Core must reject by binding,
+                # not because the JSON is malformed.
+                negatives = (
+                    ("owner", dict(body, owner=other[1])),
+                    ("run", dict(body, run_id=other[3]["run"])),
+                    ("proposal", dict(body, proposal_id=other[3]["proposal"])),
+                    ("hash", dict(body, proposal_hash="f" * 64)),
+                    ("revision", dict(body, proposal_revision=2)),
+                    ("token", dict(body, lease_token="Z" * 48)),
+                    ("execution", dict(body, execution_allowed=True)),
+                    ("effect", dict(body, effect_allowed=True)),
+                )
+                for dimension, forged in negatives:
+                    with self.subTest(tenant=tenant, dimension=dimension):
+                        code, denied = self._http(path, forged, bearer=token)
+                        self.assertEqual((code, denied["status"]),
+                                         (200, "UNKNOWN"))
+                # Actor's tenant scope is independently checked before lookup.
+                code, denied = self._http(path, body, bearer=other[2])
+                self.assertEqual((code, denied["status"]), (403, "UNKNOWN"))
+                foreign_path = path.replace(
+                    f"/tenants/{tenant}/", "/tenants/FOREIGN-CI/")
+                code, denied = self._http(
+                    foreign_path, body, bearer=token)
+                self.assertEqual((code, denied["status"]), (403, "UNKNOWN"))
+
+            # Expire both eighth leases: valid old ACKs become stale. Do not
+            # inject DEAD or mutate any Core-owned runtime terminal state.
+            with self.psycopg.connect(self.url) as db:
+                db.execute(
+                    "update aiops.hitl_decision_outbox "
+                    "set lease_until=now()-interval '1 second' "
+                    "where event_id in (%s,%s)",
+                    (first["event"], second["event"]))
+            for tenant, owner, token, ids, item, path, body in leased:
+                for _ in range(2):
+                    code, stale = self._http(path, body, bearer=token)
+                    self.assertEqual((code, stale["status"]), (200, "UNKNOWN"))
+
+            def assert_exhausted():
+                with self.psycopg.connect(self.url) as db:
+                    rows = db.execute(
+                        "select event_id,status,attempts,lease_owner,"
+                        "lease_token,lease_until<now(),delivered_at,"
+                        "last_error,decision,proposal_hash,proposal_revision "
+                        "from aiops.hitl_decision_outbox "
+                        "where event_id in (%s,%s)",
+                        (first["event"], second["event"])).fetchall()
+                self.assertEqual(len(rows), 2)
+                by_id = {row[0]: row[1:] for row in rows}
+                for tenant, owner, token, ids, item, path, body in leased:
+                    self.assertEqual(
+                        by_id[ids["event"]],
+                        ("LEASED", 8, owner, item["lease_token"],
+                         True, None, None, "REJECT",
+                         item["proposal_hash"], item["proposal_revision"]))
+                self._no_effect()
+
+            assert_exhausted()
+            queue = "ci-dead-negative-" + uuid.uuid4().hex
+            sqlite_path = str(Path(self.temp.name) / (queue + ".sqlite"))
+            async def no_signal(_run_id, _payload):
+                self.fail("exhausted LEASED event must not signal Temporal")
+
+            async def post_as(tenant, owner, token, path, body):
+                return self._http(path, body, bearer=token)
+
+            # Three separate disposable Temporal server instances reuse one
+            # persisted SQLite store. No Worker-side DEAD mutation or signal.
+            for generation in range(3):
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                    probe.bind(("127.0.0.1", 0))
+                    port = probe.getsockname()[1]
+                async with await WorkflowEnvironment.start_local(
+                        port=port,
+                        dev_server_database_filename=sqlite_path) as server:
+                    if generation == 0:
+                        handle = await server.client.start_workflow(
+                            SyntheticRejectSink.run, id=queue, task_queue=queue)
+                    else:
+                        handle = server.client.get_workflow_handle(queue)
+                    async with Worker(
+                            server.client, task_queue=queue,
+                            workflows=[SyntheticRejectSink]):
+                        for tenant, owner, token, ids, item, path, body in leased:
+                            async def post(route, request, _token=token):
+                                return self._http(route, request, bearer=_token)
+                            receipts = await deliver_core_reject_once(
+                                tenant_id=tenant, owner=owner,
+                                post=post, signal=no_signal)
+                            self.assertEqual(receipts, [])
+                            code, replay = self._http(path, body, bearer=token)
+                            self.assertEqual((code, replay["status"]),
+                                             (200, "UNKNOWN"))
+                        self.assertEqual(
+                            await handle.query(SyntheticRejectSink.count), 0)
+                        assert_exhausted()
+                self.assertTrue(Path(sqlite_path).is_file())
+            # This is a negative Core runtime qualification, NOT DEAD success.
+            assert_exhausted()
+        finally:
+            auth_patch.stop()
+
+
 if __name__ == "__main__":
     unittest.main()
