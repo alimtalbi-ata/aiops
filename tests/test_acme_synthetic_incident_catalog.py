@@ -2779,3 +2779,163 @@ class AcmeSevenEventThreeDomainReceiptTests(unittest.TestCase):
                                  capture_output=True, text=True)
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(json.loads(checked.stdout)["result"], "UNAVAILABLE")
+
+
+# ACME/Core #291 seven-source SHA mismatch: offline negative fixture only.
+from tools import acme_synthetic_sha_domain_mismatch_matrix as _sha_matrix
+
+
+class AcmeSevenShaDomainMismatchMatrixTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.manifest = gen.replay(seed=20261018)
+        cls.expected = _sha_matrix.build_matrix(cls.manifest)
+
+    def test_seven_exact_event_ids_and_three_local_domains(self):
+        rows = self.expected["hash_matrix"]
+        self.assertEqual([r["sequence"] for r in rows], list(range(1, 8)))
+        self.assertEqual([r["source_event_id"] for r in rows],
+                         [e["source_event_id"] for e in self.manifest["events"]])
+        for row, event in zip(rows, self.manifest["events"]):
+            digests = (row["acme_full_event_sha256"],
+                       row["acme_local_payload_sha256"],
+                       row["acme_proposed_core_payload_sha256"])
+            self.assertEqual(len(set(digests)), 3)
+            self.assertEqual(digests[0], hashlib.sha256(gen._canonical(event)).hexdigest())
+            self.assertEqual(digests[1], hashlib.sha256(
+                gen._canonical(event["payload"])).hexdigest())
+
+    def test_core_hashes_absent_and_domains_never_promoted(self):
+        self.assertEqual(self.expected["core_runtime_hash_equivalence"], "NOT_VERIFIED")
+        self.assertEqual(self.expected["core_pg16_readback"], "UNAVAILABLE")
+        self.assertEqual(self.expected["core_receipt_schema"],
+                         "aiops.core-canonical-seven-source-receipt.v1")
+        for row in self.expected["hash_matrix"]:
+            self.assertIsNone(row["core_runtime_payload_sha256"])
+            self.assertIsNone(row["core_runtime_full_event_sha256"])
+            self.assertIsNone(row["core_evidence_id"])
+            self.assertEqual(row["core_equivalence"], "NOT_VERIFIED")
+
+    def test_negative_fixture_missing_actor_tenant_run_glpi_evidence(self):
+        self.assertEqual(self.expected["negative_fixture_status"],
+                         "MISSING_INDEPENDENT_RUNTIME_EVIDENCE")
+        refs = self.expected["runtime_references"]
+        self.assertTrue(all(value is None for key, value in refs.items()
+                            if key != "evidence_ids"))
+        self.assertEqual(refs["evidence_ids"], [])
+        self.assertEqual(self.expected["negative_authority_gates"],
+                         _sha_matrix.NEGATIVE_GATES)
+        self.assertFalse(self.expected["test_partition_is_tenant_authority"])
+
+    def test_all_itil_stages_and_checkpoints_still_not_executed(self):
+        self.assertEqual(len(self.expected["itil_stages"]), 15)
+        self.assertEqual(len(self.expected["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED"
+                            for s in self.expected["itil_stages"] +
+                            self.expected["checkpoints"]))
+        result = _sha_matrix.verify_matrix(self.manifest, fixture=self.expected)
+        self.assertEqual(result["result"], "UNAVAILABLE")
+        self.assertEqual(result["runtime_readback"], "NOT_EXECUTED")
+
+    def test_json_fixture_is_machine_readable_and_byte_deterministic(self):
+        raw = _sha_matrix.MATRIX_FILE.read_bytes()
+        self.assertEqual(json.loads(raw), self.expected)
+        self.assertEqual(raw, (json.dumps(self.expected, sort_keys=True,
+                                          indent=2, ensure_ascii=True) +
+                               "\n").encode("utf-8"))
+        self.assertEqual(_sha_matrix.verify_matrix(self.manifest)["result"],
+                         "UNAVAILABLE")
+
+    def test_forged_runtime_identity_or_glpi_receipt_rejected(self):
+        for key, value in (("tenant_id", "ACME"),
+                           ("actor_subject", "fake-user"),
+                           ("actor_issuer", "fake-issuer"),
+                           ("incident_id", "INC-FAKE"),
+                           ("run_id", "RUN-FAKE"),
+                           ("glpi_ticket_id", "TICKET-FAKE"),
+                           ("glpi_entity_id", "ENTITY-FAKE"),
+                           ("hitl_approval", "APPROVED"),
+                           ("observed_at", 2000000000),
+                           ("revoked", False),
+                           ("evidence_ids", ["EVIDENCE-FAKE"])):
+            candidate = copy.deepcopy(self.expected)
+            candidate["runtime_references"][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+
+    def test_foreign_partition_and_false_actor_tenant_authority_rejected(self):
+        for path, value in (("test_partition", "SYNTHETIC_TEST_PARTITION_B"),
+                            ("test_partition_is_tenant_authority", True)):
+            candidate = copy.deepcopy(self.expected)
+            candidate[path] = value
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+        for key in ("actor_authentication", "tenant_authorization",
+                    "glpi_ticket_authorization", "tls_readback"):
+            candidate = copy.deepcopy(self.expected)
+            candidate["negative_authority_gates"][key] = "VERIFIED"
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+
+    def test_missing_duplicate_reordered_or_forged_source_event_rejected(self):
+        for mutation in (
+            lambda x: x["hash_matrix"].pop(),
+            lambda x: x["hash_matrix"].reverse(),
+            lambda x: x["hash_matrix"][1].update(
+                source_event_id=x["hash_matrix"][0]["source_event_id"]),
+            lambda x: x["hash_matrix"][0].update(
+                acme_full_event_sha256="f" * 64),
+        ):
+            candidate = copy.deepcopy(self.expected)
+            mutation(candidate)
+            with self.assertRaises(ValueError):
+                _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+
+    def test_swapped_hash_domains_and_forged_core_hash_rejected(self):
+        candidate = copy.deepcopy(self.expected)
+        row = candidate["hash_matrix"][0]
+        row["acme_full_event_sha256"], row["acme_local_payload_sha256"] = (
+            row["acme_local_payload_sha256"], row["acme_full_event_sha256"])
+        with self.assertRaises(ValueError):
+            _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+        candidate = copy.deepcopy(self.expected)
+        candidate["hash_matrix"][0]["core_runtime_payload_sha256"] = "a" * 64
+        with self.assertRaises(ValueError):
+            _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+
+    def test_stale_revocation_and_fake_core_proof_rejected(self):
+        for field, value in (("freshness", "FRESH"),
+                             ("revocation", "NOT_REVOKED"),
+                             ("core_run_binding", "PASS")):
+            candidate = copy.deepcopy(self.expected)
+            candidate["negative_authority_gates"][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+        candidate = copy.deepcopy(self.expected)
+        candidate["core_source_receipt"] = {"receipt_sha256": "b" * 64}
+        with self.assertRaises(ValueError):
+            _sha_matrix.verify_matrix(self.manifest, fixture=candidate)
+
+    def test_changed_seed_graph_or_event_content_rejected(self):
+        for mutation in (
+            lambda x: x.update(seed=20261019),
+            lambda x: x.update(graph_version="FOREIGN"),
+            lambda x: x["events"][0]["payload"].update(value=9999),
+        ):
+            altered = copy.deepcopy(self.manifest)
+            mutation(altered)
+            with self.assertRaises(ValueError):
+                _sha_matrix.build_matrix(altered)
+
+    def test_cli_emit_and_check_do_not_claim_runtime_authority(self):
+        cmd = [sys.executable, "-m",
+               "tools.acme_synthetic_sha_domain_mismatch_matrix"]
+        emitted = subprocess.run(cmd + ["--emit"], cwd=gen.ROOT,
+                                 capture_output=True, text=True)
+        self.assertEqual(emitted.returncode, 0, emitted.stderr)
+        self.assertEqual(emitted.stdout.encode("utf-8"),
+                         _sha_matrix.MATRIX_FILE.read_bytes())
+        checked = subprocess.run(cmd + ["--check"], cwd=gen.ROOT,
+                                 capture_output=True, text=True)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["result"], "UNAVAILABLE")
