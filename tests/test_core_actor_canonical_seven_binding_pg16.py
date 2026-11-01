@@ -397,7 +397,9 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 "values(%s,%s,%s,1,'ci','ci-fixture','none','ci',%s,%s,"
                 "%s::jsonb,0.5,'VALID')",
                 (ids["analysis"], fixture.RUN, "analysis-" + suffix,
-                 evidence_ids, digest, json.dumps({"recommended_actions": []})))
+                 evidence_ids, digest, json.dumps({"recommended_actions": [{"action_id": "CI-SOURCE",
+                     "risk_tier": "LOW", "target_ci_id": "CI-SYNTHETIC",
+                     "advisory_only": True, "requires_human_approval": True}]})))
             db.execute(
                 "insert into aiops.critique_records "
                 "(critique_id,idempotency_key,analysis_id,run_id,contract_version,"
