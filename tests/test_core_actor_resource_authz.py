@@ -229,13 +229,47 @@ class ActorDelegationTests(unittest.TestCase):
         with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
              patch.object(x, "_evaluate", return_value=("VERIFIED", signed)), \
              patch("core.actor_native_authority._native_glpi_preflight",
-                   return_value=True) as source:
+                   return_value=True) as source, \
+             patch("core.actor_replay_fence.consume_actor_delegation",
+                   return_value=True) as ledger:
             response = self.read()
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["decision"], "UNKNOWN")
             self.hidden(response)
             source.assert_called_once()
+            ledger.assert_called_once()
         self.assertEqual(len(self.fake.calls), 1)
+
+    def test_replay_revocation_and_ledger_unavailable_never_allow(self):
+        signed = {"run_id": "RUN-A", "incident_id": "INC-A",
+                  "glpi_entity_id": "0", "source_event_id": "EVT-A"}
+        with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
+             patch.object(x, "_evaluate", return_value=("VERIFIED", signed)), \
+             patch("core.actor_native_authority._native_glpi_preflight",
+                   return_value=True), \
+             patch("core.actor_replay_fence.consume_actor_delegation") as ledger:
+            for result, code in ((False, 200), (None, 503), (True, 200)):
+                with self.subTest(result=result):
+                    ledger.return_value = result
+                    response = self.read()
+                    self.assertEqual(response.status_code, code)
+                    self.assertEqual(response.json()["decision"], "UNKNOWN")
+                    self.hidden(response)
+            self.assertEqual(ledger.call_count, 3)
+
+    def test_no_native_actor_source_never_consumes_nonce(self):
+        signed = {"run_id": "RUN-A", "incident_id": "INC-A",
+                  "glpi_entity_id": "0", "source_event_id": "EVT-A"}
+        with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
+             patch.object(x, "_evaluate", return_value=("VERIFIED", signed)), \
+             patch("core.actor_native_authority._native_glpi_preflight",
+                   return_value=False), \
+             patch("core.actor_replay_fence.consume_actor_delegation") as ledger:
+            response = self.read()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["decision"], "UNKNOWN")
+            self.hidden(response)
+            ledger.assert_not_called()
 
     def test_missing_or_foreign_run_non_enumeration(self):
         with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
