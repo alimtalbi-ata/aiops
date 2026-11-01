@@ -595,3 +595,15 @@ WIP <=3 P0: Portal ACL (Portal paths); Core GLPI rights, durable replay and migr
 Gates: D0 candidate exact-head CI NOT_VERIFIED after port; D1 combined business integration NOT_QUALIFIED; D2 same-SHA browser/API lifecycle NOT_QUALIFIED; D3 semantic kit and install/upgrade/rollback NO_GO; D4 client signoff NOT_ATTESTED. SOURCE_REVIEWED != CI_PASS != INTEGRATION_PASS != RUNTIME_OBSERVED. #196 FAIL; provider-reported tokens only, cost UNKNOWN.
 
 Rollback: revert candidate-only port commit 7321d140ae6658c7e7853422f3af7528c59d97b0 on a fresh branch, rerun exact-head CI. Never rewrite main. Evidence in source PRs #252/#253/#254/#255 and issue #186.
+
+
+## 2026-11-01 05:48 Europe/Paris — source reuse delta (no duplicate implementation)
+
+| Owner | Reused focused source | Exact source CI | Selective candidate port | Unqualified dependency |
+|---|---|---|---|---|
+| ACME | #256 `39eb0a0ad863046d73b531e3fc595766b2cb8231`, 4 paths | Quality #41271570987 3/3 | Synthetic seven-event correlation + reverse-Twin candidate; no runtime IDs | Core authenticated tenant readback, real Incident/Evidence |
+| Portal | #257 `78c039c8186ee9725e1d9264d81725cabfb72cab`, 3 paths | Quality #41271935539 3/3, 22/22 targeted | Current Core UNKNOWN vs signed-v1 offline parity, still 503 | Native GLPI human rights, durable nonce, Core response signer |
+| Core | #258 `bcbafb9ee03410b78487bfb9ddb04b2b59ad3925`, 9 paths | Quality #41272794505 3/3; PG16 ledger 3/3 | Native rights preflight (negative-only), proposed migration 013 | Independent real IdP/GLPI; full migration + backup/downgrade |
+| Policy | #259 `caab0842911f44d59c274cabaf2a667b4d582094`, 3 paths | Quality #41274206608 3/3, combined #41274206599 1/1 | Disposable TCP gateway-close-after-ACK test, Worker restart REJECT | Independently deployed Core TCP and Temporal server restart |
+
+All 19 paths are disjoint across owners and were copied as exact Git blobs in #234 integration commit `74fe37e67f540e1b1ebc282dc0e8f26f17a8a25d`. The four source PRs remain Draft; no full-history merge, no second CMDB/Incident Store. Integrated D0 **PENDING** until workflows run on the final docs HEAD. Keep #201 historical source only, #234 sole candidate, main untouched. Kit #206/#210 D3 NO-GO and Analyst/Critic #196 FAIL/cost UNKNOWN without provider-reported tokens and versioned tariffs.

@@ -702,3 +702,17 @@ Rollback: revert candidate-only port commit 7321d140ae6658c7e7853422f3af7528c59d
 ### 04:54 CET exact-head CI closeout for 04:50 integration checkpoint
 
 At source/document HEAD f9b1dd88406b8b7cc47d072d7b69f4a3946867fd all four PR workflows completed SUCCESS, **7/7 jobs**: Quality 41270854470 3/3; HITL PG16/DR 41270854374 1/1; Worker Temporal 41270854443 2/2; combined Core ASGI HTTP/PG16/Temporal 41270854369 1/1. Logs explicitly checked out f9b1dd...; populated Core PG16 tests 5/5, combined 3/3, SQL DR 5/5, pg_dump/pg_restore 16.15. Artifacts: replay 13069685107, Chromium 13069490868, PG16/DR 13068714535, Worker 13069251340, combined 13068654765; ZIP digests GitHub-reported, not independently recalculated. New documentation HEAD after this closeout must be separately requalified (no green-by-proxy). D0 CI_PASS only for f9b1dd...; D1 business path and D2 browser/API lifecycle NOT_QUALIFIED, D3 NO_GO, D4 NOT_ATTESTED. Combined test uses in-process ASGI HTTP, synthetic HMAC ownership, REJECT, injected lost ACK response after DB commit and test Worker restart; real network loss, Temporal server restart, native GLPI rights and LIVE effects not observed. Effect receipts 0.
+
+
+## 2026-11-01 05:48 Europe/Paris — architect integration cycle, release NO_GO
+
+**Main/base:** `ae7c3e5102b99a66bd7806d602146f1309a9749d` (GitHub compare: 31 ahead / 0 behind before new port). **Sole candidate:** Draft #234, selective 19-path product commit `74fe37e67f540e1b1ebc282dc0e8f26f17a8a25d`; final docs HEAD will require new exact-head CI. No main push, PR merge, host access, real GLPI write or LIVE.
+
+| Owner/WIP | Source PR/head, exact CI | Contract now | Blocker / next action |
+|---|---|---|---|
+| 1 ACME P1 | #256 `39eb0a0ad863046d73b531e3fc595766b2cb8231`, Quality #41271570987 3/3 | 7 synthetic events + dedupe + candidate SAN→Payments blast radius | No tenant/Run/Incident/Evidence runtime receipts; next tenant-scoped disposable ingestion contract |
+| 2 Portal P0 | #257 `78c039c8186ee9725e1d9264d81725cabfb72cab`, Quality #41271935539 3/3 | Signed-v1 shape and real UNKNOWN parity, deny 503 | Native GLPI actor+tenant rights absent; next negative browser/API E2E |
+| 3 Core P0 | #258 `bcbafb9ee03410b78487bfb9ddb04b2b59ad3925`, Quality #41272794505 3/3 | Negative-only GLPI human rights preflight, 013 PG16 nonce/JTI ledger | Real independent IdP/GLPI, full 009→013 backup/downgrade; next durable wiring/faults |
+| 4 Policy P0 | #259 `caab0842911f44d59c274cabaf2a667b4d582094`, Quality #41274206608 3/3 + combined #41274206599 1/1 | Loopback TCP gateway closes committed ACK, Worker Temporal test restart, REJECT only | No deployed Core TCP or Temporal server restart; next isolated multi-process boundary |
+
+**Gates:** D0 source-only CI_PASS, integrated exact-head PENDING; D1 combined business path NOT_QUALIFIED (REJECT subpath only); D2 browser/API ITIL same SHA NOT_QUALIFIED; D3 clean install/upgrade/rollback NO_GO; D4 sign-off NOT_ATTESTED. No green-by-proxy. Artifacts: source #259 combined #13070581531 GitHub digest provider-reported; source #258 Quality ACME #13069418598, Chromium #13069049527; independent ZIP hash not recomputed this cycle. Revert `74fe37e` if integrated CI fails; never drop ledger 013 outside disposable environment. Owners' four hourly prompts updated; `next_run_time=null` for all five, cadence not guaranteed.
