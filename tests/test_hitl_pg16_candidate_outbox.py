@@ -28,7 +28,7 @@ PINNED = {"009_ai_decision_ledger.sql": "bfed91982654b6baf0026408fa5134a22af421b
 
 
 def _blob_sha(raw):
-    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\\0" + raw).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
 
 
 class CandidateOutboxPG16(unittest.TestCase):
@@ -239,7 +239,7 @@ class CandidateOutboxPG16(unittest.TestCase):
     def test_z_pg16_dump_restore_roundtrip(self):
         for client in ("pg_dump", "pg_restore"):
             result = subprocess.run([client, "--version"], capture_output=True, text=True, check=True)
-            self.assertRegex(result.stdout, r"\\b16\\.[0-9]+\\b")
+            self.assertRegex(result.stdout, r"\b16\.[0-9]+\b")
         output = os.environ.get("HITL_DR_ARTIFACT")
         if not output or not output.startswith("/tmp/"):
             raise RuntimeError("refuse_non_ci_dr_path")
