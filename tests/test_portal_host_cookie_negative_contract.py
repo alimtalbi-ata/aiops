@@ -213,5 +213,74 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
                                 "oidc_alias_redirect": 503})
 
 
+    def test_04_duplicate_oidc_cookie_never_selects_a_valid_handle(self):
+        # Starlette's parsed cookie dict would otherwise keep the last value.
+        # A forged+valid pair is not a legitimate OIDC session, in either order.
+        valid = self._session()
+        forged = "Z" * 43
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core business GET")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("business GET")) as get:
+            for first, second in ((valid, forged), (forged, valid),
+                                  (valid, valid)):
+                for rid in RUNS:
+                    for prefix in ("/api/portal/runs/", "/runs/"):
+                        with self.subTest(order=(first == valid, second == valid),
+                                          rid=rid, route=prefix):
+                            headers = self._headers()
+                            headers["Cookie"] = (
+                                COOKIE + "=" + first + "; " + COOKIE + "=" + second)
+                            self._assert_protected(
+                                self.client.get(prefix + rid, headers=headers), 401)
+            core.assert_not_called()
+            get.assert_not_called()
+        receipt("duplicate-oidc-cookie", {
+            "status": 401, "cookie_orders": 3, "run_variants": len(RUNS),
+            "api_html_identical_status": True, "upstream_business_get": 0,
+        })
+
+    def test_05_http_request_cannot_borrow_https_origin_or_proxy_headers(self):
+        # Simulate the ASGI request scheme, not a Debian TLS/port probe.
+        headers = {
+            **self._headers(),
+            "Origin": "https://portal.example.test:7777",
+            "X-Portal-Run-ID": RUNS[0],
+            "X-Forwarded-Proto": "https",
+            "Forwarded": "proto=https;host=portal.example.test:7777",
+        }
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core business GET")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("business GET")) as get, \
+             patch.object(main, "post_json",
+                          side_effect=AssertionError("business POST")) as post:
+            downgraded = self.client.post(
+                "http://portal.example.test:7777/api/portal/run-session",
+                headers=headers)
+            self._assert_protected(downgraded, 403)
+            self.assertNotIn("set-cookie", downgraded.headers)
+            # Matching HTTPS Host/Origin is still identity-only, not GLPI READ.
+            same_origin = self.client.post(
+                "/api/portal/run-session", headers=headers)
+            self._assert_protected(same_origin, 503)
+            self.assertFalse(same_origin.json()["tenant_acl_qualified"])
+            alias = self.client.post(
+                "/api/portal/run-session",
+                headers={**headers, "Origin": "https://portal.example.test:17777"})
+            self._assert_protected(alias, 403)
+            core.assert_not_called()
+            get.assert_not_called()
+            post.assert_not_called()
+        receipt("http-origin-downgrade", {
+            "http_request_https_origin": 403,
+            "https_7777_identity_only": 503,
+            "https_17777_alias": 403,
+            "forwarded_headers_authoritative": False,
+            "upstream_business_requests": 0,
+        })
+
+
+
 if __name__ == "__main__":
     unittest.main()
