@@ -105,11 +105,24 @@ class DisposableSignedCoreNativeGlpi:
         self.glpi_observations = []
         self.signing_key = rsa.generate_private_key(
             public_exponent=65537, key_size=2048)
+        self.signer_kid = "disposable-core-signer"
+        self.jwks = {"keys": [self._signer_jwk()]}
+
+    def _signer_jwk(self):
         numbers = self.signing_key.public_key().public_numbers()
-        self.jwks = {"keys": [{
-            "kid": "disposable-core-signer", "kty": "RSA", "alg": "RS256",
-            "use": "sig", "n": _b64(numbers.n), "e": _b64(numbers.e),
-        }]}
+        return {"kid": self.signer_kid, "kty": "RSA", "alg": "RS256",
+                "use": "sig", "n": _b64(numbers.n), "e": _b64(numbers.e)}
+
+    def rotate_signer(self, *, kid="disposable-core-signer-next",
+                      retain_previous=False):
+        """Test-only key rotation; callers must pin the resulting JWKS."""
+        if not isinstance(kid, str) or not kid or kid == self.signer_kid:
+            raise ValueError("a distinct signer kid is required")
+        previous = list(self.jwks["keys"]) if retain_previous else []
+        self.signing_key = rsa.generate_private_key(
+            public_exponent=65537, key_size=2048)
+        self.signer_kid = kid
+        self.jwks = {"keys": previous + [self._signer_jwk()]}
         self.native_rows = {
             "getFullSession": {"session": {
                 "glpiID": 77, "glpiactiveprofile": {"id": 4},
@@ -153,7 +166,7 @@ class DisposableSignedCoreNativeGlpi:
                     signed, padding.PKCS1v15(), hashes.SHA256()
                 )).rstrip(b"=").decode("ascii")
                 self._json(200, {"payload": payload, "signature": {
-                    "alg": "RS256", "kid": "disposable-core-signer",
+                    "alg": "RS256", "kid": owner.signer_kid,
                     "signature": signature}})
 
             def do_GET(self):
