@@ -1,0 +1,4 @@
+## Existing-host task execution boundary — 2026-11-01
+`scripts/existing_host_task_executor.py` is an **unconnected** local typed executor. It supports health, Compose status, Compose validation and bounded service-log inspection. Logs are **not returned** because they may contain credentials. Its deploy_service operation is deliberately disabled until a signed transport, immutable image/source binding, independent authorization and rollback are implemented and qualified. It accepts an operator-owned service allowlist and an explicit task JSON file; no shell string is accepted.
+
+Local offline validation: `python3 -m unittest discover -s tests -p test_existing_host_task_executor.py -v`. This does not prove host installation. Docker API access is high privilege and must be confined to the host agent's operational identity. The new-server kit must not be used to bootstrap this existing host.
