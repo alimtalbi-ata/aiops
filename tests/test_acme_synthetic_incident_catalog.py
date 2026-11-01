@@ -1638,5 +1638,184 @@ class AcmeSyntheticItilReplayVerifierTests(unittest.TestCase):
             self.verifier.verify_itil_replay_offline(self.manifest, deliveries=rows)
 
 
+class AcmeSyntheticReceiptReconciliationTests(unittest.TestCase):
+    """Read-only contract: synthetic absence is never a Core receipt."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_receipt_reconciliation as receipts
+        cls.receipts = receipts
+        cls.manifest = gen.replay(seed=20261018)
+
+    def test_fifteen_stages_and_six_checkpoints_remain_unexecuted(self):
+        result = self.receipts.reconcile_fixture_receipts_offline(self.manifest)
+        self.assertEqual((len(result["stages"]), len(result["checkpoints"])), (15, 6))
+        self.assertEqual(result["reconciliation_status"], "NO_AUTHENTICATED_READBACK")
+        self.assertEqual(result["runtime_readback"], "NOT_EXECUTED")
+        self.assertEqual(result["tenant_scope"], "UNKNOWN")
+        self.assertFalse(result["test_partition_is_tenant_authority"])
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["receipt_id"] is None and not s["receipt_verified"]
+                            for s in result["stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in result["checkpoints"]))
+        self.assertTrue(all(v is None or v == [] for v in
+                            result["runtime_references"].values()))
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+
+    def test_replay_hash_seed_and_graph_are_preserved(self):
+        result = self.receipts.reconcile_fixture_receipts_offline(self.manifest)
+        self.assertEqual(result["seed"], 20261018)
+        self.assertEqual(result["graph_version"], gen.SEED_GIT_BLOB)
+        self.assertEqual(result["canonical_replay_file_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(result["source_event_count"], 7)
+        self.assertEqual(result["blast_radius_candidate"]["path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertEqual(result["observed_impact"], "UNKNOWN")
+        self.assertEqual(result["priority_confirmed"], "UNKNOWN")
+        self.assertEqual(gen._canonical(result), gen._canonical(
+            self.receipts.reconcile_fixture_receipts_offline(
+                gen.replay(seed=20261018), candidate=result)))
+
+    def test_stage_authority_requirements_do_not_become_receipts(self):
+        result = self.receipts.reconcile_fixture_receipts_offline(self.manifest)
+        stages = {s["stage"]: s for s in result["stages"]}
+        self.assertEqual(stages["GLPI_TICKET"]["required_authority"],
+                         "GLPI_AUTHENTICATED_READBACK")
+        self.assertEqual(stages["CORE_RUN"]["required_authority"],
+                         "CORE_AUTHENTICATED_READBACK")
+        self.assertEqual(stages["EVIDENCE"]["required_authority"],
+                         "IMMUTABLE_EVIDENCE_SERVICE")
+        self.assertEqual(stages["HITL_APPROVAL"]["required_authority"],
+                         "CORE_VERIFIED_HUMAN_LEDGER")
+        self.assertEqual(stages["SIMULATE"]["required_authority"],
+                         "ISOLATED_EXECUTOR_RECEIPT")
+        for stage in result["stages"]:
+            self.assertEqual(stage["receipt_source"], "UNKNOWN")
+            self.assertIsNone(stage["receipt_observed_at"])
+            self.assertIn(stage["source_event_id"], result["source_event_ids"])
+
+    def test_test_only_absence_envelope_never_claims_core_readback(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        verified = verifier.verify_itil_replay_offline(self.manifest)
+        envelope = self.receipts.synthetic_absence_envelope_offline(verified)
+        result = self.receipts.reconcile_fixture_receipts_offline(
+            self.manifest, absence_envelope=envelope)
+        self.assertTrue(result["absence_envelope_checked"])
+        self.assertFalse(result["absence_envelope_is_core_receipt"])
+        self.assertEqual(result["runtime_readback"], "NOT_EXECUTED")
+        self.assertEqual(result["reconciliation_status"], "NO_AUTHENTICATED_READBACK")
+
+    def test_foreign_partition_and_tenant_are_rejected(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        verified = verifier.verify_itil_replay_offline(self.manifest)
+        base = self.receipts.synthetic_absence_envelope_offline(verified)
+        for field, value in (("test_partition", "SYNTHETIC_TEST_PARTITION_B"),
+                             ("tenant_id", "FORGED-TENANT"),
+                             ("source", "CORE_AUTHENTICATED_READBACK")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(base)
+                changed[field] = value
+                with self.assertRaises(ValueError):
+                    self.receipts.reconcile_fixture_receipts_offline(
+                        self.manifest, absence_envelope=changed)
+
+    def test_foreign_replay_seed_graph_and_event_refs_are_rejected(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        verified = verifier.verify_itil_replay_offline(self.manifest)
+        base = self.receipts.synthetic_absence_envelope_offline(verified)
+        for field, value in (("source_manifest_sha256", "0" * 64),
+                             ("source_dataset_sha256", "1" * 64),
+                             ("graph_version", "FORGED-GRAPH"),
+                             ("source_event_ids", ["FORGED-EVENT"]),
+                             ("ci_id", "FOREIGN-CI"),
+                             ("service_id", "FOREIGN-SERVICE")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(base)
+                changed[field] = value
+                with self.assertRaises(ValueError):
+                    self.receipts.reconcile_fixture_receipts_offline(
+                        self.manifest, absence_envelope=changed)
+        forged = copy.deepcopy(self.manifest)
+        forged["seed"] = 20261019
+        with self.assertRaises(ValueError):
+            self.receipts.reconcile_fixture_receipts_offline(forged)
+
+    def test_stale_future_invalid_and_non_utc_readback_clocks_rejected(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        base = self.receipts.synthetic_absence_envelope_offline(
+            verifier.verify_itil_replay_offline(self.manifest))
+        for stamp in ("2026-10-31T10:00:00Z", "2026-10-31T09:41:00Z",
+                      "2026-10-31T09:44:00+00:00", "INVALID", True):
+            with self.subTest(stamp=stamp):
+                changed = copy.deepcopy(base)
+                changed["synthetic_checked_at"] = stamp
+                with self.assertRaises(ValueError):
+                    self.receipts.reconcile_fixture_receipts_offline(
+                        self.manifest, absence_envelope=changed)
+
+    def test_forged_incident_run_glpi_and_evidence_receipts_rejected(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        base = self.receipts.synthetic_absence_envelope_offline(
+            verifier.verify_itil_replay_offline(self.manifest))
+        for field, value in (("incident_id", "FORGED-INCIDENT"),
+                             ("run_id", "FORGED-RUN"),
+                             ("glpi_ticket_id", "FORGED-GLPI"),
+                             ("evidence_ids", ["FORGED-EVIDENCE"]),
+                             ("stage_receipts", [{"stage": "HITL_APPROVAL", "approved": True}])):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(base)
+                changed[field] = value
+                with self.assertRaisesRegex(ValueError, "unverified runtime receipt"):
+                    self.receipts.reconcile_fixture_receipts_offline(
+                        self.manifest, absence_envelope=changed)
+
+    def test_missing_or_extra_readback_fields_fail_closed(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        base = self.receipts.synthetic_absence_envelope_offline(
+            verifier.verify_itil_replay_offline(self.manifest))
+        missing = copy.deepcopy(base)
+        del missing["source_event_ids"]
+        with self.assertRaises(ValueError):
+            self.receipts.reconcile_fixture_receipts_offline(
+                self.manifest, absence_envelope=missing)
+        extra = copy.deepcopy(base)
+        extra["actor_subject"] = "FORGED"
+        with self.assertRaises(ValueError):
+            self.receipts.reconcile_fixture_receipts_offline(
+                self.manifest, absence_envelope=extra)
+
+    def test_forged_verified_projection_and_cross_partition_rejected(self):
+        good = self.receipts.reconcile_fixture_receipts_offline(self.manifest)
+        for field, value in (("reconciliation_status", "VERIFIED"),
+                             ("runtime_readback", "SUCCESS"),
+                             ("priority_confirmed", "P1"),
+                             ("observed_impact", "HIGH"),
+                             ("test_partition", "SYNTHETIC_TEST_PARTITION_B")):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(good)
+                changed[field] = value
+                with self.assertRaisesRegex(ValueError, "untrusted receipt reconciliation"):
+                    self.receipts.reconcile_fixture_receipts_offline(
+                        self.manifest, candidate=changed)
+        with self.assertRaises(ValueError):
+            self.receipts.reconcile_fixture_receipts_offline(
+                self.manifest, test_partition="REAL-TENANT")
+
+    def test_stale_or_cross_partition_delivery_rejected_before_reconciliation(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        rows[0]["test_partition"] = "SYNTHETIC_TEST_PARTITION_B"
+        with self.assertRaises(ValueError):
+            self.receipts.reconcile_fixture_receipts_offline(
+                self.manifest, deliveries=rows)
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        rows[0]["synthetic_received_at"] = "2026-10-31T10:00:00Z"
+        with self.assertRaises(ValueError):
+            self.receipts.reconcile_fixture_receipts_offline(
+                self.manifest, deliveries=rows)
+
+
 if __name__ == "__main__":
     unittest.main()

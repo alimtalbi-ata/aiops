@@ -905,5 +905,273 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                 core.wait(timeout=5)
 
 
+
+    async def test_07_multiprocess_worker_restart_stale_ack_and_two_durable_rejects(self):
+        """Separate OS Worker PIDs, persisted Temporal SERVER, real Core TCP/PG16.
+
+        A gateway closes one ACK response only AFTER Core's durable commit.
+        This is injected gateway-close, NOT physical packet loss/partition.
+        """
+        import httpx
+        from temporalio.testing import WorkflowEnvironment
+
+        first = self._fixture()
+        self._write_synthetic_proofs()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            core_port = probe.getsockname()[1]
+        core_code = (
+            "from fastapi import FastAPI\n"
+            "from core.hitl_reject_delivery import router\n"
+            "import uvicorn\n"
+            "app=FastAPI()\n"
+            "app.include_router(router)\n"
+            f"uvicorn.run(app, host='127.0.0.1', port={core_port}, "
+            "access_log=False, log_level='error')\n"
+        )
+        core_env = dict(os.environ, DATABASE_URL=self.url)
+        core = subprocess.Popen(
+            [sys.executable, "-c", core_code], cwd=str(ROOT), env=core_env,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+        upstream = gateway = gateway_thread = None
+        workers = []
+        queue = "ci-multiprocess-" + uuid.uuid4().hex
+        sqlite_path = str(Path(self.temp.name) / (queue + ".sqlite"))
+        worker_code = (
+            "import asyncio,sys\n"
+            "from pathlib import Path\n"
+            "from temporalio.client import Client\n"
+            "from temporalio.worker import Worker\n"
+            "from test_worker_hitl_reject_notification import SyntheticRejectSink\n"
+            "async def main():\n"
+            "  client=await Client.connect(sys.argv[1])\n"
+            "  async with Worker(client, task_queue=sys.argv[2], "
+            "workflows=[SyntheticRejectSink]):\n"
+            "    Path(sys.argv[3]).write_text('ready')\n"
+            "    await asyncio.Event().wait()\n"
+            "asyncio.run(main())\n"
+        )
+
+        async def start_worker(target, generation):
+            ready = Path(self.temp.name) / (queue + "-" + generation + ".ready")
+            proc = subprocess.Popen(
+                [sys.executable, "-c", worker_code, target, queue, str(ready)],
+                cwd=str(ROOT), env=dict(os.environ),
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+            workers.append(proc)
+            for _ in range(100):
+                self.assertIsNone(proc.poll(), "Temporal test Worker process exited")
+                if ready.is_file():
+                    self.assertGreater(proc.pid, 0)
+                    return proc
+                await asyncio.sleep(0.1)
+            self.fail("Temporal test Worker subprocess not ready")
+
+        def stop_worker(proc):
+            self.assertIsNone(proc.poll(), "Worker exited before controlled restart")
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)
+            self.assertIsNotNone(proc.poll())
+
+        def available_port():
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind(("127.0.0.1", 0))
+                return probe.getsockname()[1]
+
+        try:
+            for _ in range(100):
+                self.assertIsNone(core.poll(), "independent Core TCP exited")
+                try:
+                    with socket.create_connection(
+                            ("127.0.0.1", core_port), timeout=0.1):
+                        break
+                except OSError:
+                    await asyncio.sleep(0.1)
+            else:
+                self.fail("independent Core TCP not ready")
+            upstream = httpx.Client(
+                base_url=f"http://127.0.0.1:{core_port}",
+                timeout=10.0, trust_env=False)
+            gateway = ThreadingHTTPServer(
+                ("127.0.0.1", 0), _LoopbackAckDropGateway)
+            gateway.core_client = upstream
+            gateway.drop_once = True
+            gateway.dropped_ack = None
+            gateway_thread = threading.Thread(
+                target=gateway.serve_forever, daemon=True)
+            gateway_thread.start()
+            signal_ids = []
+            second_ack = None
+
+            async with httpx.AsyncClient(
+                    base_url=f"http://127.0.0.1:{gateway.server_port}",
+                    timeout=10.0, trust_env=False) as tcp:
+                async def post(path, body):
+                    nonlocal second_ack
+                    response = await tcp.post(
+                        path, json=body, headers={
+                            "Authorization": "Bearer " + self.bearer})
+                    data = response.json()
+                    self.assertIs(data["execution_allowed"], False)
+                    self.assertIs(data["effect_allowed"], False)
+                    if (path.endswith("/ack") and data.get("status") == "DELIVERED"
+                            and not data.get("idempotent")):
+                        second_ack = (path, dict(body))
+                    return response.status_code, data
+
+                handle = None
+
+                async def signal(run_id, payload):
+                    self.assertEqual(payload["decision"], "REJECT")
+                    self.assertEqual(payload["run_id"], run_id)
+                    self.assertIs(payload["notification_only"], True)
+                    self.assertIs(payload["execution_allowed"], False)
+                    self.assertIs(payload["effect_allowed"], False)
+                    self.assertNotIn("lease_token", payload)
+                    await handle.signal(
+                        SyntheticRejectSink.reject_notification, payload)
+                    signal_ids.append(payload["event_id"])
+
+                # Temporal server has a disposable persistent SQLite store.
+                temporal_port_one = available_port()
+                async with await WorkflowEnvironment.start_local(
+                        port=temporal_port_one,
+                        dev_server_database_filename=sqlite_path) as server_one:
+                    target = f"127.0.0.1:{temporal_port_one}"
+                    handle = await server_one.client.start_workflow(
+                        SyntheticRejectSink.run, id=queue, task_queue=queue)
+                    worker_one = await start_worker(target, "one")
+                    with self.assertRaises(httpx.TransportError):
+                        await deliver_core_reject_once(
+                            tenant_id=TENANT, owner=OWNER, post=post,
+                            signal=signal)
+                    for _ in range(80):
+                        if await handle.query(SyntheticRejectSink.count) == 1:
+                            break
+                        await asyncio.sleep(0.1)
+                    else:
+                        self.fail("first REJECT not observed by OS Worker PID")
+                    self.assertEqual(signal_ids, [first["event"]])
+                    self.assertEqual(
+                        gateway.dropped_ack["response"]["status"], "DELIVERED")
+                    code, replay = await post(
+                        gateway.dropped_ack["path"],
+                        gateway.dropped_ack["body"])
+                    self.assertEqual(
+                        (code, replay["status"], replay["idempotent"]),
+                        (200, "DELIVERED", True))
+                    with self.psycopg.connect(self.url) as db:
+                        self.assertEqual(db.execute(
+                            "select status,attempts from aiops.hitl_decision_outbox "
+                            "where event_id=%s", (first["event"],)).fetchone(),
+                            ("DELIVERED", 1))
+
+                    second = self._fixture()
+                    self._write_synthetic_proofs()
+                    claim_path = (
+                        f"/api/tenants/{TENANT}/hitl/reject-delivery/claim")
+                    code, claim = await post(
+                        claim_path, {"owner": OWNER, "limit": 1})
+                    self.assertEqual((code, claim["status"]), (200, "LEASED"))
+                    old = claim["items"][0]
+                    self.assertEqual(old["event_id"], second["event"])
+                    stale_ack = {
+                        "owner": OWNER, "run_id": old["run_id"],
+                        "proposal_id": old["proposal_id"],
+                        "proposal_hash": old["proposal_hash"],
+                        "proposal_revision": old["proposal_revision"],
+                        "lease_token": old["lease_token"],
+                        "execution_allowed": False, "effect_allowed": False,
+                    }
+                    with self.psycopg.connect(self.url) as db:
+                        db.execute(
+                            "update aiops.hitl_decision_outbox "
+                            "set lease_until=now()-interval '1 second' "
+                            "where event_id=%s", (second["event"],))
+                    stop_worker(worker_one)
+                    self.assertEqual(signal_ids, [first["event"]])
+
+                # Server and Worker processes are independently restarted.
+                self.assertTrue(Path(sqlite_path).is_file())
+                temporal_port_two = available_port()
+                async with await WorkflowEnvironment.start_local(
+                        port=temporal_port_two,
+                        dev_server_database_filename=sqlite_path) as server_two:
+                    target = f"127.0.0.1:{temporal_port_two}"
+                    handle = server_two.client.get_workflow_handle(queue)
+                    worker_two = await start_worker(target, "two")
+                    self.assertNotEqual(worker_one.pid, worker_two.pid)
+                    stale_path = (
+                        f"/api/tenants/{TENANT}/hitl/reject-delivery/"
+                        f"{second['event']}/ack")
+                    code, denied = await post(stale_path, stale_ack)
+                    self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+                    # Invalid binding must never turn a stale lease into ACK.
+                    bad = dict(stale_ack, lease_token="Z" * 48)
+                    code, denied = await post(stale_path, bad)
+                    self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+                    self.assertEqual(signal_ids, [first["event"]])
+                    receipts = await deliver_core_reject_once(
+                        tenant_id=TENANT, owner=OWNER, post=post,
+                        signal=signal)
+                    self.assertEqual(len(receipts), 1)
+                    self.assertEqual(receipts[0]["status"], "DELIVERED")
+                    self.assertIs(receipts[0]["execution_allowed"], False)
+                    self.assertIs(receipts[0]["effect_allowed"], False)
+                    self.assertIsNotNone(second_ack)
+                    result = await asyncio.wait_for(handle.result(), timeout=30)
+                    self.assertEqual(
+                        [x["event_id"] for x in result],
+                        [first["event"], second["event"]])
+                    self.assertEqual(
+                        signal_ids, [first["event"], second["event"]])
+                    code, replay = await post(*second_ack)
+                    self.assertEqual(
+                        (code, replay["status"], replay["idempotent"]),
+                        (200, "DELIVERED", True))
+                    code, denied = await post(stale_path, stale_ack)
+                    self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+                    self.assertEqual(self._claim()[1]["items"], [])
+                    with self.psycopg.connect(self.url) as db:
+                        rows = db.execute(
+                            "select event_id,status,attempts "
+                            "from aiops.hitl_decision_outbox "
+                            "where event_id in (%s,%s)",
+                            (first["event"], second["event"])).fetchall()
+                    self.assertEqual(
+                        {row[0]: (row[1], row[2]) for row in rows},
+                        {first["event"]: ("DELIVERED", 1),
+                         second["event"]: ("DELIVERED", 2)})
+                    self._no_effect()
+                    stop_worker(worker_two)
+        finally:
+            for proc in workers:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=5)
+            if gateway is not None:
+                gateway.shutdown()
+                gateway.server_close()
+            if gateway_thread is not None:
+                gateway_thread.join(timeout=5)
+            if upstream is not None:
+                upstream.close()
+            core.terminate()
+            try:
+                core.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                core.kill()
+                core.wait(timeout=5)
+
 if __name__ == "__main__":
     unittest.main()
