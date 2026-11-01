@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from core import itsm_xref as x
 
+SOURCE_READBACK = x._glpi_readback  # real adapter; unit HTTP positives are synthetic mocks
+
 NOW=datetime.now(timezone.utc)
 TOKEN="ci-service-a"
 KEY="ci-only-test-attestation-key-32bytes-long"
@@ -80,6 +82,8 @@ class XrefHttpTests(unittest.TestCase):
         self.env.start()
         self.mock=patch.object(x,"db",self.fake.connect)
         self.mock.start()
+        self.source_mock=patch.object(x,"_glpi_readback",return_value=True)
+        self.source_mock.start()
     def write_proofs(self):
         proofs={}
         for row in self.fake.owner_rows():
@@ -89,6 +93,7 @@ class XrefHttpTests(unittest.TestCase):
         with open(self.proof_path,"w",encoding="utf-8") as fp:
             json.dump({"schema":"aiops.core-ownership-proof.v1","proofs":proofs},fp)
     def tearDown(self):
+        self.source_mock.stop()
         self.mock.stop()
         self.env.stop()
         os.unlink(self.proof_path)
@@ -121,6 +126,78 @@ class XrefHttpTests(unittest.TestCase):
         self.assertEqual(r.json()["status"],"UNKNOWN")
         self.hidden(r)
         self.assertEqual(len(self.fake.calls),3)
+
+    def test_no_independent_glpi_source_readback_is_unknown(self):
+        # Even a valid HMAC, verified=true and exact Core Run/Incident are not
+        # independent GLPI ticket/entity/CI authority.
+        with patch.object(x, "_glpi_readback", return_value=False) as gate:
+            r=self.read(expected_run_id="RUN-A",expected_incident_id="INC-A")
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()["status"],"UNKNOWN")
+        self.hidden(r)
+        gate.assert_called_once()
+
+    def test_real_glpi_adapter_requires_exact_source_and_pinned_transport(self):
+        import requests
+        from unittest.mock import patch as mock_patch
+
+        entry={"tenant_id":"TEN-A","instance_id":"GLPI-A",
+               "origin":"https://glpi.internal.example",
+               "app_token":"app-token-for-ci-only",
+               "session_token":"session-token-for-ci-only"}
+        source={"glpi_entity_id":"0"}
+
+        class Response:
+            def __init__(self, data, status=200):
+                self.status_code=status
+                self.headers={"Content-Type":"application/json"}
+                self.data=json.dumps(data).encode()
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def iter_content(self,chunk_size=4096): yield self.data
+
+        class Session:
+            def __init__(self, records):
+                self.records=records
+                self.trust_env=True
+                self.calls=[]
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def get(self,url,**kwargs):
+                self.calls.append(url)
+                assert self.trust_env is False
+                assert kwargs["allow_redirects"] is False
+                assert kwargs["verify"] is True
+                assert kwargs["stream"] is True
+                assert url.startswith("https://glpi.internal.example/apirest.php/")
+                return self.records[url.split("/apirest.php",1)[1]]
+
+        good={"/Ticket/123":Response({"id":123,"entities_id":0}),
+              "/Entity/0":Response({"id":0}),
+              "/Ticket/123/Item_Ticket":Response([{"itemtype":"Computer","items_id":77}]),
+              "/Computer/77":Response({"id":77,"entities_id":0})}
+        with mock_patch.dict(os.environ,{"AIOPS_XREF_GLPI_READBACK_JSON":json.dumps([entry])}):
+            session=Session(good)
+            with mock_patch.object(requests,"Session",return_value=session):
+                self.assertTrue(SOURCE_READBACK(source,"TEN-A","GLPI-A","123"))
+                self.assertEqual(len(session.calls),4)
+            for altered in (
+                {**good,"/Ticket/123":Response({"id":123,"entities_id":1})},
+                {**good,"/Computer/77":Response({"id":77,"entities_id":1})},
+                {**good,"/Ticket/123/Item_Ticket":Response([])},
+                {**good,"/Ticket/123":Response({"id":123,"entities_id":0},302)},
+            ):
+                with mock_patch.object(requests,"Session",return_value=Session(altered)):
+                    self.assertFalse(SOURCE_READBACK(source,"TEN-A","GLPI-A","123"))
+            with mock_patch.object(requests,"Session") as no_network:
+                self.assertFalse(SOURCE_READBACK(source,"TEN-B","GLPI-A","123"))
+                self.assertFalse(SOURCE_READBACK(source,"TEN-A","GLPI-B","123"))
+                no_network.assert_not_called()
+        with mock_patch.dict(os.environ,{"AIOPS_XREF_GLPI_READBACK_JSON":json.dumps([
+                {**entry,"origin":"http://glpi.internal.example"}])}):
+            with mock_patch.object(requests,"Session") as no_network:
+                self.assertFalse(SOURCE_READBACK(source,"TEN-A","GLPI-A","123"))
+                no_network.assert_not_called()
 
     def test_run_token_in_ticket_text_never_links(self):
         self.fake.events=[]
