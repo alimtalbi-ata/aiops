@@ -373,7 +373,7 @@ class RunDetailTests(unittest.TestCase):
                           side_effect=AssertionError("no Core read")) as core:
             response = self.client.post(
                 "/api/portal/run-session",
-                headers={"Authorization": "Bearer " + TOKEN, "Origin": "http://testserver",
+                headers={"Authorization": "Bearer " + TOKEN, "Origin": "https://testserver",
                          "X-Portal-Run-ID": RID, "X-Tenant-ID": "foreign",
                          "X-Actor-ID": "forged"},
             )
