@@ -498,3 +498,117 @@ class PortalACLChromiumE2E(unittest.TestCase):
             self.assertNotIn(self.settings[
                 "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], self.page.content())
             self.assertFalse(self.blocked)
+
+    def test_10_core_negative_consumed_only_with_active_session(self):
+        """Real Core TLS UNKNOWN is consumed only while OIDC session is active."""
+        from fastapi import Request
+        from portal.core_acl_consumer import ServerXref
+        from portal_core_real_tcp_fixture import DisposableRealCoreTCP
+
+        actor, handle = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=int(time.time()))
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+
+        def server_request(cookie_handle):
+            # Test-only ASGI request: identity is looked up from the server
+            # store, not from X-Actor-ID or a client-provided tenant.
+            cookie = (self.sessions._SESSION_COOKIE + "=" + cookie_handle).encode()
+            return Request({"type": "http", "method": "GET",
+                            "path": "/api/portal/runs/RUN-ACME-123",
+                            "headers": [(b"cookie", cookie)]})
+
+        with DisposableRealCoreTCP(
+                self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]) as core:
+            reply = core.send(plan)
+            self.assertEqual(reply[0], 200)
+            active = self.wire.assess_core_negative_for_session(
+                server_request(handle), binding=binding, plan=plan,
+                status_code=reply[0], payload=reply[1], headers=reply[2],
+                env=self.settings)
+            self.assertEqual(active.kind, "CURRENT_CORE_NEGATIVE")
+            self.assertEqual(active.portal_status, 503)
+            self.assertEqual(active.state, "UNKNOWN")
+            self.assertFalse(active.read_permitted)
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/runs/RUN-ACME-123"), 503)
+            baseline = core.observations()
+            self.assertEqual(len(baseline), 1)
+
+            with self.sessions._lock:
+                self.sessions._sessions.pop(self.sessions._digest(handle), None)
+            for cookie_handle in (handle, "F" * 43):
+                denied = self.wire.assess_core_negative_for_session(
+                    server_request(cookie_handle), binding=binding, plan=plan,
+                    status_code=reply[0], payload=reply[1], headers=reply[2],
+                    env=self.settings)
+                self.assertEqual(denied.portal_status, 401)
+                self.assertFalse(denied.read_permitted)
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/runs/RUN-ACME-123"), 401)
+            self.assert_denied(self.page.goto(
+                self.base + "/runs/RUN-ACME-123"), 401)
+            self.assertEqual(core.observations(), baseline,
+                             "revocation caused an upstream business GET")
+
+    def test_11_core_negative_foreign_and_replay_no_business_disclosure(self):
+        """Actual Core 401/403/UNKNOWN never authorizes a foreign ticket."""
+        from dataclasses import replace
+        from fastapi import Request
+        from portal.core_acl_consumer import ServerXref
+        from portal_core_real_tcp_fixture import DisposableRealCoreTCP
+
+        actor, handle = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=int(time.time()))
+        self.assertIsNotNone(plan)
+        request = Request({"type": "http", "method": "GET",
+                           "path": "/api/portal/runs/RUN-ACME-123",
+                           "headers": [(b"cookie", (
+                               self.sessions._SESSION_COOKIE + "=" + handle).encode())]})
+
+        def assess(reply, resource=binding):
+            return self.wire.assess_core_negative_for_session(
+                request, binding=resource, plan=plan,
+                status_code=reply[0], payload=reply[1], headers=reply[2],
+                env=self.settings)
+
+        with DisposableRealCoreTCP(
+                self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]) as core:
+            unknown = core.send(plan)
+            replay = core.send(plan)  # Core ledger not qualified; still deny
+            bad_token = core.send(replace(
+                plan, service_bearer="forged-" + "x" * 40))
+            foreign = core.send(replace(
+                plan, path=plan.path.replace("/tenants/ACME/",
+                                             "/tenants/FOREIGN/")))
+            self.assertEqual([r[0] for r in (
+                unknown, replay, bad_token, foreign)], [200, 200, 401, 403])
+            for reply in (unknown, replay, bad_token, foreign):
+                outcome = assess(reply)
+                self.assertEqual(outcome.portal_status, 503)
+                self.assertEqual(outcome.state, "UNKNOWN")
+                self.assertFalse(outcome.read_permitted)
+            forged_allow = (200, {**unknown[1], "decision": "ALLOW"}, unknown[2])
+            self.assertEqual(assess(forged_allow).kind, "INVALID")
+            self.assertEqual(assess(forged_allow).portal_status, 503)
+            foreign_binding = ServerXref(
+                "FOREIGN", "RUN-FOREIGN-999", "INC-FOREIGN-999",
+                "glpi-foreign", "999", "99")
+            self.assertEqual(assess(unknown, foreign_binding).kind, "INVALID")
+            baseline = core.observations()
+            self.assertEqual(len(baseline), 4)
+            self.assertTrue(all(row["method"] == "POST" for row in baseline))
+            for rid in ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999"):
+                self.assert_denied(self.context.request.get(
+                    self.base + "/api/portal/runs/" + rid), 503)
+            self.assertEqual(core.observations(), baseline)
+            self.assertFalse(any(row["method"] == "GET" for row in baseline))
+            self.assertFalse(any("ticket" in str(row["path"]) for row in baseline))
+            self.assertNotIn(self.settings[
+                "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], self.page.content())
