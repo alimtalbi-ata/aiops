@@ -845,5 +845,229 @@ class AcmeCorePg16HashComparisonNegativeTests(unittest.TestCase):
         self.assertEqual(json.loads(check.stdout)["check"], "PASS_SYNTHETIC_ONLY")
         self.assertNotIn('"ALLOW"', emit.stdout)
 
+
+class AcmeCorePg16IndependentIntakeTests(unittest.TestCase):
+    """Core-shaped data and portable audit claims never authenticate PG16."""
+
+    NOW = 1700000000
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_pg16_independent_intake as intake
+        from tools import generate_acme_incidents as gen
+        cls.intake = intake
+        cls.gen = gen
+        cls.manifest = gen.replay(seed=20261018)
+
+    def fake_core_readback(self):
+        """In-memory adversarial TEST_ONLY claim, NOT a Core producer receipt."""
+        local = self.intake.build_receipt(self.manifest)["events"]
+        return {
+            "schema": "aiops.core-canonical-seven-source-receipt.v1",
+            "decision": "UNKNOWN", "link_status": "UNKNOWN",
+            "source_preflight": "PASS_SYNTHETIC_ONLY",
+            "transport": "TLS_AUTHENTICATED_NONPORTABLE",
+            "portable_signature": "NONE",
+            "issuer": "TEST_ONLY_ISSUER", "source_system": "TEST_ONLY_SOURCE",
+            "tenant_id": "TEST_ONLY_TENANT", "incident_id": "TEST_ONLY_INCIDENT",
+            "run_id": "TEST_ONLY_RUN", "glpi_instance_id": "TEST_ONLY_GLPI",
+            "ticket_id": "TEST_ONLY_TICKET", "glpi_entity_id": "TEST_ONLY_ENTITY",
+            "permission": "run:read", "actor_issuer": "TEST_ONLY_IDP",
+            "actor_subject_sha256": "b" * 64,
+            "source_event_id": local[0]["source_event_id"],
+            "source_payload_hash": "a" * 64,
+            "observed_at": self.NOW - 20, "known_at": self.NOW - 10,
+            "expires_at": self.NOW + 60,
+            "event_count": 7,
+            "hash_domains": {
+                "payload": "aiops.core-source-event-payload.v1",
+                "full_event": "aiops.core-full-run-event.v1",
+                "acme_full_event_equivalence": "NOT_VERIFIED",
+            },
+            "events": [{
+                "sequence": i,
+                "source_event_id": row["source_event_id"],
+                "evidence_id": "TEST_ONLY_EVIDENCE_" + str(i),
+                "payload_sha256": format(i, "064x"),
+                "full_event_sha256": format(i + 100, "064x"),
+            } for i, row in enumerate(local, 1)],
+            "source_proof_sha256": "d" * 64,
+            "receipt_sha256": "e" * 64,
+        }
+
+    def assert_fail_closed(self, result):
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["core_pg16_hash_equivalence"], "UNKNOWN")
+        self.assertEqual((result["verified_stage_count"],
+                          result["not_executed_stage_count"]), (0, 15))
+        self.assertEqual((result["verified_checkpoint_count"],
+                          result["not_executed_checkpoint_count"]), (0, 6))
+        self.assertEqual(len(result["events"]), 7)
+        self.assertEqual(len(result["stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" for s in result["stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" for c in result["checkpoints"]))
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+        for field in ("actor_subject", "tenant_id", "incident_id", "run_id",
+                      "glpi_ticket_id", "hitl_approval"):
+            self.assertIsNone(result["authority"][field])
+        self.assertEqual(result["authority"]["evidence_ids"], [])
+        for row in result["events"]:
+            self.assertIsNone(row["core_pg16_full_event_sha256"])
+            self.assertIsNone(row["core_pg16_payload_sha256"])
+            self.assertEqual(len({row["acme_full_event_sha256"],
+                                  row["acme_local_payload_sha256"],
+                                  row["proposed_core_payload_sha256"]}), 3)
+
+    def test_no_readback_pinned_redacted_receipt(self):
+        expected = self.intake.build_receipt(self.manifest)
+        pinned = json.loads(self.intake.RECEIPT_PATH.read_text(encoding="utf-8"),
+                            object_pairs_hook=self.gen._unique_object)
+        self.assertEqual(expected, pinned)
+        self.intake.verify_fixture(self.manifest, pinned)
+        self.assert_fail_closed(expected)
+        self.assertEqual(expected["readback_status"], "UNAVAILABLE")
+
+    def test_core_shaped_seven_event_claim_still_unknown(self):
+        receipt = self.fake_core_readback()
+        result = self.intake.consume(
+            self.manifest, core_readback=receipt,
+            expected_tenant="TEST_ONLY_TENANT",
+            expected_actor_sha256="b" * 64, now=self.NOW)
+        self.assert_fail_closed(result)
+        self.assertEqual(result["readback_reason"], "NO_INDEPENDENT_PG16_AUTHORITY")
+        self.assertEqual(result["readback_status"], "UNVERIFIED")
+        self.assertEqual(result["events"][0]["full_byte_comparison"],
+                         "MISMATCH_UNAUTHENTICATED")
+        self.assertNotIn("TEST_ONLY_RUN", json.dumps(result))
+
+    def test_foreign_actor_and_tenant_fail_closed(self):
+        receipt = self.fake_core_readback()
+        for kw, reason in (
+            ({"expected_tenant": "TEST_ONLY_OTHER_TENANT",
+              "expected_actor_sha256": "b" * 64}, "FOREIGN_TENANT"),
+            ({"expected_tenant": "TEST_ONLY_TENANT",
+              "expected_actor_sha256": "c" * 64}, "FOREIGN_ACTOR"),
+        ):
+            with self.subTest(reason=reason):
+                result = self.intake.consume(
+                    self.manifest, core_readback=receipt, now=self.NOW, **kw)
+                self.assert_fail_closed(result)
+                self.assertEqual(result["readback_reason"], reason)
+                self.assertIsNone(result["events"][0]["supplied_core_full_event_sha256"])
+
+    def test_reordered_missing_and_foreign_events(self):
+        import copy
+        for mutation in (
+            lambda x: x["events"].reverse(),
+            lambda x: x["events"].pop(),
+            lambda x: x["events"][0].update(source_event_id="TEST_ONLY_FOREIGN"),
+            lambda x: x["events"].__setitem__(1, copy.deepcopy(x["events"][0])),
+        ):
+            receipt = self.fake_core_readback()
+            mutation(receipt)
+            result = self.intake.consume(
+                self.manifest, core_readback=receipt,
+                expected_tenant="TEST_ONLY_TENANT",
+                expected_actor_sha256="b" * 64, now=self.NOW)
+            self.assert_fail_closed(result)
+            self.assertIn(result["readback_reason"],
+                          ("MISSING_OR_EXTRA_EVENTS",
+                           "FOREIGN_DUPLICATE_OR_REORDERED_EVENTS"))
+
+    def test_missing_run_and_invalid_hash_domain(self):
+        receipt = self.fake_core_readback()
+        receipt["run_id"] = ""
+        result = self.intake.consume(self.manifest, core_readback=receipt,
+                                     now=self.NOW)
+        self.assert_fail_closed(result)
+        self.assertEqual(result["readback_reason"], "MISSING_RUNTIME_SCOPE")
+        receipt = self.fake_core_readback()
+        receipt["events"][0]["full_event_sha256"] = "bad"
+        result = self.intake.consume(self.manifest, core_readback=receipt,
+                                     now=self.NOW)
+        self.assert_fail_closed(result)
+        self.assertEqual(result["readback_reason"],
+                         "MISSING_EVIDENCE_OR_INVALID_CORE_HASH_DOMAINS")
+
+    def test_stale_expired_and_revoked_proof_claim(self):
+        receipt = self.fake_core_readback()
+        receipt["expires_at"] = self.NOW - 1
+        result = self.intake.consume(self.manifest, core_readback=receipt,
+                                     now=self.NOW)
+        self.assert_fail_closed(result)
+        self.assertEqual(result["readback_reason"], "STALE_FUTURE_OR_EXPIRED")
+        receipt = self.fake_core_readback()
+        result = self.intake.consume(
+            self.manifest, core_readback=receipt,
+            expected_tenant="TEST_ONLY_TENANT",
+            expected_actor_sha256="b" * 64, now=self.NOW,
+            audit_proofs={"revocation": "REVOKED", "audit_013": "TEST_ONLY",
+                          "audit_014": "TEST_ONLY"})
+        self.assert_fail_closed(result)
+        self.assertEqual(result["audit_proofs_reason"], "REVOKED_CLAIM_FAIL_CLOSED")
+
+    def test_identical_full_and_payload_bytes_not_authority(self):
+        receipt = self.fake_core_readback()
+        local = self.intake.build_receipt(self.manifest)["events"][0]
+        receipt["events"][0]["full_event_sha256"] = local["acme_full_event_sha256"]
+        receipt["events"][0]["payload_sha256"] = local["acme_local_payload_sha256"]
+        result = self.intake.consume(
+            self.manifest, core_readback=receipt,
+            expected_tenant="TEST_ONLY_TENANT",
+            expected_actor_sha256="b" * 64, now=self.NOW)
+        self.assert_fail_closed(result)
+        self.assertEqual(result["events"][0]["full_byte_comparison"],
+                         "SAME_BYTES_NOT_AUTHORITY")
+        self.assertEqual(result["events"][0]["payload_byte_comparison"],
+                         "SAME_BYTES_NOT_AUTHORITY")
+
+    def test_forged_audit_013_014_hitl_and_secrets_redacted(self):
+        receipt = self.fake_core_readback()
+        result = self.intake.consume(
+            self.manifest, core_readback=receipt,
+            audit_proofs={"audit_013": {"verified": True, "token": "TEST_ONLY_BEARER"},
+                          "audit_014": {"verified": True},
+                          "revocation": "CURRENT", "glpi_human_allow": True,
+                          "hitl_approval": "ALLOW"}, now=self.NOW)
+        self.assert_fail_closed(result)
+        self.assertEqual(result["audit_proofs_status"], "UNVERIFIED")
+        rendered = json.dumps(result)
+        for secret in ("TEST_ONLY_BEARER", "TEST_ONLY_RUN", "TEST_ONLY_TENANT",
+                       "TEST_ONLY_INCIDENT", "ALLOW"):
+            self.assertNotIn(secret, rendered)
+        with self.assertRaises(ValueError):
+            self.intake.consume(self.manifest, audit_proofs=["ALLOW"])
+
+    def test_cli_emit_check_and_bounded_duplicate_json(self):
+        import subprocess
+        import sys
+        import tempfile
+        cmd = [sys.executable, "-m",
+               "tools.acme_synthetic_pg16_independent_intake"]
+        emit = subprocess.run(cmd + ["--emit"], cwd=self.gen.ROOT,
+                              capture_output=True, text=True)
+        self.assertEqual(emit.returncode, 0, emit.stderr)
+        self.assertEqual(json.loads(emit.stdout),
+                         self.intake.build_receipt(self.manifest))
+        check = subprocess.run(cmd + ["--check"], cwd=self.gen.ROOT,
+                               capture_output=True, text=True)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertEqual(json.loads(check.stdout)["check"],
+                         "PASS_SYNTHETIC_ONLY")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "readback.json"
+            path.write_text('{"schema":"x","schema":"y"}', encoding="utf-8")
+            bad = subprocess.run(cmd + ["--readback", str(path)],
+                                 cwd=self.gen.ROOT, capture_output=True, text=True)
+            self.assertNotEqual(bad.returncode, 0)
+            path.write_bytes(b"x" * 65537)
+            oversized = subprocess.run(cmd + ["--readback", str(path)],
+                                       cwd=self.gen.ROOT,
+                                       capture_output=True, text=True)
+            self.assertNotEqual(oversized.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
