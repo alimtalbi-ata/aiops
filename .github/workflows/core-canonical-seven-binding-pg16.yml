@@ -10,6 +10,7 @@ on:
       - tests/test_core_actor_canonical_seven_pg16.py
       - tests/test_core_actor_canonical_seven_binding_pg16.py
       - app/core/actor_canonical_seven_source.py
+      - app/core/canonical_seven_pg_source.py
       - docs/architecture/ADR-CORE-CANONICAL-SEVEN-BINDING-20261101.md
       - docs/architecture/ADR-CORE-CANONICAL-SEVEN-EVENT-SOURCE-20261101.md
   workflow_dispatch:
@@ -78,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
-          grep -E '^Ran 14 tests in ' /tmp/core-seven-results.log
+          grep -E '^Ran 15 tests in ' /tmp/core-seven-results.log
           grep -x 'OK' /tmp/core-seven-results.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
           echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
@@ -106,6 +107,25 @@ jobs:
           assert all(e["payload_sha256"] != e["full_event_sha256"]
                      for e in obj["source_event_hashes"])
           assert obj["hash_domains"]["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          producer = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "core-owned-producer.json"
+          c = json.loads(producer.read_text())
+          cdigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in c.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert c["receipt_sha256"] == cdigest
+          assert c["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert c["schema"] == "aiops.core-owned-seven-pg-producer-receipt.v1"
+          assert c["decision"] == c["link_status"] == "UNKNOWN"
+          assert c["human_glpi_attested"] is False and c["portable_signature"] == "NONE"
+          assert c["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          assert len(c["events"]) == 7
+          assert all(e["payload_sha256"] != e["full_event_sha256"] for e in c["events"])
+          assert len(c["negative_cases"]) == 7
+          assert set(c["negative_cases"].values()) == {"UNKNOWN"}
+          assert c["audit_013_014"] == {"nonce_013": 1, "revocation_013": 1, "terminal_014": 0}
+          assert not any(secret in producer.read_text() for secret in
+                         ("idp|alice", "source-reader-disposable", "ci-seven-source-disposable-only"))
+          print("CORE_PG_PRODUCER_7_NEGATIVE=PASS", cdigest)
           raw = p.read_text()
           for secret in ("DISPOSABLE-LEASE-", "ci-seven-source-disposable-only",
                          "idp|alice", "source-reader-disposable"):
@@ -136,6 +156,8 @@ jobs:
             > "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.sha256"
           cd "$AIOPS_CORE_SEVEN_RECEIPT_DIR"
           sha256sum --check seven-014-recovery.sha256
+          sha256sum core-owned-producer.json > core-owned-producer.sha256
+          sha256sum --check core-owned-producer.sha256
           sha256sum freshness-expiry-negative.json > freshness-expiry-negative.sha256
           sha256sum --check freshness-expiry-negative.sha256
       - name: Upload synthetic redacted receipt only
@@ -145,5 +167,6 @@ jobs:
           path: |
             /tmp/core-seven-redacted-receipts/seven-014-recovery.*
             /tmp/core-seven-redacted-receipts/freshness-expiry-negative.*
+            /tmp/core-seven-redacted-receipts/core-owned-producer.*
           retention-days: 7
           if-no-files-found: error

@@ -43,85 +43,14 @@ class V2SourceHandler(fixture.SourceHandler):
                     or request["permission"] != "run:read"):
                 return self.reply(404, {"decision": "UNKNOWN"})
             import psycopg
-            now = datetime.now(timezone.utc)
+            from core.canonical_seven_pg_source import read_canonical_seven
             with psycopg.connect(self.server.db_url) as conn:
-                conn.execute("set transaction read only")
-                grant = conn.execute(
-                    "select expires_at,revoked from public.ci_actor_source_grants "
-                    "where issuer=%s and actor_subject=%s and tenant_id=%s "
-                    "and run_id=%s and incident_id=%s and glpi_instance_id=%s "
-                    "and ticket_id=%s and glpi_entity_id=%s and permission=%s",
-                    (request["actor_issuer"], request["actor_subject"], request["tenant_id"],
-                     request["run_id"], request["incident_id"],
-                     request["glpi_instance_id"], request["ticket_id"],
-                     request["glpi_entity_id"], request["permission"])).fetchone()
-                if not grant or grant[1] is not False or grant[0] <= now:
-                    return self.reply(404, {"decision": "UNKNOWN"})
-                linked = conn.execute(
-                    "select r.run_id,r.incident_id,i.synthetic "
-                    "from aiops.runs r join aiops.incidents i "
-                    "on i.incident_id=r.incident_id "
-                    "where r.run_id=%s and r.incident_id=%s and r.mode='DEMO'",
-                    (request["run_id"], request["incident_id"])).fetchone()
-                if linked != (fixture.RUN, fixture.INCIDENT, True):
-                    return self.reply(404, {"decision": "UNKNOWN"})
-                ownership = conn.execute(
-                    "select resource_kind,resource_id,tenant_id,verified,observed_at,known_at "
-                    "from aiops.tenant_resource_ownership").fetchall()
-                required = {("incident", fixture.INCIDENT),
-                            ("run", fixture.RUN), ("glpi_instance", "GLPI-A"),
-                            ("glpi_ticket", "GLPI-A:" + fixture.TICKET),
-                            ("glpi_entity", "GLPI-A:" + fixture.ENTITY)}
-                if ({(k, rid) for k, rid, *_ in ownership} != required
-                        or request["tenant_id"] != fixture.TENANT
-                        or request["glpi_instance_id"] != "GLPI-A"
-                        or any(t != fixture.TENANT or v is not True
-                               or not now-timedelta(minutes=5) <= obs <= known <= now
-                               for _, _, t, v, obs, known in ownership)):
-                    return self.reply(404, {"decision": "UNKNOWN"})
-                rows = conn.execute(
-                    "select e.external_id,e.evidence_id,e.payload_hash,e.payload,"
-                    "e.observed_at,e.known_at,r.event_id,r.sequence,r.stage,"
-                    "r.event_type,r.status,r.payload,r.evidence_ids "
-                    "from aiops.evidence e join aiops.run_events r "
-                    "on r.run_id=%s and r.payload->>'source_event_id'=e.external_id "
-                    "where e.source=%s and e.provenance->>'run_id'=%s "
-                    "order by r.sequence",
-                    (request["run_id"], fixture.SOURCE, request["run_id"])).fetchall()
-                if len(rows) != 7:
-                    return self.reply(404, {"decision": "UNKNOWN"})
-                events = []
-                for pos, row in enumerate(rows, 1):
-                    (source_id, evidence_id, payload_hash, payload, observed, known,
-                     event_id, sequence, stage, event_type, status,
-                     run_payload, evidence_ids) = row
-                    if (sequence != pos or payload != run_payload
-                            or evidence_ids != [evidence_id]
-                            or source_id != payload.get("source_event_id")
-                            or payload.get("sequence") != pos
-                            or payload_hash != binding._digest(binding.PAYLOAD_DOMAIN, payload)
-                            or not now-timedelta(minutes=5) <= observed <= known <= now):
-                        return self.reply(404, {"decision": "UNKNOWN"})
-                    full = {"event_id": event_id, "run_id": request["run_id"],
-                            "incident_id": request["incident_id"],
-                            "tenant_id": request["tenant_id"], "sequence": sequence,
-                            "stage": stage, "event_type": event_type, "status": status,
-                            "evidence_id": evidence_id, "source_event_id": source_id,
-                            "source_payload_hash": payload_hash,
-                            "observed_at": int(observed.timestamp()),
-                            "known_at": int(known.timestamp())}
-                    events.append({
-                        "sequence": sequence, "source_event_id": source_id,
-                        "evidence_id": evidence_id, "payload": payload,
-                        "payload_hash": payload_hash, "full_event": full,
-                        "full_event_hash": binding._digest(binding.FULL_DOMAIN, full)})
-            proof = {**request, "schema": binding.SCHEMA,
-                     "issuer": "core-source-disposable-authority",
-                     "source_system": "CORE_CANONICAL_READBACK",
-                     "observed_at": int(rows[0][4].timestamp()),
-                     "known_at": int(rows[-1][5].timestamp()),
-                     "expires_at": int(min(grant[0], now + timedelta(seconds=60)).timestamp()),
-                     "revoked": False, "events": events}
+                proof = read_canonical_seven(
+                    conn, request, source=fixture.SOURCE,
+                    issuer="core-source-disposable-authority",
+                    now=datetime.now(timezone.utc))
+            if proof is None:
+                return self.reply(404, {"decision": "UNKNOWN"})
             tamper = getattr(self.server, "tamper", None)
             if tamper == "hash":
                 proof["events"][3]["full_event_hash"] = "a" * 64
@@ -181,6 +110,105 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             self.claims if claims is None else claims,
             self.expected if expected is None else expected,
             row if record is None else record, int(time.time()))
+
+    def test_v2_core_owned_pg_producer_seven_negative_and_redacted_receipt(self):
+        """Core-owned SQL producer, not a test-only fixture algorithm.
+
+        Seven adversarial readbacks must fail before any positive receipt.
+        No production authorization or external GLPI rights are inferred.
+        """
+        from core.canonical_seven_pg_source import read_canonical_seven
+        now = datetime.now(timezone.utc)
+        request = {k: self.expected[k] for k in binding._SCOPE
+                   if k in self.expected}
+        request.update(actor_subject=self.claims["sub"],
+                       actor_issuer=self.claims["iss"])
+        def produce(req):
+            with self.psycopg.connect(self.db_url) as conn:
+                return read_canonical_seven(
+                    conn, req, source=fixture.SOURCE,
+                    issuer="core-source-disposable-authority",
+                    now=datetime.now(timezone.utc))
+        proof = produce(request)
+        self.assertIsNotNone(proof)
+        event = fixture.event_at(1)
+        record = {"source_event_id": event["source_event_id"],
+                  "source_payload_hash": fixture.canonical_hash(event)}
+        self.assertTrue(binding._validate(
+            proof, request, record, "core-source-disposable-authority",
+            int(time.time()), int(time.time()) + 120))
+        self.assertEqual(len(proof["events"]), 7)
+        self.assertTrue(all(e["payload_hash"] != e["full_event_hash"]
+                            for e in proof["events"]))
+        negatives = {}
+        for label, delta in (
+                ("foreign_actor", {"actor_subject": "idp|foreign"}),
+                ("foreign_tenant", {"tenant_id": "TEN-B"}),
+                ("foreign_run", {"run_id": "RUN-B"}),
+                ("foreign_ticket", {"ticket_id": "999"}),
+                ("foreign_entity", {"glpi_entity_id": "8"})):
+            negatives[label] = "UNKNOWN" if produce({**request, **delta}) is None else "ERROR"
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute("update public.ci_actor_source_grants set revoked=true")
+        negatives["revoked_grant"] = "UNKNOWN" if produce(request) is None else "ERROR"
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute("update public.ci_actor_source_grants set revoked=false,"
+                         "expires_at=clock_timestamp()-interval '1 second'")
+        negatives["expired_grant"] = "UNKNOWN" if produce(request) is None else "ERROR"
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute("update public.ci_actor_source_grants "
+                         "set expires_at=clock_timestamp()+interval '3 minutes'")
+        self.assertEqual(negatives, {key: "UNKNOWN" for key in negatives})
+        self.assertIsNotNone(produce(request))
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute((fixture.MIG / "014_hitl_reject_terminal_receipts.sql")
+                         .read_text(encoding="utf-8"))
+            audit = {
+                "nonce_013": conn.execute(
+                    "select count(*) from aiops.actor_delegation_nonce_ledger"
+                ).fetchone()[0],
+                "revocation_013": conn.execute(
+                    "select count(*) from aiops.actor_delegation_revocations"
+                ).fetchone()[0],
+                "terminal_014": conn.execute(
+                    "select count(*) from aiops.hitl_reject_terminal_receipts"
+                ).fetchone()[0],
+            }
+        self.assertEqual(audit, {"nonce_013": 1, "revocation_013": 1,
+                                 "terminal_014": 0})
+        output = os.environ.get("AIOPS_CORE_SEVEN_RECEIPT_DIR")
+        if output:
+            machine = {
+                "schema": "aiops.core-owned-seven-pg-producer-receipt.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "producer": "core.canonical_seven_pg_source.read_canonical_seven",
+                "synthetic_only": True,
+                "transport": "DISPOSABLE_TLS_BASIC_BOUND",
+                "portable_signature": "NONE",
+                "decision": "UNKNOWN",
+                "link_status": "UNKNOWN",
+                "human_glpi_attested": False,
+                "acme_full_event_equivalence": "NOT_VERIFIED",
+                "hash_domains": {"payload": binding.PAYLOAD_DOMAIN,
+                                 "full_event": binding.FULL_DOMAIN},
+                "source_proof_sha256": binding._digest(
+                    binding.RECEIPT_PROOF_DOMAIN, proof),
+                "events": [{
+                    "sequence": e["sequence"],
+                    "source_event_id": e["source_event_id"],
+                    "payload_sha256": e["payload_hash"],
+                    "full_event_sha256": e["full_event_hash"],
+                } for e in proof["events"]],
+                "negative_cases": negatives,
+                "audit_013_014": audit,
+                "execution_allowed": False,
+            }
+            machine["receipt_sha256"] = hashlib.sha256(json.dumps(
+                machine, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            directory = Path(output)
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "core-owned-producer.json").write_text(
+                json.dumps(machine, sort_keys=True, indent=2) + "\n")
 
     def test_v2_seven_full_and_payload_hash_domains_and_unknown(self):
         self.assertTrue(self.v2read())
