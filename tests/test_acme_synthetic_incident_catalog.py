@@ -1175,5 +1175,183 @@ class AcmeSyntheticVerticalContractTests(unittest.TestCase):
             self.assertIn("exclusive", exclusive.stderr)
 
 
+class AcmeSyntheticEventImpactContractTests(unittest.TestCase):
+    """No runtime writes: source-pinned Event->correlation->Twin candidate only."""
+
+    def setUp(self):
+        self.replay = gen.replay(seed=20261018)
+        self.fixture = gen.load_event_impact_contract_fixture()
+        self.contract = gen.event_impact_contract_offline(self.replay)
+
+    def test_independent_blob_and_golden_seed_are_pinned(self):
+        raw = gen.EVENT_IMPACT_CONTRACT_FILE.read_bytes()
+        self.assertEqual(gen._git_blob(raw), gen.EVENT_IMPACT_CONTRACT_GIT_BLOB)
+        self.assertEqual(self.fixture["source_dataset_sha256"], self.replay["dataset_sha256"])
+        self.assertEqual(self.fixture["graph_git_blob"], gen.SEED_GIT_BLOB)
+        self.assertEqual(self.fixture["vertical_contract_git_blob"], gen.VERTICAL_CONTRACT_GIT_BLOB)
+        self.assertEqual(len(self.fixture["events"]), 7)
+        self.assertEqual((len(gen.load_graph()["nodes"]), len(gen.load_graph()["edges"])), (18, 17))
+
+    def test_correlation_and_dedup_are_fixture_local_not_itil_incident(self):
+        events = self.replay["events"]
+        correlation = self.contract["correlation"]
+        self.assertEqual(correlation["key"], self.fixture["correlation_key"])
+        self.assertEqual(correlation["scope"], "LOCAL_FIXTURE_ONLY")
+        self.assertEqual(correlation["event_count"], 7)
+        self.assertEqual(correlation["ci_ids"], sorted({e["ci_id"] for e in events}))
+        self.assertEqual(correlation["dedupe_keys"], [e["dedupe_key"] for e in events])
+        self.assertEqual(len(set(correlation["dedupe_keys"])), 7)
+        self.assertEqual(correlation["runtime_incident_id"], None)
+        self.assertEqual(self.contract["source_event_ids"],
+                         [e["source_event_id"] for e in events])
+        self.assertTrue(all(e["runtime_readback"] == "NOT_EXECUTED"
+                            for e in self.contract["timeline"]))
+
+    def test_reverse_reachable_services_and_path_are_candidates_not_outages(self):
+        graph = gen.load_graph()
+        independent = gen.dependency_candidates(graph, self.replay["ci_id"],
+                                                self.replay["service_id"])
+        candidate = self.contract["blast_radius_candidate"]
+        self.assertEqual(candidate["candidate_service_ids"],
+                         independent["candidate_service_ids"])
+        self.assertEqual(candidate["candidate_ci_count"],
+                         independent["candidate_ci_count"])
+        self.assertEqual(candidate["path_edge_ids"], ["ACME-E08", "ACME-E06",
+                                                       "ACME-E04", "ACME-E02"])
+        self.assertEqual(candidate["path_node_ids"], independent["path_node_ids"])
+        self.assertEqual(candidate["classification"], "REVERSE_REACHABLE_CANDIDATE_ONLY")
+        self.assertEqual(candidate["observed_service_impact"], "UNKNOWN")
+        self.assertIsNone(candidate["observed_at"])
+        self.assertFalse(candidate["causality_verified"])
+        self.assertFalse(candidate["redundancy_evaluated"])
+        self.assertEqual(self.contract["itil"]["priority_candidate"], "P1")
+        self.assertEqual(self.contract["itil"]["priority_confirmed"], "UNKNOWN")
+        self.assertEqual(self.contract["itil"]["impact_observed"], "UNKNOWN")
+
+    def test_every_source_time_is_pinned_and_known_at_is_simulated(self):
+        self.assertEqual([e["event_time"] for e in self.contract["timeline"]],
+                         [e["event_time"] for e in self.fixture["events"]])
+        for projected, original in zip(self.contract["timeline"], self.replay["events"]):
+            self.assertEqual(projected["source_event_id"], original["source_event_id"])
+            self.assertEqual(projected["known_at"], original["known_at"])
+            self.assertEqual(projected["ci_id"], original["ci_id"])
+            self.assertEqual(projected["action"], original["action"])
+            self.assertEqual(projected["provenance"], "SYNTHETIC_FIXTURE")
+        self.assertEqual(self.contract["runtime_readback"], "NOT_EXECUTED")
+
+    def test_no_forged_glpi_run_evidence_model_effect_or_itil_receipt(self):
+        for key in ("tenant_id", "ticket_id", "incident_id", "run_id",
+                    "analyst_receipt", "critic_receipt", "policy_receipt",
+                    "hitl_receipt", "simulation_receipt"):
+            self.assertIsNone(self.contract[key], key)
+        self.assertEqual(self.contract["evidence_ids"], [])
+        self.assertEqual(self.contract["tenant_scope"], "UNKNOWN")
+        self.assertFalse(self.contract["publishable_to_core_or_glpi"])
+        self.assertFalse(self.contract["live_effects_authorized"])
+        self.assertEqual(len(self.contract["stages"]), 15)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["runtime_id"] is None and
+                            s["runtime_evidence_ids"] == []
+                            for s in self.contract["stages"]))
+        self.assertEqual(len(self.contract["checkpoints"]), 6)
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in self.contract["checkpoints"]))
+        self.assertTrue(all(v == "UNKNOWN" for v in
+                            self.contract["governance_unknowns"].values()))
+
+    def test_foreign_tenant_seed_and_timestamp_rehash_fail_closed(self):
+        cases = [
+            ("tenant_id", "foreign-tenant"),
+            ("tenant_scope", "tenant-authorized"),
+            ("seed", 20261019),
+            ("seed", True),
+        ]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                forged = copy.deepcopy(self.replay)
+                forged[field] = value
+                forged["dataset_sha256"] = hashlib.sha256(gen._canonical(
+                    {k: v for k, v in forged.items() if k != "dataset_sha256"}
+                )).hexdigest()
+                with self.assertRaises(ValueError):
+                    gen.event_impact_contract_offline(forged)
+        for field, value in (("event_time", "2026-10-31T09:42:01Z"),
+                             ("known_at", "2026-10-31T09:41:59Z"),
+                             ("observed_at", "2026-10-31T09:42:05Z")):
+            with self.subTest(time_field=field):
+                forged = copy.deepcopy(self.replay)
+                forged["events"][0][field] = value
+                with self.assertRaises(ValueError):
+                    gen.event_impact_contract_offline(forged)
+
+    def test_forged_source_event_dedupe_and_impact_are_rejected(self):
+        for field, value in (
+            ("source_event_id", "SYN-EVT-AAAAAAAAAAAAAAAAAAAA"),
+            ("dedupe_key", "SYN-DEDUP-AAAAAAAAAAAAAAAAAAAA"),
+            ("correlation_key", "SYN-CORR-AAAAAAAAAAAAAAAAAAAA"),
+            ("ci_id", "ACME-SAN-FABRIC-B"),
+            ("evidence_id", "forged-receipt"),
+        ):
+            with self.subTest(field=field):
+                forged = copy.deepcopy(self.replay)
+                forged["events"][1][field] = value
+                with self.assertRaises(ValueError):
+                    gen.event_impact_contract_offline(forged)
+        forged = copy.deepcopy(self.replay)
+        forged["impact_estimate"]["candidate_service_ids"] = ["ACME-SVC-PAYMENTS"]
+        with self.assertRaises(ValueError):
+            gen.event_impact_contract_offline(forged)
+
+    def test_forged_fixture_source_tenant_bool_and_blast_radius_fail_closed(self):
+        for mutate in (
+            lambda f: f.update(tenant_scope="ACME"),
+            lambda f: f.update(seed=True),
+            lambda f: f["events"][0].update(event_time="2026-10-31T09:42:01Z"),
+            lambda f: f["events"][0].update(source_event_id="SYN-EVT-FAKE"),
+            lambda f: f["blast_radius_candidate"].update(
+                observed_service_impact="OUTAGE"),
+            lambda f: f["blast_radius_candidate"].update(
+                candidate_service_ids=["ACME-SVC-PAYMENTS"]),
+        ):
+            forged = copy.deepcopy(self.fixture)
+            mutate(forged)
+            with self.assertRaises(ValueError):
+                gen.event_impact_contract_offline(self.replay, fixture=forged)
+        with tempfile.TemporaryDirectory() as directory:
+            bad = Path(directory) / "event-impact.json"
+            bad.write_text(json.dumps(self.fixture).replace(
+                '"tenant_scope": "UNKNOWN"', '"tenant_scope": "ACME"'),
+                encoding="utf-8")
+            with self.assertRaises(ValueError):
+                gen.load_event_impact_contract_fixture(bad)
+
+    def test_reproducible_cli_and_byte_identical_canonical_replay(self):
+        before = json.dumps(self.replay, sort_keys=True, indent=2,
+                            ensure_ascii=True) + "\n"
+        self.assertEqual(hashlib.sha256(before.encode()).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(gen._canonical(self.contract),
+                         gen._canonical(gen.event_impact_contract_offline(
+                             gen.replay(seed=20261018))))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "event-impact.json"
+            cmd = [sys.executable, str(gen.ROOT / "tools/generate_acme_incidents.py"),
+                   "--seed", "20261018", "--event-impact-contract",
+                   "--output", str(output)]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(gen._canonical(json.loads(output.read_text())),
+                             gen._canonical(self.contract))
+            self.assertEqual(json.loads(result.stdout)["sha256"],
+                             hashlib.sha256(output.read_bytes()).hexdigest())
+            exclusive = subprocess.run(cmd + ["--vertical-contract"],
+                                       capture_output=True, text=True)
+            self.assertNotEqual(exclusive.returncode, 0)
+            self.assertIn("exclusive", exclusive.stderr)
+        after = json.dumps(gen.replay(seed=20261018), sort_keys=True,
+                           indent=2, ensure_ascii=True) + "\n"
+        self.assertEqual(before, after)
+
+
 if __name__ == "__main__":
     unittest.main()
