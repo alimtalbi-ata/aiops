@@ -561,7 +561,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             return fulfill
 
         for code, expected in ((401, "401 UNAUTHORIZED"),
-                               (403, "503 UNKNOWN")):
+                               (403, "403 FORBIDDEN")):
             with self.subTest(http=code):
                 self.page.route("**/api/portal/itsm", denied_route(code))
                 self.page.locator("#glpi-check").click()
