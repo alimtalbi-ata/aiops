@@ -1175,7 +1175,7 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_08_cross_tenant_run_fencing_after_two_os_worker_restarts(self):
-        """Two tenants, distinct synthetic principals, three OS Worker PIDs.
+        """Two tenants, distinct synthetic principals, four OS Worker PIDs.
 
         Real Core loopback TCP and PostgreSQL 16; Temporal server stop/start
         persists its SQLite history. The first ACK response is deliberately
@@ -1474,7 +1474,126 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                         {first["event"]: ("DELIVERED", 1, OWNER, "REJECT"),
                          second["event"]: ("DELIVERED", 2, owner_b, "REJECT")})
                     self._no_effect()
+
+                    # Core's eighth and final lease attempt is real HTTP/PG16.
+                    # DEAD is deliberately applied by the disposable SQL fault
+                    # controller: Core v1 does not expose a DEAD transition API.
+                    # This must never be misreported as a runtime dead-letter.
+                    dead = self._fixture(tenant_id=tenant_b)
+                    self._write_synthetic_proofs()
+                    with self.psycopg.connect(self.url) as db:
+                        db.execute(
+                            "update aiops.hitl_decision_outbox "
+                            "set status='LEASED', attempts=7, lease_owner=%s, "
+                            "lease_token=%s, lease_until=now()-interval '1 second' "
+                            "where event_id=%s",
+                            (owner_b, "EXPIRED-CI-LEASE", dead["event"]))
+                    code, last = await post_b(
+                        path_claim_b, {"owner": owner_b, "limit": 1})
+                    self.assertEqual((code, last["status"]), (200, "LEASED"))
+                    self.assertEqual(
+                        [item["event_id"] for item in last["items"]],
+                        [dead["event"]])
+                    final_lease = last["items"][0]
+                    dead_path = (
+                        f"/api/tenants/{tenant_b}/hitl/reject-delivery/"
+                        f"{dead['event']}/ack")
+                    dead_ack = {
+                        "owner": owner_b, "run_id": final_lease["run_id"],
+                        "proposal_id": final_lease["proposal_id"],
+                        "proposal_hash": final_lease["proposal_hash"],
+                        "proposal_revision": final_lease["proposal_revision"],
+                        "lease_token": final_lease["lease_token"],
+                        "execution_allowed": False, "effect_allowed": False,
+                    }
+                    # A foreign tenant, forged token and expired eighth lease
+                    # cannot acknowledge the third (never-signalled) event.
+                    code, denied = await post_a(dead_path, dead_ack)
+                    self.assertEqual((code, denied["status"]), (403, "UNKNOWN"))
+                    code, denied = await post_b(
+                        dead_path, dict(dead_ack, lease_token="FORGED"))
+                    self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+                    with self.psycopg.connect(self.url) as db:
+                        db.execute(
+                            "update aiops.hitl_decision_outbox "
+                            "set lease_until=now()-interval '1 second' "
+                            "where event_id=%s", (dead["event"],))
+                    code, denied = await post_b(dead_path, dead_ack)
+                    self.assertEqual((code, denied["status"]), (200, "UNKNOWN"))
+                    code, empty = await post_b(
+                        path_claim_b, {"owner": owner_b, "limit": 1})
+                    self.assertEqual((code, empty["items"]), (200, []))
+                    with self.psycopg.connect(self.url) as db:
+                        terminal = db.execute(
+                            "update aiops.hitl_decision_outbox "
+                            "set status='DEAD',last_error=%s "
+                            "where event_id=%s and attempts=8 "
+                            "and lease_until<now() returning status,attempts",
+                            ("CI_INJECTED_RETRY_EXHAUSTED", dead["event"])
+                        ).fetchone()
+                    self.assertEqual(terminal, ("DEAD", 8))
+                    self.assertEqual(
+                        signal_ids, [first["event"], second["event"]])
+                    self._no_effect()
                     stop_worker(worker_three)
+
+                # A SECOND persisted Temporal SERVER stop/start, plus a third
+                # independent OS Worker restart. Check both durable delivered
+                # receipts and the SQL-injected DEAD event after recovery.
+                self.assertTrue(Path(sqlite_path).is_file())
+                temporal_port_three = available_port()
+                async with await WorkflowEnvironment.start_local(
+                        port=temporal_port_three,
+                        dev_server_database_filename=sqlite_path) as server_three:
+                    target = f"127.0.0.1:{temporal_port_three}"
+                    handle = server_three.client.get_workflow_handle(queue)
+                    worker_four = await start_worker(target, "four")
+                    self.assertEqual(len({
+                        worker_one.pid, worker_two.pid,
+                        worker_three.pid, worker_four.pid}), 4)
+                    history = await asyncio.wait_for(handle.result(), timeout=30)
+                    self.assertEqual(
+                        [entry["event_id"] for entry in history],
+                        [first["event"], second["event"]])
+                    for post, path, body in (
+                        (post_a, path_a, body_a),
+                        (post_b, *second_ack)):
+                        code, replay = await post(path, body)
+                        self.assertEqual(
+                            (code, replay["status"], replay["idempotent"]),
+                            (200, "DELIVERED", True))
+                    for post, path, body, expected in (
+                        (post_b, path_b, body_b, 200),
+                        (post_a, dead_path, dead_ack, 403),
+                        (post_b, dead_path, dead_ack, 200),
+                        (post_b, dead_path,
+                         dict(dead_ack, lease_token="FORGED"), 200)):
+                        code, denied = await post(path, body)
+                        self.assertEqual((code, denied["status"]),
+                                         (expected, "UNKNOWN"))
+                    for post, tenant, owner in (
+                        (post_a, TENANT, OWNER),
+                        (post_b, tenant_b, owner_b)):
+                        code, empty = await post(
+                            f"/api/tenants/{tenant}/hitl/reject-delivery/claim",
+                            {"owner": owner, "limit": 1})
+                        self.assertEqual((code, empty["items"]), (200, []))
+                    with self.psycopg.connect(self.url) as db:
+                        rows = db.execute(
+                            "select event_id,status,attempts,decision "
+                            "from aiops.hitl_decision_outbox "
+                            "where event_id in (%s,%s,%s)",
+                            (first["event"], second["event"],
+                             dead["event"])).fetchall()
+                    self.assertEqual(
+                        {row[0]: row[1:] for row in rows},
+                        {first["event"]: ("DELIVERED", 1, "REJECT"),
+                         second["event"]: ("DELIVERED", 2, "REJECT"),
+                         dead["event"]: ("DEAD", 8, "REJECT")})
+                    self.assertEqual(
+                        signal_ids, [first["event"], second["event"]])
+                    self._no_effect()
+                    stop_worker(worker_four)
         finally:
             for proc in workers:
                 if proc.poll() is None:

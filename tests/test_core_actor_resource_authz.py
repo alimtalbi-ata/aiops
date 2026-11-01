@@ -230,6 +230,8 @@ class ActorDelegationTests(unittest.TestCase):
              patch.object(x, "_evaluate", return_value=("VERIFIED", signed)), \
              patch("core.actor_native_authority._native_glpi_preflight",
                    return_value=True) as source, \
+             patch("core.actor_run_event_source._source_run_event_preflight",
+                   return_value=True) as run_source, \
              patch("core.actor_replay_fence.consume_actor_delegation",
                    return_value=True) as ledger:
             response = self.read()
@@ -237,6 +239,7 @@ class ActorDelegationTests(unittest.TestCase):
             self.assertEqual(response.json()["decision"], "UNKNOWN")
             self.hidden(response)
             source.assert_called_once()
+            run_source.assert_called_once()
             ledger.assert_called_once()
         self.assertEqual(len(self.fake.calls), 1)
 
@@ -246,6 +249,8 @@ class ActorDelegationTests(unittest.TestCase):
         with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
              patch.object(x, "_evaluate", return_value=("VERIFIED", signed)), \
              patch("core.actor_native_authority._native_glpi_preflight",
+                   return_value=True), \
+             patch("core.actor_run_event_source._source_run_event_preflight",
                    return_value=True), \
              patch("core.actor_replay_fence.consume_actor_delegation") as ledger:
             for result, code in ((False, 200), (None, 503), (True, 200)):
