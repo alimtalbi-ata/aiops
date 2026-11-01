@@ -136,7 +136,7 @@ class WorkerCoreWireContract(unittest.IsolatedAsyncioTestCase):
     async def test_forged_binding_approval_and_effect_never_signal(self):
         cases = (
             ("tenant_id", "FOREIGN"), ("lease_owner", "other"),
-            ("proposal_hash", "b" * 64), ("proposal_revision", 0),
+            ("proposal_hash", "not-a-sha256"), ("proposal_revision", 0),
             ("decision", "APPROVE"), ("human_approved", True),
             ("effect_allowed", True), ("execution_allowed", True),
         )
