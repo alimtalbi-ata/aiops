@@ -343,11 +343,11 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
         }
         secret = self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]
         with patch.dict(os.environ, self.settings):
-            with TestClient(main.app, base_url="https://portal.example.test") as client, \\
+            with TestClient(main.app, base_url="https://portal.example.test") as client, \
                  patch.object(acme_run_detail, "_read_core_run",
-                              side_effect=AssertionError("Core business GET forbidden")) as core, \\
+                              side_effect=AssertionError("Core business GET forbidden")) as core, \
                  patch.object(main, "get_json",
-                              side_effect=AssertionError("upstream GET forbidden")) as upstream, \\
+                              side_effect=AssertionError("upstream GET forbidden")) as upstream, \
                  patch("urllib.request.urlopen",
                        side_effect=AssertionError("network forbidden")) as network:
                 client.cookies.set(oidc_session._SESSION_COOKIE, handle)
