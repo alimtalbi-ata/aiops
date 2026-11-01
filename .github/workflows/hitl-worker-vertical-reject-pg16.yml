@@ -82,9 +82,18 @@ jobs:
           assert hashlib.sha256(canonical).hexdigest() == digest
           assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
           assert data["schema"] == "aiops.worker-reject-simulate-verification.v1"
-          assert data["core_run_api"] == "READ_ONLY_CORE_ASGI_OBSERVED"
-          assert data["core_event_write"] == "NOT_TESTED_MISSING_EVENT_KEY_MIGRATION"
-          assert data["run_events_source"] == "CI_PG16_FIXTURE_ONLY"
+          # A green fixture-only path must never be reported as Core E2E.
+          # The sibling writer gate independently probes actual HTTP writes.
+          gate_path = path.with_name("worker-core-writer-rollback-gate.json")
+          gate = json.loads(gate_path.read_text())
+          if gate["migration_event_key_present"]:
+              assert data["core_run_api"] == "CORE_HTTP_WRITER_AND_READBACK_OBSERVED"
+              assert data["core_event_write"] == "CORE_WRITTEN_PG16_OBSERVED"
+              assert data["run_events_source"] == "CORE_HTTP_WRITER_PG16"
+          else:
+              assert data["core_run_api"] == "READ_ONLY_CORE_ASGI_OBSERVED"
+              assert data["core_event_write"] == "NOT_TESTED_MISSING_EVENT_KEY_MIGRATION"
+              assert data["run_events_source"] == "CI_PG16_FIXTURE_ONLY"
           assert data["core_terminal_api"] == "CORE_OWNED_DEAD_OBSERVED"
           assert data["migration_014"] == "ONE_IMMUTABLE_RECEIPT_OBSERVED"
           assert data["policy_decision"] == "SIMULATE"

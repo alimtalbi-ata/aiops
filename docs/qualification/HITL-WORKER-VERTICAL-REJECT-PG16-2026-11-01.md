@@ -44,6 +44,37 @@ credential. Exact-head workflow requires **2/2 tests, zero SKIP**, plus the
 existing **DR 5/5**. These are disposable CI observations, not Debian
 runtime, native GLPI/OIDC human authority or Portal tenant authorization.
 
+## P1 conditional Core-written vertical path (2026-11-01)
+
+The first PG16/Temporal regression now probes the installed schema for
+`aiops.run_events.event_key` before choosing the source of six synthetic
+Analyst/Critic/Policy/HITL/REMEDIATE/VERIFY Run events. **If Core installs
+the full migration**, the test requires Core HTTP `START`, six distinct
+`/events` writes with exact event keys and idempotent replays, then Core
+HTTP `BLOCK` with idempotent replay. The Core GET readback must contain
+eight events (two state transitions plus six stage events), and the existing
+REJECT veto, independent UNVERIFIED verification, recommended-not-executed
+reopen, one immutable 014 terminal receipt, two SDK Worker instances,
+persisted Temporal restart and zero-effect assertions remain mandatory.
+This is a test contract, **not a claim that the positive branch ran**.
+
+**If the column is missing**, the original six mutable fixture rows remain
+explicitly `CI_PG16_FIXTURE_ONLY`, while the separate test_16 probes the
+real writers and requires HTTP 500 with transactional rollback. This is a
+Core-owned P0 defect, not an acceptable writer success. The exact-head
+receipt distinguishes `CORE_WRITTEN_PG16_OBSERVED` from
+`NOT_TESTED_MISSING_EVENT_KEY_MIGRATION`; the CI validator cross-checks
+the first receipt against test_16's independently recorded column presence.
+Any partial Core migration or broken HTTP idempotence fails rather than
+silently falling back to fixture SQL.
+
+No Worker schema, Core handler, Portal or Quality edit; no SQL DEAD or
+immutable 012/013/014 mutation. No real OIDC/GLPI human identity, no
+LIVE executor, no GLPI write, no Debian runtime attestation, and no
+universal exactly-once claim. PG16 DR 5/5 and zero SKIP are mandatory.
+Rollback is a code-only revert of the focused Worker test/workflow/docs
+delta, preserving all existing Core audits and host data.
+
 ## Qualification and evidence
 
 Workflow: `.github/workflows/hitl-worker-vertical-reject-pg16.yml`. On exact source HEAD, run `PYTHONPATH=app:tests python -m unittest discover -s tests -p 'test_worker_hitl_vertical_reject_pg16.py' -v`, requiring 2/2 and zero SKIP; then existing `test_hitl_pg16_candidate_outbox.py` requiring DR 5/5 and zero SKIP, PG16 `pg_dump`/`pg_restore` 16.x. Check `AIOPS_EXPECTED_HEAD_SHA` against checkout and receipt. Upload **only** `worker-vertical-reject.json`, `worker-core-writer-rollback-gate.json` plus SHA256 manifests, never raw dump, credentials, bearer or HMAC material. No SQL DEAD mutation, no SQL update to immutable 012/013/014. The synthetic fixture inserts provenance/analysis/critique/approval/outbox rows as test-only setup.
