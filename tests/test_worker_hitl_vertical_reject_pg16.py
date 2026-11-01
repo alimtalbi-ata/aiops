@@ -42,6 +42,25 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
             locals()[_old] = None
     del _old
 
+    @classmethod
+    def setUpClass(cls):
+        # Core 015 is now part of the combined disposable candidate contract.
+        # Install it after inherited 001/004/009-014, never on Debian.
+        # This intentionally makes both conditional tests exercise real Core
+        # HTTP writes; fixture-only fallback is no longer a green release gate.
+        super().setUpClass()
+        try:
+            with cls.psycopg.connect(cls.url) as db:
+                db.execute((base.ROOT / "db/migrations" /
+                            "015_core_run_event_idempotency.sql").read_text())
+                assert db.execute(
+                    "select count(*) from information_schema.columns "
+                    "where table_schema='aiops' and table_name='run_events' "
+                    "and column_name='event_key'").fetchone()[0] == 1
+        except Exception:
+            super().tearDownClass()
+            raise
+
     def setUp(self):
         pass
 
