@@ -139,3 +139,31 @@ Existing `test_08` continues to exercise two distinct REJECT event IDs with dura
 **Commands / expected CI:** `PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_pg16_temporal_combined.py' -v` (nine tests if CI passes); `/tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v` (five tests, including DR). Pinned `psycopg[binary]==3.2.13`, `pg_dump/pg_restore 16`, synthetic PostgreSQL 16 and persisted Temporal are retained. CI report separates `core_runtime_dead_negative`, `core_dead_after_eighth_claim_in_test_08` and `terminal_dead_transition=CI_INJECTED_SQL`. Gateway-close after ACK is deterministic injection, **not** physical packet loss/partition.
 
 **Safety / rollback:** `execution_allowed=false`, `effect_allowed=false`, REJECT-only, zero APPROVE/effect receipts, no poller, executor, LIVE, host, GLPI write, human approval or candidate/shared CI/Core/Portal edit. Close the focused Draft or revert only its three Worker-owned file commits. Do not remove the existing DR workflow or its PostgreSQL 16 pin.
+
+
+## 2026-11-01 12:25 CET — negative Core DEAD contract matrix (Worker-owned only)
+
+**Source:** sole architect Draft #234 exact base 6755405ffb8538470925163f1466b45686d9b4af, main ae7c3e5102b99a66bd7806d602146f1309a9749d. This focused Worker-only Draft changes exactly the existing combined test, dedicated workflow and this qualification document. It does not re-port #283/#279 or modify candidate, Core, Portal, ACME, shared Quality, migrations, Policy public HTTP or runtime poller.
+
+**New case 10:** two distinct CI-synthetic tenant/Run/REJECT events with separate scoped Bearer credentials and HMAC ownership fixtures. PostgreSQL 16 is installed with the existing blob-pinned 001/004/009–012 migrations. The SQL test fixture seeds **seven expired attempts**, but only the real Core HTTP claim handler obtains attempt **8**. Before expiry, all wrong bindings are refused; after expiry, even the correct ACK is stale and remains refused. A persistent SQLite-backed disposable Temporal development server is stopped and started **twice** (three server instances), with a fresh Temporal test Worker on each instance. Worker invokes the actual claim-only adapter for each tenant and receives empty claims; the signal callback is a fail-fast trap. The workflow's queryable signal count must stay zero on all three instances, while both PG16 rows stay LEASED, attempts=8, delivered_at=NULL, last_error=NULL. No DEAD SQL mutation occurs in case 10.
+
+| Negative dimension | Required Core-owned fence | Expected result in case 10 |
+|---|---|---|
+| Tenant / scoped service Bearer | Authorized tenant matches route and signed Run ownership | 403 UNKNOWN for foreign tenant/actor |
+| Run ID | ACK Run equals immutable outbox Run | 200 UNKNOWN |
+| Proposal ID | ACK proposal equals immutable outbox proposal | 200 UNKNOWN |
+| Proposal SHA256 hash | Exact immutable canonical proposal hash | 200 UNKNOWN |
+| Proposal revision | Exact immutable integer revision | 200 UNKNOWN |
+| Lease owner | Authenticated actor equals stored lease owner and ACK owner | 200 UNKNOWN |
+| Lease token | Exact unexpired stored token, not a replay or substitute | 200 UNKNOWN |
+| Lease expiry | Expired eighth lease cannot ACK or be claimed again | 200 UNKNOWN, empty claim |
+| Effect/execute flags | Both must be literal false | 200 UNKNOWN when either is true |
+| Durable terminal receipt | No DELIVERED, DEAD, effect receipt or signal without qualified transition | LEASED, attempts 8, no signal/effect |
+
+**Future Core-owned audited DEAD contract (not implemented here):** Core must specify an atomic terminal transition on the same immutable tenant/Run/proposal ID/hash/revision and event ID, fenced by authenticated lease owner, lease token and expiry, and an audited terminal reason and transition time. It must define what happens when an eighth lease expires, including idempotent repeated transition requests, stale or foreign actor denial, and durable non-reclaimability after terminal state. An exhausted lease is not authorization; no Temporal signal may represent a DEAD or human APPROVE decision. Core alone owns any endpoint, transaction, audit schema or migration. Worker must not synthesize a runtime DEAD receipt.
+
+**Evidence classification:** case 09 remains NEGATIVE_OBSERVED for LEASED attempts=8; case 08's DEAD remains CI_INJECTED_SQL, not runtime. Case 10 is NEGATIVE_OBSERVED only after exact-head CI proves 10/10 combined tests and zero signal query counts. It uses real Core ASGI TestClient/PG16 handlers and a persisted disposable Temporal server, **not an independent Core TCP process in this new case** (prior cases 05–08 cover independent Core TCP). Earlier ACK gateway-close is deterministic INJECTED_GATEWAY_CLOSE_AFTER_COMMIT, not physical packet loss or network partition (NOT_TESTED). Synthetic HMAC/Bearers are not GLPI/IdP attestation (NOT_ATTESTED). No universal exactly-once claim.
+
+**Exact-head gate:** dedicated workflow checks out the focused PR HEAD and runs the combined test discovery (10 expected) and independent test_hitl_pg16_candidate_outbox.py DR suite (5 expected), with PostgreSQL 16 pg_dump/pg_restore and SHA256 manifest. Pin psycopg[binary]==3.2.13, temporalio==1.16.0, uvicorn==0.35.0; never remove DR. If PG16 apt install fails, use a separately pinned major-16 client image and rerun. Do not report PASS, artifact digest or runtime observation until exact-head CI is checked.
+
+**Safety and revert:** execution_allowed=false, effect_allowed=false, REJECT notification-only, zero APPROVE, effect receipts, executor, LIVE, real GLPI write or host access. Rollback by closing the focused Draft or reverting only these three Worker-owned paths. Disposable database, Temporal SQLite and subprocesses are CI-only. Architect is sole integrator; RELEASE_STABLE=NO_GO.

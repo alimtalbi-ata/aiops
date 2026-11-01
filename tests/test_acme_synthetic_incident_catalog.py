@@ -2393,3 +2393,191 @@ class AcmeCoreSingleEventHashGapTests(unittest.TestCase):
         self.assertFalse(result["publishable_to_core_or_glpi"])
         self.assertFalse(result["live_effects_authorized"])
         self.assertEqual(result, self._verify([self._proposal()]))
+
+
+class AcmeCoreCanonicalCrossDomainTests(unittest.TestCase):
+    """Core PG16's proposed schema is not ACME full-event hash authority."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_core_canonical_cross_domain as cross
+        cls.cross = cross
+        cls.manifest = gen.replay()
+        cls.now = 1793520000  # fixed TEST_ONLY clock
+        cls.rows = cross.proposed_cross_domain_rows(cls.manifest)
+
+    def _proposal(self):
+        return {
+            "schema": self.cross.SCHEMA,
+            "source": self.cross.SOURCE,
+            "authority": self.cross.AUTHORITY,
+            "test_partition": self.cross.TEST_PARTITION,
+            "tenant_id": self.cross.TEST_TENANT,
+            "actor_subject": self.cross.TEST_ACTOR,
+            "observed_at": self.now - 30,
+            "known_at": self.now - 20,
+            "expires_at": self.now + 60,
+            "revoked": False,
+            "verified": False,
+            "bindings": copy.deepcopy(self.rows),
+        }
+
+    def _verify(self, proposal=None, **kwargs):
+        return self.cross.verify_core_canonical_cross_domain_offline(
+            self.manifest, proposal=proposal, now=self.now, **kwargs)
+
+    def test_core_pg16_test_only_schema_and_serializer_are_pinned(self):
+        source = (gen.ROOT / "tests/test_core_actor_canonical_seven_pg16.py").read_text()
+        self.assertIn('SCHEMA = "aiops.core-source-event-payload.v1"', source)
+        self.assertIn('{"schema": SCHEMA, "event": event}', source)
+        self.assertIn('separators=(",", ":"), ensure_ascii=True', source)
+        self.assertEqual(self.cross.CORE_PAYLOAD_SCHEMA,
+                         "aiops.core-source-event-payload.v1")
+
+    def test_seven_full_event_and_core_wrapper_domains_are_independent(self):
+        self.assertEqual(len(self.rows), 7)
+        self.assertEqual(len({r["source_event_id"] for r in self.rows}), 7)
+        for sequence, (event, row) in enumerate(zip(self.manifest["events"], self.rows), 1):
+            with self.subTest(sequence=sequence):
+                self.assertEqual(row["sequence"], sequence)
+                self.assertEqual(row["acme_full_event_sha256"],
+                                 hashlib.sha256(gen._canonical(event)).hexdigest())
+                self.assertEqual(row["acme_payload_sha256_candidate"],
+                                 hashlib.sha256(gen._canonical(event["payload"])).hexdigest())
+                wrapped = {"schema": self.cross.CORE_PAYLOAD_SCHEMA,
+                           "event": row["proposed_core_event"]}
+                self.assertEqual(row["proposed_core_wrapped_event_sha256"],
+                                 hashlib.sha256(gen._canonical(wrapped)).hexdigest())
+                self.assertNotEqual(row["acme_full_event_sha256"],
+                                    row["proposed_core_wrapped_event_sha256"])
+                self.assertEqual(row["mapping_authority"],
+                                 "LOCAL_PROPOSAL_NOT_CORE_EVENT")
+
+    def test_core_runtime_ownership_fields_remain_unknown(self):
+        for row in self.rows:
+            projected = row["proposed_core_event"]
+            self.assertTrue(projected["synthetic"])
+            for field in ("tenant_id", "incident_id", "run_id", "ticket_id",
+                          "glpi_entity_id", "metric"):
+                self.assertIsNone(projected[field])
+        result = self._verify()
+        self.assertEqual(result["cross_domain_mapping"]["metric"],
+                         "UNKNOWN_NULL_NOT_CORE_TEST_METRIC")
+        self.assertFalse(result["hash_domains_equivalent"])
+        self.assertFalse(result["core_runtime_source_serialization_qualified"])
+
+    def test_no_proposal_and_matching_seven_are_both_unavailable(self):
+        missing = self._verify()
+        matched = self._verify(self._proposal())
+        self.assertEqual(missing["reason"],
+                         "NO_INDEPENDENT_SEVEN_EVENT_CORE_READBACK")
+        self.assertEqual(matched["reason"],
+                         "SEVEN_LOCAL_HASH_PROPOSALS_NOT_CORE_AUTHORITY")
+        for result in (missing, matched):
+            self.assertEqual(result["result"], "UNAVAILABLE")
+            self.assertFalse(result["actor_authenticated"])
+            self.assertFalse(result["tenant_acl_qualified"])
+            self.assertFalse(result["seven_event_readback_authenticated"])
+            self.assertIsNone(result["incident_id"])
+            self.assertIsNone(result["run_id"])
+            self.assertIsNone(result["tenant_id"])
+            self.assertEqual(result["evidence_ids"], [])
+
+    def test_foreign_actor_tenant_partition_and_non_test_identity_fail(self):
+        for field, value in (("actor_subject", "TEST_ONLY_ACTOR_B"),
+                             ("tenant_id", "TEST_ONLY_TENANT_B"),
+                             ("test_partition", "SYNTHETIC_TEST_PARTITION_B")):
+            with self.subTest(field=field):
+                proposal = self._proposal()
+                proposal[field] = value
+                with self.assertRaises(ValueError):
+                    self._verify(proposal)
+        with self.assertRaises(ValueError):
+            self._verify(expected_actor="idp|alice")
+        with self.assertRaises(ValueError):
+            self._verify(expected_tenant="TEN-A")
+
+    def test_forged_full_event_payload_or_core_digest_fails(self):
+        for field in ("acme_full_event_sha256", "acme_payload_sha256_candidate",
+                      "proposed_core_wrapped_event_sha256"):
+            with self.subTest(field=field):
+                proposal = self._proposal()
+                proposal["bindings"][0][field] = "0" * 64
+                with self.assertRaisesRegex(ValueError, "forged source-event"):
+                    self._verify(proposal)
+        proposal = self._proposal()
+        proposal["bindings"][0]["proposed_core_event"]["acme_payload"] = {"fake": "LIVE"}
+        with self.assertRaises(ValueError):
+            self._verify(proposal)
+
+    def test_missing_duplicate_reordered_and_extra_source_rows_fail(self):
+        for mutation in (
+            lambda p: p["bindings"].pop(),
+            lambda p: p["bindings"].__setitem__(1, copy.deepcopy(p["bindings"][0])),
+            lambda p: p["bindings"].reverse(),
+            lambda p: p["bindings"][0].update(verified=True),
+            lambda p: p["bindings"][0].pop("source_event_id"),
+        ):
+            proposal = self._proposal()
+            mutation(proposal)
+            with self.assertRaises(ValueError):
+                self._verify(proposal)
+
+    def test_stale_future_expired_revoked_and_boolean_time_fail(self):
+        for field, value in (("observed_at", self.now - 301),
+                             ("known_at", self.now + 1),
+                             ("expires_at", self.now),
+                             ("expires_at", self.now + 301),
+                             ("observed_at", True),
+                             ("revoked", True),
+                             ("verified", True)):
+            with self.subTest(field=field):
+                proposal = self._proposal()
+                proposal[field] = value
+                with self.assertRaises(ValueError):
+                    self._verify(proposal)
+
+    def test_forged_core_source_and_runtime_ids_fail_closed(self):
+        for field, value in (("source", "CORE_CANONICAL_READBACK"),
+                             ("authority", "INDEPENDENT_AUTHORITY"),
+                             ("schema", "aiops.core-source-event-payload.v1")):
+            proposal = self._proposal()
+            proposal[field] = value
+            with self.assertRaises(ValueError):
+                self._verify(proposal)
+        for field in ("run_id", "incident_id", "glpi_ticket_id", "evidence_ids"):
+            proposal = self._proposal()
+            proposal[field] = "FORGED"
+            with self.assertRaises(ValueError):
+                self._verify(proposal)
+
+    def test_replay_seed_graph_and_source_event_tampering_fail_closed(self):
+        for field, value in (("seed", 20261019), ("graph_version", "FAKE"),
+                             ("scenario_id", "SCN-FAKE")):
+            forged = copy.deepcopy(self.manifest)
+            forged[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.cross.verify_core_canonical_cross_domain_offline(
+                    forged, now=self.now)
+        forged = copy.deepcopy(self.manifest)
+        forged["events"][0]["payload"] = {"unobserved": "FAKE"}
+        with self.assertRaises(ValueError):
+            self.cross.verify_core_canonical_cross_domain_offline(
+                forged, now=self.now)
+
+    def test_canonical_replay_stages_and_checkpoints_remain_unexecuted(self):
+        result = self._verify(self._proposal())
+        self.assertEqual(result["canonical_replay_file_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(result["seed"], 20261018)
+        self.assertEqual(len(result["stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["runtime_id"] is None for s in result["stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and
+                            c["id"] is None for c in result["checkpoints"]))
+        self.assertEqual(result["observed_impact"], "UNKNOWN")
+        self.assertEqual(result["priority_confirmed"], "UNKNOWN")
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+        self.assertEqual(result, self._verify(self._proposal()))
