@@ -716,9 +716,9 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         with oidc_session._lock:
             oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
         with patch.object(wire, "assess_core_authz_reply_offline",
-                          side_effect=AssertionError("offline-only")) as contract, \\
+                          side_effect=AssertionError("offline-only")) as contract, \
              patch.object(acme_run_detail, "_read_core_run",
-                          side_effect=AssertionError("no Core read")) as core, \\
+                          side_effect=AssertionError("no Core read")) as core, \
              patch.object(main, "get_json",
                           side_effect=AssertionError("no upstream")) as upstream:
             for rid in (RUN, OTHER, "RUN-NOT-FOUND", "RUN-forged!"):
