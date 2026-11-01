@@ -2231,3 +2231,165 @@ class AcmeFutureCoreActorTenantBindingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class AcmeCoreSingleEventHashGapTests(unittest.TestCase):
+    """Core v1 is one source_payload_hash; ACME pins seven full-event hashes."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_core_event_hash_gap as gap
+        cls.gap = gap
+        cls.manifest = gen.replay()
+        cls.now = 1793520000  # synthetic clock only, not observed Core time
+
+    def _proposal(self, index=0):
+        row = self.gap.pinned_hash_domains(self.manifest)[index]
+        return {
+            "schema": self.gap.CORE_SCHEMA,
+            "source": self.gap.TEST_SOURCE,
+            "test_partition": "SYNTHETIC_TEST_PARTITION_A",
+            "tenant_id": "TEST_ONLY_TENANT_A",
+            "actor_subject": "TEST_ONLY_ACTOR_A",
+            "source_event_id": row["source_event_id"],
+            "source_event_hash": row["local_payload_sha256_candidate"],
+            "source_event_content_sha256": row["full_event_sha256"],
+            "hash_scope": self.gap.HASH_SCOPE,
+            "observed_at": self.now - 30,
+            "known_at": self.now - 20,
+            "expires_at": self.now + 60,
+            "revoked": False,
+            "verified": False,
+            "authority": "UNVERIFIED_SYNTHETIC_PROJECTION",
+        }
+
+    def _verify(self, proposals=None, **kwargs):
+        return self.gap.verify_single_event_core_gap_offline(
+            self.manifest, proposals=proposals, now=self.now, **kwargs)
+
+    def test_absent_core_source_is_explicitly_unavailable(self):
+        result = self._verify()
+        self.assertEqual(result["result"], "UNAVAILABLE")
+        self.assertEqual(result["reason"], "NO_INDEPENDENT_CORE_READBACK")
+        self.assertEqual(result["synthetic_shape_coverage"], 0)
+        self.assertEqual(result["core_readback_cardinality"],
+                         "ONE_SOURCE_EVENT_PER_RESPONSE")
+        self.assertFalse(result["core_hash_semantics_qualified"])
+
+    def test_seven_hash_domains_are_recomputed_not_core_receipts(self):
+        rows = self.gap.pinned_hash_domains(self.manifest)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(len({r["source_event_id"] for r in rows}), 7)
+        for row, event in zip(rows, self.manifest["events"]):
+            self.assertEqual(row["full_event_sha256"],
+                             hashlib.sha256(gen._canonical(event)).hexdigest())
+            self.assertEqual(row["local_payload_sha256_candidate"],
+                             hashlib.sha256(gen._canonical(event["payload"])).hexdigest())
+            self.assertNotEqual(row["full_event_sha256"],
+                                row["local_payload_sha256_candidate"])
+        self.assertFalse(self._verify()["local_payload_digest_is_core_receipt"])
+
+    def test_one_or_seven_test_shapes_never_promote_core_authority(self):
+        for count in (1, 7):
+            with self.subTest(count=count):
+                result = self._verify([self._proposal(i) for i in range(count)])
+                self.assertEqual(result["synthetic_shape_coverage"], count)
+                self.assertEqual(result["result"], "UNAVAILABLE")
+                self.assertFalse(result["source_event_binding_verified_by_core"])
+                self.assertEqual(result["reason"],
+                                 "CORE_V1_SINGLE_EVENT_COVERAGE_ONLY" if count == 1
+                                 else "SEVEN_TEST_SHAPES_ARE_NOT_CORE_AUTHORITY")
+                self.assertIsNone(result["run_id"])
+                self.assertIsNone(result["incident_id"])
+
+    def test_foreign_tenant_actor_and_partition_are_rejected(self):
+        for key, value in (("tenant_id", "TEST_ONLY_TENANT_B"),
+                           ("actor_subject", "TEST_ONLY_ACTOR_B"),
+                           ("test_partition", "SYNTHETIC_TEST_PARTITION_B")):
+            proof = self._proposal()
+            proof[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self._verify([proof])
+        with self.assertRaises(ValueError):
+            self._verify(expected_actor="idp|real-actor")
+
+    def test_foreign_duplicate_reordered_and_missing_event_fail_closed(self):
+        first = self._proposal(0)
+        first["source_event_id"] = "FORGED-EVENT"
+        with self.assertRaisesRegex(ValueError, "foreign source event"):
+            self._verify([first])
+        with self.assertRaisesRegex(ValueError, "duplicate or reordered"):
+            self._verify([self._proposal(0), self._proposal(0)])
+        with self.assertRaisesRegex(ValueError, "duplicate or reordered"):
+            self._verify([self._proposal(2), self._proposal(1)])
+        missing = self._proposal()
+        del missing["source_event_hash"]
+        with self.assertRaisesRegex(ValueError, "missing or unexpected"):
+            self._verify([missing])
+
+    def test_swapped_hash_domains_and_forged_digests_are_rejected(self):
+        for field, replacement in (
+                ("source_event_hash", self._proposal()["source_event_content_sha256"]),
+                ("source_event_content_sha256", self._proposal()["source_event_hash"]),
+                ("hash_scope", "CORE_VERIFIED_FULL_EVENT"),
+                ("source_event_hash", "0" * 64)):
+            proof = self._proposal()
+            proof[field] = replacement
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    ValueError, "hash domain mismatch"):
+                self._verify([proof])
+
+    def test_stale_future_expired_and_revoked_proposals_fail_closed(self):
+        for field, value in (("observed_at", self.now - 301),
+                             ("known_at", self.now + 1),
+                             ("expires_at", self.now),
+                             ("expires_at", self.now + 301),
+                             ("observed_at", True),
+                             ("revoked", True), ("verified", True)):
+            proof = self._proposal()
+            proof[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self._verify([proof])
+
+    def test_forged_core_source_schema_or_runtime_receipt_rejected(self):
+        for field, value in (("source", "CORE_CANONICAL_READBACK"),
+                             ("schema", "aiops.core-actor-run-event-binding.v2"),
+                             ("authority", "INDEPENDENTLY_VERIFIED")):
+            proof = self._proposal()
+            proof[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self._verify([proof])
+        proof = self._proposal()
+        proof["run_id"] = "RUN-FAKE"
+        with self.assertRaisesRegex(ValueError, "unexpected synthetic"):
+            self._verify([proof])
+
+    def test_forged_replay_seed_or_event_payload_rejected(self):
+        for field, value in (("seed", 20261019), ("scenario_id", "SCN-FAKE")):
+            forged = copy.deepcopy(self.manifest)
+            forged[field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.gap.verify_single_event_core_gap_offline(forged, now=self.now)
+        forged = copy.deepcopy(self.manifest)
+        forged["events"][0]["payload"] = {"invented": "LIVE"}
+        with self.assertRaises(ValueError):
+            self.gap.verify_single_event_core_gap_offline(forged, now=self.now)
+
+    def test_replay_digest_stages_and_checkpoints_remain_unchanged(self):
+        result = self._verify([self._proposal()])
+        self.assertEqual(result["canonical_replay_file_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(result["seed"], 20261018)
+        self.assertEqual(len(result["stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["runtime_id"] is None for s in result["stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and
+                            c["id"] is None for c in result["checkpoints"]))
+        self.assertEqual(result["observed_impact"], "UNKNOWN")
+        self.assertEqual(result["priority_confirmed"], "UNKNOWN")
+        self.assertEqual(result["evidence_ids"], [])
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+        self.assertEqual(result, self._verify([self._proposal()]))
