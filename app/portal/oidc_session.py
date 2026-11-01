@@ -236,7 +236,7 @@ def _session_from_cookie(request: Request) -> _Session | None:
     # Reject cookie-tossing ambiguity before Starlette collapses duplicate
     # names (last value wins). Neither a valid nor a forged duplicate may
     # choose which server-owned OIDC handle is authenticated.
-    cookie_pattern = r"(?:^|;)\\s*" + re.escape(_SESSION_COOKIE) + r"\\s*="
+    cookie_pattern = r"(?:^|;)\s*" + re.escape(_SESSION_COOKIE) + r"\s*="
     occurrences = sum(len(re.findall(cookie_pattern, header))
                       for header in request.headers.getlist("cookie"))
     if occurrences != 1:
