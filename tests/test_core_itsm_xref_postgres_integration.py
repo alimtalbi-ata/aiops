@@ -109,12 +109,11 @@ class XrefPostgresTests(unittest.TestCase):
         self.assertNotIn("ticket_id",r.json())
         self.assertEqual(r.headers.get("cache-control"),"no-store")
 
-    def test_real_http_synthetic_signed_verified(self):
+    def test_real_http_synthetic_hmac_without_glpi_source_is_unknown(self):
         r=self.read(expected_run_id="RUN-XREF-A",expected_incident_id="INC-XREF-A")
         self.assertEqual(r.status_code,200,r.text)
-        self.assertEqual(r.json()["status"],"VERIFIED")
-        self.assertEqual(r.json()["run_id"],"RUN-XREF-A")
-        self.assertEqual(r.json()["source_event_id"],"EVT-XREF-BASE")
+        self.assertEqual(r.json()["status"],"UNKNOWN")
+        self.hidden(r)  # no authenticated GLPI source in disposable PG fixture
     def test_auth_and_cross_tenant(self):
         for token,code in (("none",401),("bad",401),("b",403),("no_perm",403)):
             with self.subTest(token=token):
@@ -152,8 +151,8 @@ class XrefPostgresTests(unittest.TestCase):
             self.assertEqual(r.json()["status"],status)
             self.hidden(r)
         r=self.read(ticket="792")
-        self.assertEqual(r.json()["status"],"VERIFIED")
-        self.assertEqual(r.json()["mapping_version"],2)
+        self.assertEqual(r.json()["status"],"UNKNOWN")
+        self.hidden(r)  # signed supersession alone is not GLPI authority
     def test_orphan_history_version_two_postgres_is_not_verified(self):
         # Real PG permits a standalone mapping_version=2; Core must reject it.
         r=self.read(ticket="795",expected_run_id="RUN-XREF-A")
