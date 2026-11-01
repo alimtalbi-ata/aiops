@@ -1,5 +1,5 @@
 name: HITL Worker Core DEAD positive PG16 Temporal disposable
-# Candidate main-based exact-head gate; no raw PG16 dump artifact.
+# Candidate exact-head gate on main; upload checksums only.
 
 on:
   pull_request:

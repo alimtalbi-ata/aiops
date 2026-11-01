@@ -300,3 +300,8 @@ Existing SRV-DEB-05 read-only reporter publishes canonical `ops/debian-reports/S
 **WIP:** Portal P0 [#298](https://github.com/alimtalbi-ata/aiops/pull/298) HEAD `0a527ce265ad107651b7db9c2ca255ed5f38ff77`, Quality [#41315561070](https://github.com/alimtalbi-ata/aiops/actions/runs/41315561070) 3/3, 55/55 negative, **7777 host unknown**; Core P0 #295 12/12+restore, integrated candidate requalification pending; Worker/Policy P0 #296 HEAD `a96111982d43accdb9dc7cede2f1c466fab70baa`, combined [#41311898721](https://github.com/alimtalbi-ata/aiops/actions/runs/41311898721) 11/11+DR 5/5, negative 404 only, positive 014 not integrated; ACME P1 #297 HEAD `a4daed17b6452ca6179f9007780700ee9a795429`, Quality [#41314428648](https://github.com/alimtalbi-ata/aiops/actions/runs/41314428648) 3/3, 210/210 synthetic. Actor/tenant/GLPI native rights, Core signer, full ACME ITIL 15 stages/6 checkpoints and 7777 host remain **NOT_VERIFIED**. **RELEASE_STABLE=NO_GO**.
 
 **Rollback:** revert the new selective candidate commit (Core 014 code + docs) by a forward commit, never DROP 013/014 or delete immutable audit; preserve existing volumes, images, backup and `main` history. Requalify new exact HEAD before any merge; no deploy.
+
+
+## 2026-11-01 16:14 CET — Core 014 Worker qualification
+
+Core owns terminal REJECT to DEAD and immutable 013/014 audit. Candidate #234 selectively imports Worker #299 positive PG16/Temporal tests, source CI 41316946503 (1/1 positive + 5/5 DR) and Quality 41316946593 (3/3). Candidate exact-head CI must requalify. Main-based workflow excludes raw PG16 archive uploads. No real GLPI approval or host changes. Host TCP 7777 NOT_VERIFIED; loopback 17777 is different. RELEASE_STABLE=NO_GO.

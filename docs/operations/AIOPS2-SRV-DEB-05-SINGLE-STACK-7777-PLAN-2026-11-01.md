@@ -31,3 +31,7 @@ An authorized host operator must collect **redacted**: `docker inspect` (RepoDig
 6. Roll back **application code/image/config** to recorded digests and previous route if health fails; keep immutable 013/014 audit, DB/volumes and existing backups. No force-push, no main reset.
 
 **Owner:** Architect coordinates host-evidence schema/manifest and gate. Portal owns UI 7777/IdP negative contract, Core owns 014 audit and DB, Worker owns delivery/Temporal, ACME owns synthetic seven-event fixture. **RUNTIME_OBSERVED** is only GitHub-published read-only inventory and disposable CI; host 7777, single public entry and actual in-place migration remain **NOT_VERIFIED**.
+
+## 2026-11-01 16:14 CET — read-only inventory checkpoint
+
+GitHub latest.json collected_at 2026-11-01T15:14:02.002390+00:00: 61 containers, 53 running/8 exited; 22 healthy/38 no-healthcheck/1 unhealthy. Rebuild Portal healthy; candidate Portal running without healthcheck; historical rollback exited/unhealthy. Loopback 17777 reachable, host TCP 7777 NOT_VERIFIED. KEEP/MIGRATE/STOP-LATER/UNKNOWN until read-only PortBindings, image digests, Compose labels, networks, proxy, ss, firewall, Host/TLS, traffic, volumes, DB ownership, backups and rollback. No host action, no new stack, no volume changes.
