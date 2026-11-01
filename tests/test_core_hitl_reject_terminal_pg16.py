@@ -81,6 +81,28 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
         self.assertEqual(result["receipt_schema"], delivery.TERMINAL_SCHEMA)
         self.assertRegex(result["receipt_sha256"], r"^[0-9a-f]{64}$")
         self.assertNotIn("lease_token", result)
+        # Redacted machine-readable receipt binds actual Core/PG16 readback
+        # to the checked-out exact HEAD, without bearer, token or event ID.
+        target = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if target:
+            path = Path(target)
+            path.mkdir(parents=True, exist_ok=True)
+            receipt = {
+                "schema": "aiops.core-terminal-pg16-ci-receipt.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "terminal_status": result["status"],
+                "attempts": result["attempts"],
+                "receipt_sha256": result["receipt_sha256"],
+                "actor_authorization": "UNKNOWN",
+                "human_glpi_attested": False,
+                "execution_allowed": False,
+                "effect_allowed": False,
+                "synthetic_disposable": True,
+            }
+            receipt["payload_sha256"] = hashlib.sha256(json.dumps(
+                receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            (path / "terminal-dead.json").write_text(
+                json.dumps(receipt, sort_keys=True, indent=2) + "\n")
         self.assertEqual(self._ack(ids, digest, tokens[-1])[1]["status"], "UNKNOWN")
         self.assertEqual(self._claim()[1]["items"], [])
         with self.psycopg.connect(self.url) as db:
