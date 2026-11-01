@@ -37,7 +37,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://aiops:ci-core-pg16-disposable-only@127.0.0.1:5432/aiops
       AIOPS_XREF_CI_DISPOSABLE: "1"
-      AIOPS_PG16_RECOVERY_ARTIFACT_DIR: ${{ runner.temp }}/core-pg16-native-recovery
+      AIOPS_PG16_RECOVERY_ARTIFACT_DIR: /tmp/core-pg16-native-recovery
       PGPASSWORD: ci-core-pg16-disposable-only
     steps:
       - name: Install Python and loopback forwarder inside disposable container
@@ -108,6 +108,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: core-pg16-native-013-audit-recovery
-          path: ${{ runner.temp }}/core-pg16-native-recovery/
+          path: /tmp/core-pg16-native-recovery/
           if-no-files-found: error
           retention-days: 7
