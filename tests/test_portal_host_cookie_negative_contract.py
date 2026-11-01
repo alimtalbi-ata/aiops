@@ -405,5 +405,106 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
 
 
 
+    def test_08_unattested_independent_human_authority_cannot_be_browser_supplied(self):
+        """IdP subject is identity; native GLPI and Core resource proofs are absent.
+
+        Deliberately no synthetic ALLOW. A forged set of *all* source claims
+        must not turn a viewer or OIDC session into GLPI ticket READ.
+        """
+        from portal import core_authz_transport
+
+        valid = self._session()
+        forged_authority = {
+            "X-GLPI-User-ID": "77",
+            "X-GLPI-Profile": "Super-Admin",
+            "X-GLPI-Entity": "42",
+            "X-GLPI-Ticket": "123",
+            "X-GLPI-Permission": "READ",
+            "X-GLPI-READMY": "1",
+            "X-Core-Run-ID": RUNS[0],
+            "X-Core-Incident-ID": "INC-ACME-123",
+            "X-Core-Signed-Decision": "ALLOW",
+            "X-Core-Nonce": "browser-forged-nonce",
+            "X-Actor-ID": "operator-123",
+            "X-Tenant-ID": "ACME",
+        }
+        self.assertFalse(core_authz_transport.core_authz_read_permitted())
+        projections = []
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core business GET")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("GLPI/Core GET")) as get, \
+             patch.object(main, "post_json",
+                          side_effect=AssertionError("business POST")) as post:
+            for rid in RUNS:
+                for prefix in ("/api/portal/runs/", "/runs/"):
+                    response = self.client.get(prefix + rid, headers={
+                        **self._headers(valid), **forged_authority})
+                    self._assert_protected(response, 503)
+                    if prefix.startswith("/api/"):
+                        projections.append(response.json())
+                        self.assertEqual(response.json()["journey"]["GLPI"]["state"],
+                                         "UNKNOWN")
+                        self.assertFalse(response.json()["tenant_acl_qualified"])
+                    self.assertNotIn("set-cookie", response.headers)
+            self.assertEqual(projections[0], projections[1])
+            self.assertEqual(projections[1], projections[2])
+            # A foreign tenant is not a proof of access to an ACME Run.
+            now = int(time.time())
+            foreign = PortalActorContext(
+                "operator-123", "FOREIGN", ("N2",),
+                "https://idp.example.test/realms/acme", "aiops2-portal",
+                expires_at=now + 600)
+            with oidc_session._lock:
+                oidc_session._sessions[oidc_session._digest(valid)] = (
+                    oidc_session._Session(foreign, now + 600))
+            foreign_response = self.client.get(
+                "/api/portal/runs/" + RUNS[0],
+                headers={**self._headers(valid), **forged_authority})
+            self._assert_protected(foreign_response, 503)
+            self.assertEqual(foreign_response.json(), projections[0])
+            # Explicit revocation wins over a valid viewer bearer and
+            # forged native rights, without querying ticket existence.
+            with oidc_session._lock:
+                oidc_session._sessions.pop(oidc_session._digest(valid), None)
+            for rid in RUNS:
+                response = self.client.get("/api/portal/runs/" + rid,
+                                           headers={**self._headers(valid),
+                                                    **forged_authority})
+                self._assert_protected(response, 401)
+            same_origin = self.client.post("/api/portal/run-session", headers={
+                **self._headers(), **forged_authority,
+                "Origin": "https://portal.example.test:7777",
+                "X-Portal-Run-ID": RUNS[0]})
+            self._assert_protected(same_origin, 503)
+            alias = self.client.post("/api/portal/run-session", headers={
+                **self._headers(), **forged_authority,
+                "Origin": "https://portal.example.test:17777",
+                "X-Portal-Run-ID": RUNS[0]})
+            self._assert_protected(alias, 403)
+            core.assert_not_called()
+            get.assert_not_called()
+            post.assert_not_called()
+        receipt("independent-human-authority-unattested", {
+            "valid_oidc_without_native_glpi_rights": 503,
+            "foreign_tenant_without_core_binding": 503,
+            "revoked_oidc_with_forged_glpi_rights": 401,
+            "https_7777_origin_without_acl": 503,
+            "https_17777_origin_alias": 403,
+            "run_variants": len(RUNS),
+            "upstream_business_requests": 0,
+            "missing_independent_proofs": [
+                "idp_subject_to_glpi_user_source_binding",
+                "native_glpi_user_profile_entity_ticket_read",
+                "core_actor_tenant_run_incident_ticket_binding",
+                "core_signer_rotation_and_revocation",
+                "durable_atomic_nonce_jti_revocation",
+                "debian_7777_portbindings_host_tls",
+            ],
+            "synthetic_positive_allow": False,
+        })
+
+
+
 if __name__ == "__main__":
     unittest.main()
