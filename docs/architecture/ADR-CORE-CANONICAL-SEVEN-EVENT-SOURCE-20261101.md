@@ -23,11 +23,11 @@ sha256(json.dumps(
 
 Seven events are uniquely identified by `EVT-SOURCE-01` through `EVT-SOURCE-07` and carry an explicit sequence. The test-only PostgreSQL triggers reject UPDATE/DELETE of the seven evidence and run-event rows. **These triggers are not an installed migration**, so the test does not qualify production immutability of either table. The installed 013 nonce/JTI and revocation tables are populated, compared before/after and never dropped or modified by the readback tests. Test-only actor grants are confined to the disposable database and do not constitute a second CMDB or a production authorization source.
 
-Adversarial tests: seven independent readbacks; actor/tenant/Run/Incident/ticket/entity/permission/hash tampering; revoked/expired grant; attempted evidence/run-event mutation; untrusted TLS root; preservation of immutable 013 audit. The source returns generic UNKNOWN without enumerating foreign identifiers. All upstream successes still result in `actor_authorization=UNKNOWN`, never `ALLOW`.
+Adversarial tests: seven independent readbacks; actor/tenant/Run/Incident/ticket/entity/permission/hash tampering; revoked/expired grant; future-dated source observations; attempted evidence/run-event mutation; untrusted TLS root; preservation of immutable 013 audit. The source returns generic UNKNOWN without enumerating foreign identifiers. All upstream successes still result in `actor_authorization=UNKNOWN`, never `ALLOW`.
 
 ## CI and rollback
 
-Dedicated Core-only `.github/workflows/core-canonical-seven-source-pg16.yml` runs on the focused PR with PostgreSQL 16 server/client in disposable containers, a loopback-only database forwarder, ephemeral TLS material, exact PR HEAD checkout and **five tests with zero skips**. No shared Quality edits. Execute:
+Dedicated Core-only `.github/workflows/core-canonical-seven-source-pg16.yml` runs on the focused PR with PostgreSQL 16 server/client in disposable containers, a loopback-only database forwarder, ephemeral TLS material, exact PR HEAD checkout and **six tests with zero skips**. No shared Quality edits. Execute:
 
 ```bash
 AIOPS_XREF_CI_DISPOSABLE=1 GITHUB_ACTIONS=true PYTHONPATH=app \
