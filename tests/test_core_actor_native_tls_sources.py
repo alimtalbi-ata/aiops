@@ -141,6 +141,17 @@ class DisposableNativeTLSAuthorityTests(unittest.TestCase):
         return len(self.servers[role][0].calls)
 
     def test_three_verified_tls_sources_still_never_allow(self):
+        # Exercise the genuine TLS adapter before the OAuth introspection.
+        with requests.Session() as session:
+            session.trust_env = False
+            try:
+                response = session.get(
+                    "https://127.0.0.2:8443/introspect", verify=True,
+                    allow_redirects=False, timeout=(2, 3))
+            except requests.RequestException as exc:
+                self.fail("Real TLS handshake failed: " + repr(exc)[:500])
+            self.assertEqual(response.status_code, 401)
+        self.servers["idp"][0].calls.clear()
         claims, passed = self.preflight()
         self.assertIsNotNone(claims)
         self.assertTrue(passed)
