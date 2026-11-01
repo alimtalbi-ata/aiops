@@ -27,6 +27,14 @@ trap cleanup EXIT
 test -f "$SRC/app/portal/main.py"
 test -x "$VENV"
 docker inspect "$OLD" >/dev/null
+# Safety gate: the live DEV portal is Compose-owned. Do not replace it with
+# a standalone docker run container; that would discard its network/env contract.
+# A targeted Compose update requires an explicit, separately reviewed procedure.
+owner="$(docker inspect "$OLD" --format '{{index .Config.Labels "com.docker.compose.project"}}')"
+if [[ -n "$owner" && "$owner" != "<no value>" ]]; then
+  echo "BLOCKED: $OLD belongs to Compose project $owner; standalone replacement forbidden" >&2
+  exit 78
+fi
 if docker inspect "$BACKUP" >/dev/null 2>&1; then
   echo "Rollback container already exists; refusing deployment" >&2
   exit 1
