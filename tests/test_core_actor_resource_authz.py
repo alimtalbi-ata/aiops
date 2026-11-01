@@ -223,6 +223,20 @@ class ActorDelegationTests(unittest.TestCase):
             evaluation.assert_called_once()
         self.assertEqual(len(self.fake.calls), 1)
 
+    def test_even_synthetic_native_actor_source_pass_cannot_allow(self):
+        signed = {"run_id": "RUN-A", "incident_id": "INC-A",
+                  "glpi_entity_id": "0", "source_event_id": "EVT-A"}
+        with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
+             patch.object(x, "_evaluate", return_value=("VERIFIED", signed)), \
+             patch("core.actor_native_authority._native_glpi_preflight",
+                   return_value=True) as source:
+            response = self.read()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["decision"], "UNKNOWN")
+            self.hidden(response)
+            source.assert_called_once()
+        self.assertEqual(len(self.fake.calls), 1)
+
     def test_missing_or_foreign_run_non_enumeration(self):
         with patch.object(a, "_actor_introspection", return_value=CLAIMS), \
              patch.object(x, "_evaluate", return_value=("NOT_FOUND", None)):
