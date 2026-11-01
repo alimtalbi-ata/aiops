@@ -281,6 +281,129 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
         })
 
 
+    def test_06_split_cookie_fields_never_downgrade_to_viewer_or_glpi_rights(self):
+        # HTTP permits repeated Cookie fields in some intermediaries; Starlette
+        # request.cookies can see only one. Every raw field is inspected.
+        valid = self._session()
+        forged = "Z" * 43
+        cases = (
+            (COOKIE + "=" + valid, COOKIE + "=" + forged),
+            (COOKIE + "=" + forged, COOKIE + "=" + valid),
+            (COOKIE + "=" + valid, COOKIE + "=" + valid),
+            ("unrelated=1", COOKIE + "=" + forged),
+            ("unrelated=1", COOKIE + "=" + valid),
+            (COOKIE + "=" + valid, "unrelated=1"),
+        )
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core business GET")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("GLPI/Core business GET")) as get, \
+             patch.object(main, "post_json",
+                          side_effect=AssertionError("business POST")) as post:
+            for first, second in cases:
+                # Sequence preserves two distinct raw Cookie headers.
+                headers = [
+                    ("Authorization", "Bearer " + VIEWER),
+                    ("X-Actor-ID", "forged-manager"),
+                    ("X-Tenant-ID", "FOREIGN"),
+                    ("X-GLPI-Profile", "Super-Admin"),
+                    ("X-GLPI-Entity", "99"),
+                    ("Cookie", first), ("Cookie", second),
+                ]
+                for rid in RUNS:
+                    for prefix in ("/api/portal/runs/", "/runs/"):
+                        with self.subTest(cookie_fields=cases.index((first, second)),
+                                          run=rid, route=prefix):
+                            response = self.client.get(prefix + rid, headers=headers)
+                            self._assert_protected(response, 401)
+                            self.assertNotIn("set-cookie", response.headers)
+            # Even a single valid identity cookie and spoofed native GLPI
+            # profile/entity claims cannot establish independent human rights.
+            projections = []
+            for rid in RUNS:
+                response = self.client.get("/api/portal/runs/" + rid, headers={
+                    **self._headers(valid),
+                    "X-GLPI-Profile": "Super-Admin",
+                    "X-GLPI-Permission": "READ",
+                })
+                self._assert_protected(response, 503)
+                projections.append(response.json())
+            self.assertEqual(projections[0], projections[1])
+            self.assertEqual(projections[1], projections[2])
+            self.assertEqual(projections[0]["journey"]["GLPI"]["state"], "UNKNOWN")
+            self.assertFalse(projections[0]["tenant_acl_qualified"])
+            core.assert_not_called()
+            get.assert_not_called()
+            post.assert_not_called()
+        receipt("split-cookie-fields", {
+            "duplicate_or_split_cookie_cases": len(cases),
+            "run_variants": len(RUNS),
+            "routes_per_variant": 2,
+            "explicit_cookie_status": 401,
+            "identity_only_glpi_human_rights": "UNKNOWN",
+            "identity_only_http_status": 503,
+            "upstream_business_requests": 0,
+        })
+
+    def test_07_callback_redirect_pins_https_7777_not_17777(self):
+        from urllib.parse import parse_qs, urlsplit
+
+        callback = "https://portal.example.test:7777/auth/oidc/callback"
+        with patch.dict(os.environ, {"AIOPS_PORTAL_OIDC_REDIRECT_URI": callback}):
+            # Login is a local redirect builder; no IdP token exchange or
+            # external network request, and no host PortBindings attestation.
+            response = self.client.get("/auth/oidc/login")
+            self.assertEqual(response.status_code, 303)
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertEqual(parse_qs(urlsplit(response.headers["location"]).query)[
+                "redirect_uri"], [callback])
+            self.assertIn("Secure", response.headers["set-cookie"])
+            self.assertIn("HttpOnly", response.headers["set-cookie"])
+            self.assertNotIn(VIEWER, response.headers["location"])
+            self.assertNotIn(SERVICE, response.headers["location"])
+            state = parse_qs(urlsplit(response.headers["location"]).query)["state"][0]
+            state_cookie = response.headers["set-cookie"].split(";", 1)[0]
+            # Cookies are not port-scoped. Even a copied secure state cookie
+            # cannot authorize a callback on :17777 or an HTTP downgrade.
+            with patch.object(oidc_session, "_exchange",
+                              side_effect=AssertionError("IdP exchange")) as exchange:
+                for wrong_url in (
+                    "https://portal.example.test:17777/auth/oidc/callback",
+                    "http://portal.example.test:7777/auth/oidc/callback",
+                ):
+                    with self.subTest(callback=wrong_url):
+                        wrong = self.client.get(
+                            wrong_url, params={"code": "fixture", "state": state},
+                            headers={"Cookie": state_cookie})
+                        self.assertEqual(wrong.status_code, 401)
+                        self.assertEqual(wrong.json()["state"], "UNKNOWN")
+                        self.assertNotIn("set-cookie", wrong.headers)
+                exchange.assert_not_called()
+        for rejected in (
+            "https://portal.example.test:17777/auth/oidc/callback",
+            "https://portal.example.test:8443/auth/oidc/callback",
+            "http://portal.example.test:7777/auth/oidc/callback",
+        ):
+            with self.subTest(redirect=rejected), patch.dict(
+                    os.environ, {"AIOPS_PORTAL_OIDC_REDIRECT_URI": rejected}):
+                response = self.client.get("/auth/oidc/login")
+                self.assertEqual(response.status_code, 503)
+                self.assertEqual(response.json()["state"], "UNKNOWN")
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertNotIn("location", response.headers)
+                self.assertNotIn("set-cookie", response.headers)
+        receipt("callback-7777-only", {
+            "https_7777_redirect": 303,
+            "https_17777_redirect": 503,
+            "https_other_port_redirect": 503,
+            "http_7777_redirect": 503,
+            "https_17777_callback": 401,
+            "http_7777_callback": 401,
+            "host_port_binding_verified": False,
+            "real_idp_or_glpi_attested": False,
+        })
+
+
 
 if __name__ == "__main__":
     unittest.main()
