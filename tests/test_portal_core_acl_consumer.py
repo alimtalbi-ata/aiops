@@ -453,8 +453,10 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         """Exercise the actual Core router with only disposable mocks; no HTTP upstream."""
         import json
         from fastapi import FastAPI
-        from core import actor_resource_authz as core_actor
+        # Core xref registers the actor router; import xref first to avoid
+        # the existing Core module-level circular import during isolated tests.
         from core import itsm_xref as core_xref
+        from core import actor_resource_authz as core_actor
         from portal import core_authz_transport as wire
 
         actor, binding = self.actor(), self.binding()
@@ -508,8 +510,10 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         """No delegated IdP token, foreign tenant or forged body may grant a read."""
         import json
         from fastapi import FastAPI
-        from core import actor_resource_authz as core_actor
+        # Core xref registers the actor router; import xref first to avoid
+        # the existing Core module-level circular import during isolated tests.
         from core import itsm_xref as core_xref
+        from core import actor_resource_authz as core_actor
         from portal import core_authz_transport as wire
 
         plan = wire.prepare_core_authz_wire(
