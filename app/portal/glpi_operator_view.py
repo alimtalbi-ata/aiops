@@ -64,6 +64,17 @@ du ticket. Le lien Core Incident/Run/ticket, le signataire et la révocation
 doivent être attestés indépendamment.</p>
 <button type="button" id="glpi-check" aria-controls="glpi-check-status">Vérifier mon état d'accès</button>
 <p id="glpi-check-status" role="status" aria-live="polite">UNKNOWN — contrôle non demandé.</p>
+<div id="glpi-source-readiness" role="group" aria-label="Origine et fraîcheur des autorisations">
+<p id="glpi-source-provenance" role="note">Provenance : PORTAL_CONTRACT_ONLY ; observé à : UNKNOWN ;
+fraîcheur : UNKNOWN. Le producteur Core PG16 est un contrat source, pas un droit humain GLPI.</p>
+<table aria-describedby="glpi-source-provenance"><caption>Préconditions indépendantes — aucune lecture métier</caption>
+<thead><tr><th scope="col">Autorité requise</th><th scope="col">État</th></tr></thead>
+<tbody>
+<tr><th scope="row">IdP subject → GLPI User, mapping gouverné</th><td data-authority-check="idp">UNKNOWN — non attesté</td></tr>
+<tr><th scope="row">GLPI Profile / Entity / Ticket READ ou READMY + propriété</th><td data-authority-check="glpi">UNKNOWN — non attesté</td></tr>
+<tr><th scope="row">Core PG16 Run → Incident → ticket, signataire distinct de l'IdP</th><td data-authority-check="core">UNKNOWN — non attesté</td></tr>
+<tr><th scope="row">Nonce/JTI atomique, révocation et fraîcheur</th><td data-authority-check="replay">UNKNOWN — non attesté</td></tr>
+</tbody></table></div>
 <dl><dt>IdP → User GLPI</dt><dd>UNKNOWN — mapping non attesté</dd>
 <dt>Profile / Entity / Ticket READ</dt><dd>UNKNOWN — droits natifs non attestés</dd>
 <dt>READMY / propriété du ticket</dt><dd>UNKNOWN — propriété non attestée</dd>
@@ -189,6 +200,18 @@ def glpi_readonly_status(request: Request,
             "readmy_ticket_ownership": "UNKNOWN",
             "core_run_ticket_binding": "UNKNOWN",
             "signer_nonce_revocation": "UNKNOWN",
+            "human_allow": False,
+        },
+        "authority_sources": {
+            "schema": "aiops.portal.authority-sources.v1",
+            "provenance": "PORTAL_CONTRACT_ONLY",
+            "observed_at": None,
+            "freshness": "UNKNOWN",
+            "core_pg16_producer": "SOURCE_CONTRACT_ONLY_NOT_HUMAN_ACL",
+            "idp_glpi_mapping": "NOT_ATTESTED",
+            "glpi_native_readmy_ownership": "NOT_ATTESTED",
+            "core_run_signer_nonce_revocation": "NOT_ATTESTED",
+            "independent_proofs_verified": False,
             "human_allow": False,
         },
         "tenant_acl_qualified": False,

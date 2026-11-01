@@ -403,6 +403,108 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             headers={"Authorization": "Bearer " + VIEWER}).status, 503)
 
 
+    def test_09_glpi_source_freshness_ui_rejects_forged_positive(self):
+        """Real Chromium: source provenance is visible but never authorizes."""
+        response = self.context.request.get(
+            self.base + "/api/portal/itsm",
+            headers={"Authorization": "Bearer " + VIEWER,
+                     "X-GLPI-Permission": "READ",
+                     "X-Core-Signed-Decision": "ALLOW"},
+        )
+        self.assertEqual(response.status, 503)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertIn("frame-ancestors 'none'",
+                      response.headers["content-security-policy"])
+        body = response.json()
+        self.assertEqual(body["authority_sources"]["provenance"],
+                         "PORTAL_CONTRACT_ONLY")
+        self.assertIsNone(body["authority_sources"]["observed_at"])
+        self.assertEqual(body["authority_sources"]["freshness"], "UNKNOWN")
+        self.assertEqual(body["authority_sources"]["core_pg16_producer"],
+                         "SOURCE_CONTRACT_ONLY_NOT_HUMAN_ACL")
+        self.assertFalse(body["authority_sources"]["independent_proofs_verified"])
+        self.assertFalse(body["human_authority"]["human_allow"])
+        self.assertNotIn("ticket_id", body)
+        self.assertNotIn("run_id", body)
+
+        requests = []
+        self.page.on("request", lambda request: requests.append(request.url))
+        self.page.goto(self.base + "/itsm")
+        expect(self.page.locator("#glpi-source-provenance")).to_contain_text(
+            "PORTAL_CONTRACT_ONLY")
+        self.assertEqual(self.page.locator("[data-authority-check]").count(), 4)
+        self.assertTrue(self.page.get_by_role("button", name="Approuver HITL").is_disabled())
+
+        # This 503 is a test-controlled negative projection, NOT an IdP/GLPI
+        # authenticated session. It exercises the UI renderer, not real ALLOW.
+        self.page.route("**/api/portal/itsm", lambda route: route.fulfill(
+            status=503, content_type="application/json", body=json.dumps(body)))
+        self.page.locator("#glpi-check").click()
+        expect(self.page.locator("#glpi-check-status")).to_contain_text("503 UNKNOWN")
+        expect(self.page.locator('[data-authority-check="core"]')).to_contain_text(
+            "source indépendante non attestée")
+        self.page.unroute("**/api/portal/itsm")
+
+        # An injected 200/CONNECTED/ALLOW cannot promote human authority or
+        # place a forged ticket/Run in the browser, even on the same origin.
+        self.page.route("**/api/portal/itsm", lambda route: route.fulfill(
+            status=200, content_type="application/json",
+            body=json.dumps({"state": "CONNECTED", "decision": "ALLOW",
+                             "ticket_id": "FORGED-TICKET-999",
+                             "run_id": "RUN-FORGED-999"})))
+        self.page.locator("#glpi-check").click()
+        expect(self.page.locator("#glpi-check-status")).to_contain_text(
+            "503 UNKNOWN")
+        expect(self.page.locator('[data-authority-check="idp"]')).to_contain_text(
+            "réponse non qualifiée")
+        self.assertNotIn("FORGED-TICKET-999", self.page.locator("body").inner_text())
+        self.assertNotIn("CONNECTED", self.page.locator("#glpi-check-status").inner_text())
+        self.assertNotIn("CONNECTED", self.page.locator("#glpi-source-readiness").inner_text())
+        self.page.unroute("**/api/portal/itsm")
+
+        self.assertTrue(self.page.get_by_role("button", name="Commenter").is_disabled())
+        self.assertTrue(self.page.get_by_role("button", name="Assigner").is_disabled())
+        self.assertTrue(self.page.get_by_role("button", name="Approuver HITL").is_disabled())
+        self.assertFalse(any("/api/noc/runs/" in url or "/api/core/" in url
+                             or "/api/glpi/" in url for url in requests))
+        self.assertFalse(any("token=" in url for url in requests))
+
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")))
+        output.mkdir(parents=True, exist_ok=True)
+        checked_out_head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        expected_head = os.environ.get("AIOPS_EXPECTED_HEAD_SHA")
+        if expected_head:
+            self.assertEqual(checked_out_head, expected_head)
+        receipt = {
+            "schema": "aiops.portal.glpi-source-freshness-negative.v1",
+            "provenance": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+            "source_head": checked_out_head,
+            "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+            "portal_api_http": 503,
+            "portal_source_provenance": "PORTAL_CONTRACT_ONLY",
+            "upstream_observed_at": None,
+            "upstream_freshness": "UNKNOWN",
+            "core_pg16_source_contract": "SOURCE_ONLY_NOT_HUMAN_ACL",
+            "ui_negative_projection_cases": 2,
+            "forged_positive_visible": False,
+            "native_glpi_human_allow": False,
+            "business_upstream_requests": 0,
+            "host_7777_local_operator_reported": True,
+            "external_tls_sso_unique_entrypoint_attested": False,
+            "release_stable": "NO_GO",
+        }
+        canonical = json.dumps(receipt, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")
+        receipt["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+        (output / "portal-glpi-source-freshness-negative.json").write_text(
+            json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8")
+
+
+
+
 # Quality browser entry point also runs the disposable negative Portal ACL suite.
 from test_portal_acl_browser_e2e import PortalACLChromiumE2E
 # Run the Portal actor-resource contract suite at the same exact CI SHA.
