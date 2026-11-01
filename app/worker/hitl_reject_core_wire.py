@@ -52,7 +52,8 @@ def _validate_claim(response, tenant_id, owner, *, now=None):
         if (type(item) is not dict
                 or item.get("tenant_id") != tenant_id
                 or item.get("lease_owner") != owner
-                or item.get("human_approved") not in (None, False)):
+                or (item.get("human_approved") is not None
+                    and item.get("human_approved") is not False)):
             raise UnqualifiedNotification("core_claim_identity_unqualified")
         expiry = item.get("lease_until")
         if type(expiry) is not str:
