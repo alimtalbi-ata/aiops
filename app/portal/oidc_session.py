@@ -66,15 +66,21 @@ class _Config:
     origin: str
 
 
-def _origin(url: str) -> str:
+def _origin(url: str, *, portal_redirect: bool = False) -> str:
+    """Only the Portal callback may use explicit HTTPS :7777 (not :17777).
+
+    Configuration validation is not a claim that a host listener exists.
+    """
     try:
         parsed = urllib.parse.urlsplit(url)
+        port = parsed.port
         if (parsed.scheme != "https" or not parsed.hostname
                 or parsed.username is not None or parsed.password is not None
-                or parsed.query or parsed.fragment or parsed.port is not None
+                or parsed.query or parsed.fragment
+                or (port is not None and (not portal_redirect or port != 7777))
                 or parsed.hostname.endswith(".") or parsed.hostname.lower() != parsed.hostname):
             raise ValueError("invalid URL")
-        return "https://" + parsed.hostname
+        return "https://" + parsed.hostname + (":7777" if port == 7777 else "")
     except (ValueError, TypeError) as exc:
         raise IdentityUnavailable("OIDC endpoint configuration invalid") from exc
 
@@ -91,13 +97,14 @@ def _config() -> _Config:
             or _origin(authorize) != origin or _origin(token) != origin
             or not urllib.parse.urlsplit(authorize).path.startswith("/")
             or not urllib.parse.urlsplit(token).path.startswith("/")
-            or _origin(redirect) == origin
+            or _origin(redirect, portal_redirect=True) == origin
             or urllib.parse.urlsplit(redirect).path != "/auth/oidc/callback"
             or not re.fullmatch(r"[A-Za-z0-9._~-]{3,128}", client)
             or env.get("AIOPS_PORTAL_OIDC_AUDIENCE") != client
             or authorize == token):
         raise IdentityUnavailable("OIDC endpoint configuration invalid")
-    return _Config(issuer, authorize, token, client, redirect, _origin(redirect))
+    return _Config(issuer, authorize, token, client, redirect,
+                   _origin(redirect, portal_redirect=True))
 
 
 def _b64(raw: bytes) -> str:
@@ -237,9 +244,12 @@ def _session_from_cookie(request: Request) -> _Session | None:
     # names (last value wins). Neither a valid nor a forged duplicate may
     # choose which server-owned OIDC handle is authenticated.
     cookie_pattern = r"(?:^|;)\s*" + re.escape(_SESSION_COOKIE) + r"\s*="
+    headers = request.headers.getlist("cookie")
     occurrences = sum(len(re.findall(cookie_pattern, header))
-                      for header in request.headers.getlist("cookie"))
-    if occurrences != 1:
+                      for header in headers)
+    # Multiple Cookie fields are ambiguous across ASGI/framework parsers.
+    # Reject them even if just one contains the OIDC handle.
+    if len(headers) != 1 or occurrences != 1:
         return None
     value = request.cookies.get(_SESSION_COOKIE, "")
     if not _OPAQUE.fullmatch(value):
