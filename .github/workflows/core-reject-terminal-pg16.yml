@@ -71,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-terminal-venv/bin/python -m unittest discover -s tests -p 'test_core_hitl_reject_terminal_pg16.py' -v 2>&1 | tee /tmp/core-terminal-tests.log
-          grep -E '^Ran 14 tests in ' /tmp/core-terminal-tests.log
+          grep -E '^Ran 15 tests in ' /tmp/core-terminal-tests.log
           grep -x 'OK' /tmp/core-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-terminal-tests.log
           echo "SYNTHETIC_ONLY=TRUE; HUMAN_GLPI_AUTH=UNKNOWN; EFFECT_ALLOWED=FALSE; HOST_DEPLOY=FALSE"
@@ -160,6 +160,38 @@ jobs:
           PY
           sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.sha256"
           sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.sha256"
+      - name: Verify post-commit revocation fence receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-postcommit-revocation.json"
+          data = json.loads(p.read_text())
+          digest = data.pop("payload_sha256")
+          assert digest == hashlib.sha256(json.dumps(
+              data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["schema"] == "aiops.core-terminal-postcommit-revocation.v1"
+          assert data["http"] == {
+              "committed_dead": 200, "credential_revoked": 401,
+              "terminal_permission_revoked": 403, "source_proof_revoked": 200,
+              "late_ack": 200, "revalidated_idempotent_replay": 200}
+          assert data["revoked_status"] == data["late_ack_status"] == "UNKNOWN"
+          assert data["terminal_status"] == "DEAD" and data["attempts"] == 8
+          assert data["audit_014_rows"] == 1 and len(data["receipt_sha256"]) == 64
+          assert data["actor_authorization"] == "UNKNOWN"
+          assert data["human_glpi_attested"] is False
+          assert data["execution_allowed"] is False and data["effect_allowed"] is False
+          assert data["rollback"] == "CODE_ONLY_KEEP_013_014_AUDIT"
+          assert data["synthetic_disposable"] is True and data["canonical_core_app"] is True
+          assert not any(s in p.read_text() for s in (
+              "lease_token", "Bearer ", "postgresql://", "signed-synthetic-owner"))
+          print("CORE_TERMINAL_POSTCOMMIT_REVOCATION_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-postcommit-revocation.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-postcommit-revocation.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-postcommit-revocation.sha256"
       - name: Preserve redacted exact-head qualification
         if: always()
         uses: actions/upload-artifact@v4
@@ -173,4 +205,6 @@ jobs:
             /tmp/core-terminal-receipts/terminal-native-restore.sha256
             /tmp/core-terminal-receipts/terminal-main-http-contract.json
             /tmp/core-terminal-receipts/terminal-main-http-contract.sha256
+            /tmp/core-terminal-receipts/terminal-postcommit-revocation.json
+            /tmp/core-terminal-receipts/terminal-postcommit-revocation.sha256
           retention-days: 7
