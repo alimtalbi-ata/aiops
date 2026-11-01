@@ -105,3 +105,8 @@ The offline `scripts/automation_heartbeat_gate.py` is not installed on Debian an
 | D Internal lab / owner | On-demand ACME seed 20261018, OIDC/Chromium, PG16 SQL-model, Policy | Source exact-head CI as above, candidate D0 pending; no Debian/NGX/real GLPI runtime | Record scenario, seed, SHA, test N/N and artifact; synthetic != runtime; no LIVE |
 
 The offline `scripts/automation_heartbeat_gate.py` remains not deployed. No Debian cron changes, runner host access, external mutation, real GLPI write or executor. `RELEASE_STABLE=NO_GO`.
+
+
+### B GitHub Actions — exact-head correction (2026-11-01)
+
+Review of candidate Quality showed three default PR merge-ref checkouts. Architect pinned all three to `github.event.pull_request.head.sha || github.sha` and added explicit `git rev-parse HEAD` assertions plus contract test on #234 commit `f2bf03f085495348fd80e0acb2a898f9b0b72eb8`. Previous PR-triggered green jobs are **not** evidence of exact source-head D0; new SHA must be requalified. Daily `schedule` trigger still has no observed heartbeat; PR runs are not cron. No Debian host or external effects.

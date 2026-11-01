@@ -656,3 +656,8 @@ The five RRULEs were reset with future local DTSTART values to avoid a first DTS
 | 4 HITL P0 | #243 `e4e4c7c09b96d911184f80dbb6249cd191fa8390`; disposable PG16/DR SQL-model / `a44d6aed` | Source 5/5 PG16 SQL, dump/restore 16; Core claim/ACK and Worker/Temporal restart not tested; architect owns shared CI |
 
 **Tests:** source CI #240 3/3, #241 3/3, #242 3/3, #243 Quality 3/3 + dedicated HITL 1/1; candidate new SHA requires D0 requalification. D1 full combined disposable NOT_QUALIFIED; D2 same-SHA browser/API story NOT_QUALIFIED; D3 kit semantic/install/upgrade/rollback NO_GO; D4 client NOT_ATTESTED. #196 FAIL and cost UNKNOWN without versioned pricing/provider-reported tokens. WIP P0=3. Rollback: revert #243→#242→#241→#240 commits in reverse order, drop disposable databases; no main reset or LIVE.
+
+
+### D0 correction — 2026-11-01, architect exact-head audit
+
+**SOURCE_REVIEWED:** Quality's three `actions/checkout@v4` steps had no explicit PR HEAD ref or checkout SHA assertion. Therefore old PR Quality 3/3 results are **CI_SUCCESS_ON_DEFAULT_PR_REF**, not qualified D0 exact-head. Candidate fix `f2bf03f085495348fd80e0acb2a898f9b0b72eb8` pins and asserts the exact PR HEAD in all three jobs; `tests/test_quality_schedule_contract.py` now enforces 3/3 guards. Re-run exact candidate SHA and inspect workflow/job logs and artifacts before D0 PASS. Dedicated HITL exact-head SQL-model test is separate. D1/D2/D3/D4 unchanged NO_GO/NOT_QUALIFIED. This correction supersedes earlier descriptions of #234 Quality as exact-head before the fix. No main merge.
