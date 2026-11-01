@@ -24,33 +24,28 @@ from core import actor_canonical_seven_source as binding
 
 
 class V2SourceHandler(fixture.SourceHandler):
-    """A separate service identity and read-only SQL transaction, not HMAC rows."""
+    """A distinct HTTPS service credential and Core-owned SQL dispatch."""
 
     def do_POST(self):
         if self.path != "/v2/canonical-seven-readback":
             return super().do_POST()
-        token = "Basic " + base64.b64encode(
-            (fixture.CLIENT + ":" + fixture.SECRET).encode()).decode()
-        if not hmac.compare_digest(self.headers.get("Authorization", ""), token):
-            return self.reply(401, {"decision": "UNKNOWN"})
+        from core.canonical_seven_https_adapter import dispatch_canonical_seven
+        import psycopg
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 1 <= length <= 8192:
-                return self.reply(404, {"decision": "UNKNOWN"})
-            request = json.loads(self.rfile.read(length))
-            if (not isinstance(request, dict) or set(request) != set(binding._SCOPE)
-                    or any(type(v) is not str or not v for v in request.values())
-                    or request["permission"] != "run:read"):
-                return self.reply(404, {"decision": "UNKNOWN"})
-            import psycopg
-            from core.canonical_seven_pg_source import read_canonical_seven
-            with psycopg.connect(self.server.db_url) as conn:
-                proof = read_canonical_seven(
-                    conn, request, source=fixture.SOURCE,
-                    issuer="core-source-disposable-authority",
-                    now=datetime.now(timezone.utc))
-            if proof is None:
-                return self.reply(404, {"decision": "UNKNOWN"})
+            body = self.rfile.read(length) if 1 <= length <= 8192 else b""
+            status, proof = dispatch_canonical_seven(
+                method="POST", path=self.path,
+                tls=isinstance(self.connection, ssl.SSLSocket),
+                authorization=self.headers.get("Authorization", ""),
+                body=body, client_id=fixture.CLIENT,
+                client_secret=fixture.SECRET,
+                connect=lambda: psycopg.connect(self.server.db_url),
+                source=fixture.SOURCE,
+                source_issuer="core-source-disposable-authority",
+                now=datetime.now(timezone.utc))
+            if status != 200:
+                return self.reply(status, proof)
             tamper = getattr(self.server, "tamper", None)
             if tamper == "hash":
                 proof["events"][3]["full_event_hash"] = "a" * 64
@@ -110,6 +105,120 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             self.claims if claims is None else claims,
             self.expected if expected is None else expected,
             row if record is None else record, int(time.time()))
+
+    def test_v2_core_https_adapter_is_not_portable_authority(self):
+        """Real TLS listener delegates to Core-owned dispatch, never ALLOW."""
+        from core.canonical_seven_https_adapter import dispatch_canonical_seven
+        with self.psycopg.connect(self.db_url) as db:
+            db.execute((fixture.MIG / "014_hitl_reject_terminal_receipts.sql")
+                       .read_text(encoding="utf-8"))
+        def audit():
+            with self.psycopg.connect(self.db_url) as db:
+                return {
+                    "nonce_013": db.execute(
+                        "select count(*) from aiops.actor_delegation_nonce_ledger"
+                    ).fetchone()[0],
+                    "revocation_013": db.execute(
+                        "select count(*) from aiops.actor_delegation_revocations"
+                    ).fetchone()[0],
+                    "terminal_014": db.execute(
+                        "select count(*) from aiops.hitl_reject_terminal_receipts"
+                    ).fetchone()[0],
+                }
+        before = audit()
+        request = {k: self.expected[k] for k in binding._SCOPE
+                   if k in self.expected}
+        request.update(actor_subject=self.claims["sub"],
+                       actor_issuer=self.claims["iss"])
+        body = json.dumps(request).encode("utf-8")
+        auth = "Basic " + base64.b64encode(
+            (fixture.CLIENT + ":" + fixture.SECRET).encode()).decode()
+        def dispatch(**changes):
+            args = {
+                "method": "POST", "path": "/v2/canonical-seven-readback",
+                "tls": True, "authorization": auth, "body": body,
+                "client_id": fixture.CLIENT, "client_secret": fixture.SECRET,
+                "connect": lambda: self.psycopg.connect(self.db_url),
+                "source": fixture.SOURCE,
+                "source_issuer": "core-source-disposable-authority",
+                "now": datetime.now(timezone.utc),
+            }
+            return dispatch_canonical_seven(**{**args, **changes})
+        self.assertEqual(dispatch(tls=False)[0], 503)
+        self.assertEqual(dispatch(authorization="Basic invalid")[0], 401)
+        self.assertEqual(dispatch(body=b"{}")[0], 404)
+        self.assertEqual(dispatch(body=json.dumps(
+            {**request, "actor_subject": "idp|foreign"}).encode())[0], 404)
+        self.assertEqual(dispatch(connect=lambda: (_ for _ in ()).throw(
+            RuntimeError("synthetic SQL outage")))[0], 503)
+        status, proof = dispatch()
+        self.assertEqual(status, 200)
+        self.assertEqual(proof["issuer"], "core-source-disposable-authority")
+        self.assertNotEqual(proof["issuer"], proof["actor_issuer"])
+        self.assertEqual(len(proof["events"]), 7)
+        self.assertEqual([e["sequence"] for e in proof["events"]], list(range(1, 8)))
+        self.assertTrue(all(e["payload_hash"] != e["full_event_hash"]
+                            for e in proof["events"]))
+        with requests.Session() as session:
+            session.trust_env = False
+            url = f"https://{fixture.IP}:{fixture.PORT}/v2/canonical-seven-readback"
+            bad = session.post(url, json=request,
+                               auth=(fixture.CLIENT, "wrong-secret"),
+                               verify=True, timeout=5)
+            self.assertEqual(bad.status_code, 401)
+            self.assertEqual(bad.json(), {"decision": "UNKNOWN"})
+            good = session.post(url, json=request,
+                                auth=(fixture.CLIENT, fixture.SECRET),
+                                verify=True, timeout=5)
+            self.assertEqual(good.status_code, 200)
+            self.assertEqual(good.json()["events"], proof["events"])
+        event = fixture.event_at(1)
+        record = {
+            "tenant_id": fixture.TENANT, "run_id": fixture.RUN,
+            "incident_id": fixture.INCIDENT, "glpi_entity_id": fixture.ENTITY,
+            "source_event_id": event["source_event_id"],
+            "source_payload_hash": fixture.canonical_hash(event),
+        }
+        receipt = binding.canonical_seven_source_receipt(
+            self.claims, self.expected, record, int(time.time()))
+        self.assertIsNotNone(receipt)
+        self.assertEqual(receipt["decision"], "UNKNOWN")
+        self.assertEqual(receipt["link_status"], "UNKNOWN")
+        self.assertEqual(receipt["portable_signature"], "NONE")
+        self.assertEqual(receipt["event_count"], 7)
+        self.assertEqual(receipt["hash_domains"]["acme_full_event_equivalence"],
+                         "NOT_VERIFIED")
+        self.assertEqual(before, audit())
+        output = os.environ.get("AIOPS_CORE_SEVEN_RECEIPT_DIR")
+        if output:
+            machine = {
+                "schema": "aiops.core-https-seven-adapter-receipt.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "source_issuer": proof["issuer"],
+                "actor_issuer_distinct": proof["issuer"] != proof["actor_issuer"],
+                "transport": "DISPOSABLE_TLS_BASIC_BOUND",
+                "portable_signature": "NONE",
+                "decision": "UNKNOWN", "link_status": "UNKNOWN",
+                "human_glpi_attested": False,
+                "source_proof_sha256": binding._digest(
+                    binding.RECEIPT_PROOF_DOMAIN, proof),
+                "consumer_receipt_sha256": receipt["receipt_sha256"],
+                "hash_domains": receipt["hash_domains"],
+                "events": receipt["events"],
+                "negative_http": {
+                    "missing_tls": 503, "invalid_basic": 401,
+                    "malformed_scope": 404, "foreign_actor": 404,
+                    "sql_failure": 503, "invalid_basic_over_tls": 401,
+                },
+                "audit_before": before, "audit_after": audit(),
+                "execution_allowed": False, "effect_allowed": False,
+            }
+            machine["receipt_sha256"] = hashlib.sha256(json.dumps(
+                machine, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            directory = Path(output)
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "core-https-adapter.json").write_text(
+                json.dumps(machine, sort_keys=True, indent=2) + "\n")
 
     def test_v2_core_owned_pg_producer_seven_negative_and_redacted_receipt(self):
         """Core-owned SQL producer, not a test-only fixture algorithm.
