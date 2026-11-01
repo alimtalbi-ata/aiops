@@ -74,8 +74,8 @@ join aiops.runs r on r.run_id=o.run_id and r.incident_id is not null
 join aiops.tenant_resource_ownership own on own.resource_kind='run'
   and own.resource_id=o.run_id and own.tenant_id=%s
 where o.decision='REJECT' and o.source_status in ('REJECTED','REVOKED')
-  and p.status in ('REJECTED','REVOKED')
-  and a.decision in ('REJECT','REVOKE')
+  and ((o.source_status='REJECTED' and p.status='REJECTED' and a.decision='REJECT')
+       or (o.source_status='REVOKED' and p.status='REVOKED' and a.decision='REVOKE'))
   and o.attempts < 8 and o.available_at <= statement_timestamp()
   and (o.status='PENDING' or
        (o.status='LEASED' and o.lease_until < statement_timestamp()))
@@ -97,13 +97,14 @@ from aiops.hitl_decision_outbox o
 join aiops.action_proposals p on p.proposal_id=o.proposal_id
   and p.run_id=o.run_id and p.proposal_hash=o.proposal_hash
   and p.proposal_revision=o.proposal_revision
-  and p.status in ('REJECTED','REVOKED')
 join aiops.approval_records a on a.approval_id=o.approval_id
   and a.proposal_id=o.proposal_id and a.proposal_hash=o.proposal_hash
-  and a.decision in ('REJECT','REVOKE')
 join aiops.tenant_resource_ownership own on own.resource_kind='run'
   and own.resource_id=o.run_id and own.tenant_id=%s
-where o.event_id=%s for update of o
+where o.event_id=%s and o.decision='REJECT'
+  and ((o.source_status='REJECTED' and p.status='REJECTED' and a.decision='REJECT')
+       or (o.source_status='REVOKED' and p.status='REVOKED' and a.decision='REVOKE'))
+for update of o
 """
 _DELIVER_SQL = """
 update aiops.hitl_decision_outbox
