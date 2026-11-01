@@ -158,30 +158,140 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         self.assertFalse(core_acl_consumer.positive_core_contract_matches(
             current_core, actor, binding))
 
-    def test_future_contract_rejects_expired_or_mismatched_claims(self):
+    def future_envelope(self, now):
         actor, binding = self.actor(), self.binding()
-        future = {"schema": "aiops.core-actor-resource-authorization.v1",
-                  "decision": "ALLOW", "permission": "run:read",
-                  "tenant_acl_qualified": True, "glpi_owner_attested": True,
-                  "provenance": "AUTHENTICATED_GLPI_READBACK",
-                  "acl_version": "v1", "expires_at": NOW + 100,
-                  "actor_subject": actor.subject, "tenant_id": "ACME",
-                  "run_id": RUN, "incident_id": "INC-ACME-123",
-                  "glpi_instance_id": "glpi-acme",
-                  "ticket_id": "123", "glpi_entity_id": "42"}
-        self.assertTrue(core_acl_consumer.positive_core_contract_matches(
-            future, actor, binding, now=NOW))
-        for changes in ({"expires_at": NOW - 1},
-                        {"actor_subject": "forged"},
-                        {"tenant_id": "OTHER"},
-                        {"run_id": OTHER},
-                        {"glpi_entity_id": "99"},
-                        {"glpi_owner_attested": False},
-                        {"provenance": "SYNTHETIC"},
-                        {"permission": "admin"}):
+        nonce = "n" * 43
+        return actor, binding, nonce, {
+            "schema": "aiops.core-actor-resource-authorization.v1",
+            "decision": "ALLOW", "permission": "run:read",
+            "tenant_acl_qualified": True, "acl_version": "v1",
+            "decision_id": "d" * 24, "actor_subject": actor.subject,
+            "actor_issuer": actor.issuer, "actor_audience": actor.audience,
+            "tenant_id": binding.tenant_id, "run_id": binding.run_id,
+            "incident_id": binding.incident_id,
+            "glpi_instance_id": binding.glpi_instance_id,
+            "ticket_id": binding.ticket_id,
+            "glpi_entity_id": binding.glpi_entity_id,
+            "request_nonce": nonce, "issued_at": now - 5,
+            "expires_at": now + 30, "revocation_checked_at": now - 2,
+            "revoked": False,
+            "delegation": {
+                "kind": "CORE_VERIFIED_OIDC_DELEGATION",
+                "subject": actor.subject, "issuer": actor.issuer,
+                "audience": actor.audience, "tenant_id": actor.tenant_id,
+                "expires_at": now + 60, "revoked": False,
+            },
+            "glpi_readback": {
+                "kind": "INDEPENDENT_AUTHENTICATED_GLPI_READBACK",
+                "instance_id": binding.glpi_instance_id,
+                "ticket_id": binding.ticket_id,
+                "entity_id": binding.glpi_entity_id,
+                "permission": "ticket:read", "verified_at": now - 4,
+                "expires_at": now + 60, "ownership_confirmed": True,
+                "actor_permission_confirmed": True,
+                "run_ticket_binding_confirmed": True,
+            },
+        }
+
+    def test_v1_shape_is_never_positive_authorization(self):
+        now = int(time.time())
+        actor, binding, nonce, envelope = self.future_envelope(now)
+        self.assertTrue(core_acl_consumer.core_v1_envelope_matches(
+            envelope, actor, binding, request_nonce=nonce, now=now))
+        # Even a perfect synthetic JSON cannot establish transport trust,
+        # real subject delegation or independent GLPI authority.
+        self.assertFalse(core_acl_consumer.positive_core_contract_matches(
+            envelope, actor, binding, now=now))
+        self.assertFalse(core_acl_consumer.core_v1_envelope_matches(
+            envelope, actor, binding, request_nonce="r" * 43, now=now))
+
+    def test_v1_adversarial_claims_and_stale_proofs_rejected(self):
+        now = int(time.time())
+        actor, binding, nonce, envelope = self.future_envelope(now)
+        variants = [
+            {"actor_subject": "forged"}, {"tenant_id": "OTHER"},
+            {"run_id": OTHER}, {"incident_id": "INC-FOREIGN"},
+            {"ticket_id": "999"}, {"glpi_entity_id": "99"},
+            {"actor_issuer": "https://evil.test"},
+            {"actor_audience": "other-client"},
+            {"permission": "admin"}, {"schema": "aiops.core-itsm-xref-read.v1"},
+            {"decision": "DENY"}, {"revoked": True},
+            {"tenant_acl_qualified": False}, {"expires_at": now - 1},
+            {"expires_at": now + 301}, {"issued_at": now - 61},
+            {"issued_at": now + 1}, {"revocation_checked_at": now - 31},
+            {"revocation_checked_at": now + 1}, {"acl_version": "v0"},
+            {"decision_id": ""}, {"request_nonce": "r" * 43},
+            {"extra_authority": "CONNECTED"},
+            {"delegation": {**envelope["delegation"], "revoked": True}},
+            {"delegation": {**envelope["delegation"], "subject": "forged"}},
+            {"delegation": {**envelope["delegation"], "expires_at": now - 1}},
+            {"glpi_readback": {**envelope["glpi_readback"],
+                               "ownership_confirmed": False}},
+            {"glpi_readback": {**envelope["glpi_readback"],
+                               "actor_permission_confirmed": False}},
+            {"glpi_readback": {**envelope["glpi_readback"],
+                               "run_ticket_binding_confirmed": False}},
+            {"glpi_readback": {**envelope["glpi_readback"], "entity_id": "99"}},
+            {"glpi_readback": {**envelope["glpi_readback"],
+                               "verified_at": now - 61}},
+            {"glpi_readback": {**envelope["glpi_readback"],
+                               "expires_at": now - 1}},
+        ]
+        for changes in variants:
             with self.subTest(changes=changes):
-                self.assertFalse(core_acl_consumer.positive_core_contract_matches(
-                    {**future, **changes}, actor, binding, now=NOW))
+                self.assertFalse(core_acl_consumer.core_v1_envelope_matches(
+                    {**envelope, **changes}, actor, binding,
+                    request_nonce=nonce, now=now))
+        # JSON booleans must not be accepted as integer timestamps.
+        for key in ("issued_at", "expires_at", "revocation_checked_at"):
+            with self.subTest(timestamp=key):
+                self.assertFalse(core_acl_consumer.core_v1_envelope_matches(
+                    {**envelope, key: True}, actor, binding,
+                    request_nonce=nonce, now=now))
+
+    def test_distinct_core_authz_service_token_preflight_only(self):
+        settings = {**os.environ,
+            "AIOPS_PORTAL_CORE_AUTHZ_ORIGIN": "https://core.example.test:8443",
+            "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN": "authz-" + "a" * 40,
+            "AIOPS_PORTAL_CORE_AUTHZ_SCOPE": "actor:resource:authorize",
+        }
+        target = core_acl_consumer.configured_core_authz_target(settings)
+        self.assertIsNotNone(target)
+        self.assertNotIn("authz-", repr(target))
+        for changes in (
+            {"AIOPS_PORTAL_CORE_AUTHZ_SCOPE": "itsm:xref:read"},
+            {"AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN":
+             settings["AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN"]},
+            {"AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN":
+             settings["AIOPS_PORTAL_READ_TOKEN"]},
+            {"AIOPS_PORTAL_CORE_AUTHZ_ORIGIN": "http://core.example.test"},
+            {"AIOPS_PORTAL_CORE_AUTHZ_ORIGIN":
+             "https://core.example.test@evil.test"},
+        ):
+            with self.subTest(changes=changes):
+                self.assertIsNone(core_acl_consumer.configured_core_authz_target(
+                    {**settings, **changes}))
+
+    def test_session_replay_expiry_revocation_api_html_no_upstream(self):
+        self.session()
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("no Core read")) as core, \\
+             patch("urllib.request.urlopen",
+                   side_effect=AssertionError("no network")) as upstream:
+            for route in ("/api/portal/runs/", "/runs/"):
+                self.assert_fence(self.client.get(route + RUN), 503)
+            with oidc_session._lock:
+                oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
+            for route in ("/api/portal/runs/", "/runs/"):
+                self.assert_fence(self.client.get(route + RUN), 401)
+            self.session(ttl=-1)
+            for route in ("/api/portal/runs/", "/runs/"):
+                self.assert_fence(self.client.get(route + RUN), 401)
+            self.session(actor_expiry=-1)
+            for route in ("/api/portal/runs/", "/runs/"):
+                self.assert_fence(self.client.get(route + RUN), 401)
+            core.assert_not_called()
+            upstream.assert_not_called()
 
     def test_even_future_envelope_does_not_enable_network(self):
         self.session()
