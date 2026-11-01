@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 MIG = Path(__file__).resolve().parent.parent / "db" / "migrations"
 ORDER = ("001_schema.sql", "004_operational_model.sql",
@@ -52,7 +52,7 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
         target = "aiops_actor_restore_ci"
         created = []
         def dburl(name):
-            return os.environ["DATABASE_URL"].replace("/aiops", "/" + name)
+            return urlunsplit((p.scheme, p.netloc, "/" + name, "", ""))
         try:
             with psycopg.connect(os.environ["DATABASE_URL"], autocommit=True) as admin:
                 version = int(admin.execute("show server_version_num").fetchone()[0])
