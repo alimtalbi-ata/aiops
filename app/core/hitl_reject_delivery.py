@@ -339,6 +339,14 @@ def terminal_reject(tenant_id: str, event_id: str, payload: dict,
                 if (not isinstance(receipt, dict)
                         or receipt.get("schema") != TERMINAL_SCHEMA
                         or receipt.get("actor_id") != actor["actor_id"]
+                        or receipt.get("event_id") != event_id
+                        or receipt.get("tenant_id") != tenant_id
+                        or receipt.get("run_id") != run_id
+                        or receipt.get("proposal_id") != proposal_id
+                        or receipt.get("attempts") != attempts
+                        or receipt.get("decision") != "REJECT"
+                        or receipt.get("execution_allowed") is not False
+                        or receipt.get("effect_allowed") is not False
                         or receipt.get("lease_owner") != owner
                         or receipt.get("lease_token_sha256") != _terminal_digest(token)
                         or receipt.get("proposal_hash") != proposal_hash
