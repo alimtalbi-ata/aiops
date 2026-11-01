@@ -705,3 +705,17 @@ All 19 paths are disjoint across owners and were copied as exact Git blobs in #2
 **Architecture decisions:** no promotion from signed synthetic Core ALLOW or GLPI-shaped fixture to human authorization; independent issuer, tenant/actor/Run/ticket/entity, nonce/JTI and 013 ledger are mandatory. ACME full-event and Core source-payload hash domains differ; no seven-event Core runtime binding or verified blast radius. Worker retry exhaustion lacks runtime terminal transition. Temporal signal is notification only. Keep all 15 ITIL stages and six checkpoints NOT_EXECUTED until real synthetic disposable end-to-end receipts.
 
 **Truth labels:** SOURCE_REVIEWED 13 source patches/blobs; CI_PASS four independent source exact HEADs; INTEGRATION_PASS **PENDING** on new candidate HEAD; RUNTIME_OBSERVED only disposable CI sources; NOT_VERIFIED actual human IdP/GLPI rights, Core seven-event production API, D1 complete ITIL chain, D2 operator role journey, D3 cumulative kit install/upgrade/rollback, D4 customer signoff. **RELEASE_STABLE=NO_GO**, keep #234 Draft, main unchanged. No merge despite source green. Revert new docs commit and focused product commit `7a1e344313a94335c93fdafd0929c4063e673640` using new candidate commits, rerun exact-head CI, never reset/force-push or delete 013 audit; main promotion only after D0–D4, expected_head_sha and explicit GO.
+
+
+## 2026-11-01 12:34 CET — anti-duplication and selective port register
+
+| Source | Ownership / reuse | Gate |
+|---|---|---|
+| #284 ACME HEAD `75eb60d8` | 3 exact blobs; full-event/payload/Core hash cross-domain **test-only**, no Incident/Run ownership | 181/181 targeted, Quality 3/3 source; integrated exact-head pending |
+| #285 Portal HEAD `2523bad3` | 4 exact blobs; synthetic IdP→GLPI signer rotation/JTI/nonce negatives, no ALLOW | 48/48 targeted, Quality 3/3 source; integrated exact-head pending |
+| #287 Core HEAD `20ecf050` | 4 exact blobs; independent HTTPS/TLS PG16 seven-event preflight, no migration/positive human ACL | PG16 10/10, dedicated 1/1 + Quality 3/3 source; integrated exact-head pending |
+| #288 Worker HEAD `33b4730d` | 3 exact blobs; exhausted eighth lease fencing, zero signal, no runtime DEAD | combined 10/10 + DR 5/5, dedicated 1/1 + Quality 3/3 source; integrated exact-head pending |
+| #286 existing-host observer | **HOLD / DUPLICATE**: second systemd observer and Issues-token publisher overlap already publishing reporter `scripts/debian-readonly-reporter.py` + SSH `scripts/aiops-publish-report.sh`. Reuse narrow runbook only after source/security review; typed task executor unconnected | No host install, no unrestricted Docker socket, no LIVE or arbitrary command; no merge |
+| Debian runtime report | Existing canonical GitHub branch `ops/debian-runtime-reports`, 11:29 UTC collection; commits 11:29/11:30/11:35 UTC show repeated publication | Fresh at 12:34 CET (~5m), automatic cron firing NOT_TESTED, recheck each cycle |
+
+The sole integration candidate remains Draft #234; source histories were **not** merged, only 14 exact blobs in `d3099158`. Main `ae7c3e51` unchanged. Source 14/14 jobs SUCCESS; new combined-head CI is **NOT_VERIFIED**. See [cycle record](../release/AIOPS2-INTEGRATION-CYCLE-2026-11-01-1234.md). Rollback by revert of candidate commits only, never main reset or audit 013 deletion.
