@@ -57,6 +57,7 @@ jobs:
           pg_dump --version
           pg_restore --version
       - name: PostgreSQL 16 isolated 009-012 outbox SQL failure injection and DR roundtrip
+        shell: bash
         run: |
           set -eu
           set -o pipefail
