@@ -113,11 +113,22 @@ class DisposableNativeTLSAuthorityTests(unittest.TestCase):
             self.trust = patch("requests.adapters.DEFAULT_CA_BUNDLE_PATH",
                                str(self.root / "ca.pem"))
             self.trust.start()
+            # requests 2.32.4 preloads an SSLContext at import time, before
+            # DEFAULT_CA_BUNDLE_PATH can be patched. Replace only its trust
+            # anchor with a new CERT_REQUIRED, hostname-checking context.
+            ca_context = ssl.create_default_context(cafile=str(self.root / "ca.pem"))
+            self.preloaded_trust = patch.object(
+                requests.adapters, "_preloaded_ssl_context",
+                ca_context, create=True)
+            self.preloaded_trust.start()
         except Exception:
             self.tearDown()
             raise
 
     def tearDown(self):
+        if hasattr(self, "preloaded_trust"):
+            self.preloaded_trust.stop()
+            del self.preloaded_trust
         if hasattr(self, "trust"):
             self.trust.stop()
             del self.trust
@@ -192,7 +203,10 @@ class DisposableNativeTLSAuthorityTests(unittest.TestCase):
 
     def test_untrusted_ca_fails_closed_without_http_bridge(self):
         # A genuine TLS trust failure; no HTTP handler should receive a request.
-        with patch("requests.adapters.DEFAULT_CA_BUNDLE_PATH", requests.certs.where()):
+        with patch("requests.adapters.DEFAULT_CA_BUNDLE_PATH", requests.certs.where()), \
+             patch.object(requests.adapters, "_preloaded_ssl_context",
+                          ssl.create_default_context(cafile=requests.certs.where()),
+                          create=True):
             self.assertFalse(self.preflight()[1])
         self.assertEqual(self.calls("idp"), 0)
         self.assertEqual(self.calls("mapping"), 0)
