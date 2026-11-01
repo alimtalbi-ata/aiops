@@ -1817,5 +1817,194 @@ class AcmeSyntheticReceiptReconciliationTests(unittest.TestCase):
                 self.manifest, deliveries=rows)
 
 
+
+from unittest import mock
+
+
+class AcmeCoreReadOnlyBindingProbeTests(unittest.TestCase):
+    """All IDs below are TEST_ONLY hints, never observed Core receipts."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_core_binding_probe as probe
+        cls.probe = probe
+        cls.manifest = gen.replay()
+        cls.now = datetime(2026, 11, 1, 8, 59, tzinfo=timezone.utc)
+        cls.rid = "RUN-TEST-ONLY-UNTRUSTED"
+        cls.iid = "INC-TEST-ONLY-UNTRUSTED"
+
+    def _responses(self):
+        run = {
+            "run_id": self.rid, "incident_id": self.iid,
+            "scenario_id": "SCN-GOLDEN-PAYMENT-P1",
+            "mode": "DEMO", "status": "CREATED",
+            "created_at": "2026-11-01T08:58:00Z",
+        }
+        return {
+            "/api/runs": {"items": [copy.deepcopy(run)]},
+            "/api/runs/" + self.rid: {
+                "run": copy.deepcopy(run), "events": [
+                    {"sequence": 1, "event_type": "RUN_CREATED",
+                     "stage": "INGEST", "status": "CREATED",
+                     "payload": {"scenario_id": "SCN-GOLDEN-PAYMENT-P1",
+                                 "mode": "DEMO"}, "evidence_ids": []}]},
+            "/api/noc/runs/" + self.rid: {
+                "run": {k: run[k] for k in
+                        ("run_id", "incident_id", "mode", "status")},
+                "data_classification": "SYNTHETIC_CANONICAL_RUN",
+                "tenant_acl_qualified": False,
+                "runtime_authenticated": False,
+                "live_remediation_authorized": False},
+        }
+
+    def _call(self, data=None, **kwargs):
+        data = self._responses() if data is None else data
+        calls = []
+        def fake_get(base, path, token=None):
+            calls.append((base, path, token))
+            return copy.deepcopy(data[path])
+        params = dict(origin="https://core.example",
+                      expected_run_id=self.rid,
+                      expected_incident_id=self.iid,
+                      token="TEST_ONLY_NOT_A_SECRET",
+                      now=self.now, get=fake_get)
+        params.update(kwargs)
+        with mock.patch.dict("os.environ", {
+                "AIOPS_ACME_TRUSTED_CORE_ORIGINS": "https://core.example"}):
+            result = self.probe.probe_core_binding_readonly(self.manifest, **params)
+        return result, calls
+
+    def test_internal_bearer_pair_never_promotes_tenant_actor_or_itil_receipts(self):
+        result, calls = self._call()
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["reason"],
+                         "TENANT_ACTOR_AND_CANONICAL_EVENT_BINDING_UNAVAILABLE")
+        self.assertTrue(result["core_internal_pair_match"])
+        self.assertEqual(result["core_read_attempt_count"], 3)
+        self.assertEqual([bool(t) for _, _, t in calls], [False, False, True])
+        self.assertEqual(len(result["stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["receipt_id"] is None for s in result["stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and
+                            c["id"] is None for c in result["checkpoints"]))
+        self.assertIsNone(result["run_id"])
+        self.assertIsNone(result["incident_id"])
+        self.assertIsNone(result["tenant_id"])
+        self.assertIsNone(result["actor_subject"])
+        self.assertEqual(result["evidence_ids"], [])
+        self.assertFalse(result["tenant_acl_qualified"])
+        self.assertFalse(result["source_event_binding_verified"])
+        self.assertEqual(result["canonical_replay_file_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertNotIn("TEST_ONLY_NOT_A_SECRET", str(result))
+
+    def test_missing_ids_or_token_never_initiates_core_request(self):
+        for params, reason in (
+                ({"expected_run_id": None}, "EXPECTED_CORE_PAIR_UNKNOWN"),
+                ({"expected_incident_id": None}, "EXPECTED_CORE_PAIR_UNKNOWN"),
+                ({"expected_run_id": "RUN-../bad"}, "EXPECTED_CORE_PAIR_UNKNOWN"),
+                ({"token": None}, "INTERNAL_TOKEN_NOT_CONFIGURED")):
+            with self.subTest(params=params):
+                result, calls = self._call(**params)
+                self.assertEqual(result["reason"], reason)
+                self.assertEqual(calls, [])
+
+    def test_unpinned_or_credentialed_origin_does_not_forward_bearer(self):
+        for origin in ("https://evil.example", "https://user@core.example",
+                       "http://core.example", "https://core.example.evil.test",
+                       "https://core.example/other"):
+            with self.subTest(origin=origin):
+                result, calls = self._call(origin=origin)
+                self.assertEqual(result["reason"], "CORE_ORIGIN_NOT_PINNED")
+                self.assertEqual(calls, [])
+
+    def test_foreign_or_ambiguous_incident_run_registry_fails_closed(self):
+        for mutation in (
+                lambda d: d["/api/runs"]["items"][0].update(
+                    incident_id="INC-FOREIGN-TEST"),
+                lambda d: d["/api/runs"]["items"].append(
+                    copy.deepcopy(d["/api/runs"]["items"][0])),
+                lambda d: d["/api/runs"].update(items=[]),
+                lambda d: d["/api/runs"]["items"][0].update(
+                    scenario_id="SCN-OTHER")):
+            data = self._responses()
+            mutation(data)
+            result, _ = self._call(data)
+            self.assertIn(result["reason"], (
+                "RUN_NOT_UNIQUELY_IN_REGISTRY_WINDOW",
+                "RUN_REGISTRY_SCOPE_OR_SCENARIO_MISMATCH"))
+            self.assertFalse(result["core_internal_pair_match"])
+
+    def test_foreign_detail_and_internal_run_rejected(self):
+        for path, field, value in (
+                ("/api/runs/" + self.rid, "incident_id", "INC-FOREIGN-TEST"),
+                ("/api/noc/runs/" + self.rid, "run_id", "RUN-FOREIGN-TEST")):
+            data = self._responses()
+            data[path]["run"][field] = value
+            result, _ = self._call(data)
+            self.assertIn(result["reason"], (
+                "RUN_DETAIL_SCOPE_MISMATCH", "INTERNAL_PROJECTION_UNQUALIFIED"))
+            self.assertFalse(result["core_internal_pair_match"])
+
+    def test_missing_and_stale_core_timestamp_fail_closed(self):
+        for stamp in (None, "2026-10-29T08:58:00Z",
+                      "2026-11-01T09:10:00Z", "2026-11-01T08:58:00",
+                      True):
+            data = self._responses()
+            data["/api/runs"]["items"][0]["created_at"] = stamp
+            data["/api/runs/" + self.rid]["run"]["created_at"] = stamp
+            result, _ = self._call(data)
+            self.assertEqual(result["reason"], "RUN_SOURCE_TIMESTAMP_STALE_OR_MISSING")
+
+    def test_forged_tenant_actor_or_runtime_authentication_claims_rejected(self):
+        for target, field, value in (
+                ("registry", "tenant_id", "TENANT-FORGED"),
+                ("detail", "actor_subject", "actor-forged"),
+                ("internal", "actor_verified", True),
+                ("internal", "tenant_acl_qualified", True),
+                ("internal", "runtime_authenticated", True)):
+            data = self._responses()
+            obj = (data["/api/runs"]["items"][0] if target == "registry"
+                   else data["/api/runs/" + self.rid]["run"] if target == "detail"
+                   else data["/api/noc/runs/" + self.rid])
+            obj[field] = value
+            result, _ = self._call(data)
+            self.assertFalse(result["core_internal_pair_match"])
+            self.assertEqual(result["result"], "UNKNOWN")
+
+    def test_wrong_creation_event_or_foreign_nested_run_rejected(self):
+        for field, value in (("event_type", "FAKE_EVENT"),
+                             ("run_id", "RUN-FOREIGN-TEST")):
+            data = self._responses()
+            data["/api/runs/" + self.rid]["events"][0][field] = value
+            result, _ = self._call(data)
+            self.assertIn(result["reason"], (
+                "RUN_CREATION_ANCHOR_MISMATCH", "RUN_EVENTS_UNQUALIFIED"))
+
+    def test_foreign_partition_or_seed_cannot_become_core_binding(self):
+        with self.assertRaises(ValueError):
+            self._call(test_partition="REAL_TENANT")
+        forged = copy.deepcopy(self.manifest)
+        forged["seed"] = 20261019
+        with mock.patch.dict("os.environ", {
+                "AIOPS_ACME_TRUSTED_CORE_ORIGINS": "https://core.example"}):
+            with self.assertRaises(ValueError):
+                self.probe.probe_core_binding_readonly(
+                    forged, origin="https://core.example",
+                    expected_run_id=self.rid,
+                    expected_incident_id=self.iid,
+                    token="TEST_ONLY_NOT_A_SECRET")
+
+    def test_missing_core_read_and_source_event_link_remain_unknown(self):
+        data = self._responses()
+        del data["/api/noc/runs/" + self.rid]
+        result, calls = self._call(data)
+        self.assertEqual(result["reason"], "CORE_READ_UNAVAILABLE")
+        self.assertEqual(len(calls), 3)
+        self.assertFalse(result["source_event_binding_verified"])
+        self.assertIsNone(result["glpi_ticket_id"])
+
+
 if __name__ == "__main__":
     unittest.main()

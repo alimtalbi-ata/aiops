@@ -86,3 +86,27 @@ New `test_05_independent_core_tcp_temporal_server_restart_persistent_reject` run
 **Exact-head execution gate:** dedicated CI runs `PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_pg16_temporal_combined.py' -v` (7 expected, PASS only after CI logs) and `/tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v` (5 expected, includes PostgreSQL 16 `pg_dump`/`pg_restore` DR). Pin `psycopg[binary]==3.2.13`, `temporalio==1.16.0`, `uvicorn==0.35.0` and PostgreSQL client major 16. On apt install failure, keep DR and use a separately pinned PostgreSQL 16 client image. Evidence JSON, CI run ID, exact HEAD, N/N, artifact and SHA256 are recorded only after actual execution.
 
 **Rollback:** close the Draft PR or revert only these three Worker-owned paths. The isolated database is dropped, disposable Core/Worker processes terminated and Temporal SQLite removed by CI teardown. No schema migration, Core handler or candidate branch modification; architect remains sole integrator.
+
+
+## 2026-11-01 09:28 CET — Cross-tenant / Run / lease isolation with two OS Worker restarts
+
+**Source:** sole architect Draft #234 exact base 6a8c9bcab294e85a9831b34ae84980bf2b8649b1, main ae7c3e5102b99a66bd7806d602146f1309a9749d; #271 already selectively integrated. This is a new Worker-owned **test-only** PR, not a re-port of historical Worker/Policy/Core work. Only the combined test, dedicated workflow and this qualification file change.
+
+The eighth combined test creates **two independent synthetic tenant/Run ownership bindings** with separate scoped synthetic service Bearer credentials and CI-generated HMAC proofs. The test runs actual Core claim/ACK HTTP on an independent loopback Uvicorn OS process, PostgreSQL 16 with installed pinned migrations 001/004/009–012, and a persisted Temporal SDK development server. It starts three distinct OS Worker processes sequentially (two separate Worker restarts) and stops/restarts the Temporal **server** between the second and third Worker. Each of two distinct tenant-bound REJECT events must be signalled exactly once **in this test**; the two durable Core receipts must be DELIVERED with attempts 1 and 2 respectively. No claim of universal exactly-once semantics or production Worker/poller qualification is made.
+
+Negative assertions: foreign-tenant Bearer cannot ACK the other tenant's event (403 UNKNOWN); wrong Run, proposal ID, proposal hash, proposal revision or lease token returns UNKNOWN; an expired lease token remains denied both before and after Worker/Temporal restart; the new Core lease is the only route to a durable second ACK. Both correct ACK replays are idempotent, and both tenants have no remaining claimable event. Signals contain no lease token and are REJECT notification-only, not human authorization. execution_allowed=false, effect_allowed=false, zero APPROVE rows, zero effect receipts. The public Policy HTTP contract remains unchanged (state, decision, reason).
+
+**Fault classification:** the first ACK response is dropped by deterministic **loopback gateway socket close after Core's actual PG16 commit**; this is **INJECTED_GATEWAY_CLOSE**, not physical packet loss or a network partition. Temporal SERVER stop/start with persisted SQLite is separate from two Worker OS restarts. Real GLPI/OIDC source attestation is **NOT_ATTESTED**; synthetic HMAC is only a cryptographic test fixture. Real production runtime/poller, physical partition, executor and LIVE remain **NOT_TESTED / DISABLED**.
+
+**CI commands (execute on PR exact HEAD, not a prior green SHA):**
+
+~~~bash
+PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_pg16_temporal_combined.py' -v
+/tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v
+pg_dump --version && pg_restore --version
+sha256sum --check /tmp/hitl-combined-pg16-dr.sha256
+~~~
+
+The dedicated workflow requires GitHub Actions disposable PostgreSQL 16, pinned psycopg[binary]==3.2.13, temporalio==1.16.0, uvicorn==0.35.0, and PostgreSQL 16 client pg_dump/pg_restore. Expected **8 combined + 5 DR** tests, but do **not** claim PASS or observed runtime until exact-head logs confirm. On client installation failure, retain DR and switch to a separately pinned postgres:16-alpine client image with version assertion, then rerun. The workflow evidence JSON must distinguish source-only, observed, gateway-close, and NOT_TESTED.
+
+**Dependency:** Core retains authority for immutable tenant/Run/proposal hash/revision/lease owner/token/expiry and idempotent ACK. No Core code, migrations, shared Quality, Portal, candidate, or release manifest changes. Architect alone may selectively integrate after exact-head review and checks. **Rollback:** close Draft or revert only the three Worker test/workflow/doc path changes; retain all previously integrated tests and immutable audit 013. No main push or merge by Worker owner.
