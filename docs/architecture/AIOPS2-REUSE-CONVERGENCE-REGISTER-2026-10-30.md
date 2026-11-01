@@ -748,3 +748,8 @@ The sole integration candidate remains Draft #234; source histories were **not**
 ### 2026-11-01 16:14 CET — Worker #299 selective reuse
 
 Source #299 HEAD 507899f18d38a083f1bedc5a8603d17160612c83, CI 41316946503 (1/1 positive + 5/5 PG16 DR), Quality 41316946593 (3/3). Three Worker paths imported to sole Draft #234, with main-based CI trigger and no raw PG16 archive upload. Core #295 terminal /dead and migration 014 already present. Portal #298 55/55 negative and ACME #300 205/205 offline remain source-only. Exact candidate HEAD CI required; 7777 and real GLPI human authority NOT_VERIFIED. NO_GO, revert targeted code only, retain 013/014 audit and host volumes.
+
+
+### 2026-11-01 16:25 CET — selective source #302/#301
+
+Core #302 HEAD 990b1f8f6ce14a1e4d191a8fb062ada1fd990039, four files, canonical Core route mounted, source PG16 14/14 and native recovery CI 41320750573 SUCCESS, Quality 41320750574 SUCCESS. Portal #301 HEAD 604c704bde3291615350cc4623040dea8273a14c, five files, invalid OIDC cookie cannot downgrade, source Chromium/API 54/54 and Quality 41320526303 SUCCESS. Both selectively imported into sole Draft #234 without merging source history. Candidate exact-head CI pending; real GLPI human rights and host 7777 NOT_VERIFIED. NO_GO; forward revert targeted commits, preserve audit 013/014 and volumes.

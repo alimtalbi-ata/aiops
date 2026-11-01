@@ -863,3 +863,8 @@ A genuine GitHub Actions `schedule` event is now **OBSERVED**, correcting previo
 ## 2026-11-01 16:14 CET — Worker positive integration
 
 Sole Draft #234 selectively imported three Worker #299 paths on Core-owned 014, source CI 41316946503 (1/1 positive + 5/5 PG16 DR) and Quality 41316946593 (3/3). Candidate head at review: 34eee55ddccc3ca94156b93a1781c378db0e9a54; exact-head CI pending. Source #298 Portal 55/55 negative, #295 Core 12/12 + recovery, #300 ACME 205/205 synthetic. Reporter collected_at 2026-11-01T15:14:02Z: 61 containers, 53 running, 8 exited. Host TCP 7777 NOT_VERIFIED; 17777 is distinct. No host changes, no main merge. WIP P0 Portal/Core/Worker; ACME P1. RELEASE_STABLE=NO_GO; revert candidate import only, preserve Core 013/014 audit and volumes.
+
+
+## 2026-11-01 16:25 CET — Core/Portal security integration
+
+Candidate #234 selectively imports Core #302 four files (canonical /dead mount, 14/14 PG16, native restore) and Portal #301 five files (OIDC cookie downgrade refusal, 54/54 Chromium/API). Source CI #302 41320750573 and 41320750574 SUCCESS; #301 41320526303 SUCCESS 3/3. Candidate new HEAD ef799be5b66aa2124ff83a4f6dd8bf19e11cca59 requires new exact-head CI. Main unchanged. P0 Portal/Core/Worker, P1 ACME. Host 7777 and real GLPI authority NOT_VERIFIED. NO_GO. Rollback targeted forward revert, preserve 013/014 audit and volumes.

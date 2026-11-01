@@ -305,3 +305,8 @@ Existing SRV-DEB-05 read-only reporter publishes canonical `ops/debian-reports/S
 ## 2026-11-01 16:14 CET — Core 014 Worker qualification
 
 Core owns terminal REJECT to DEAD and immutable 013/014 audit. Candidate #234 selectively imports Worker #299 positive PG16/Temporal tests, source CI 41316946503 (1/1 positive + 5/5 DR) and Quality 41316946593 (3/3). Candidate exact-head CI must requalify. Main-based workflow excludes raw PG16 archive uploads. No real GLPI approval or host changes. Host TCP 7777 NOT_VERIFIED; loopback 17777 is different. RELEASE_STABLE=NO_GO.
+
+
+## 2026-11-01 16:25 CET — canonical Core and Portal OIDC fence
+
+Core #302 fixes a critical integration gap: the terminal /dead handler existed but was not mounted on canonical core.main.app. Four focused files were imported into Draft #234; disposable source PG16 canonical HTTP 14/14 and native restore passed. Portal #301 rejects invalid/revoked OIDC cookie downgrade to viewer bearer, requires HTTPS same-Origin and preserves 503 UNKNOWN for unqualified Run; source Chromium/API 54/54 passed. Neither synthetic test proves human GLPI rights, Debian 7777 reachability or a full ITIL incident journey. Candidate exact-head requalification required; RELEASE_STABLE=NO_GO.
