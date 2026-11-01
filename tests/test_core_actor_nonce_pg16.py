@@ -108,6 +108,33 @@ class ActorLedgerPopulatedPG16(unittest.TestCase):
             self.assertEqual(conn.execute(
                 "select count(*) from aiops.actor_delegation_revocations").fetchone()[0], 2)
 
+    def test_python_actor_fence_real_pg16_first_consume_replay_revocation(self):
+        """Python Core decision helper against the real installed 013 SQL."""
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from core import actor_replay_fence as fence
+        from core import itsm_xref as x
+        now = int(datetime.now(timezone.utc).timestamp())
+        claims = {"iss": "https://issuer.example.invalid", "sub": "subject-PG",
+                  "jti": "jti-python-fence-disposable", "exp": now + 90}
+        expected = {"tenant_id": "TEN-A", "run_id": "RUN-A",
+                    "incident_id": "INC-A", "glpi_instance_id": "GLPI-A",
+                    "ticket_id": "123", "glpi_entity_id": "7",
+                    "permission": "run:read",
+                    "nonce": "nonce-python-fence-disposable"}
+        with patch.object(x, "db", lambda: self.psycopg.connect(self.url)):
+            self.assertTrue(fence.consume_actor_delegation(claims, expected, now))
+            self.assertFalse(fence.consume_actor_delegation(claims, expected, now))
+            revoked = {**claims, "jti": "jti-python-fence-revoked"}
+            with self.psycopg.connect(self.url) as conn:
+                self.assertTrue(self.revoke(conn, revoked["jti"]))
+            self.assertFalse(fence.consume_actor_delegation(
+                revoked, {**expected, "nonce": "nonce-python-fence-revoked"}, now))
+            # A foreign-tenant nonce cannot replay the exact consumed JTI.
+            self.assertFalse(fence.consume_actor_delegation(
+                claims, {**expected, "tenant_id": "TEN-B",
+                         "nonce": "nonce-python-fence-foreign"}, now))
+
     def test_populated_logical_backup_restore_without_dropping_audit(self):
         """Disposable COPY snapshot/restore into an isolated schema, then rollback.
 
