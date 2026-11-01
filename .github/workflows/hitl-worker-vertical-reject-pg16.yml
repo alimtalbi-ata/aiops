@@ -1,0 +1,132 @@
+name: HITL Worker synthetic REJECT vertical Core PG16 Temporal disposable
+
+on:
+  pull_request:
+    branches:
+      - integration/enterprise-slice-main-20261031-2230
+      - main
+    paths:
+      - app/worker/hitl_reject_vertical_projection.py
+      - tests/test_worker_hitl_vertical_reject_pg16.py
+      - .github/workflows/hitl-worker-vertical-reject-pg16.yml
+      - docs/qualification/HITL-WORKER-VERTICAL-REJECT-PG16-2026-11-01.md
+
+permissions:
+  contents: read
+
+jobs:
+  vertical-reject-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    container:
+      image: ubuntu:24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-hitl-ephemeral-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DATABASE_URL: postgresql://aiops:ci-hitl-ephemeral-only@postgres:5432/aiops
+      AIOPS_CI_COMBINED_DISPOSABLE: "YES"
+      AIOPS_CI_CORE_DEAD_POSITIVE: "YES"
+      AIOPS_CI_VERTICAL_REJECT: "YES"
+      AIOPS_CI_OUTBOX_DISPOSABLE: "YES"
+      AIOPS_CI_VERTICAL_REJECT_RECEIPT_DIR: /tmp/hitl-worker-vertical-receipts
+      HITL_DR_ARTIFACT: /tmp/hitl-worker-vertical-pg16-dr.dump
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Install PostgreSQL 16 client in disposable CI
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv postgresql-client-16
+          pg_dump --version | grep -E ' 16[.]'
+          pg_restore --version | grep -E ' 16[.]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify exact HEAD and pinned test dependencies
+        run: |
+          set -eu
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          python3 -m venv /tmp/hitl-combined-venv
+          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "uvicorn==0.35.0"
+          /tmp/hitl-combined-venv/bin/python -m py_compile app/worker/hitl_reject_vertical_projection.py tests/test_worker_hitl_vertical_reject_pg16.py
+      - name: Core PG16 synthetic Analyst Critic Policy REJECT SIMULATE veto VERIFY and persisted Temporal
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_hitl_vertical_reject_pg16.py' -v 2>&1 | tee /tmp/hitl-worker-vertical.log
+          grep -q "Ran 1 test" /tmp/hitl-worker-vertical.log
+          grep -q "^OK$" /tmp/hitl-worker-vertical.log
+          ! grep -q "skipped=" /tmp/hitl-worker-vertical.log
+      - name: Validate redacted exact-head machine-readable receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CI_VERTICAL_REJECT_RECEIPT_DIR"]) / "worker-vertical-reject.json"
+          raw = path.read_text()
+          data = json.loads(raw)
+          digest = data.pop("payload_sha256")
+          canonical = json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
+          assert hashlib.sha256(canonical).hexdigest() == digest
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["schema"] == "aiops.worker-reject-simulate-verification.v1"
+          assert data["core_run_api"] == "OBSERVED_CI_DISPOSABLE_ASGI"
+          assert data["core_terminal_api"] == "CORE_OWNED_DEAD_OBSERVED"
+          assert data["migration_014"] == "ONE_IMMUTABLE_RECEIPT_OBSERVED"
+          assert data["policy_decision"] == "SIMULATE"
+          assert data["human_decision"] == "REJECT_SYNTHETIC_UNVERIFIED"
+          assert data["simulation_status"] == "SUPPRESSED_BY_REJECT"
+          assert data["verification_status"] == "UNVERIFIED"
+          assert data["reopen_status"] == "RECOMMENDED_NOT_EXECUTED"
+          assert data["incident_state"] == "OPEN" and data["run_status"] == "BLOCKED"
+          assert data["disposable_worker_instances"] == 2
+          assert data["independent_os_processes"] is False
+          assert data["temporal_persisted_restarts"] == 1
+          assert data["temporal_signal_count"] == data["approve_count"] == data["effect_receipt_count"] == 0
+          assert data["live_executor_calls"] == data["glpi_write_calls"] == 0
+          assert data["execution_allowed"] is False and data["effect_allowed"] is False
+          assert data["sql_dead_injection"] is False
+          assert data["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert data["host_7777_local_operator"] == "REPORTED_VERIFIED"
+          assert data["host_7777_external"] == "NOT_ATTESTED"
+          assert data["universal_exactly_once"] == "NOT_CLAIMED"
+          assert not any(s in raw.lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
+          print("VERTICAL_REJECT_RECEIPT_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CI_VERTICAL_REJECT_RECEIPT_DIR"/worker-vertical-reject.json > /tmp/hitl-worker-vertical.sha256
+          sha256sum --check /tmp/hitl-worker-vertical.sha256
+      - name: PostgreSQL 16 outbox DR restore regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v 2>&1 | tee /tmp/hitl-worker-vertical-dr.log
+          grep -q "Ran 5 tests" /tmp/hitl-worker-vertical-dr.log
+          grep -q "^OK$" /tmp/hitl-worker-vertical-dr.log
+          ! grep -q "skipped=" /tmp/hitl-worker-vertical-dr.log
+          test -s "$HITL_DR_ARTIFACT"
+          pg_restore --version | grep -E ' 16[.]'
+          sha256sum "$HITL_DR_ARTIFACT" > /tmp/hitl-worker-vertical-dr.sha256
+          sha256sum --check /tmp/hitl-worker-vertical-dr.sha256
+      - name: Upload only redacted JSON and SHA256 manifests (never PG16 dump)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-worker-vertical-reject-pg16-receipts-only
+          path: |
+            /tmp/hitl-worker-vertical-receipts/worker-vertical-reject.json
+            /tmp/hitl-worker-vertical.sha256
+            /tmp/hitl-worker-vertical-dr.sha256
+          retention-days: 7
+          if-no-files-found: warn
