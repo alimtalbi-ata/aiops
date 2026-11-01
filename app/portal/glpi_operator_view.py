@@ -71,13 +71,14 @@ fraîcheur : UNKNOWN. Le producteur Core PG16 est un contrat source, pas un droi
 <thead><tr><th scope="col">Autorité requise</th><th scope="col">État</th></tr></thead>
 <tbody>
 <tr><th scope="row">IdP subject → GLPI User, mapping gouverné</th><td data-authority-check="idp">UNKNOWN — non attesté</td></tr>
-<tr><th scope="row">GLPI Profile / Entity / Ticket READ ou READMY + propriété</th><td data-authority-check="glpi">UNKNOWN — non attesté</td></tr>
+<tr><th scope="row">GLPI User / Profile / Entity / Ticket READ ou READMY</th><td data-authority-check="glpi">UNKNOWN — non attesté</td></tr>
+<tr><th scope="row">GLPI Ticket_User : READMY exige un lien humain natif, sans confondre READ</th><td data-authority-check="ownership">UNKNOWN — non attesté</td></tr>
 <tr><th scope="row">Core PG16 Run → Incident → ticket, signataire distinct de l'IdP</th><td data-authority-check="core">UNKNOWN — non attesté</td></tr>
 <tr><th scope="row">Nonce/JTI atomique, révocation et fraîcheur</th><td data-authority-check="replay">UNKNOWN — non attesté</td></tr>
 </tbody></table></div>
 <dl><dt>IdP → User GLPI</dt><dd>UNKNOWN — mapping non attesté</dd>
 <dt>Profile / Entity / Ticket READ</dt><dd>UNKNOWN — droits natifs non attestés</dd>
-<dt>READMY / propriété du ticket</dt><dd>UNKNOWN — propriété non attestée</dd>
+<dt>READMY / Ticket_User (demandeur, observateur ou assignation selon GLPI)</dt><dd>UNKNOWN — relation native et règles de visibilité non attestées ; un lien seul ne vaut pas ALLOW</dd>
 <dt>Core Run / ticket / signer / nonce</dt><dd>UNKNOWN — liaison et révocation non attestées</dd></dl>
 <p><button type="button" disabled aria-disabled="true">Commenter</button>
 <button type="button" disabled aria-disabled="true">Assigner</button>
@@ -198,6 +199,7 @@ def glpi_readonly_status(request: Request,
             "idp_subject_glpi_user": "UNKNOWN",
             "native_user_profile_entity_ticket_read": "UNKNOWN",
             "readmy_ticket_ownership": "UNKNOWN",
+            "readmy_ticket_user_membership": "UNKNOWN",
             "core_run_ticket_binding": "UNKNOWN",
             "signer_nonce_revocation": "UNKNOWN",
             "human_allow": False,
@@ -210,6 +212,7 @@ def glpi_readonly_status(request: Request,
             "core_pg16_producer": "SOURCE_CONTRACT_ONLY_NOT_HUMAN_ACL",
             "idp_glpi_mapping": "NOT_ATTESTED",
             "glpi_native_readmy_ownership": "NOT_ATTESTED",
+            "glpi_native_ticket_user_membership": "NOT_ATTESTED",
             "core_run_signer_nonce_revocation": "NOT_ATTESTED",
             "independent_proofs_verified": False,
             "human_allow": False,
