@@ -380,6 +380,23 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("CONNECTED", status.text())
 
 
+    def test_08_canonical_7777_is_intent_not_ci_or_debian_binding(self):
+        """Real Chromium uses an ephemeral port; never reports it as host 7777."""
+        health = self.context.request.get(self.base + "/health")
+        self.assertEqual(health.status, 200)
+        data = health.json()
+        self.assertEqual(data["canonical_host_port"], 7777)
+        self.assertIs(data["host_port_binding_verified"], False)
+        self.assertEqual(data["runtime_exposure"], "UNKNOWN")
+        self.assertNotIn("external_port", data)
+        self.assertNotIn("17777", health.text())
+        self.page.goto(self.base + "/")
+        self.assertEqual(self.page.locator('a[href*="17777"]').count(), 0)
+        self.page.goto(self.base + "/itsm")
+        self.assertIn("UNKNOWN", self.page.locator("body").inner_text())
+        self.assertNotIn("CONNECTED", self.page.locator("body").inner_text())
+
+
 # Quality browser entry point also runs the disposable negative Portal ACL suite.
 from test_portal_acl_browser_e2e import PortalACLChromiumE2E
 # Run the Portal actor-resource contract suite at the same exact CI SHA.
@@ -387,6 +404,8 @@ from test_portal_acl_browser_e2e import PortalACLChromiumE2E
 from test_portal_core_acl_consumer import PortalCoreACLConsumerTests
 # Focused disposable IdP/GLPI/Core signer rotation suite (no shared CI edit).
 from test_portal_idp_glpi_rotation_contract import PortalIdpGlpiRotationContract
+# Canonical host 7777 is an intent contract, not a Debian runtime observation.
+from test_portal_single_7777_contract import PortalSingle7777NegativeContract
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
