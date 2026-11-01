@@ -552,12 +552,18 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
 
         # A native-looking negative body cannot grant; explicit 401 and
         # 403 remain visibly denied without a browser viewer fallback.
+        def denied_route(status_code):
+            # Playwright may pass (route, request) positionally; do not
+            # capture the status as a callback default argument.
+            def fulfill(route):
+                route.fulfill(status=status_code, content_type="application/json",
+                              body=json.dumps({"state": "UNAUTHORIZED"}))
+            return fulfill
+
         for code, expected in ((401, "401 UNAUTHORIZED"),
                                (403, "503 UNKNOWN")):
             with self.subTest(http=code):
-                self.page.route("**/api/portal/itsm", lambda route, code=code:
-                    route.fulfill(status=code, content_type="application/json",
-                                  body=json.dumps({"state": "UNAUTHORIZED"})))
+                self.page.route("**/api/portal/itsm", denied_route(code))
                 self.page.locator("#glpi-check").click()
                 expect(self.page.locator("#glpi-check-status")).to_contain_text(
                     expected)
