@@ -5,14 +5,17 @@ fixture. No independent GLPI/OIDC source attestation, no human APPROVE, no LIVE,
 no poller or executor. HTTP is FastAPI TestClient (in-process), not a network
 partition test. Temporal *test Worker* restarts; server does not restart.
 """
+import asyncio
 import concurrent.futures
 import hashlib
 import hmac
 import json
+import socket
 import os
 import secrets
 import tempfile
 import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import unittest
 import uuid
 from pathlib import Path
@@ -47,6 +50,51 @@ def git_blob(raw):
 @unittest.skipUnless(os.getenv("GITHUB_ACTIONS") == "true"
                      and os.getenv("AIOPS_CI_COMBINED_DISPOSABLE") == "YES",
                      "requires explicitly disposable GitHub Actions services")
+
+class _LoopbackAckDropGateway(BaseHTTPRequestHandler):
+    """Disposable TCP gateway: forward to actual Core ASGI, drop one ACK reply.
+
+    The client experiences a closed TCP connection after Core committed. This
+    is NOT a real Core TCP deployment or a random network partition.
+    """
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *_args):
+        pass
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length < 1 or length > 8192:
+            self.send_error(400)
+            return
+        body = json.loads(self.rfile.read(length))
+        response = self.server.core_client.post(
+            self.path, json=body, headers={
+                "Authorization": self.headers.get("Authorization", "")})
+        if self.path.endswith("/ack") and self.server.drop_once:
+            self.server.drop_once = False
+            self.server.dropped_ack = {
+                "path": self.path, "body": body,
+                "status_code": response.status_code,
+                "response": response.json(),
+            }
+            # The upstream Core handler returned (and committed its DB ACK).
+            # Simulate a network-boundary lost response by closing the TCP
+            # socket without writing an HTTP status line or response bytes.
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.close_connection = True
+            return
+        data = response.content
+        self.send_response(response.status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
 class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
@@ -340,6 +388,120 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                 "select attempts from aiops.hitl_decision_outbox "
                 "where event_id=%s", (ids["event"],)).fetchone()[0], 2)
         self._no_effect()
+
+    async def test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate(self):
+        """Actual loopback TCP response close; Core remains in-process ASGI.
+
+        This qualifies deterministic gateway-side loss, not physical packet
+        loss, an independently deployed Core server, or Temporal server restart.
+        """
+        import httpx
+        from temporalio.testing import WorkflowEnvironment
+        from temporalio.worker import Worker
+
+        first = self._fixture()
+        self._write_synthetic_proofs()
+        gateway = ThreadingHTTPServer(("127.0.0.1", 0), _LoopbackAckDropGateway)
+        gateway.core_client = self.client
+        gateway.drop_once = True
+        gateway.dropped_ack = None
+        thread = threading.Thread(target=gateway.serve_forever, daemon=True)
+        thread.start()
+        try:
+            async with httpx.AsyncClient(
+                    base_url=f"http://127.0.0.1:{gateway.server_port}",
+                    timeout=10.0, trust_env=False) as tcp:
+                async def post(path, body):
+                    response = await tcp.post(
+                        path, json=body,
+                        headers={"Authorization": "Bearer " + self.bearer})
+                    payload = response.json()
+                    self.assertIs(payload["execution_allowed"], False)
+                    self.assertIs(payload["effect_allowed"], False)
+                    return response.status_code, payload
+
+                async with await WorkflowEnvironment.start_local() as env:
+                    queue = "ci-core-tcp-loss-" + uuid.uuid4().hex
+                    handle = await env.client.start_workflow(
+                        SyntheticRejectSink.run, id=queue, task_queue=queue)
+
+                    async def signal(run_id, payload):
+                        self.assertEqual(payload["decision"], "REJECT")
+                        self.assertEqual(payload["run_id"], run_id)
+                        self.assertIs(payload["notification_only"], True)
+                        self.assertIs(payload["execution_allowed"], False)
+                        self.assertIs(payload["effect_allowed"], False)
+                        self.assertNotIn("lease_token", payload)
+                        await handle.signal(
+                            SyntheticRejectSink.reject_notification, payload)
+
+                    async with Worker(env.client, task_queue=queue,
+                                      workflows=[SyntheticRejectSink]):
+                        with self.assertRaises(httpx.TransportError):
+                            await deliver_core_reject_once(
+                                tenant_id=TENANT, owner=OWNER,
+                                post=post, signal=signal)
+                        for _ in range(50):
+                            if await handle.query(SyntheticRejectSink.count) == 1:
+                                break
+                            await asyncio.sleep(0.1)
+                        else:
+                            self.fail("first REJECT not observed before restart")
+
+                    dropped = gateway.dropped_ack
+                    self.assertIsNotNone(dropped)
+                    self.assertEqual(dropped["status_code"], 200)
+                    self.assertEqual(dropped["response"]["status"], "DELIVERED")
+                    self.assertIs(dropped["response"]["idempotent"], False)
+                    with self.psycopg.connect(self.url) as db:
+                        self.assertEqual(db.execute(
+                            "select status,attempts from aiops.hitl_decision_outbox "
+                            "where event_id=%s", (first["event"],)).fetchone(),
+                            ("DELIVERED", 1))
+                    # A fresh TCP request replays EXACTLY the committed ACK.
+                    # It cannot send a second Temporal signal or re-claim it.
+                    code, receipt = await post(dropped["path"], dropped["body"])
+                    self.assertEqual((code, receipt["status"], receipt["idempotent"]),
+                                     (200, "DELIVERED", True))
+                    code, again = await post(dropped["path"], dropped["body"])
+                    self.assertEqual((code, again["idempotent"]), (200, True))
+                    code, empty = await post(
+                        f"/api/tenants/{TENANT}/hitl/reject-delivery/claim",
+                        {"owner": OWNER, "limit": 1})
+                    self.assertEqual((code, empty["status"], empty["items"]),
+                                     (200, "UNKNOWN", []))
+                    self.assertEqual(await handle.query(SyntheticRejectSink.count), 1)
+
+                    second = self._fixture()
+                    self._write_synthetic_proofs()
+                    # Temporal *test Worker* is restarted; server stays alive.
+                    async with Worker(env.client, task_queue=queue,
+                                      workflows=[SyntheticRejectSink]):
+                        receipts = await deliver_core_reject_once(
+                            tenant_id=TENANT, owner=OWNER,
+                            post=post, signal=signal)
+                        self.assertEqual(len(receipts), 1)
+                        self.assertEqual(receipts[0]["status"], "DELIVERED")
+                        signals = await asyncio.wait_for(handle.result(), timeout=20)
+                        self.assertEqual(len(signals), 2)
+                        self.assertEqual(
+                            [item["run_id"] for item in signals],
+                            [first["run"], second["run"]])
+                        self.assertEqual(
+                            len({item["event_id"] for item in signals}), 2)
+                    with self.psycopg.connect(self.url) as db:
+                        self.assertEqual(db.execute(
+                            "select status,attempts from aiops.hitl_decision_outbox "
+                            "where event_id=%s", (first["event"],)).fetchone(),
+                            ("DELIVERED", 1))
+                    self.assertIs(gateway.drop_once, False)
+                    self._no_effect()
+        finally:
+            gateway.shutdown()
+            gateway.server_close()
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive(), "TCP gateway did not stop")
+
 
 
 if __name__ == "__main__":
