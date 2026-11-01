@@ -116,6 +116,10 @@ class DisposableSignedCoreNativeGlpi:
             "Entity": {"id": 42},
             "Ticket": {"id": 123, "entities_id": 42},
         }
+        # Test-only GLPI native Ticket_User relation. This does NOT prove
+        # effective READMY, since GLPI may impose further profile/entity rules.
+        self.ticket_users = [{"id": 9, "tickets_id": 123,
+                              "users_id": 77, "type": 1}]
 
     def _signer_jwk(self):
         numbers = self.signing_key.public_key().public_numbers()
@@ -203,12 +207,15 @@ class DisposableSignedCoreNativeGlpi:
                     "/apirest.php/Profile/4": "Profile",
                     "/apirest.php/Entity/42": "Entity",
                     "/apirest.php/Ticket/123": "Ticket",
+                    "/apirest.php/Ticket/123/Ticket_User": "Ticket_User",
                 }
                 name = routes.get(self.path)
                 if name is None:
                     self.send_error(404)
                     return
-                raw = json.dumps(owner.native_rows[name]).encode("utf-8")
+                row = (owner.ticket_users if name == "Ticket_User"
+                       else owner.native_rows[name])
+                raw = json.dumps(row).encode("utf-8")
                 self.send_response(200)
                 for key, value in _HEADERS.items():
                     self.send_header(key, value)
@@ -301,3 +308,14 @@ class DisposableSignedCoreNativeGlpi:
                 raise ValueError("disposable GLPI readback unavailable")
             rows[name] = body
         return rows
+
+    def read_ticket_users(self):
+        """Test-only native Ticket_User GET; never a permission or Portal fetch."""
+        status, body, _ = self._request(
+            1, "glpi.example.test", self.glpi_cert, "GET",
+            "/apirest.php/Ticket/123/Ticket_User",
+            headers={"App-Token": "synthetic-app-token",
+                     "Session-Token": "synthetic-human-session"})
+        if status != 200 or not isinstance(body, list):
+            raise ValueError("disposable Ticket_User readback unavailable")
+        return body

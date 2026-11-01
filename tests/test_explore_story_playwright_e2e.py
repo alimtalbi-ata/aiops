@@ -432,7 +432,7 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.page.goto(self.base + "/itsm")
         expect(self.page.locator("#glpi-source-provenance")).to_contain_text(
             "PORTAL_CONTRACT_ONLY")
-        self.assertEqual(self.page.locator("[data-authority-check]").count(), 4)
+        self.assertEqual(self.page.locator("[data-authority-check]").count(), 5)
         self.assertTrue(self.page.get_by_role("button", name="Approuver HITL").is_disabled())
 
         # This 503 is a test-controlled negative projection, NOT an IdP/GLPI
@@ -502,6 +502,111 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
             json.dumps(receipt, sort_keys=True, indent=2) + "\n",
             encoding="utf-8")
 
+
+
+    def test_10_glpi_readmy_ticket_user_boundary_browser_401_403_503(self):
+        """Real Chromium/HTTP, no positive human permission or ticket exposure."""
+        denied = self.context.request.get(self.base + "/api/portal/itsm")
+        self.assertEqual(denied.status, 401)
+        unknown = self.context.request.get(self.base + "/api/portal/itsm",
+            headers={"Authorization": "Bearer " + VIEWER,
+                     "X-GLPI-Ticket-User": "77",
+                     "X-GLPI-Permission": "READMY",
+                     "X-Core-Decision": "ALLOW"})
+        self.assertEqual(unknown.status, 503)
+        body = unknown.json()
+        self.assertEqual(body["human_authority"]["readmy_ticket_user_membership"],
+                         "UNKNOWN")
+        self.assertEqual(body["authority_sources"][
+            "glpi_native_ticket_user_membership"], "NOT_ATTESTED")
+        self.assertFalse(body["authority_sources"]["independent_proofs_verified"])
+        self.assertNotIn("ticket_id", body)
+        self.assertNotIn("run_id", body)
+        self.assertEqual(unknown.headers["cache-control"], "no-store")
+
+        requested = []
+        self.page.on("request", lambda req: requested.append(req.url))
+        self.page.goto(self.base + "/itsm")
+        ownership = self.page.locator('[data-authority-check="ownership"]')
+        expect(ownership).to_contain_text("UNKNOWN")
+        self.assertEqual(self.page.locator("[data-authority-check]").count(), 5)
+        self.assertIn("Ticket_User", self.page.locator(
+            "#human-rights-title").locator("xpath=..").inner_text())
+
+        # Even forged same-origin 200/ALLOW with native-looking ownership
+        # and a Core signature is never rendered as an authorization.
+        self.page.route("**/api/portal/itsm", lambda route: route.fulfill(
+            status=200, content_type="application/json",
+            body=json.dumps({"state": "CONNECTED", "decision": "ALLOW",
+                             "glpi_right": "READMY", "ticket_user": 77,
+                             "ticket_id": "FORGED-TICKET-999",
+                             "run_id": "RUN-FORGED-999",
+                             "core_signature": "FORGED"})))
+        self.page.locator("#glpi-check").click()
+        expect(self.page.locator("#glpi-check-status")).to_contain_text(
+            "503 UNKNOWN")
+        expect(ownership).to_contain_text("réponse non qualifiée")
+        self.assertNotIn("FORGED-TICKET-999", self.page.locator("body").inner_text())
+        self.assertNotIn("RUN-FORGED-999", self.page.locator("body").inner_text())
+        self.page.unroute("**/api/portal/itsm")
+
+        # A native-looking negative body cannot grant; explicit 401 and
+        # 403 remain visibly denied without a browser viewer fallback.
+        def denied_route(status_code):
+            # Playwright may pass (route, request) positionally; do not
+            # capture the status as a callback default argument.
+            def fulfill(route):
+                route.fulfill(status=status_code, content_type="application/json",
+                              body=json.dumps({"state": "UNAUTHORIZED"}))
+            return fulfill
+
+        for code, expected in ((401, "401 UNAUTHORIZED"),
+                               (403, "503 UNKNOWN")):
+            with self.subTest(http=code):
+                self.page.route("**/api/portal/itsm", denied_route(code))
+                self.page.locator("#glpi-check").click()
+                expect(self.page.locator("#glpi-check-status")).to_contain_text(
+                    expected)
+                expect(ownership).to_contain_text("UNKNOWN")
+                self.page.unroute("**/api/portal/itsm")
+
+        for name in ("Commenter", "Assigner", "Approuver HITL"):
+            self.assertTrue(self.page.get_by_role("button", name=name).is_disabled())
+        self.assertFalse(any("/api/core/" in url or "/api/glpi/" in url
+                             or "/api/noc/runs/" in url for url in requested))
+        self.assertFalse(any("token=" in url for url in requested))
+
+        output = Path(os.environ.get(
+            "AIOPS_E2E_ARTIFACT_DIR", str(Path(self.tmp.name) / "artifacts")))
+        output.mkdir(parents=True, exist_ok=True)
+        head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        expected = os.environ.get("AIOPS_EXPECTED_HEAD_SHA")
+        if expected:
+            self.assertEqual(head, expected)
+        receipt = {
+            "schema": "aiops.portal.glpi-readmy-browser-negative.v1",
+            "source_head": head,
+            "provenance": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+            "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+            "readmy_ticket_user_authority": "NOT_ATTESTED",
+            "core_run_binding_authority": "NOT_ATTESTED",
+            "api_missing_identity_http": 401,
+            "api_viewer_without_native_glpi_http": 503,
+            "injected_http_cases": [200, 401, 403],
+            "forged_positive_visible": False,
+            "business_upstream_requests": 0,
+            "human_allow": False,
+            "host_local_7777_operator_reported": True,
+            "external_https_sso_glpi_unique_entrypoint_attested": False,
+            "release_stable": "NO_GO",
+        }
+        canonical = json.dumps(receipt, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")
+        receipt["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+        (output / "portal-glpi-readmy-browser-negative.json").write_text(
+            json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8")
 
 
 
