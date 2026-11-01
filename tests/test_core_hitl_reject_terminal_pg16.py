@@ -186,6 +186,185 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
         self.assertEqual(self._dead(ids, digest, token)[1]["status"], "DEAD")
         self._no_effect()
 
+    def test_terminal_native_pg16_restore_013_014_audit_and_replay(self):
+        """Native PG16 custom archive into a NEW disposable DB, never source.
+
+        Keep the archive ephemeral: it contains synthetic lease tokens, so
+        only a redacted digest/row-count manifest may leave the CI runner.
+        """
+        import subprocess
+        import tempfile
+        from urllib.parse import urlsplit, urlunsplit
+
+        client_dir = Path("/usr/lib/postgresql/16/bin")
+        dump, restore = (str(client_dir / name)
+                         for name in ("pg_dump", "pg_restore"))
+        for binary in (dump, restore):
+            self.assertTrue(Path(binary).is_file(),
+                            "NOT_QUALIFIED: native PostgreSQL 16 client absent")
+            version = subprocess.run(
+                [binary, "--version"], check=True, capture_output=True,
+                text=True, timeout=10).stdout
+            self.assertIn("(PostgreSQL) 16.", version)
+        parsed = urlsplit(self.url)
+        self.assertEqual((parsed.hostname, parsed.port, parsed.username),
+                         ("127.0.0.1", 5432, "aiops"))
+        self.assertEqual(parsed.path, "/" + self.name)
+        with self.psycopg.connect(self.url) as db:
+            version = int(db.execute("show server_version_num").fetchone()[0])
+            self.assertTrue(160000 <= version < 170000)
+
+        ids, digest, tokens = self._exhaust()
+        first = self._dead(ids, digest, tokens[-1])
+        self.assertEqual((first[0], first[1]["status"]), (200, "DEAD"))
+        hash_of = lambda s: hashlib.sha256(s.encode("utf-8")).hexdigest()
+        issuer = "https://issuer.example.invalid"
+        consumed_jti, revoked_jti = hash_of("terminal-native-consumed"), hash_of("terminal-native-revoked")
+        with self.psycopg.connect(self.url) as db:
+            self.assertTrue(db.execute(
+                "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,"
+                "clock_timestamp()+interval '120 seconds')",
+                ("TEN-A", issuer, hash_of("synthetic-subject"), consumed_jti,
+                 hash_of("terminal-native-nonce"), hash_of(ids["run"]))).fetchone()[0])
+            self.assertTrue(db.execute(
+                "select aiops.actor_delegation_revoke(%s,%s,%s)",
+                (issuer, revoked_jti, "SRC-TERMINAL-RESTORE")).fetchone()[0])
+
+        def snapshot(url):
+            with self.psycopg.connect(url) as db:
+                return {
+                    "terminal": db.execute(
+                        "select event_id,tenant_id,run_id,proposal_hash,"
+                        "receipt_payload,receipt_sha256 from "
+                        "aiops.hitl_reject_terminal_receipts where event_id=%s",
+                        (ids["event"],)).fetchall(),
+                    "nonce": db.execute(
+                        "select tenant_id,issuer,subject_sha256,jti_sha256,"
+                        "nonce_sha256,resource_sha256,expires_at,consumed_at "
+                        "from aiops.actor_delegation_nonce_ledger "
+                        "where issuer=%s and jti_sha256=%s",
+                        (issuer, consumed_jti)).fetchall(),
+                    "revocation": db.execute(
+                        "select issuer,jti_sha256,source_event_id,revoked_at "
+                        "from aiops.actor_delegation_revocations "
+                        "where issuer=%s and jti_sha256=%s",
+                        (issuer, revoked_jti)).fetchall(),
+                    "outbox": db.execute(
+                        "select status,attempts,lease_owner,lease_token "
+                        "from aiops.hitl_decision_outbox where event_id=%s",
+                        (ids["event"],)).fetchall(),
+                }
+        before = snapshot(self.url)
+        self.assertEqual([len(before[k]) for k in
+                          ("terminal", "nonce", "revocation", "outbox")],
+                         [1, 1, 1, 1])
+        self.assertEqual(before["outbox"][0][:2], ("DEAD", 8))
+
+        target_name = "aiops_core_terminal_native_restore_ci"
+        target_url = urlunsplit((parsed.scheme, parsed.netloc,
+                                 "/" + target_name, "", ""))
+        created = False
+        try:
+            with self.psycopg.connect(self.admin_url, autocommit=True) as admin:
+                admin.execute(self.sql.SQL("create database {}").format(
+                    self.sql.Identifier(target_name)))
+                created = True
+            with tempfile.TemporaryDirectory(prefix="core-terminal-native-pg16-") as tmp:
+                archive = Path(tmp) / "terminal-013-014.pgcustom"
+                env = dict(os.environ)
+                env["PGCONNECT_TIMEOUT"] = "5"
+                subprocess.run(
+                    [dump, "--format=custom", "--no-owner", "--no-acl",
+                     "--file=" + str(archive), "--dbname=" + self.url],
+                    env=env, check=True, timeout=90, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE)
+                self.assertGreater(archive.stat().st_size, 1000)
+                expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+                tampered = Path(tmp) / "corrupt.pgcustom"
+                tampered.write_bytes(archive.read_bytes() + b"tampered")
+                self.assertNotEqual(hashlib.sha256(tampered.read_bytes()).hexdigest(),
+                                    expected)
+                # Fail before invoking pg_restore if the archive digest differs.
+                def verified(path):
+                    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+                    if actual != expected:
+                        raise ValueError("archive SHA256 mismatch")
+                    return path
+                with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
+                    verified(tampered)
+                subprocess.run(
+                    [restore, "--no-owner", "--no-acl", "--single-transaction",
+                     "--exit-on-error", "--dbname=" + target_url,
+                     str(verified(archive))],
+                    env=env, check=True, timeout=120,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(),
+                                 expected)
+                self.assertEqual(snapshot(target_url), before)
+                with self.psycopg.connect(target_url) as db:
+                    self.assertFalse(db.execute(
+                        "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,"
+                        "clock_timestamp()+interval '120 seconds')",
+                        ("TEN-A", issuer, hash_of("synthetic-subject"), consumed_jti,
+                         hash_of("fresh-nonce"), hash_of(ids["run"]))).fetchone()[0])
+                    self.assertFalse(db.execute(
+                        "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,"
+                        "clock_timestamp()+interval '120 seconds')",
+                        ("TEN-A", issuer, hash_of("synthetic-subject"), revoked_jti,
+                         hash_of("other-nonce"), hash_of(ids["run"]))).fetchone()[0])
+                    # Idempotent 013/014 reapply must not erase audit rows.
+                    for name in ("013_actor_delegation_replay_ledger.sql",
+                                 "014_hitl_reject_terminal_receipts.sql"):
+                        db.execute((Path(__file__).resolve().parents[1] /
+                                    "db/migrations" / name).read_text())
+                self.assertEqual(snapshot(target_url), before)
+                for statement, params in (
+                    ("update aiops.hitl_reject_terminal_receipts "
+                     "set attempts=9 where event_id=%s", (ids["event"],)),
+                    ("delete from aiops.actor_delegation_revocations "
+                     "where issuer=%s and jti_sha256=%s",
+                     (issuer, revoked_jti)),
+                ):
+                    with self.assertRaises(self.psycopg.Error):
+                        with self.psycopg.connect(target_url) as db:
+                            db.execute(statement, params)
+                self.assertEqual(snapshot(target_url), before)
+                out = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+                self.assertTrue(out, "CI must retain redacted restore manifest")
+                receipt_dir = Path(out)
+                receipt_dir.mkdir(parents=True, exist_ok=True)
+                manifest = {
+                    "schema": "aiops.core-terminal-native-restore-ci.v1",
+                    "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                    "postgres_server_major": 16,
+                    "pg_dump_major": 16, "pg_restore_major": 16,
+                    "installed": ["001", "004", "009", "010", "011",
+                                  "012", "013", "014"],
+                    "archive_sha256": expected,
+                    "audit_rows_preserved": {"terminal_014": 1,
+                                             "nonce_013": 1,
+                                             "revocation_013": 1},
+                    "archive_retained": False,
+                    "restored_to_new_disposable_database": True,
+                    "actor_authorization": "UNKNOWN",
+                    "execution_allowed": False, "effect_allowed": False,
+                    "rollback": "CODE_ONLY_KEEP_013_014_AUDIT",
+                }
+                manifest["payload_sha256"] = hashlib.sha256(
+                    json.dumps(manifest, sort_keys=True,
+                               separators=(",", ":")).encode()).hexdigest()
+                (receipt_dir / "terminal-native-restore.json").write_text(
+                    json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+        finally:
+            if created:
+                with self.psycopg.connect(self.admin_url, autocommit=True) as admin:
+                    admin.execute(self.sql.SQL(
+                        "drop database {} with (force)").format(
+                            self.sql.Identifier(target_name)))
+        # Source is never dropped or downgraded; both audit ledgers survive.
+        self.assertEqual(snapshot(self.url), before)
+        self._no_effect()
+
     def test_terminal_014_immutable_reapply_013_preserved_and_rollback(self):
         ids, digest, tokens = self._exhaust()
         with self.psycopg.connect(self.url) as db:
