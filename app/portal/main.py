@@ -43,7 +43,20 @@ app.include_router(glpi_operator_view_router)
 app.include_router(oidc_session_router)
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
-def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
+def health():
+    # Application liveness is NOT proof of a host TCP PortBinding or proxy route.
+    # 7777 is the sole desired DEV UI entry; 17777 must never be an alias.
+    configured = os.getenv('AIOPS_PORTAL_HOST_PORT', '')
+    port_state = ('UNCONFIGURED' if not configured else
+                  'CONFIGURED_UNVERIFIED' if configured == '7777' else
+                  'MISMATCH_UNVERIFIED')
+    return {
+        'status': 'ok', 'component': 'portal', 'internal_port': 777,
+        'canonical_host_port': 7777,
+        'host_port_binding_state': port_state,
+        'host_port_binding_verified': False,
+        'runtime_exposure': 'UNKNOWN',
+    }
 @app.get('/api/portal/bootstrap')
 def bootstrap(authorization: str | None = Header(default=None)):
     # Shared PR #36 NOC viewer token; deny before any Core/Twin network access.
