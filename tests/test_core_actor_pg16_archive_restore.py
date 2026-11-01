@@ -40,10 +40,18 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                 or p.path != "/aiops" or p.username != "aiops"
                 or p.query or p.fragment):
             raise RuntimeError("Refusing non-disposable PostgreSQL target")
-        dump = shutil.which("pg_dump")
-        restore = shutil.which("pg_restore")
+        # Ubuntu runners may default to pg_dump 17/18; that archive emits
+        # transaction_timeout, which PostgreSQL 16 cannot restore.
+        pg16 = Path("/usr/lib/postgresql/16/bin")
+        dump = str(pg16 / "pg_dump") if (pg16 / "pg_dump").is_file() else shutil.which("pg_dump")
+        restore = str(pg16 / "pg_restore") if (pg16 / "pg_restore").is_file() else shutil.which("pg_restore")
         if not dump or not restore:
             self.fail("PostgreSQL 16 pg_dump and pg_restore clients are required")
+        for binary in (dump, restore):
+            version = subprocess.run([binary, "--version"], check=True,
+                                     capture_output=True, text=True, timeout=5).stdout
+            self.assertIn("(PostgreSQL) 16.", version,
+                          "Client/server major mismatch would corrupt recovery evidence")
         env = dict(os.environ)
         env["PGPASSWORD"] = unquote(p.password or "")
         env["PGCONNECT_TIMEOUT"] = "5"
