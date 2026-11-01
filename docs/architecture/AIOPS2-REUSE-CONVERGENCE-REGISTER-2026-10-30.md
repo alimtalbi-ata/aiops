@@ -576,3 +576,8 @@ SOURCE_REVIEWED: DEV main `ae7c3e5102b99a66bd7806d602146f1309a9749d`; sole Draft
 **Next owner contracts (WIP P0=3):** Core owns source-authenticated GLPI native actor permission and durable nonce/revocation, plus Core-fenced claim/ACK interface; Portal owns an authenticated transport and no-ALLOW-until-qualified exact Run binding, without overlapping Core files; Policy owns a disposable integration test for Core claim/ACK and Worker/Temporal REJECT with zero effects, without wiring poller; ACME owns independently sourced Twin governance facts and a synthetic end-to-end fixture, never invented SLA/OLA. Architect owns shared CI, migrations and candidate promotion. **Rollback:** revert these four focused commits in reverse order ACME→HITL→Portal→Core, remove disposable databases/artifacts; no persistent-data downgrade claimed and no main reset. `RELEASE_STABLE=NO_GO`.
 
 Reuse decision: source #244/#245/#246/#247 are focused source branches; copy exact scoped file blobs and adapt only the dedicated Worker CI target to main. They remain Draft, not wholesale merge candidates.
+
+
+## 2026-11-01 03:48 CET reuse register delta
+
+Architect selectively ported source PR #250 Core (6 paths), #251 Worker (4), #249 Portal (3), #248 ACME (4) into sole Draft #234. No wholesale history or duplicated migrations. Exact source and candidate commit references, CI, scope, dependency, rollback and four-plane automation status: `docs/release/AIOPS2-INTEGRATION-CYCLE-2026-11-01-0348.md`. Source CI cannot qualify final candidate. Core native GLPI actor rights and real PG16 claim/ACK unqualified; Portal dispatch=false, Worker mock Core wire, ACME synthetic UNKNOWN governance. D1/D2 NOT_QUALIFIED, D3 NO_GO, D4 NOT_ATTESTED; #196 FAIL, cost UNKNOWN. RELEASE_STABLE=NO_GO.
