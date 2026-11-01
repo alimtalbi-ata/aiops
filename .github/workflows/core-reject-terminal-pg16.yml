@@ -44,7 +44,7 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
           python3 -m venv /tmp/core-terminal-venv
-          /tmp/core-terminal-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1"
+          /tmp/core-terminal-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "requests==2.32.4"
       - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
