@@ -323,6 +323,109 @@ class PortalIdpGlpiRotationContract(unittest.TestCase):
                 oidc_session._sessions.pop(oidc_session._digest(handle), None)
 
 
+    def test_p0_revoked_oidc_cookie_never_downgrades_to_viewer_bearer(self):
+        """Revoked/forged session + valid viewer cannot bypass 401 on Run API/HTML.
+
+        This is an independent ASGI request test, not a GLPI permission test.
+        Both authenticated identity and native human rights remain insufficient
+        for a positive read, even when the viewer token is valid.
+        """
+        from fastapi.testclient import TestClient
+        from portal import main, acme_run_detail
+        actor = self.actor()
+        handle = "Q" * 43
+        runs = ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999")
+        headers = {
+            "Authorization": "Bearer " + self.settings["AIOPS_PORTAL_READ_TOKEN"],
+            "X-Tenant-ID": "FOREIGN",
+            "X-Actor-ID": "administrator",
+            "X-GLPI-Ticket": "999",
+        }
+        secret = self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]
+        with patch.dict(os.environ, self.settings):
+            with TestClient(main.app, base_url="https://portal.example.test") as client, \\
+                 patch.object(acme_run_detail, "_read_core_run",
+                              side_effect=AssertionError("Core business GET forbidden")) as core, \\
+                 patch.object(main, "get_json",
+                              side_effect=AssertionError("upstream GET forbidden")) as upstream, \\
+                 patch("urllib.request.urlopen",
+                       side_effect=AssertionError("network forbidden")) as network:
+                client.cookies.set(oidc_session._SESSION_COOKIE, handle)
+                with oidc_session._lock:
+                    oidc_session._sessions[oidc_session._digest(handle)] = (
+                        oidc_session._Session(actor, int(time.time()) + 180))
+                try:
+                    # Active OIDC identity + viewer bearer still cannot read.
+                    active = [client.get("/api/portal/runs/" + run,
+                                         headers=headers) for run in runs]
+                    self.assertEqual([r.status_code for r in active],
+                                     [503] * len(runs))
+                    self.assertEqual(active[0].json(), active[1].json())
+                    self.assertEqual(active[1].json(), active[2].json())
+                    self.assertEqual(active[0].json()["state"], "UNKNOWN")
+
+                    # Revoke the session without deleting the browser cookie.
+                    with oidc_session._lock:
+                        oidc_session._sessions.pop(
+                            oidc_session._digest(handle), None)
+                    denied = []
+                    for run in runs:
+                        api = client.get("/api/portal/runs/" + run,
+                                         headers=headers)
+                        page = client.get("/runs/" + run, headers=headers)
+                        self.assertEqual((api.status_code, page.status_code),
+                                         (401, 401))
+                        self.assertEqual(api.json()["state"], "UNAUTHORIZED")
+                        self.assertIn("Requested Run — NOT VERIFIED", page.text)
+                        self.assertNotIn("CONNECTED", page.text)
+                        for response in (api, page):
+                            self.assertEqual(response.headers["cache-control"],
+                                             "no-store")
+                            self.assertIn("frame-ancestors 'none'",
+                                          response.headers["content-security-policy"])
+                            self.assertNotIn(secret, response.text)
+                            self.assertNotIn(secret, str(response.headers))
+                            self.assertNotIn("glpi-acme", response.text)
+                            self.assertNotIn("INC-ACME-123", response.text)
+                        denied.append(api.json())
+                    self.assertEqual(denied[0], denied[1])
+                    self.assertEqual(denied[1], denied[2])
+
+                    # A forged opaque handle cannot downgrade to viewer either.
+                    client.cookies.set(oidc_session._SESSION_COOKIE, "Z" * 43)
+                    forged = client.get("/api/portal/runs/" + runs[0],
+                                        headers=headers)
+                    self.assertEqual(forged.status_code, 401)
+                    self.assertEqual(forged.json(), denied[0])
+
+                    # Without an OIDC cookie the legacy viewer is identity-only.
+                    client.cookies.delete(oidc_session._SESSION_COOKIE)
+                    viewer = client.get("/api/portal/runs/" + runs[0],
+                                        headers=headers)
+                    self.assertEqual(viewer.status_code, 503)
+                    self.assertEqual(viewer.json()["state"], "UNKNOWN")
+                    core.assert_not_called()
+                    upstream.assert_not_called()
+                    network.assert_not_called()
+                finally:
+                    with oidc_session._lock:
+                        oidc_session._sessions.pop(
+                            oidc_session._digest(handle), None)
+        self.assertFalse(wire.core_authz_read_permitted())
+        self._emit_negative_receipt(
+            "revoked-cookie-viewer-downgrade",
+            ["valid_session_viewer_503_unknown",
+             "revoked_cookie_viewer_401_api_and_html",
+             "forged_cookie_viewer_401",
+             "foreign_and_forged_run_non_enumerating",
+             "viewer_without_oidc_is_not_native_glpi_right",
+             "no_core_glpi_business_get_or_browser_service_bearer"],
+            {"run_variants": len(runs), "active_session_http": 503,
+             "revoked_session_http": 401, "forged_cookie_http": 401,
+             "viewer_only_http": 503, "upstream_business_gets": 0,
+             "independent_idp_glpi_user_profile_entity_ticket": "NOT_ATTESTED",
+             "independent_core_signer_and_atomic_nonce_jti": "NOT_ATTESTED"})
+
     def _emit_negative_receipt(self, name, checks, observations):
         """CI-only JSON receipt: synthetic negative assertions, never authority."""
         import hashlib
