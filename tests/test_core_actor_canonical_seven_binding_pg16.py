@@ -326,5 +326,243 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                          "UNKNOWN")
 
 
+    def test_z_v2_native_014_audit_restore_and_fail_closed_receipt(self):
+        """One disposable PG16 authority, seven sources and 013/014 audit.
+
+        The 014 row below is an explicitly synthetic audit fixture, not a
+        claim that Core's terminal handler or a real human GLPI right ran.
+        The archive is destroyed locally; only a redacted receipt survives.
+        """
+        import subprocess
+        import tempfile
+        import uuid
+        from urllib.parse import urlsplit, urlunsplit
+
+        source_event = fixture.event_at(1)
+        record = {
+            "tenant_id": fixture.TENANT, "incident_id": fixture.INCIDENT,
+            "run_id": fixture.RUN, "glpi_entity_id": fixture.ENTITY,
+            "source_event_id": source_event["source_event_id"],
+            "source_payload_hash": fixture.canonical_hash(source_event),
+        }
+        def read(claims=None, expected=None):
+            return binding.canonical_seven_source_receipt(
+                self.claims if claims is None else claims,
+                self.expected if expected is None else expected,
+                record, int(time.time()))
+
+        source_receipt = read()
+        self.assertIsNotNone(source_receipt)
+        self.assertEqual(source_receipt["decision"], "UNKNOWN")
+        self.assertEqual(source_receipt["event_count"], 7)
+        self.assertEqual(source_receipt["hash_domains"]["acme_full_event_equivalence"],
+                         "NOT_VERIFIED")
+        self.assertTrue(all(e["payload_sha256"] != e["full_event_sha256"]
+                            for e in source_receipt["events"]))
+        for changed in ({"tenant_id": "TEN-FOREIGN"},
+                        {"run_id": "RUN-FOREIGN"},
+                        {"ticket_id": "TICKET-FOREIGN"},
+                        {"glpi_entity_id": "ENTITY-FOREIGN"}):
+            self.assertIsNone(read(expected={**self.expected, **changed}))
+        self.assertIsNone(read(claims={**self.claims, "sub": "foreign-subject"}))
+        self.server.tamper = "hash"
+        self.assertIsNone(read())
+        self.server.tamper = "revoked"
+        self.assertIsNone(read())
+        self.server.tamper = None
+
+        suffix = uuid.uuid4().hex
+        ids = {k: "CI-SEVEN-" + k.upper() + "-" + suffix
+               for k in ("analysis", "critique", "proposal", "approval", "event")}
+        digest = hashlib.sha256(("CI-SEVEN-014-" + suffix).encode()).hexdigest()
+        lease_hash = hashlib.sha256(("DISPOSABLE-LEASE-" + suffix).encode()).hexdigest()
+        evidence_ids = json.dumps(["EVIDENCE-SOURCE-01"])
+        audit_payload = {
+            "schema": "aiops.core-hitl-reject-terminal-receipt.v1",
+            "status": "DEAD", "synthetic_fixture": True,
+            "tenant_id": fixture.TENANT, "run_id": fixture.RUN,
+            "proposal_hash": digest, "attempts": 8,
+            "execution_allowed": False, "effect_allowed": False,
+        }
+        audit_hash = hashlib.sha256(json.dumps(
+            audit_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        with self.psycopg.connect(self.db_url) as db:
+            db.execute((fixture.MIG / "014_hitl_reject_terminal_receipts.sql")
+                       .read_text(encoding="utf-8"))
+            db.execute(
+                "insert into aiops.analysis_records "
+                "(analysis_id,run_id,idempotency_key,revision,contract_version,"
+                "provider,model,prompt_version,evidence_ids,evidence_set_hash,"
+                "output,confidence,status) "
+                "values(%s,%s,%s,1,'ci','ci-fixture','none','ci',%s,%s,"
+                "%s::jsonb,0.5,'VALID')",
+                (ids["analysis"], fixture.RUN, "analysis-" + suffix,
+                 evidence_ids, digest, json.dumps({"recommended_actions": []})))
+            db.execute(
+                "insert into aiops.critique_records "
+                "(critique_id,idempotency_key,analysis_id,run_id,contract_version,"
+                "provider,model,validated,evidence_ids,output,diagnostic_confidence) "
+                "values(%s,%s,%s,%s,'ci','ci-fixture','none',true,%s,%s::jsonb,0.5)",
+                (ids["critique"], "critique-" + suffix, ids["analysis"],
+                 fixture.RUN, evidence_ids, json.dumps({"issues": []})))
+            db.execute(
+                "insert into aiops.action_proposals "
+                "(proposal_id,run_id,analysis_id,critique_id,source_action_id,"
+                "proposal_revision,target_ci_id,action_type,risk_tier,evidence_ids,"
+                "preconditions,expected_postconditions,proposal_hash,status,expires_at) "
+                "values(%s,%s,%s,%s,'CI-SOURCE',1,'CI-SYNTHETIC',"
+                "'COLLECT_DIAGNOSTICS','LOW',%s,'[]','[]',%s,'REJECTED',"
+                "now()+interval '1 hour')",
+                (ids["proposal"], fixture.RUN, ids["analysis"],
+                 ids["critique"], evidence_ids, digest))
+            db.execute(
+                "insert into aiops.approval_records "
+                "(approval_id,proposal_id,proposal_hash,actor_id,actor_role,"
+                "decision,nonce,expires_at,audit) "
+                "values(%s,%s,%s,'UNATTESTED_CI','test_only','REJECT',"
+                "%s,now()+interval '1 hour',%s::jsonb)",
+                (ids["approval"], ids["proposal"], digest, "nonce-" + suffix,
+                 json.dumps({"synthetic": True, "identity_attested": False})))
+            db.execute(
+                "insert into aiops.hitl_decision_outbox "
+                "(event_id,proposal_id,run_id,proposal_hash,proposal_revision,"
+                "decision,source_status,approval_id,status,attempts,lease_owner,"
+                "lease_token,lease_until) "
+                "values(%s,%s,%s,%s,1,'REJECT','REJECTED',%s,'DEAD',8,"
+                "'ci-disposable','redacted-in-artifact',"
+                "now()-interval '2 seconds')",
+                (ids["event"], ids["proposal"], fixture.RUN, digest,
+                 ids["approval"]))
+            db.execute(
+                "insert into aiops.hitl_reject_terminal_receipts "
+                "(event_id,tenant_id,run_id,proposal_id,proposal_hash,"
+                "proposal_revision,actor_id,lease_owner,lease_token_sha256,"
+                "attempts,lease_expired_at,dead_at,receipt_payload,receipt_sha256) "
+                "values(%s,%s,%s,%s,%s,1,'ci-unattested','ci-disposable',"
+                "%s,8,now()-interval '2 seconds',now(),%s::jsonb,%s)",
+                (ids["event"], fixture.TENANT, fixture.RUN, ids["proposal"],
+                 digest, lease_hash, json.dumps(audit_payload), audit_hash))
+        def snapshot(url):
+            with self.psycopg.connect(url) as db:
+                return {
+                    "evidence": db.execute(
+                        "select count(*) from aiops.evidence where source=%s",
+                        (fixture.SOURCE,)).fetchone()[0],
+                    "run_events": db.execute(
+                        "select count(*) from aiops.run_events where run_id=%s",
+                        (fixture.RUN,)).fetchone()[0],
+                    "nonce_013": db.execute(
+                        "select count(*) from aiops.actor_delegation_nonce_ledger").fetchone()[0],
+                    "revocation_013": db.execute(
+                        "select count(*) from aiops.actor_delegation_revocations").fetchone()[0],
+                    "audit_014": db.execute(
+                        "select receipt_sha256 from aiops.hitl_reject_terminal_receipts "
+                        "where event_id=%s", (ids["event"],)).fetchone(),
+                }
+        before = snapshot(self.db_url)
+        self.assertEqual(before, {
+            "evidence": 7, "run_events": 7, "nonce_013": 1,
+            "revocation_013": 1, "audit_014": (audit_hash,)})
+        # An aborted append must not survive; no destructive DOWN/DROP of audit.
+        rollback_jti = hashlib.sha256(("rollback-" + suffix).encode()).hexdigest()
+        with self.assertRaisesRegex(RuntimeError, "disposable rollback"):
+            with self.psycopg.connect(self.db_url) as db:
+                db.execute(
+                    "insert into aiops.actor_delegation_revocations "
+                    "(issuer,jti_sha256,source_event_id) values(%s,%s,%s)",
+                    (fixture.ISSUER, rollback_jti, "ROLLBACK-TEST"))
+                raise RuntimeError("disposable rollback")
+        self.assertEqual(snapshot(self.db_url), before)
+
+        client = Path("/usr/lib/postgresql/16/bin")
+        for name in ("pg_dump", "pg_restore"):
+            self.assertTrue((client / name).is_file(), "PG16 native client required")
+            self.assertIn("(PostgreSQL) 16.", subprocess.run(
+                [str(client / name), "--version"], check=True, text=True,
+                capture_output=True, timeout=10).stdout)
+        parsed = urlsplit(self.db_url)
+        restore_name = "aiops_core_seven_014_restore_ci"
+        restore_url = urlunsplit((parsed.scheme, parsed.netloc,
+                                 "/" + restore_name, "", ""))
+        created = False
+        try:
+            with self.psycopg.connect(self.admin_url, autocommit=True) as db:
+                db.execute(self.sql.SQL("create database {}").format(
+                    self.sql.Identifier(restore_name)))
+                created = True
+            with tempfile.TemporaryDirectory(prefix="ci-seven-014-") as tmp:
+                archive = Path(tmp) / "synthetic.pgcustom"
+                subprocess.run(
+                    [str(client / "pg_dump"), "--format=custom", "--no-owner",
+                     "--no-acl", "--file=" + str(archive),
+                     "--dbname=" + self.db_url],
+                    check=True, timeout=90, capture_output=True)
+                archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+                self.assertGreater(archive.stat().st_size, 1000)
+                corrupt = Path(tmp) / "corrupt.pgcustom"
+                corrupt.write_bytes(archive.read_bytes() + b"CORRUPTED")
+                self.assertNotEqual(hashlib.sha256(corrupt.read_bytes()).hexdigest(),
+                                    archive_sha)
+                self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(),
+                                 archive_sha)
+                subprocess.run(
+                    [str(client / "pg_restore"), "--no-owner", "--no-acl",
+                     "--single-transaction", "--exit-on-error",
+                     "--dbname=" + restore_url, str(archive)],
+                    check=True, timeout=120, capture_output=True)
+                self.assertEqual(snapshot(restore_url), before)
+                with self.psycopg.connect(restore_url) as db:
+                    for migration in ("013_actor_delegation_replay_ledger.sql",
+                                      "014_hitl_reject_terminal_receipts.sql"):
+                        db.execute((fixture.MIG / migration).read_text(encoding="utf-8"))
+                self.assertEqual(snapshot(restore_url), before)
+                for statement in (
+                    "update aiops.hitl_reject_terminal_receipts "
+                    "set attempts=9 where event_id=%s",
+                    "delete from aiops.hitl_reject_terminal_receipts where event_id=%s",
+                ):
+                    with self.assertRaises(self.psycopg.Error):
+                        with self.psycopg.connect(restore_url) as db:
+                            db.execute(statement, (ids["event"],))
+                self.assertEqual(snapshot(restore_url), before)
+                out = os.environ.get("AIOPS_CORE_SEVEN_RECEIPT_DIR")
+                if out:
+                    path = Path(out)
+                    path.mkdir(parents=True, exist_ok=True)
+                    machine = {
+                        "schema": "aiops.core-seven-014-disposable-recovery.v1",
+                        "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                        "source_receipt_schema": binding.RECEIPT_SCHEMA,
+                        "source_receipt_sha256": source_receipt["receipt_sha256"],
+                        "source_preflight": "PASS_SYNTHETIC_ONLY",
+                        "decision": "UNKNOWN", "link_status": "UNKNOWN",
+                        "human_glpi_attested": False,
+                        "acme_full_event_equivalence": "NOT_VERIFIED",
+                        "hash_domains": source_receipt["hash_domains"],
+                        "source_event_hashes": source_receipt["events"],
+                        "pg_major": 16, "installed": [
+                            "001", "004", "009", "010", "011", "012", "013", "014"],
+                        "rows": {k: v if isinstance(v, int) else 1
+                                 for k, v in before.items()},
+                        "archive_sha256": archive_sha, "archive_retained": False,
+                        "native_restore": True, "rollback_preserved": True,
+                        "audit_013_014_immutable": True, "synthetic_only": True,
+                        "execution_allowed": False, "effect_allowed": False,
+                    }
+                    machine["receipt_sha256"] = hashlib.sha256(json.dumps(
+                        machine, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                    (path / "seven-014-recovery.json").write_text(
+                        json.dumps(machine, sort_keys=True, indent=2) + "\n")
+        finally:
+            if created:
+                with self.psycopg.connect(self.admin_url, autocommit=True) as db:
+                    db.execute(self.sql.SQL("drop database {} with (force)").format(
+                        self.sql.Identifier(restore_name)))
+        self.assertEqual(snapshot(self.db_url), before)
+        self.assertIsNotNone(read())
+        self.assertEqual(json.loads(fixture.actor_resource_authz._reply().body)
+                         ["decision"], "UNKNOWN")
+
+
 if __name__ == "__main__":
     unittest.main()
