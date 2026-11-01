@@ -12,7 +12,7 @@ The JS check displays source-readiness information only for a strictly validated
 
 ## Disposable test and receipt
 
-`test_09_glpi_source_freshness_ui_rejects_forged_positive` in the existing Playwright entry point checks the real ephemeral Portal API (503, no-store, CSP, redacted, UNKNOWN source), renders the four-source table in Chromium, injects a test-only 503 negative response, then injects a forged 200/ALLOW/ticket/Run and verifies no elevation or disclosure. The test writes `portal-glpi-source-freshness-negative.json` under `AIOPS_E2E_ARTIFACT_DIR`, with exact `GITHUB_SHA`, `CI_DISPOSABLE_SYNTHETIC_ONLY`, UTC test time and SHA-256 of canonical JSON excluding its digest. No credentials or ticket data are recorded.
+`test_09_glpi_source_freshness_ui_rejects_forged_positive` in the existing Playwright entry point checks the real ephemeral Portal API (503, no-store, CSP, redacted, UNKNOWN source), renders the four-source table in Chromium, injects a test-only 503 negative response, then injects a forged 200/ALLOW/ticket/Run and verifies no elevation or disclosure. The test writes `portal-glpi-source-freshness-negative.json` under `AIOPS_E2E_ARTIFACT_DIR`, with actual checked-out `git rev-parse HEAD` (compared to `AIOPS_EXPECTED_HEAD_SHA` when set), `CI_DISPOSABLE_SYNTHETIC_ONLY`, UTC test time and SHA-256 of canonical JSON excluding its digest. No credentials or ticket data are recorded.
 
 Reproduce in the existing Quality browser job:
 
