@@ -133,6 +133,10 @@ class ActorLedgerPopulatedPG16(unittest.TestCase):
             with self.assertRaises(self.psycopg.Error):
                 conn.execute("delete from aiops.actor_delegation_nonce_ledger")
             conn.rollback()
+            # Ensure a row exists: PostgreSQL does not fire row triggers on an
+            # UPDATE matching zero rows. Roll this synthetic revocation back.
+            conn.execute("select aiops.actor_delegation_revoke(%s,%s,%s)",
+                         ("https://issuer.example.invalid", sha("jti-trigger"), "REV-TRIGGER"))
             with self.assertRaises(self.psycopg.Error):
                 conn.execute("update aiops.actor_delegation_revocations set source_event_id='EVIL'")
             conn.rollback()
