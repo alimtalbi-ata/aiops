@@ -103,10 +103,15 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                                env=env, check=True, timeout=60,
                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                 self.assertGreater(Path(archive).stat().st_size, 1000)
-                subprocess.run([restore, *common, "--exit-on-error",
-                                "--dbname=" + target, archive],
-                               env=env, check=True, timeout=90,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                restored = subprocess.run(
+                    [restore, *common, "--exit-on-error",
+                     "--dbname=" + target, archive],
+                    env=env, check=False, timeout=90,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                self.assertEqual(
+                    restored.returncode, 0,
+                    "Disposable pg_restore failed: " +
+                    restored.stderr.decode("utf-8", errors="replace")[-1800:])
             self.assertEqual(snapshot(dburl(target)), before)
             with psycopg.connect(dburl(target)) as conn:
                 # An archive restore must retain the negative replay fence.
