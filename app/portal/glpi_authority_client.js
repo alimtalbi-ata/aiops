@@ -5,7 +5,7 @@
   const button = document.getElementById("glpi-check");
   const status = document.getElementById("glpi-check-status");
   const provenance = document.getElementById("glpi-source-provenance");
-  const fields = ["idp", "glpi", "core", "replay"];
+  const fields = ["idp", "glpi", "ownership", "core", "replay"];
   if (!button || !status || !provenance) return;
   let generation = 0;
   const paintUnknown = (detail) => {
@@ -53,6 +53,8 @@
         src.core_pg16_producer === "SOURCE_CONTRACT_ONLY_NOT_HUMAN_ACL" &&
         src.idp_glpi_mapping === "NOT_ATTESTED" &&
         src.glpi_native_readmy_ownership === "NOT_ATTESTED" &&
+        src.glpi_native_ticket_user_membership === "NOT_ATTESTED" &&
+        data.human_authority.readmy_ticket_user_membership === "UNKNOWN" &&
         src.core_run_signer_nonce_revocation === "NOT_ATTESTED" &&
         src.independent_proofs_verified === false && src.human_allow === false;
       status.textContent = "503 UNKNOWN — droits humains GLPI et liaison Core non attestés.";
