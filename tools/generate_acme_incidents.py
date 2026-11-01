@@ -21,6 +21,8 @@ SEED_FILE = ROOT / "db/migrations/005_seed_acme.sql"
 CATALOG_FILE = ROOT / "tests/fixtures/acme_enterprise_incident_catalog_v1.json"
 SEED_GIT_BLOB = "67f0124a2c3b450e5249165e719a5d943fdd7237"
 CATALOG_GIT_BLOB = "78e749c623d7ee7ea1d33a74577b4f7b696f3207"
+GOVERNANCE_SOURCE_FILE = ROOT / "tests/fixtures/acme_twin_governance_source_index_v1.json"
+GOVERNANCE_SOURCE_GIT_BLOB = "e77a0abbb53176488ec49d7c0c9f8581d4620b3f"
 SOURCE = "ACME_OFFLINE_SYNTHETIC_REPLAY_V1"
 ANCHOR = datetime(2026, 10, 31, 9, 42, tzinfo=timezone.utc)  # fixture clock, NOT wall clock
 NODE_RE = re.compile(r"^\('(ACME-[^']+)','(BUSINESS|SERVICE|APPLICATION|VM|SERVER|STORAGE|SAN|NETWORK|NAS)','[^']+','[^']+','[^']+',([1-5]),", re.M)
@@ -158,6 +160,50 @@ def load_catalog(path=CATALOG_FILE):
                     not 0 <= w["start_offset_seconds"] < w["end_offset_seconds"] <= s["duration_seconds"]):
                 raise ValueError("invalid synthetic maintenance window")
     return data, hashlib.sha256(raw).hexdigest()
+
+
+def load_governance_source_index(path=None):
+    """Read only pinned source *pointers*, never invented governance records.
+
+    A source pointer is not a real DC/owner/SLA/OLA/Change authority.
+    Changes require review of this exact Git blob and the underlying source.
+    """
+    path = GOVERNANCE_SOURCE_FILE if path is None else path
+    raw = Path(path).read_bytes()
+    if _git_blob(raw) != GOVERNANCE_SOURCE_GIT_BLOB:
+        raise ValueError("governance source index Git blob mismatch")
+    data = json.loads(raw, object_pairs_hook=_unique_object)
+    if (data.get("schema") != "aiops.acme.synthetic-governance-source-index.v1" or
+            data.get("provenance") != "SYNTHETIC_FIXTURE" or
+            data.get("tenant_scope") != "UNKNOWN" or
+            data.get("graph_git_blob") != SEED_GIT_BLOB or
+            data.get("catalog_git_blob") != CATALOG_GIT_BLOB):
+        raise ValueError("governance source index provenance mismatch")
+    supported = {
+        "site": ("SYNTHETIC_NODE_ONLY", "db/migrations/005_seed_acme.sql", "twin_nodes.site"),
+        "service_criticality_synthetic_1_to_5": (
+            "SYNTHETIC_NODE_ONLY", "db/migrations/005_seed_acme.sql", "twin_nodes.criticality"),
+        "blast_radius_candidate_service_ids": (
+            "SYNTHETIC_CANDIDATE_ONLY", "db/migrations/005_seed_acme.sql",
+            "twin_edges.consumer_to_dependency_reverse_reachability"),
+        "maintenance_window_synthetic": (
+            "SYNTHETIC_SCENARIO_ONLY",
+            "tests/fixtures/acme_enterprise_incident_catalog_v1.json",
+            "scenarios[].maintenance_window"),
+        "change_lookup": (
+            "PLANNED_STEP_ONLY", "db/migrations/005_seed_acme.sql",
+            "scenario_steps.CHANGE_LOOKUP"),
+    }
+    absent = {"datacenter_id", "datacenter_relation", "service_owner_id",
+              "service_team_id", "sla_id", "ola_id", "change_id",
+              "maintenance_actual"}
+    expected = {field: {"authority": status, "source": source, "selector": selector}
+                for field, (status, source, selector) in supported.items()}
+    expected.update({field: {"authority": "UNKNOWN", "source": None, "selector": None}
+                     for field in absent})
+    if _canonical(data.get("fields")) != _canonical(expected):
+        raise ValueError("governance source index unsupported authority")
+    return data
 
 
 def dependency_candidates(graph, source_ci, service_id):
@@ -467,7 +513,7 @@ def twin_service_context_offline(manifest, *, false_positive=False):
         raise ValueError("untrusted Twin service path")
     path_sites = {ci: details[ci]["site"] for ci in path_nodes}
     sites = set(path_sites.values())
-    return {
+    context = {
         "source": "db/migrations/005_seed_acme.sql",
         "source_git_blob": SEED_GIT_BLOB,
         "provenance": "SYNTHETIC_FIXTURE",
@@ -504,6 +550,44 @@ def twin_service_context_offline(manifest, *, false_positive=False):
         "urgency_synthetic": manifest["itil"]["urgency_input"],
         "runtime_readback": "NOT_EXECUTED",
     }
+    index = load_governance_source_index()
+    catalog, _ = load_catalog()
+    scenario = next(s for s in catalog["scenarios"]
+                    if s["key"] == manifest["scenario_category"])
+    if context["maintenance_window_synthetic"] != scenario["maintenance_window"]:
+        raise ValueError("maintenance source is not the pinned scenario")
+    planned_change = any(action == "CHANGE_LOOKUP"
+                         for _, _, action, _, _ in graph["steps"]) if (
+                             manifest["scenario_id"] == "SCN-GOLDEN-PAYMENT-P1") else False
+    if (context["change_lookup"] == "PLANNED_NOT_EXECUTED") != planned_change:
+        raise ValueError("change lookup is not a pinned planned step")
+    records = {}
+    for field, source_ref in index["fields"].items():
+        value = context[field]
+        if source_ref["authority"] == "UNKNOWN" and value != "UNKNOWN":
+            raise ValueError("missing governance authority cannot supply a value")
+        ci_ids = (
+            list(path_nodes) if field == "site" else
+            [service] if field == "service_criticality_synthetic_1_to_5" else
+            [manifest["ci_id"]] + list(impact["candidate_service_ids"])
+            if field == "blast_radius_candidate_service_ids" else []
+        )
+        records[field] = {
+            "value": value, "authority": source_ref["authority"],
+            "source": source_ref["source"], "selector": source_ref["selector"],
+            "source_git_blob": (
+                CATALOG_GIT_BLOB if source_ref["source"] == str(CATALOG_FILE.relative_to(ROOT))
+                else SEED_GIT_BLOB if source_ref["source"] == str(SEED_FILE.relative_to(ROOT))
+                else None),
+            "source_ci_ids": ci_ids,
+            "scenario_category": manifest["scenario_category"] if field in (
+                "maintenance_window_synthetic", "change_lookup") else None,
+            "provenance": "SYNTHETIC_FIXTURE",
+            "tenant_scope": "UNKNOWN",
+        }
+    context["governance_source_index_git_blob"] = GOVERNANCE_SOURCE_GIT_BLOB
+    context["governance_source_records"] = records
+    return context
 
 
 def correlate_offline(events):
