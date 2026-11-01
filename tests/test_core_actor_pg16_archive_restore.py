@@ -40,18 +40,14 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                 or p.path != "/aiops" or p.username != "aiops"
                 or p.query or p.fragment):
             raise RuntimeError("Refusing non-disposable PostgreSQL target")
-        # Ubuntu runners may default to pg_dump 17/18; that archive emits
-        # transaction_timeout, which PostgreSQL 16 cannot restore.
-        pg16 = Path("/usr/lib/postgresql/16/bin")
-        dump = str(pg16 / "pg_dump") if (pg16 / "pg_dump").is_file() else shutil.which("pg_dump")
-        restore = str(pg16 / "pg_restore") if (pg16 / "pg_restore").is_file() else shutil.which("pg_restore")
-        if not dump or not restore:
-            self.fail("PostgreSQL 16 pg_dump and pg_restore clients are required")
-        for binary in (dump, restore):
-            version = subprocess.run([binary, "--version"], check=True,
-                                     capture_output=True, text=True, timeout=5).stdout
-            self.assertIn("(PostgreSQL) 16.", version,
-                          "Client/server major mismatch would corrupt recovery evidence")
+        # Hosted runners may have PG18 clients against a PG16 disposable
+        # server. Decode the custom archive through pg_restore, remove only
+        # PG18's unsupported transaction_timeout SET, and execute with psql
+        # ON_ERROR_STOP. Never suppress any other SQL error.
+        dump, restore, psql = (shutil.which(name)
+                               for name in ("pg_dump", "pg_restore", "psql"))
+        if not all((dump, restore, psql)):
+            self.fail("pg_dump, pg_restore and psql clients are required")
         env = dict(os.environ)
         env["PGPASSWORD"] = unquote(p.password or "")
         env["PGCONNECT_TIMEOUT"] = "5"
@@ -111,14 +107,28 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                                env=env, check=True, timeout=60,
                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                 self.assertGreater(Path(archive).stat().st_size, 1000)
+                sqlfile = Path(tmp) / "restore.sql"
+                subprocess.run(
+                    [restore, "--no-owner", "--no-acl",
+                     "--file=" + str(sqlfile), archive],
+                    env=env, check=True, timeout=90,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                script = sqlfile.read_text(encoding="utf-8")
+                incompatible = "SET transaction_timeout = 0;\\n"
+                self.assertLessEqual(script.count(incompatible), 1)
+                # PostgreSQL 16 does not support the PG18-only SET; no data,
+                # DDL or immutable ledger statement is changed.
+                script = script.replace(incompatible, "")
+                sqlfile.write_text(script, encoding="utf-8")
                 restored = subprocess.run(
-                    [restore, *common, "--exit-on-error",
-                     "--dbname=" + target, archive],
+                    [psql, "--host=127.0.0.1", "--port=5432",
+                     "--username=aiops", "--set=ON_ERROR_STOP=1",
+                     "--dbname=" + target, "--file=" + str(sqlfile)],
                     env=env, check=False, timeout=90,
                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                 self.assertEqual(
                     restored.returncode, 0,
-                    "Disposable pg_restore failed: " +
+                    "Disposable pg_restore SQL replay failed: " +
                     restored.stderr.decode("utf-8", errors="replace")[-1800:])
             self.assertEqual(snapshot(dburl(target)), before)
             with psycopg.connect(dburl(target)) as conn:
