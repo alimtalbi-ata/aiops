@@ -1039,10 +1039,11 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
                     signal_ids.append(payload["event_id"])
 
                 # Temporal server has a disposable persistent SQLite store.
+                temporal_port_one = available_port()
                 async with await WorkflowEnvironment.start_local(
-                        port=available_port(),
+                        port=temporal_port_one,
                         dev_server_database_filename=sqlite_path) as server_one:
-                    target = server_one.client.service_client.config.target_host
+                    target = f"127.0.0.1:{temporal_port_one}"
                     handle = await server_one.client.start_workflow(
                         SyntheticRejectSink.run, id=queue, task_queue=queue)
                     worker_one = await start_worker(target, "one")
@@ -1098,10 +1099,11 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
 
                 # Server and Worker processes are independently restarted.
                 self.assertTrue(Path(sqlite_path).is_file())
+                temporal_port_two = available_port()
                 async with await WorkflowEnvironment.start_local(
-                        port=available_port(),
+                        port=temporal_port_two,
                         dev_server_database_filename=sqlite_path) as server_two:
-                    target = server_two.client.service_client.config.target_host
+                    target = f"127.0.0.1:{temporal_port_two}"
                     handle = server_two.client.get_workflow_handle(queue)
                     worker_two = await start_worker(target, "two")
                     self.assertNotEqual(worker_one.pid, worker_two.pid)
