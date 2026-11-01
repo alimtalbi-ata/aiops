@@ -6,10 +6,12 @@ on:
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - app/core/hitl_reject_delivery.py
+      - app/core/main.py
       - db/migrations/014_hitl_reject_terminal_receipts.sql
       - tests/test_core_hitl_reject_terminal_pg16.py
       - .github/workflows/core-reject-terminal-pg16.yml
       - docs/architecture/ADR-CORE-REJECT-TERMINAL-DEAD-AUDIT-20261101.md
+      - docs/architecture/ADR-CORE-TERMINAL-MAIN-HTTP-WORKER-CONTRACT-20261101.md
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,7 +46,7 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
           python3 -m venv /tmp/core-terminal-venv
-          /tmp/core-terminal-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "requests==2.32.4"
+          /tmp/core-terminal-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "requests==2.32.4" "httpx==0.28.1"
       - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
@@ -69,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-terminal-venv/bin/python -m unittest discover -s tests -p 'test_core_hitl_reject_terminal_pg16.py' -v 2>&1 | tee /tmp/core-terminal-tests.log
-          grep -E '^Ran 12 tests in ' /tmp/core-terminal-tests.log
+          grep -E '^Ran 14 tests in ' /tmp/core-terminal-tests.log
           grep -x 'OK' /tmp/core-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-terminal-tests.log
           echo "SYNTHETIC_ONLY=TRUE; HUMAN_GLPI_AUTH=UNKNOWN; EFFECT_ALLOWED=FALSE; HOST_DEPLOY=FALSE"
@@ -126,6 +128,38 @@ jobs:
           PY
           sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-native-restore.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-native-restore.sha256"
           sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-native-restore.sha256"
+      - name: Verify canonical Core app HTTP /dead receipt and negative contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-main-http-contract.json"
+          data = json.loads(p.read_text())
+          expected = data.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert actual == expected
+          assert data["schema"] == "aiops.core-terminal-main-http-contract.v1"
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["core_app_route_registered"] is True
+          assert data["http"] == {
+              "unauthenticated": 401, "wrong_tenant_permission": 403,
+              "foreign_tenant_non_enumerating": 200, "mismatched_bindings": 6,
+              "dead": 200, "idempotent_replay": 200, "late_ack": 200}
+          assert data["terminal_status"] == "DEAD"
+          assert data["late_ack_status"] == "UNKNOWN"
+          assert data["audit_014_rows"] == 1 and data["attempts"] == 8
+          assert len(data["receipt_sha256"]) == 64
+          assert data["human_glpi_attested"] is False
+          assert data["actor_authorization"] == "UNKNOWN"
+          assert data["execution_allowed"] is False and data["effect_allowed"] is False
+          assert data["synthetic_disposable"] is True
+          assert not any(x in p.read_text() for x in ("lease_token", "Bearer ", "postgresql://"))
+          print("CORE_TERMINAL_MAIN_HTTP_CONTRACT_PASS", expected)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.sha256"
       - name: Preserve redacted exact-head qualification
         if: always()
         uses: actions/upload-artifact@v4
@@ -137,4 +171,6 @@ jobs:
             /tmp/core-terminal-receipts/terminal-dead.sha256
             /tmp/core-terminal-receipts/terminal-native-restore.json
             /tmp/core-terminal-receipts/terminal-native-restore.sha256
+            /tmp/core-terminal-receipts/terminal-main-http-contract.json
+            /tmp/core-terminal-receipts/terminal-main-http-contract.sha256
           retention-days: 7
