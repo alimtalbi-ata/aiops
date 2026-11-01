@@ -149,7 +149,7 @@ class CoreRunEventKey015PG16(unittest.TestCase):
         route = f"/api/runs/{rid}"
         headers = {"Authorization":"Bearer "+self.token}
         negatives = {}
-        with TestClient(self.core.app, raise_server_exceptions=False) as client:
+        with TestClient(self.core.app) as client:
             before = client.get(route).json()
             self.assertEqual((before["run"]["version"],len(before["events"])),(1,0))
             def body(i, version):
@@ -209,8 +209,9 @@ class CoreRunEventKey015PG16(unittest.TestCase):
                 original(*args,**kwargs)
                 raise RuntimeError("synthetic SQL failure after insert")
             with patch.object(self.core,"append_event",side_effect=fail_after_insert):
-                failed=client.post(route+"/events",json=body(7,9)|{
-                    "event_key":"SYN-EVT-ROLLBACK"},headers=headers)
+                with TestClient(self.core.app,raise_server_exceptions=False) as fault_client:
+                    failed=fault_client.post(route+"/events",json=body(7,9)|{
+                        "event_key":"SYN-EVT-ROLLBACK"},headers=headers)
             self.assertEqual(failed.status_code,500)
             after=client.get(route).json()
             self.assertEqual((after["run"]["status"],after["run"]["version"],
