@@ -8,7 +8,9 @@ The existing `aiops.core-canonical-seven-source-receipt.v1` is generated only af
 
 One added test `test_z_v2_native_014_audit_restore_and_fail_closed_receipt` uses that authority, then installs 014 **after** the existing disposable 001/004/009–013 fixture and seeds one explicitly unverified, synthetic 014 terminal audit fixture referencing the same Run. This is **not** evidence of Core terminal handler execution. It checks foreign actor/tenant/Run/ticket/entity, corrupted full hash and revoked proof all return no source receipt (UNKNOWN). It verifies 013 nonce/revocation and 014 receipt preservation, failed transactional append rollback, PG16 native custom archive SHA256, restore into a new disposable database, 013/014 migration reapply and immutable trigger enforcement. No DOWN migration, no audit deletion or production database.
 
-CI uploads only a redacted machine-readable `seven-014-recovery.json` and its SHA256, bound to the checkout HEAD. No raw archive, lease token, service secret, human subject, bearer or GLPI credential is retained. The fixture's temporary databases are deleted **only within disposable CI**.
+A separate adversarial test `test_v2_expired_and_stale_attestation_never_writes_013_014` forces a previously authenticated source to return either an out-of-window observation or an expired authority timestamp. Both must return no receipt (UNKNOWN), leave 013 nonce/revocation and 014 terminal audit counts unchanged, and allow a fresh read only after the source is restored. The disposable test explicitly installs 014 but never seeds a human permission or terminal transition. The redacted `freshness-expiry-negative.json` records the two refusals and before/after audit counts, not an authorization grant.
+
+CI uploads only redacted machine-readable `seven-014-recovery.json` and `freshness-expiry-negative.json`, each with SHA256, bound to the checkout HEAD. No raw archive, lease token, service secret, human subject, bearer or GLPI credential is retained. The fixture's temporary databases are deleted **only within disposable CI**.
 
 ## Limits and integration
 
