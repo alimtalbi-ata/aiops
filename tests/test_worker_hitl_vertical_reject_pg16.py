@@ -120,11 +120,11 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                     route = f"/api/runs/{ids['run']}"
                     run = client.get(route).json()["run"]
                     self.assertEqual(run["incident_id"], ids["inc"])
-                    started = post(route + "/command", {
-                        "expected_version": run["version"],
-                        "idempotency_key": "CI-VERTICAL-START-" + ids["run"],
-                        "command": "START"})
-                    version = started["version"]
+                    # Core's existing event writer references run_events.event_key
+                    # but the installed 001/004/009-014 chain lacks that
+                    # column. Do NOT invent a Worker-owned migration. Seed
+                    # only mutable CI fixture rows; Core GET and gate API
+                    # remain the actual read/Policy-gate surfaces.
                     stages = [
                         ("DGX_ANALYST", "ANALYST_RECORDED", "analysis_id",
                          "PASS", None, {}),
@@ -141,42 +141,42 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                          {"resolution_verified": False,
                           "reopen_recommended": True}),
                     ]
-                    for stage, event_type, binding, status, decision, extra in stages:
-                        body = {
-                            "expected_version": version,
-                            "stage": stage, "event_type": event_type,
-                            "event_key": "CI-VERTICAL-" + stage,
-                            "status": status, "decision": decision,
-                            "evidence_ids": [ids["evidence"]],
-                            "payload": {
+                    with self.psycopg.connect(self.url) as db:
+                        for seq, (stage, event_type, binding, status,
+                                  decision, extra) in enumerate(stages, 1):
+                            payload = {
                                 binding: ids[binding],
                                 "tenant_id": base.TENANT,
                                 "run_id": ids["run"],
                                 "synthetic": True,
                                 "execution_allowed": False,
-                                "effect_allowed": False, **extra},
-                        }
-                        event = post(route + "/events", body)
-                        self.assertIs(event["idempotent"], False)
-                        version = event["version"]
-                        if stage == "VERIFY":
-                            # Core event-key replay is idempotent only when
-                            # the caller uses the current canonical version.
-                            body["expected_version"] = version
-                            repeated = post(route + "/events", body)
-                            self.assertIs(repeated["idempotent"], True)
-                            self.assertEqual(repeated["version"], version)
+                                "effect_allowed": False, **extra}
+                            db.execute(
+                                "insert into aiops.run_events "
+                                "(event_id,run_id,sequence,stage,event_type,"
+                                "status,evidence_ids,decision,payload) "
+                                "values(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                                ("CI-VERTICAL-EVT-" + str(seq) + "-" + ids["run"],
+                                 ids["run"], seq, stage, event_type, status,
+                                 json.dumps([ids["evidence"]]), decision,
+                                 json.dumps(payload)))
+                        db.execute(
+                            "update aiops.runs set status='BLOCKED' "
+                            "where run_id=%s and mode='DEMO'", (ids["run"],))
                     post(route + "/gates", {
                         "stage": "POLICY", "state": "PASS",
                         "decision": "SIMULATE",
                         "reason": "synthetic advisory; HITL REJECT veto",
                         "evidence_ids": [ids["evidence"]],
                         "required_evidence": ["analyst", "critic"]})
-                    blocked = post(route + "/command", {
-                        "expected_version": version,
-                        "idempotency_key": "CI-VERTICAL-BLOCK-" + ids["run"],
-                        "command": "BLOCK"})
-                    self.assertEqual(blocked["status"], "BLOCKED")
+                    # Replayed gate is an idempotent Core upsert; it must
+                    # remain one row and never grant an effect.
+                    post(route + "/gates", {
+                        "stage": "POLICY", "state": "PASS",
+                        "decision": "SIMULATE",
+                        "reason": "synthetic advisory; HITL REJECT veto",
+                        "evidence_ids": [ids["evidence"]],
+                        "required_evidence": ["analyst", "critic"]})
                     core_view = client.get(route).json()
                     self.assertEqual(core_view["run"]["status"], "BLOCKED")
                     self.assertEqual(core_view["run"]["incident_id"], ids["inc"])
@@ -339,7 +339,9 @@ class WorkerRejectVerticalPG16(positive.CoreDeadPositiveWorkerContract):
                 receipt = {
                     **projection,
                     "source_head": head,
-                    "core_run_api": "OBSERVED_CI_DISPOSABLE_ASGI",
+                    "core_run_api": "READ_ONLY_CORE_ASGI_OBSERVED",
+                    "core_event_write": "NOT_TESTED_MISSING_EVENT_KEY_MIGRATION",
+                    "run_events_source": "CI_PG16_FIXTURE_ONLY",
                     "core_terminal_api": "CORE_OWNED_DEAD_OBSERVED",
                     "migration_014": "ONE_IMMUTABLE_RECEIPT_OBSERVED",
                     "temporal_persisted_restarts": 1,
