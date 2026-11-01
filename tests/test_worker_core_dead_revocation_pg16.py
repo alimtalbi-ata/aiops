@@ -281,6 +281,106 @@ class CanonicalPostDeadRevocation(previous.CanonicalCoreDeadGatewayReplay):
                                       workflows=[SyntheticRejectSink]):
                         self.assertEqual(
                             await handle.query(SyntheticRejectSink.count), 0)
+                        # Two separate OS Worker processes, each polling the
+                        # persisted Temporal queue and issuing its own bounded
+                        # revoked-actor retry batch against canonical Core TCP.
+                        worker_script = r"""
+import asyncio, json, os
+from pathlib import Path
+import httpx
+from temporalio.client import Client
+from temporalio.worker import Worker
+from test_worker_hitl_reject_notification import SyntheticRejectSink
+
+async def run():
+    cfg = json.loads(os.environ["AIOPS_CI_REVOKED_WORKER_INPUT"])
+    client = await Client.connect(cfg["temporal"])
+    async with Worker(client, task_queue=cfg["queue"],
+                      workflows=[SyntheticRejectSink]):
+        Path(cfg["ready"]).write_text("ready")
+        while not Path(cfg["go"]).exists():
+            await asyncio.sleep(0.05)
+        async with httpx.AsyncClient(base_url=cfg["core"], timeout=20,
+                                     trust_env=False) as http:
+            async def denied(path, body):
+                r = await http.post(path, json=body, headers={
+                    "Authorization": "Bearer " + cfg["bearer"]})
+                data = r.json()
+                assert r.status_code == 401 and data["status"] == "UNKNOWN"
+                assert data["execution_allowed"] is False
+                assert data["effect_allowed"] is False
+                assert data.get("items", []) == []
+                assert "receipt_sha256" not in data
+            n = cfg["n"]
+            await asyncio.gather(
+                *[denied(cfg["dead"], cfg["ack"]) for _ in range(n)],
+                *[denied(cfg["late_ack"], cfg["ack"]) for _ in range(n)],
+                *[denied(cfg["claim"], cfg["claim_body"]) for _ in range(n)])
+        Path(cfg["result"]).write_text(json.dumps({
+            "pid": os.getpid(), "dead": n, "ack": n, "claim": n}))
+        await asyncio.Event().wait()
+
+asyncio.run(run())
+"""
+                        worker_processes = []
+                        ready_paths, result_paths = [], []
+                        go_path = Path(self.temp.name) / ("worker-go-" + queue)
+                        try:
+                            for i in range(2):
+                                ready = Path(self.temp.name) / (
+                                    f"revoked-worker-{queue}-{i}.ready")
+                                result = Path(self.temp.name) / (
+                                    f"revoked-worker-{queue}-{i}.json")
+                                cfg = {
+                                    "temporal": restarted.client.service_client.config.target_host,
+                                    "queue": queue, "ready": str(ready),
+                                    "go": str(go_path), "result": str(result),
+                                    "core": f"http://127.0.0.1:{port}",
+                                    "bearer": self.bearer,
+                                    "dead": path + "/dead",
+                                    "late_ack": path + "/ack",
+                                    "claim": claim_path, "ack": ack_body(lease),
+                                    "claim_body": {"owner": base.OWNER, "limit": 1},
+                                    "n": n,
+                                }
+                                proc = subprocess.Popen(
+                                    [sys.executable, "-c", worker_script],
+                                    cwd=str(base.ROOT),
+                                    env=dict(os.environ, PYTHONPATH="app:tests",
+                                             AIOPS_CI_REVOKED_WORKER_INPUT=json.dumps(cfg)),
+                                    stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL)
+                                worker_processes.append(proc)
+                                ready_paths.append(ready)
+                                result_paths.append(result)
+                            for _ in range(200):
+                                self.assertTrue(all(p.poll() is None for p in worker_processes),
+                                                "disposable Worker exited early")
+                                if all(p.exists() for p in ready_paths):
+                                    break
+                                await asyncio.sleep(0.05)
+                            else:
+                                self.fail("two disposable Worker processes not ready")
+                            go_path.write_text("go")
+                            for _ in range(400):
+                                self.assertTrue(all(p.poll() is None for p in worker_processes),
+                                                "revoked Worker retry failed")
+                                if all(p.exists() for p in result_paths):
+                                    break
+                                await asyncio.sleep(0.05)
+                            else:
+                                self.fail("two disposable Worker retries timed out")
+                            results = [json.loads(p.read_text()) for p in result_paths]
+                            self.assertEqual(len({r["pid"] for r in results}), 2)
+                            self.assertTrue(all(
+                                r["dead"] == r["ack"] == r["claim"] == n
+                                for r in results))
+                            self.assertEqual(
+                                await handle.query(SyntheticRejectSink.count), 0)
+                        finally:
+                            for proc in worker_processes:
+                                stop_core(proc)
                         async with httpx.AsyncClient(
                             base_url=f"http://127.0.0.1:{port}",
                             timeout=20.0, trust_env=False,
@@ -350,6 +450,9 @@ class CanonicalPostDeadRevocation(previous.CanonicalCoreDeadGatewayReplay):
                     "actor_denied_dead": n,
                     "actor_denied_ack": n,
                     "actor_denied_claim": n,
+                    "disposable_worker_processes": 2,
+                    "distinct_worker_processes": True,
+                    "revoked_worker_retry_requests": n * 2 * 3,
                     "delivery_only_terminal_denied": True,
                     "foreign_tenant_terminal_denied": True,
                     "temporal_persisted_restarts": 1,
@@ -361,7 +464,8 @@ class CanonicalPostDeadRevocation(previous.CanonicalCoreDeadGatewayReplay):
                     "execution_allowed": False, "effect_allowed": False,
                     "sql_dead_injection": False,
                     "oidc_glpi_identity": "NOT_ATTESTED",
-                    "host_7777": "NOT_VERIFIED",
+                    "host_7777": "NOT_VERIFIED_BY_CI",
+                    "host_7777_local_operator": "REPORTED_VERIFIED",
                     "universal_exactly_once": "NOT_CLAIMED",
                 }
                 canonical = json.dumps(
