@@ -40,8 +40,8 @@ jobs:
           set -eu
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv postgresql-client-16
-          pg_dump --version | grep -E ' 16\\.'
-          pg_restore --version | grep -E ' 16\\.'
+          pg_dump --version | grep -E ' 16\.'
+          pg_restore --version | grep -E ' 16\.'
       - name: Checkout exact PR head (not synthetic merge SHA)
         uses: actions/checkout@v4
         with:
