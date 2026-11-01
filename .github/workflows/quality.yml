@@ -20,6 +20,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -146,6 +153,13 @@ jobs:
       AIOPS_INTERNAL_TOKEN: ci-noc-internal-ephemeral-token-20261028-only
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -262,6 +276,13 @@ jobs:
       AIOPS_GRAFANA_READ_URL: http://127.0.0.1:3000
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
