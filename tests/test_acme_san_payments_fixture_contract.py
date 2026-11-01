@@ -163,5 +163,119 @@ class AcmeSanPaymentsFixtureContractTests(unittest.TestCase):
         self.assertNotIn("ACME-DEMO-PAY-002", sql)
 
 
+
+class AcmeSevenSourceAuthorityNegativeContractTests(unittest.TestCase):
+    """Seven local domains, no authenticated Core PG16 or GLPI authority."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import generate_acme_incidents as gen
+        from tools import acme_synthetic_source_authority_negative as negative
+        cls.gen = gen
+        cls.negative = negative
+        cls.manifest = gen.replay(seed=20261018)
+        cls.expected = negative.build_negative_receipt(cls.manifest)
+        cls.fixture = json.loads(negative.FIXTURE.read_text(encoding="utf-8"),
+                                 object_pairs_hook=gen._unique_object)
+
+    def test_redacted_machine_receipt_pinned_and_reproducible(self):
+        self.assertEqual(self.fixture, self.expected)
+        self.assertEqual(self.negative.verify_negative_receipt(
+            self.manifest, self.fixture)["result"], "UNAVAILABLE")
+        self.assertEqual(self.fixture["source_replay_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(self.fixture["seed"], 20261018)
+        self.assertEqual(self.fixture["graph_version"], self.gen.SEED_GIT_BLOB)
+        self.assertEqual(hashlib.sha256(self.negative.FIXTURE.read_bytes()).hexdigest(),
+                         "3464ced6e31f4cbc28145090d8a89cb8448c54e08a5f948aadada2ff8df202b1")
+
+    def test_each_event_has_three_distinct_local_hashes_and_no_core_hash(self):
+        rows = self.fixture["events"]
+        self.assertEqual(len(rows), 7)
+        self.assertEqual([r["sequence"] for r in rows], list(range(1, 8)))
+        self.assertEqual([r["source_event_id"] for r in rows],
+                         [e["source_event_id"] for e in self.manifest["events"]])
+        for event, row in zip(self.manifest["events"], rows):
+            with self.subTest(event=row["source_event_id"]):
+                digests = [row[k] for k in self.negative.FIELDS]
+                self.assertEqual(len(set(digests)), 3)
+                self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in digests))
+                self.assertEqual(digests[0],
+                                 hashlib.sha256(self.gen._canonical(event)).hexdigest())
+                self.assertEqual(digests[1], hashlib.sha256(
+                    self.gen._canonical(event["payload"])).hexdigest())
+                self.assertIsNone(row["core_pg16_payload_sha256"])
+                self.assertIsNone(row["core_pg16_full_event_sha256"])
+                self.assertEqual(row["mapping_status"], "UNAVAILABLE")
+
+    def test_missing_reordered_duplicate_foreign_events_rejected(self):
+        import copy
+        mutations = (
+            lambda c: c["events"].pop(),
+            lambda c: c["events"].reverse(),
+            lambda c: c["events"].__setitem__(1, copy.deepcopy(c["events"][0])),
+            lambda c: c["events"][0].update(source_event_id="FOREIGN-EVENT"),
+        )
+        for mutate in mutations:
+            candidate = copy.deepcopy(self.fixture)
+            mutate(candidate)
+            with self.assertRaises(ValueError):
+                self.negative.verify_negative_receipt(self.manifest, candidate)
+
+    def test_swapped_and_forged_hash_domains_rejected(self):
+        import copy
+        for field in self.negative.FIELDS:
+            candidate = copy.deepcopy(self.fixture)
+            candidate["events"][0][field] = "0" * 64
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.negative.verify_negative_receipt(self.manifest, candidate)
+        candidate = copy.deepcopy(self.fixture)
+        row = candidate["events"][0]
+        row[self.negative.FIELDS[0]], row[self.negative.FIELDS[2]] = (
+            row[self.negative.FIELDS[2]], row[self.negative.FIELDS[0]])
+        with self.assertRaises(ValueError):
+            self.negative.verify_negative_receipt(self.manifest, candidate)
+
+    def test_foreign_actor_tenant_runtime_ids_and_fake_core_receipts_rejected(self):
+        import copy
+        for field, value in (("tenant_id", "FOREIGN"), ("actor_subject", "FOREIGN"),
+                             ("incident_id", "FORGED"), ("run_id", "FORGED"),
+                             ("glpi_ticket_id", "FORGED"), ("hitl_approval", "APPROVED"),
+                             ("freshness", "FRESH"), ("revocation", "NOT_REVOKED")):
+            candidate = copy.deepcopy(self.fixture)
+            candidate["runtime_authority"][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.negative.verify_negative_receipt(self.manifest, candidate)
+        candidate = copy.deepcopy(self.fixture)
+        candidate["events"][0]["core_pg16_full_event_sha256"] = "a" * 64
+        with self.assertRaises(ValueError):
+            self.negative.verify_negative_receipt(self.manifest, candidate)
+
+    def test_fifteen_stages_six_checkpoints_remain_unexecuted(self):
+        self.assertEqual(self.fixture["itil_stages"],
+                         {"count": 15, "status": "NOT_EXECUTED"})
+        self.assertEqual(self.fixture["checkpoints"],
+                         {"count": 6, "status": "NOT_EXECUTED"})
+        self.assertEqual(self.fixture["runtime_readback"], "NOT_EXECUTED")
+        self.assertEqual(self.fixture["runtime_authority"]["core_pg16_readback"],
+                         "UNAVAILABLE")
+        self.assertFalse(self.fixture["publishable_to_core_or_glpi"])
+        self.assertFalse(self.fixture["live_effects_authorized"])
+
+    def test_cli_emit_check_byte_identical_and_unavailable(self):
+        import subprocess
+        import sys
+        cmd = [sys.executable, "-m", "tools.acme_synthetic_source_authority_negative"]
+        emit = subprocess.run(cmd + ["--emit"], cwd=self.gen.ROOT,
+                              capture_output=True, text=True)
+        self.assertEqual(emit.returncode, 0, emit.stderr)
+        self.assertEqual(emit.stdout.encode("utf-8"),
+                         self.negative.FIXTURE.read_bytes())
+        check = subprocess.run(cmd + ["--check"], cwd=self.gen.ROOT,
+                               capture_output=True, text=True)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertEqual(json.loads(check.stdout)["result"], "UNAVAILABLE")
+
+
 if __name__ == "__main__":
     unittest.main()
