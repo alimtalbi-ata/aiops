@@ -732,5 +732,169 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
             upstream.assert_not_called()
 
 
+    def test_independent_signed_core_and_native_glpi_tls_are_still_unqualified(self):
+        """Two disposable TLS origins: signed ALLOW + native GLPI shape != ACL."""
+        import copy
+        import json
+        from portal import core_authz_transport as wire
+        from portal_core_signed_glpi_fixture import (
+            DisposableSignedCoreNativeGlpi, synthetic_native_glpi_shape_matches,
+        )
+
+        now = int(time.time())
+        actor, binding, _, envelope = self.future_envelope(now)
+        settings = self.authz_settings()
+        plan = wire.prepare_core_authz_wire(actor, binding, env=settings, now=now)
+        self.assertIsNotNone(plan)
+        self.assertIs(plan.dispatch_allowed, False)
+        envelope["request_nonce"] = plan.nonce
+
+        with DisposableSignedCoreNativeGlpi(plan.service_bearer) as peers:
+            settings["AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON"] = json.dumps(
+                peers.jwks)
+            peers.payload = envelope
+            status, signed, headers = peers.send_core(plan)
+            self.assertEqual(status, 200)
+            self.assertEqual(peers.core_observations[0]["body"],
+                             json.loads(plan.body))
+            self.assertEqual(len(peers.glpi_observations), 0)
+            assessment = wire.assess_core_authz_reply_offline(
+                status, signed["payload"], headers, signed["signature"],
+                actor=actor, binding=binding, plan=plan, env=settings, now=now)
+            self.assertEqual(assessment.kind, "SIGNED_SHAPE_UNQUALIFIED")
+            self.assertEqual((assessment.portal_status, assessment.state,
+                              assessment.read_permitted), (503, "UNKNOWN", False))
+            self.assertFalse(wire.core_authz_read_permitted(
+                signed["payload"], signed["signature"]))
+            self.assertFalse(core_acl_consumer.positive_core_contract_matches(
+                signed["payload"], actor, binding, now=now))
+
+            # The independent GLPI test peer reads a *human* session's native
+            # User/Profile/Entity/Ticket shapes, never a service-level xref.
+            native = peers.read_native_glpi()
+            self.assertTrue(synthetic_native_glpi_shape_matches(
+                native, binding, glpi_user_id=77))
+            self.assertEqual(len(peers.glpi_observations), 5)
+            self.assertTrue(all(row["method"] == "GET"
+                                for row in peers.glpi_observations))
+            self.assertTrue(all(row["method"] == "POST"
+                                for row in peers.core_observations))
+
+            # Every variant is RE-SIGNED by the independent Core peer. A
+            # syntactically authentic but foreign/revoked claim stays INVALID.
+            variants = (
+                {"actor_subject": "forged-operator"},
+                {"actor_issuer": "https://foreign-idp.example.test"},
+                {"actor_audience": "wrong-audience"},
+                {"tenant_id": "FOREIGN"},
+                {"run_id": "RUN-FOREIGN-999"},
+                {"incident_id": "INC-FOREIGN-999"},
+                {"ticket_id": "999"},
+                {"glpi_entity_id": "99"},
+                {"request_nonce": "r" * 43},
+                {"revoked": True},
+                {"expires_at": now - 1},
+                {"glpi_readback": {
+                    **envelope["glpi_readback"],
+                    "actor_permission_confirmed": False}},
+            )
+            for changes in variants:
+                with self.subTest(changes=changes):
+                    peers.payload = {**envelope, **changes}
+                    code, forged, h = peers.send_core(plan)
+                    result = wire.assess_core_authz_reply_offline(
+                        code, forged["payload"], h, forged["signature"],
+                        actor=actor, binding=binding, plan=plan,
+                        env=settings, now=now)
+                    self.assertEqual(result.kind, "INVALID")
+                    self.assertFalse(result.read_permitted)
+                    self.assertEqual(result.portal_status, 503)
+            # A signed answer replayed for a fresh nonce is not a grant.
+            next_plan = wire.prepare_core_authz_wire(
+                actor, binding, env=settings, now=now)
+            self.assertNotEqual(next_plan.nonce, plan.nonce)
+            self.assertEqual(wire.assess_core_authz_reply_offline(
+                status, signed["payload"], headers, signed["signature"],
+                actor=actor, binding=binding, plan=next_plan,
+                env=settings, now=now).kind, "INVALID")
+            # No business GET is made to Core, even by the explicit test peer.
+            self.assertTrue(all(row["method"] == "POST"
+                                for row in peers.core_observations))
+
+    def test_native_glpi_profile_entity_user_denials_and_portal_no_leak(self):
+        """Synthetic GLPI native rights cannot be inferred from viewer/OIDC."""
+        import copy
+        from portal import core_authz_transport as wire
+        from portal_core_signed_glpi_fixture import (
+            DisposableSignedCoreNativeGlpi, synthetic_native_glpi_shape_matches,
+        )
+        actor, binding = self.actor(), self.binding()
+        settings = self.authz_settings()
+        plan = wire.prepare_core_authz_wire(actor, binding, env=settings)
+        self.assertIsNotNone(plan)
+        with DisposableSignedCoreNativeGlpi(plan.service_bearer) as peers:
+            rows = peers.read_native_glpi()
+            for section, key, value in (
+                ("getFullSession", "session", {
+                    **rows["getFullSession"]["session"], "glpiID": 78}),
+                ("getFullSession", "session", {
+                    **rows["getFullSession"]["session"],
+                    "glpiactiveentities": [99]}),
+                ("User", "is_active", 0),
+                ("Profile", "ticket", 0),
+                ("Profile", "ticket", 2),  # READMY != native READ
+                ("Profile", "ticket", True),
+                ("Profile", "id", 5),
+                ("Entity", "id", 99),
+                ("Ticket", "id", 999),
+                ("Ticket", "entities_id", 99),
+            ):
+                with self.subTest(section=section, key=key, value=value):
+                    changed = copy.deepcopy(rows)
+                    changed[section][key] = value
+                    self.assertFalse(synthetic_native_glpi_shape_matches(
+                        changed, binding, glpi_user_id=77))
+            self.assertFalse(synthetic_native_glpi_shape_matches(
+                rows, self.binding("OTHER"), glpi_user_id=77))
+
+            # Portal remains unable to dispatch even with a reachable,
+            # independently signed synthetic Core and GLPI human-session peer.
+            self.session()
+            before_core = len(peers.core_observations)
+            before_glpi = len(peers.glpi_observations)
+            with patch.dict(os.environ, settings), patch.object(
+                    wire, "prepare_core_authz_wire",
+                    side_effect=AssertionError("no Core authz dispatch")) as preflight, \\
+                 patch.object(acme_run_detail, "_read_core_run",
+                              side_effect=AssertionError("no Core business GET")) as core, \\
+                 patch.object(main, "get_json",
+                              side_effect=AssertionError("no upstream GLPI GET")) as upstream:
+                projections = []
+                for rid in (RUN, OTHER, "RUN-NOT-FOUND", "RUN-forged!"):
+                    for prefix in ("/api/portal/runs/", "/runs/"):
+                        response = self.client.get(prefix + rid, headers={
+                            "Authorization": "Bearer " + plan.service_bearer,
+                            "X-Actor-ID": "forged", "X-Tenant-ID": "FOREIGN",
+                            "X-GLPI-Profile": "manager"})
+                        self.assert_fence(response, 503)
+                        self.assertNotIn(plan.service_bearer, response.text)
+                        self.assertNotIn(binding.ticket_id, response.text)
+                        self.assertNotIn(binding.incident_id, response.text)
+                        if prefix.startswith("/api/"):
+                            projections.append(response.json())
+                self.assertTrue(all(item == projections[0]
+                                    for item in projections))
+                preflight.assert_not_called()
+                core.assert_not_called()
+                upstream.assert_not_called()
+            self.assertEqual(len(peers.core_observations), before_core)
+            self.assertEqual(len(peers.glpi_observations), before_glpi)
+            with oidc_session._lock:
+                oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
+            for prefix in ("/api/portal/runs/", "/runs/"):
+                self.assert_fence(self.client.get(prefix + RUN), 401)
+            self.assertFalse(wire.core_authz_read_permitted())
+
+
 if __name__ == "__main__":
     unittest.main()
