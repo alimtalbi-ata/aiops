@@ -1,0 +1,117 @@
+name: HITL Worker Core DEAD positive PG16 Temporal disposable
+
+on:
+  pull_request:
+    branches:
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - tests/test_worker_core_dead_positive_pg16.py
+      - .github/workflows/hitl-worker-core-dead-positive-pg16.yml
+      - docs/qualification/HITL-WORKER-CORE-DEAD-POSITIVE-2026-11-01.md
+
+permissions:
+  contents: read
+
+jobs:
+  worker-core-dead-positive-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    container:
+      image: ubuntu:24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-hitl-ephemeral-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DATABASE_URL: postgresql://aiops:ci-hitl-ephemeral-only@postgres:5432/aiops
+      AIOPS_CI_COMBINED_DISPOSABLE: "YES"
+      AIOPS_CI_CORE_DEAD_POSITIVE: "YES"
+      AIOPS_CI_OUTBOX_DISPOSABLE: "YES"
+      AIOPS_CI_WORKER_DISPOSABLE: "YES"
+      AIOPS_CI_COMBINED_RECEIPT_DIR: /tmp/hitl-core-dead-positive-receipts
+      HITL_DR_ARTIFACT: /tmp/hitl-core-dead-positive-pg16-dr.dump
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Install PostgreSQL 16 client in disposable CI
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv postgresql-client-16
+          pg_dump --version | grep -E ' 16[.]'
+          pg_restore --version | grep -E ' 16[.]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify exact HEAD and install pinned test clients
+        run: |
+          set -eu
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          python3 -m venv /tmp/hitl-combined-venv
+          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "uvicorn==0.35.0"
+          /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_dead_positive_pg16.py
+      - name: Positive Core-owned DEAD PG16 and persisted Temporal restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_dead_positive_pg16.py' -v 2>&1 | tee /tmp/hitl-core-dead-positive.log
+      - name: Validate exact-head machine-readable Core DEAD receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CI_COMBINED_RECEIPT_DIR"]) / "core-dead-positive.json"
+          receipt = json.loads(path.read_text())
+          digest = receipt.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert digest == actual, "receipt_digest_mismatch"
+          assert receipt["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"], "head_mismatch"
+          assert receipt["schema"] == "aiops.worker-core-dead-positive.v1"
+          assert receipt["migration_014"] == "CORE_OWNED_RUNTIME_OBSERVED"
+          assert receipt["event_count"] == receipt["dead_count"] == 2
+          assert len({e["event_id"] for e in receipt["events"]}) == 2
+          assert all(e["status"] == "DEAD" and e["attempts"] == 8 and e["decision"] == "REJECT" and e["audit_rows"] == 1 for e in receipt["events"])
+          assert receipt["temporal_persisted_restarts"] == 1
+          assert receipt["temporal_signal_count"] == receipt["approve_count"] == receipt["effect_receipt_count"] == receipt["delivered_count"] == 0
+          assert receipt["execution_allowed"] is False and receipt["effect_allowed"] is False
+          assert receipt["sql_dead_injection"] is False
+          assert receipt["physical_packet_loss"] == "NOT_TESTED"
+          assert receipt["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert receipt["gateway_close"] == "INJECTED_AFTER_CORE_TCP_DEAD_COMMIT"
+          assert not any(k in json.dumps(receipt).lower() for k in ("bearer", "lease_token", "hmac_secret"))
+          print("CORE_DEAD_POSITIVE_RECEIPT_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CI_COMBINED_RECEIPT_DIR/core-dead-positive.json" > /tmp/hitl-core-dead-positive.sha256
+          sha256sum --check /tmp/hitl-core-dead-positive.sha256
+      - name: Existing PostgreSQL 16 outbox and DR restoration regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v 2>&1 | tee /tmp/hitl-core-dead-positive-dr.log
+          test -s "$HITL_DR_ARTIFACT"
+          pg_restore --version | grep -E ' 16[.]'
+          sha256sum "$HITL_DR_ARTIFACT" > /tmp/hitl-core-dead-positive-dr.sha256
+          sha256sum --check /tmp/hitl-core-dead-positive-dr.sha256
+      - name: Upload synthetic evidence and PostgreSQL DR
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-worker-core-dead-positive-pg16-disposable
+          path: |
+            /tmp/hitl-core-dead-positive.log
+            /tmp/hitl-core-dead-positive-dr.log
+            /tmp/hitl-core-dead-positive-receipts/core-dead-positive.json
+            /tmp/hitl-core-dead-positive.sha256
+            /tmp/hitl-core-dead-positive-pg16-dr.dump
+            /tmp/hitl-core-dead-positive-dr.sha256
+          retention-days: 7
+          if-no-files-found: warn
