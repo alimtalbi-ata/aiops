@@ -84,7 +84,11 @@ def exact_binding_valid(actor: PortalActorContext, binding: ServerXref) -> bool:
             and actor.tenant_acl_qualified is False
             and isinstance(binding, ServerXref)
             and isinstance(actor.tenant_id, str)
+            and isinstance(binding.tenant_id, str)
             and hmac.compare_digest(actor.tenant_id, binding.tenant_id)
+            and all(isinstance(value, str) for value in (
+                binding.run_id, binding.incident_id, binding.glpi_instance_id,
+                binding.ticket_id, binding.glpi_entity_id))
             and bool(_RUN.fullmatch(binding.run_id))
             and bool(_INCIDENT.fullmatch(binding.incident_id))
             and bool(_RESOURCE.fullmatch(binding.glpi_instance_id))
