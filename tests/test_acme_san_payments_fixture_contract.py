@@ -682,5 +682,168 @@ class AcmeItilStageAuthorityConsumerTests(unittest.TestCase):
             self.assertEqual(json.loads(proc.stdout)["verified_stage_count"], 0)
 
 
+
+class AcmeCorePg16HashComparisonNegativeTests(unittest.TestCase):
+    """A test-only Core-shaped vector cannot authorize any runtime stage."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_pg16_hash_comparison as comparison
+        from tools import generate_acme_incidents as gen
+        cls.comparison = comparison
+        cls.gen = gen
+        cls.manifest = gen.replay(seed=20261018)
+        cls.vector = json.loads(comparison.VECTOR_PATH.read_text(encoding="utf-8"),
+                                object_pairs_hook=gen._unique_object)
+        cls.expected = json.loads(comparison.RECEIPT_PATH.read_text(encoding="utf-8"),
+                                  object_pairs_hook=gen._unique_object)
+
+    def negative(self, result):
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["core_pg16_readback"], "UNAVAILABLE")
+        self.assertEqual(result["core_pg16_hash_equivalence"], "UNKNOWN")
+        self.assertEqual((result["verified_stage_count"],
+                          result["not_executed_stage_count"]), (0, 15))
+        self.assertEqual((result["verified_checkpoint_count"],
+                          result["not_executed_checkpoint_count"]), (0, 6))
+        self.assertEqual(len(result["stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" for s in result["stages"]))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" for c in result["checkpoints"]))
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+        for key in ("actor_subject", "tenant_id", "incident_id", "run_id",
+                    "glpi_ticket_id", "hitl_approval"):
+            self.assertIsNone(result["authority"][key])
+        self.assertEqual(result["authority"]["evidence_ids"], [])
+        for row in result["comparison_rows"]:
+            self.assertIsNone(row["core_pg16_full_event_sha256"])
+            self.assertIsNone(row["core_pg16_payload_sha256"])
+            self.assertEqual(row["core_pg16_domain_equivalence"], "UNKNOWN")
+
+    def test_seven_test_only_hash_pairs_and_golden_receipt(self):
+        result = self.comparison.compare(self.manifest, self.vector)
+        self.negative(result)
+        self.assertEqual(result, self.expected)
+        self.assertEqual(result["test_vector_reason"], "TEST_VECTOR_SHAPE_ONLY_NOT_PG16")
+        self.assertEqual(len({r["source_event_id"] for r in result["comparison_rows"]}), 7)
+        for row in result["comparison_rows"]:
+            self.assertEqual(row["test_only_full_byte_comparison"], "MISMATCH_TEST_ONLY")
+            self.assertEqual(row["test_only_payload_byte_comparison"], "MISMATCH_TEST_ONLY")
+            self.assertEqual(len({row["acme_full_event_sha256"],
+                                  row["acme_local_payload_sha256"],
+                                  row["acme_proposed_core_payload_sha256"]}), 3)
+
+    def test_missing_readback_all_unknown(self):
+        result = self.comparison.compare(self.manifest)
+        self.negative(result)
+        self.assertEqual(result["test_vector_reason"], "NO_INDEPENDENT_TEST_VECTOR")
+        self.assertTrue(all(row["test_only_core_full_event_sha256"] is None
+                            for row in result["comparison_rows"]))
+
+    def test_foreign_missing_reordered_duplicate_events(self):
+        import copy
+        for mutate in (
+            lambda v: v["events"].reverse(),
+            lambda v: v["events"].pop(),
+            lambda v: v["events"][0].update(source_event_id="TEST_ONLY_FOREIGN"),
+            lambda v: v["events"].__setitem__(2, copy.deepcopy(v["events"][0])),
+        ):
+            candidate = copy.deepcopy(self.vector)
+            mutate(candidate)
+            result = self.comparison.compare(self.manifest, candidate)
+            self.negative(result)
+            self.assertIn(result["test_vector_reason"],
+                          ("MISSING_OR_EXTRA_EVENTS", "FOREIGN_DUPLICATE_OR_REORDERED_EVENTS"))
+            self.assertNotIn("TEST_ONLY_FOREIGN", json.dumps(result))
+
+    def test_foreign_schema_domains_and_extra_fields(self):
+        import copy
+        for mutate in (
+            lambda v: v.update(schema="TEST_ONLY_FOREIGN_SCHEMA"),
+            lambda v: v["hash_domains"].update(full_event="ACME_LOCAL_EVENT"),
+            lambda v: v.update(verified=True),
+        ):
+            candidate = copy.deepcopy(self.vector)
+            mutate(candidate)
+            result = self.comparison.compare(self.manifest, candidate)
+            self.negative(result)
+            self.assertIn(result["test_vector_reason"],
+                          ("FOREIGN_OR_UNTRUSTED_HASH_DOMAIN", "MALFORMED_OR_EXTRA_FIELDS"))
+
+    def test_forged_actor_tenant_run_glpi_evidence_hitl(self):
+        import copy
+        for key, value in (
+            ("actor_subject", "TEST_ONLY_ACTOR"), ("tenant_id", "TEST_ONLY_TENANT"),
+            ("incident_id", "TEST_ONLY_INCIDENT"), ("run_id", "TEST_ONLY_RUN"),
+            ("glpi_ticket_id", "TEST_ONLY_GLPI"), ("hitl_approval", "ALLOW"),
+            ("evidence_ids", ["TEST_ONLY_EVIDENCE"]),
+        ):
+            candidate = copy.deepcopy(self.vector)
+            candidate[key] = value
+            result = self.comparison.compare(self.manifest, candidate)
+            self.negative(result)
+            self.assertEqual(result["test_vector_reason"],
+                             "UNTRUSTED_RUNTIME_AUTHORITY_CLAIM")
+            self.assertNotIn(str(value), json.dumps(result))
+
+    def test_swapped_hash_domains_still_unknown(self):
+        import copy
+        candidate = copy.deepcopy(self.vector)
+        row = candidate["events"][0]
+        row["payload_sha256"], row["full_event_sha256"] = (
+            row["full_event_sha256"], row["payload_sha256"])
+        result = self.comparison.compare(self.manifest, candidate)
+        self.negative(result)
+        self.assertEqual(result["test_vector_reason"], "TEST_VECTOR_SHAPE_ONLY_NOT_PG16")
+
+    def test_identical_bytes_are_not_pg16_authority(self):
+        import copy
+        candidate = copy.deepcopy(self.vector)
+        candidate["events"][0]["full_event_sha256"] = (
+            self.expected["comparison_rows"][0]["acme_full_event_sha256"])
+        result = self.comparison.compare(self.manifest, candidate)
+        self.negative(result)
+        self.assertEqual(result["comparison_rows"][0]["test_only_full_byte_comparison"],
+                         "SAME_BYTES_NOT_AUTHORITY")
+
+    def test_invalid_duplicate_and_collapsed_hashes(self):
+        import copy
+        for mutate in (
+            lambda v: v["events"][0].update(payload_sha256="bad"),
+            lambda v: v["events"][0].update(
+                payload_sha256=v["events"][0]["full_event_sha256"]),
+            lambda v: v["events"][1].update(
+                payload_sha256=v["events"][0]["payload_sha256"]),
+        ):
+            candidate = copy.deepcopy(self.vector)
+            mutate(candidate)
+            result = self.comparison.compare(self.manifest, candidate)
+            self.negative(result)
+            self.assertIn(result["test_vector_reason"],
+                          ("INVALID_TEST_ONLY_HASH", "COLLAPSED_CORE_HASH_DOMAINS",
+                           "DUPLICATE_CORE_TEST_HASH"))
+
+    def test_golden_replay_and_six_checkpoints_unchanged(self):
+        result = self.comparison.compare(self.manifest, self.vector)
+        self.negative(result)
+        self.assertEqual(self.manifest["seed"], 20261018)
+        self.assertEqual(result["source_replay_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+
+    def test_cli_check_and_emit_are_redacted(self):
+        import subprocess
+        import sys
+        cmd = [sys.executable, "-m", "tools.acme_synthetic_pg16_hash_comparison"]
+        emit = subprocess.run(cmd + ["--emit"], cwd=self.gen.ROOT,
+                              capture_output=True, text=True)
+        self.assertEqual(emit.returncode, 0, emit.stderr)
+        self.assertEqual(json.loads(emit.stdout), self.expected)
+        check = subprocess.run(cmd + ["--check"], cwd=self.gen.ROOT,
+                               capture_output=True, text=True)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        self.assertEqual(json.loads(check.stdout)["check"], "PASS_SYNTHETIC_ONLY")
+        self.assertNotIn('"ALLOW"', emit.stdout)
+
 if __name__ == "__main__":
     unittest.main()
