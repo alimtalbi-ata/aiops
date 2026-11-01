@@ -519,7 +519,11 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
 
         # Revoke the service credential after commit: a matching token/lease
         # must not be treated as a durable authorization.
-        with patch.dict(os.environ, {"AIOPS_XREF_READ_AUTHZ_JSON": "[]"}):
+        other_actor = [{"token_sha256": hashlib.sha256(self.token_b.encode()).hexdigest(),
+                        "actor_id": "svc-TEN-B", "tenant_ids": ["TEN-B"],
+                        "permissions": ["hitl:reject:deliver", "hitl:reject:terminal"]}]
+        with patch.dict(os.environ, {
+            "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps(other_actor)}):
             revoked = client.post(path, json=body, headers=headers)
             self.assertEqual(revoked.status_code, 401)
             self.assertEqual(revoked.json()["status"], "UNKNOWN")
