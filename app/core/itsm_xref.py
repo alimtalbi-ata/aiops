@@ -342,3 +342,7 @@ def read_ticket_xref(tenant_id:str,instance_id:str,ticket_id:str,
                   glpi_ticket_readback_verified=True,core_run_readback_verified=True,
                   observed_at=_stamp(e["observed_at"]),known_at=_stamp(e["known_at"]),
                   provenance=e["provenance"])
+
+# Core-owned actor ACL preflight; shares the existing xref router registration.
+from core.actor_resource_authz import router as actor_resource_router
+router.include_router(actor_resource_router)
