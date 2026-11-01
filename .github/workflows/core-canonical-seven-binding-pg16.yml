@@ -1,4 +1,4 @@
-name: Core canonical seven-event v2 full/payload binding (disposable)
+name: Core canonical seven-event receipts and full/payload binding (disposable)
 
 on:
   pull_request:
@@ -76,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
-          grep -E '^Ran 10 tests in ' /tmp/core-seven-results.log
+          grep -E '^Ran 12 tests in ' /tmp/core-seven-results.log
           grep -x 'OK' /tmp/core-seven-results.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
-          echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE"
+          echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
