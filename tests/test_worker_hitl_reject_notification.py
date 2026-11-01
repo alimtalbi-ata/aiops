@@ -86,7 +86,7 @@ class RejectNotificationContract(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(UnqualifiedNotification):
             prepare_reject(bad, OWNER)
 
-    def test_signal_failure_never_acknowledges(self):
+    async def test_signal_failure_never_acknowledges(self):
         calls = []
         async def signal(*args):
             calls.append("signal")
@@ -98,7 +98,7 @@ class RejectNotificationContract(unittest.IsolatedAsyncioTestCase):
                                       signal=signal, acknowledge=ack)
         self.assertEqual(calls, ["signal"])
 
-    def test_lost_ack_response_is_not_claimed_as_network_proof(self):
+    async def test_lost_ack_response_is_not_claimed_as_network_proof(self):
         # Synthetic transport exception AFTER fake Core commit; no real network.
         committed = set()
         deliveries = []
