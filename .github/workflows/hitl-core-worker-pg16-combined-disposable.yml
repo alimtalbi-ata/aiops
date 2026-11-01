@@ -75,12 +75,13 @@ jobs:
           import json, os, re
           log_path = "/tmp/hitl-combined.log"
           log = open(log_path).read() if os.path.isfile(log_path) else ""
-          tcp_boundary_pass = bool(re.search(
-              r"test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate.*[.]?[.][.] ok",
-              log))
-          worker_restart_pass = bool(re.search(
-              r"test_02_core_http_temporal_worker_restart_and_ack_response_loss.*[.]?[.][.] ok",
-              log)) and tcp_boundary_pass
+          combined_ok = bool(
+              re.search(r"(?m)^Ran 4 tests in [0-9.]+s$", log)
+              and re.search(r"(?m)^OK$", log))
+          tcp_boundary_pass = (combined_ok and
+              "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
+          worker_restart_pass = (combined_ok and
+              "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
           report = {
               "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
               "core_claim_ack": "ACTUAL_FASTAPI_ASGI_HTTP_AND_POPULATED_PG16_IF_PASS",
