@@ -443,7 +443,7 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
 
         success = client.post(path, json=body, headers=headers)
         replay = client.post(path, json=body, headers=headers)
-        ack = client.post(path[:-5] + "ack", json=body, headers=headers)
+        ack = client.post(path.removesuffix("/dead") + "/ack", json=body, headers=headers)
         self.assertEqual((success.status_code, success.json()["status"],
                           success.json()["idempotent"]), (200, "DEAD", False))
         self.assertEqual((replay.status_code, replay.json()["status"],
