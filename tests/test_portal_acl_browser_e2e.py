@@ -389,3 +389,112 @@ class PortalACLChromiumE2E(unittest.TestCase):
             self.assertEqual(len(core.observations), 3,
                              "revoked session unexpectedly reached Core")
             self.assertTrue(all(x["method"] == "POST" for x in core.observations))
+
+    def test_08_real_core_tcp_unknown_401_403_and_replay_contract(self):
+        """Actual Core ASGI route on independent TLS TCP; no mock ALLOW."""
+        from dataclasses import replace
+        from portal.core_acl_consumer import ServerXref
+        from portal_core_real_tcp_fixture import DisposableRealCoreTCP
+
+        actor, _ = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=int(time.time()))
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        with DisposableRealCoreTCP(
+                self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]) as core:
+            first = core.send(plan)
+            replay = core.send(plan)
+            for status, payload, headers in (first, replay):
+                self.assertEqual(status, 200)
+                self.assertEqual(payload, {
+                    "schema": "aiops.core-actor-resource-authorization.v1",
+                    "decision": "UNKNOWN"})
+                assessment = self.wire.assess_core_authz_reply_offline(
+                    status, payload, headers, None, actor=actor, binding=binding,
+                    plan=plan, env=self.settings, now=int(time.time()))
+                self.assertEqual(assessment.kind, "CURRENT_CORE_NEGATIVE")
+                self.assertFalse(assessment.read_permitted)
+                self.assertEqual(assessment.portal_status, 503)
+            # Core service authentication and tenant fence are separate from
+            # OIDC identity, native GLPI human rights and resource read ACL.
+            unauth = core.send(replace(plan, service_bearer="forged-" + "x" * 40))
+            self.assertEqual(unauth[0], 401)
+            self.assertEqual(unauth[1]["decision"], "UNKNOWN")
+            self.assertEqual({k.lower(): v for k, v in unauth[2].items()}.get(
+                "www-authenticate"), "Bearer")
+            foreign = core.send(replace(
+                plan, path=plan.path.replace("/tenants/ACME/", "/tenants/FOREIGN/")))
+            self.assertEqual(foreign[0], 403)
+            self.assertEqual(foreign[1]["decision"], "UNAUTHORIZED")
+            self.assertEqual(len(core.observations()), 4)
+            self.assertTrue(all(row["method"] == "POST" and
+                                row["path"].endswith("/actor-resource-authorization")
+                                for row in core.observations()))
+            # A replayed nonce receives UNKNOWN; without a qualified atomic
+            # ledger this is NOT proof of replay resistance or actor permission.
+            self.assertFalse(self.wire.core_authz_read_permitted(first[1]))
+            self.assertFalse(self.wire.core_authz_read_permitted(foreign[1]))
+
+    def test_09_real_core_tcp_no_business_fetch_revocation_and_browser_leak(self):
+        """Portal never dispatches Core/GLPI business reads on UNKNOWN."""
+        from portal.core_acl_consumer import ServerXref
+        from portal_core_real_tcp_fixture import DisposableRealCoreTCP
+
+        actor, handle = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=int(time.time()))
+        self.assertIsNotNone(plan)
+        with DisposableRealCoreTCP(
+                self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"]) as core:
+            self.assertEqual(core.send(plan)[0], 200)
+            baseline = core.observations()
+            self.assertEqual(len(baseline), 1)
+            results = []
+            for rid in ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999"):
+                response = self.context.request.get(
+                    self.base + "/api/portal/runs/" + rid,
+                    headers={"Authorization": "Bearer forged",
+                             "X-Actor-ID": "admin", "X-Tenant-ID": "FOREIGN",
+                             "X-GLPI-Ticket": "999", "X-GLPI-Entity": "99"})
+                self.assert_denied(response, 503)
+                results.append(response.json())
+            self.assertEqual(results[0], results[1])
+            self.assertEqual(results[1], results[2])
+            self.assert_denied(self.page.goto(
+                self.base + "/runs/RUN-FOREIGN-999"), 503)
+            # The viewer gate is identity-only; not native GLPI permission.
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/itsm"), 401)
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/itsm",
+                headers={"Authorization": "Bearer " +
+                         self.settings["AIOPS_PORTAL_READ_TOKEN"]}), 503)
+            self.assertEqual(core.observations(), baseline)
+            with self.sessions._lock:
+                self.sessions._sessions.pop(self.sessions._digest(handle), None)
+            for _ in range(2):
+                self.assert_denied(self.context.request.get(
+                    self.base + "/api/portal/runs/RUN-ACME-123"), 401)
+                self.assert_denied(self.page.goto(
+                    self.base + "/runs/RUN-ACME-123"), 401)
+            self.assertEqual(core.observations(), baseline)
+            foreign_actor, _ = self.session(tenant="FOREIGN")
+            self.assertIsNone(self.wire.prepare_core_authz_wire(
+                foreign_actor, binding, env=self.settings, now=int(time.time())))
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/runs/RUN-ACME-123"), 503)
+            self.assertEqual(core.observations(), baseline)
+            for url, headers in self.observed:
+                self.assertTrue(url.startswith(self.base + "/"))
+                self.assertNotIn("core.example.test", url)
+                for secret in (self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"],
+                               self.settings["AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN"]):
+                    self.assertNotIn(secret, str(headers))
+            self.assertNotIn(self.settings[
+                "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], self.page.content())
+            self.assertFalse(self.blocked)
