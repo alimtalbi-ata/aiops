@@ -302,5 +302,151 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         upstream.assert_not_called()
 
 
+    def authz_settings(self):
+        return {**os.environ,
+            "AIOPS_PORTAL_CORE_AUTHZ_ORIGIN": "https://core.example.test:8443",
+            "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN": "authz-" + "a" * 40,
+            "AIOPS_PORTAL_CORE_AUTHZ_SCOPE": "actor:resource:authorize",
+        }
+
+    def test_authz_wire_preflight_is_server_only_and_dispatch_disabled(self):
+        from portal import core_authz_transport as wire
+        actor, binding = self.actor(), self.binding()
+        settings = self.authz_settings()
+        with patch("urllib.request.urlopen", side_effect=AssertionError("network")) as net:
+            plan = wire.prepare_core_authz_wire(actor, binding, env=settings)
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        self.assertEqual(plan.method, "POST")
+        self.assertEqual(plan.origin, "https://core.example.test:8443")
+        self.assertEqual(plan.path, "/api/tenants/ACME/runs/" + RUN
+                         + "/actor-resource-authorization")
+        self.assertEqual(plan.headers["Authorization"],
+                         "Bearer " + settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"])
+        self.assertNotIn(settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], repr(plan))
+        self.assertNotIn("operator-123", plan.body.decode())
+        self.assertNotIn("X-Actor", str(plan.headers))
+        self.assertNotIn("X-Tenant", str(plan.headers))
+        self.assertNotIn("delegation", plan.body.decode())
+        self.assertEqual(__import__("json").loads(plan.body)["permission"], "run:read")
+        net.assert_not_called()
+
+    def test_authz_wire_rejects_foreign_expired_and_forged_bindings(self):
+        from portal import core_authz_transport as wire
+        settings = self.authz_settings()
+        for actor, binding in (
+            (self.actor("ACME"), self.binding("OTHER")),
+            (self.actor(expiry=-1), self.binding()),
+            (self.actor(), core_acl_consumer.ServerXref(
+                "ACME", "RUN-../evil", "INC-ACME-123", "glpi-acme", "123", "42")),
+            (self.actor(), core_acl_consumer.ServerXref(
+                "ACME", RUN, "INC-ACME-123", "glpi-acme", "123", "foreign")),
+        ):
+            with self.subTest(actor=actor, binding=binding):
+                self.assertIsNone(wire.prepare_core_authz_wire(
+                    actor, binding, env=settings))
+
+    def test_authz_wire_rejects_unpinned_origin_and_shared_service_token(self):
+        from portal import core_authz_transport as wire
+        settings = self.authz_settings()
+        for changes in (
+            {"AIOPS_PORTAL_CORE_AUTHZ_ORIGIN": "http://core.example.test"},
+            {"AIOPS_PORTAL_CORE_AUTHZ_ORIGIN": "https://core.example.test@evil.test"},
+            {"AIOPS_PORTAL_CORE_AUTHZ_ORIGIN": "https://core.example.test/path"},
+            {"AIOPS_PORTAL_CORE_AUTHZ_SCOPE": "itsm:xref:read"},
+            {"AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN":
+                settings["AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN"]},
+            {"AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN":
+                settings["AIOPS_PORTAL_READ_TOKEN"]},
+        ):
+            with self.subTest(changes=changes):
+                self.assertIsNone(wire.prepare_core_authz_wire(
+                    self.actor(), self.binding(), env={**settings, **changes}))
+
+    def test_signed_synthetic_allow_is_authenticated_but_never_authorized(self):
+        from portal import core_authz_transport as wire
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding, rsa
+        import base64
+        now = int(time.time())
+        actor, binding, _, payload = self.future_envelope(now)
+        settings = self.authz_settings()
+        plan = wire.prepare_core_authz_wire(actor, binding, env=settings, now=now)
+        self.assertIsNotNone(plan)
+        payload["request_nonce"] = plan.nonce
+        private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        numbers = private.public_key().public_numbers()
+        def b64(value):
+            return base64.urlsafe_b64encode(
+                value.to_bytes((value.bit_length() + 7) // 8, "big")
+            ).rstrip(b"=").decode("ascii")
+        settings["AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON"] = __import__("json").dumps({
+            "keys": [{"kid": "core-test-key", "kty": "RSA", "alg": "RS256",
+                      "use": "sig", "n": b64(numbers.n), "e": b64(numbers.e)}]
+        })
+        def sign(body, origin=None):
+            signed = wire._canonical_signed_bytes(origin or plan.origin, body)
+            return {"alg": "RS256", "kid": "core-test-key",
+                    "signature": base64.urlsafe_b64encode(private.sign(
+                        signed, padding.PKCS1v15(), hashes.SHA256())
+                    ).rstrip(b"=").decode("ascii")}
+        signature = sign(payload)
+        check = lambda p, s, target=plan: wire.verify_pinned_core_response_signature(
+            p, s, actor=actor, binding=binding, plan=target,
+            env=settings, now=now)
+        self.assertTrue(check(payload, signature))
+        self.assertFalse(wire.core_authz_read_permitted(payload, signature))
+        self.assertFalse(core_acl_consumer.positive_core_contract_matches(
+            payload, actor, binding, now=now))
+        # A forged ALLOW without a valid signature is not even authenticated.
+        self.assertFalse(check({**payload, "tenant_id": "OTHER"}, signature))
+        self.assertFalse(check({**payload, "run_id": OTHER}, signature))
+        self.assertFalse(check({**payload, "ticket_id": "999"}, signature))
+        self.assertFalse(check(payload, {**signature, "alg": "none"}))
+        self.assertFalse(check(payload, {**signature, "signature": "x" * 40}))
+        self.assertFalse(check(payload, sign(payload, "https://evil.test")))
+        self.assertFalse(check(payload, {**signature, "kid": "attacker"}))
+        # A new challenge cannot accept a previous signed response.
+        next_plan = wire.prepare_core_authz_wire(actor, binding, env=settings, now=now)
+        self.assertNotEqual(plan.nonce, next_plan.nonce)
+        self.assertFalse(check(payload, signature, next_plan))
+        # A forged pin or a missing pin is not response authenticity.
+        self.assertFalse(wire.verify_pinned_core_response_signature(
+            payload, signature, actor=actor, binding=binding, plan=plan,
+            env={**settings, "AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON":
+                 '{"keys":[]}'}, now=now))
+        self.assertFalse(wire.verify_pinned_core_response_signature(
+            payload, signature, actor=actor, binding=binding, plan=plan,
+            env={**settings, "AIOPS_PORTAL_CORE_AUTHZ_ORIGIN":
+                 "https://other.example.test"}, now=now))
+
+    def test_authz_transport_is_not_wired_to_browser_or_api(self):
+        from portal import core_authz_transport as wire
+        self.session()
+        settings = self.authz_settings()
+        with patch.dict(os.environ, settings), patch.object(
+                wire, "prepare_core_authz_wire",
+                side_effect=AssertionError("premature Core authz request")) as prepare, \
+             patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core business read")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("Core/GLPI fetch")) as upstream:
+            for rid in (RUN, OTHER, "RUN-ABSENT", "RUN-forged!"):
+                for prefix in ("/api/portal/runs/", "/runs/"):
+                    response = self.client.get(prefix + rid, headers={
+                        "Authorization": "Bearer forged-allow",
+                        "X-Actor-ID": "admin", "X-Tenant-ID": "OTHER",
+                        "X-GLPI-Profile": "manager"})
+                    self.assert_fence(response, 503)
+                    self.assertNotIn("INC-ACME", response.text)
+                    self.assertNotIn("glpi-acme", response.text)
+            prepare.assert_not_called()
+            core.assert_not_called()
+            upstream.assert_not_called()
+        with oidc_session._lock:
+            oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
+        for prefix in ("/api/portal/runs/", "/runs/"):
+            self.assert_fence(self.client.get(prefix + RUN), 401)
+
 if __name__ == "__main__":
     unittest.main()
