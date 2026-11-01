@@ -45,3 +45,62 @@ Revert the Portal-only PR commits to remove the new verifier/preflight and resto
 - **Core #233 dependency:** define a distinct authenticated subject-delegation mechanism and a Core-authoritative `aiops.core-actor-resource-authorization.v1` endpoint, with independent GLPI/CMDB ownership evidence (not merely a signed synthetic fixture). Core must authorize actor + tenant + exact Run → Incident → ticket + entity, and provide replay/expiry/revocation semantics. Until Core and GLPI attestation are independently tested, no positive ACL or CONNECTED state is permitted.
 - Disposable negative tests are in `tests/test_portal_core_acl_consumer.py`, executed via the existing Portal-owned Quality bridge `tests/test_portal_demo_command_auth.py`. Shared `.github/workflows/quality.yml` is unchanged. No real IdP, GLPI API, production network or mutations.
 - Rollback: revert the focused Portal-only commits; no schema, persistent state, external session or GLPI mutation to undo. `RELEASE_STABLE=NO_GO`.
+
+## Proposed Core actor-resource authorization v1 — Portal P0 next gate (2026-11-01)
+
+**Contract proposal, not an implemented Core endpoint or positive authorization.**
+Core #233/#242 currently expose `aiops.core-itsm-xref-read.v1`, a
+service-authorized xref with disposable GLPI readback tests. They do **not**
+provide an OIDC-subject-delegated actor ACL, native GLPI actor permission,
+or independently sourced Run↔Ticket ownership. A `VERIFIED` xref, HMAC,
+DB flag or synthetic GLPI response is insufficient.
+
+Portal's `core_v1_envelope_matches` validates only a proposed **closed**
+`aiops.core-actor-resource-authorization.v1` response shape. Required:
+`decision=ALLOW`, `permission=run:read`, `tenant_acl_qualified=true`,
+`acl_version=vN`, opaque `decision_id`, exact actor subject/issuer/audience,
+tenant, Run, Incident, GLPI instance/ticket/entity and a server-created
+one-time `request_nonce`. Integer `issued_at`, `expires_at`,
+`revocation_checked_at` must be recent (60/60/30 seconds respectively),
+non-revoked and bounded by the live OIDC identity expiry. `delegation`
+must name Core-verified subject, issuer, audience, tenant, expiry and
+revocation; `glpi_readback` must attest authenticated independent ticket
+ownership, exact entity, native actor `ticket:read` permission and a
+separately proven Run↔Ticket link. Extra/missing fields, cross-tenant
+identifiers, stale/forged/replayed nonce, wrong subject/issuer/audience,
+false ownership or revoked/expired proofs are rejected.
+
+**Important:** an attacker can construct a syntactically matching JSON.
+The shape validator is NOT an ACL verifier. The historical
+`positive_core_contract_matches` is deliberately hard-closed (always
+false), and `consume_run_acl` still returns 503 UNKNOWN without network.
+No flag/environment variable can turn on a positive read. The separate
+`configured_core_authz_target` only checks pinned HTTPS origin and
+`actor:resource:authorize` service token distinct from the xref token,
+viewer token, operator token and internal token; it performs no request.
+Never forward browser bearer or actor/tenant/profile headers to Core.
+
+**Core-owner acceptance required before activation:** publish a versioned
+Core endpoint with server-authenticated OIDC subject delegation (not
+arbitrary request headers), bounded one-time challenge and replay store,
+Core-side authorization of exact Run→Incident→ticket/entity, independently
+authenticated GLPI ownership **and native actor permission**, expiry,
+revocation and response authenticity. Agree on the wire schema, status
+codes and Core-signed or pinned mTLS/service transport, and prove negative
+cross-tenant/absent/foreign indistinguishability. Portal will then need
+an architect-reviewed network client that authenticates the response,
+atomically consumes the challenge, rechecks session revocation, and only
+then performs resource reads. Until then: no upstream fetch, no CONNECTED,
+no GLPI action, no positive role grant.
+
+**Tests:** `python -m unittest discover -s tests -p
+'test_portal_core_acl_consumer.py' -v` (disposable sessions, no network).
+API and HTML must agree for present/absent/foreign/forged Runs; expired,
+revoked and replayed cookies are 401, valid identity without ACL is 503
+UNKNOWN. CSP, no-store and no-business-ID disclosure are asserted.
+The existing Chromium synthetic suite is not proof of a real GLPI/IdP.
+No shared Quality workflow or Core/Worker/Evidence file is changed.
+
+**Rollback:** revert this Portal-only PR (consumer/test/contract) or close
+it; no Core request, persistent state, GLPI mutation, migration, deployment
+or LIVE side effect was created. `RELEASE_STABLE=NO_GO`.
