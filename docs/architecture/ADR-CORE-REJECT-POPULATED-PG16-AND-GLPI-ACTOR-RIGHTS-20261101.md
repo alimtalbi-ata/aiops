@@ -8,8 +8,7 @@ Supersedes no earlier ADR. Existing schema `aiops.core-hitl-reject-delivery.v1`,
 
 ## What this delta actually exercises
 
-`tests/test_core_hitl_reject_pg16_populated.py` uses **the actual Core
-FastAPI router**, actual psycopg transactions and installed PostgreSQL 16
+`tests/test_core_hitl_reject_pg16_populated.py` calls **the actual Core route handlers** (no HTTP transport), actual psycopg transactions and installed PostgreSQL 16
 tables. It creates its own `aiops_core_reject_populated_ci` database on the
 CI loopback PostgreSQL service, refusing any other URL/PG version and refusing
 to overwrite a pre-existing database. It inserts synthetic Incident, Run,
@@ -18,7 +17,7 @@ and signed Run ownership. No human decision is fabricated as authenticated.
 
 The existing Quality command
 `PYTHONPATH=app python -m unittest discover -s tests -p 'test_core_xref_installed_migrations.py' -v`
-imports the new suite. Tests exercise two concurrent Core HTTP claims
+imports the new suite. Tests exercise two concurrent Core handler claims
 (`FOR UPDATE SKIP LOCKED`), single lease, expired lease reclaim, stale
 token ACK refusal, exact eight-field ACK wire, response-loss replay after
 committed ACK, cross-tenant service bearer refusal, source-proof removal,
