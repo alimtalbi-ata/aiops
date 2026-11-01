@@ -2006,5 +2006,228 @@ class AcmeCoreReadOnlyBindingProbeTests(unittest.TestCase):
         self.assertIsNone(result["glpi_ticket_id"])
 
 
+
+class AcmeFutureCoreActorTenantBindingTests(unittest.TestCase):
+    """Only TEST_ONLY in-memory proposals; never independently authorized Core."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_future_core_binding as future
+        cls.future = future
+        cls.manifest = gen.replay()
+        cls.now = datetime(2026, 11, 1, 9, 56, tzinfo=timezone.utc)
+
+    def _proposal(self):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        v = verifier.verify_itil_replay_offline(self.manifest)
+        return {
+            "schema": self.future.SCHEMA,
+            "source": self.future.SOURCE,
+            "test_partition": "SYNTHETIC_TEST_PARTITION_A",
+            "principal": {
+                "tenant_id": "TEST_ONLY_TENANT_A",
+                "actor_subject": "TEST_ONLY_ACTOR_A",
+            },
+            "core": {
+                "incident_id": "INC-TEST-ONLY-A",
+                "run_id": "RUN-TEST-ONLY-A",
+                "incident_tenant_id": "TEST_ONLY_TENANT_A",
+                "run_tenant_id": "TEST_ONLY_TENANT_A",
+                "incident_actor_subject": "TEST_ONLY_ACTOR_A",
+                "run_actor_subject": "TEST_ONLY_ACTOR_A",
+                "scenario_id": v["scenario_id"],
+                "service_id": v["service_id"],
+                "ci_id": v["ci_id"],
+                "source_dataset_sha256": v["source_dataset_sha256"],
+                "source_manifest_sha256": v["source_manifest_sha256"],
+                "canonical_replay_file_sha256": v["canonical_replay_file_sha256"],
+                "graph_version": v["graph_version"],
+                "correlation_key": v["correlation"]["key"],
+                "source_event_bindings": self.future.pinned_event_bindings(self.manifest),
+                "readback_at": "2026-11-01T09:55:00Z",
+            },
+            "attestation": {
+                "kind": "UNVERIFIED_TEST_INPUT",
+                "actor_authenticated": False,
+                "tenant_acl_qualified": False,
+                "core_signature_verified": False,
+            },
+        }
+
+    def test_absent_core_authority_is_unavailable_not_a_runtime_receipt(self):
+        result = self.future.verify_future_core_binding_offline(
+            self.manifest, now=self.now)
+        self.assertEqual(result["result"], "UNAVAILABLE")
+        self.assertEqual(result["runtime_readback"], "NOT_EXECUTED")
+        self.assertFalse(result["proposal_shape_checked"])
+        self.assertFalse(result["tenant_acl_qualified"])
+        self.assertFalse(result["actor_authenticated"])
+        self.assertEqual(len(result["required_independent_authority"]), 6)
+        self.assertEqual(result["canonical_replay_file_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+
+    def test_matching_test_shape_cannot_attest_actor_tenant_or_run(self):
+        proposal = self._proposal()
+        result = self.future.verify_future_core_binding_offline(
+            self.manifest, proposal=proposal, now=self.now)
+        self.assertTrue(result["proposal_shape_checked"])
+        self.assertEqual(result["result"], "UNAVAILABLE")
+        self.assertEqual(result["reason"],
+                         "TEST_SHAPE_MATCH_ONLY_INDEPENDENT_AUTHORITY_UNAVAILABLE")
+        for key in ("tenant_id", "actor_subject", "incident_id", "run_id",
+                    "glpi_ticket_id"):
+            self.assertIsNone(result[key], key)
+        self.assertEqual(result["evidence_ids"], [])
+        self.assertFalse(result["source_event_binding_verified_by_core"])
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["runtime_id"] is None for s in result["stages"]))
+        self.assertEqual(len(result["stages"]), 15)
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and
+                            c["id"] is None for c in result["checkpoints"]))
+        self.assertNotIn("INC-TEST-ONLY-A", str(result))
+        self.assertEqual(result, self.future.verify_future_core_binding_offline(
+            self.manifest, proposal=proposal, now=self.now))
+
+    def test_seven_hashes_are_independently_derived_from_canonical_events(self):
+        rows = self.future.pinned_event_bindings(self.manifest)
+        self.assertEqual(len(rows), 7)
+        for event, row in zip(self.manifest["events"], rows):
+            self.assertEqual(row["source_event_id"], event["source_event_id"])
+            self.assertEqual(row["source_event_content_sha256"],
+                             hashlib.sha256(gen._canonical(event)).hexdigest())
+            self.assertEqual(row["dedupe_key"], event["dedupe_key"])
+            self.assertEqual(row["event_time"], event["event_time"])
+
+    def test_foreign_or_reordered_source_event_hashes_fail_closed(self):
+        for change in ("digest", "drop", "reorder", "duplicate", "foreign_ci"):
+            with self.subTest(change=change):
+                proposal = self._proposal()
+                rows = proposal["core"]["source_event_bindings"]
+                if change == "digest":
+                    rows[0]["source_event_content_sha256"] = "0" * 64
+                elif change == "drop":
+                    rows.pop()
+                elif change == "reorder":
+                    rows.reverse()
+                elif change == "duplicate":
+                    rows[1] = copy.deepcopy(rows[0])
+                else:
+                    rows[0]["ci_id"] = "FOREIGN-CI"
+                with self.assertRaisesRegex(ValueError, "foreign replay"):
+                    self.future.verify_future_core_binding_offline(
+                        self.manifest, proposal=proposal, now=self.now)
+
+    def test_foreign_tenant_or_actor_on_either_core_record_fails_closed(self):
+        for key, value in (
+            ("incident_tenant_id", "TEST_ONLY_TENANT_B"),
+            ("run_tenant_id", "TEST_ONLY_TENANT_B"),
+            ("incident_actor_subject", "TEST_ONLY_ACTOR_B"),
+            ("run_actor_subject", "TEST_ONLY_ACTOR_B"),
+        ):
+            with self.subTest(key=key):
+                proposal = self._proposal()
+                proposal["core"][key] = value
+                with self.assertRaisesRegex(ValueError, "foreign actor or tenant"):
+                    self.future.verify_future_core_binding_offline(
+                        self.manifest, proposal=proposal, now=self.now)
+
+    def test_test_partition_is_not_a_tenant_authentication(self):
+        proposal = self._proposal()
+        proposal["test_partition"] = "SYNTHETIC_TEST_PARTITION_B"
+        with self.assertRaisesRegex(ValueError, "foreign partition"):
+            self.future.verify_future_core_binding_offline(
+                self.manifest, proposal=proposal, now=self.now)
+        with self.assertRaises(ValueError):
+            self.future.verify_future_core_binding_offline(
+                self.manifest, test_partition="REAL_CUSTOMER", now=self.now)
+
+    def test_stale_future_missing_and_non_utc_readback_clock_fail_closed(self):
+        for stamp in ("2026-11-01T09:40:00Z", "2026-11-01T10:00:00Z",
+                      "2026-11-01T09:55:00+00:00", "not-a-clock", None, True):
+            with self.subTest(stamp=stamp):
+                proposal = self._proposal()
+                proposal["core"]["readback_at"] = stamp
+                with self.assertRaises(ValueError):
+                    self.future.verify_future_core_binding_offline(
+                        self.manifest, proposal=proposal, now=self.now)
+
+    def test_untrusted_source_or_claimed_authority_is_rejected(self):
+        for mutate in (
+            lambda p: p.update(source="CORE_AUTHENTICATED"),
+            lambda p: p["attestation"].update(actor_authenticated=True),
+            lambda p: p["attestation"].update(tenant_acl_qualified=True),
+            lambda p: p["attestation"].update(core_signature_verified=True),
+            lambda p: p["attestation"].update(signed_receipt="FORGED"),
+        ):
+            proposal = self._proposal()
+            mutate(proposal)
+            with self.assertRaises(ValueError):
+                self.future.verify_future_core_binding_offline(
+                    self.manifest, proposal=proposal, now=self.now)
+
+    def test_runtime_looking_or_missing_identifiers_never_promoted(self):
+        for key, value in (
+            ("incident_id", "INC-12345"),
+            ("run_id", "RUN-12345"),
+            ("incident_id", None),
+            ("run_id", ""),
+        ):
+            with self.subTest(key=key, value=value):
+                proposal = self._proposal()
+                proposal["core"][key] = value
+                with self.assertRaisesRegex(ValueError, "TEST_ONLY placeholder"):
+                    self.future.verify_future_core_binding_offline(
+                        self.manifest, proposal=proposal, now=self.now)
+
+    def test_forged_seed_dataset_graph_correlation_or_scenario_fails(self):
+        for key, value in (
+            ("source_dataset_sha256", "0" * 64),
+            ("source_manifest_sha256", "0" * 64),
+            ("graph_version", "FORGED-GRAPH"),
+            ("correlation_key", "FOREIGN-CORRELATION"),
+            ("scenario_id", "SCN-FOREIGN"),
+            ("service_id", "FOREIGN-SERVICE"),
+        ):
+            with self.subTest(key=key):
+                proposal = self._proposal()
+                proposal["core"][key] = value
+                with self.assertRaisesRegex(ValueError, "foreign replay"):
+                    self.future.verify_future_core_binding_offline(
+                        self.manifest, proposal=proposal, now=self.now)
+        forged = copy.deepcopy(self.manifest)
+        forged["seed"] = 20261019
+        with self.assertRaises(ValueError):
+            self.future.verify_future_core_binding_offline(
+                forged, now=self.now)
+
+    def test_missing_and_extra_fields_fail_closed(self):
+        for mutate in (
+            lambda p: p["core"].pop("source_event_bindings"),
+            lambda p: p["principal"].pop("actor_subject"),
+            lambda p: p.update(evidence_ids=["FORGED"]),
+            lambda p: p["core"].update(verified=True),
+        ):
+            proposal = self._proposal()
+            mutate(proposal)
+            with self.assertRaises(ValueError):
+                self.future.verify_future_core_binding_offline(
+                    self.manifest, proposal=proposal, now=self.now)
+
+    def test_canonical_replay_stable_and_no_glpi_evidence_or_effect(self):
+        before = (json.dumps(self.manifest, sort_keys=True, indent=2,
+                             ensure_ascii=True) + "\n").encode()
+        self.assertEqual(hashlib.sha256(before).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        result = self.future.verify_future_core_binding_offline(
+            self.manifest, now=self.now)
+        self.assertEqual(result["observed_impact"], "UNKNOWN")
+        self.assertEqual(result["priority_confirmed"], "UNKNOWN")
+        self.assertFalse(result["source_hash_is_evidence_receipt"])
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+        self.assertEqual(result["blast_radius_candidate"]["classification"],
+                         "REVERSE_REACHABLE_CANDIDATE_ONLY")
+
 if __name__ == "__main__":
     unittest.main()
