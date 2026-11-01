@@ -380,5 +380,8 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("CONNECTED", status.text())
 
 
+# Quality browser entry point also runs the disposable negative Portal ACL suite.
+from test_portal_acl_browser_e2e import PortalACLChromiumE2E
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
