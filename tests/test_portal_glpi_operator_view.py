@@ -35,7 +35,7 @@ class GlpiOperatorViewTests(unittest.TestCase):
 
     def assert_only_status_check_and_disabled_actions(self, page):
         """No ticket mutation controls: one status GET and three inert actions."""
-        buttons = re.findall(r"<button\\b[^>]*>", page)
+        buttons = re.findall(r"<button\b[^>]*>", page)
         self.assertEqual(len(buttons), 4)
         self.assertEqual(sum('id="glpi-check"' in button for button in buttons), 1)
         for button in buttons:
