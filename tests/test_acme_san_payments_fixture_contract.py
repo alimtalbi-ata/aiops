@@ -354,6 +354,13 @@ class AcmeCoreSourceReceiptShapeGapTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "digest mismatch"):
             self.inspect(c)
 
+    def test_source_payload_must_bind_same_selected_event(self):
+        c = self.candidate()
+        c["source_payload_hash"] = c["events"][1]["payload_sha256"]
+        self.rehash(c)
+        with self.assertRaisesRegex(ValueError, "not bound to selected event"):
+            self.inspect(c)
+
     def test_source_event_outside_seven_denied(self):
         c = self.candidate()
         c["source_event_id"] = "TEST_ONLY_FOREIGN_EVENT"
