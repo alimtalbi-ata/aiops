@@ -118,6 +118,18 @@ class InstalledMigrationPostgres16(unittest.TestCase):
                               "itsm_xref_events", "tenant_resource_ownership"):
                     self.assertIsNotNone(conn.execute(
                         "select to_regclass(%s)", ("aiops." + table,)).fetchone()[0])
+                # Core REJECT-only claim/ACK SQL: parse and plan against the
+                # installed 009-012 schema, not fixture copies. EXPLAIN is
+                # read-only; populated delivery and downgrade remain separate.
+                from core import hitl_reject_delivery as delivery
+                for statement, args in (
+                    (delivery._CLAIM_SQL, ("TEN-CI",)),
+                    (delivery._LEASE_SQL, ("svc-CI", "token-CI", "EVT-CI")),
+                    (delivery._ACK_SQL, ("TEN-CI", "EVT-CI")),
+                    (delivery._DELIVER_SQL, ("EVT-CI", "svc-CI", "token-CI")),
+                ):
+                    with self.subTest(stage="reject_delivery_sql_plan"):
+                        self.assertTrue(conn.execute("EXPLAIN " + statement, args).fetchall())
                 conn.execute(
                     "insert into aiops.tenant_resource_ownership "
                     "(resource_kind,resource_id,tenant_id,source_event_id,"

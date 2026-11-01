@@ -346,3 +346,8 @@ def read_ticket_xref(tenant_id:str,instance_id:str,ticket_id:str,
 # Core-owned actor ACL preflight; shares the existing xref router registration.
 from core.actor_resource_authz import router as actor_resource_router
 router.include_router(actor_resource_router)
+
+
+# Core-owned REJECT-only delivery routes; no Worker/Policy implementation here.
+from core.hitl_reject_delivery import router as hitl_reject_delivery_router
+router.include_router(hitl_reject_delivery_router)

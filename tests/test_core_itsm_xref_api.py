@@ -412,4 +412,6 @@ if __name__=="__main__": unittest.main()
 def load_tests(loader, tests, pattern):
     from test_core_actor_resource_authz import ActorDelegationTests
     tests.addTests(loader.loadTestsFromTestCase(ActorDelegationTests))
+    from test_core_hitl_reject_delivery import RejectDeliveryTests
+    tests.addTests(loader.loadTestsFromTestCase(RejectDeliveryTests))
     return tests
