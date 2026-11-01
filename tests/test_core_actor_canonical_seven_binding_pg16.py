@@ -139,6 +139,10 @@ class V2SourceHandler(fixture.SourceHandler):
                 proof["events"][0]["full_event"]["known_at"] += 3600
             elif tamper == "revoked":
                 proof["revoked"] = True
+            elif tamper == "stale_attestation":
+                proof["observed_at"] -= 3600
+            elif tamper == "expired_attestation":
+                proof["expires_at"] = int(time.time()) - 10
             self.server.calls += 1
             return self.reply(200, proof)
         except Exception:
@@ -232,6 +236,91 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
         self.assertEqual(before, (1, 1))
         self.assertEqual(after, before)
 
+
+    def test_v2_expired_and_stale_attestation_never_writes_013_014(self):
+        """Reject stale/expired independently authenticated source responses.
+
+        A valid disposable TLS connection is not a durable authorization.
+        The refusal must not consume a nonce or alter terminal audit rows.
+        """
+        event = fixture.event_at(1)
+        record = {
+            "tenant_id": fixture.TENANT, "run_id": fixture.RUN,
+            "incident_id": fixture.INCIDENT, "glpi_entity_id": fixture.ENTITY,
+            "source_event_id": event["source_event_id"],
+            "source_payload_hash": fixture.canonical_hash(event),
+        }
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute((fixture.MIG / "014_hitl_reject_terminal_receipts.sql")
+                         .read_text(encoding="utf-8"))
+            def counts():
+                return {
+                    "nonce_013": conn.execute(
+                        "select count(*) from aiops.actor_delegation_nonce_ledger"
+                    ).fetchone()[0],
+                    "revocation_013": conn.execute(
+                        "select count(*) from aiops.actor_delegation_revocations"
+                    ).fetchone()[0],
+                    "terminal_014": conn.execute(
+                        "select count(*) from aiops.hitl_reject_terminal_receipts"
+                    ).fetchone()[0],
+                }
+            before = counts()
+        self.assertEqual(before, {"nonce_013": 1, "revocation_013": 1,
+                                  "terminal_014": 0})
+        try:
+            for attack in ("stale_attestation", "expired_attestation"):
+                with self.subTest(attack=attack):
+                    self.server.tamper = attack
+                    self.assertFalse(self.v2read())
+                    self.assertIsNone(binding.canonical_seven_source_receipt(
+                        self.claims, self.expected, record, int(time.time())))
+        finally:
+            self.server.tamper = None
+        with self.psycopg.connect(self.db_url) as conn:
+            after = {
+                "nonce_013": conn.execute(
+                    "select count(*) from aiops.actor_delegation_nonce_ledger"
+                ).fetchone()[0],
+                "revocation_013": conn.execute(
+                    "select count(*) from aiops.actor_delegation_revocations"
+                ).fetchone()[0],
+                "terminal_014": conn.execute(
+                    "select count(*) from aiops.hitl_reject_terminal_receipts"
+                ).fetchone()[0],
+            }
+        self.assertEqual(after, before)
+        self.assertTrue(self.v2read())
+        self.assertEqual(json.loads(fixture.actor_resource_authz._reply().body)
+                         ["decision"], "UNKNOWN")
+        out = os.environ.get("AIOPS_CORE_SEVEN_RECEIPT_DIR")
+        if out:
+            machine = {
+                "schema": "aiops.core-seven-freshness-negative.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "synthetic_only": True,
+                "transport": "TLS_AUTHENTICATED_NONPORTABLE",
+                "portable_signature": "NONE",
+                "decision": "UNKNOWN",
+                "link_status": "UNKNOWN",
+                "human_glpi_attested": False,
+                "acme_full_event_equivalence": "NOT_VERIFIED",
+                "negative_cases": {
+                    "stale_attestation": "UNKNOWN",
+                    "expired_attestation": "UNKNOWN",
+                },
+                "audit_before": before,
+                "audit_after": after,
+                "valid_source_recovery": True,
+                "execution_allowed": False,
+                "effect_allowed": False,
+            }
+            machine["receipt_sha256"] = hashlib.sha256(json.dumps(
+                machine, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            path = Path(out)
+            path.mkdir(parents=True, exist_ok=True)
+            (path / "freshness-expiry-negative.json").write_text(
+                json.dumps(machine, sort_keys=True, indent=2) + "\n")
 
     def test_v2_receipt_is_machine_readable_and_never_authorizes(self):
         event = fixture.event_at(1)
