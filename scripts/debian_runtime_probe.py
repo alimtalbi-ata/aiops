@@ -124,7 +124,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 def _http_7777():
     """No redirects, response echo, remote URL or browser bearer."""
     try:
-        opener = urllib.request.build_opener(_NoRedirect)
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
         request = urllib.request.Request("http://127.0.0.1:7777/health",
                                          headers={"Accept": "application/json"})
         with opener.open(request, timeout=3) as response:
