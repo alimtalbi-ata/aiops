@@ -1487,5 +1487,156 @@ class AcmeSyntheticIngestionPreflightTests(unittest.TestCase):
                                             ensure_ascii=True) + "\n")
 
 
+
+class AcmeSyntheticItilReplayVerifierTests(unittest.TestCase):
+    """Source-anchored 15-stage projection, never a runtime ITIL receipt."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_itil_replay_verifier as verifier
+        cls.verifier = verifier
+        cls.manifest = gen.replay(seed=20261018)
+
+    def test_fifteen_stages_anchor_to_seven_pinned_events(self):
+        result = self.verifier.verify_itil_replay_offline(self.manifest)
+        self.assertEqual((len(result["stages"]), result["source_event_count"]), (15, 7))
+        self.assertEqual(len(result["checkpoints"]), 6)
+        self.assertEqual(result["source_event_ids"],
+                         [e["source_event_id"] for e in self.manifest["events"]])
+        for stage in result["stages"]:
+            source = self.manifest["events"][stage["source_step"] - 1]
+            self.assertEqual(stage["source_event_id"], source["source_event_id"])
+            self.assertEqual(stage["source_event_time"], source["event_time"])
+            self.assertEqual(stage["source_known_at"], source["known_at"])
+            self.assertEqual(stage["source_ci_id"], source["ci_id"])
+            self.assertEqual(stage["source_dedupe_key"], source["dedupe_key"])
+            self.assertEqual(stage["status"], "NOT_EXECUTED")
+            self.assertEqual(stage["source_anchor_validation"],
+                             "MATCHED_PINNED_SYNTHETIC_EVENT")
+            self.assertFalse(stage["source_anchor_is_runtime_proof"])
+            self.assertIsNone(stage["runtime_id"])
+            self.assertEqual(stage["runtime_evidence_ids"], [])
+
+    def test_runtime_receipts_and_authorities_are_never_inferred(self):
+        result = self.verifier.verify_itil_replay_offline(self.manifest)
+        self.assertEqual(result["runtime_readback"], "NOT_EXECUTED")
+        self.assertEqual(result["tenant_scope"], "UNKNOWN")
+        self.assertIsNone(result["tenant_id"])
+        self.assertFalse(result["test_partition_is_tenant_authority"])
+        self.assertTrue(all(v is None or v == [] for v in result["runtime_receipts"].values()))
+        self.assertTrue(all(c["status"] == "NOT_EXECUTED" and c["id"] is None
+                            for c in result["checkpoints"]))
+        self.assertEqual(result["priority_confirmed"], "UNKNOWN")
+        self.assertEqual(result["observed_impact"], "UNKNOWN")
+        self.assertFalse(result["source_content_hash_is_evidence_receipt"])
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+
+    def test_reverse_twin_candidate_and_governance_are_sourced_not_observed(self):
+        result = self.verifier.verify_itil_replay_offline(self.manifest)
+        impact = result["blast_radius_candidate"]
+        self.assertEqual(impact["path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertEqual(impact["candidate_service_ids"],
+                         ["ACME-SVC-ERP", "ACME-SVC-PAYMENTS"])
+        self.assertEqual(impact["classification"], "REVERSE_REACHABLE_CANDIDATE_ONLY")
+        self.assertFalse(impact["causality_verified"])
+        self.assertEqual(impact["observed_service_impact"], "UNKNOWN")
+        self.assertTrue(all(v == "UNKNOWN" for v in result["governance_unknowns"].values()))
+
+    def test_reproducible_projection_and_canonical_replay_file_sha(self):
+        first = self.verifier.verify_itil_replay_offline(self.manifest)
+        second = self.verifier.verify_itil_replay_offline(gen.replay(seed=20261018),
+                                                          candidate=first)
+        self.assertEqual(gen._canonical(first), gen._canonical(second))
+        replay_bytes = (json.dumps(self.manifest, sort_keys=True, indent=2,
+                                   ensure_ascii=True) + "\n").encode()
+        self.assertEqual(hashlib.sha256(replay_bytes).hexdigest(),
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+        self.assertEqual(first["canonical_replay_file_sha256"],
+                         hashlib.sha256(replay_bytes).hexdigest())
+
+    def test_duplicate_deliveries_remain_local_without_incident_creation(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        rows.extend((copy.deepcopy(rows[0]), copy.deepcopy(rows[3])))
+        result = self.verifier.verify_itil_replay_offline(self.manifest, deliveries=rows)
+        self.assertEqual((result["delivery_count"], result["duplicate_delivery_count"]),
+                         (9, 2))
+        self.assertEqual(result["candidate_incident"]["status"], "NOT_CREATED")
+        self.assertIsNone(result["candidate_incident"]["incident_id"])
+
+    def test_cross_partition_delivery_and_projection_are_rejected(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        rows[0]["test_partition"] = "SYNTHETIC_TEST_PARTITION_B"
+        with self.assertRaises(ValueError):
+            self.verifier.verify_itil_replay_offline(self.manifest, deliveries=rows)
+        foreign = self.verifier.verify_itil_replay_offline(
+            self.manifest, test_partition="SYNTHETIC_TEST_PARTITION_B")
+        with self.assertRaisesRegex(ValueError, "untrusted synthetic ITIL replay projection"):
+            self.verifier.verify_itil_replay_offline(self.manifest, candidate=foreign)
+        for partition in ("TENANT-REAL", "", True, None):
+            with self.subTest(partition=partition), self.assertRaises(ValueError):
+                self.verifier.verify_itil_replay_offline(self.manifest,
+                                                         test_partition=partition)
+
+    def test_stale_future_and_non_utc_deliveries_fail_closed(self):
+        for stamp in ("2026-10-31T10:00:00Z", "2026-10-31T09:41:00Z",
+                      "2026-10-31T09:42:02+00:00", "INVALID"):
+            with self.subTest(stamp=stamp):
+                rows = ingest.synthetic_deliveries_offline(self.manifest)
+                rows[0]["synthetic_received_at"] = stamp
+                with self.assertRaises(ValueError):
+                    self.verifier.verify_itil_replay_offline(self.manifest, deliveries=rows)
+
+    def test_foreign_tenant_seed_source_and_known_at_fail_closed(self):
+        for label, mutate in (
+            ("tenant", lambda m: m.__setitem__("tenant_id", "FORGED")),
+            ("seed", lambda m: m.__setitem__("seed", 20261019)),
+            ("source", lambda m: m["events"][0].__setitem__("source", "FORGED")),
+            ("known_at", lambda m: m["events"][0].__setitem__(
+                "known_at", "2026-10-31T10:42:00Z")),
+            ("ci", lambda m: m["events"][0].__setitem__("ci_id", "FOREIGN-CI")),
+            ("correlation", lambda m: m["events"][0].__setitem__(
+                "correlation_key", "FAKE")),
+        ):
+            with self.subTest(label=label):
+                forged = copy.deepcopy(self.manifest)
+                mutate(forged)
+                with self.assertRaises(ValueError):
+                    self.verifier.verify_itil_replay_offline(forged)
+
+    def test_forged_runtime_receipts_stage_and_blast_radius_fail_closed(self):
+        good = self.verifier.verify_itil_replay_offline(self.manifest)
+        for label, mutate in (
+            ("glpi", lambda p: p["runtime_receipts"].__setitem__(
+                "glpi_ticket_id", "GLPI-FAKE")),
+            ("evidence", lambda p: p["runtime_receipts"].__setitem__(
+                "evidence_ids", ["EVID-FAKE"])),
+            ("stage", lambda p: p["stages"][5].__setitem__("status", "SUCCESS")),
+            ("model", lambda p: p["runtime_receipts"].__setitem__(
+                "analyst_output", {"model": "FAKE"})),
+            ("impact", lambda p: p["blast_radius_candidate"].__setitem__(
+                "observed_service_impact", "CONFIRMED")),
+            ("priority", lambda p: p.__setitem__("priority_confirmed", "P1")),
+            ("checkpoint", lambda p: p["checkpoints"][0].__setitem__(
+                "id", "RUN-FAKE")),
+            ("type-alias", lambda p: p.__setitem__("source_event_count", True)),
+        ):
+            with self.subTest(label=label):
+                forged = copy.deepcopy(good)
+                mutate(forged)
+                with self.assertRaisesRegex(ValueError, "untrusted synthetic ITIL replay projection"):
+                    self.verifier.verify_itil_replay_offline(self.manifest, candidate=forged)
+
+    def test_missing_or_conflicting_delivery_never_becomes_receipt(self):
+        rows = ingest.synthetic_deliveries_offline(self.manifest)
+        with self.assertRaises(ValueError):
+            self.verifier.verify_itil_replay_offline(self.manifest, deliveries=rows[:-1])
+        rows.append(copy.deepcopy(rows[0]))
+        rows[-1]["event"]["source_event_id"] = "FORGED"
+        with self.assertRaises(ValueError):
+            self.verifier.verify_itil_replay_offline(self.manifest, deliveries=rows)
+
+
 if __name__ == "__main__":
     unittest.main()
