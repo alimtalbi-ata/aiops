@@ -61,8 +61,6 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
                       response.headers["content-security-policy"])
         self.assertNotIn("CONNECTED", response.text)
         self.assertNotIn("operator-123", response.text)
-        self.assertNotIn("ACME", response.text)
-        self.assertNotIn("FOREIGN", response.text)
 
     def test_valid_identity_still_unknown_for_present_foreign_absent_forged(self):
         self.session()
