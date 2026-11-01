@@ -448,5 +448,161 @@ class PortalCoreACLConsumerTests(unittest.TestCase):
         for prefix in ("/api/portal/runs/", "/runs/"):
             self.assert_fence(self.client.get(prefix + RUN), 401)
 
+
+    def test_current_core_route_and_negative_wire_are_exactly_reconciled(self):
+        """Exercise the actual Core router with only disposable mocks; no HTTP upstream."""
+        import json
+        from fastapi import FastAPI
+        # Core xref registers the actor router; import xref first to avoid
+        # the existing Core module-level circular import during isolated tests.
+        from core import itsm_xref as core_xref
+        from core import actor_resource_authz as core_actor
+        from portal import core_authz_transport as wire
+
+        actor, binding = self.actor(), self.binding()
+        plan = wire.prepare_core_authz_wire(
+            actor, binding, env=self.authz_settings())
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        self.assertNotIn("X-Actor-Delegation", plan.headers)
+        self.assertNotIn("actor_subject", plan.body.decode())
+        self.assertNotIn("actor_issuer", plan.body.decode())
+        self.assertNotIn("actor_audience", plan.body.decode())
+        self.assertEqual(plan.path,
+                         "/api/tenants/ACME/runs/" + RUN +
+                         "/actor-resource-authorization")
+        self.assertEqual(core_actor.SCHEMA,
+                         "aiops.core-actor-resource-authorization.v1")
+
+        app = FastAPI()
+        app.include_router(core_xref.router)
+        with TestClient(app) as client, \
+             patch.object(core_xref, "_auth", return_value=(
+                 {"permissions": ["actor:resource:authorize"],
+                  "tenant_ids": ["ACME"]}, 200)), \
+             patch.object(core_actor, "_actor_introspection",
+                          return_value=None) as introspect, \
+             patch.object(core_xref, "db",
+                          side_effect=AssertionError("no Core DB")) as database:
+            response = client.post(plan.path, json=json.loads(plan.body),
+                                   headers=plan.headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {
+                "schema": core_actor.SCHEMA, "decision": "UNKNOWN"})
+            self.assertTrue(wire.core_v1_current_unknown_reply_matches(
+                response.status_code, response.json(), response.headers))
+            self.assertFalse(wire.core_authz_read_permitted(response.json()))
+            self.assertFalse(core_acl_consumer.positive_core_contract_matches(
+                response.json(), actor, binding))
+            self.assertEqual(introspect.call_count, 1)
+            self.assertIsNone(introspect.call_args.args[0])
+            expected = introspect.call_args.args[1]
+            self.assertEqual(expected, {
+                "tenant_id": binding.tenant_id, "run_id": binding.run_id,
+                "incident_id": binding.incident_id,
+                "glpi_instance_id": binding.glpi_instance_id,
+                "ticket_id": binding.ticket_id,
+                "glpi_entity_id": binding.glpi_entity_id,
+                "permission": "run:read", "nonce": plan.nonce})
+            database.assert_not_called()
+
+    def test_current_core_401_403_and_invalid_resource_no_upstream(self):
+        """No delegated IdP token, foreign tenant or forged body may grant a read."""
+        import json
+        from fastapi import FastAPI
+        # Core xref registers the actor router; import xref first to avoid
+        # the existing Core module-level circular import during isolated tests.
+        from core import itsm_xref as core_xref
+        from core import actor_resource_authz as core_actor
+        from portal import core_authz_transport as wire
+
+        plan = wire.prepare_core_authz_wire(
+            self.actor(), self.binding(), env=self.authz_settings())
+        app = FastAPI()
+        app.include_router(core_xref.router)
+        with TestClient(app) as client, \
+             patch.object(core_actor, "_actor_introspection") as introspect, \
+             patch.object(core_xref, "db",
+                          side_effect=AssertionError("no Core DB")) as database:
+            for auth, path, status in (
+                ((None, 401), plan.path, 401),
+                (({"permissions": [], "tenant_ids": ["ACME"]}, 200),
+                 plan.path, 403),
+                (({"permissions": ["actor:resource:authorize"],
+                   "tenant_ids": ["ACME"]}, 200),
+                 plan.path.replace("/ACME/", "/OTHER/"), 403),
+            ):
+                with self.subTest(status=status, path=path), \
+                     patch.object(core_xref, "_auth", return_value=auth):
+                    response = client.post(path, json=json.loads(plan.body),
+                                           headers=plan.headers)
+                    self.assertEqual(response.status_code, status)
+                    self.assertTrue(wire.core_v1_current_unknown_reply_matches(
+                        status, response.json(), response.headers))
+                    self.assertFalse(wire.core_authz_read_permitted(response.json()))
+            with patch.object(core_xref, "_auth", return_value=(
+                {"permissions": ["actor:resource:authorize"],
+                 "tenant_ids": ["ACME"]}, 200)):
+                for changes in (
+                    {"nonce": "replayed-invalid"}, {"ticket_id": "999;drop"},
+                    {"incident_id": "INC-../foreign"},
+                    {"glpi_entity_id": "OTHER"},
+                    {"permission": "ticket:write"},
+                ):
+                    with self.subTest(changes=changes):
+                        body = {**json.loads(plan.body), **changes}
+                        response = client.post(plan.path, json=body,
+                                               headers=plan.headers)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertTrue(wire.core_v1_current_unknown_reply_matches(
+                            200, response.json(), response.headers))
+            introspect.assert_not_called()
+            database.assert_not_called()
+
+    def test_current_core_reply_rejects_forged_allow_replay_and_leaks(self):
+        from portal import core_authz_transport as wire
+        good_headers = {"Cache-Control": "no-store", "Pragma": "no-cache",
+                        "X-Content-Type-Options": "nosniff",
+                        "Referrer-Policy": "no-referrer"}
+        unknown = {"schema": "aiops.core-actor-resource-authorization.v1",
+                   "decision": "UNKNOWN"}
+        self.assertTrue(wire.core_v1_current_unknown_reply_matches(
+            200, unknown, good_headers))
+        for code, body, headers in (
+            (200, {**unknown, "decision": "ALLOW"}, good_headers),
+            (200, {**unknown, "tenant_id": "ACME"}, good_headers),
+            (200, {**unknown, "actor_subject": "admin"}, good_headers),
+            (200, {**unknown, "request_nonce": "replayed"}, good_headers),
+            (200, {**unknown, "glpi_readback": {"verified": True}}, good_headers),
+            (200, {**unknown, "decision": "CONNECTED"}, good_headers),
+            (503, {**unknown, "decision": "ALLOW"}, good_headers),
+            (200, unknown, {**good_headers, "Cache-Control": "public"}),
+            (200, unknown, {**good_headers, "Referrer-Policy": "unsafe-url"}),
+            (401, unknown, good_headers),
+            (200, unknown, {}),
+        ):
+            with self.subTest(code=code, body=body):
+                self.assertFalse(wire.core_v1_current_unknown_reply_matches(
+                    code, body, headers))
+        self.session()
+        with patch.object(acme_run_detail, "_read_core_run",
+                          side_effect=AssertionError("Core read forbidden")) as core, \
+             patch.object(main, "get_json",
+                          side_effect=AssertionError("upstream forbidden")) as upstream:
+            for rid in (RUN, OTHER, "RUN-NOT-FOUND", "RUN-forged!"):
+                for prefix in ("/api/portal/runs/", "/runs/"):
+                    response = self.client.get(prefix + rid, headers={
+                        "X-Tenant-ID": "OTHER", "X-Actor-ID": "admin",
+                        "Authorization": "Bearer forged-allow"})
+                    self.assert_fence(response, 503)
+                    self.assertNotIn("INC-ACME", response.text)
+            core.assert_not_called()
+            upstream.assert_not_called()
+        with oidc_session._lock:
+            oidc_session._sessions.pop(oidc_session._digest(HANDLE), None)
+        self.assert_fence(self.client.get("/api/portal/runs/" + RUN), 401)
+        self.session(ttl=-1)
+        self.assert_fence(self.client.get("/runs/" + RUN), 401)
+
 if __name__ == "__main__":
     unittest.main()
