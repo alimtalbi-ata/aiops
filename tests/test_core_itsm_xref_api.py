@@ -416,4 +416,6 @@ def load_tests(loader, tests, pattern):
     tests.addTests(loader.loadTestsFromTestCase(RejectDeliveryTests))
     from test_core_actor_native_authority import NativeActorRightsTests
     tests.addTests(loader.loadTestsFromTestCase(NativeActorRightsTests))
+    from test_core_actor_replay_fence import ActorReplayFenceTests
+    tests.addTests(loader.loadTestsFromTestCase(ActorReplayFenceTests))
     return tests

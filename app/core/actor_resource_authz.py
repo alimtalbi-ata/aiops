@@ -131,7 +131,7 @@ def authorize_actor_resource(
     """Non-enumerating Core actor ACL preflight; v1 deliberately has no ALLOW.
 
     GLPI native user/profile/entity rights and durable nonce consumption are
-    not qualified. Never promote service-only xref VERIFIED to actor ALLOW.
+    not independently qualified. Never promote xref VERIFIED to actor ALLOW.
     """
     actor, code = x._auth(authorization)
     if code != 200:
@@ -187,6 +187,14 @@ def authorize_actor_resource(
     from core import actor_native_authority as native
     if not native._native_glpi_preflight(claims, expected, now):
         return _reply()
-    # Even a fully synthetic source-contract pass is NOT an ALLOW. Durable
-    # JTI/nonce consumption and real issuer/GLPI authority are unqualified.
+    # The source-contract pass alone cannot grant rights. Consume a durable,
+    # issuer/JTI-serialized nonce only after the independently authenticated
+    # source preflight; revoked, replayed or cross-tenant grants stay UNKNOWN.
+    from core import actor_replay_fence
+    consumed = actor_replay_fence.consume_actor_delegation(claims, expected, now)
+    if consumed is None:
+        return _reply(503)
+    # Even first consumption + synthetic GLPI/IdP mocks is NOT an ALLOW.
+    # Real issuer trust, GLPI native ticket:read and operator signoff remain
+    # separately required before any future positive authorization contract.
     return _reply()
