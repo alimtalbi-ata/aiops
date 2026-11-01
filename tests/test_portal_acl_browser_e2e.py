@@ -268,10 +268,10 @@ class PortalACLChromiumE2E(unittest.TestCase):
         self.session()
         self.page.goto(self.base + "/runs/RUN-ACME-123")
         self.page.goto(self.base + "/itsm")
-        # ITSM currently uses its own legacy viewer gate, not the OIDC
-        # identity cookie. A valid OIDC session cannot bypass that gate.
+        # A valid server OIDC session is identity-only: 503 UNKNOWN, not
+        # GLPI READ/READMY. A revoked explicit cookie remains 401.
         status = self.context.request.get(self.base + "/api/portal/itsm")
-        self.assert_denied(status, 401)
+        self.assert_denied(status, 503)
         self.assertFalse(status.json().get("glpi_write_enabled", False))
         legacy = self.context.request.get(self.base + "/api/portal/itsm",
             headers={"Authorization": "Bearer " + self.settings["AIOPS_PORTAL_READ_TOKEN"]})
@@ -467,9 +467,9 @@ class PortalACLChromiumE2E(unittest.TestCase):
             self.assertEqual(results[1], results[2])
             self.assert_denied(self.page.goto(
                 self.base + "/runs/RUN-FOREIGN-999"), 503)
-            # The viewer gate is identity-only; not native GLPI permission.
+            # The valid OIDC session is identity-only, not native GLPI READ.
             self.assert_denied(self.context.request.get(
-                self.base + "/api/portal/itsm"), 401)
+                self.base + "/api/portal/itsm"), 503)
             self.assert_denied(self.context.request.get(
                 self.base + "/api/portal/itsm",
                 headers={"Authorization": "Bearer " +

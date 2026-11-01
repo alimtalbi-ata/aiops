@@ -380,6 +380,29 @@ class ExploreStoryChromiumE2E(unittest.TestCase):
         self.assertNotIn("CONNECTED", status.text())
 
 
+    def test_08_glpi_human_readiness_ui_stays_unknown_and_actions_disabled(self):
+        """Chromium sees a usable status check, not an unqualified ticket."""
+        requests = []
+        self.page.on("request", lambda request: requests.append(request.url))
+        self.page.goto(self.base + "/itsm")
+        expect(self.page.get_by_role("heading", name="Contrôle d'accès humain GLPI — lecture seule")).to_be_visible()
+        self.assertIn("READMY", self.page.locator("body").inner_text())
+        for action in ("Commenter", "Assigner", "Approuver HITL"):
+            self.assertTrue(self.page.get_by_role("button", name=action).is_disabled())
+        self.page.locator("#glpi-check").click()
+        expect(self.page.locator("#glpi-check-status")).to_contain_text("401 UNAUTHORIZED")
+        self.assertTrue(self.page.locator("#glpi-check").is_enabled())
+        self.assertNotIn("CONNECTED", self.page.locator("#glpi-check-status").inner_text())
+        self.assertTrue(any("/api/portal/itsm" in url for url in requests))
+        self.assertFalse(any("/api/noc/runs/" in url for url in requests))
+        self.assertFalse(any("/api/core/" in url for url in requests))
+        self.assertFalse(any("/api/glpi/" in url for url in requests))
+        self.assertFalse(any("token=" in url for url in requests))
+        self.assertEqual(self.context.request.get(
+            self.base + "/api/portal/itsm",
+            headers={"Authorization": "Bearer " + VIEWER}).status, 503)
+
+
 # Quality browser entry point also runs the disposable negative Portal ACL suite.
 from test_portal_acl_browser_e2e import PortalACLChromiumE2E
 # Run the Portal actor-resource contract suite at the same exact CI SHA.
