@@ -72,7 +72,7 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                     "true,now(),now())")
                 consumed = conn.execute(
                     "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,"
-                    "clock_timestamp() + interval '2 hours')",
+                    "clock_timestamp() + interval '120 seconds')",
                     ("TEN-A", "https://issuer.example.invalid", _hash("subject"),
                      _hash("archive-jti"), _hash("archive-nonce"),
                      _hash("TEN-A|RUN-A|INC-A|123|7|run:read"))).fetchone()[0]
@@ -112,13 +112,13 @@ class CoreActorArchiveRestorePG16(unittest.TestCase):
                 # An archive restore must retain the negative replay fence.
                 self.assertFalse(conn.execute(
                     "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,"
-                    "clock_timestamp() + interval '2 hours')",
+                    "clock_timestamp() + interval '120 seconds')",
                     ("TEN-A", "https://issuer.example.invalid", _hash("subject"),
                      _hash("archive-jti"), _hash("archive-nonce"),
                      _hash("TEN-A|RUN-A|INC-A|123|7|run:read"))).fetchone()[0])
                 self.assertFalse(conn.execute(
                     "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,"
-                    "clock_timestamp() + interval '2 hours')",
+                    "clock_timestamp() + interval '120 seconds')",
                     ("TEN-A", "https://issuer.example.invalid", _hash("subject"),
                      _hash("revoked-jti"), _hash("new-nonce"),
                      _hash("TEN-A|RUN-A|INC-A|123|7|run:read"))).fetchone()[0])
