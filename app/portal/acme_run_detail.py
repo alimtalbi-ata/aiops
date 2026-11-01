@@ -114,7 +114,14 @@ def _oidc_cookie_supplied(request: Request) -> bool:
     the server-side identity channel. consume_run_acl returns 401 for them.
     The viewer bearer remains identity-only and cannot rescue this attempt.
     """
-    return _SESSION_COOKIE in request.cookies
+    # Starlette's request.cookies collapses repeated Cookie fields and may
+    # ignore an OIDC cookie in a later field. Detect the *attempt* in every
+    # raw field, then let _session_from_cookie reject ambiguity with 401.
+    return any(
+        part.partition("=")[0].strip() == _SESSION_COOKIE
+        for header in request.headers.getlist("cookie")
+        for part in header.split(";")
+    )
 
 
 def _session_failure(status: int, detail: str, headers: dict | None = None) -> JSONResponse:
