@@ -413,7 +413,8 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 "proposal_revision,target_ci_id,action_type,risk_tier,evidence_ids,"
                 "preconditions,expected_postconditions,proposal_hash,status,expires_at) "
                 "values(%s,%s,%s,%s,'CI-SOURCE',1,'CI-SYNTHETIC',"
-                "'COLLECT_DIAGNOSTICS','LOW',%s,'[]','[]',%s,'PROPOSED',"
+                "'COLLECT_DIAGNOSTICS','LOW',%s,'[\"ci precondition\"]',"
+                "'[\"ci postcondition\"]',%s,'PROPOSED',"
                 "now()+interval '1 hour')",
                 (ids["proposal"], fixture.RUN, ids["analysis"],
                  ids["critique"], evidence_ids, digest))
