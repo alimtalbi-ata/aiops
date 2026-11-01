@@ -405,3 +405,11 @@ class XrefHttpTests(unittest.TestCase):
         self.hidden(r)
 
 if __name__=="__main__": unittest.main()
+
+
+# Core-owned test bridge: shared Quality invokes this existing suite by name.
+# Do not edit the architect-owned workflow for a focused actor ACL addition.
+def load_tests(loader, tests, pattern):
+    from test_core_actor_resource_authz import ActorDelegationTests
+    tests.addTests(loader.loadTestsFromTestCase(ActorDelegationTests))
+    return tests
