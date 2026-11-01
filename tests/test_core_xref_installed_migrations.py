@@ -152,6 +152,7 @@ class InstalledMigrationPostgres16(unittest.TestCase):
 from test_core_hitl_reject_pg16_populated import CoreRejectPopulatedPG16
 from test_core_actor_nonce_pg16 import ActorLedgerStaticTests, ActorLedgerPopulatedPG16
 from test_core_actor_pg16_archive_restore import CoreActorArchiveRestorePG16
+from test_core_actor_pg16_native_sha_restore import CoreActorNativeArchiveRestorePG16
 
 if __name__ == "__main__":
     unittest.main()
