@@ -612,3 +612,141 @@ class PortalACLChromiumE2E(unittest.TestCase):
             self.assertFalse(any("ticket" in str(row["path"]) for row in baseline))
             self.assertNotIn(self.settings[
                 "AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"], self.page.content())
+
+
+    def test_12_signed_allow_claim_matrix_never_authorizes_browser_or_api(self):
+        """A valid test signature and every foreign claim remain non-authoritative."""
+        from fastapi import Request
+        from portal.core_acl_consumer import ServerXref
+        from test_portal_core_acl_consumer import PortalCoreACLConsumerTests
+
+        actor, handle = self.session()
+        binding = ServerXref("ACME", "RUN-ACME-123", "INC-ACME-123",
+                             "glpi-acme", "123", "42")
+        now = int(time.time())
+        plan = self.wire.prepare_core_authz_wire(
+            actor, binding, env=self.settings, now=now)
+        self.assertIsNotNone(plan)
+        self.assertFalse(plan.dispatch_allowed)
+        _, _, _, envelope = PortalCoreACLConsumerTests().future_envelope(now)
+        envelope["request_nonce"] = plan.nonce
+        public = self.key.public_key().public_numbers()
+
+        def b64_integer(number):
+            return base64.urlsafe_b64encode(number.to_bytes(
+                (number.bit_length() + 7) // 8, "big")).rstrip(b"=").decode("ascii")
+
+        settings = {**self.settings,
+                    "AIOPS_PORTAL_CORE_AUTHZ_RESPONSE_JWKS_JSON": json.dumps({
+                        "keys": [{"kid": "disposable-core", "kty": "RSA",
+                                  "alg": "RS256", "use": "sig",
+                                  "n": b64_integer(public.n),
+                                  "e": b64_integer(public.e)}]})}
+
+        def signed(body):
+            value = self.key.sign(
+                self.wire._canonical_signed_bytes(plan.origin, body),
+                padding.PKCS1v15(), hashes.SHA256())
+            return {"alg": "RS256", "kid": "disposable-core",
+                    "signature": base64.urlsafe_b64encode(value).rstrip(
+                        b"=").decode("ascii")}
+
+        headers = {"cache-control": "no-store", "pragma": "no-cache",
+                   "x-content-type-options": "nosniff",
+                   "referrer-policy": "no-referrer"}
+        cookie = (self.sessions._SESSION_COOKIE + "=" + handle).encode()
+        request = Request({"type": "http", "method": "GET",
+                           "path": "/api/portal/runs/RUN-ACME-123",
+                           "headers": [(b"cookie", cookie)]})
+
+        signature = signed(envelope)
+        self.assertTrue(self.wire.verify_pinned_core_response_signature(
+            envelope, signature, actor=actor, binding=binding, plan=plan,
+            env=settings, now=now))
+        # Offline signature qualification is NOT a GLPI native human ACL.
+        self.assertEqual(self.wire.assess_core_authz_reply_offline(
+            200, envelope, headers, signature, actor=actor, binding=binding,
+            plan=plan, env=settings, now=now).kind, "SIGNED_SHAPE_UNQUALIFIED")
+        self.assertEqual(self.wire.assess_core_negative_for_session(
+            request, binding=binding, plan=plan, status_code=200,
+            payload=envelope, headers=headers, env=settings, now=now).kind,
+            "INVALID")
+        self.assertFalse(self.wire.core_authz_read_permitted(envelope, signature))
+
+        variants = (
+            ("tenant", {"tenant_id": "FOREIGN"}),
+            ("actor", {"actor_subject": "forged-manager"}),
+            ("issuer", {"actor_issuer": "https://evil.example.test"}),
+            ("audience", {"actor_audience": "evil-portal"}),
+            ("run", {"run_id": "RUN-FOREIGN-999"}),
+            ("incident", {"incident_id": "INC-FOREIGN-999"}),
+            ("ticket", {"ticket_id": "999"}),
+            ("entity", {"glpi_entity_id": "99"}),
+            ("instance", {"glpi_instance_id": "glpi-foreign"}),
+            ("nonce", {"request_nonce": "n" * 43}),
+            ("expired", {"expires_at": now - 1}),
+            ("revoked", {"revoked": True}),
+            ("delegation", {"delegation": {
+                **envelope["delegation"], "subject": "forged-manager"}}),
+            ("native-profile", {"glpi_readback": {
+                **envelope["glpi_readback"],
+                "actor_permission_confirmed": False}}),
+            ("native-entity", {"glpi_readback": {
+                **envelope["glpi_readback"], "entity_id": "99"}}),
+        )
+        for label, changes in variants:
+            with self.subTest(claim=label):
+                altered = {**copy.deepcopy(envelope), **changes}
+                # Re-sign every foreign payload: reject claim mismatch even
+                # when the disposable RSA key itself is valid.
+                proof = signed(altered)
+                self.assertFalse(self.wire.verify_pinned_core_response_signature(
+                    altered, proof, actor=actor, binding=binding, plan=plan,
+                    env=settings, now=now))
+                self.assertEqual(self.wire.assess_core_authz_reply_offline(
+                    200, altered, headers, proof, actor=actor, binding=binding,
+                    plan=plan, env=settings, now=now).kind, "INVALID")
+                self.assertFalse(self.wire.core_authz_read_permitted(
+                    altered, proof))
+
+        with patch.object(self.detail, "_read_core_run",
+                          side_effect=AssertionError("business Core GET forbidden")) as get_run, \
+             patch.object(self.main, "get_json",
+                          side_effect=AssertionError("upstream GET forbidden")) as get_json:
+            api = []
+            for rid in ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999"):
+                response = self.context.request.get(
+                    self.base + "/api/portal/runs/" + rid,
+                    headers={"X-Actor-ID": "forged-manager",
+                             "X-Tenant-ID": "FOREIGN",
+                             "X-GLPI-Ticket": "999",
+                             "X-GLPI-Entity": "99"})
+                self.assert_denied(response, 503)
+                api.append(response.json())
+                self.assert_denied(self.page.goto(
+                    self.base + "/runs/" + rid), 503)
+            self.assertEqual(api[0], api[1])
+            self.assertEqual(api[1], api[2])
+            self.assertNotIn("ticket_id", api[0])
+            get_run.assert_not_called()
+            get_json.assert_not_called()
+
+        with self.sessions._lock:
+            self.sessions._sessions.pop(self.sessions._digest(handle), None)
+        self.assertEqual(self.wire.assess_core_negative_for_session(
+            request, binding=binding, plan=plan, status_code=200,
+            payload={"schema": "aiops.core-actor-resource-authorization.v1",
+                     "decision": "UNKNOWN"},
+            headers=headers, env=settings, now=now).portal_status, 401)
+        for rid in ("RUN-ACME-123", "RUN-FOREIGN-999", "RUN-FORGED-999"):
+            self.assert_denied(self.context.request.get(
+                self.base + "/api/portal/runs/" + rid), 401)
+            self.assert_denied(self.page.goto(self.base + "/runs/" + rid), 401)
+        for url, request_headers in self.observed:
+            self.assertTrue(url.startswith(self.base + "/"))
+            self.assertNotIn("core.example.test", url)
+            for token in (self.settings["AIOPS_PORTAL_CORE_AUTHZ_SERVICE_TOKEN"],
+                          self.settings["AIOPS_PORTAL_CORE_XREF_SERVICE_TOKEN"]):
+                self.assertNotIn(token, str(request_headers))
+                self.assertNotIn(token, self.page.content())
+        self.assertFalse(self.blocked)
