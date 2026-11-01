@@ -166,7 +166,8 @@ jobs:
           assert evidence["execution_allowed"] is False and evidence["effect_allowed"] is False
           assert evidence["sql_dead_injection"] is False
           assert evidence["oidc_glpi_identity"] == "NOT_ATTESTED"
-          assert evidence["host_7777"] == "NOT_VERIFIED"
+          assert evidence["host_7777"] == "NOT_VERIFIED_BY_CI"
+          assert evidence["host_7777_local_operator"] == "REPORTED_VERIFIED"
           assert evidence["universal_exactly_once"] == "NOT_CLAIMED"
           assert not any(s in revoked.read_text().lower() for s in ("bearer", "lease_token", "hmac_secret", "postgresql://"))
           print("CANONICAL_DEAD_REVOCATION_RECEIPT_PASS", digest)
