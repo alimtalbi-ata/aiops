@@ -87,8 +87,8 @@ jobs:
           report = {
               "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
               "core_claim_ack": "ACTUAL_FASTAPI_ASGI_HTTP_AND_POPULATED_PG16_IF_PASS",
-              "core_http": "ASGI_TESTCLIENT_UPSTREAM_NOT_DEPLOYED_TCP_CORE",
-              "http_network": "LOOPBACK_TCP_GATEWAY_IF_PASS" if tcp_boundary_pass else "NOT_QUALIFIED",
+              "core_http": ("INDEPENDENT_LOOPBACK_CORE_TCP_PROCESS" if independent_core_temporal_restart_pass else "ASGI_TESTCLIENT_UPSTREAM_NOT_DEPLOYED_TCP_CORE"),
+              "http_network": ("LOOPBACK_TCP_GATEWAY_AND_INDEPENDENT_CORE" if independent_core_temporal_restart_pass else ("LOOPBACK_TCP_GATEWAY_IF_PASS" if tcp_boundary_pass else "NOT_QUALIFIED")),
               "tcp_ack_response_drop": (
                   "OBSERVED_CI_DISPOSABLE_GATEWAY_CLOSE_AFTER_CORE_COMMIT"
                   if tcp_boundary_pass else "NOT_TESTED_OR_FAILED"),
@@ -101,7 +101,7 @@ jobs:
               "independent_core_tcp_service": ("OBSERVED_CI_DISPOSABLE_SEPARATE_PID" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
               "temporal_partition": "CONTROLLED_SERVER_STOP_START_NOT_NETWORK_PARTITION",
               "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT",
-              "boundary_scope": "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER",
+              "boundary_scope": ("GATEWAY_CLOSE_AFTER_INDEPENDENT_CORE_TCP_COMMIT_NOT_PACKET_LOSS" if independent_core_temporal_restart_pass else "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER"),
               "real_network_ack_loss": "NOT_TESTED",
               "ack_gateway_close_upstream": ("INDEPENDENT_CORE_TCP_AFTER_DB_COMMIT" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
               "decision": "REJECT",
