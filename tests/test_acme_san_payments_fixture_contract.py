@@ -1069,5 +1069,191 @@ class AcmeCorePg16IndependentIntakeTests(unittest.TestCase):
             self.assertNotEqual(oversized.returncode, 0)
 
 
+
+class AcmePg16TwinImpactHandoffTests(unittest.TestCase):
+    """Executable source-to-Core payload bridge; no PG16 authority invented."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_synthetic_pg16_twin_impact_handoff as handoff
+        from tools import acme_synthetic_pg16_independent_intake as intake
+        from tools import generate_acme_incidents as gen
+        cls.handoff, cls.intake, cls.gen = handoff, intake, gen
+        cls.manifest = gen.replay(seed=20261018)
+        cls.scope = {
+            "tenant_id": "TEST_ONLY_TENANT",
+            "incident_id": "TEST_ONLY_INCIDENT",
+            "run_id": "TEST_ONLY_RUN",
+            "ticket_id": "TEST_ONLY_TICKET",
+            "glpi_entity_id": "TEST_ONLY_ENTITY",
+        }
+
+    def assert_unknown(self, result):
+        self.assertEqual(result["result"], "UNKNOWN")
+        self.assertEqual(result["core_pg16_full_payload_equivalence"], "UNKNOWN")
+        self.assertEqual(result["itil_stages"],
+                         {"count": 15, "verified": 0, "not_executed": 15,
+                          "status": "NOT_EXECUTED"})
+        self.assertEqual(result["checkpoints"],
+                         {"count": 6, "verified": 0, "not_executed": 6,
+                          "status": "NOT_EXECUTED"})
+        self.assertFalse(result["publishable_to_core_or_glpi"])
+        self.assertFalse(result["live_effects_authorized"])
+        self.assertTrue(all(value is None for key, value in result["runtime"].items()
+                            if key != "evidence_ids"))
+        self.assertEqual(result["runtime"]["evidence_ids"], [])
+        self.assertEqual(result["candidate_incident"]["id"], None)
+        self.assertEqual(result["candidate_incident"]["status"], "NOT_CREATED")
+        self.assertEqual(result["twin_impact"]["observed_service_impact"], "UNKNOWN")
+        self.assertTrue(all(e["core_pg16_full_event_sha256"] is None and
+                            e["core_pg16_payload_sha256"] is None
+                            for e in result["events"]))
+
+    def test_pinned_redacted_machine_receipt_exact(self):
+        expected = self.handoff.build_preview(self.manifest)
+        pinned = json.loads(self.handoff.FIXTURE.read_text(encoding="utf-8"),
+                            object_pairs_hook=self.gen._unique_object)
+        self.assertEqual(expected, pinned)
+        self.assert_unknown(expected)
+        self.assertEqual(expected["source_replay_sha256"],
+                         "bfe0f0f14fc6229d47e641c8d4c6b9ae1600dcbf729f5f0b988960a8e62a70b8")
+
+    def test_sourced_san_to_payments_blast_radius_not_observed(self):
+        result = self.handoff.build_preview(self.manifest)
+        self.assertEqual(result["twin_impact"]["path_node_ids"], [
+            "ACME-SAN-FABRIC-A", "ACME-STO-PURE01", "ACME-VM-PAY01",
+            "ACME-APP-ORACLEPAY", "ACME-SVC-PAYMENTS"])
+        self.assertEqual(result["twin_impact"]["path_edge_ids"],
+                         ["ACME-E08", "ACME-E06", "ACME-E04", "ACME-E02"])
+        self.assertEqual(result["twin_impact"]["candidate_ci_count"], 10)
+        self.assertEqual(result["twin_impact"]["estimated_impact_level"], "HIGH")
+        self.assertEqual(result["itil_priority_candidate"], "P1")
+        self.assertEqual(result["itil_priority_confirmed"], "UNKNOWN")
+        self.assertEqual(result["portal_read_model_kind"], "SYNTHETIC_PREVIEW_ONLY")
+        self.assertEqual(result["portal_integration_status"], "NOT_CONNECTED")
+
+    def test_one_candidate_group_and_seven_distinct_local_sha_domains(self):
+        result = self.handoff.build_preview(self.manifest)
+        self.assertEqual(result["candidate_incident"]["candidate_count"], 1)
+        self.assertEqual(result["correlation"]["scope"], "LOCAL_FIXTURE_ONLY")
+        self.assertEqual(len(result["events"]), 7)
+        self.assertEqual(len({e["source_event_id"] for e in result["events"]}), 7)
+        for sequence, row in enumerate(result["events"], 1):
+            self.assertEqual(row["sequence"], sequence)
+            self.assertEqual(len({row["acme_full_event_sha256"],
+                                  row["acme_local_payload_sha256"],
+                                  row["proposed_core_payload_sha256"]}), 3)
+
+    def test_disposable_core_payloads_use_core_domain_not_pg16_receipts(self):
+        rows = self.handoff.disposable_core_payloads(self.manifest, self.scope)
+        self.assertEqual(len(rows), 7)
+        for index, row in enumerate(rows, 1):
+            payload = row["payload"]
+            self.assertEqual(row["source_event_id"],
+                             self.manifest["events"][index - 1]["source_event_id"])
+            self.assertEqual(payload["run_id"], self.scope["run_id"])
+            self.assertEqual(payload["sequence"], index)
+            self.assertEqual(row["proposed_core_payload_sha256"], hashlib.sha256(
+                self.gen._canonical({
+                    "schema": "aiops.core-source-event-payload.v1",
+                    "event": payload,
+                })).hexdigest())
+            self.assertIsNone(row["core_pg16_full_event_sha256"])
+            self.assertIsNone(row["core_pg16_payload_sha256"])
+            self.assertEqual(row["authority"], "TEST_ONLY_PROPOSAL_NOT_PG16")
+
+    def test_disposable_scope_missing_foreign_or_reused_rejected(self):
+        import copy
+        for mutate in (
+            lambda s: s.pop("run_id"),
+            lambda s: s.update(run_id="RUN_REAL"),
+            lambda s: s.update(run_id=s["incident_id"]),
+            lambda s: s.update(extra="TEST_ONLY_EXTRA"),
+            lambda s: s.update(ticket_id=True),
+        ):
+            scope = copy.deepcopy(self.scope)
+            mutate(scope)
+            with self.subTest(scope=scope), self.assertRaises(ValueError):
+                self.handoff.disposable_core_payloads(self.manifest, scope)
+        with self.assertRaises(ValueError):
+            self.handoff.disposable_core_payloads(self.manifest, None)
+
+    def test_mutated_source_event_or_order_rejected(self):
+        import copy
+        for mutate in (
+            lambda m: m["events"].reverse(),
+            lambda m: m["events"].pop(),
+            lambda m: m["events"][0].update(source_event_id="TEST_ONLY_FOREIGN"),
+        ):
+            manifest = copy.deepcopy(self.manifest)
+            mutate(manifest)
+            with self.assertRaises(ValueError):
+                self.handoff.build_preview(manifest)
+            with self.assertRaises(ValueError):
+                self.handoff.disposable_core_payloads(manifest, self.scope)
+
+    def test_untrusted_core_receipt_stays_unknown_and_redacted(self):
+        receipt = AcmeCorePg16IndependentIntakeTests.fake_core_readback(self)
+        result = self.handoff.build_preview(
+            self.manifest, core_readback=receipt,
+            expected_tenant="TEST_ONLY_TENANT",
+            expected_actor_sha256="b" * 64, now=1700000000)
+        self.assert_unknown(result)
+        self.assertEqual(result["core_readback_status"], "UNVERIFIED")
+        self.assertEqual(result["core_readback_reason"],
+                         "NO_INDEPENDENT_PG16_AUTHORITY")
+        self.assertNotIn("TEST_ONLY_RUN", json.dumps(result))
+        self.assertNotIn("TEST_ONLY_INCIDENT", json.dumps(result))
+
+    def test_foreign_missing_reordered_core_events_fail_closed(self):
+        import copy
+        for mutate in (
+            lambda x: x["events"].reverse(),
+            lambda x: x["events"].pop(),
+            lambda x: x["events"][0].update(source_event_id="TEST_ONLY_FOREIGN"),
+        ):
+            receipt = AcmeCorePg16IndependentIntakeTests.fake_core_readback(self)
+            mutate(receipt)
+            result = self.handoff.build_preview(
+                self.manifest, core_readback=receipt,
+                expected_tenant="TEST_ONLY_TENANT",
+                expected_actor_sha256="b" * 64, now=1700000000)
+            self.assert_unknown(result)
+            self.assertIn(result["core_readback_reason"],
+                          ("MISSING_OR_EXTRA_EVENTS",
+                           "FOREIGN_DUPLICATE_OR_REORDERED_EVENTS"))
+            self.assertNotIn("TEST_ONLY_FOREIGN", json.dumps(result))
+
+    def test_matching_hash_and_forged_hitl_audit_cannot_promote(self):
+        receipt = AcmeCorePg16IndependentIntakeTests.fake_core_readback(self)
+        local = self.intake.build_receipt(self.manifest)["events"][0]
+        receipt["events"][0]["full_event_sha256"] = local["acme_full_event_sha256"]
+        receipt["events"][0]["payload_sha256"] = local["acme_local_payload_sha256"]
+        result = self.handoff.build_preview(
+            self.manifest, core_readback=receipt, now=1700000000,
+            expected_tenant="TEST_ONLY_TENANT",
+            expected_actor_sha256="b" * 64,
+            audit_proofs={"audit_013": {"verified": True, "secret": "TEST_ONLY_SECRET"},
+                          "audit_014": {"verified": True},
+                          "glpi_human_allow": True, "hitl_approval": "ALLOW"})
+        self.assert_unknown(result)
+        self.assertNotIn("TEST_ONLY_SECRET", json.dumps(result))
+        self.assertNotIn('"ALLOW"', json.dumps(result))
+
+    def test_cli_check_and_emit_match_pinned_receipt(self):
+        import subprocess
+        import sys
+        cmd = [sys.executable, "-m", "tools.acme_synthetic_pg16_twin_impact_handoff"]
+        emitted = subprocess.run(cmd + ["--emit"], cwd=self.gen.ROOT,
+                                 capture_output=True, text=True)
+        self.assertEqual(emitted.returncode, 0, emitted.stderr)
+        self.assertEqual(json.loads(emitted.stdout),
+                         self.handoff.build_preview(self.manifest))
+        checked = subprocess.run(cmd + ["--check"], cwd=self.gen.ROOT,
+                                 capture_output=True, text=True)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["check"],
+                         "PASS_SYNTHETIC_ONLY")
+
 if __name__ == "__main__":
     unittest.main()
