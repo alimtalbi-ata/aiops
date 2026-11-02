@@ -66,9 +66,9 @@ def qualify(attempt, core, twin):
             or any(not isinstance(core.get(k), str) or not core[k]
                    or core[k] != twin.get(k) for k in ids)
             or not core['ticket_id'].startswith('SIM-GLPI-')
-            or core.get('incident_status') != 'PREPARED'
-            or core.get('run_status') != 'PREPARED'
-            or core.get('ticket_status') != 'PREPARED'
+            or core.get('incident_status') not in ('PREPARED', 'RESOLVED')
+            or core.get('run_status') != core.get('incident_status')
+            or core.get('ticket_status') != core.get('run_status')
             or core.get('ticket_authority') != 'SIMULATED_ONLY'
             or core.get('glpi_mode') != 'SIMULATED_ONLY'
             or core.get('source_event_count') != 7
