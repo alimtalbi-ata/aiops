@@ -204,7 +204,7 @@ def _unambiguous_state_cookie(request: Request) -> str:
     raw_fields = request.headers.getlist("cookie")
     if len(raw_fields) != 1:
         return ""
-    pattern = r"(?:^|;)\\s*" + re.escape(_STATE_COOKIE) + r"\\s*="
+    pattern = r"(?:^|;)\s*" + re.escape(_STATE_COOKIE) + r"\s*="
     if len(re.findall(pattern, raw_fields[0])) != 1:
         return ""
     return request.cookies.get(_STATE_COOKIE, "")
