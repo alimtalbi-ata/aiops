@@ -19,7 +19,7 @@ import uuid
 STATE = Path('/home/aiops/.local/state/aiops-debian-agent')
 RECEIPT = STATE / 'acme-sim-e2e.json'
 TENANT = 'ACME-TEST'
-SCENARIO = 'ACME-TEST-SAN-PAYMENTS'
+SCENARIO = 'ACME-SAN-PAYMENTS'
 SERVICES = {
     'simulator': ('aiops2-rebuild-simulator', 816),
     'core': ('aiops2-rebuild-core', 810),
