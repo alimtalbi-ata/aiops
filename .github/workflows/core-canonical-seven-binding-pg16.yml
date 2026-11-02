@@ -206,7 +206,22 @@ jobs:
                      and e["source_event_id"].startswith("SYN-EVT-")
                      and e["core_pg16_payload_sha256"] != e["core_pg16_full_event_sha256"]
                      for e in g["events"])
-          assert len(g["negative_cases"]) == 7
+          assert len(g["negative_cases"]) == 9
+          assert set(g["negative_cases"]) == {
+              "foreign_actor", "foreign_actor_issuer", "foreign_tenant",
+              "foreign_run", "foreign_incident", "foreign_ticket",
+              "revoked", "expired", "foreign_source_issuer"}
+          assert g["source_run_sequences"] == [1,2,4,5,6,8,9]
+          assert g["source_payload_ordinals"] == list(range(1,8))
+          assert g["source_run_sequence_domain"] == "PHYSICAL_RUN_SEQUENCE"
+          assert g["source_payload_sequence_domain"] == "PINNED_SOURCE_ORDINAL"
+          assert g["interleaved_workflow_events"] == 2
+          assert g["appended_workflow_events"] == 2
+          assert g["same_run_workflow_events"] == 4
+          assert g["same_run_total_before_rogue"] == 11
+          assert g["same_run_source_count"] == 7
+          assert [e["physical_run_sequence"] for e in g["events"]] == [1,2,4,5,6,8,9]
+          assert [e["pinned_source_ordinal"] for e in g["events"]] == list(range(1,8))
           assert set(g["negative_cases"].values()) == {"UNKNOWN"}
           assert g["stale"] == g["hash_mismatch"] == "UNKNOWN"
           assert not any(secret in graph.read_text() for secret in (

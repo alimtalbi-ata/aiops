@@ -1217,13 +1217,15 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                     patch.object(main, "db",
                                  side_effect=lambda: self.psycopg.connect(self.db_url)):
                 with TestClient(main.app) as client:
+                    run_version = 0
                     for pos, (event_id, _, _) in enumerate(expected_events, 1):
+                        run_version += 1
                         with self.psycopg.connect(self.db_url) as conn:
                             payload = conn.execute(
                                 "select payload from aiops.evidence where external_id=%s",
                                 (event_id,)).fetchone()[0]
                         body = {
-                            "expected_version": pos, "stage": "SOURCE",
+                            "expected_version": run_version, "stage": "SOURCE",
                             "event_type": "OBSERVED", "status": "PASS",
                             "event_key": event_id,
                             "evidence_ids": [f"EVI-GRAPH005-{pos:02d}"],
@@ -1233,8 +1235,27 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                             f"/api/runs/{run}/events", json=body,
                             headers={"Authorization": "Bearer ci-graph005-writer-only"})
                         self.assertEqual(result.status_code, 200, result.text)
-                        self.assertEqual(result.json()["sequence"], pos)
+                        self.assertEqual(result.json()["sequence"], run_version)
                         self.assertFalse(result.json()["idempotent"])
+                        # Interleave two Worker-shaped events in the SAME Run,
+                        # including a misleading source_event_id in their payload.
+                        # Neither is a SOURCE/OBSERVED observation.
+                        if pos in (2, 5):
+                            run_version += 1
+                            worker_stage = "DGX_ANALYST" if pos == 2 else "VERIFY"
+                            worker = client.post(
+                                f"/api/runs/{run}/events", json={
+                                    "expected_version": run_version,
+                                    "stage": worker_stage,
+                                    "event_type": "WORKFLOW_OBSERVATION",
+                                    "status": "PASS",
+                                    "event_key": f"workflow-interleaved-{pos}",
+                                    "evidence_ids": [],
+                                    "payload": {"synthetic": True,
+                                                "source_event_id": expected_events[0][0]},
+                                }, headers={"Authorization": "Bearer ci-graph005-writer-only"})
+                            self.assertEqual(worker.status_code, 200, worker.text)
+                            self.assertEqual(worker.json()["sequence"], run_version)
                         if pos == 1:
                             replay_result = client.post(
                                 f"/api/runs/{run}/events", json=body,
@@ -1246,10 +1267,11 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                                 json={**body, "payload": {**payload, "synthetic": False}},
                                 headers={"Authorization": "Bearer ci-graph005-writer-only"})
                             self.assertEqual(invalid.status_code, 422)
+                    self.assertEqual(run_version, 9)
                     with self.psycopg.connect(self.db_url) as conn:
                         self.assertEqual(conn.execute(
                             "select count(*) from aiops.run_events where run_id=%s",
-                            (run,)).fetchone()[0], 7)
+                            (run,)).fetchone()[0], 9)
 
         def read(req, *, db_url=None, at=None, expected=None):
             with self.psycopg.connect(db_url or self.db_url) as conn:
@@ -1262,6 +1284,19 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
         proof = read(request)
         self.assertIsNotNone(proof)
         self.assertNotEqual(proof["issuer"], proof["actor_issuer"])
+        # SOURCE ordinal 1..7 is distinct from physical Run sequences 1,2,4,5,6,8,9.
+        # The full-event SHA256 covers the actual PG16 Run sequence.
+        source_sequences = [1, 2, 4, 5, 6, 8, 9]
+        self.assertEqual([e["sequence"] for e in proof["events"]], source_sequences)
+        self.assertEqual([e["full_event"]["sequence"] for e in proof["events"]],
+                         source_sequences)
+        self.assertEqual([e["payload"]["sequence"] for e in proof["events"]],
+                         list(range(1, 8)))
+        self.assertTrue(binding._validate(
+            proof, request, {
+                "source_event_id": expected_events[0][0],
+                "source_payload_hash": proof["events"][0]["payload_hash"],
+            }, source_issuer, int(time.time()), int(time.time()) + 120))
         self.assertEqual([e["source_event_id"] for e in proof["events"]],
                          [e[0] for e in expected_events])
         self.assertTrue(all(e["full_event"]["stage"] == "SOURCE"
@@ -1304,19 +1339,19 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             self.assertEqual(good.status_code, 200)
             self.assertEqual(good.json()["events"], proof["events"])
 
-        # A real Worker appends ITIL events to this SAME Run after the seven
-        # SOURCE observations. They must not invalidate the source proof.
+        # Appended Worker-shaped ITIL events must also preserve readback;
+        # the two interleaved events already occupy physical sequences 3 and 7.
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-graph005-writer-only"}):
             from core import main
             with patch.object(main, "ADMIN", "ci-graph005-writer-only"), \
                     patch.object(main, "db",
                                  side_effect=lambda: self.psycopg.connect(self.db_url)):
                 with TestClient(main.app) as client:
-                    for version, stage in ((8, "DGX_ANALYST"), (9, "VERIFY")):
+                    for version, stage in ((10, "DGX_ANALYST"), (11, "VERIFY")):
                         body = {
                             "expected_version": version, "stage": stage,
                             "event_type": "WORKFLOW_OBSERVATION", "status": "PASS",
-                            "event_key": f"workflow-{stage.lower()}-graph005",
+                            "event_key": f"workflow-append-{stage.lower()}-graph005",
                             "evidence_ids": [], "payload": {"synthetic": True},
                         }
                         response = client.post(
@@ -1327,7 +1362,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
         with self.psycopg.connect(self.db_url) as conn:
             self.assertEqual(conn.execute(
                 "select count(*) from aiops.run_events where run_id=%s",
-                (run,)).fetchone()[0], 9)
+                (run,)).fetchone()[0], 11)
             self.assertEqual(conn.execute(
                 "select count(*) from aiops.run_events where run_id=%s "
                 "and stage='SOURCE' and event_type='OBSERVED'",
@@ -1338,6 +1373,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
         negatives = {}
         for name, change in (
             ("foreign_actor", {"actor_subject": "idp|foreign"}),
+            ("foreign_actor_issuer", {"actor_issuer": "https://foreign-idp.invalid"}),
             ("foreign_tenant", {"tenant_id": "TEN-FOREIGN"}),
             ("foreign_run", {"run_id": "RUN-FOREIGN"}),
             ("foreign_incident", {"incident_id": "INC-FOREIGN"}),
@@ -1355,12 +1391,23 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 "expires_at=clock_timestamp()-interval '1 second' "
                 "where run_id=%s", (run,))
         negatives["expired"] = "UNKNOWN" if read(request) is None else "ERROR"
-        self.assertEqual(negatives, {k: "UNKNOWN" for k in negatives})
+        # Restore a valid grant before testing the independently pinned
+        # SOURCE issuer; otherwise an expired grant would mask this denial.
         with self.psycopg.connect(self.db_url) as conn:
             conn.execute(
                 "update public.ci_actor_source_grants "
-                "set expires_at=clock_timestamp()+interval '3 minutes' "
+                "set expires_at=clock_timestamp()+interval '10 minutes' "
                 "where run_id=%s", (run,))
+        with self.psycopg.connect(self.db_url) as conn:
+            negatives["foreign_source_issuer"] = (
+                "UNKNOWN" if pgsource.read_graph005_core_written_seven(
+                    conn, request, source=fixture.SOURCE,
+                    issuer="foreign-core-source", now=datetime.now(timezone.utc),
+                    expected_events=expected_events,
+                    graph_version=pinned["graph_version"]) is None else "ERROR")
+        self.assertEqual(negatives, {k: "UNKNOWN" for k in negatives})
+        # Source and ownership observations age out after five minutes even
+        # while the synthetic grant itself remains unexpired for ten minutes.
         self.assertIsNone(read(request, at=datetime.now(timezone.utc)
                                + timedelta(minutes=6)))
         changed = list(expected_events)
@@ -1407,7 +1454,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 with self.psycopg.connect(restore_url) as conn:
                     self.assertEqual(conn.execute(
                         "select count(*) from aiops.run_events where run_id=%s",
-                        (run,)).fetchone()[0], 9)
+                        (run,)).fetchone()[0], 11)
                     self.assertEqual(conn.execute(
                         "select count(*) from pg_trigger where tgname in "
                         "('trg_actor_nonce_immutable',"
@@ -1436,7 +1483,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 with TestClient(main.app) as client:
                     response = client.post(
                         f"/api/runs/{run}/events",
-                        json={"expected_version": 10, "stage": "SOURCE",
+                        json={"expected_version": 12, "stage": "SOURCE",
                               "event_type": "OBSERVED", "status": "PASS",
                               "event_key": rogue_key,
                               "evidence_ids": ["EVI-GRAPH005-01"],
@@ -1473,11 +1520,19 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                     "acme_fixture_payload_sha256": expected_events[i][2],
                     "core_pg16_payload_sha256": e["payload_hash"],
                     "core_pg16_full_event_sha256": e["full_event_hash"],
+                    "physical_run_sequence": e["full_event"]["sequence"],
+                    "pinned_source_ordinal": e["payload"]["sequence"],
                 } for i, e in enumerate(proof["events"])],
                 "negative_cases": negatives, "stale": "UNKNOWN",
-                "same_run_workflow_events": 2,
+                "same_run_workflow_events": 4,
+                "interleaved_workflow_events": 2,
+                "appended_workflow_events": 2,
+                "source_run_sequences": source_sequences,
+                "source_payload_ordinals": list(range(1, 8)),
+                "source_run_sequence_domain": "PHYSICAL_RUN_SEQUENCE",
+                "source_payload_sequence_domain": "PINNED_SOURCE_ORDINAL",
                 "same_run_source_count": 7,
-                "same_run_total_before_rogue": 9,
+                "same_run_total_before_rogue": 11,
                 "same_run_readback": "PASS_SYNTHETIC_ONLY",
                 "extra_source_event": "UNKNOWN",
                 "hash_mismatch": "UNKNOWN",
