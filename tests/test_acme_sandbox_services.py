@@ -160,6 +160,8 @@ def sample_record():
         core_source_event_ids=prepared_core()['source_event_ids'],
         issuer_id='twin-acme-test', approval_actor=TWIN.ISSUER,
         approval_kind='SIMULATED', approval_status='SIMULATED',
+        approval_phase='PRE_RESOLUTION', core_status_at_issuance='PREPARED',
+        resolution_verified=False, post_resolution_readback_required=True,
         approval_nonce='SIMNONCE-1234567890ABCDEF',
         issued_at=now.isoformat(), expires_at=(now + timedelta(minutes=4)).isoformat(),
         impact_root=TWIN.ROOT, impacted_cis=[TWIN.ROOT, TWIN.PAYMENTS],
@@ -208,6 +210,10 @@ def test_simulator_positive_structural_orchestration_only_simulated(monkeypatch)
                            'core_request_sha256': 'a' * 64,
                            'core_source_event_ids': prepared_core()['source_event_ids'],
                            'approval_issuer': SIM.ISSUER, 'approval_kind': 'SIMULATED',
+                           'approval_phase': 'PRE_RESOLUTION',
+                           'core_status_at_issuance': 'PREPARED',
+                           'resolution_verified': False,
+                           'post_resolution_readback_required': True,
                            'approval_nonce': 'SIMNONCE-123456',
                            'human_approved': False, 'live_effects_allowed': False}
         if component == 'policy':
