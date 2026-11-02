@@ -19,7 +19,19 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T14:50:13.096141+00:00",
+  "canonical_compose_receipt": {
+    "base_compose_verified": true,
+    "collected_at": "2026-11-02T15:37:21.502561+00:00",
+    "compose_changed": true,
+    "docker_mutations": 1,
+    "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
+    "portal_health_strict": true,
+    "reason": "CANONICALIZED_RECREATED",
+    "rollback_attempted": false,
+    "rollback_succeeded": null,
+    "status": "PASS"
+  },
+  "collected_at": "2026-11-02T15:37:22.061635+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -27,14 +39,14 @@
     "compose_config_valid": true,
     "compose_file_present": true,
     "compose_rollback_tested": false,
-    "current_portal_image_id": "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985",
-    "deployed_image_id": "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985",
+    "current_portal_image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
+    "deployed_image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "deployment_executed": true,
-    "deployment_result_collected_at": "2026-11-02T14:50:12.775506+00:00",
+    "deployment_result_collected_at": "2026-11-02T15:37:12.928281+00:00",
     "docker_mutations": 1,
     "env_file_present": true,
     "portal_container_name_matches": true,
-    "portal_env_port_7777": false,
+    "portal_env_port_7777": true,
     "portal_host_port_7777": true,
     "portal_service_present": true,
     "reason": "E2E_HUMAN_GLPI_NOT_ATTESTED",
@@ -68,16 +80,93 @@
       }
     ],
     "compose_project": "aiops2-rebuild",
-    "container_id": "6b4e0ec57e52ae2ffe54cdf084e0f15c77c33502c5904db1be6f41484ed490a1",
+    "container_id": "f8396d7c62cb488efb2d39a7a2575b885174b11e0af144a5e929ed610d212162",
     "health": "healthy",
-    "image_id": "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985",
+    "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "inspection": "READ_ONLY",
     "manifest_digests": [
-      "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985"
+      "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1"
     ],
     "mount_count": 0,
     "network_count": 3,
     "state": "running"
+  },
+  "portal_nine_readonly_contracts": {
+    "acme_e2e": "BLOCKED_NO_INDEPENDENT_HUMAN_GLPI_IDP_AUTHORITY",
+    "attempt_id": "ACME-READONLY-20261102T153721Z",
+    "checks": [
+      {
+        "http_status": 200,
+        "name": "health",
+        "path": "/health",
+        "reason": "STRICT_7777_HEALTH",
+        "status": "PASS"
+      },
+      {
+        "http_status": 200,
+        "name": "shell",
+        "path": "/",
+        "reason": "HTML_SHELL_ONLY",
+        "status": "PASS"
+      },
+      {
+        "http_status": 200,
+        "name": "itsm_shell",
+        "path": "/itsm",
+        "reason": "HTML_SHELL_ONLY",
+        "status": "PASS"
+      },
+      {
+        "http_status": 401,
+        "name": "oidc_session",
+        "path": "/api/portal/session",
+        "reason": "AUTHORITY_DENIED_OR_UNKNOWN",
+        "status": "PASS"
+      },
+      {
+        "http_status": 401,
+        "name": "bootstrap",
+        "path": "/api/portal/bootstrap",
+        "reason": "AUTHORITY_DENIED_OR_UNKNOWN",
+        "status": "PASS"
+      },
+      {
+        "http_status": 401,
+        "name": "components",
+        "path": "/api/portal/components",
+        "reason": "AUTHORITY_DENIED_OR_UNKNOWN",
+        "status": "PASS"
+      },
+      {
+        "http_status": 401,
+        "name": "glpi_authority",
+        "path": "/api/portal/itsm",
+        "reason": "AUTHORITY_DENIED_OR_UNKNOWN",
+        "status": "PASS"
+      },
+      {
+        "http_status": 401,
+        "name": "noc_runtime",
+        "path": "/api/noc/runtime-state",
+        "reason": "AUTHORITY_DENIED_OR_UNKNOWN",
+        "status": "PASS"
+      },
+      {
+        "http_status": 401,
+        "name": "noc_correlation",
+        "path": "/api/noc/correlation",
+        "reason": "AUTHORITY_DENIED_OR_UNKNOWN",
+        "status": "PASS"
+      }
+    ],
+    "collected_at": "2026-11-02T15:37:21.693622+00:00",
+    "glpi_ticket_id": null,
+    "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
+    "incident_id": null,
+    "passed": 9,
+    "run_id": null,
+    "status": "PASS_READONLY_ONLY",
+    "total": 9
   },
   "publisher_cron_diagnostics": {
     "cron_read_ok": true,
@@ -91,23 +180,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 4811,
-    "collected_at": "2026-11-02T13:30:01.906491+00:00",
+    "age_seconds": 2841,
+    "collected_at": "2026-11-02T14:50:01.231949+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 12,
-      "collected_at": "2026-11-02T14:50:01.231949+00:00",
+      "age_seconds": 20,
+      "collected_at": "2026-11-02T15:37:01.769393+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 13688,
+    "publish_log_age_seconds": 16517,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "4b92668f8f70aec82bbb3995c28186a6f848ed94",
+  "stable_checkout_sha": "1aa363eca411c07209e6d3eedb1d4228a359b4e3",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
