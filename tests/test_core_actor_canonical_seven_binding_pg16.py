@@ -796,7 +796,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
 
 
 
-    def test_v2_core_written_015_actor_source_readback_and_native_dr(self):
+    def test_zz_v2_core_written_015_actor_source_readback_and_native_dr(self):
         """Real Core ASGI seven SYN-EVT writes -> independently Basic/TLS readback.
 
         The actor grant is disposable synthetic provenance, NOT human IdP or
