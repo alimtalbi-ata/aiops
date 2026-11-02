@@ -44,7 +44,7 @@ def impact(node_id:str):
     k=['node_id','type','name','criticality','depth']; return {'root':node_id,'affected':[dict(zip(k,x)) for x in rows]}
 @app.get('/api/twin/at')
 def at(known_at:str):
-    with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
+    with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.attribute <> 'sandbox_simulated_approval' and f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
     k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']; return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r]}
 import os
 from pydantic import BaseModel
@@ -69,3 +69,7 @@ def metrics():
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
     return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'
+
+# Twin-owned signed synthetic approvals; independent readback, no human ALLOW.
+from twin.acme_sandbox import router as acme_sandbox_router
+app.include_router(acme_sandbox_router)
