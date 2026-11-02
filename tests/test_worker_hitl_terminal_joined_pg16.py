@@ -17,6 +17,9 @@ import unittest
 
 # unittest discovery prepends Worker tests; force Core #344's pinned fixture.
 sys.path.insert(0, str(Path(os.environ['AIOPS_CORE344_ROOT']) / 'tests'))
+# Core is pinned from #344, while Worker must come from the PR under test.
+import core
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'app'))
 
 import psycopg
 import requests
@@ -138,7 +141,9 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
             signal_count = 0
             async def worker(target, index):
                 ready = tmp / f"worker-{index}.ready"
-                child_env = dict(env, TEMPORAL_ADDRESS=target)
+                child_env = dict(env, TEMPORAL_ADDRESS=target,
+                    PYTHONPATH=str(Path(__file__).resolve().parents[1] / 'app')
+                    + os.pathsep + env['PYTHONPATH'])
                 proc = await self.launch(
                     [sys.executable, "-c", WORKER, str(ready)], child_env,
                     lambda: ready.is_file())
