@@ -127,6 +127,7 @@ def main():
             inspect('{{len .Mounts}}') != '0'):
             raise ValueError('PORTAL_OWNERSHIP_HEALTH_OR_MOUNTS')
         old_image = inspect('{{.Image}}')
+        old_container = inspect('{{.Id}}')
         if command(['docker', 'image', 'inspect', tag, '--format', '{{.Id}}']) != old_image:
             raise ValueError('PINNED_TAG_NOT_CURRENT_IMAGE')
         result['image_id'] = old_image
@@ -153,7 +154,6 @@ def main():
             raise ValueError('CANONICAL_COMPOSE_CONTRACT_FAILED')
         result['base_compose_verified'] = True
         if wrote:
-            result['docker_mutations'] = 1
             command(base + ['up', '-d', '--no-deps', '--no-build', '--force-recreate',
                             'aiops2-portal'], timeout=120)
             for _ in range(40):
@@ -167,6 +167,11 @@ def main():
                 time.sleep(3)
             else:
                 raise ValueError('POST_RECREATE_HEALTH_FAILED')
+            new_container = inspect('{{.Id}}')
+            if new_container == old_container or len(new_container) != 64:
+                raise ValueError('RECREATE_NOT_ATTESTED')
+            result['docker_mutations'] = 1
+            result['new_container_id'] = new_container
         result['portal_health_strict'] = strict_health()
         if not result['portal_health_strict'] or inspect('{{.Image}}') != old_image:
             raise ValueError('POST_CHECK_IMAGE_OR_HEALTH')
@@ -187,9 +192,18 @@ def main():
                              '--env-file', str(ENV), '-f', str(path), '-f', str(override),
                              'up', '-d', '--no-deps', '--no-build', '--force-recreate',
                              'aiops2-portal'], timeout=120)
-                result['rollback_succeeded'] = (strict_health() and
-                    command(['docker', 'inspect', 'aiops2-rebuild-portal',
-                             '--format', '{{.Image}}']) == old_image)
+                for _ in range(20):
+                    try:
+                        if (strict_health() and
+                            command(['docker', 'inspect', 'aiops2-rebuild-portal',
+                                     '--format', '{{.Image}}']) == old_image):
+                            result['rollback_succeeded'] = True
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(3)
+                if result['rollback_succeeded'] is not True:
+                    result['rollback_succeeded'] = False
             except Exception:
                 result['rollback_succeeded'] = False
     finally:
