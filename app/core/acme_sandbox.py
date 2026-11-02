@@ -45,6 +45,7 @@ def auth(authorization):
     secret = os.getenv('AIOPS_INTERNAL_TOKEN', '')
     scheme, sep, supplied = (authorization or '').partition(' ')
     if (scheme.lower() != 'bearer' or not sep or not supplied
+            or len(supplied) > 256 or not supplied.isascii()
             or not hmac.compare_digest(secret, supplied)):
         raise HTTPException(401, 'sandbox_service_auth_required')
 
