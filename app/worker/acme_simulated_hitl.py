@@ -253,9 +253,54 @@ async def simulate_no_effect(intent, *, get, now=None):
     ).hexdigest()
     return receipt
 
+_RECEIPT_AUDIT = [
+    "CORE_PREPARED_INDEPENDENTLY_VERIFIED",
+    "TWIN_SIMULATED_APPROVAL_VALIDATED",
+    "POLICY_SIMULATE_INDEPENDENTLY_VERIFIED",
+    "WORKER_NO_EFFECT",
+]
+_RECEIPT_KEYS = frozenset((
+    "schema", "attempt_id", "tenant_id", "incident_id", "run_id",
+    "proposal_id", "approval_id", "action", "receipt_status",
+    "approval_issuer", "approval_kind", "human_approved",
+    "execution_allowed", "effect_allowed", "live_effects_allowed",
+    "real_glpi_writes_allowed", "effect_receipts", "audit_transitions",
+    "audit_authority", "receipt_phase", "core_status_at_validation",
+    "resolution_verified", "post_resolution_readback_required",
+    "core_014_015_written", "glpi_write", "core_request_sha256",
+    "core_source_event_ids", "twin_approval_nonce_sha256", "receipt_sha256",
+))
+
+
 def receipt_digest_valid(receipt):
-    """Integrity check only; Core must also independently verify Run authority."""
-    if type(receipt) is not dict:
+    """Fail-closed receipt shape + digest; neither is Core authority.
+
+    A SHA256 checksum is not an authentication signature. Even a correctly
+    rehashed object must never turn a no-effect Temporal result into a human
+    approval, LIVE permission, or post-resolution claim.
+    """
+    if type(receipt) is not dict or frozenset(receipt) != _RECEIPT_KEYS:
+        return False
+    if (receipt.get("schema") != SCHEMA
+            or receipt.get("tenant_id") != TENANT
+            or receipt.get("action") != "SIMULATE"
+            or receipt.get("receipt_status") != "SIMULATED_NO_EFFECT"
+            or receipt.get("approval_issuer") != ISSUER
+            or receipt.get("approval_kind") != "SIMULATED"
+            or receipt.get("receipt_phase") != "PRE_RESOLUTION"
+            or receipt.get("core_status_at_validation") != "PREPARED"
+            or receipt.get("audit_authority") != "TEMPORAL_WORKFLOW_HISTORY_ONLY"
+            or receipt.get("audit_transitions") != _RECEIPT_AUDIT
+            or type(receipt.get("effect_receipts")) is not int
+            or receipt["effect_receipts"] != 0
+            or any(receipt.get(k) is not False for k in (
+                "human_approved", "execution_allowed", "effect_allowed",
+                "live_effects_allowed", "real_glpi_writes_allowed",
+                "resolution_verified", "core_014_015_written", "glpi_write"))
+            or receipt.get("post_resolution_readback_required") is not True
+            or not all(_id(receipt.get(k)) for k in (
+                "incident_id", "run_id", "proposal_id", "approval_id"))
+            or not receipt["approval_id"].startswith("SIM-APP-")):
         return False
     expected = receipt.get("receipt_sha256")
     if type(expected) is not str or re.fullmatch(r"[0-9a-f]{64}", expected) is None:
