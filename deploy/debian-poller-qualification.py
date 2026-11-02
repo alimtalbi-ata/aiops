@@ -4,6 +4,7 @@ import datetime as dt
 import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import socket
@@ -28,7 +29,10 @@ PORTS = (7777, 17777, 17778)
 
 def run(argv, timeout=12):
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout)
+        # Reuse existing report publisher's noninteractive SSH boundary.
+        env = dict(os.environ, GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10",
+                   GIT_TERMINAL_PROMPT="0") if argv and argv[0] == "git" else None
+        p = subprocess.run(argv, capture_output=True, text=True, check=False, timeout=timeout, env=env)
         return p.stdout.strip() if p.returncode == 0 and len(p.stdout) <= 131072 else None
     except (OSError, subprocess.TimeoutExpired):
         return None
