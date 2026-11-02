@@ -43,20 +43,23 @@ def canonical_text(original, candidate_sha):
     env_positions = [i for i, x in enumerate(block) if x.rstrip('\r\n') == '    environment:']
     if len(env_positions) != 1:
         raise ValueError('PORTAL_ENV_AMBIGUOUS')
-    existing_port = [x for x in block if x.startswith('      AIOPS_PORTAL_HOST_PORT:')]
-    if existing_port and (len(existing_port) != 1 or
-                          existing_port[0].strip() not in
-                          ('AIOPS_PORTAL_HOST_PORT: "7777"', "AIOPS_PORTAL_HOST_PORT: '7777'",
-                           'AIOPS_PORTAL_HOST_PORT: 7777')):
-        raise ValueError('PORTAL_PORT_CONFLICT')
+    port_positions = [i for i, x in enumerate(block)
+                      if x.startswith('      AIOPS_PORTAL_HOST_PORT:')]
+    if len(port_positions) > 1:
+        raise ValueError('PORTAL_PORT_DUPLICATED')
     tag = 'aiops2-portal:pinned-' + candidate_sha[:12]
-    images = [x for x in block if x.startswith('    image:')]
-    if images and (len(images) != 1 or images[0].strip() not in
-                   ('image: ' + tag, 'image: "' + tag + '"')):
-        raise ValueError('PORTAL_IMAGE_CONFLICT')
-    if not existing_port:
+    image_positions = [i for i, x in enumerate(block) if x.startswith('    image:')]
+    if len(image_positions) > 1:
+        raise ValueError('PORTAL_IMAGE_DUPLICATED')
+    if port_positions:
+        block[port_positions[0]] = '      AIOPS_PORTAL_HOST_PORT: "7777"\n'
+    else:
         block.insert(env_positions[0] + 1, '      AIOPS_PORTAL_HOST_PORT: "7777"\n')
-    if not images:
+    # The image is checked against the running Docker image ID before this
+    # local Compose edit. Existing image tags may be stale; backup preserves it.
+    if image_positions:
+        block[image_positions[0]] = '    image: "' + tag + '"\n'
+    else:
         block.insert(1, '    image: "' + tag + '"\n')
     return ''.join(lines[:start] + block + lines[end:]), tag
 
