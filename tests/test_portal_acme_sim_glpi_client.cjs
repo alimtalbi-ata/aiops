@@ -12,18 +12,21 @@ const GOOD = {
   schema: "aiops.portal.sim-glpi-readback.v1",
   state: "RESOLVED", simulated: true, tenant_id: "ACME-TEST",
   scenario_id: "ACME-SAN-PAYMENTS", attempt_id: ATTEMPT, mode: "SIMULATION",
-  provenance: "SIMULATED", readback_source: "CORE_SANDBOX_READBACK",
+  provenance: "SIMULATED", readback_source: "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET",
+  worker_receipt_status: "SIMULATED_NO_EFFECT",
+  worker_receipt_phase: "PRE_RESOLUTION", worker_no_effect_verified: true,
+  core_resolution_after_worker_verified: true,
   source_freshness: "UNKNOWN", observed_at: null, human_allow: false,
   native_glpi_readmy_attested: false, real_glpi_writes_allowed: false,
   live_effects_allowed: false, host_e2e_qualified: false,
   ticket: {id: "SIM-GLPI-ABCDEF1234567890", status: "RESOLVED",
-    transition_to: "RESOLVED", transition_history_attested: false},
+    current_state: "RESOLVED", transition_history_attested: false},
   incident_id: "INC-ACME-SIM-1234", run_id: "RUN-ACME-SIM-1234"
 };
 function setup(response) {
   const ids = ["sim-read", "sim-clear", "sim-attempt", "sim-token",
     "sim-status", "sim-ticket", "sim-state", "sim-run", "sim-transition",
-    "sim-provenance"];
+    "sim-provenance", "sim-worker"];
   const nodes = Object.fromEntries(ids.map(id => [id, {
     value: "", textContent: "", disabled: false,
     addEventListener(type, handler) { this[type] = handler; }
@@ -50,6 +53,7 @@ test("strict resolved Core sandbox response renders SIMULATED, never human ALLOW
   assert.match(nodes["sim-state"].textContent, /RESOLVED · SIMULATED/);
   assert.match(nodes["sim-transition"].textContent, /NOT_ATTESTED/);
   assert.match(nodes["sim-provenance"].textContent, /GLPI humain UNKNOWN/);
+  assert.match(nodes["sim-worker"].textContent, /SIMULATED_NO_EFFECT/);
   assert.equal(nodes["sim-token"].value, "");
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "/api/demo/acme-sim-glpi/" + ATTEMPT);
@@ -65,11 +69,17 @@ test("forged HTTP 200 cannot promote wrong tenant, real ticket or human ALLOW", 
     {ticket: {...GOOD.ticket, transition_history_attested: true}},
     {state: "OPEN"}, {run_id: null}, {host_e2e_qualified: true},
     {provenance: "REAL"}, {real_glpi_writes_allowed: true},
-    {native_glpi_readmy_attested: true}, {attempt_id: "ACME-SIM-OTHER123456"}
+    {native_glpi_readmy_attested: true}, {attempt_id: "ACME-SIM-OTHER123456"},
+    {worker_receipt_status: "SUCCESS"},
+    {worker_receipt_phase: "POST_RESOLUTION"},
+    {worker_no_effect_verified: false},
+    {core_resolution_after_worker_verified: false},
+    {ticket: {...GOOD.ticket, current_state: "PREPARED"}}
   ]) {
     const {nodes} = setup({status: 200, body: {...GOOD, ...mutation}});
     await nodes["sim-read"].click();
     assert.equal(nodes["sim-ticket"].textContent, "UNKNOWN");
+    assert.equal(nodes["sim-worker"].textContent, "UNKNOWN — aucun reçu no-effect");
     assert.match(nodes["sim-status"].textContent, /503 UNKNOWN/);
   }
 });
