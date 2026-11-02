@@ -92,6 +92,35 @@ def bound(value, request, ids=None):
 def valid_id(value):
     return type(value) is str and ID.fullmatch(value) is not None
 
+
+def prepared_core(value, x, ids=None):
+    """Core is the sole state authority; never approve a pre-resolved Run."""
+    bound(value, x, ids)
+    event_ids = value.get('source_event_ids')
+    if (value.get('incident_status') != 'PREPARED'
+            or value.get('run_status') != 'PREPARED'
+            or value.get('ticket_status') != 'PREPARED'
+            or value.get('ticket_authority') != 'SIMULATED_ONLY'
+            or value.get('source') != 'SYNTHETIC_SIMULATOR'
+            or value.get('source_event_count') != 7
+            or value.get('source_hashes_qualified') is not True
+            or type(event_ids) is not list or len(event_ids) != 7
+            or len(set(str(v) for v in event_ids)) != 7
+            or any(not valid_id(v) or not v.startswith('SYN-EVT-') for v in event_ids)
+            or type(value.get('request_sha256')) is not str
+            or re.fullmatch(r'[0-9a-f]{64}', value['request_sha256']) is None
+            or value.get('analysis_validated') is not True
+            or value.get('critic_validated') is not True
+            or type(value.get('evidence_count')) is not int
+            or value['evidence_count'] < 2
+            or value.get('human_approved') is not False
+            or value.get('execution_allowed') is not False
+            or value.get('effect_allowed') is not False
+            or value.get('live_effects_allowed') is not False
+            or value.get('real_glpi_writes_allowed') is not False):
+        raise HTTPException(503, 'sandbox_core_not_prepared')
+    return value['request_sha256'], tuple(event_ids)
+
 @router.get('/api/sandbox/acme/capabilities')
 def capabilities():
     require_enabled()
@@ -118,6 +147,7 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
             or core.get('glpi_mode') != 'SIMULATED_ONLY'
             or core.get('approval_id') is not None):
         raise HTTPException(503, 'sandbox_core_start_unqualified')
+    fingerprint = prepared_core(core, x, ids)
     # Core owns incident/Run/ticket/proposal. Only Twin can issue the approval.
     twin = remote('twin', '/api/sandbox/acme/approvals', 'POST', {**request, **ids})
     bound(twin, x, ids)
@@ -125,6 +155,9 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
     if (not valid_id(aid) or not aid.startswith('SIM-APP-')
             or twin.get('approval_issuer') != ISSUER
             or twin.get('approval_kind') != 'SIMULATED'
+            or twin.get('issuer_id') != 'twin-acme-test'
+            or twin.get('core_request_sha256') != fingerprint[0]
+            or twin.get('core_source_event_ids') != list(fingerprint[1])
             or twin.get('human_approved') is not False
             or twin.get('live_effects_allowed') is not False):
         raise HTTPException(503, 'sandbox_twin_approval_unqualified')
@@ -133,6 +166,8 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
     readback = remote('twin', '/api/sandbox/acme/e2e/' + x.attempt_id)
     bound(readback, x, ids)
     if (readback.get('approval_nonce') != twin.get('approval_nonce')
+            or readback.get('core_request_sha256') != fingerprint[0]
+            or readback.get('core_source_event_ids') != list(fingerprint[1])
             or readback.get('approval_issuer') != ISSUER
             or readback.get('approval_kind') != 'SIMULATED'):
         raise HTTPException(503, 'sandbox_twin_readback_unqualified')
@@ -142,6 +177,10 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
             or policy.get('human_approved') is not False
             or policy.get('live_effects_allowed') is not False):
         raise HTTPException(503, 'sandbox_policy_unqualified')
+    # Re-read Core before Worker: Twin/Policy may never race a resolution.
+    before_worker = remote('core', '/api/sandbox/acme/e2e/' + x.attempt_id)
+    if prepared_core(before_worker, x, ids) != fingerprint:
+        raise HTTPException(503, 'sandbox_core_snapshot_changed')
     # Worker #348 requires exactly its 14 intent keys, and returns PENDING
     # while Temporal independently validates Core/Twin/Policy. The Debian
     # runner, not this POST response, qualifies the final no-effect GET.
