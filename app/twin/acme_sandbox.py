@@ -71,6 +71,11 @@ def verified_record(value, *, attempt_id, now=None):
                 or payload.get('tenant_id') != TENANT
                 or payload.get('scenario_id') != SCENARIO
                 or payload.get('approval_id') != approval_id(attempt_id)
+                or payload.get('idempotency_key') != attempt_id
+                or any(type(payload.get(k)) is not str
+                       or ID.fullmatch(payload[k]) is None
+                       for k in ('incident_id', 'run_id', 'ticket_id', 'proposal_id'))
+                or not payload['ticket_id'].startswith('SIM-GLPI-')
                 or payload.get('approval_issuer') != ISSUER
                 or payload.get('issuer_id') != 'twin-acme-test'
                 or payload.get('approval_actor') != ISSUER
