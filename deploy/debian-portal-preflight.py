@@ -237,6 +237,54 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                             else 'DEPLOYMENT_RECEIPT_OR_HOST_MISMATCH'))
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
+    # Independent host-only receipts. Never turn a 503 fail-closed API response
+    # into human GLPI/HITL authority, and never infer a Docker mutation from CI.
+    for filename, schema, key in (
+        ('portal-compose-result.json', 'aiops.debian-portal-compose-canonical.v1',
+         'canonical_compose_receipt'),
+        ('portal-host-contracts.json', 'aiops.debian-portal-anonymous-nine-contracts.v1',
+         'portal_nine_readonly_contracts'),
+    ):
+        report[key] = {'status': 'NOT_VERIFIED'}
+        try:
+            local_path = state_dir / filename
+            if local_path.stat().st_size > 16384:
+                continue
+            local = json.loads(local_path.read_text(encoding='utf-8'))
+            when = dt.datetime.fromisoformat(local['collected_at'].replace('Z', '+00:00'))
+            age = (dt.datetime.now(dt.timezone.utc) - when).total_seconds()
+            if (when.tzinfo is None or not 0 <= age <= 900 or
+                local.get('schema') != schema or
+                local.get('image_id') != report.get('portal', {}).get('image_id') or
+                not isinstance(local.get('image_id'), str)):
+                continue
+            if key == 'canonical_compose_receipt':
+                if local.get('candidate_sha') != pinned:
+                    continue
+                report[key] = {k: local.get(k) for k in (
+                    'collected_at', 'status', 'reason', 'compose_changed',
+                    'docker_mutations', 'rollback_attempted', 'rollback_succeeded',
+                    'base_compose_verified', 'portal_health_strict', 'image_id')}
+            else:
+                checks = local.get('checks')
+                if (not isinstance(checks, list) or len(checks) != 9 or
+                    local.get('total') != 9 or
+                    not all(isinstance(c, dict) and c.get('status') in ('PASS', 'FAIL')
+                            for c in checks)):
+                    continue
+                report[key] = {
+                    'collected_at': local.get('collected_at'),
+                    'status': local.get('verdict'),
+                    'attempt_id': local.get('attempt_id'),
+                    'passed': local.get('passed'), 'total': 9,
+                    'checks': [{k: c.get(k) for k in (
+                        'name', 'path', 'status', 'http_status', 'reason')} for c in checks],
+                    'image_id': local.get('image_id'),
+                    'acme_e2e': 'BLOCKED_NO_INDEPENDENT_HUMAN_GLPI_IDP_AUTHORITY',
+                    'incident_id': None, 'run_id': None, 'glpi_ticket_id': None,
+                }
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            pass
     report['release_stable'] = 'NO_GO'
     report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
                            if report['deployment_preflight']['deployment_executed']
