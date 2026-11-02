@@ -25,7 +25,8 @@ CHAIN = ['001_schema.sql', '004_operational_model.sql',
          '014_hitl_reject_terminal_receipts.sql',
          '015_core_run_event_idempotency.sql', '016_acme_sandbox_attempts.sql',
          '017_acme_sandbox_prepared_transition.sql',
-         '018_acme_sandbox_terminal_ticket_receipt.sql']
+         '018_acme_sandbox_terminal_ticket_receipt.sql',
+    '019_acme_sandbox_twin_topology.sql']
 
 def intent(attempt):
     return {'attempt_id': attempt, 'tenant_id': 'ACME-TEST',
@@ -602,6 +603,51 @@ class SandboxPG16(unittest.TestCase):
         out = Path('/tmp/acme-pg16-temporal-joined.json')
         out.write_text(json.dumps(evidence, sort_keys=True, separators=(',', ':')))
         self.assertEqual(json.loads(out.read_text())['run_id'], state['run_id'])
+
+
+    def test_18_real_pg16_acme_twin_san_path_is_isolated(self):
+        """RG-ACME-22: two FC fabrics, RHEL multipath, payments/ERP synthetic only."""
+        from unittest.mock import patch
+        from twin import acme_sandbox as twin
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.twin_nodes "
+                "where site='ACME-TEST-SIMULATION'").fetchone()[0],9)
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.twin_edges "
+                "where edge_id like 'ACME-SIM-EDGE-%'").fetchone()[0],8)
+        with patch.dict(os.environ,{'AIOPS_ACME_TWIN_APPROVAL_KEY':'a'*64}):
+            impacted=twin.sourced_impact()
+            self.assertIn('ACME-SAN-FABRIC-A',impacted)
+            self.assertIn('ACME-HOST-RHEL-MPATH-01',impacted)
+            self.assertIn('ACME-SVC-PAYMENTS',impacted)
+            self.assertIn('ACME-SVC-ERP',impacted)
+            self.assertEqual(twin.capabilities()['component'],'twin')
+
+    def test_19_mixed_live_twin_graph_refused_and_cleaned(self):
+        """RG-ACME-23: never let simulated approval traverse a real CMDB node."""
+        from fastapi import HTTPException
+        from twin import acme_sandbox as twin
+        with psycopg.connect(self.url) as db:
+            db.execute(
+                "insert into aiops.twin_nodes(node_id,type,name,site,state) "
+                "values('FOREIGN-LIVE-CI-TEST','SERVER','foreign test','LIVE','UNKNOWN')")
+            db.execute(
+                "insert into aiops.twin_edges "
+                "(edge_id,source_id,target_id,relation_type,confidence) "
+                "values('ACME-SIM-EDGE-FOREIGN-CI','ACME-SAN-FABRIC-A',"
+                "'FOREIGN-LIVE-CI-TEST','SIMULATED_DEPENDS_ON',1.0)")
+        try:
+            with self.assertRaises(HTTPException) as caught:
+                twin.sourced_impact()
+            self.assertEqual(caught.exception.status_code,503)
+        finally:
+            with psycopg.connect(self.url) as db:
+                db.execute("delete from aiops.twin_edges "
+                           "where edge_id='ACME-SIM-EDGE-FOREIGN-CI'")
+                db.execute("delete from aiops.twin_nodes "
+                           "where node_id='FOREIGN-LIVE-CI-TEST'")
+        self.assertIn('ACME-SVC-PAYMENTS',twin.sourced_impact())
 
 if __name__ == '__main__':
     unittest.main()
