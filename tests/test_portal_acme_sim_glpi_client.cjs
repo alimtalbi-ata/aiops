@@ -16,6 +16,7 @@ const GOOD = {
   worker_receipt_status: "SIMULATED_NO_EFFECT",
   worker_receipt_phase: "PRE_RESOLUTION", worker_no_effect_verified: true,
   core_resolution_after_worker_verified: true,
+  terminal_ticket_digest_verified: true, independent_final_read_rounds: 2,
   source_freshness: "UNKNOWN", observed_at: null, human_allow: false,
   native_glpi_readmy_attested: false, real_glpi_writes_allowed: false,
   live_effects_allowed: false, host_e2e_qualified: false,
@@ -75,6 +76,8 @@ test("forged HTTP 200 cannot promote wrong tenant, real ticket or human ALLOW", 
     {worker_receipt_phase: "POST_RESOLUTION"},
     {worker_no_effect_verified: false},
     {core_resolution_after_worker_verified: false},
+    {terminal_ticket_digest_verified: false},
+    {independent_final_read_rounds: 1},
     {ticket: {...GOOD.ticket, current_state: "PREPARED"}}
   ]) {
     const {nodes} = setup({status: 200, body: {...GOOD, ...mutation}});
