@@ -26,14 +26,14 @@ class TestSimulation(unittest.TestCase):
     def test_all_caps_then_independent_resolved(self):
         calls=[]
         ids={'incident_id':'INC-123','run_id':'RUN-123','ticket_id':'SIM-GLPI-123',
-             'proposal_id':'PROP-123','approval_id':'APP-123'}
+             'proposal_id':'PROP-123','approval_id':'SIM-APP-123'}
         def p(component,path,method='GET',payload=None,auth=False):
             calls.append((component,path,method))
             if path.endswith('/capabilities'):return capability(component)
             if method=='POST':return dict(ids,attempt_id='ACME-SIM-TEST0001',tenant_id='ACME-TEST',glpi_mode='SIMULATED_ONLY')
             x=dict(attempt_id='ACME-SIM-TEST0001',tenant_id='ACME-TEST',incident_id='INC-123',run_id='RUN-123')
             if component=='core':return dict(x,incident_status='RESOLVED',run_status='RESOLVED',ticket_id='SIM-GLPI-123',ticket_authority='SIMULATED_ONLY',ticket_status='RESOLVED',source='SYNTHETIC_SIMULATOR',analysis_validated=True,critic_validated=True,evidence_count=2)
-            if component=='twin':return dict(x,impact_root='ACME-SAN-FABRIC-A',approval_id='APP-123',approval_issuer='TWIN_ACME_SIMULATED',approval_kind='SIMULATED',approval_actor='TWIN_ACME_SIMULATED',impacted_cis=['ACME-SVC-PAYMENTS'])
+            if component=='twin':return dict(x,impact_root='ACME-SAN-FABRIC-A',approval_id='SIM-APP-123',approval_issuer='TWIN_ACME_SIMULATED',approval_kind='SIMULATED',approval_actor='TWIN_ACME_SIMULATED',impacted_cis=['ACME-SVC-PAYMENTS'])
             if component=='policy':return dict(x,decision='SIMULATE',approval_kind='SIMULATED',human_approved=False,live_effects_allowed=False)
             return dict(x,action='SIMULATE',receipt_status='SIMULATED_NO_EFFECT',effect_receipts=0,execution_allowed=False)
         r=m.execute(p,'ACME-SIM-TEST0001')
@@ -51,10 +51,10 @@ class TestSimulation(unittest.TestCase):
                 self.assertFalse(m.qualified_capability('core',c))
 
     def test_wrong_issuer_in_independent_readback_rejected(self):
-        ids={'incident_id':'INC-1','run_id':'RUN-1','ticket_id':'SIM-GLPI-1','approval_id':'APP-1'}
+        ids={'incident_id':'INC-1','run_id':'RUN-1','ticket_id':'SIM-GLPI-1','approval_id':'SIM-APP-1'}
         base={'attempt_id':'A','tenant_id':'ACME-TEST','incident_id':'INC-1','run_id':'RUN-1'}
         reads={'core':dict(base,incident_status='RESOLVED',run_status='RESOLVED',ticket_id='SIM-GLPI-1'),
-               'twin':dict(base,impact_root='ACME-SAN-FABRIC-A',approval_id='APP-1',approval_issuer='HUMAN',approval_kind='SIMULATED'),
+               'twin':dict(base,impact_root='ACME-SAN-FABRIC-A',approval_id='SIM-APP-1',approval_issuer='HUMAN',approval_kind='SIMULATED'),
                'policy':dict(base,decision='SIMULATE',approval_kind='SIMULATED',human_approved=False,live_effects_allowed=False),
                'worker':dict(base,action='SIMULATE',receipt_status='SIMULATED_NO_EFFECT',effect_receipts=0,execution_allowed=False)}
         self.assertFalse(m.validate_final('A',ids,reads))
