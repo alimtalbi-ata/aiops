@@ -1,5 +1,6 @@
 """Disposable PG16 Core ACME sandbox, zero GLPI/LIVE/host effects."""
 import concurrent.futures
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -311,6 +312,7 @@ class SandboxPG16(unittest.TestCase):
                           'TWIN_SIMULATED_APPROVAL_VALIDATED',
                           'POLICY_SIMULATE_INDEPENDENTLY_VERIFIED', 'WORKER_NO_EFFECT'],
                       core_014_015_written=False, glpi_write=False)
+        now = datetime.now(timezone.utc)
         twin = dict(common, **flags, approval_id=approval,
                     ticket_id=state['ticket_id'],
                     approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED',
@@ -318,7 +320,11 @@ class SandboxPG16(unittest.TestCase):
                     approval_phase='PRE_RESOLUTION', resolution_verified=False,
                     post_resolution_readback_required=True,
                     core_request_sha256=state['request_sha256'],
-                    core_source_event_ids=state['source_event_ids'])
+                    core_source_event_ids=state['source_event_ids'],
+                    issuer_id='twin-acme-test', approval_actor='TWIN_ACME_SIMULATED',
+                    approval_status='SIMULATED', approval_nonce='SIMNONCE-TEST-VALID',
+                    issued_at=now.isoformat(),
+                    expires_at=(now + timedelta(minutes=4)).isoformat())
         policy = dict(common, **flags, approval_id=approval,
                       ticket_id=state['ticket_id'], decision='SIMULATE',
                       state='PASS', mode='SIMULATION',
@@ -509,6 +515,54 @@ class SandboxPG16(unittest.TestCase):
                               'where datname=%s and pid<>pg_backend_pid()', (target,))
                 admin.execute(sql.SQL('drop database if exists {}').format(
                     sql.Identifier(target)))
+
+    def test_16_stale_twin_and_service_credential_rotation_fail_closed(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-FRESHNESS-ROTATION'
+        prepared = self.post(attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(prepared)))
+        docs['twin']['issued_at'] = (
+            datetime.now(timezone.utc) - timedelta(minutes=12)).isoformat()
+        docs['twin']['expires_at'] = (
+            datetime.now(timezone.utc) - timedelta(minutes=8)).isoformat()
+        with patch.object(core, 'independent_readback',
+                          side_effect=lambda component, attempt: docs[component]):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
+        os.environ['AIOPS_INTERNAL_TOKEN'] = TOKEN + '-rotated'
+        try:
+            self.assertEqual(self.get(attempt).status_code, 401)
+            self.assertEqual(self.post(attempt).status_code, 401)
+        finally:
+            os.environ['AIOPS_INTERNAL_TOKEN'] = TOKEN
+        self.assertEqual(self.get(attempt).status_code, 200)
+
+    def test_17_double_worker_receipt_rotation_no_mutation(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-WORKER-ROTATION'
+        prepared = self.post(attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(prepared)))
+        calls = {'worker': 0}
+        def changed(component, attempt_id):
+            if component == 'worker':
+                calls['worker'] += 1
+                if calls['worker'] == 2:
+                    return dict(docs['worker'], approval_id='SIM-APP-ROTATED')
+            return docs[component]
+        with patch.object(core, 'independent_readback', side_effect=changed):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.acme_sandbox_ticket_events "
+                "where attempt_id=%s and status='RESOLVED'",
+                (attempt,)).fetchone()[0], 0)
 
 if __name__ == '__main__':
     unittest.main()
