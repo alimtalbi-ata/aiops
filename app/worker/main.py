@@ -1,13 +1,16 @@
 import os,asyncio
+import requests
 from fastapi import FastAPI,HTTPException,Header
 from temporalio import activity
-from temporalio.client import Client
+from temporalio.client import Client, WorkflowExecutionStatus
+from temporalio.common import WorkflowIDReusePolicy
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
 from worker.hitl_reject_terminal_runtime import recover_terminal_once, validate_request, UnqualifiedTerminal
-from worker.temporal_workflows import IncidentWorkflow, TerminalRejectWorkflow
+from worker.temporal_workflows import IncidentWorkflow, TerminalRejectWorkflow, AcmeSimulatedHitlWorkflow
+from worker.acme_simulated_hitl import (SandboxDenied, capability, validate_intent, simulate_no_effect)
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -120,7 +123,105 @@ async def worker_main():
  while True:
   try:
    c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow,TerminalRejectWorkflow],activities=[execute_stage,start_run,finish_run,reject_terminal_recover]):await asyncio.Event().wait()
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow,TerminalRejectWorkflow,AcmeSimulatedHitlWorkflow],activities=[execute_stage,start_run,finish_run,reject_terminal_recover,acme_simulated_no_effect]):await asyncio.Event().wait()
   except Exception:await asyncio.sleep(5)
 @app.on_event('startup')
 async def startup():asyncio.create_task(worker_main())
+
+
+# The ACME simulator is NOT a human IdP/GLPI approval. This bounded route is
+# disabled by default and never writes to Core, Twin, Policy, GLPI or LIVE.
+# Only the simulator's nonsecret IDs enter Temporal history. The activity
+# obtains fresh authenticated readbacks itself, never trusts supplied proof.
+def _acme_sandbox_enabled():
+    return os.getenv("AIOPS_ACME_SANDBOX_ENABLED") == "1"
+
+
+def _acme_sandbox_guard():
+    if not _acme_sandbox_enabled():
+        raise HTTPException(503, "sandbox_capability_unavailable")
+
+
+def _acme_sandbox_auth(authorization):
+    if (authorization or "").removeprefix("Bearer ") != ADMIN:
+        raise HTTPException(401, "sandbox_service_denied")
+
+
+@activity.defn(name="acme_simulated_no_effect")
+async def acme_simulated_no_effect(intent):
+    if not _acme_sandbox_enabled():
+        raise SandboxDenied("sandbox_disabled")
+
+    async def read(component, path):
+        origin = {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component)
+        if origin is None:
+            raise SandboxDenied("sandbox_component_denied")
+
+        def fetch():
+            response = requests.get(
+                origin.rstrip("/") + path,
+                headers={"Authorization": "Bearer " + ADMIN, "Accept": "application/json"},
+                timeout=8, allow_redirects=False)
+            if response.status_code != 200 or len(response.content) > 32768:
+                raise SandboxDenied("sandbox_service_denied_or_unavailable")
+            return response.json()
+
+        return await asyncio.to_thread(fetch)
+
+    return await simulate_no_effect(intent, get=read)
+
+
+@app.get("/api/sandbox/acme/capabilities")
+def acme_sandbox_capabilities():
+    _acme_sandbox_guard()
+    return capability()
+
+
+@app.post("/api/sandbox/acme/e2e")
+async def start_acme_simulated(intent: dict, authorization: str | None = Header(default=None)):
+    _acme_sandbox_guard()
+    _acme_sandbox_auth(authorization)
+    try:
+        validate_intent(intent)
+    except SandboxDenied:
+        raise HTTPException(422, "sandbox_intent_unqualified") from None
+    client = await Client.connect(TEMP)
+    workflow_id = "acme-simulated-" + intent["tenant_id"] + "-" + intent["attempt_id"]
+    try:
+        handle = await client.start_workflow(
+            AcmeSimulatedHitlWorkflow.run, intent, id=workflow_id,
+            task_queue="aiops-runner",
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
+        return {"workflow_id": handle.id, "attempt_id": intent["attempt_id"],
+                "status": "PENDING_INDEPENDENT_READBACK", "effect_allowed": False}
+    except WorkflowAlreadyStartedError:
+        return {"workflow_id": workflow_id, "attempt_id": intent["attempt_id"],
+                "idempotent": True, "effect_allowed": False}
+
+
+@app.get("/api/sandbox/acme/e2e/{attempt_id}")
+async def read_acme_simulated(attempt_id: str, authorization: str | None = Header(default=None)):
+    _acme_sandbox_guard()
+    _acme_sandbox_auth(authorization)
+    # No arbitrary workflow ID, tenant or cross-sandbox lookup.
+    from worker.acme_simulated_hitl import _id
+    if not _id(attempt_id) or not attempt_id.startswith("ACME-SIM-"):
+        raise HTTPException(404, "sandbox_receipt_unknown")
+    client = await Client.connect(TEMP)
+    handle = client.get_workflow_handle("acme-simulated-ACME-TEST-" + attempt_id)
+    try:
+        state = await handle.describe()
+        if state.status != WorkflowExecutionStatus.COMPLETED:
+            raise HTTPException(503, "sandbox_receipt_unqualified")
+        result = await handle.result()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "sandbox_receipt_unqualified") from None
+    if (type(result) is not dict or result.get("attempt_id") != attempt_id
+            or result.get("tenant_id") != "ACME-TEST"
+            or result.get("receipt_status") != "SIMULATED_NO_EFFECT"
+            or result.get("execution_allowed") is not False
+            or result.get("effect_allowed") is not False):
+        raise HTTPException(503, "sandbox_receipt_unqualified")
+    return result
