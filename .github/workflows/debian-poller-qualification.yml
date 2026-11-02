@@ -1,0 +1,23 @@
+name: Debian poller safe receipt
+on:
+  pull_request:
+    paths:
+      - 'deploy/deploy-demo-studio-v2.sh'
+      - 'deploy/debian-poller-qualification.py'
+      - 'tests/test_debian_poller_qualification.py'
+      - '.github/workflows/debian-poller-qualification.yml'
+  push:
+    branches: ['deploy/aiops2-stable']
+permissions:
+  contents: read
+jobs:
+  safe-receipt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git rev-parse HEAD
+          bash -n deploy/deploy-demo-studio-v2.sh
+          python3 -m py_compile deploy/debian-poller-qualification.py
+          python3 -m unittest discover -s tests -p test_debian_poller_qualification.py -v
