@@ -175,3 +175,71 @@ def read_core_written_seven(conn, request, *, source: str, issuer: str,
             return None
     # The caller must not promote this source proof into human ALLOW/VERIFIED.
     return proof
+
+
+def read_graph005_core_written_seven(conn, request, *, source: str, issuer: str,
+                                    now: datetime, expected_events,
+                                    graph_version: str) -> dict | None:
+    """Exact pinned graph-005 IDs on ONE Core-written synthetic Incident/Run.
+
+    expected_events and graph_version MUST be independently pinned by the
+    trusted listener, never taken from the HTTP request or a Core row.
+    ACME hashes identify the pinned *fixture*, not portable source authority.
+    The PG proof has separate Core payload/full-event hash domains.
+    """
+    import re
+
+    if (type(graph_version) is not str
+            or not re.fullmatch(r"[0-9a-f]{40}", graph_version)
+            or type(expected_events) not in (tuple, list)
+            or len(expected_events) != 7):
+        return None
+    seen = set()
+    for item in expected_events:
+        if (type(item) not in (tuple, list) or len(item) != 3
+                or any(type(v) is not str for v in item)
+                or not re.fullmatch(r"SYN-EVT-[0-9A-F]{20}", item[0])
+                or not all(re.fullmatch(r"[0-9a-f]{64}", h)
+                           for h in item[1:])
+                or item[0] in seen):
+            return None
+        seen.add(item[0])
+    proof = read_canonical_seven(
+        conn, request, source=source, issuer=issuer, now=now)
+    if proof is None:
+        return None
+    rows = conn.execute(
+        "select r.sequence,r.event_key,r.stage,r.event_type,r.status,"
+        "r.payload,e.provenance from aiops.run_events r "
+        "join aiops.evidence e on e.evidence_id=r.evidence_ids->>0 "
+        "where r.run_id=%s order by r.sequence",
+        (request["run_id"],)).fetchall()
+    if len(rows) != 7:
+        return None
+    for pos, row in enumerate(rows, 1):
+        sequence, key, stage, event_type, status, payload, provenance = row
+        expected_id, acme_full, acme_payload = expected_events[pos - 1]
+        if (sequence != pos or key != expected_id
+                or stage != "SOURCE" or event_type != "OBSERVED"
+                or status != "PASS"
+                or not isinstance(payload, dict)
+                or not isinstance(provenance, dict)
+                or payload.get("source_event_id") != expected_id
+                or payload.get("sequence") != pos
+                or payload.get("graph_version") != graph_version
+                or payload.get("acme_full_event_sha256") != acme_full
+                or payload.get("acme_local_payload_sha256") != acme_payload
+                or payload.get("actor_subject") != request["actor_subject"]
+                or payload.get("actor_issuer") != request["actor_issuer"]
+                or payload.get("source_issuer") != issuer
+                or payload.get("synthetic") is not True
+                or any(provenance.get(k) != request[k] for k in (
+                    "tenant_id", "incident_id", "run_id",
+                    "actor_subject", "actor_issuer"))
+                or provenance.get("source_issuer") != issuer
+                or proof["events"][pos - 1]["source_event_id"] != key
+                or proof["events"][pos - 1]["full_event"]["stage"] != "SOURCE"
+                or proof["events"][pos - 1]["full_event"]["event_type"] != "OBSERVED"):
+            return None
+    # Never promote a fixture match to human GLPI ALLOW or ACME authority.
+    return proof

@@ -27,6 +27,27 @@ class V2SourceHandler(fixture.SourceHandler):
     """A distinct HTTPS service credential and Core-owned SQL dispatch."""
 
     def do_POST(self):
+        if self.path == "/v4/graph005-core-written-seven-readback":
+            from core.canonical_seven_https_adapter import dispatch_graph005_core_written_seven
+            import psycopg
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = self.rfile.read(length) if 1 <= length <= 8192 else b""
+                status, proof = dispatch_graph005_core_written_seven(
+                    method="POST", path=self.path,
+                    tls=isinstance(self.connection, ssl.SSLSocket),
+                    authorization=self.headers.get("Authorization", ""),
+                    body=body, client_id=fixture.CLIENT,
+                    client_secret=fixture.SECRET,
+                    connect=lambda: psycopg.connect(self.server.db_url),
+                    source=fixture.SOURCE,
+                    source_issuer="core-graph005-disposable-source",
+                    expected_events=self.server.graph005_events,
+                    graph_version=self.server.graph005_version,
+                    now=datetime.now(timezone.utc))
+                return self.reply(status, proof)
+            except Exception:
+                return self.reply(503, {"decision": "UNKNOWN"})
         if self.path != "/v2/canonical-seven-readback":
             return super().do_POST()
         from core.canonical_seven_https_adapter import dispatch_canonical_seven
@@ -1086,6 +1107,326 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             target = Path(out)
             target.mkdir(parents=True, exist_ok=True)
             (target / "core-written-seven-015.json").write_text(
+                json.dumps(machine, sort_keys=True, indent=2) + "\n")
+
+
+    def test_zzz_graph005_exact_ids_core_http_source_and_pg16_dr(self):
+        """Pinned ACME IDs on one Core Run; source fixture != human authority."""
+        import subprocess
+        import tempfile
+        from fastapi.testclient import TestClient
+        from core import canonical_seven_pg_source as pgsource
+        from core.canonical_seven_https_adapter import dispatch_graph005_core_written_seven
+        from tools import generate_acme_incidents as gen
+
+        pinned_path = (Path(__file__).resolve().parents[1] /
+                       "docs/customer-story/ACME-CORE015-V3-CANONICAL-NEGATIVE-2026-11-02.json")
+        pinned = json.loads(pinned_path.read_text(encoding="utf-8"))
+        replay = gen.replay(seed=20261018)
+        self.assertEqual(len(replay["events"]), 7)
+        self.assertEqual(pinned["graph_version"], replay["graph_version"])
+        self.assertEqual(pinned["graph_version"], gen.SEED_GIT_BLOB)
+        expected_events = tuple((
+            row["source_event_id"], row["acme_full_event_sha256"],
+            row["acme_local_payload_sha256"]) for row in pinned["events"])
+        self.assertEqual(len(set(x[0] for x in expected_events)), 7)
+        for row, event in zip(pinned["events"], replay["events"]):
+            self.assertEqual(row["source_event_id"], event["source_event_id"])
+            self.assertEqual(row["acme_full_event_sha256"],
+                             hashlib.sha256(gen._canonical(event)).hexdigest())
+            self.assertEqual(row["acme_local_payload_sha256"],
+                             hashlib.sha256(gen._canonical(event["payload"])).hexdigest())
+        self.server.graph005_events = expected_events
+        self.server.graph005_version = pinned["graph_version"]
+
+        tenant, incident, run = "TEN-GRAPH005", "INC-GRAPH005", "RUN-GRAPH005"
+        actor, actor_issuer = "idp|graph005", fixture.ISSUER
+        source_issuer = "core-graph005-disposable-source"
+        request = {
+            "tenant_id": tenant, "incident_id": incident, "run_id": run,
+            "glpi_instance_id": "GLPI-G", "ticket_id": "777",
+            "glpi_entity_id": "33", "permission": "run:read",
+            "actor_subject": actor, "actor_issuer": actor_issuer,
+        }
+        script = (fixture.MIG / "015_core_run_event_idempotency.sql").read_text()
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute((fixture.MIG / "014_hitl_reject_terminal_receipts.sql").read_text())
+            conn.execute(script)
+            conn.execute(script)
+            conn.execute(
+                "insert into aiops.incidents(incident_id,title,severity,state,"
+                "opened_at,source,synthetic,payload) "
+                "values(%s,'Graph005 disposable','P4','OPEN',now(),%s,true,%s::jsonb)",
+                (incident, fixture.SOURCE, json.dumps({"tenant_id": tenant})))
+            conn.execute(
+                "insert into aiops.runs(run_id,incident_id,mode,scenario_id,"
+                "status,idempotency_key) values(%s,%s,'DEMO','GRAPH005',"
+                "'CREATED','graph005-core-only')", (run, incident))
+            for kind, rid in (
+                ("incident", incident), ("run", run),
+                ("glpi_instance", "GLPI-G"), ("glpi_ticket", "GLPI-G:777"),
+                ("glpi_entity", "GLPI-G:33")
+            ):
+                conn.execute(
+                    "insert into aiops.tenant_resource_ownership "
+                    "(resource_kind,resource_id,tenant_id,source_event_id,"
+                    "verified,observed_at,known_at) "
+                    "values(%s,%s,%s,'SYN-EVT-GRAPH005-OWN',true,"
+                    "clock_timestamp()-interval '20 seconds',"
+                    "clock_timestamp()-interval '10 seconds')",
+                    (kind, rid, tenant))
+            conn.execute(
+                "insert into public.ci_actor_source_grants "
+                "(issuer,actor_subject,tenant_id,run_id,incident_id,"
+                "glpi_instance_id,ticket_id,glpi_entity_id,permission,"
+                "expires_at,revoked) "
+                "values(%s,%s,%s,%s,%s,'GLPI-G','777','33','run:read',"
+                "clock_timestamp()+interval '3 minutes',false)",
+                (actor_issuer, actor, tenant, run, incident))
+            for pos, (event_id, full_sha, payload_sha) in enumerate(expected_events, 1):
+                payload = {
+                    "tenant_id": tenant, "incident_id": incident, "run_id": run,
+                    "ticket_id": "777", "glpi_entity_id": "33",
+                    "source_event_id": event_id, "sequence": pos,
+                    "actor_subject": actor, "actor_issuer": actor_issuer,
+                    "source_issuer": source_issuer, "synthetic": True,
+                    "graph_version": pinned["graph_version"],
+                    "acme_full_event_sha256": full_sha,
+                    "acme_local_payload_sha256": payload_sha,
+                }
+                provenance = {
+                    "tenant_id": tenant, "incident_id": incident, "run_id": run,
+                    "actor_subject": actor, "actor_issuer": actor_issuer,
+                    "source_issuer": source_issuer,
+                }
+                conn.execute(
+                    "insert into aiops.evidence "
+                    "(evidence_id,source,external_id,observed_at,known_at,"
+                    "claim,confidence,provenance,payload_hash,payload) "
+                    "values(%s,%s,%s,clock_timestamp()-interval '20 seconds',"
+                    "clock_timestamp()-interval '10 seconds','TEST_ONLY',1,"
+                    "%s::jsonb,%s,%s::jsonb)",
+                    (f"EVI-GRAPH005-{pos:02d}", fixture.SOURCE, event_id,
+                     json.dumps(provenance),
+                     binding._digest(binding.PAYLOAD_DOMAIN, payload),
+                     json.dumps(payload)))
+
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-graph005-writer-only"}):
+            from core import main
+            with patch.object(main, "ADMIN", "ci-graph005-writer-only"), \
+                    patch.object(main, "db",
+                                 side_effect=lambda: self.psycopg.connect(self.db_url)):
+                with TestClient(main.app) as client:
+                    for pos, (event_id, _, _) in enumerate(expected_events, 1):
+                        with self.psycopg.connect(self.db_url) as conn:
+                            payload = conn.execute(
+                                "select payload from aiops.evidence where external_id=%s",
+                                (event_id,)).fetchone()[0]
+                        body = {
+                            "expected_version": pos, "stage": "SOURCE",
+                            "event_type": "OBSERVED", "status": "PASS",
+                            "event_key": event_id,
+                            "evidence_ids": [f"EVI-GRAPH005-{pos:02d}"],
+                            "payload": payload,
+                        }
+                        result = client.post(
+                            f"/api/runs/{run}/events", json=body,
+                            headers={"Authorization": "Bearer ci-graph005-writer-only"})
+                        self.assertEqual(result.status_code, 200, result.text)
+                        self.assertEqual(result.json()["sequence"], pos)
+                        self.assertFalse(result.json()["idempotent"])
+                        if pos == 1:
+                            replay_result = client.post(
+                                f"/api/runs/{run}/events", json=body,
+                                headers={"Authorization": "Bearer ci-graph005-writer-only"})
+                            self.assertEqual(replay_result.status_code, 200)
+                            self.assertTrue(replay_result.json()["idempotent"])
+                            invalid = client.post(
+                                f"/api/runs/{run}/events",
+                                json={**body, "payload": {**payload, "synthetic": False}},
+                                headers={"Authorization": "Bearer ci-graph005-writer-only"})
+                            self.assertEqual(invalid.status_code, 422)
+                    with self.psycopg.connect(self.db_url) as conn:
+                        self.assertEqual(conn.execute(
+                            "select count(*) from aiops.run_events where run_id=%s",
+                            (run,)).fetchone()[0], 7)
+
+        def read(req, *, db_url=None, at=None, expected=None):
+            with self.psycopg.connect(db_url or self.db_url) as conn:
+                return pgsource.read_graph005_core_written_seven(
+                    conn, req, source=fixture.SOURCE, issuer=source_issuer,
+                    now=at or datetime.now(timezone.utc),
+                    expected_events=expected or expected_events,
+                    graph_version=pinned["graph_version"])
+
+        proof = read(request)
+        self.assertIsNotNone(proof)
+        self.assertNotEqual(proof["issuer"], proof["actor_issuer"])
+        self.assertEqual([e["source_event_id"] for e in proof["events"]],
+                         [e[0] for e in expected_events])
+        self.assertTrue(all(e["full_event"]["stage"] == "SOURCE"
+                            and e["full_event"]["event_type"] == "OBSERVED"
+                            and e["payload_hash"] != e["full_event_hash"]
+                            for e in proof["events"]))
+        self.assertTrue(all(e["full_event_hash"] != expected_events[i][1]
+                            for i, e in enumerate(proof["events"])))
+
+        auth = "Basic " + base64.b64encode(
+            (fixture.CLIENT + ":" + fixture.SECRET).encode()).decode()
+        args = {
+            "method": "POST", "path": "/v4/graph005-core-written-seven-readback",
+            "tls": True, "authorization": auth, "body": json.dumps(request).encode(),
+            "client_id": fixture.CLIENT, "client_secret": fixture.SECRET,
+            "connect": lambda: self.psycopg.connect(self.db_url),
+            "source": fixture.SOURCE, "source_issuer": source_issuer,
+            "expected_events": expected_events, "graph_version": pinned["graph_version"],
+            "now": datetime.now(timezone.utc),
+        }
+        status, result = dispatch_graph005_core_written_seven(**args)
+        self.assertEqual(status, 200)
+        self.assertEqual(result["events"], proof["events"])
+        self.assertEqual(dispatch_graph005_core_written_seven(
+            **{**args, "tls": False})[0], 503)
+        self.assertEqual(dispatch_graph005_core_written_seven(
+            **{**args, "authorization": "Basic invalid"})[0], 401)
+        self.assertEqual(dispatch_graph005_core_written_seven(
+            **{**args, "expected_events": expected_events[:-1]})[0], 404)
+        with requests.Session() as session:
+            session.trust_env = False
+            url = f"https://{fixture.IP}:{fixture.PORT}/v4/graph005-core-written-seven-readback"
+            bad = session.post(url, json=request, auth=(fixture.CLIENT, "invalid"),
+                               verify=True, timeout=5)
+            self.assertEqual(bad.status_code, 401)
+            self.assertEqual(bad.json(), {"decision": "UNKNOWN"})
+            good = session.post(url, json=request,
+                                auth=(fixture.CLIENT, fixture.SECRET),
+                                verify=True, timeout=5)
+            self.assertEqual(good.status_code, 200)
+            self.assertEqual(good.json()["events"], proof["events"])
+
+        negatives = {}
+        for name, change in (
+            ("foreign_actor", {"actor_subject": "idp|foreign"}),
+            ("foreign_tenant", {"tenant_id": "TEN-FOREIGN"}),
+            ("foreign_run", {"run_id": "RUN-FOREIGN"}),
+            ("foreign_incident", {"incident_id": "INC-FOREIGN"}),
+            ("foreign_ticket", {"ticket_id": "778"}),
+        ):
+            negatives[name] = "UNKNOWN" if read({**request, **change}) is None else "ERROR"
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute(
+                "update public.ci_actor_source_grants set revoked=true "
+                "where run_id=%s", (run,))
+        negatives["revoked"] = "UNKNOWN" if read(request) is None else "ERROR"
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute(
+                "update public.ci_actor_source_grants set revoked=false,"
+                "expires_at=clock_timestamp()-interval '1 second' "
+                "where run_id=%s", (run,))
+        negatives["expired"] = "UNKNOWN" if read(request) is None else "ERROR"
+        self.assertEqual(negatives, {k: "UNKNOWN" for k in negatives})
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute(
+                "update public.ci_actor_source_grants "
+                "set expires_at=clock_timestamp()+interval '3 minutes' "
+                "where run_id=%s", (run,))
+        self.assertIsNone(read(request, at=datetime.now(timezone.utc)
+                               + timedelta(minutes=6)))
+        changed = list(expected_events)
+        changed[0] = (changed[0][0], "0" * 64, changed[0][2])
+        self.assertIsNone(read(request, expected=changed))
+        self.assertIsNotNone(read(request))
+
+        def audit(url):
+            with self.psycopg.connect(url) as conn:
+                return {
+                    "nonce_013": conn.execute(
+                        "select count(*) from aiops.actor_delegation_nonce_ledger"
+                    ).fetchone()[0],
+                    "revocation_013": conn.execute(
+                        "select count(*) from aiops.actor_delegation_revocations"
+                    ).fetchone()[0],
+                    "terminal_014": conn.execute(
+                        "select count(*) from aiops.hitl_reject_terminal_receipts"
+                    ).fetchone()[0],
+                }
+        before = audit(self.db_url)
+        with tempfile.TemporaryDirectory(prefix="core-graph005-015-") as tmp:
+            dump = Path(tmp) / "backup.dump"
+            restore_name = "aiops_graph005_015_restore_ci"
+            restore_url = self.db_url.replace("/" + self.db_name,
+                                              "/" + restore_name)
+            with self.psycopg.connect(self.admin_url, autocommit=True) as conn:
+                conn.execute(self.sql.SQL("create database {}").format(
+                    self.sql.Identifier(restore_name)))
+            try:
+                subprocess.run(
+                    ["/usr/lib/postgresql/16/bin/pg_dump", "--format=custom",
+                     "--file", str(dump), "--dbname", self.db_url],
+                    check=True, timeout=120, capture_output=True)
+                archive_sha = hashlib.sha256(dump.read_bytes()).hexdigest()
+                subprocess.run(
+                    ["/usr/lib/postgresql/16/bin/pg_restore",
+                     "--single-transaction", "--exit-on-error",
+                     "--no-owner", "--no-acl", "--dbname", restore_url,
+                     str(dump)],
+                    check=True, timeout=120, capture_output=True)
+                self.assertIsNotNone(read(request, db_url=restore_url))
+                self.assertEqual(before, audit(restore_url))
+                with self.psycopg.connect(restore_url) as conn:
+                    self.assertEqual(conn.execute(
+                        "select count(*) from aiops.run_events where run_id=%s",
+                        (run,)).fetchone()[0], 7)
+                    self.assertEqual(conn.execute(
+                        "select count(*) from pg_trigger where tgname in "
+                        "('trg_actor_nonce_immutable',"
+                        "'trg_actor_revocation_immutable',"
+                        "'trg_hitl_reject_terminal_immutable') "
+                        "and not tgisinternal").fetchone()[0], 3)
+            finally:
+                with self.psycopg.connect(self.admin_url, autocommit=True) as conn:
+                    conn.execute(self.sql.SQL("drop database {} with (force)").format(
+                        self.sql.Identifier(restore_name)))
+        self.assertEqual(before, audit(self.db_url))
+
+        output = os.environ.get("AIOPS_CORE_SEVEN_RECEIPT_DIR")
+        if output:
+            machine = {
+                "schema": "aiops.core-graph005-seven-015-source-receipt.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "installed": ["001", "004", "009", "010", "011", "012",
+                              "013", "014", "015"],
+                "writer": "core.main.app /api/runs/{rid}/events",
+                "producer": "core.canonical_seven_pg_source.read_graph005_core_written_seven",
+                "transport": "DISPOSABLE_TLS_BASIC_BOUND",
+                "actor_issuer_distinct_from_source": True,
+                "graph_version": pinned["graph_version"],
+                "source_fixture_only": True,
+                "tenant_id": tenant, "incident_id": incident, "run_id": run,
+                "actor_subject_sha256": hashlib.sha256(actor.encode()).hexdigest(),
+                "decision": "UNKNOWN", "link_status": "UNKNOWN",
+                "human_glpi_attested": False, "portable_signature": "NONE",
+                "acme_full_event_equivalence": "NOT_VERIFIED",
+                "hash_domains": {"payload": binding.PAYLOAD_DOMAIN,
+                                 "full_event": binding.FULL_DOMAIN},
+                "events": [{
+                    "source_event_id": e["source_event_id"],
+                    "acme_fixture_full_sha256": expected_events[i][1],
+                    "acme_fixture_payload_sha256": expected_events[i][2],
+                    "core_pg16_payload_sha256": e["payload_hash"],
+                    "core_pg16_full_event_sha256": e["full_event_hash"],
+                } for i, e in enumerate(proof["events"])],
+                "negative_cases": negatives, "stale": "UNKNOWN",
+                "hash_mismatch": "UNKNOWN",
+                "audit_before": before, "audit_after": audit(self.db_url),
+                "native_pg16_restore": True, "archive_sha256": archive_sha,
+                "archive_retained": False, "release_stable": "NO_GO",
+            }
+            machine["receipt_sha256"] = hashlib.sha256(json.dumps(
+                machine, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            target = Path(output)
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "core-graph005-seven-015.json").write_text(
                 json.dumps(machine, sort_keys=True, indent=2) + "\n")
 
 
