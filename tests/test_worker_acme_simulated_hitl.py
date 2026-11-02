@@ -2,6 +2,8 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import ast
+import hashlib
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -9,7 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
-    ISSUER, SandboxDenied, capability, simulate_no_effect,
+    ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
     validate_intent, validate_readbacks,
 )
 
@@ -36,7 +38,7 @@ def fixtures():
                 ticket_id=INTENT["ticket_id"], ticket_authority="SIMULATED_ONLY",
                 ticket_status="PREPARED", source="SYNTHETIC_SIMULATOR",
                 source_event_count=7, source_hashes_qualified=True,
-                source_event_ids=["SYN-EVT-TEST-%d" % i for i in range(1, 8)],
+                source_event_ids=canonical_source_ids(INTENT["attempt_id"]),
                 request_sha256="a" * 64,
                 human_approved=False, execution_allowed=False,
                 effect_allowed=False, live_effects_allowed=False,
@@ -405,6 +407,51 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                 SandboxDenied, "^policy_simulation_unqualified$"):
             asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
         self.assertEqual(calls, 6)
+
+    def test_25_source_ids_must_be_canonical_even_when_twin_agrees(self):
+        for source_ids in (
+            list(reversed(canonical_source_ids(INTENT["attempt_id"]))),
+            canonical_source_ids("ACME-SIM-FOREIGN-001"),
+            canonical_source_ids(INTENT["attempt_id"])[:6] +
+                ["SYN-EVT-AAAAAAAAAAAAAAAAAAAA"],
+        ):
+            docs = fixtures()
+            docs["core"]["source_event_ids"] = list(source_ids)
+            docs["twin"]["core_source_event_ids"] = list(source_ids)
+            with self.subTest(source_ids=source_ids[0]), self.assertRaisesRegex(
+                    SandboxDenied, "^twin_core_prepared_snapshot_unqualified$"):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_26_receipt_digest_stable_and_bound_to_core_snapshot(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        first = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        second = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(first, second)
+        digest = first.pop("receipt_sha256")
+        expected = hashlib.sha256(json.dumps(
+            first, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")).hexdigest()
+        self.assertEqual(digest, expected)
+        self.assertEqual(first["core_request_sha256"], docs["core"]["request_sha256"])
+        self.assertEqual(first["core_source_event_ids"], canonical_source_ids(INTENT["attempt_id"]))
+        self.assertEqual(len(first["twin_approval_nonce_sha256"]), 64)
+        self.assertNotIn("approval_nonce", first)
+        self.assertFalse(first["resolution_verified"])
+        self.assertEqual(first["effect_receipts"], 0)
+        docs["core"]["request_sha256"] = "b" * 64
+        docs["twin"]["core_request_sha256"] = "b" * 64
+        rotated = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertNotEqual(rotated["receipt_sha256"], digest)
+
+    def test_27_noncanonical_attempt_denied_before_transport(self):
+        bad = dict(INTENT, attempt_id="FOREIGN-ATTEMPT-001",
+                   idempotency_key="FOREIGN-ATTEMPT-001")
+        with self.assertRaisesRegex(SandboxDenied, "^sandbox_intent_unqualified$"):
+            validate_intent(bad)
+        with self.assertRaisesRegex(SandboxDenied, "^sandbox_attempt_unqualified$"):
+            canonical_source_ids("FOREIGN-ATTEMPT-001")
 
 
 if __name__ == "__main__":
