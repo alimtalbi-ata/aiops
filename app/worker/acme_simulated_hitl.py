@@ -103,6 +103,21 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or core["evidence_count"] < 2
             or core.get("proposal_id") != intent["proposal_id"]):
         raise SandboxDenied("core_resolution_unqualified")
+    # Bind the Twin-issued approval to the exact Core PREPARED snapshot.
+    # Identity and nonce alone cannot detect a stale/replayed SOURCE set.
+    source_ids = core.get("source_event_ids")
+    request_hash = core.get("request_sha256")
+    if (type(request_hash) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", request_hash) is None
+            or type(source_ids) is not list or len(source_ids) != 7
+            or any(type(v) is not str or not v.startswith("SYN-EVT-")
+                   or not _id(v) for v in source_ids)
+            or len(set(source_ids)) != 7
+            or twin.get("core_request_sha256") != request_hash
+            or twin.get("core_source_event_ids") != source_ids
+            or twin.get("approval_phase") != "PRE_RESOLUTION"
+            or twin.get("core_status_at_issuance") != "PREPARED"):
+        raise SandboxDenied("twin_core_prepared_snapshot_unqualified")
     if (twin.get("approval_id") != intent["approval_id"]
             or twin.get("proposal_id") != intent["proposal_id"]
             or twin.get("ticket_id") != intent["ticket_id"]
