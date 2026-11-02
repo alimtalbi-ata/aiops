@@ -171,6 +171,7 @@ class PreflightContract(unittest.TestCase):
         self.assertIn('SOURCE_SHA_CHANGED', deploy)
         self.assertIn('portal-rollback-manifest.json', deploy)
         self.assertIn('portal-deploy-result.json', deploy)
+        self.assertIn('NOOP_ALREADY_SAME_IMAGE', deploy)
         self.assertIn('--no-deps --no-build', deploy)
         self.assertNotIn('docker stop', deploy)
         self.assertNotIn('docker run', deploy)
