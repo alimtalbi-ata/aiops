@@ -97,6 +97,11 @@ def _require_sim_viewer(authorization: str | None) -> None:
     expected = os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
     if not expected:
         raise HTTPException(status_code=503, detail="portal_read_auth_not_configured")
+    # A browser viewer secret must never be an internal service/admin credential.
+    for privileged in ("AIOPS_INTERNAL_TOKEN", "AIOPS_ADMIN_TOKEN"):
+        candidate = os.getenv(privileged, "")
+        if candidate and hmac.compare_digest(expected, candidate):
+            raise HTTPException(status_code=503, detail="portal_viewer_privileged_token_reuse_denied")
     scheme, separator, supplied = (authorization or "").partition(" ")
     if (not separator or scheme.lower() != "bearer" or not supplied
             or not hmac.compare_digest(supplied, expected)):
