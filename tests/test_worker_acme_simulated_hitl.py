@@ -437,6 +437,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertEqual(digest, expected)
         self.assertEqual(first["core_request_sha256"], docs["core"]["request_sha256"])
         self.assertEqual(first["core_source_event_ids"], canonical_source_ids(INTENT["attempt_id"]))
+        self.assertEqual(first["ticket_id"], INTENT["ticket_id"])
         self.assertEqual(len(first["twin_approval_nonce_sha256"]), 64)
         self.assertNotIn("approval_nonce", first)
         self.assertFalse(first["resolution_verified"])
@@ -534,6 +535,34 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             ).encode("ascii")).hexdigest()
             with self.subTest(change=change):
                 self.assertFalse(receipt_digest_valid(forged))
+
+
+    def test_31_temporal_receipt_binds_simulated_ticket_without_authority_escalation(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(receipt["ticket_id"], INTENT["ticket_id"])
+        self.assertTrue(receipt_digest_valid(receipt))
+        # An altered receipt must not survive a digest check. A recomputed
+        # checksum is not a signature or permission to create a real GLPI ticket.
+        for ticket in ("GLPI-REAL-123", "SIM-GLPI-FOREIGN", "", None):
+            forged = deepcopy(receipt)
+            forged["ticket_id"] = ticket
+            self.assertFalse(receipt_digest_valid(forged))
+            forged["receipt_sha256"] = hashlib.sha256(json.dumps(
+                {k: v for k, v in forged.items() if k != "receipt_sha256"},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")).hexdigest()
+            if ticket != "SIM-GLPI-FOREIGN":
+                self.assertFalse(receipt_digest_valid(forged))
+            # A different well-formed synthetic ticket can be rehashed, so
+            # Core MUST compare ticket_id against its persisted same-Run record.
+        for component in ("core", "twin", "policy"):
+            wrong = fixtures()
+            wrong[component]["ticket_id"] = "SIM-GLPI-FOREIGN"
+            with self.subTest(component=component), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **wrong, now=NOW)
 
 
 if __name__ == "__main__":
