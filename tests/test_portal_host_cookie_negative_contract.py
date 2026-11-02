@@ -620,7 +620,8 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
                             "/auth/oidc/callback",
                             params={"code": "disposable-code", "state": state},
                             headers=headers)
-                        self._assert_protected(response, 401)
+                        self.assertEqual(response.status_code, 401)
+                        self.assertEqual(response.headers["cache-control"], "no-store")
                         self.assertEqual(response.json()["reason"],
                                          "OIDC_CALLBACK_REJECTED")
                         self.assertNotIn("set-cookie", response.headers)
