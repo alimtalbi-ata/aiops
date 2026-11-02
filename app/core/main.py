@@ -155,10 +155,42 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
 @app.post('/api/runs/{rid}/events')
 def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
-    if x.stage not in STAGES and x.stage!='INGEST':raise HTTPException(422,'unknown stage')
+    # SOURCE is a synthetic graph-005 observation, not an ITIL stage or
+    # a human-approved action. Keep this narrow: the internal bearer alone
+    # does not authenticate an IdP actor or GLPI permissions.
+    graph_source = x.stage == 'SOURCE'
+    if graph_source:
+        p = x.payload
+        if (x.event_type != 'OBSERVED' or x.status != 'PASS'
+                or not x.event_key
+                or not re.fullmatch(r'SYN-EVT-[0-9A-F]{20}', x.event_key)
+                or len(x.evidence_ids) != 1
+                or p.get('synthetic') is not True
+                or p.get('source_event_id') != x.event_key
+                or p.get('run_id') != rid
+                or type(p.get('sequence')) is not int
+                or not 1 <= p['sequence'] <= 7
+                or not re.fullmatch(r'[0-9a-f]{40}', str(p.get('graph_version', '')))
+                or not all(type(p.get(k)) is str and p[k] for k in (
+                    'tenant_id', 'incident_id', 'actor_subject',
+                    'actor_issuer', 'source_issuer', 'ticket_id',
+                    'glpi_entity_id'))
+                or p['actor_issuer'] == p['source_issuer']):
+            raise HTTPException(422, 'invalid synthetic source envelope')
+    if x.stage not in STAGES and not graph_source:
+        raise HTTPException(422,'unknown stage')
     with db() as c:
-        row=c.execute('select version,status from aiops.runs where run_id=%s for update',(rid,)).fetchone()
+        row=c.execute('select version,status,mode,incident_id from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
+        if graph_source:
+            incident=c.execute(
+                'select synthetic,payload from aiops.incidents where incident_id=%s',
+                (row[3],)).fetchone()
+            if (row[2] != 'DEMO' or not incident or incident[0] is not True
+                    or not isinstance(incident[1],dict)
+                    or incident[1].get('tenant_id') != x.payload['tenant_id']
+                    or row[3] != x.payload['incident_id']):
+                raise HTTPException(403,'synthetic source scope unavailable')
         # Check the existing keyed event BEFORE the version fence: an exact
         # retry is safe even after the first request advanced the Run version.
         # A key cannot silently authorize different event content.
