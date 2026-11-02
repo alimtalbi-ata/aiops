@@ -974,8 +974,9 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                             token_free = restored.post(
                                 dead_path.removesuffix("/dead") +
                                 "/terminal-receipt",
-                                json={k: v for k, v in dead_body.items()
-                                      if k != "lease_token"},
+                                json={**{k: v for k, v in dead_body.items()
+                                       if k != "lease_token"},
+                                      "incident_id": ids["inc"]},
                                 headers=dead_headers)
                             self.assertEqual((
                                 token_free.status_code,
@@ -1105,6 +1106,7 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
         client = self._canonical_core_client()
         root = f"/api/tenants/TEN-A/hitl/reject-delivery/{ids['event']}"
         body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "incident_id": ids["inc"],
                 "proposal_id": ids["proposal"], "proposal_hash": digest,
                 "proposal_revision": 1, "execution_allowed": False,
                 "effect_allowed": False}
@@ -1131,6 +1133,7 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 json=body, headers={"Authorization": "Bearer " + self.token_b}
             ).status_code, 403)
             for delta in ({"owner": "svc-foreign"}, {"run_id": "RUN-foreign"},
+                          {"incident_id": "INC-foreign"},
                           {"proposal_id": "PROPOSAL-foreign"},
                           {"proposal_hash": "0" * 64},
                           {"proposal_revision": 2}, {"effect_allowed": True}):
@@ -1213,6 +1216,7 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
     def test_terminal_restart_recovery_insert_rollback_and_concurrency(self):
         ids, digest, tokens = self._exhaust()
         body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "incident_id": ids["inc"],
                 "proposal_id": ids["proposal"], "proposal_hash": digest,
                 "proposal_revision": 1, "execution_allowed": False,
                 "effect_allowed": False}
