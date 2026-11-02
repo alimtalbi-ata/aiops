@@ -36,7 +36,7 @@ class SafeUpgrade(unittest.TestCase):
         self.assertLess(SCRIPT.index('pg_restore -U aiops -d "$restore_db"'),
                         SCRIPT.index('psql -U aiops -d aiops -v ON_ERROR_STOP=1'))
         self.assertLess(SCRIPT.index('restore_status=PASS'),
-                        SCRIPT.index('mutated=1\\ncompose -f'))
+                        SCRIPT.index('mutated=1\ncompose -f'))
         self.assertIn('if [ "$restore_created" = 1 ]; then', SCRIPT)
 
     def test_private_key_and_manifest_gated_poller(self):
