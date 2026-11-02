@@ -1167,6 +1167,14 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
             receipt_sha = first.json()["receipt_sha256"]
             self.assertEqual(read.json()["receipt_sha256"], receipt_sha)
             self.assertEqual(replay.json()["receipt_sha256"], receipt_sha)
+            # This binding comes from the canonical Core Run row, not a
+            # Worker-supplied Incident assertion or immutable 014 payload.
+            self.assertEqual([r.json().get("incident_id")
+                              for r in (first, read, replay)], [ids["inc"]] * 3)
+            post_dead_foreign = client.post(root + "/terminal-receipt",
+                json={**body, "incident_id": "INC-foreign"}, headers=headers)
+            self.assertEqual((post_dead_foreign.status_code,
+                              post_dead_foreign.json()["status"]), (200, "UNKNOWN"))
             for response in (first, read, replay):
                 self.assertNotIn("lease_token", response.text)
                 self.assertNotIn(tokens[-1], response.text)
@@ -1202,6 +1210,8 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                        "wrong_permission": 403, "revoked_bearer": 401,
                        "revoked_source_proof": "UNKNOWN",
                        "lease_token_exported": False,
+                       "incident_id_core_readback": True,
+                       "post_dead_foreign_incident": "200_UNKNOWN",
                        "real_worker_os_processes": 0,
                        "human_glpi_authority": "UNKNOWN",
                        "execution_allowed": False, "effect_allowed": False,
