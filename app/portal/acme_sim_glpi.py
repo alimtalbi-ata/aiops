@@ -103,9 +103,13 @@ def _sandbox_read(component: str, attempt_id: str) -> dict:
     }
     env, default, hosts = config[component]
     base = os.getenv(env, default).rstrip("/")
-    parsed = urlsplit(base)
+    try:
+        parsed = urlsplit(base)
+        port = parsed.port
+    except ValueError:
+        raise ValueError("sandbox_service_configuration_unavailable") from None
     if (not token or parsed.scheme not in ("http", "https")
-            or parsed.hostname not in hosts or not parsed.port
+            or parsed.hostname not in hosts or not port
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise ValueError("sandbox_service_configuration_unavailable")
     try:
