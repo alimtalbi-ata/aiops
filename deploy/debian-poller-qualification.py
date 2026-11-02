@@ -18,6 +18,8 @@ STATE = Path.home() / ".local/state/aiops-debian-agent"
 REPORT_GIT = STATE / "report-git"
 BRANCH = "ops/debian-runtime-reports"
 TARGET = "ops/debian-reports/SRV-DEB-05/poller-qualification.json"
+LATEST_TARGET = "ops/debian-reports/SRV-DEB-05/latest.json"
+LOCAL_LATEST = STATE / "latest.json"
 DEV = Path("/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e")
 POLLER = Path("/home/aiops/aiops2-auto-deploy/poll.sh")
 REMOTE = "git@github.com:alimtalbi-ata/aiops.git"
@@ -149,8 +151,72 @@ def collect(runner=run, http_probe=http, tcp_probe=tcp, clock=None):
     }
 
 
+
+def validated_fresh_local_report(path, now=None):
+    """One-shot recovery of the existing publisher's already-public, bounded schema.
+
+    Never copy arbitrary local JSON into a public GitHub repository. This is
+    NOT a replacement for the recurring SSH publisher cron.
+    """
+    try:
+        if path.stat().st_size > 32768:
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        required = {"agent", "collected_at", "docker", "host", "resources",
+                    "schema_version", "tcp_loopback"}
+        if type(data) is not dict or set(data) != required:
+            return None
+        if data["schema_version"] != 1 or data["agent"] != {
+                "name": "aiops-debian-readonly", "version": "1.0.0"}:
+            return None
+        when = dt.datetime.fromisoformat(data["collected_at"].replace("Z", "+00:00"))
+        if when.tzinfo is None:
+            return None
+        age = (now or dt.datetime.now(dt.timezone.utc)) - when
+        if not 0 <= age.total_seconds() <= 900:
+            return None
+        docker = data["docker"]
+        if (type(docker) is not dict or set(docker) !=
+                {"available", "containers", "truncated"} or
+                type(docker["containers"]) is not list or
+                len(docker["containers"]) > 128):
+            return None
+        for item in docker["containers"]:
+            if (type(item) is not dict or
+                    not set(item).issubset({"name", "image", "state", "health", "inspect_ok"}) or
+                    not {"name", "image", "state", "health", "inspect_ok"}.issubset(item) or
+                    any(type(item[k]) is not str or len(item[k]) > 256
+                        for k in ("name", "image", "state", "health")) or
+                    type(item["inspect_ok"]) is not bool):
+                return None
+        if (type(data["host"]) is not dict or
+                not set(data["host"]).issubset(
+                    {"architecture", "kernel", "os", "reported_name", "uptime"}) or
+                type(data["resources"]) is not dict or
+                not set(data["resources"]).issubset(
+                    {"disk_home", "disk_root", "load_1_5_15", "memory_bytes"}) or
+                type(data["tcp_loopback"]) is not dict or
+                not set(data["tcp_loopback"]).issubset(
+                    {"3000", "5432", "7233", "9090", "17777", "7777", "17778"})):
+            return None
+        # No unexpected key names at any nesting depth, including secrets.
+        def suspicious(obj):
+            if isinstance(obj, dict):
+                return any(re.search(r"token|password|secret|authorization|api.?key|private.?key", str(k), re.I)
+                           or suspicious(v) for k, v in obj.items())
+            if isinstance(obj, list):
+                return any(suspicious(v) for v in obj)
+            return False
+        if suspicious(data):
+            return None
+        output = json.dumps(data, sort_keys=True, indent=2) + "\n"
+        return output if len(output.encode("utf-8")) <= 32768 else None
+    except (OSError, ValueError, TypeError, AttributeError, KeyError):
+        return None
+
+
 def publish(report, runner=run):
-    """Never overwrite minute reporter latest.json; use its SSH checkout and lock."""
+    """Publish sidecar and, if validated, one fresh local reporter snapshot under the SSH lock."""
     if not (REPORT_GIT / ".git").is_dir():
         raise RuntimeError("report_checkout_missing")
     with (STATE / "publish.lock").open("a+") as lock:
@@ -174,6 +240,17 @@ def publish(report, runner=run):
                 raise RuntimeError("report_git_sync_failed")
         target = REPORT_GIT / TARGET
         target.parent.mkdir(parents=True, exist_ok=True)
+        # Existing minute reporter writes a separate local file; the SSH
+        # publisher cron is currently stale. Recover ONE fresh validated
+        # snapshot through this already-qualified Git writer under same lock.
+        local_latest = validated_fresh_local_report(LOCAL_LATEST)
+        report["local_report_republish_eligible"] = local_latest is not None
+        if local_latest is not None:
+            latest_target = REPORT_GIT / LATEST_TARGET
+            latest_tmp = latest_target.with_suffix(".tmp")
+            latest_tmp.write_text(local_latest, encoding="utf-8")
+            latest_tmp.chmod(0o600)
+            latest_tmp.replace(latest_target)
         content = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if len(content.encode()) > 16384:
             raise RuntimeError("receipt_oversize")
@@ -181,7 +258,8 @@ def publish(report, runner=run):
         temp.write_text(content)
         temp.chmod(0o600)
         temp.replace(target)
-        if runner(base + ["add", "--", TARGET]) is None:
+        staged = [TARGET] + ([LATEST_TARGET] if local_latest is not None else [])
+        if runner(base + ["add", "--"] + staged) is None:
             raise RuntimeError("report_add_failed")
         if runner(base + ["diff", "--cached", "--quiet"]) is not None:
             return "UNCHANGED"

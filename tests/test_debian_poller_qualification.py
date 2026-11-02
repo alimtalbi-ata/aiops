@@ -1,8 +1,10 @@
 """Disposable no-host regression for safe poller."""
+import datetime as dt
 import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +57,39 @@ class PollerContract(unittest.TestCase):
         self.assertEqual(r["host_portal_7777"], "FAIL_OR_UNKNOWN")
         self.assertEqual(r["portal"]["inspection"], "UNKNOWN")
         self.assertIsNone(r["stable_checkout_sha"])
+
+    def test_one_shot_republish_only_fresh_whitelisted_report(self):
+        now = dt.datetime(2026, 11, 2, 12, 29, tzinfo=dt.timezone.utc)
+        report = {
+            "agent": {"name": "aiops-debian-readonly", "version": "1.0.0"},
+            "collected_at": "2026-11-02T12:28:01Z",
+            "schema_version": 1,
+            "docker": {"available": True, "truncated": False, "containers": [
+                {"name": "aiops2-rebuild-portal", "image": "portal:synthetic",
+                 "state": "running", "health": "healthy", "inspect_ok": True}]},
+            "host": {"reported_name": "REDACTED"},
+            "resources": {"memory_bytes": {"total": 12345}},
+            "tcp_loopback": {"7777": True, "17777": False},
+        }
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "latest.json"
+            p.write_text(json.dumps(report))
+            output = mod.validated_fresh_local_report(p, now=now)
+            self.assertIsNotNone(output)
+            self.assertEqual(json.loads(output)["collected_at"], report["collected_at"])
+            report["docker"]["containers"][0]["secret_token"] = "SYNTHETIC_NEVER_PUBLISH"
+            p.write_text(json.dumps(report))
+            self.assertIsNone(mod.validated_fresh_local_report(p, now=now))
+            del report["docker"]["containers"][0]["secret_token"]
+            report["collected_at"] = "2026-11-02T11:01:01Z"
+            p.write_text(json.dumps(report))
+            self.assertIsNone(mod.validated_fresh_local_report(p, now=now))
+            report["collected_at"] = "2026-11-02T12:28:01Z"
+            report["unexpected"] = "SYNTHETIC_NEVER_PUBLISH"
+            p.write_text(json.dumps(report))
+            self.assertIsNone(mod.validated_fresh_local_report(p, now=now))
+            p.write_text("X" * 32769)
+            self.assertIsNone(mod.validated_fresh_local_report(p, now=now))
 
     def test_no_docker_mutation_in_source(self):
         source = SCRIPT.read_text()
