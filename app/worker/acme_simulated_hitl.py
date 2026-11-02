@@ -220,7 +220,7 @@ async def simulate_no_effect(intent, *, get, now=None):
         "schema": SCHEMA, "attempt_id": intent["attempt_id"],
         "tenant_id": TENANT, "incident_id": intent["incident_id"],
         "run_id": intent["run_id"], "proposal_id": intent["proposal_id"],
-        "approval_id": intent["approval_id"],
+        "approval_id": intent["approval_id"], "ticket_id": intent["ticket_id"],
         "action": "SIMULATE", "receipt_status": "SIMULATED_NO_EFFECT",
         "approval_issuer": ISSUER, "approval_kind": "SIMULATED",
         "human_approved": False, "execution_allowed": False,
@@ -261,7 +261,7 @@ _RECEIPT_AUDIT = [
 ]
 _RECEIPT_KEYS = frozenset((
     "schema", "attempt_id", "tenant_id", "incident_id", "run_id",
-    "proposal_id", "approval_id", "action", "receipt_status",
+    "proposal_id", "approval_id", "ticket_id", "action", "receipt_status",
     "approval_issuer", "approval_kind", "human_approved",
     "execution_allowed", "effect_allowed", "live_effects_allowed",
     "real_glpi_writes_allowed", "effect_receipts", "audit_transitions",
@@ -299,8 +299,10 @@ def receipt_digest_valid(receipt):
                 "resolution_verified", "core_014_015_written", "glpi_write"))
             or receipt.get("post_resolution_readback_required") is not True
             or not all(_id(receipt.get(k)) for k in (
-                "incident_id", "run_id", "proposal_id", "approval_id"))
-            or not receipt["approval_id"].startswith("SIM-APP-")):
+                "incident_id", "run_id", "proposal_id", "approval_id",
+                "ticket_id"))
+            or not receipt["approval_id"].startswith("SIM-APP-")
+            or not receipt["ticket_id"].startswith("SIM-GLPI-")):
         return False
     expected = receipt.get("receipt_sha256")
     if type(expected) is not str or re.fullmatch(r"[0-9a-f]{64}", expected) is None:
