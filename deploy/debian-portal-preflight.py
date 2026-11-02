@@ -208,8 +208,39 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                    'PORTAL_HEALTH_CONTRACT_UNQUALIFIED' if not healthy else
                    'BACKUP_ROLLBACK_AND_E2E_GATES_MISSING'),
     }
+    # The local deploy result is a separate attestation, not inferred from CI or HTTP.
+    # Require fresh receipt, exact release SHA and observed container image/health.
+    state_dir = state or Path.home() / '.local/state/aiops-debian-agent'
+    try:
+        result_path = state_dir / 'portal-deploy-result.json'
+        if result_path.stat().st_size <= 8192:
+            deployed = json.loads(result_path.read_text(encoding='utf-8'))
+            when = dt.datetime.fromisoformat(deployed['collected_at'].replace('Z', '+00:00'))
+            age = (dt.datetime.now(dt.timezone.utc) - when).total_seconds()
+            if (when.tzinfo is not None and 0 <= age <= 900
+                    and deployed.get('schema') == 'aiops.debian-portal-deploy-result.v1'
+                    and deployed.get('candidate_sha') == pinned):
+                passed = (deployed.get('status') == 'PASS'
+                          and deployed.get('deployment_executed') is True
+                          and deployed.get('docker_mutations', 0) >= 1
+                          and deployed.get('new_image_id') == report.get('portal', {}).get('image_id')
+                          and healthy)
+                report['deployment_preflight'].update(
+                    deployment_executed=bool(deployed.get('deployment_executed')),
+                    docker_mutations=deployed.get('docker_mutations', 0),
+                    rollback_attempted=bool(deployed.get('rollback_attempted')),
+                    deployment_result_collected_at=deployed.get('collected_at'),
+                    deployed_image_id=deployed.get('new_image_id'),
+                    verdict=('DEPLOYED_HEALTH_PASS_E2E_PENDING' if passed
+                             else 'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED'),
+                    reason=('E2E_HUMAN_GLPI_NOT_ATTESTED' if passed
+                            else 'DEPLOYMENT_RECEIPT_OR_HOST_MISMATCH'))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
     report['release_stable'] = 'NO_GO'
-    report['execution'] = 'POLLER_ENTRYPOINT_READONLY_PREFLIGHT'
+    report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
+                           if report['deployment_preflight']['deployment_executed']
+                           else 'POLLER_ENTRYPOINT_READONLY_PREFLIGHT')
     return report
 
 
