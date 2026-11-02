@@ -1071,3 +1071,161 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
         self._no_effect()
 
+
+    def test_terminal_restart_recovery_and_token_free_receipt_fail_closed(self):
+        """Core HTTP handles an expired eighth lease without exporting its token."""
+        ids, digest, tokens = self._exhaust()
+        client = self._canonical_core_client()
+        root = f"/api/tenants/TEN-A/hitl/reject-delivery/{ids['event']}"
+        body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "proposal_id": ids["proposal"], "proposal_hash": digest,
+                "proposal_revision": 1, "execution_allowed": False,
+                "effect_allowed": False}
+        headers = {"Authorization": "Bearer " + self.token_a}
+        entry_a = {"token_sha256": hashlib.sha256(self.token_a.encode()).hexdigest(),
+                   "actor_id": "svc-TEN-A", "tenant_ids": ["TEN-A"],
+                   "permissions": ["hitl:reject:deliver", "hitl:reject:terminal",
+                                   "hitl:reject:recover"]}
+        entry_b = {"token_sha256": hashlib.sha256(self.token_b.encode()).hexdigest(),
+                   "actor_id": "svc-TEN-B", "tenant_ids": ["TEN-B"],
+                   "permissions": ["hitl:reject:deliver", "hitl:reject:terminal",
+                                   "hitl:reject:recover"]}
+        # No implicit grant to existing terminal callers.
+        self.assertEqual(client.post(root + "/terminal-recover", json=body,
+                                     headers=headers).status_code, 403)
+        with patch.dict(os.environ, {
+                "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([entry_a, entry_b])}):
+            self.assertEqual(client.post(root + "/terminal-receipt",
+                                         json=body, headers=headers).json()["status"],
+                             "UNKNOWN")
+            self.assertEqual(client.post(root + "/terminal-recover",
+                                         json=body).status_code, 401)
+            self.assertEqual(client.post(root + "/terminal-recover",
+                json=body, headers={"Authorization": "Bearer " + self.token_b}
+            ).status_code, 403)
+            for delta in ({"owner": "svc-foreign"}, {"run_id": "RUN-foreign"},
+                          {"proposal_id": "PROPOSAL-foreign"},
+                          {"proposal_hash": "0" * 64},
+                          {"proposal_revision": 2}, {"effect_allowed": True}):
+                denied = client.post(root + "/terminal-recover",
+                                     json={**body, **delta}, headers=headers)
+                self.assertEqual((denied.status_code, denied.json()["status"]),
+                                 (200, "UNKNOWN"))
+            foreign = client.post(root.replace("/TEN-A/", "/TEN-B/") +
+                "/terminal-recover", json={**body, "owner": "svc-TEN-B"},
+                headers={"Authorization": "Bearer " + self.token_b})
+            self.assertEqual((foreign.status_code, foreign.json()["status"]),
+                             (200, "UNKNOWN"))
+            proof_file = Path(self.proof_path)
+            proof_file.write_text(json.dumps({
+                "schema": "aiops.core-ownership-proof.v1", "proofs": {}}))
+            self.assertEqual(client.post(root + "/terminal-recover",
+                json=body, headers=headers).json()["status"], "UNKNOWN")
+            self._write_proofs()
+            first = client.post(root + "/terminal-recover",
+                                json=body, headers=headers)
+            read = client.post(root + "/terminal-receipt",
+                               json=body, headers=headers)
+            replay = client.post(root + "/terminal-recover",
+                                 json=body, headers=headers)
+            self.assertEqual((first.status_code, first.json()["status"],
+                              first.json()["idempotent"]), (200, "DEAD", False))
+            self.assertEqual((read.status_code, read.json()["status"],
+                              read.json()["idempotent"]), (200, "DEAD", True))
+            self.assertEqual((replay.status_code, replay.json()["status"],
+                              replay.json()["idempotent"]), (200, "DEAD", True))
+            receipt_sha = first.json()["receipt_sha256"]
+            self.assertEqual(read.json()["receipt_sha256"], receipt_sha)
+            self.assertEqual(replay.json()["receipt_sha256"], receipt_sha)
+            for response in (first, read, replay):
+                self.assertNotIn("lease_token", response.text)
+                self.assertNotIn(tokens[-1], response.text)
+                self.assertFalse(response.json()["effect_allowed"])
+                self.assertFalse(response.json()["execution_allowed"])
+            with self.psycopg.connect(self.url) as db:
+                self.assertEqual(db.execute(
+                    "select status,attempts from aiops.hitl_decision_outbox "
+                    "where event_id=%s", (ids["event"],)).fetchone(), ("DEAD", 8))
+                self.assertEqual(db.execute(
+                    "select count(*) from aiops.hitl_reject_terminal_receipts "
+                    "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+            # A revoked service bearer or revoked signed ownership proof
+            # cannot read even an already-committed terminal receipt.
+            with patch.dict(os.environ, {
+                    "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([entry_b])}):
+                self.assertEqual(client.post(root + "/terminal-receipt",
+                    json=body, headers=headers).status_code, 401)
+            proof_file.write_text(json.dumps({
+                "schema": "aiops.core-ownership-proof.v1", "proofs": {}}))
+            self.assertEqual(client.post(root + "/terminal-receipt",
+                json=body, headers=headers).json()["status"], "UNKNOWN")
+            self._write_proofs()
+            self.assertEqual(client.post(root + "/terminal-receipt",
+                json=body, headers=headers).json()["receipt_sha256"], receipt_sha)
+        target = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if target:
+            receipt = {"schema": "aiops.core-terminal-restart-recovery-ci.v1",
+                       "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                       "core_http_recovery": "200_DEAD", "readback": "200_DEAD",
+                       "replay_idempotent": True, "audit_014_rows": 1,
+                       "attempts": 8, "receipt_sha256": receipt_sha,
+                       "wrong_permission": 403, "revoked_bearer": 401,
+                       "revoked_source_proof": "UNKNOWN",
+                       "lease_token_exported": False,
+                       "real_worker_os_processes": 0,
+                       "human_glpi_authority": "UNKNOWN",
+                       "execution_allowed": False, "effect_allowed": False,
+                       "rollback": "REVERT_CORE_CODE_TEST_WORKFLOW_KEEP_013_014_015"}
+            receipt["payload_sha256"] = hashlib.sha256(json.dumps(
+                receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            Path(target).mkdir(parents=True, exist_ok=True)
+            (Path(target) / "terminal-recovery.json").write_text(
+                json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+        self._no_effect()
+
+    def test_terminal_restart_recovery_insert_rollback_and_concurrency(self):
+        ids, digest, tokens = self._exhaust()
+        body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "proposal_id": ids["proposal"], "proposal_hash": digest,
+                "proposal_revision": 1, "execution_allowed": False,
+                "effect_allowed": False}
+        entry = {"token_sha256": hashlib.sha256(self.token_a.encode()).hexdigest(),
+                 "actor_id": "svc-TEN-A", "tenant_ids": ["TEN-A"],
+                 "permissions": ["hitl:reject:deliver", "hitl:reject:terminal",
+                                 "hitl:reject:recover"]}
+        with patch.dict(os.environ, {
+                "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([entry])}):
+            with patch.object(delivery, "_TERMINAL_INSERT_SQL",
+                              "insert into aiops.hitl_reject_terminal_receipts "
+                              "(no_such_column) values (%s)"):
+                failed = delivery.terminal_recover(
+                    "TEN-A", ids["event"], body,
+                    authorization="Bearer " + self.token_a)
+            self.assertEqual((failed.status_code, json.loads(failed.body)["status"]),
+                             (503, "UNKNOWN"))
+            with self.psycopg.connect(self.url) as db:
+                self.assertEqual(db.execute(
+                    "select status,attempts from aiops.hitl_decision_outbox "
+                    "where event_id=%s", (ids["event"],)).fetchone(), ("LEASED", 8))
+                self.assertEqual(db.execute(
+                    "select count(*) from aiops.hitl_reject_terminal_receipts "
+                    "where event_id=%s", (ids["event"],)).fetchone()[0], 0)
+            barrier = threading.Barrier(2)
+            def contender():
+                barrier.wait(timeout=10)
+                response = delivery.terminal_recover(
+                    "TEN-A", ids["event"], body,
+                    authorization="Bearer " + self.token_a)
+                return response.status_code, json.loads(response.body)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(contender) for _ in range(2)]
+                results = [f.result(timeout=20) for f in futures]
+            self.assertEqual(sorted((r[0], r[1]["status"], r[1]["idempotent"])
+                                    for r in results),
+                             [(200, "DEAD", False), (200, "DEAD", True)])
+            self.assertEqual(len({r[1]["receipt_sha256"] for r in results}), 1)
+            with self.psycopg.connect(self.url) as db:
+                self.assertEqual(db.execute(
+                    "select count(*) from aiops.hitl_reject_terminal_receipts "
+                    "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+        self._no_effect()
