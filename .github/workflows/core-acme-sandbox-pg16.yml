@@ -86,6 +86,7 @@ jobs:
           assert data['source_head']==os.environ['AIOPS_EXPECTED_HEAD_SHA']
           assert data['migration_chain']==['001','004','009','010','011','012','013','014','015','016']
           assert data['source_event_count']==7 and data['evidence_count']==2
+          assert data['source_hashes_qualified'] is True
           assert data['incident_status']==data['run_status']==data['ticket_status']=='RESOLVED'
           assert data['ticket_authority']=='SIMULATED_ONLY'
           assert data['analysis_kind']=='SYNTHETIC_FIXTURE'
