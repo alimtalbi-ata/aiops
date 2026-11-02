@@ -1,4 +1,6 @@
 """Source-only Policy sandbox security tests; not host E2E."""
+import hashlib
+import json
 import os
 import sys
 import unittest
@@ -36,6 +38,29 @@ def docs():
                  'human_approved': False, 'execution_allowed': False,
                  'effect_allowed': False, 'live_effects_allowed': False,
                  'real_glpi_writes_allowed': False})
+    return core,twin
+
+def resolved_docs():
+    core,twin=docs()
+    core.update({
+        'incident_status':'RESOLVED','run_status':'RESOLVED',
+        'ticket_status':'RESOLVED','source':'SYNTHETIC_SIMULATOR',
+        'approval_id':twin['approval_id'],
+        'worker_receipt_verified':True,
+        'terminal_ticket_receipt_verified':True,
+        'resolution_after_worker_receipt':True,
+        'approval_fresh_at_resolution':True,
+        'approval_nonce_consumed':True,
+        'approval_nonce_revoked':False,
+        'worker_receipt_sha256':'b'*64})
+    binding={'schema':'aiops.portal.sim-glpi-ticket-digest.v1',
+             'tenant_id':'ACME-TEST','attempt_id':ATTEMPT,
+             'incident_id':core['incident_id'],'run_id':core['run_id'],
+             'ticket_id':core['ticket_id'],'ticket_status':'RESOLVED',
+             'core_request_sha256':core['request_sha256'],
+             'worker_receipt_sha256':core['worker_receipt_sha256']}
+    core['terminal_ticket_sha256']=hashlib.sha256(
+        json.dumps(binding,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     return core,twin
 
 class PolicySandboxTests(unittest.TestCase):
@@ -91,6 +116,87 @@ class PolicySandboxTests(unittest.TestCase):
                 'policy.main.evaluate',return_value={'state':'BLOCKED','decision':'ESCALATE'}):
             self.assertEqual(self.client.get('/api/sandbox/acme/e2e/'+ATTEMPT,
                 headers={'Authorization':'Bearer '+TOKEN}).status_code,503)
+
+    def test_06_rg_acme_24_resolved_get_historical_only(self):
+        core,twin=resolved_docs()
+        with patch.object(p,'fetch_component',side_effect=lambda component, attempt:
+                          core if component=='core' else twin), patch(
+                'policy.main.evaluate') as evaluate:
+            result=self.client.get('/api/sandbox/acme/e2e/'+ATTEMPT,
+                headers={'Authorization':'Bearer '+TOKEN})
+            self.assertEqual(result.status_code,200,result.text)
+            body=result.json()
+            self.assertEqual(body['decision'],'SIMULATE')
+            self.assertTrue(body['historical_readback'])
+            self.assertFalse(body['new_approval_issued'])
+            self.assertFalse(body['execution_allowed'])
+            self.assertFalse(body['human_approved'])
+            intent={'attempt_id':ATTEMPT,'tenant_id':'ACME-TEST',
+                    'scenario_id':'ACME-SAN-PAYMENTS','mode':'SIMULATION',
+                    'approval_issuer':'TWIN_ACME_SIMULATED',
+                    'idempotency_key':ATTEMPT,'live_effects_allowed':False,
+                    'incident_id':core['incident_id'],'run_id':core['run_id'],
+                    'ticket_id':core['ticket_id'],'proposal_id':core['proposal_id'],
+                    'approval_id':twin['approval_id']}
+            denied=self.client.post('/api/sandbox/acme/e2e',json=intent,
+                headers={'Authorization':'Bearer '+TOKEN})
+            self.assertEqual(denied.status_code,503)
+            evaluate.assert_not_called()
+
+    def test_07_rg_acme_24_terminal_digest_and_worker_proof_fail_closed(self):
+        for field,value in (('terminal_ticket_sha256','0'*64),
+                            ('worker_receipt_sha256','f'*64),
+                            ('worker_receipt_verified',False),
+                            ('terminal_ticket_receipt_verified',False),
+                            ('approval_nonce_consumed',False),
+                            ('approval_fresh_at_resolution',False),
+                            ('source','LIVE')):
+            with self.subTest(field=field):
+                core,twin=resolved_docs()
+                core[field]=value
+                with self.assertRaises(Exception):
+                    p.qualify(ATTEMPT,core,twin,historical=True)
+        core,twin=resolved_docs()
+        twin['approval_id']='SIM-APP-FOREIGN'
+        with self.assertRaises(Exception):
+            p.qualify(ATTEMPT,core,twin,historical=True)
+
+    def test_08_rg_acme_24_prepared_cannot_claim_historical(self):
+        core,twin=docs()
+        with self.assertRaises(Exception):
+            p.qualify(ATTEMPT,core,twin,historical=True)
+        core,twin=resolved_docs()
+        twin['tenant_id']='FOREIGN'
+        with self.assertRaises(Exception):
+            p.qualify(ATTEMPT,core,twin,historical=True)
+
+    def test_09_rg_acme_25_fixed_origin_and_no_proxy_bearer(self):
+        for origin in ('http://evil.example:810',
+                       'http://aiops2-rebuild-core:9999',
+                       'http://user@aiops2-rebuild-core:810',
+                       'http://aiops2-rebuild-core:810/redirect',
+                       'http://[::1:810'):
+            with self.subTest(origin=origin), patch.dict(os.environ,{'CORE_URL':origin}), patch.object(
+                    p.requests,'Session') as session:
+                with self.assertRaises(Exception):
+                    p.fetch_component('core',ATTEMPT)
+                session.assert_not_called()
+        class DirectSession:
+            trust_env=True
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def get(self,url,**kwargs):
+                self.url,self.kwargs=url,kwargs
+                return type('Response',(),{'status_code':200,'content':b'{}',
+                                           'json':lambda self:{'tenant_id':'ACME-TEST'}})()
+        direct=DirectSession()
+        with patch.dict(os.environ,{'CORE_URL':'http://aiops2-rebuild-core:810'}), patch.object(
+                p.requests,'Session',return_value=direct):
+            self.assertEqual(p.fetch_component('core',ATTEMPT)['tenant_id'],'ACME-TEST')
+        self.assertIs(direct.trust_env,False)
+        self.assertEqual(direct.url,'http://aiops2-rebuild-core:810/api/sandbox/acme/e2e/'+ATTEMPT)
+        self.assertIs(direct.kwargs['allow_redirects'],False)
+        self.assertEqual(direct.kwargs['headers']['Authorization'],'Bearer '+TOKEN)
 
 if __name__ == '__main__':
     unittest.main()
