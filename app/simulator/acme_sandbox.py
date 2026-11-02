@@ -101,6 +101,7 @@ def prepared_core(value, x, ids=None):
             or value.get('run_status') != 'PREPARED'
             or value.get('ticket_status') != 'PREPARED'
             or value.get('ticket_authority') != 'SIMULATED_ONLY'
+            or value.get('approval_issuer') != ISSUER
             or value.get('source') != 'SYNTHETIC_SIMULATOR'
             or value.get('source_event_count') != 7
             or value.get('source_hashes_qualified') is not True
@@ -185,7 +186,9 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
         raise HTTPException(503, 'sandbox_policy_unqualified')
     # Re-read Core before Worker: Twin/Policy may never race a resolution.
     before_worker = remote('core', '/api/sandbox/acme/e2e/' + x.attempt_id)
-    if prepared_core(before_worker, x, ids) != fingerprint:
+    # Core must not mint Twin's approval_id; compare only Core-owned identities.
+    core_ids = {k: v for k, v in ids.items() if k != 'approval_id'}
+    if prepared_core(before_worker, x, core_ids) != fingerprint:
         raise HTTPException(503, 'sandbox_core_snapshot_changed')
     # Worker #348 requires exactly its 14 intent keys, and returns PENDING
     # while Temporal independently validates Core/Twin/Policy. The Debian
