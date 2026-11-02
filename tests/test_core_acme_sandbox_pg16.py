@@ -303,6 +303,7 @@ class SandboxPG16(unittest.TestCase):
                  'real_glpi_writes_allowed': False}
         approval = 'SIM-APP-TEST-VALID'
         worker = dict(common, **flags, approval_id=approval,
+                      ticket_id=state['ticket_id'],
                       schema='aiops.worker-acme-simulated-no-effect.v1',
                       receipt_status='SIMULATED_NO_EFFECT',
                       receipt_phase='PRE_RESOLUTION',
@@ -622,6 +623,48 @@ class SandboxPG16(unittest.TestCase):
                         self.assertEqual(get.call_count, 1)
                         self.assertFalse(get.call_args.kwargs['allow_redirects'])
                         self.assertEqual(get.call_args.kwargs['timeout'], 5)
+
+    def test_19_rg_acme_19_worker_ticket_and_post_lock_freshness(self):
+        """RG-ACME-19: receipt ticket binding and lock-wait TTL are mandatory."""
+        from unittest.mock import patch
+        foreign_attempt = 'ACME-SIM-WORKER-TICKET-FENCE'
+        foreign = self.post(foreign_attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(foreign)))
+        docs['worker']['ticket_id'] = 'SIM-GLPI-FOREIGN-TICKET'
+        docs['worker']['receipt_sha256'] = core.digest({
+            k: v for k, v in docs['worker'].items() if k != 'receipt_sha256'})
+        with patch.object(core, 'independent_readback',
+                          side_effect=lambda component, attempt: docs[component]):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(foreign_attempt),
+                headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(foreign_attempt).json()['ticket_status'], 'PREPARED')
+
+        attempt = 'ACME-SIM-POSTLOCK-EXPIRY'
+        prepared = self.post(attempt).json()
+        original_fresh = core.approval_fresh
+        checks = []
+        def freshness(twin):
+            checks.append(len(checks) + 1)
+            if len(checks) == 2:
+                raise HTTPException(503, 'sandbox_approval_expired_after_lock')
+            return original_fresh(twin)
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(prepared)):
+            with patch.object(core, 'approval_fresh', side_effect=freshness):
+                denied = self.client.post('/api/sandbox/acme/resolve',
+                    json=intent(attempt),
+                    headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(checks, [1, 2])
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.acme_sandbox_ticket_events "
+                "where attempt_id=%s and status='RESOLVED'",
+                (attempt,)).fetchone()[0], 0)
 
 if __name__ == '__main__':
     unittest.main()
