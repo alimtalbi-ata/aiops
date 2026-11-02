@@ -19,7 +19,7 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T12:29:02.692012+00:00",
+  "collected_at": "2026-11-02T12:34:03.078989+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -49,6 +49,7 @@
     "qualified": false,
     "status": 200
   },
+  "local_report_republish_eligible": true,
   "poller": {
     "mentions_entrypoint": true,
     "mentions_stable": true,
@@ -77,23 +78,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 5281,
+    "age_seconds": 5581,
     "collected_at": "2026-11-02T11:01:01.799223+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
       "age_seconds": 61,
-      "collected_at": "2026-11-02T12:28:01.585581+00:00",
+      "collected_at": "2026-11-02T12:33:01.742912+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 5218,
+    "publish_log_age_seconds": 5518,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "9aa57a5e9736816e7f7995143c499f02e274997c",
+  "stable_checkout_sha": "fdadc4b89fcd9c15d0b624acf96bbc64ea70fe7a",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
