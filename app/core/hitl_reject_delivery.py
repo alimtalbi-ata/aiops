@@ -270,7 +270,7 @@ def _terminal_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
-def _terminal_reply(receipt, digest, *, idempotent):
+def _terminal_reply(receipt, digest, *, idempotent, incident_id=None):
     # Raw lease tokens, token hashes, bearer credentials and approval identity
     # are deliberately excluded from the response.
     return _response(status="DEAD", receipt_schema=TERMINAL_SCHEMA,
@@ -280,7 +280,8 @@ def _terminal_reply(receipt, digest, *, idempotent):
                      proposal_revision=receipt["proposal_revision"],
                      actor_id=receipt["actor_id"], attempts=receipt["attempts"],
                      dead_at=receipt["dead_at"], receipt_sha256=digest,
-                     idempotent=idempotent)
+                     idempotent=idempotent,
+                     **({"incident_id": incident_id} if incident_id is not None else {}))
 
 
 @router.post("/api/tenants/{tenant_id}/hitl/reject-delivery/{event_id}/dead")
@@ -469,7 +470,8 @@ def _terminal_recovery(tenant_id, event_id, payload, authorization, *, mutate):
                         or not secrets.compare_digest(
                             str(digest), _terminal_digest(_terminal_json(receipt)))):
                     return _response(503)
-                return _terminal_reply(receipt, digest, idempotent=True)
+                return _terminal_reply(receipt, digest, idempotent=True,
+                                       incident_id=incident[0])
             # Readback is strictly read-only and non-enumerating before DEAD.
             if not mutate:
                 return _response()
@@ -498,7 +500,8 @@ def _terminal_recovery(tenant_id, event_id, payload, authorization, *, mutate):
                        revision, actor["actor_id"], owner, _terminal_digest(token),
                        committed_attempts, lease_until, dead_at,
                        _terminal_json(receipt), digest))
-        return _terminal_reply(receipt, digest, idempotent=False)
+        return _terminal_reply(receipt, digest, idempotent=False,
+                               incident_id=incident[0])
     except Exception:
         # Any failure in the audit INSERT rolls back the DEAD update.
         return _response(503)
