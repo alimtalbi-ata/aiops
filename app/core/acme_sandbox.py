@@ -67,7 +67,10 @@ def validate(x):
 
 def schema_ready(c):
     return c.execute("select to_regclass('aiops.acme_sandbox_attempts') is not null "
-                     "and to_regclass('aiops.run_events') is not null").fetchone()[0]
+                     "and to_regclass('aiops.ux_run_events_event_key') is not null "
+                     "and exists (select 1 from pg_attribute "
+                     "where attrelid=to_regclass('aiops.run_events') "
+                     "and attname='event_key' and not attisdropped)").fetchone()[0]
 
 def row(c, attempt):
     return c.execute(
@@ -109,7 +112,7 @@ def read(c, attempt):
         "and status='PASS' order by sequence", (run,)).fetchall()
     if len(proofs) != 7:
         raise HTTPException(503, 'sandbox_source_count_unqualified')
-    source_ids = []
+    source_ids, linked_evidence = [], []
     for index, (key, event, eids) in enumerate(proofs, 1):
         expected = ident('SYN-EVT-', attempt + ':' + str(index), 20)
         if (key != expected or type(event) is not dict
@@ -120,18 +123,24 @@ def read(c, attempt):
                 or event.get('sequence') != index
                 or event.get('source') != 'SYNTHETIC_SIMULATOR'
                 or event.get('synthetic') is not True
+                or event.get('source_issuer') != 'sandbox-simulator'
+                or event.get('actor_issuer') != 'sandbox-simulated-actor'
                 or type(eids) is not list or len(eids) != 1):
             raise HTTPException(503, 'sandbox_source_binding_unqualified')
         source_ids.append(key)
+        linked_evidence.append(eids[0])
     facts = c.execute(
-        "select evidence_id,provenance from aiops.evidence "
+        "select evidence_id,provenance,observed_at,known_at from aiops.evidence "
         "where provenance->>'sandbox_attempt_id'=%s "
         "and provenance->>'tenant_id'=%s and provenance->>'run_id'=%s",
         (attempt, TENANT, run)).fetchall()
     evidence_ids = sorted(r[0] for r in facts)
     if (len(facts) != 2 or set(evidence_ids) !=
             {ident('EVID-SIM-', attempt + ':' + str(i)) for i in (1, 2)}
-            or any(f[1].get('incident_id') != incident for f in facts)):
+            or any(f[1].get('incident_id') != incident for f in facts)
+            or any(eid not in evidence_ids for eid in linked_evidence)
+            or any(f[2] is None or f[3] is None or
+                   not (0 <= (f[3]-f[2]).total_seconds() <= 300) for f in facts)):
         raise HTTPException(503, 'sandbox_evidence_unqualified')
     ar = c.execute('select status,provider,evidence_ids,output from aiops.analysis_records '
                    'where analysis_id=%s and run_id=%s and incident_id=%s',
