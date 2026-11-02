@@ -134,7 +134,7 @@ async def startup():asyncio.create_task(worker_main())
 # Only the simulator's nonsecret IDs enter Temporal history. The activity
 # obtains fresh authenticated readbacks itself, never trusts supplied proof.
 def _acme_sandbox_enabled():
-    return os.getenv("AIOPS_ACME_SANDBOX_ENABLED") == "1"
+    return os.getenv("AIOPS_ACME_SANDBOX_ENABLED") == "true"
 
 
 def _acme_sandbox_guard():
@@ -227,6 +227,15 @@ async def read_acme_simulated(attempt_id: str, authorization: str | None = Heade
             or result.get("approval_kind") != "SIMULATED"
             or result.get("action") != "SIMULATE"
             or result.get("receipt_status") != "SIMULATED_NO_EFFECT"
+            or result.get("receipt_phase") != "PRE_RESOLUTION"
+            or result.get("core_status_at_validation") != "PREPARED"
+            or result.get("resolution_verified") is not False
+            or result.get("post_resolution_readback_required") is not True
+            or result.get("audit_transitions") != [
+                "CORE_PREPARED_INDEPENDENTLY_VERIFIED",
+                "TWIN_SIMULATED_APPROVAL_VALIDATED",
+                "POLICY_SIMULATE_INDEPENDENTLY_VERIFIED",
+                "WORKER_NO_EFFECT"]
             or result.get("human_approved") is not False
             or result.get("execution_allowed") is not False
             or result.get("effect_allowed") is not False
