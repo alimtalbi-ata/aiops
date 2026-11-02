@@ -28,9 +28,11 @@
         data.real_glpi_writes_allowed !== false ||
         data.live_effects_allowed !== false || data.host_e2e_qualified !== false ||
         !data.ticket || typeof data.ticket !== "object" ||
-        !idPattern.test(data.ticket.id) || !data.ticket.id.startsWith("SIM-GLPI-") ||
+        typeof data.ticket.id !== "string" || !idPattern.test(data.ticket.id) ||
+        !data.ticket.id.startsWith("SIM-GLPI-") ||
         data.ticket.status !== "RESOLVED" || data.ticket.transition_to !== "RESOLVED" ||
         data.ticket.transition_history_attested !== false ||
+        typeof data.incident_id !== "string" || typeof data.run_id !== "string" ||
         !idPattern.test(data.incident_id) || !idPattern.test(data.run_id)) return false;
     return true;
   };
