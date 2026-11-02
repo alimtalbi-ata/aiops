@@ -27,6 +27,27 @@ class V2SourceHandler(fixture.SourceHandler):
     """A distinct HTTPS service credential and Core-owned SQL dispatch."""
 
     def do_POST(self):
+        if self.path == "/v4/graph005-core-written-seven-readback":
+            from core.canonical_seven_https_adapter import dispatch_graph005_core_written_seven
+            import psycopg
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = self.rfile.read(length) if 1 <= length <= 8192 else b""
+                status, proof = dispatch_graph005_core_written_seven(
+                    method="POST", path=self.path,
+                    tls=isinstance(self.connection, ssl.SSLSocket),
+                    authorization=self.headers.get("Authorization", ""),
+                    body=body, client_id=fixture.CLIENT,
+                    client_secret=fixture.SECRET,
+                    connect=lambda: psycopg.connect(self.server.db_url),
+                    source=fixture.SOURCE,
+                    source_issuer="core-graph005-disposable-source",
+                    expected_events=self.server.graph005_events,
+                    graph_version=self.server.graph005_version,
+                    now=datetime.now(timezone.utc))
+                return self.reply(status, proof)
+            except Exception:
+                return self.reply(503, {"decision": "UNKNOWN"})
         if self.path != "/v2/canonical-seven-readback":
             return super().do_POST()
         from core.canonical_seven_https_adapter import dispatch_canonical_seven
