@@ -647,6 +647,9 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                        "ticket_id text not null,glpi_entity_id text not null,"
                        "permission text not null,expires_at timestamptz not null,"
                        "revoked boolean not null default false)")
+            db.execute("update aiops.incidents set payload=%s::jsonb "
+                       "where incident_id=%s",
+                       (json.dumps({"tenant_id": tenant}), ids["inc"]))
             db.execute("insert into public.ci_actor_source_grants "
                        "(issuer,actor_subject,tenant_id,run_id,incident_id,"
                        "glpi_instance_id,ticket_id,glpi_entity_id,permission,"
