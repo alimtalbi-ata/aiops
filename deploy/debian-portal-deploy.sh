@@ -23,7 +23,7 @@ git --git-dir="$TMP/repo.git" archive FETCH_HEAD app | tar -x -C "$TMP"
 TAG="aiops2-portal:pr234-${SHA:0:12}"
 docker build -f "$TMP/app/portal/Dockerfile" -t "$TAG" "$TMP/app"
 echo "PORTAL_NEW_IMAGE=$(docker image inspect "$TAG" --format '{{.Id}}')"
-printf 'services:\n  aiops2-portal:\n    image: %s\n' "$TAG" > "$TMP/new.yml"
+printf 'services:\n  aiops2-portal:\n    image: %s\n    environment:\n      AIOPS_PORTAL_HOST_PORT: "7777"\n' "$TAG" > "$TMP/new.yml"
 printf 'services:\n  aiops2-portal:\n    image: %s\n' "$OLD" > "$TMP/rollback.yml"
 cd "$DEV"
 base=(docker compose --project-name aiops2-rebuild --env-file "$ENV" -f "$DEV/compose.yml")
