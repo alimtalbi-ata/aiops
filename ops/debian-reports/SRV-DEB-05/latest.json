@@ -3,10 +3,45 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-02T22:26:01.887201+00:00",
+  "collected_at": "2026-11-02T23:25:01.830388+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "healthy",
+        "image": "aiops2-acme-sandbox-worker:35c244267b90",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-worker",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-acme-sandbox-twin:35c244267b90",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-twin",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-acme-sandbox-simulator:35c244267b90",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-simulator",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-acme-sandbox-policy:35c244267b90",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-policy",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-acme-sandbox-core:35c244267b90",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-core",
+        "state": "running"
+      },
       {
         "health": "healthy",
         "image": "aiops2-portal:pinned-1fd6391f8a8e",
@@ -19,41 +54,6 @@
         "image": "aiops2-rebuild-aiops2-intelligence",
         "inspect_ok": true,
         "name": "aiops2-rebuild-intelligence",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-rebuild-aiops2-simulator",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-simulator",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-rebuild-aiops2-worker",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-worker",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-rebuild-aiops2-core",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-core",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-p0-new-twin:b51f6c1deef9",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-twin",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-p0-new-policy:b51f6c1deef9",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-policy",
         "state": "running"
       },
       {
@@ -445,13 +445,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 3 weeks, 5 days, 12 hours, 37 minutes"
+    "uptime": "up 3 weeks, 5 days, 13 hours, 36 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 144197718016,
+      "free_bytes": 144253448192,
       "total_bytes": 172898033664,
-      "used_bytes": 19842994176
+      "used_bytes": 19787264000
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -459,14 +459,14 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.19287109375,
-      1.3876953125,
-      1.33056640625
+      1.7802734375,
+      1.39111328125,
+      1.216796875
     ],
     "memory_bytes": {
-      "MemAvailable": 19821666304,
+      "MemAvailable": 19833651200,
       "MemTotal": 25205911552,
-      "SwapFree": 9992867840,
+      "SwapFree": 9993129984,
       "SwapTotal": 10838077440
     }
   },

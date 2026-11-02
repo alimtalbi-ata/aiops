@@ -1,77 +1,12 @@
 {
   "acme_sandbox_upgrade": {
-    "collected_at": "2026-11-02T22:26:29.321317+00:00",
-    "dev_checkout_sha": "5b3b9f327f517e8f5999766389abf69c8a035cf8",
-    "docker_container_mutations": 1,
-    "docker_image_builds": 5,
-    "images": [
-      {
-        "http_status": 200,
-        "image_changed": true,
-        "json_status": "ok",
-        "observed_container_id": "ec9082c990aa7c3bc87f44eb3c0170aeae9a002d74a1f60f8843c1b72aff65e1",
-        "observed_health": "healthy",
-        "observed_image_id": "sha256:133d8c91606f5b7c8a58b45568254c796ff1be6a6d3750a67117ca3912fdb01a",
-        "previous_image_id": "sha256:87e9fb9a7412698197aa0a6888bbb18f20bb719c94d0bc3ebd14d850fc825200",
-        "service": "core"
-      },
-      {
-        "http_status": 200,
-        "image_changed": true,
-        "json_status": "ok",
-        "observed_container_id": "e893cce3d9a92de9824ce112b65ee1144615b25f3b53635db986a348aa825666",
-        "observed_health": "healthy",
-        "observed_image_id": "sha256:1f7a7dd436c8b106b245d35e279c75a6f3f9bb912a1bc824c8e09ded2cde12bc",
-        "previous_image_id": "sha256:d7667c50a266bb707accdb6ef1024c389ac0106dd18412a56d1ad74d483f7ebc",
-        "service": "twin"
-      },
-      {
-        "http_status": 200,
-        "image_changed": true,
-        "json_status": "ok",
-        "observed_container_id": "a0391c526f5dd6a84fba09c02815b82197b2da12b8b3e3ad93655538f6da68b8",
-        "observed_health": "healthy",
-        "observed_image_id": "sha256:6ef2b18df8b58e88d1ec0978ddcfe38961613a96defe86b1654276a972a3c7a5",
-        "previous_image_id": "sha256:ef84ccebd21a3e236153658d6d006f3678182a882c2540ef2349d2abd5786b4d",
-        "service": "policy"
-      },
-      {
-        "http_status": 200,
-        "image_changed": true,
-        "json_status": "ok",
-        "observed_container_id": "073be1fd3c8d0b6bd6e54ae2ded784e3050c8a766384e73da56b11687c96f50f",
-        "observed_health": "healthy",
-        "observed_image_id": "sha256:914388472b1fed5c12e37be5eb211fb8a6469937aa44a31cc1f99c7ffc0a5ad0",
-        "previous_image_id": "sha256:1a6650d8beb86fa4b6301e28a3f3e14ba07743ed66ead9f03b06259fdadf90df",
-        "service": "worker"
-      },
-      {
-        "http_status": 200,
-        "image_changed": true,
-        "json_status": "ok",
-        "observed_container_id": "29220ee4147fa24e845f5f7bb4e28e4ce20848ad6093779c2570225714ac4c3c",
-        "observed_health": "healthy",
-        "observed_image_id": "sha256:958974a4b65b076f8cb7ae069dcb432e50fc82d45241b558583794f99388d21c",
-        "previous_image_id": "sha256:b5642d8e6f5b97b641d1fffe8bfa26399290798ba8c9dbb03cafca28db31cdb1",
-        "service": "simulator"
-      }
-    ],
-    "pg16_backup_sha256": "73a279fc97f147ef4f1a9ed76aa72f0ab2d19ccb3500bcd97754802dbe0445b1",
-    "portal_http": {
-      "external_port": 7777,
-      "http_status": 200,
-      "json_status": "ok"
-    },
-    "rollback_status": "NOT_REQUIRED",
-    "source_sha": "35c244267b90dfa886eaabdfdcbcf20f18e223d7",
-    "stable_checkout_sha": "9e6802de1f07b544775b5cce2b187919387df84f",
-    "status": "PASS"
+    "status": "NOT_VERIFIED"
   },
   "acme_sandbox_verdict": "NO_GO_NOT_RUNTIME_VERIFIED",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-1EE851E8D32E49D1",
-    "collected_at": "2026-11-02T22:26:30.081770+00:00",
+    "attempt_id": "ACME-SIM-95E501FC01C84730",
+    "collected_at": "2026-11-02T23:25:03.808163+00:00",
     "human_approval_claimed": false,
     "ids": {},
     "live_effects_allowed": false,
@@ -109,7 +44,7 @@
   "canonical_compose_receipt": {
     "status": "NOT_VERIFIED"
   },
-  "collected_at": "2026-11-02T22:26:30.384177+00:00",
+  "collected_at": "2026-11-02T23:25:04.088937+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -125,7 +60,7 @@
     "portal_env_port_7777": true,
     "portal_host_port_7777": true,
     "portal_service_present": true,
-    "reason": "BACKUP_ROLLBACK_AND_E2E_GATES_MISSING",
+    "reason": "REPORTER_PUBLISHER_STALE_OR_MISSING",
     "release_manifest_disabled": true,
     "schema": "aiops.debian-portal-preflight.v1",
     "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
@@ -168,7 +103,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261102T222603Z",
+    "attempt_id": "ACME-READONLY-20261102T232503Z",
     "checks": [
       {
         "http_status": 200,
@@ -234,7 +169,7 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-02T22:26:03.248991+00:00",
+    "collected_at": "2026-11-02T23:25:03.085828+00:00",
     "glpi_ticket_id": null,
     "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "incident_id": null,
@@ -255,23 +190,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 268,
-    "collected_at": "2026-11-02T22:22:02.049087+00:00",
-    "fresh": true
+    "age_seconds": 3542,
+    "collected_at": "2026-11-02T22:26:01.887201+00:00",
+    "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 28,
-      "collected_at": "2026-11-02T22:26:01.887201+00:00",
+      "age_seconds": 2,
+      "collected_at": "2026-11-02T23:25:01.830388+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 41065,
+    "publish_log_age_seconds": 44579,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "9e6802de1f07b544775b5cce2b187919387df84f",
+  "stable_checkout_sha": "ee81144e141034b62d9e28c13ff04d045ee468e2",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
