@@ -7,7 +7,9 @@ Worker no-effect receipt alone proves a final Core transition.
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
+import json
 import os
 import re
 from pathlib import Path
@@ -122,12 +124,12 @@ def _sandbox_config(component: str) -> tuple[str, str]:
     """Preflight both trusted origins before issuing any business GET."""
     token = os.getenv("AIOPS_INTERNAL_TOKEN", "")
     config = {
-        "core": ("CORE_URL", "http://aiops2-core:810",
+        "core": ("CORE_URL", "http://aiops2-core:810", 810,
                  {"aiops2-core", "aiops2-rebuild-core", "127.0.0.1", "localhost"}),
-        "worker": ("WORKER_URL", "http://aiops2-worker:815",
+        "worker": ("WORKER_URL", "http://aiops2-worker:815", 815,
                    {"aiops2-worker", "aiops2-rebuild-worker", "127.0.0.1", "localhost"}),
     }
-    env, default, hosts = config[component]
+    env, default, expected_port, hosts = config[component]
     base = os.getenv(env, default).rstrip("/")
     try:
         parsed = urlsplit(base)
@@ -135,7 +137,7 @@ def _sandbox_config(component: str) -> tuple[str, str]:
     except ValueError:
         raise ValueError("sandbox_service_configuration_unavailable") from None
     if (not token or parsed.scheme not in ("http", "https")
-            or parsed.hostname not in hosts or not port
+            or parsed.hostname not in hosts or port != expected_port
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise ValueError("sandbox_service_configuration_unavailable")
     return base, token
@@ -196,7 +198,10 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
             or len(core["source_event_ids"]) != 7
             or not all(type(x) is str and IDENTIFIER.fullmatch(x)
                        for x in core["source_event_ids"])
-            or len(set(core["source_event_ids"])) != 7
+            or core["source_event_ids"] != [
+                "SYN-EVT-" + hashlib.sha256(
+                    (TENANT + ":" + attempt_id + ":" + str(index)).encode("ascii")
+                ).hexdigest()[:20].upper() for index in range(1, 8)]
             or type(core.get("request_sha256")) is not str
             or re.fullmatch(r"[0-9a-f]{64}", core["request_sha256"]) is None):
         raise ValueError("core_source_provenance_unqualified")
@@ -235,6 +240,42 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
             "POLICY_SIMULATE_INDEPENDENTLY_VERIFIED",
             "WORKER_NO_EFFECT"]:
         raise ValueError("worker_audit_not_attested")
+    # Digest is an integrity check, NOT a signature or independent authority.
+    receipt_digest = worker.get("receipt_sha256")
+    if (type(receipt_digest) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", receipt_digest) is None
+            or worker.get("core_request_sha256") != core["request_sha256"]
+            or worker.get("core_source_event_ids") != core["source_event_ids"]
+            or type(worker.get("twin_approval_nonce_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", worker["twin_approval_nonce_sha256"]) is None):
+        raise ValueError("worker_core_source_binding_unqualified")
+    receipt_bytes = json.dumps(
+        {key: value for key, value in worker.items() if key != "receipt_sha256"},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")
+    if not hmac.compare_digest(hashlib.sha256(receipt_bytes).hexdigest(),
+                               receipt_digest):
+        raise ValueError("worker_receipt_digest_mismatch")
+    # Proposed Core-owned durable terminal ticket receipt contract. Core must
+    # independently persist and verify these fields after its final transition;
+    # #358 does not yet produce them, so its HTTP 200 must remain 503 here.
+    ticket_binding = {
+        "schema": "aiops.portal.sim-glpi-ticket-digest.v1",
+        "tenant_id": TENANT, "attempt_id": attempt_id,
+        "incident_id": ids["incident_id"], "run_id": ids["run_id"],
+        "ticket_id": ids["ticket_id"], "ticket_status": "RESOLVED",
+        "core_request_sha256": core["request_sha256"],
+        "worker_receipt_sha256": receipt_digest,
+    }
+    ticket_digest = hashlib.sha256(json.dumps(
+        ticket_binding, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")).hexdigest()
+    if (core.get("terminal_ticket_receipt_verified") is not True
+            or core.get("worker_receipt_sha256") != receipt_digest
+            or type(core.get("terminal_ticket_sha256")) is not str
+            or not hmac.compare_digest(core["terminal_ticket_sha256"],
+                                       ticket_digest)):
+        raise ValueError("core_durable_terminal_ticket_digest_not_attested")
     return {
         "schema": SCHEMA, "authority": "SIMULATED_ONLY", "ticket_authority": "SIMULATED_ONLY", "state": "RESOLVED", "simulated": True,
         "tenant_id": TENANT, "attempt_id": attempt_id,
@@ -246,6 +287,8 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
         "worker_receipt_phase": "PRE_RESOLUTION",
         "worker_no_effect_verified": True,
         "core_resolution_after_worker_verified": True,
+        "terminal_ticket_digest_verified": True,
+        "independent_final_read_rounds": 2,
         "provenance": "SIMULATED",
         "readback_source": "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET",
         "source_freshness": "UNKNOWN", "observed_at": None,
@@ -279,16 +322,17 @@ def simulated_glpi_readback(attempt_id: str, authorization: str | None = Header(
     if not _require_sim_actor_acl(attempt_id):
         return denied(503, "SANDBOX_ACTOR_TENANT_ACL_NOT_QUALIFIED")
     try:
-        # Worker receipt first; Core final state only after that independent GET.
-        # Re-read Worker to fence a changing/replaced receipt across Core GET.
+        # Two independently fetched final Core/Worker rounds. Compare both
+        # complete JSON readbacks; no single forged/rotating HTTP 200 qualifies.
         _sandbox_config("core")
         _sandbox_config("worker")
-        worker_before = _sandbox_read("worker", attempt_id)
-        core_final = _sandbox_read("core", attempt_id)
-        worker_after = _sandbox_read("worker", attempt_id)
-        if worker_before != worker_after:
-            raise ValueError("worker_receipt_rotated_during_core_read")
-        return JSONResponse(_project(core_final, worker_after, attempt_id),
+        worker_first = _sandbox_read("worker", attempt_id)
+        core_first = _sandbox_read("core", attempt_id)
+        worker_second = _sandbox_read("worker", attempt_id)
+        core_second = _sandbox_read("core", attempt_id)
+        if worker_first != worker_second or core_first != core_second:
+            raise ValueError("sandbox_final_readback_rotated")
+        return JSONResponse(_project(core_second, worker_second, attempt_id),
                             headers=HEADERS)
     except ValueError:
         return denied(503, "CORE_SIMULATED_TICKET_NOT_ATTESTED")
