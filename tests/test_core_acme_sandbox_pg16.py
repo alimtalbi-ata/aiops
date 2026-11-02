@@ -329,6 +329,11 @@ class SandboxPG16(unittest.TestCase):
                       ticket_id=state['ticket_id'], decision='SIMULATE',
                       state='PASS', mode='SIMULATION',
                       approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        worker['core_request_sha256'] = state['request_sha256']
+        worker['core_source_event_ids'] = state['source_event_ids']
+        worker['twin_approval_nonce_sha256'] = hashlib.sha256(
+            twin['approval_nonce'].encode('ascii')).hexdigest()
+        worker['receipt_sha256'] = core.digest(worker)
         return [worker, twin, policy]
 
     def _service_reads(self, state):
