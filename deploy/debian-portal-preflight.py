@@ -6,6 +6,8 @@ receipt is never a deployment approval or a tenant/human E2E attestation.
 """
 import datetime as dt
 import importlib.util
+import hashlib
+import os
 import json
 from pathlib import Path
 import re
@@ -133,6 +135,37 @@ def local_reporter_pipeline(state, now=None):
     return status
 
 
+
+def publisher_cron_diagnostics(run=subprocess.run, home=None):
+    """Read-only cron/script evidence. Never publish raw crontab, script or logs."""
+    home = home or Path.home()
+    script = home / '.local/bin/aiops-publish-report'
+    out = {'schema': 'aiops.debian-publisher-cron-diagnostic.v1',
+           'cron_read_ok': False, 'publisher_entry_count': None,
+           'reporter_entry_count': None, 'poller_entry_count': None,
+           'publisher_script_present': False, 'publisher_script_executable': False,
+           'publisher_script_sha256': None}
+    try:
+        if script.is_file() and not script.is_symlink():
+            out['publisher_script_present'] = True
+            out['publisher_script_executable'] = os.access(script, os.X_OK)
+            if script.stat().st_size <= 65536:
+                out['publisher_script_sha256'] = hashlib.sha256(script.read_bytes()).hexdigest()
+        proc = run(['crontab', '-l'], capture_output=True, text=True,
+                   timeout=8, check=False)
+        if proc.returncode != 0 or len(proc.stdout) > 65536:
+            return out
+        lines = [line.strip() for line in proc.stdout.splitlines()
+                 if line.strip() and not line.lstrip().startswith('#')]
+        out['cron_read_ok'] = True
+        out['publisher_entry_count'] = sum('aiops-publish-report' in line for line in lines)
+        out['reporter_entry_count'] = sum('aiops-debian-reporter' in line for line in lines)
+        out['poller_entry_count'] = sum('poll.sh' in line for line in lines)
+    except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+        pass
+    return out
+
+
 def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, env=ENV, state=None):
     report = poller.collect()
     pinned = None
@@ -151,6 +184,7 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
     report['reporter_freshness'] = reporter
     report['reporter_pipeline'] = local_reporter_pipeline(
         state or Path.home() / '.local/state/aiops-debian-agent')
+    report['publisher_cron_diagnostics'] = publisher_cron_diagnostics(run=run)
     healthy = (report.get('host_portal_7777') == 'PASS' and
                report.get('http_7777', {}).get('qualified') is True)
     report['deployment_preflight'] = {
