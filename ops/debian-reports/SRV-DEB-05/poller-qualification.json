@@ -19,7 +19,7 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T12:24:02.598223+00:00",
+  "collected_at": "2026-11-02T12:29:02.692012+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -35,7 +35,7 @@
     "portal_env_port_7777": false,
     "portal_host_port_7777": true,
     "portal_service_present": true,
-    "reason": "REPORTER_STALE_OR_MISSING",
+    "reason": "REPORTER_PUBLISHER_STALE_OR_MISSING",
     "release_manifest_disabled": true,
     "schema": "aiops.debian-portal-preflight.v1",
     "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
@@ -77,13 +77,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 4981,
+    "age_seconds": 5281,
     "collected_at": "2026-11-02T11:01:01.799223+00:00",
     "fresh": false
   },
+  "reporter_pipeline": {
+    "local_report": {
+      "age_seconds": 61,
+      "collected_at": "2026-11-02T12:28:01.585581+00:00",
+      "fresh": true
+    },
+    "publish_last_class": "PUBLISHED",
+    "publish_log_age_seconds": 5218,
+    "publish_log_recent": false
+  },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "2b2dd3d8a1f3937127be3748897418c659bb7c85",
+  "stable_checkout_sha": "9aa57a5e9736816e7f7995143c499f02e274997c",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
