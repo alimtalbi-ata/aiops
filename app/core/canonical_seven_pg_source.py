@@ -128,3 +128,50 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
         "expires_at": int(min(grants[0][0], now + timedelta(seconds=60)).timestamp()),
         "revoked": False, "events": events,
     }
+
+
+def read_core_written_seven(conn, request, *, source: str, issuer: str,
+                            now: datetime) -> dict | None:
+    """Read seven *Core API-written* SYN-EVT keys, not fixture-inserted events.
+
+    Requires the independently service-authenticated caller to pin the source
+    and source issuer. The synthetic actor grant is a negative-only source
+    ownership check, NOT independently qualified IdP/GLPI human permission.
+    The original SQL producer checks the exact Incident/Run, five ownership
+    rows, grant freshness/revocation, seven Evidence and both hash domains.
+    This additional bridge requires 015 event_key and exact actor provenance.
+    """
+    proof = read_canonical_seven(conn, request, source=source,
+                                 issuer=issuer, now=now)
+    if proof is None:
+        return None
+    rows = conn.execute(
+        "select r.sequence,r.event_key,r.stage,r.event_type,r.status,"
+        "r.payload,e.provenance from aiops.run_events r "
+        "join aiops.evidence e on e.evidence_id=r.evidence_ids->>0 "
+        "where r.run_id=%s order by r.sequence",
+        (request["run_id"],)
+    ).fetchall()
+    if len(rows) != 7:
+        return None
+    for pos, row in enumerate(rows, 1):
+        sequence, key, stage, event_type, status, payload, provenance = row
+        expected_key = f"SYN-EVT-{pos:02d}"
+        if (sequence != pos or key != expected_key
+                or stage != "INGEST" or event_type != "SYNTHETIC_SOURCE_EVENT"
+                or status != "PASS"
+                or not isinstance(payload, dict)
+                or not isinstance(provenance, dict)
+                or payload.get("source_event_id") != key
+                or payload.get("actor_subject") != request["actor_subject"]
+                or payload.get("actor_issuer") != request["actor_issuer"]
+                or payload.get("source_issuer") != issuer
+                or payload.get("synthetic") is not True
+                or any(provenance.get(k) != request[k] for k in (
+                    "tenant_id", "incident_id", "run_id",
+                    "actor_subject", "actor_issuer"))
+                or provenance.get("source_issuer") != issuer
+                or proof["events"][pos - 1]["source_event_id"] != key):
+            return None
+    # The caller must not promote this source proof into human ALLOW/VERIFIED.
+    return proof
