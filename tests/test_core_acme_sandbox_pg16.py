@@ -11,7 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 from psycopg import sql
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from core import acme_sandbox as core
 
@@ -152,7 +152,11 @@ class SandboxPG16(unittest.TestCase):
 
     def test_05_bearer_not_human_or_tenant_grant(self):
         self.assertEqual(self.post('ACME-SIM-BADTOKEN', token='wrong').status_code, 401)
-        self.assertEqual(self.post('ACME-SIM-BADUNICODE', token='nonascii-é').status_code, 401)
+        # HTTP clients reject non-ASCII header bytes before transport; test the
+        # Core auth fence directly rather than misclassifying a client exception.
+        with self.assertRaises(HTTPException) as bad:
+            core.auth('Bearer nonascii-é')
+        self.assertEqual(bad.exception.status_code, 401)
         self.assertEqual(self.get('ACME-SIM-COREPOSITIVE', token='wrong').status_code, 401)
         self.assertEqual(self.client.get('/api/sandbox/acme/e2e/ACME-SIM-COREPOSITIVE').status_code, 401)
         self.assertFalse(self.client.get('/api/sandbox/acme/capabilities').json()['real_glpi_writes_allowed'])
