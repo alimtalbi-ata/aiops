@@ -76,7 +76,20 @@ SHORT="$(printf '%s' "$PIN" | cut -c1-12)"
 TAG="aiops2-portal:pinned-$SHORT"
 docker build --quiet -f "$TMP/app/portal/Dockerfile" -t "$TAG" "$TMP/app" >/dev/null
 NEW="$(docker image inspect "$TAG" --format '{{.Id}}')"
-test -n "$NEW" && test "$NEW" != "$OLD" || { echo 'PORTAL_DEPLOY=NO_GO_IMAGE_UNCHANGED'; exit 78; }
+test -n "$NEW"
+if [ "$NEW" = "$OLD" ]; then
+  # Idempotent re-entry: no recreate, and never claim a fresh Docker mutation.
+  python3 - <<'PY'
+import json,urllib.request
+with urllib.request.urlopen('http://127.0.0.1:7777/health',timeout=5) as r:
+    v=json.load(r)
+    assert r.status==200 and v.get('status')=='ok'
+    assert type(v.get('external_port')) is int and v['external_port']==7777
+PY
+  success=1
+  echo 'PORTAL_DEPLOY=NOOP_ALREADY_SAME_IMAGE'
+  exit 0
+fi
 
 # Redacted rollback record: no copies of .env, no secrets in published receipts.
 python3 - "$STATE/portal-rollback-manifest.json" "$OLD" "$OLD_CONTAINER" "$PIN" "$DEV/compose.yml" "$ENV" <<'PY'
