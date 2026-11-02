@@ -583,15 +583,45 @@ class SandboxPG16(unittest.TestCase):
                 (attempt,)).fetchone()[0], 0)
 
     def test_18_authenticated_service_origin_fence(self):
+        """RG-ACME-18: reject foreign and malformed origins before bearer egress."""
         from unittest.mock import patch
-        for value in ('https://external.example:815',
-                      'http://aiops2-worker:9999'):
-            with patch.dict(os.environ, {'WORKER_URL': value}):
-                with patch.object(core.requests, 'get',
-                                  side_effect=AssertionError('must not send bearer')):
-                    with self.assertRaises(HTTPException) as denied:
-                        core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
-            self.assertEqual(denied.exception.status_code, 503)
+        rejected = (
+            'https://external.example:815',
+            'http://aiops2-worker:9999',
+            'http://169.254.169.254:815',
+            'http://127.0.0.2:815',
+            'http://aiops2-worker:abc',
+            'http://aiops2-worker:99999',
+            'http://[::1:815',
+            'http://user:password@aiops2-worker:815',
+            'http://aiops2-worker:815/unexpected',
+            'http://aiops2-worker:815?token=unexpected',
+        )
+        for value in rejected:
+            with self.subTest(origin=value):
+                with patch.dict(os.environ, {'WORKER_URL': value}):
+                    with patch.object(core.requests, 'get',
+                                      side_effect=AssertionError('must not send bearer')) as get:
+                        with self.assertRaises(HTTPException) as denied:
+                            core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
+                        self.assertEqual(denied.exception.status_code, 503)
+                        get.assert_not_called()
+
+        class Response:
+            status_code = 200
+            content = b'{"sandbox":"synthetic"}'
+            def json(self):
+                return {'sandbox': 'synthetic'}
+
+        for origin in ('http://aiops2-worker:815', 'http://127.0.0.1:815'):
+            with self.subTest(allowed=origin):
+                with patch.dict(os.environ, {'WORKER_URL': origin}):
+                    with patch.object(core.requests, 'get', return_value=Response()) as get:
+                        result = core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
+                        self.assertEqual(result, {'sandbox': 'synthetic'})
+                        self.assertEqual(get.call_count, 1)
+                        self.assertFalse(get.call_args.kwargs['allow_redirects'])
+                        self.assertEqual(get.call_args.kwargs['timeout'], 5)
 
 if __name__ == '__main__':
     unittest.main()
