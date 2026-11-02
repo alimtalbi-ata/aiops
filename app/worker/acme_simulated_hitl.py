@@ -83,12 +83,20 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
     validate_intent(intent)
     for document in (core, twin, policy):
         _bound(document, intent)
-    if (core.get("incident_status") != "RESOLVED"
-            or core.get("run_status") != "RESOLVED"
+    # PREPARED is a causal fence: this activity must run BEFORE Core resolution.
+    if (core.get("incident_status") != "PREPARED"
+            or core.get("run_status") != "PREPARED"
             or core.get("ticket_id") != intent["ticket_id"]
             or core.get("ticket_authority") != "SIMULATED_ONLY"
-            or core.get("ticket_status") != "RESOLVED"
+            or core.get("ticket_status") != "PREPARED"
             or core.get("source") != "SYNTHETIC_SIMULATOR"
+            or core.get("source_event_count") != 7
+            or core.get("source_hashes_qualified") is not True
+            or core.get("human_approved") is not False
+            or core.get("execution_allowed") is not False
+            or core.get("effect_allowed") is not False
+            or core.get("live_effects_allowed") is not False
+            or core.get("real_glpi_writes_allowed") is not False
             or core.get("analysis_validated") is not True
             or core.get("critic_validated") is not True
             or type(core.get("evidence_count")) is not int
@@ -97,6 +105,8 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
         raise SandboxDenied("core_resolution_unqualified")
     if (twin.get("approval_id") != intent["approval_id"]
             or twin.get("proposal_id") != intent["proposal_id"]
+            or twin.get("ticket_id") != intent["ticket_id"]
+            or twin.get("issuer_id") != "twin-acme-test"
             or twin.get("approval_issuer") != ISSUER
             or twin.get("approval_actor") != ISSUER
             or twin.get("approval_kind") != "SIMULATED"
@@ -133,13 +143,18 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or policy.get("live_effects_allowed") is not False
             or policy.get("real_glpi_writes_allowed") is not False
             or policy.get("proposal_id") != intent["proposal_id"]
+            or policy.get("ticket_id") != intent["ticket_id"]
             or policy.get("approval_id") != intent["approval_id"]):
         raise SandboxDenied("policy_simulation_unqualified")
     return True
 
 
 async def simulate_no_effect(intent, *, get, now=None):
-    """Read Core/Twin/Policy twice; never POST, signal, approve or mutate."""
+    """Two independent PREPARED reads, then no-effect receipt, never resolution.
+
+    Core alone may transition to RESOLVED *after* the Temporal receipt is
+    independently read. A pre-resolved Core record must fail closed.
+    """
     intent = validate_intent(intent)
     path = "/api/sandbox/acme/e2e/" + intent["attempt_id"]
     try:
@@ -153,7 +168,9 @@ async def simulate_no_effect(intent, *, get, now=None):
         raise
     except Exception:
         raise SandboxDenied("sandbox_independent_readback_unavailable") from None
-    if (first["twin"]["approval_nonce"] != second["twin"]["approval_nonce"]
+    if (first["core"].get("request_sha256") != second["core"].get("request_sha256")
+            or first["core"].get("source_event_ids") != second["core"].get("source_event_ids")
+            or first["twin"]["approval_nonce"] != second["twin"]["approval_nonce"]
             or first["twin"]["issued_at"] != second["twin"]["issued_at"]
             or first["twin"]["expires_at"] != second["twin"]["expires_at"]):
         raise SandboxDenied("sandbox_approval_replay_or_rotation")
@@ -168,10 +185,15 @@ async def simulate_no_effect(intent, *, get, now=None):
         "effect_allowed": False, "live_effects_allowed": False,
         "real_glpi_writes_allowed": False, "effect_receipts": 0,
         "audit_transitions": [
+            "CORE_PREPARED_INDEPENDENTLY_VERIFIED",
             "TWIN_SIMULATED_APPROVAL_VALIDATED",
+            "POLICY_SIMULATE_INDEPENDENTLY_VERIFIED",
             "WORKER_NO_EFFECT",
-            "CORE_RESOLVED_INDEPENDENTLY_VERIFIED",
         ],
         "audit_authority": "TEMPORAL_WORKFLOW_HISTORY_ONLY",
+        "receipt_phase": "PRE_RESOLUTION",
+        "core_status_at_validation": "PREPARED",
+        "resolution_verified": False,
+        "post_resolution_readback_required": True,
         "core_014_015_written": False, "glpi_write": False,
     }
