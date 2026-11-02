@@ -251,7 +251,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             return result
         with self.assertRaises(SandboxDenied):
             asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
-        self.assertEqual(order, ["core", "twin", "policy", "core"])
+        self.assertEqual(order, ["core", "twin", "policy", "core", "twin", "policy"])
 
     def test_15_immutable_source_and_policy_rotation_denied(self):
         for component, field, changed in (
