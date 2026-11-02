@@ -29,6 +29,8 @@
         data.worker_receipt_phase !== "PRE_RESOLUTION" ||
         data.worker_no_effect_verified !== true ||
         data.core_resolution_after_worker_verified !== true ||
+        data.terminal_ticket_digest_verified !== true ||
+        data.independent_final_read_rounds !== 2 ||
         data.source_freshness !== "UNKNOWN" || data.observed_at !== null ||
         data.human_allow !== false || data.native_glpi_readmy_attested !== false ||
         data.real_glpi_writes_allowed !== false ||
@@ -65,14 +67,14 @@
       const data = await response.json();
       if (current !== epoch) return;
       if (!qualified(data, attempt)) return reset("503 UNKNOWN — readback 200 non qualifié");
-      el("sim-status").textContent = "SIMULATED · RESOLVED — Core final + Worker no-effect vérifiés";
+      el("sim-status").textContent = "SIMULATED · RESOLVED — 2 lectures Core/Worker + digest terminal vérifiés";
       el("sim-ticket").textContent = data.ticket.id;
       el("sim-state").textContent = "RESOLVED · SIMULATED";
       el("sim-run").textContent = data.incident_id + " / " + data.run_id;
       el("sim-transition").textContent = "État final RESOLVED ; historique de transition NOT_ATTESTED";
       el("sim-worker").textContent = "SIMULATED_NO_EFFECT · PRE_RESOLUTION · 0 effet";
       el("sim-provenance").textContent =
-        "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET · ACME-TEST · SIMULATED ; GLPI humain UNKNOWN ; E2E hôte UNKNOWN";
+        "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET · 2 lectures · digest terminal · ACME-TEST · SIMULATED ; GLPI humain UNKNOWN ; E2E hôte UNKNOWN";
     } catch (_) {
       if (current === epoch) reset("503 UNKNOWN — Core sandbox indisponible");
     } finally {
