@@ -7,8 +7,9 @@ SCRIPT=(ROOT/'deploy/debian-acme-sandbox-upgrade.sh').read_text()
 ENTRY=(ROOT/'deploy/deploy-demo-studio-v2.sh').read_text()
 MANIFEST=json.loads((ROOT/'deploy/debian-acme-sandbox-release.json').read_text())
 class SafeUpgrade(unittest.TestCase):
-    def test_manifest_disabled_until_exact_head_and_host_backup(self):
-        self.assertIs(MANIFEST['enabled'],False)
+    def test_manifest_enabled_only_for_reviewed_immutable_source_sha(self):
+        self.assertIs(MANIFEST['enabled'],True)
+        self.assertEqual(MANIFEST['candidate_sha'],'35c244267b90dfa886eaabdfdcbcf20f18e223d7')
         self.assertEqual(MANIFEST['schema'],'aiops.debian-acme-sandbox-release-intent.v1')
     def test_only_existing_five_services_no_portal_recreate(self):
         self.assertIn('services="core twin policy worker simulator"',SCRIPT)
@@ -38,6 +39,15 @@ class SafeUpgrade(unittest.TestCase):
         self.assertLess(SCRIPT.index('restore_status=PASS'),
                         SCRIPT.index('mutated=1\ncompose -f'))
         self.assertIn('if [ "$restore_created" = 1 ]; then', SCRIPT)
+
+    def test_same_pin_is_idempotent_and_prior_failure_stops_promotion(self):
+        self.assertIn('ACME_UPGRADE=ALREADY_APPLIED_VERIFIED',SCRIPT)
+        self.assertIn('NO_GO_PRIOR_SAME_PIN_FAILURE',SCRIPT)
+        self.assertIn('NO_GO_PRIOR_RECEIPT_OR_RUNTIME_DRIFT',SCRIPT)
+        self.assertIn("r.get('pg16_scratch_restore')!='PASS'",SCRIPT)
+        self.assertIn("parts[1]!=row.get('observed_container_id')",SCRIPT)
+        self.assertLess(SCRIPT.index('ALREADY_APPLIED_VERIFIED'),
+                        SCRIPT.index('docker build --quiet'))
 
     def test_private_key_and_manifest_gated_poller(self):
         self.assertIn('acme-twin-hmac.key',SCRIPT)
