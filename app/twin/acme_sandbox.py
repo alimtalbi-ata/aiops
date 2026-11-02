@@ -142,7 +142,10 @@ def validate_intent(x):
 def core_readback(x):
     """Independently authenticated Core read; never caller-supplied evidence."""
     base = os.getenv('CORE_URL', 'http://aiops2-core:810').rstrip('/')
-    target = urlsplit(base)
+    try:
+        target = urlsplit(base)
+    except ValueError:
+        raise HTTPException(503, 'independent_core_url_invalid') from None
     # Do not forward the internal bearer token to an arbitrary configured origin.
     # Match the existing Compose Core DNS names and the disposable local test origin.
     if (target.scheme not in ('http', 'https')
