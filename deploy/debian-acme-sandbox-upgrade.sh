@@ -50,9 +50,25 @@ finish() {
   code=$?
   trap - EXIT
   rollback
-  python3 - "$receipt" "$PIN" "$success" "$mutated" "$image_builds" "$code" "$rollback_status" "$backup_sha" "$TMP/images.tsv" <<'PY'
+  python3 - "$receipt" "$PIN" "$success" "$mutated" "$image_builds" "$code" "$rollback_status" "$backup_sha" "$TMP/images.tsv" "$TMP/health.tsv" "$TMP/portal-health.tsv" "$ROOT" "$DEV" <<'PY'
 import datetime,json,os,sys,tempfile,subprocess
-path,pin,success,mutated,builds,code,rollback,backup,images=sys.argv[1:]
+path,pin,success,mutated,builds,code,rollback,backup,images,health,portal,stable,dev=sys.argv[1:]
+def sha(path):
+ try:
+  p=subprocess.run(['git','-C',path,'rev-parse','HEAD'],capture_output=True,text=True,timeout=5,check=False)
+  return p.stdout.strip() if p.returncode==0 and len(p.stdout.strip())==40 else None
+ except (OSError,subprocess.TimeoutExpired):return None
+probes={}
+try:
+ for line in open(health):
+  name,http,status=line.strip().split('\t')
+  probes[name]={'http_status':int(http),'json_status':status}
+except (OSError,ValueError):pass
+portal_probe=None
+try:
+ parts=open(portal).read().strip().split('\t')
+ if len(parts)==3:portal_probe={'http_status':int(parts[0]),'json_status':parts[1],'external_port':int(parts[2])}
+except (OSError,ValueError):pass
 rows=[]
 try:
  for line in open(images):
@@ -69,11 +85,13 @@ try:
      item.update(observed_image_id=fields[0],observed_container_id=fields[1],
                  observed_health=fields[2],image_changed=fields[0]!=parts[1])
    except (OSError,subprocess.TimeoutExpired):pass
+   item.update(probes.get(parts[0],{}))
    rows.append(item)
 except OSError: pass
 payload={'schema':'aiops.debian-acme-sandbox-upgrade.v1',
  'collected_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
- 'source_sha':pin,'scope':'aiops2-rebuild core/twin/policy/worker/simulator only',
+ 'source_sha':pin,'stable_checkout_sha':sha(stable),'dev_checkout_sha':sha(dev),
+ 'portal_http':portal_probe,'scope':'aiops2-rebuild core/twin/policy/worker/simulator only',
  'portal_7777_untouched':True,'glpi_write':False,'live_effects_allowed':False,
  'docker_container_mutations':int(mutated),'docker_image_builds':int(builds),
  'status':'PASS' if success=='1' and code=='0' else 'FAIL',
@@ -202,6 +220,28 @@ for i in $(seq 1 30); do
   sleep 2
 done
 test "$all_healthy" = 1
+# Strict container-local HTTP JSON health and unchanged canonical host portal :7777.
+for svc in $services; do
+  case "$svc" in
+    core) port=810;; twin) port=811;; policy) port=813;;
+    worker) port=815;; simulator) port=816;;
+  esac
+  docker exec -i "aiops2-rebuild-$svc" python3 - "$port" <<'PY'
+import json,sys,urllib.request
+with urllib.request.urlopen('http://127.0.0.1:'+sys.argv[1]+'/health',timeout=5) as response:
+ value=json.load(response)
+ assert response.status==200 and value.get('status')=='ok'
+PY
+  printf '%s\t200\tok\n' "$svc" >> "$TMP/health.tsv"
+done
+python3 - "$TMP/portal-health.tsv" <<'PY'
+import json,sys,urllib.request
+with urllib.request.urlopen('http://127.0.0.1:7777/health',timeout=5) as response:
+ value=json.load(response)
+ assert response.status==200 and value.get('status')=='ok'
+ assert type(value.get('external_port')) is int and value['external_port']==7777
+open(sys.argv[1],'w').write('200\tok\t7777\n')
+PY
 # A successful deployment must attest a changed image and actual container recreation.
 for svc in $services; do
   old="$(awk -F '\t' -v s="$svc" '$1==s{print $2}' "$TMP/images.tsv")"
