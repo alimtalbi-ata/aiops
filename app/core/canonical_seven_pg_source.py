@@ -13,7 +13,7 @@ from core import actor_canonical_seven_source as binding
 
 
 def read_canonical_seven(conn, request, *, source: str, issuer: str,
-                         now: datetime) -> dict | None:
+                         now: datetime, source_only: bool = False) -> dict | None:
     """Return an exact synthetic source proof or None (UNKNOWN), never ALLOW.
 
     The caller must pin source and issuer in trusted server configuration.
@@ -68,6 +68,11 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
                    or not now - timedelta(minutes=5) <= r[5] <= r[6] <= now
                    for r in owned)):
         return None
+    # A canonical graph-005 SOURCE proof may coexist with subsequent Worker
+    # ITIL events on the same Run. Count only SOURCE/OBSERVED, but reject any
+    # eighth source observation (even when it is not in the pinned manifest).
+    source_filter = (" and r.stage='SOURCE' and r.event_type='OBSERVED'"
+                     if source_only else "")
     rows = conn.execute(
         "select e.external_id,e.evidence_id,e.payload_hash,e.payload,"
         "e.provenance,e.observed_at,e.known_at,r.event_id,r.sequence,"
@@ -75,10 +80,11 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
         "from aiops.evidence e join aiops.run_events r "
         "on r.run_id=%s and r.payload->>'source_event_id'=e.external_id "
         "where e.source=%s and e.provenance->>'run_id'=%s "
-        "order by r.sequence",
+        + source_filter + " order by r.sequence",
         (request["run_id"], source, request["run_id"])).fetchall()
     total = conn.execute(
-        "select count(*) from aiops.run_events where run_id=%s",
+        "select count(*) from aiops.run_events r where r.run_id=%s"
+        + source_filter,
         (request["run_id"],)).fetchone()[0]
     if len(rows) != 7 or total != 7:
         return None
@@ -205,14 +211,16 @@ def read_graph005_core_written_seven(conn, request, *, source: str, issuer: str,
             return None
         seen.add(item[0])
     proof = read_canonical_seven(
-        conn, request, source=source, issuer=issuer, now=now)
+        conn, request, source=source, issuer=issuer, now=now,
+        source_only=True)
     if proof is None:
         return None
     rows = conn.execute(
         "select r.sequence,r.event_key,r.stage,r.event_type,r.status,"
         "r.payload,e.provenance from aiops.run_events r "
         "join aiops.evidence e on e.evidence_id=r.evidence_ids->>0 "
-        "where r.run_id=%s order by r.sequence",
+        "where r.run_id=%s and r.stage='SOURCE' "
+        "and r.event_type='OBSERVED' order by r.sequence",
         (request["run_id"],)).fetchall()
     if len(rows) != 7:
         return None
