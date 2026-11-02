@@ -19,7 +19,7 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T12:34:03.078989+00:00",
+  "collected_at": "2026-11-02T13:30:03.353686+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -76,25 +76,35 @@
     "network_count": 3,
     "state": "running"
   },
+  "publisher_cron_diagnostics": {
+    "cron_read_ok": true,
+    "poller_entry_count": 1,
+    "publisher_entry_count": 1,
+    "publisher_script_executable": true,
+    "publisher_script_present": true,
+    "publisher_script_sha256": "0b7694961ad77a4cfc6cf66fcc23a9a1027793959db672598571de3d68caf5c8",
+    "reporter_entry_count": 1,
+    "schema": "aiops.debian-publisher-cron-diagnostic.v1"
+  },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 5581,
-    "collected_at": "2026-11-02T11:01:01.799223+00:00",
+    "age_seconds": 3362,
+    "collected_at": "2026-11-02T12:34:01.434978+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 61,
-      "collected_at": "2026-11-02T12:33:01.742912+00:00",
+      "age_seconds": 62,
+      "collected_at": "2026-11-02T13:29:01.277240+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 5518,
+    "publish_log_age_seconds": 8878,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "fdadc4b89fcd9c15d0b624acf96bbc64ea70fe7a",
+  "stable_checkout_sha": "ac6b80a66053814fc090edffc7cd082c00baddf6",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
