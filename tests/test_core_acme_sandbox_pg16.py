@@ -600,7 +600,7 @@ class SandboxPG16(unittest.TestCase):
             'debian_host_deployed': False, 'release_stable': 'NO_GO'
         }
         out = Path('/tmp/acme-pg16-temporal-joined.json')
-        out.write_text(json.dumps(evidence, sort_keys=True, separators=(',', ':')) + '\\n')
+        out.write_text(json.dumps(evidence, sort_keys=True, separators=(',', ':')))
         self.assertEqual(json.loads(out.read_text())['run_id'], state['run_id'])
 
 if __name__ == '__main__':
