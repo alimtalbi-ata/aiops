@@ -217,6 +217,7 @@ class Graph005TwoOSWorker(unittest.IsolatedAsyncioTestCase):
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL)
             workers.append(proc)
+            self.addCleanup(stop, proc)
             for _ in range(120):
                 if proc.poll() is not None:
                     self.fail("independent_worker_process_exited")
