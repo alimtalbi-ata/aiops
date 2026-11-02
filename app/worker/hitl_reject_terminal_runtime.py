@@ -57,7 +57,7 @@ def _validate_receipt(response, args, owner):
             or type(response.get('idempotent')) is not bool
             or response.get('actor_id') != owner
             or any(response.get(k) != args[k] for k in
-                   ('tenant_id', 'event_id', 'run_id', 'proposal_id',
+                   ('tenant_id', 'event_id', 'run_id', 'incident_id', 'proposal_id',
                     'proposal_hash', 'proposal_revision'))
             or type(response.get('receipt_sha256')) is not str
             or _HASH.fullmatch(response['receipt_sha256']) is None

@@ -9,6 +9,7 @@ on:
       - app/worker/temporal_workflows.py
       - app/worker/hitl_reject_terminal_runtime.py
       - tests/test_worker_hitl_reject_terminal_runtime.py
+      - tests/test_worker_hitl_terminal_joined_pg16.py
       - .github/workflows/worker-reject-terminal-runtime.yml
   workflow_dispatch:
 permissions:
@@ -25,7 +26,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Exact source and 8/8 no-skip tests
+      - name: Exact source and 10/10 no-skip tests
         shell: bash
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -34,13 +35,13 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           python -m compileall -q app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py
           python -m unittest discover -s tests -p 'test_worker_hitl_reject_terminal_runtime.py' -v 2>&1 | tee /tmp/worker-terminal-tests.log
-          grep -E '^Ran 8 tests in ' /tmp/worker-terminal-tests.log
+          grep -E '^Ran 10 tests in ' /tmp/worker-terminal-tests.log
           grep -x 'OK' /tmp/worker-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-terminal-tests.log
           python - <<'PY'
           import hashlib,json,os,pathlib
           r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
-             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":8,
+             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":10,
              "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,
              "runtime_workflow_registered":True,"core_344_joined_pg16":False,
              "two_os_worker_restart":False,"temporal_persisted_restart":False,
@@ -83,7 +84,7 @@ jobs:
       AIOPS_WORKER_CORE344_JOINED: "YES"
       AIOPS_INTERNAL_TOKEN: ci-worker-core344-import-only
       AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      AIOPS_CORE344_HEAD_SHA: 5e56b9dfc142eded7ad2bf84f818ceacf74e60e5
+      AIOPS_CORE344_HEAD_SHA: a84c7ef2e08c237521ae2ade1725d2799a0069cd
       AIOPS_CORE344_ROOT: ${{ github.workspace }}/core344
       AIOPS_WORKER_CORE344_RECEIPT_DIR: /tmp/worker-core344-joined-receipt
       PYTHONPATH: ${{ github.workspace }}/core344/app:${{ github.workspace }}/app:${{ github.workspace }}/core344/tests:${{ github.workspace }}/tests
@@ -100,7 +101,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: 5e56b9dfc142eded7ad2bf84f818ceacf74e60e5
+          ref: a84c7ef2e08c237521ae2ade1725d2799a0069cd
           path: core344
           persist-credentials: false
       - name: Exact two-source SHA and disposable PostgreSQL 16
@@ -148,6 +149,8 @@ jobs:
           assert data["production_registered_activity"]=="reject_terminal_recover"
           assert data["core_http_recover"]=="200_DEAD"
           assert data["core_http_readback"]=="200_DEAD_IDEMPOTENT"
+          assert data["canonical_incident_readback"] is True
+          assert data["post_dead_foreign_incident"]=="200_UNKNOWN"
           assert data["core_pg16_014_rows"]==1 and data["core_pg16_015_migration"]
           assert data["core_outbox_status"]=="DEAD" and data["core_outbox_attempts"]==8
           assert data["core_replay_idempotent"]

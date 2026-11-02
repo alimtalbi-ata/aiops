@@ -137,8 +137,9 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
                  "--host", "127.0.0.1", "--port", str(core_port)], env,
                 lambda: self._core_ready(base))
             self.assertIsNone(core.poll())
-            def post(bearer, suffix):
-                return requests.post(base + root + suffix, json=body,
+            def post(bearer, suffix, payload=None):
+                return requests.post(base + root + suffix,
+                    json=body if payload is None else payload,
                     headers={"Authorization": "Bearer " + bearer}, timeout=10)
             self.assertEqual(post("invalid", "/terminal-recover").status_code, 401)
             self.assertEqual(post(pg.token_b, "/terminal-recover").status_code, 403)
@@ -164,6 +165,7 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
                 if expect_success:
                     result = await asyncio.wait_for(handle.result(), timeout=70)
                     self.assertEqual(result["status"], "DEAD")
+                    self.assertEqual(result["incident_id"], ids["inc"])
                     self.assertFalse(result["temporal_signal_sent"])
                     self.assertFalse(result["ack_sent"])
                     self.assertFalse(result["effect_allowed"])
@@ -191,6 +193,9 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
                 replay = await execute(second.client, "replay", True)
                 self.assertTrue(replay["idempotent"])
                 self.assertEqual(replay["receipt_sha256"], initial["receipt_sha256"])
+                self.assertEqual(replay["incident_id"], ids["inc"])
+                self.assertEqual(post(pg.token_a, "/terminal-receipt",
+                    dict(body, incident_id="INC-FOREIGN")).json()["status"], "UNKNOWN")
                 # Revocation of the independently signed Core source proof:
                 # a committed 014 DEAD is still durable but no longer readable.
                 Path(pg.proof_path).write_text(json.dumps({
@@ -227,6 +232,8 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
                 "production_registered_activity": "reject_terminal_recover",
                 "core_http_recover": "200_DEAD",
                 "core_http_readback": "200_DEAD_IDEMPOTENT",
+                "canonical_incident_readback": True,
+                "post_dead_foreign_incident": "200_UNKNOWN",
                 "core_pg16_014_rows": audits, "core_pg16_015_migration": True,
                 "core_pg16_run_event_count": run_events,
                 "core_outbox_status": state[0], "core_outbox_attempts": state[1],

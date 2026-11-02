@@ -21,7 +21,7 @@ def receipt(**changes):
              execution_allowed=False, effect_allowed=False, attempts=8,
              idempotent=False, actor_id=OWNER, tenant_id=ARGS['tenant_id'],
              event_id=ARGS['event_id'], run_id=ARGS['run_id'],
-             proposal_id=ARGS['proposal_id'], proposal_hash=ARGS['proposal_hash'],
+             incident_id=ARGS['incident_id'], proposal_id=ARGS['proposal_id'], proposal_hash=ARGS['proposal_hash'],
              proposal_revision=1, receipt_sha256='b'*64,
              dead_at='2026-11-02T10:00:00+00:00')
     r.update(changes)
@@ -91,6 +91,26 @@ class TerminalRuntimeTests(unittest.TestCase):
             async def post(path, body): return receipt(**changes)
             with self.subTest(changes=changes), self.assertRaises(UnqualifiedTerminal):
                 self.run_async(post)
+
+    def test_09_missing_canonical_incident_fails_before_readback(self):
+        calls = []
+        async def post(path, body):
+            calls.append(path)
+            response = receipt()
+            del response['incident_id']
+            return response
+        with self.assertRaises(UnqualifiedTerminal):
+            self.run_async(post)
+        self.assertEqual(len(calls), 1)
+
+    def test_10_foreign_canonical_incident_on_readback_fails(self):
+        calls = []
+        async def post(path, body):
+            calls.append(path)
+            return receipt(incident_id='INC-FOREIGN') if len(calls) == 2 else receipt()
+        with self.assertRaises(UnqualifiedTerminal):
+            self.run_async(post)
+        self.assertEqual(len(calls), 2)
 
     def test_08_production_registration_and_workflow(self):
         source = (pathlib.Path(__file__).resolve().parents[1] / 'app/worker/main.py').read_text()
