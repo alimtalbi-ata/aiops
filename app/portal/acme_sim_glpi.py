@@ -157,10 +157,12 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
     if any(type(core.get(k)) is not type(v) or core.get(k) != v
            for k, v in expected.items()):
         raise ValueError("core_final_resolution_not_attested")
-    if any(core.get(k) is not False for k in (
-            "human_allow", "human_approved", "human_approval_claimed",
-            "real_glpi_writes_allowed", "live_effects_allowed",
-            "execution_allowed", "effect_allowed")):
+    # Core's canonical readback has no human_allow key; absence never grants it.
+    if (core.get("human_allow") not in (None, False)
+            or any(core.get(k) is not False for k in (
+                "human_approved", "human_approval_claimed",
+                "real_glpi_writes_allowed", "live_effects_allowed",
+                "execution_allowed", "effect_allowed"))):
         raise ValueError("core_simulated_authority_unqualified")
     if type(core.get("evidence_count")) is not int or core["evidence_count"] < 2:
         raise ValueError("core_evidence_unqualified")
