@@ -868,5 +868,55 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
                 self.assertFalse(rehashed["live_effects_authorized"])
 
 
+    def test_28_terminal_014_cross_head_without_015_stays_unexecuted(self):
+        """A real Worker terminal 014 test with zero 015 rows cannot join ACME.
+
+        Core graph005 SOURCE CI and Worker terminal recovery CI are independent
+        processes/heads. Even a valid unkeyed Worker digest and canonical
+        Incident-shaped fields do not establish a shared 015 writer or IdP.
+        """
+        from tools import acme_graph005_ci_artifact_join as join
+
+        core, worker, head = self.ci_artifact_pair()
+        worker.update({
+            "source_head": "653033bb02b721bd0f4ce90d64d95a4d83a1c4ea",
+            "core_terminal_014_exercised": True,
+            "core_pg16_run_event_count": 0,
+            "same_run_015_event_writer_joined": False,
+            "incident_id": "TEST_ONLY_UNTRUSTED_INCIDENT",
+            "run_id": "TEST_ONLY_UNTRUSTED_RUN",
+        })
+        self.sign_unkeyed_ci_receipt(worker, "payload_sha256")
+        foreign = join.build_receipt(core, worker, head)
+        self.assertEqual(foreign["cross_artifact_concordance"], "UNKNOWN")
+        self.assertEqual(foreign["cross_artifact_reason"],
+                         "CROSS_ARTIFACT_EXACT_HEAD_MISMATCH")
+
+        # Even an attacker re-pinning the Worker claim to the Core CI HEAD
+        # cannot turn a separate 014 terminal receipt into 015 SOURCE proof.
+        worker["source_head"] = head
+        self.sign_unkeyed_ci_receipt(worker, "payload_sha256")
+        re_pinned = join.build_receipt(core, worker, head)
+        self.assertEqual(re_pinned["cross_artifact_concordance"], "UNKNOWN")
+        self.assertEqual(re_pinned["cross_artifact_reason"],
+                         "UNTRUSTED_WORKER_OR_HUMAN_AUTHORITY_PROMOTION")
+        for result in (foreign, re_pinned):
+            self.assertEqual((result["verified_stage_count"],
+                              result["not_executed_stage_count"]), (0, 15))
+            self.assertEqual((result["verified_checkpoint_count"],
+                              result["not_executed_checkpoint_count"]), (0, 6))
+            self.assertEqual(result["independent_core_worker_same_run"],
+                             "NOT_ATTESTED")
+            self.assertEqual(result["core_014_terminal_worker_join"],
+                             "NOT_ATTESTED")
+            self.assertEqual(result["glpi_human_allow"], "NOT_ATTESTED")
+            self.assertEqual(result["hitl_approval"], "NOT_ATTESTED")
+            self.assertIsNone(result["runtime_incident_id"])
+            self.assertIsNone(result["runtime_run_id"])
+            self.assertFalse(result["live_effects_authorized"])
+            self.assertEqual(result["release_stable"], "NO_GO")
+            self.assertNotIn("TEST_ONLY_UNTRUSTED", json.dumps(result))
+
+
 if __name__ == "__main__":
     unittest.main()
