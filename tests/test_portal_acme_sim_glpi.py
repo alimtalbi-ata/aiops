@@ -387,6 +387,39 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                                   side_effect=good_reads(worker={**WORKER, **mutation})):
                     self.assert_unknown(self.get())
 
+    def test_rehashed_worker_extra_authority_claims_fail_even_with_matching_core_digests(self):
+        # A checksum is not an authority signature. Recompute both digests to
+        # prove the Portal rejects *schema injection*, not only broken hashes.
+        for injected in (
+            {"human_allow": True},
+            {"native_glpi_readmy_attested": True},
+            {"ticket_authority": "REAL_GLPI"},
+            {"live_executor": "AUTHORIZED"},
+            {"ticket_id": GOOD["ticket_id"]},
+        ):
+            with self.subTest(injected=injected):
+                worker = {**WORKER, **injected}
+                worker["receipt_sha256"] = hashlib.sha256(json.dumps(
+                    {k: v for k, v in worker.items() if k != "receipt_sha256"},
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                ).encode("ascii")).hexdigest()
+                core = {**GOOD, "worker_receipt_sha256": worker["receipt_sha256"]}
+                core["terminal_ticket_sha256"] = hashlib.sha256(json.dumps({
+                    "schema": "aiops.portal.sim-glpi-ticket-digest.v1",
+                    "tenant_id": "ACME-TEST", "attempt_id": ATTEMPT,
+                    "incident_id": core["incident_id"], "run_id": core["run_id"],
+                    "ticket_id": core["ticket_id"], "ticket_status": "RESOLVED",
+                    "core_request_sha256": core["request_sha256"],
+                    "worker_receipt_sha256": worker["receipt_sha256"],
+                }, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                ).encode("ascii")).hexdigest()
+                with self.assertRaisesRegex(ValueError, "worker_receipt_schema_unqualified"):
+                    acme_sim_glpi._project(core, worker, ATTEMPT)
+                with patch.object(acme_sim_glpi.requests, "get",
+                                  side_effect=good_reads(core=core, worker=worker)) as get:
+                    self.assert_unknown(self.get())
+                self.assertEqual(get.call_count, 4)
+
     def test_worker_unavailable_never_queries_core(self):
         with patch.object(acme_sim_glpi.requests, "get",
                           return_value=upstream(code=503)) as get:
