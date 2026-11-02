@@ -820,6 +820,8 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
         }
         script = (fixture.MIG / "015_core_run_event_idempotency.sql").read_text()
         with self.psycopg.connect(self.db_url) as conn:
+            conn.execute((fixture.MIG / "014_hitl_reject_terminal_receipts.sql").read_text())
+        with self.psycopg.connect(self.db_url) as conn:
             conn.execute(script)
             conn.rollback()
         with self.psycopg.connect(self.db_url) as conn:
@@ -913,6 +915,10 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                         self.assertEqual(response.status_code, 200, response.text)
                         self.assertEqual(response.json()["sequence"], pos)
                         self.assertIs(response.json()["idempotent"], False)
+                    with self.psycopg.connect(self.db_url) as conn:
+                        first_payload = conn.execute(
+                            "select payload from aiops.evidence "
+                            "where evidence_id=\'EVI-WRITER-01\'").fetchone()[0]
                     replay = client.post(
                         f"/api/runs/{run}/events",
                         json={
