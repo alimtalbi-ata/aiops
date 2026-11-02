@@ -1,5 +1,14 @@
 name: Core ACME-TEST sandbox PG16 (disposable, no effects)
 on:
+  push:
+    branches:
+      - core/acme-ticket-receipt-authority-rg08-09-20261102
+    paths:
+      - app/core/acme_sandbox.py
+      - db/migrations/017_acme_sandbox_prepared_transition.sql
+      - db/migrations/018_acme_sandbox_ticket_terminal_receipts.sql
+      - tests/test_core_acme_sandbox_pg16.py
+      - .github/workflows/core-acme-sandbox-pg16.yml
   pull_request:
     branches:
       - main
@@ -10,6 +19,7 @@ on:
       - app/core/main.py
       - db/migrations/016_acme_sandbox_attempts.sql
       - db/migrations/017_acme_sandbox_prepared_transition.sql
+      - db/migrations/018_acme_sandbox_ticket_terminal_receipts.sql
       - tests/test_core_acme_sandbox_pg16.py
       - .github/workflows/core-acme-sandbox-pg16.yml
   workflow_dispatch:
