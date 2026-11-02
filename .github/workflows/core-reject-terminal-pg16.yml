@@ -272,6 +272,8 @@ jobs:
           assert data["wrong_permission"] == 403 and data["revoked_bearer"] == 401
           assert data["revoked_source_proof"] == "UNKNOWN"
           assert data["lease_token_exported"] is False
+          assert data["incident_id_core_readback"] is True
+          assert data["post_dead_foreign_incident"] == "200_UNKNOWN"
           assert data["real_worker_os_processes"] == 0
           assert data["human_glpi_authority"] == "UNKNOWN"
           assert data["execution_allowed"] is data["effect_allowed"] is False
