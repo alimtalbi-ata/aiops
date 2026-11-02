@@ -31,7 +31,11 @@ cleanup_db() {
   psql -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $TARGET" >/dev/null || true
 }
 trap 'cleanup_db; rm -rf "$TMP"' EXIT
-pg_restore -d "$TARGET" --no-owner --exit-on-error --single-transaction "$TMP/source.dump"
+# Runner PostgreSQL 18 client can emit transaction_timeout, unsupported by PG16 server.
+# Restore the exact custom archive as SQL, removing ONLY that client-generated SET.
+pg_restore --no-owner --file "$TMP/restore.sql" "$TMP/source.dump"
+sed -i '/^SET transaction_timeout = 0;$/d' "$TMP/restore.sql"
+psql -d "$TARGET" -v ON_ERROR_STOP=1 -1 -f "$TMP/restore.sql" >/dev/null
 QUERY="SELECT table_name FROM information_schema.tables WHERE table_schema='aiops' AND table_type='BASE TABLE' ORDER BY table_name"
 mapfile -t tables < <(psql -d "$SOURCE" -At -v ON_ERROR_STOP=1 -c "$QUERY")
 [[ "${#tables[@]}" -gt 0 ]] || { echo 'FAIL|empty_source_schema'; exit 3; }
