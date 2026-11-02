@@ -481,5 +481,161 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
 
 
 
+    def vertical(self, rows=None, *, seen=None, receipt=None, claims=None,
+                 glpi=None, evidence=None, candidate=None):
+        from tools import acme_graph005_itil_15_stage_contract as vertical
+        return vertical.consume(
+            self.manifest,
+            run_events=self.worker_projection() if rows is None else rows,
+            receipt=self.receipt if receipt is None else receipt,
+            claims=self.claims if claims is None else claims,
+            expected=self.expected, record=self.record,
+            source_issuer=self.source_issuer, now=self.NOW,
+            seen_receipt_hashes=seen, glpi_receipt=glpi,
+            evidence_receipt=evidence, stage_candidate=candidate)
+
+    def assert_vertical_unexecuted(self, result):
+        self.assertEqual(result["stage_count"], 15)
+        self.assertEqual((result["verified_stage_count"],
+                          result["not_executed_stage_count"]), (0, 15))
+        self.assertEqual((result["verified_checkpoint_count"],
+                          result["not_executed_checkpoint_count"]), (0, 6))
+        self.assertTrue(all(row["status"] == "NOT_EXECUTED" and
+                            row["verification"] == "UNKNOWN" and
+                            row["runtime_id"] is None and
+                            row["runtime_evidence_ids"] == []
+                            for row in result["stages"]))
+        self.assertTrue(all(row["status"] == "NOT_EXECUTED" and
+                            row["id"] is None for row in result["checkpoints"]))
+        self.assertEqual(result["glpi_human_allow"], "NOT_ATTESTED")
+        self.assertEqual(result["hitl_approval"], "NOT_ATTESTED")
+        self.assertEqual(result["core_pg16_authority"], "UNKNOWN")
+        self.assertEqual(result["actor_idp_authority"], "UNKNOWN")
+        self.assertEqual(result["core_terminal_014_joined"], "NOT_ATTESTED")
+        self.assertEqual(result["core_outbox_replay_joined"], "NOT_ATTESTED")
+        self.assertEqual(result["durable_replay_fence"], "NOT_ATTESTED")
+        self.assertEqual(result["runtime_e2e"], "NOT_EXECUTED")
+        self.assertIsNone(result["runtime_incident_id"])
+        self.assertIsNone(result["runtime_run_id"])
+        self.assertIsNone(result["runtime_ticket_id"])
+        self.assertEqual(result["runtime_evidence_ids"], [])
+        for key in ("simulation_executed", "post_action_verified",
+                    "resolution_verified", "reopen_verified",
+                    "publishable_to_core_or_glpi", "live_effects_authorized"):
+            self.assertFalse(result[key])
+        self.assertEqual(result["release_stable"], "NO_GO")
+        rendered = json.dumps(result)
+        for secret in ("TEST_ONLY_ACTOR_A", "TEST_ONLY_TENANT_A",
+                       "TEST_ONLY_INCIDENT_A", "TEST_ONLY_RUN_A",
+                       "TEST_ONLY_TICKET_A", "TEST_ONLY_EVIDENCE_1"):
+            self.assertNotIn(secret, rendered)
+
+    def test_18_fifteen_stage_same_run_source_anchor_is_not_runtime_proof(self):
+        from tools import acme_synthetic_itil_stage_authority_consumer as plan
+        result = self.vertical(seen=set())
+        self.assertEqual(result["contract_status"], "CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["source_concordance"], "CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["worker_projection_concordance"],
+                         "CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["source_ordinals"], list(range(1, 8)))
+        self.assertEqual(result["physical_run_sequences"],
+                         [1, 2, 4, 5, 6, 8, 9])
+        self.assertEqual(result["twin_impact"]["candidate_ci_count"], 10)
+        self.assertEqual(result["twin_impact"]["source_ci_id"],
+                         "ACME-SAN-FABRIC-A")
+        self.assertEqual(result["twin_impact"]["selected_service_id"],
+                         "ACME-SVC-PAYMENTS")
+        self.assertEqual(result["twin_impact"]["observed_service_impact"],
+                         "UNKNOWN")
+        expected_stages = plan.build_receipt(self.manifest)["stages"]
+        self.assertEqual([s["stage"] for s in result["stages"]],
+                         [s["stage"] for s in expected_stages])
+        for projected, expected in zip(result["stages"], expected_stages):
+            ordinal = expected["source_step"]
+            core = self.receipt["events"][ordinal - 1]
+            self.assertEqual(projected["source_event_id"],
+                             expected["source_event_id"])
+            self.assertEqual(projected["source_ordinal"], ordinal)
+            self.assertEqual(projected["physical_run_sequence"],
+                             consumer.PHYSICAL_SEQUENCES[ordinal - 1])
+            self.assertEqual(projected["fixture_full_sha256"],
+                             expected["acme_full_event_sha256"])
+            self.assertEqual(projected["core_full_sha256_untrusted"],
+                             core["full_event_sha256"])
+            self.assertEqual(projected["core_payload_sha256_untrusted"],
+                             core["payload_sha256"])
+            self.assertNotEqual(projected["fixture_full_sha256"],
+                                projected["core_full_sha256_untrusted"])
+        self.assert_vertical_unexecuted(result)
+
+    def test_19_missing_forged_or_eighth_same_run_never_executes_itil(self):
+        cases = ("missing", "eighth", "foreign_tenant", "forged_worker_allow",
+                 "source_hash", "no_guard")
+        for case in cases:
+            with self.subTest(case=case):
+                self.setUp()
+                rows = self.worker_projection()
+                if case == "missing":
+                    rows.pop()
+                elif case == "eighth":
+                    rows.append(copy.deepcopy(rows[-1]))
+                elif case == "foreign_tenant":
+                    self.receipt["tenant_id"] = "TEST_ONLY_FOREIGN_TENANT"
+                    self.sign_untrusted()
+                elif case == "forged_worker_allow":
+                    rows[9]["decision"] = "ALLOW"
+                elif case == "source_hash":
+                    rows[3]["full_event_sha256"] = "a" * 64
+                result = self.vertical(rows, seen=None if case == "no_guard"
+                                       else set())
+                self.assertEqual(result["contract_status"], "UNKNOWN")
+                self.assertTrue(all(
+                    row["core_full_sha256_untrusted"] is None and
+                    row["core_payload_sha256_untrusted"] is None
+                    for row in result["stages"]))
+                self.assert_vertical_unexecuted(result)
+
+    def test_20_forged_human_and_evidence_shapes_cannot_promote_itil(self):
+        from tools import acme_synthetic_itil_stage_authority_consumer as plan
+        forged_glpi = {"decision": "ALLOW", "human": True,
+                       "ticket_id": "TEST_ONLY_FORGED_TICKET"}
+        forged_evidence = {"status": "VERIFIED", "immutable": True,
+                           "evidence_id": "TEST_ONLY_FORGED_EVIDENCE"}
+        result = self.vertical(seen=set(), glpi=forged_glpi,
+                               evidence=forged_evidence)
+        self.assertEqual(result["glpi_receipt_shape"], "UNVERIFIED")
+        self.assertEqual(result["evidence_receipt_shape"], "UNVERIFIED")
+        self.assertEqual(result["contract_status"], "CONSISTENT_UNTRUSTED")
+        self.assert_vertical_unexecuted(result)
+        self.assertNotIn("TEST_ONLY_FORGED", json.dumps(result))
+        candidate = plan.build_receipt(self.manifest)
+        candidate["stages"][9]["status"] = "VERIFIED"
+        with self.assertRaisesRegex(ValueError, "foreign, missing or promoted"):
+            self.vertical(seen=set(), candidate=candidate)
+
+    def test_21_rehashed_nonanchor_and_replay_remain_unexecuted(self):
+        rows, seen = self.worker_projection(), set()
+        first = self.vertical(rows, seen=seen)
+        self.assertEqual(first["contract_status"], "CONSISTENT_UNTRUSTED")
+        replayed = self.vertical(rows, seen=seen)
+        self.assertEqual(replayed["contract_status"], "UNKNOWN")
+        self.assertEqual(replayed["source_reason"], "REPLAYED_CORE_RECEIPT")
+        self.assert_vertical_unexecuted(replayed)
+        self.setUp()
+        rows = self.worker_projection()
+        source = self.receipt["events"][6]  # ordinal 7 / physical Run 9
+        source["payload_sha256"] = hashlib.sha256(
+            b"TEST_ONLY_FORGED_PAYLOAD").hexdigest()
+        source["full_event_sha256"] = hashlib.sha256(
+            b"TEST_ONLY_FORGED_FULL").hexdigest()
+        self.sign_untrusted()  # unkeyed digest is not a signature
+        rows[8]["payload_sha256"] = source["payload_sha256"]
+        rows[8]["full_event_sha256"] = source["full_event_sha256"]
+        forged = self.vertical(rows, seen=set())
+        self.assertEqual(forged["contract_status"], "CONSISTENT_UNTRUSTED")
+        self.assert_vertical_unexecuted(forged)
+        self.assertEqual(forged["source_provenance"], "NONPORTABLE_SHAPE_ONLY")
+
+
 if __name__ == "__main__":
     unittest.main()
