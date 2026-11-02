@@ -377,6 +377,8 @@ def test_twin_approval_replay_expiry_and_foreign_tenant_denied():
     'http://external.example:810',
     'https://external.example:810',
     'http://169.254.169.254:810',
+    'http://aiops2-core:9999',
+    'http://localhost:9999',
 ])
 def test_twin_independent_core_origin_rejects_untrusted_urls_before_http(monkeypatch, bad_url):
     monkeypatch.setenv('CORE_URL', bad_url)
