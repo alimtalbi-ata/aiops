@@ -1,0 +1,216 @@
+import asyncio
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+import ast
+from pathlib import Path
+import sys
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "app"))
+from worker.acme_simulated_hitl import (
+    ISSUER, SandboxDenied, capability, simulate_no_effect,
+    validate_intent, validate_readbacks,
+)
+
+NOW = datetime(2026, 11, 2, 16, 0, tzinfo=timezone.utc)
+INTENT = {
+    "attempt_id": "ACME-SIM-TEST-001", "tenant_id": "ACME-TEST",
+    "scenario_id": "ACME-SAN-PAYMENTS", "mode": "SIMULATION",
+    "approval_issuer": ISSUER, "incident_id": "INC-TEST-001",
+    "run_id": "RUN-TEST-001", "proposal_id": "PROP-TEST-001",
+    "approval_id": "SIM-APP-TEST-001", "ticket_id": "SIM-GLPI-TEST-001",
+    "idempotency_key": "ACME-SIM-TEST-001",
+    "human_approved": False, "execution_allowed": False,
+    "effect_allowed": False,
+}
+
+
+def fixtures():
+    common = dict(attempt_id=INTENT["attempt_id"], tenant_id="ACME-TEST",
+                  incident_id=INTENT["incident_id"], run_id=INTENT["run_id"])
+    core = dict(common, incident_status="RESOLVED", run_status="RESOLVED",
+                ticket_id=INTENT["ticket_id"], ticket_authority="SIMULATED_ONLY",
+                ticket_status="RESOLVED", source="SYNTHETIC_SIMULATOR",
+                analysis_validated=True, critic_validated=True, evidence_count=2,
+                proposal_id=INTENT["proposal_id"])
+    twin = dict(common, approval_id=INTENT["approval_id"],
+                proposal_id=INTENT["proposal_id"], approval_issuer=ISSUER,
+                approval_actor=ISSUER, approval_kind="SIMULATED",
+                approval_status="SIMULATED", mode="SIMULATION",
+                human_approved=False, execution_allowed=False,
+                effect_allowed=False, live_effects_allowed=False,
+                real_glpi_writes_allowed=False,
+                impact_root="ACME-SAN-FABRIC-A",
+                impacted_cis=["ACME-SVC-PAYMENTS"],
+                approval_nonce="NONCE-TEST-001",
+                issued_at=(NOW-timedelta(seconds=30)).isoformat(),
+                expires_at=(NOW+timedelta(minutes=2)).isoformat())
+    policy = dict(common, decision="SIMULATE", approval_kind="SIMULATED",
+                  approval_issuer=ISSUER, mode="SIMULATION",
+                  human_approved=False, execution_allowed=False,
+                  effect_allowed=False, live_effects_allowed=False,
+                  real_glpi_writes_allowed=False,
+                  proposal_id=INTENT["proposal_id"],
+                  approval_id=INTENT["approval_id"])
+    return dict(core=core, twin=twin, policy=policy)
+
+
+class AcmeSimulatedHitlTests(unittest.TestCase):
+    def test_01_strict_positive_no_effect_two_independent_reads(self):
+        docs = fixtures()
+        calls = []
+        async def get(component, path):
+            calls.append((component, path))
+            return deepcopy(docs[component])
+        result = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(len(calls), 6)
+        self.assertEqual({c for c, _ in calls}, {"core", "twin", "policy"})
+        self.assertTrue(all(path.endswith(INTENT["attempt_id"]) for _, path in calls))
+        self.assertEqual(result["receipt_status"], "SIMULATED_NO_EFFECT")
+        self.assertEqual(len(result["audit_transitions"]), 3)
+        self.assertEqual(result["audit_authority"], "TEMPORAL_WORKFLOW_HISTORY_ONLY")
+        self.assertFalse(result["human_approved"])
+        self.assertFalse(result["execution_allowed"])
+        self.assertFalse(result["effect_allowed"])
+        self.assertFalse(result["glpi_write"])
+        self.assertEqual(result["effect_receipts"], 0)
+        self.assertNotIn("approval_nonce", result)
+
+    def test_02_cross_tenant_denied_before_transport(self):
+        for tenant in ("TENANT-FOREIGN", "", None):
+            bad = dict(INTENT, tenant_id=tenant)
+            with self.subTest(tenant=tenant), self.assertRaises(SandboxDenied):
+                validate_intent(bad)
+        docs = fixtures()
+        docs["twin"]["tenant_id"] = "TENANT-FOREIGN"
+        with self.assertRaises(SandboxDenied):
+            validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_03_wrong_issuer_or_forged_human_allow(self):
+        for key, value in (
+            ("approval_issuer", "GLPI_HUMAN"), ("approval_actor", "human-user"),
+            ("approval_kind", "HUMAN"), ("human_approved", True),
+            ("approval_status", "ALLOW"),
+        ):
+            docs = fixtures()
+            docs["twin"][key] = value
+            with self.subTest(key=key), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+        bad = dict(INTENT, approval_issuer="GLPI_HUMAN")
+        with self.assertRaises(SandboxDenied):
+            validate_intent(bad)
+
+    def test_04_expired_future_or_overlong_approval_denied(self):
+        for issued, expires in (
+            (NOW-timedelta(minutes=6), NOW-timedelta(seconds=1)),
+            (NOW+timedelta(minutes=2), NOW+timedelta(minutes=3)),
+            (NOW-timedelta(minutes=1), NOW+timedelta(minutes=8)),
+            (NOW-timedelta(minutes=2), NOW-timedelta(minutes=1)),
+        ):
+            docs = fixtures()
+            docs["twin"]["issued_at"] = issued.isoformat()
+            docs["twin"]["expires_at"] = expires.isoformat()
+            with self.subTest(issued=issued, expires=expires), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_05_replay_or_approval_rotation_denied(self):
+        docs = fixtures()
+        count = 0
+        async def get(component, path):
+            nonlocal count
+            count += 1
+            result = deepcopy(docs[component])
+            if count > 3 and component == "twin":
+                result["approval_nonce"] = "NONCE-OTHER-001"
+            return result
+        with self.assertRaises(SandboxDenied):
+            asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(count, 6)
+
+    def test_06_live_and_effect_permissions_denied(self):
+        for key, value in (
+            ("mode", "LIVE"), ("execution_allowed", True),
+            ("effect_allowed", True), ("human_approved", True),
+        ):
+            with self.subTest(key=key), self.assertRaises(SandboxDenied):
+                validate_intent(dict(INTENT, **{key: value}))
+        for component, key, value in (
+            ("twin", "live_effects_allowed", True),
+            ("twin", "real_glpi_writes_allowed", True),
+            ("policy", "effect_allowed", True),
+            ("policy", "human_approved", True),
+        ):
+            docs = fixtures()
+            docs[component][key] = value
+            with self.subTest(component=component, key=key), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_07_idempotency_and_extra_token_denied(self):
+        for changes in (
+            {"idempotency_key": "REPLAY-NEW-001"},
+            {"lease_token": "should-not-enter-history"},
+            {"attempt_id": "bad/slash"},
+            {"ticket_id": "GLPI-REAL-001"},
+            {"approval_id": "APP-HUMAN-001"},
+        ):
+            with self.subTest(changes=list(changes)), self.assertRaises(SandboxDenied):
+                validate_intent(dict(INTENT, **changes))
+
+    def test_08_core_resolution_and_id_mismatch_denied(self):
+        for key, value in (
+            ("run_status", "RUNNING"), ("incident_status", "OPEN"),
+            ("ticket_authority", "GLPI_REAL"), ("source", "REAL"),
+            ("evidence_count", 1), ("critic_validated", False),
+            ("proposal_id", "PROP-OTHER-001"), ("incident_id", "INC-FOREIGN"),
+        ):
+            docs = fixtures()
+            docs["core"][key] = value
+            with self.subTest(key=key), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_09_policy_simulate_binding_required(self):
+        for key, value in (
+            ("decision", "ALLOW"), ("approval_kind", "HUMAN"),
+            ("approval_issuer", "IDP"), ("approval_id", "SIM-APP-FOREIGN"),
+            ("proposal_id", "PROP-FOREIGN"), ("mode", "LIVE"),
+        ):
+            docs = fixtures()
+            docs["policy"][key] = value
+            with self.subTest(key=key), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_10_transport_denial_is_sanitized_and_no_receipt(self):
+        for status in (401, 403, 503):
+            async def get(component, path):
+                raise RuntimeError("HTTP " + str(status) + " bearer secret")
+            with self.subTest(status=status), self.assertRaisesRegex(
+                    SandboxDenied, "^sandbox_independent_readback_unavailable$"):
+                asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+
+    def test_11_capability_is_simulated_only(self):
+        cap = capability()
+        self.assertEqual(cap["component"], "worker")
+        self.assertEqual(cap["approval_issuer"], ISSUER)
+        self.assertEqual(cap["tenant_id"], "ACME-TEST")
+        self.assertFalse(cap["human_approval_claimed"])
+        self.assertFalse(cap["live_effects_allowed"])
+        self.assertFalse(cap["real_glpi_writes_allowed"])
+
+    def test_12_registered_production_worker_and_temporal_no_effect(self):
+        main = (ROOT / "app/worker/main.py").read_text()
+        flows = (ROOT / "app/worker/temporal_workflows.py").read_text()
+        tree = ast.parse(main)
+        worker = next(n for n in ast.walk(tree)
+                      if isinstance(n, ast.AsyncFunctionDef) and n.name == "worker_main")
+        self.assertIn("acme_simulated_no_effect", ast.unparse(worker))
+        self.assertIn("AcmeSimulatedHitlWorkflow", ast.unparse(worker))
+        self.assertIn("REJECT_DUPLICATE", main)
+        self.assertIn("/api/sandbox/acme/e2e", main)
+        self.assertIn("acme_simulated_no_effect", flows)
+        self.assertNotIn("signal_workflow", flows)
+        self.assertNotIn("shared.http", flows)
+
+
+if __name__ == "__main__":
+    unittest.main()
