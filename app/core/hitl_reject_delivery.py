@@ -171,7 +171,7 @@ def ack_reject(tenant_id: str, event_id: str, payload: dict,
     if (not _valid(tenant_id) or not _valid(event_id)
             or type(payload) is not dict or set(payload) != required
             or payload["owner"] != actor["actor_id"]
-            or not all(_valid(payload[k]) for k in ("run_id", "incident_id", "proposal_id"))
+            or not all(_valid(payload[k]) for k in ("run_id", "proposal_id"))
             or not _valid(payload["proposal_hash"], _HASH)
             or not _valid(payload["lease_token"], _TOKEN)
             or type(payload["proposal_revision"]) is not int
@@ -405,7 +405,7 @@ def _terminal_recovery(tenant_id, event_id, payload, authorization, *, mutate):
             or type(payload) is not dict
             or set(payload) != _TERMINAL_RECOVERY_KEYS
             or payload["owner"] != actor["actor_id"]
-            or not all(_valid(payload[k]) for k in ("run_id", "proposal_id"))
+            or not all(_valid(payload[k]) for k in ("run_id", "incident_id", "proposal_id"))
             or not _valid(payload["proposal_hash"], _HASH)
             or type(payload["proposal_revision"]) is not int
             or payload["proposal_revision"] < 1
