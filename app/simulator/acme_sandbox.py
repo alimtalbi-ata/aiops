@@ -17,6 +17,14 @@ SERVICES = {
     'policy': ('POLICY_URL', 'http://aiops2-policy:813'),
     'worker': ('WORKER_URL', 'http://aiops2-worker:815'),
 }
+# Service-specific Compose/local origins; never forward internal bearer to a foreign host/port.
+ALLOWED_ORIGINS = {
+    component: frozenset((f'aiops2-{component}:{port}',
+                          f'aiops2-rebuild-{component}:{port}',
+                          f'localhost:{port}', f'127.0.0.1:{port}'))
+    for component, port in (('core', 810), ('twin', 811),
+                            ('policy', 813), ('worker', 815))
+}
 
 def enabled():
     return os.getenv('AIOPS_ACME_SANDBOX_ENABLED') == 'true' and bool(os.getenv('AIOPS_INTERNAL_TOKEN'))
@@ -38,7 +46,8 @@ def remote(component, path, method='GET', payload=None):
     env, default = SERVICES[component]
     base = os.getenv(env, default).rstrip('/')
     parsed = urlsplit(base)
-    if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+    if (parsed.scheme not in ('http', 'https')
+            or parsed.netloc not in ALLOWED_ORIGINS[component]
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise HTTPException(503, 'sandbox_service_url_invalid')
     try:
