@@ -150,6 +150,7 @@ def check_core(core, x):
     event_ids = core.get('source_event_ids')
     if (core.get('attempt_id') != x.attempt_id
             or core.get('tenant_id') != TENANT
+            or core.get('approval_issuer') != ISSUER
             or core.get('incident_id') != x.incident_id
             or core.get('run_id') != x.run_id
             or core.get('ticket_id') != x.ticket_id
