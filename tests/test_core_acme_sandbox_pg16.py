@@ -1,6 +1,7 @@
 """Disposable PG16 Core ACME sandbox, zero GLPI/LIVE/host effects."""
 import concurrent.futures
 import hashlib
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -23,7 +24,8 @@ CHAIN = ['001_schema.sql', '004_operational_model.sql',
          '013_actor_delegation_replay_ledger.sql',
          '014_hitl_reject_terminal_receipts.sql',
          '015_core_run_event_idempotency.sql', '016_acme_sandbox_attempts.sql',
-         '017_acme_sandbox_prepared_transition.sql']
+         '017_acme_sandbox_prepared_transition.sql',
+         '018_acme_sandbox_terminal_ticket_receipt.sql']
 
 def intent(attempt):
     return {'attempt_id': attempt, 'tenant_id': 'ACME-TEST',
@@ -298,6 +300,19 @@ class SandboxPG16(unittest.TestCase):
         policy = dict(common, **flags, approval_id=approval,
                       ticket_id=state['ticket_id'], decision='SIMULATE',
                       approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        nonce = 'SIM-NONCE-CORE-TEST-' + state['attempt_id']
+        issued = datetime.now(timezone.utc) - timedelta(seconds=10)
+        twin.update(approval_nonce=nonce, approval_phase='PRE_RESOLUTION',
+                    approval_status='SIMULATED',
+                    core_request_sha256=state['request_sha256'],
+                    core_source_event_ids=state['source_event_ids'],
+                    issued_at=issued.isoformat(),
+                    expires_at=(issued + timedelta(minutes=5)).isoformat())
+        worker.update(core_request_sha256=state['request_sha256'],
+                      core_source_event_ids=state['source_event_ids'],
+                      twin_approval_nonce_sha256=hashlib.sha256(
+                          nonce.encode('ascii')).hexdigest())
+        worker['receipt_sha256'] = core.digest(worker)
         return [worker, twin, policy]
 
     def test_10_core_only_finalization_after_independent_no_effect(self):
@@ -314,8 +329,9 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(result.json()['ticket_status'], 'RESOLVED')
         self.assertFalse(result.json()['effect_allowed'])
         self.assertEqual(self.get(attempt).json()['run_status'], 'RESOLVED')
+        # A replay must NOT depend on expiring Twin/Worker HTTP authorities.
         with patch.object(core, 'independent_readback',
-                          side_effect=self._qualified_no_effect(state)):
+                          side_effect=AssertionError('replay_must_be_local')):
             repeat = self.client.post('/api/sandbox/acme/resolve',
                 json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
         self.assertEqual(repeat.status_code, 200, repeat.text)
@@ -325,6 +341,20 @@ class SandboxPG16(unittest.TestCase):
                 "select count(*) from aiops.run_events where run_id=%s "
                 "and event_type='SIMULATED_RESOLVED'",
                 (state['run_id'],)).fetchone()[0], 1)
+            terminal = db.execute(
+                'select ticket_status,worker_receipt_sha256,worker_receipt,'
+                'terminal_ticket_sha256 from aiops.acme_sandbox_terminal_tickets '
+                'where tenant_id=%s and attempt_id=%s',
+                ('ACME-TEST',attempt)).fetchone()
+            self.assertEqual(terminal[0], 'RESOLVED')
+            self.assertEqual(terminal[1].strip(), terminal[2]['receipt_sha256'])
+            self.assertEqual(terminal[1].strip(), core.digest({
+                k:v for k,v in terminal[2].items() if k != 'receipt_sha256'}))
+            self.assertEqual(terminal[3].strip(),
+                             result.json()['terminal_ticket_sha256'])
+            self.assertEqual(db.execute(
+                "select ticket_status from aiops.acme_sandbox_attempts "
+                "where attempt_id=%s",(attempt,)).fetchone()[0], 'PREPARED')
 
     def test_11_forged_human_worker_receipt_cannot_resolve(self):
         from unittest.mock import patch
@@ -332,11 +362,101 @@ class SandboxPG16(unittest.TestCase):
         state = self.post(attempt).json()
         docs = self._qualified_no_effect(state)
         docs[0]['human_approved'] = True
+        docs[0]['receipt_sha256'] = core.digest({
+            k:v for k,v in docs[0].items() if k != 'receipt_sha256'})
         with patch.object(core, 'independent_readback', side_effect=docs):
             result = self.client.post('/api/sandbox/acme/resolve',
                 json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
         self.assertEqual(result.status_code, 503)
         self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+
+
+    def test_12_reject_worker_receipt_digest_mismatch(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-BAD-DIGEST'
+        state = self.post(attempt).json()
+        docs = self._qualified_no_effect(state)
+        docs[0]['receipt_sha256'] = '0' * 64
+        with patch.object(core, 'independent_readback', side_effect=docs):
+            response = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
+
+    def test_13_terminal_ticket_is_independent_and_immutable(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-TERMINAL-IMMUTABLE'
+        state = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._qualified_no_effect(state)):
+            self.assertEqual(self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN}).status_code, 200)
+        with psycopg.connect(self.url) as db:
+            with self.assertRaises(psycopg.Error):
+                with db.transaction():
+                    db.execute("update aiops.acme_sandbox_terminal_tickets "
+                               "set ticket_status='PREPARED' where attempt_id=%s",
+                               (attempt,))
+            with self.assertRaises(psycopg.Error):
+                with db.transaction():
+                    db.execute("delete from aiops.acme_sandbox_terminal_tickets "
+                               "where attempt_id=%s", (attempt,))
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'RESOLVED')
+
+    def test_14_stale_twin_approval_denies_terminal_write(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-STALE-TWIN'
+        state = self.post(attempt).json()
+        docs = self._qualified_no_effect(state)
+        past = datetime.now(timezone.utc) - timedelta(minutes=10)
+        docs[1]['issued_at'] = past.isoformat()
+        docs[1]['expires_at'] = (past + timedelta(minutes=5)).isoformat()
+        with patch.object(core, 'independent_readback', side_effect=docs):
+            response = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+
+    def test_15_native_pg16_terminal_backup_restore(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-TERMINAL-RESTORE'
+        state = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._qualified_no_effect(state)):
+            self.assertEqual(self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN}).status_code, 200)
+        target = 'aiops_core_acme_terminal_restore_ci'
+        parsed = urlsplit(self.original)
+        url = urlunsplit((parsed.scheme, parsed.netloc, '/' + target, '', ''))
+        with psycopg.connect(self.original, autocommit=True) as admin:
+            admin.execute(sql.SQL('create database {}').format(sql.Identifier(target)))
+        try:
+            with tempfile.TemporaryDirectory(prefix='acme-terminal-restore-') as tmp:
+                archive = Path(tmp) / 'terminal.pgcustom'
+                subprocess.run(['/usr/lib/postgresql/16/bin/pg_dump',
+                    '--format=custom','--no-owner','--no-acl',
+                    '--file='+str(archive),'--dbname='+self.url],
+                    check=True,timeout=90,capture_output=True)
+                subprocess.run(['/usr/lib/postgresql/16/bin/pg_restore',
+                    '--no-owner','--no-acl','--dbname='+url,str(archive)],
+                    check=True,timeout=90,capture_output=True)
+            with psycopg.connect(url) as db:
+                row = db.execute(
+                    'select ticket_status,worker_receipt_sha256,worker_receipt '
+                    'from aiops.acme_sandbox_terminal_tickets where attempt_id=%s',
+                    (attempt,)).fetchone()
+                self.assertIsNotNone(row)
+                self.assertEqual(row[0], 'RESOLVED')
+                self.assertEqual(row[1].strip(), row[2]['receipt_sha256'])
+                self.assertEqual(db.execute(
+                    'select status from aiops.runs where run_id=%s',
+                    (state['run_id'],)).fetchone()[0], 'RESOLVED')
+        finally:
+            with psycopg.connect(self.original, autocommit=True) as admin:
+                admin.execute('select pg_terminate_backend(pid) from pg_stat_activity '
+                              'where datname=%s and pid<>pg_backend_pid()', (target,))
+                admin.execute(sql.SQL('drop database if exists {}').format(
+                    sql.Identifier(target)))
 
 if __name__ == '__main__':
     unittest.main()
