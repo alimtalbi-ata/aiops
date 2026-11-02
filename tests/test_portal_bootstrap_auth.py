@@ -106,5 +106,28 @@ class PortalBootstrapAuthTests(unittest.TestCase):
         self.assertNotIn("innerHTML", response.text)
 
 
+    def test_health_contract_canonical_host_7777_is_numeric_and_fail_closed(self):
+        # Source-level HTTP regression only: no claim of actual host binding.
+        with patch.dict(os.environ, {"AIOPS_PORTAL_HOST_PORT": "7777"}):
+            response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+        self.assertEqual(response.json()["external_port"], 7777)
+        self.assertIs(type(response.json()["external_port"]), int)
+        for bad in ("17777", "17778", "not-a-port", "0"):
+            with self.subTest(bad=bad), patch.dict(
+                os.environ, {"AIOPS_PORTAL_HOST_PORT": bad}
+            ):
+                response = self.client.get("/health")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["status"], "misconfigured")
+            self.assertIsNone(response.json()["external_port"])
+            self.assertEqual(response.headers["cache-control"], "no-store")
+        with patch.dict(os.environ, {}, clear=True):
+            response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["external_port"], 7777)
+
+
 if __name__ == "__main__":
     unittest.main()
