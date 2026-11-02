@@ -578,5 +578,68 @@ class PortalHostCookieNegativeContract(unittest.TestCase):
 
 
 
+    def test_10_callback_state_cookie_tossing_rejected_before_idp_exchange(self):
+        """Ambiguous callback state cannot choose a CSRF cookie or mint a session."""
+        from urllib.parse import parse_qs, urlsplit
+        from starlette.requests import Request
+
+        callback = "https://portal.example.test:7777/auth/oidc/callback"
+        with patch.dict(os.environ, {"AIOPS_PORTAL_OIDC_REDIRECT_URI": callback}):
+            login = self.client.get("/auth/oidc/login")
+            self.assertEqual(login.status_code, 303)
+            self.assertIn("Secure", login.headers["set-cookie"])
+            state = parse_qs(urlsplit(login.headers["location"]).query)["state"][0]
+            name = oidc_session._STATE_COOKIE
+            valid = name + "=" + state
+            forged = name + "=" + "F" * 43
+            scope = {
+                "type": "http", "method": "GET",
+                "path": "/auth/oidc/callback", "scheme": "https",
+                "server": ("portal.example.test", 7777),
+                "query_string": b"",
+                "headers": [(b"cookie", valid.encode("ascii"))],
+            }
+            self.assertEqual(
+                oidc_session._unambiguous_state_cookie(Request(scope)), state)
+            ambiguous = (
+                [("Cookie", valid + "; " + forged)],
+                [("Cookie", forged + "; " + valid)],
+                [("Cookie", valid + "; " + valid)],
+                [("Cookie", valid), ("Cookie", forged)],
+                [("Cookie", forged), ("Cookie", valid)],
+                [("Cookie", valid), ("Cookie", "unrelated=1")],
+            )
+            with patch.object(oidc_session, "_exchange",
+                              side_effect=AssertionError("IdP exchange forbidden")) as exchange, \
+                 patch.object(main, "get_json",
+                              side_effect=AssertionError("business GET forbidden")) as upstream:
+                for headers in ambiguous:
+                    with self.subTest(raw_cookie_fields=len(headers),
+                                      raw_cookie_value=headers[0][1][:20]):
+                        response = self.client.get(
+                            "/auth/oidc/callback",
+                            params={"code": "disposable-code", "state": state},
+                            headers=headers)
+                        self.assertEqual(response.status_code, 401)
+                        self.assertEqual(response.headers["cache-control"], "no-store")
+                        self.assertEqual(response.json()["reason"],
+                                         "OIDC_CALLBACK_REJECTED")
+                        self.assertNotIn("set-cookie", response.headers)
+                exchange.assert_not_called()
+                upstream.assert_not_called()
+            with oidc_session._lock:
+                self.assertIn(oidc_session._digest(state), oidc_session._pending)
+                self.assertEqual(len(oidc_session._sessions), 0)
+        receipt("callback-state-cookie-ambiguity", {
+            "https_7777_callback_ambiguous_state_http": 401,
+            "duplicate_or_split_state_cookie_variants": len(ambiguous),
+            "single_cookie_parser_accepts_state": True,
+            "idp_exchanges": 0, "business_upstream_requests": 0,
+            "session_minted": False, "synthetic_allow": False,
+            "https_17777_alias_allowed": False,
+            "debian_external_https_attested": False,
+        })
+
+
 if __name__ == "__main__":
     unittest.main()
