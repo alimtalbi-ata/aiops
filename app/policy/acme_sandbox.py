@@ -45,15 +45,21 @@ def fetch_component(component, attempt):
     base = os.getenv(env, default).rstrip('/')
     try:
         parsed = urlsplit(base)
+        expected_port = 810 if component == 'core' else 811
         if (parsed.scheme not in ('http', 'https')
-                or parsed.hostname not in allowed or parsed.username
-                or parsed.password or parsed.path or parsed.query or parsed.fragment):
+                or parsed.hostname not in allowed or parsed.port != expected_port
+                or parsed.username or parsed.password
+                or parsed.path or parsed.query or parsed.fragment):
             raise ValueError('origin')
-        response = requests.get(
-            base + '/api/sandbox/acme/e2e/' + attempt,
-            headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
-                     'Accept': 'application/json'},
-            timeout=5, allow_redirects=False)
+        # RG-ACME-25: never forward the internal bearer via environment proxy
+        # or .netrc; only the fixed, allowlisted internal origin is eligible.
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.get(
+                base + '/api/sandbox/acme/e2e/' + attempt,
+                headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
+                         'Accept': 'application/json'},
+                timeout=5, allow_redirects=False)
         if response.status_code != 200 or len(response.content) > 32768:
             raise ValueError('status_or_size')
         result = response.json()
