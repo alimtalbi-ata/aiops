@@ -9,9 +9,11 @@ on:
       - .github/workflows/core-canonical-seven-binding-pg16.yml
       - tests/test_core_actor_canonical_seven_pg16.py
       - tests/test_core_actor_canonical_seven_binding_pg16.py
+      - app/core/main.py
       - app/core/actor_canonical_seven_source.py
       - app/core/canonical_seven_pg_source.py
       - app/core/canonical_seven_https_adapter.py
+      - docs/architecture/ADR-CORE-GRAPH005-SEVEN-015-SOURCE-20261102.md
       - docs/architecture/ADR-CORE-HTTPS-SEVEN-SOURCE-ADAPTER-20261101.md
       - docs/architecture/ADR-CORE-CANONICAL-SEVEN-BINDING-20261101.md
       - docs/architecture/ADR-CORE-CANONICAL-SEVEN-EVENT-SOURCE-20261101.md
@@ -81,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
-          grep -E '^Ran 17 tests in ' /tmp/core-seven-results.log
+          grep -E '^Ran 18 tests in ' /tmp/core-seven-results.log
           grep -x 'OK' /tmp/core-seven-results.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
           echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
@@ -182,6 +184,35 @@ jobs:
               "idp|writer", "ci-core-writer-only", "source-reader-disposable",
               "ci-seven-source-disposable-only", "postgresql://"))
           print("CORE_WRITTEN_SEVEN_015_SOURCE_PASS", wdigest)
+          graph = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "core-graph005-seven-015.json"
+          g = json.loads(graph.read_text())
+          gdigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in g.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert g["receipt_sha256"] == gdigest
+          assert g["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert g["schema"] == "aiops.core-graph005-seven-015-source-receipt.v1"
+          assert g["installed"] == ["001","004","009","010","011","012","013","014","015"]
+          assert g["decision"] == g["link_status"] == "UNKNOWN"
+          assert g["human_glpi_attested"] is False
+          assert g["portable_signature"] == "NONE"
+          assert g["source_fixture_only"] is True
+          assert g["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          assert g["native_pg16_restore"] is True
+          assert g["audit_before"] == g["audit_after"]
+          assert len(g["events"]) == 7
+          assert len({e["source_event_id"] for e in g["events"]}) == 7
+          assert all(len(e["source_event_id"]) == len("SYN-EVT-") + 20
+                     and e["source_event_id"].startswith("SYN-EVT-")
+                     and e["core_pg16_payload_sha256"] != e["core_pg16_full_event_sha256"]
+                     for e in g["events"])
+          assert len(g["negative_cases"]) == 7
+          assert set(g["negative_cases"].values()) == {"UNKNOWN"}
+          assert g["stale"] == g["hash_mismatch"] == "UNKNOWN"
+          assert not any(secret in graph.read_text() for secret in (
+              "idp|graph005", "ci-graph005-writer-only",
+              "ci-seven-source-disposable-only", "postgresql://"))
+          print("CORE_GRAPH005_EXACT_SEVEN_015_PASS", gdigest)
           raw = p.read_text()
           for secret in ("DISPOSABLE-LEASE-", "ci-seven-source-disposable-only",
                          "idp|alice", "source-reader-disposable"):
@@ -218,6 +249,8 @@ jobs:
           sha256sum --check core-https-adapter.sha256
           sha256sum core-written-seven-015.json > core-written-seven-015.sha256
           sha256sum --check core-written-seven-015.sha256
+          sha256sum core-graph005-seven-015.json > core-graph005-seven-015.sha256
+          sha256sum --check core-graph005-seven-015.sha256
           sha256sum freshness-expiry-negative.json > freshness-expiry-negative.sha256
           sha256sum --check freshness-expiry-negative.sha256
       - name: Upload synthetic redacted receipt only
@@ -230,5 +263,6 @@ jobs:
             /tmp/core-seven-redacted-receipts/core-owned-producer.*
             /tmp/core-seven-redacted-receipts/core-https-adapter.*
             /tmp/core-seven-redacted-receipts/core-written-seven-015.*
+            /tmp/core-seven-redacted-receipts/core-graph005-seven-015.*
           retention-days: 7
           if-no-files-found: error
