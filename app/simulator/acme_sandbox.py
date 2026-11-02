@@ -45,7 +45,10 @@ def remote(component, path, method='GET', payload=None):
         raise HTTPException(503, 'sandbox_target_denied')
     env, default = SERVICES[component]
     base = os.getenv(env, default).rstrip('/')
-    parsed = urlsplit(base)
+    try:
+        parsed = urlsplit(base)
+    except ValueError:
+        raise HTTPException(503, 'sandbox_service_url_invalid') from None
     if (parsed.scheme not in ('http', 'https')
             or parsed.netloc not in ALLOWED_ORIGINS[component]
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
