@@ -1681,3 +1681,94 @@ class AcmeCoreHttpsSevenTwinConcordanceTests(unittest.TestCase):
         self.assertEqual(result["itil_not_executed"], 15)
         self.assertEqual(result["checkpoints_not_executed"], 6)
         self.assert_unknown(self.concordance.build_receipt(self.manifest))
+
+    def test_10_core_015_numeric_keys_rejected_even_with_valid_hashes(self):
+        """Core #333 v3 writes SYN-EVT-01..07, not pinned graph-005 IDs.
+
+        Recalculate both Core hash domains to prove the rejection is caused by
+        event identity, not merely by a stale hash. No PG16/HTTP is invoked.
+        """
+        from tools import acme_synthetic_pg16_seven_bridge as bridge
+        proof = self.proof()
+        canonical = [e["source_event_id"] for e in
+                     self.concordance.build_receipt(self.manifest)["events"]]
+        for sequence, row in enumerate(proof["events"], 1):
+            foreign = f"SYN-EVT-{sequence:02d}"
+            self.assertNotEqual(foreign, canonical[sequence - 1])
+            row["source_event_id"] = foreign
+            row["payload"]["source_event_id"] = foreign
+            row["full_event"]["source_event_id"] = foreign
+            row["payload_hash"] = bridge._digest(
+                bridge.CORE_PAYLOAD_DOMAIN, row["payload"])
+            row["full_event"]["source_payload_hash"] = row["payload_hash"]
+            row["full_event_hash"] = bridge._digest(
+                bridge.CORE_FULL_DOMAIN, row["full_event"])
+        result = self.compare(200, proof)
+        self.assertEqual(result["core_source_shape"], "REJECTED")
+        self.assertEqual(result["core_source_reason"],
+                         "FOREIGN_DUPLICATE_OR_REORDERED_SOURCE_IDS")
+        self.assertEqual(result["compared_event_count"], 0)
+        self.assert_unknown(result)
+
+    def test_11_core_015_ingest_stage_rejected_even_with_canonical_ids(self):
+        """Core-written INGEST events cannot impersonate SOURCE/OBSERVED.
+
+        Even if Core later uses the exact ACME event IDs, full-event hashes
+        and a 200 source response cannot silently qualify ITIL or GLPI.
+        """
+        from tools import acme_synthetic_pg16_seven_bridge as bridge
+        proof = self.proof()
+        for row in proof["events"]:
+            row["full_event"]["stage"] = "INGEST"
+            row["full_event"]["event_type"] = "SYNTHETIC_SOURCE_EVENT"
+            row["full_event_hash"] = bridge._digest(
+                bridge.CORE_FULL_DOMAIN, row["full_event"])
+        result = self.compare(200, proof)
+        self.assertEqual(result["core_source_shape"], "REJECTED")
+        self.assertEqual(result["core_source_reason"],
+                         "CROSS_SCOPE_OR_FOREIGN_CORE_FULL_EVENT")
+        self.assertEqual(result["compared_event_count"], 0)
+        self.assert_unknown(result)
+
+    def test_12_redacted_core_015_v3_negative_receipt_pinned_to_graph(self):
+        """Machine receipt describes a source contract gap, never a Run."""
+        path = (self.gen.ROOT / "docs/customer-story" /
+                "ACME-CORE015-V3-CANONICAL-NEGATIVE-2026-11-02.json")
+        receipt = json.loads(path.read_text(encoding="utf-8"),
+                             object_pairs_hook=self.gen._unique_object)
+        local = self.concordance.build_receipt(self.manifest)
+        self.assertEqual(receipt["schema"],
+                         "aiops.acme.core015-v3-canonical-negative.v1")
+        self.assertEqual(receipt["core_source_pr"], 333)
+        self.assertEqual(receipt["core_source_head"],
+                         "78d3792ea4c83e9bd2e4dd4c48e518c90ce5c9bc")
+        self.assertEqual(receipt["graph_version"], self.gen.SEED_GIT_BLOB)
+        self.assertEqual(receipt["seed"], 20261018)
+        self.assertEqual(receipt["core_v3_event_keys"],
+                         [f"SYN-EVT-{i:02d}" for i in range(1, 8)])
+        self.assertEqual(receipt["twin_path_edges"],
+                         list(self.concordance.PATH_EDGES))
+        self.assertEqual(receipt["twin_path_nodes"],
+                         list(self.concordance.PATH_NODES))
+        expected = [{
+            k: e[k] for k in (
+                "sequence", "source_event_id", "acme_full_event_sha256",
+                "acme_local_payload_sha256", "proposed_core_payload_sha256",
+                "core_pg16_full_event_sha256", "core_pg16_payload_sha256")
+        } for e in local["events"]]
+        self.assertEqual(receipt["events"], expected)
+        self.assertEqual(receipt["core_v3_stage"], "INGEST")
+        self.assertEqual(receipt["core_v3_event_type"],
+                         "SYNTHETIC_SOURCE_EVENT")
+        self.assertEqual(receipt["source_comparison"], "REJECTED")
+        self.assertEqual(receipt["core_actor_authority"], "UNKNOWN")
+        self.assertEqual(receipt["incident_status"], "NOT_CREATED")
+        self.assertEqual(receipt["itil_stages"],
+                         {"verified": 0, "not_executed": 15})
+        self.assertEqual(receipt["checkpoints"],
+                         {"verified": 0, "not_executed": 6})
+        self.assertIsNone(receipt["runtime_incident_id"])
+        self.assertIsNone(receipt["runtime_run_id"])
+        self.assertIs(receipt["glpi_human_allow"], False)
+        self.assertIs(receipt["hitl_approval"], None)
+        self.assertNotIn("TEST_ONLY_", json.dumps(receipt))
