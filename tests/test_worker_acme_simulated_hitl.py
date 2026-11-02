@@ -29,7 +29,10 @@ INTENT = {
 def fixtures():
     common = dict(attempt_id=INTENT["attempt_id"], tenant_id="ACME-TEST",
                   incident_id=INTENT["incident_id"], run_id=INTENT["run_id"])
-    core = dict(common, incident_status="PREPARED", run_status="PREPARED",
+    core = dict(common, scenario_id="ACME-SAN-PAYMENTS",
+                mode="SIMULATION", approval_issuer=ISSUER,
+                glpi_mode="SIMULATED_ONLY", human_approval_claimed=False,
+                incident_status="PREPARED", run_status="PREPARED",
                 ticket_id=INTENT["ticket_id"], ticket_authority="SIMULATED_ONLY",
                 ticket_status="PREPARED", source="SYNTHETIC_SIMULATOR",
                 source_event_count=7, source_hashes_qualified=True,
@@ -40,7 +43,10 @@ def fixtures():
                 real_glpi_writes_allowed=False,
                 analysis_validated=True, critic_validated=True, evidence_count=2,
                 proposal_id=INTENT["proposal_id"])
-    twin = dict(common, approval_id=INTENT["approval_id"],
+    twin = dict(common, scenario_id="ACME-SAN-PAYMENTS",
+                resolution_verified=False,
+                post_resolution_readback_required=True,
+                approval_id=INTENT["approval_id"],
                 proposal_id=INTENT["proposal_id"], ticket_id=INTENT["ticket_id"],
                 issuer_id="twin-acme-test", approval_issuer=ISSUER,
                 approval_actor=ISSUER, approval_kind="SIMULATED",
@@ -57,7 +63,8 @@ def fixtures():
                 approval_nonce="NONCE-TEST-001",
                 issued_at=(NOW-timedelta(seconds=30)).isoformat(),
                 expires_at=(NOW+timedelta(minutes=2)).isoformat())
-    policy = dict(common, decision="SIMULATE", approval_kind="SIMULATED",
+    policy = dict(common, state="PASS", human_approval_claimed=False,
+                  decision="SIMULATE", approval_kind="SIMULATED",
                   approval_issuer=ISSUER, mode="SIMULATION",
                   human_approved=False, execution_allowed=False,
                   effect_allowed=False, live_effects_allowed=False,
@@ -219,7 +226,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
 
     def test_12_registered_production_worker_and_temporal_no_effect(self):
         main = (ROOT / "app/worker/main.py").read_text()
-        flows = (ROOT / "app/worker/workflow.py").read_text()
+        flows = (ROOT / "app/worker/temporal_workflows.py").read_text()
         tree = ast.parse(main)
         worker = next(n for n in ast.walk(tree)
                       if isinstance(n, ast.AsyncFunctionDef) and n.name == "worker_main")
@@ -340,6 +347,62 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             return result
         with self.assertRaisesRegex(
                 SandboxDenied, "^twin_core_prepared_snapshot_unqualified$"):
+            asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(calls, 6)
+
+
+
+    def test_21_core_scope_and_nonhuman_authority_must_match(self):
+        for field, value in (
+            ("scenario_id", "FOREIGN-SCENARIO"),
+            ("mode", "LIVE"),
+            ("approval_issuer", "HUMAN_IDP"),
+            ("glpi_mode", "REAL_GLPI"),
+            ("human_approval_claimed", True),
+        ):
+            docs = fixtures()
+            docs["core"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    SandboxDenied, "^core_resolution_unqualified$"):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_22_twin_signed_payload_must_precede_resolution(self):
+        # These fields are emitted only after Twin verifies the stored HMAC
+        # on its authenticated GET; Worker does not possess Twin signing key.
+        for field, value in (
+            ("scenario_id", "OTHER"),
+            ("resolution_verified", True),
+            ("post_resolution_readback_required", False),
+        ):
+            docs = fixtures()
+            docs["twin"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    SandboxDenied, "^twin_simulated_approval_unqualified$"):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_23_policy_must_be_pass_and_never_claim_human(self):
+        for field, value in (
+            ("state", "BLOCKED"),
+            ("human_approval_claimed", True),
+        ):
+            docs = fixtures()
+            docs["policy"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    SandboxDenied, "^policy_simulation_unqualified$"):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_24_policy_flip_between_readbacks_never_emits_receipt(self):
+        docs = fixtures()
+        calls = 0
+        async def get(component, path):
+            nonlocal calls
+            calls += 1
+            result = deepcopy(docs[component])
+            if calls > 3 and component == "policy":
+                result["state"] = "BLOCKED"
+            return result
+        with self.assertRaisesRegex(
+                SandboxDenied, "^policy_simulation_unqualified$"):
             asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
         self.assertEqual(calls, 6)
 
