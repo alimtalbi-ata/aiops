@@ -51,14 +51,25 @@ finish() {
   trap - EXIT
   rollback
   python3 - "$receipt" "$PIN" "$success" "$mutated" "$image_builds" "$code" "$rollback_status" "$backup_sha" "$TMP/images.tsv" <<'PY'
-import datetime,json,os,sys,tempfile
+import datetime,json,os,sys,tempfile,subprocess
 path,pin,success,mutated,builds,code,rollback,backup,images=sys.argv[1:]
 rows=[]
 try:
  for line in open(images):
   parts=line.strip().split('\t')
-  if len(parts)==4: rows.append(dict(service=parts[0],previous_image_id=parts[1],
-                                     rollback_tag=parts[2],candidate_tag=parts[3]))
+  if len(parts)==4:
+   item=dict(service=parts[0],previous_image_id=parts[1],
+             rollback_tag=parts[2],candidate_tag=parts[3])
+   try:
+    inspect=subprocess.run(['docker','inspect','aiops2-rebuild-'+parts[0],
+       '--format','{{.Image}} {{.Id}} {{if .State.Health}}{{.State.Health.Status}}{{end}}'],
+       capture_output=True,text=True,timeout=5,check=False)
+    fields=inspect.stdout.strip().split()
+    if inspect.returncode==0 and len(fields)==3:
+     item.update(observed_image_id=fields[0],observed_container_id=fields[1],
+                 observed_health=fields[2],image_changed=fields[0]!=parts[1])
+   except (OSError,subprocess.TimeoutExpired):pass
+   rows.append(item)
 except OSError: pass
 payload={'schema':'aiops.debian-acme-sandbox-upgrade.v1',
  'collected_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -191,5 +202,11 @@ for i in $(seq 1 30); do
   sleep 2
 done
 test "$all_healthy" = 1
+# A successful deployment must attest a changed image and actual container recreation.
+for svc in $services; do
+  old="$(awk -F '\t' -v s="$svc" '$1==s{print $2}' "$TMP/images.tsv")"
+  new="$(docker inspect "aiops2-rebuild-$svc" --format '{{.Image}}')"
+  test "$old" != "$new"
+done
 success=1
 echo 'ACME_UPGRADE=PASS_IMAGES_RECREATED_E2E_SEPARATE'
