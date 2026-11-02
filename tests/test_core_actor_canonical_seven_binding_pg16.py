@@ -1304,6 +1304,37 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
             self.assertEqual(good.status_code, 200)
             self.assertEqual(good.json()["events"], proof["events"])
 
+        # A real Worker appends ITIL events to this SAME Run after the seven
+        # SOURCE observations. They must not invalidate the source proof.
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-graph005-writer-only"}):
+            from core import main
+            with patch.object(main, "ADMIN", "ci-graph005-writer-only"), \
+                    patch.object(main, "db",
+                                 side_effect=lambda: self.psycopg.connect(self.db_url)):
+                with TestClient(main.app) as client:
+                    for version, stage in ((8, "ANALYST"), (9, "VERIFY")):
+                        body = {
+                            "expected_version": version, "stage": stage,
+                            "event_type": "WORKFLOW_OBSERVATION", "status": "PASS",
+                            "event_key": f"workflow-{stage.lower()}-graph005",
+                            "evidence_ids": [], "payload": {"synthetic": True},
+                        }
+                        response = client.post(
+                            f"/api/runs/{run}/events", json=body,
+                            headers={"Authorization": "Bearer ci-graph005-writer-only"})
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertEqual(response.json()["sequence"], version)
+        with self.psycopg.connect(self.db_url) as conn:
+            self.assertEqual(conn.execute(
+                "select count(*) from aiops.run_events where run_id=%s",
+                (run,)).fetchone()[0], 9)
+            self.assertEqual(conn.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and stage='SOURCE' and event_type='OBSERVED'",
+                (run,)).fetchone()[0], 7)
+        self.assertIsNotNone(read(request))
+        self.assertEqual(dispatch_graph005_core_written_seven(**args)[0], 200)
+
         negatives = {}
         for name, change in (
             ("foreign_actor", {"actor_subject": "idp|foreign"}),
@@ -1376,7 +1407,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 with self.psycopg.connect(restore_url) as conn:
                     self.assertEqual(conn.execute(
                         "select count(*) from aiops.run_events where run_id=%s",
-                        (run,)).fetchone()[0], 7)
+                        (run,)).fetchone()[0], 9)
                     self.assertEqual(conn.execute(
                         "select count(*) from pg_trigger where tgname in "
                         "('trg_actor_nonce_immutable',"
@@ -1387,6 +1418,33 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 with self.psycopg.connect(self.admin_url, autocommit=True) as conn:
                     conn.execute(self.sql.SQL("drop database {} with (force)").format(
                         self.sql.Identifier(restore_name)))
+        self.assertEqual(before, audit(self.db_url))
+
+        # An eighth SOURCE/OBSERVED event is not an allowed workflow append.
+        # Even a valid internal service bearer cannot expand the pinned set.
+        with self.psycopg.connect(self.db_url) as conn:
+            rogue_payload = conn.execute(
+                "select payload from aiops.evidence where external_id=%s",
+                (expected_events[0][0],)).fetchone()[0]
+        rogue_key = "SYN-EVT-FFFFFFFFFFFFFFFFFFFF"
+        rogue_payload = {**rogue_payload, "source_event_id": rogue_key}
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-graph005-writer-only"}):
+            from core import main
+            with patch.object(main, "ADMIN", "ci-graph005-writer-only"), \
+                    patch.object(main, "db",
+                                 side_effect=lambda: self.psycopg.connect(self.db_url)):
+                with TestClient(main.app) as client:
+                    response = client.post(
+                        f"/api/runs/{run}/events",
+                        json={"expected_version": 10, "stage": "SOURCE",
+                              "event_type": "OBSERVED", "status": "PASS",
+                              "event_key": rogue_key,
+                              "evidence_ids": ["EVI-GRAPH005-01"],
+                              "payload": rogue_payload},
+                        headers={"Authorization": "Bearer ci-graph005-writer-only"})
+                    self.assertEqual(response.status_code, 200, response.text)
+        self.assertIsNone(read(request))
+        self.assertEqual(dispatch_graph005_core_written_seven(**args)[0], 404)
         self.assertEqual(before, audit(self.db_url))
 
         output = os.environ.get("AIOPS_CORE_SEVEN_RECEIPT_DIR")
@@ -1417,6 +1475,11 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                     "core_pg16_full_event_sha256": e["full_event_hash"],
                 } for i, e in enumerate(proof["events"])],
                 "negative_cases": negatives, "stale": "UNKNOWN",
+                "same_run_workflow_events": 2,
+                "same_run_source_count": 7,
+                "same_run_total_before_rogue": 9,
+                "same_run_readback": "PASS_SYNTHETIC_ONLY",
+                "extra_source_event": "UNKNOWN",
                 "hash_mismatch": "UNKNOWN",
                 "audit_before": before, "audit_after": audit(self.db_url),
                 "native_pg16_restore": True, "archive_sha256": archive_sha,
