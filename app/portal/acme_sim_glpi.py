@@ -266,9 +266,10 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
     if not hmac.compare_digest(hashlib.sha256(receipt_bytes).hexdigest(),
                                receipt_digest):
         raise ValueError("worker_receipt_digest_mismatch")
-    # Proposed Core-owned durable terminal ticket receipt contract. Core must
-    # independently persist and verify these fields after its final transition;
-    # #358 does not yet produce them, so its HTTP 200 must remain 503 here.
+    # Core #358 now implements this durable terminal ticket receipt in source
+    # (migration 018), but that Draft is not stable/host deployment evidence.
+    # The independently governed viewer actor+tenant ACL is still absent, so
+    # the actual Portal route remains 503 even with a well-shaped Core 200.
     ticket_binding = {
         "schema": "aiops.portal.sim-glpi-ticket-digest.v1",
         "tenant_id": TENANT, "attempt_id": attempt_id,
