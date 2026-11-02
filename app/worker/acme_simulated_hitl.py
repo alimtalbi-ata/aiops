@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import re
+from urllib.parse import urlsplit
 
 TENANT = "ACME-TEST"
 SCENARIO = "ACME-SAN-PAYMENTS"
@@ -21,6 +22,40 @@ _KEYS = frozenset((
     "incident_id", "run_id", "proposal_id", "approval_id", "ticket_id",
     "idempotency_key", "human_approved", "execution_allowed", "effect_allowed",
 ))
+
+
+# The shared internal bearer must never be sent to a caller-configured or
+# foreign origin. These are exact service DNS names and fixed service ports,
+# not suffix checks or arbitrary private-network destinations.
+_SERVICE_ORIGINS = {
+    "core": (frozenset(("aiops2-core", "aiops2-rebuild-core",
+                         "localhost", "127.0.0.1")), 810),
+    "twin": (frozenset(("aiops2-twin", "aiops2-rebuild-twin",
+                         "localhost", "127.0.0.1")), 811),
+    "policy": (frozenset(("aiops2-policy", "aiops2-rebuild-policy",
+                           "localhost", "127.0.0.1")), 813),
+}
+
+
+def validated_service_origin(component, configured):
+    """Fence bearer egress before an authenticated sandbox GET."""
+    if component not in _SERVICE_ORIGINS or type(configured) is not str:
+        raise SandboxDenied("sandbox_service_origin_unqualified")
+    allowed, port = _SERVICE_ORIGINS[component]
+    try:
+        parsed = urlsplit(configured)
+        valid = (
+            parsed.scheme in ("http", "https")
+            and parsed.hostname in allowed and parsed.port == port
+            and parsed.username is None and parsed.password is None
+            and not parsed.path and not parsed.query and not parsed.fragment
+            and configured == configured.strip()
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise SandboxDenied("sandbox_service_origin_unqualified")
+    return configured
 
 
 class SandboxDenied(ValueError):
