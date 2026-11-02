@@ -50,3 +50,15 @@ class TerminalRejectWorkflow:
         return await workflow.execute_activity(
             "reject_terminal_recover", args,
             start_to_close_timeout=timedelta(seconds=60), retry_policy=RETRY)
+
+
+@workflow.defn
+class AcmeSimulatedHitlWorkflow:
+    """Sandbox-only no-effect activity; Temporal persists the redacted audit."""
+
+    @workflow.run
+    async def run(self, intent):
+        return await workflow.execute_activity(
+            "acme_simulated_no_effect", intent,
+            start_to_close_timeout=timedelta(seconds=60),
+            retry_policy=RetryPolicy(maximum_attempts=1))
