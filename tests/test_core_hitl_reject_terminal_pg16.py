@@ -1297,6 +1297,104 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 json.dumps(receipt, sort_keys=True, indent=2) + "\n")
         self._no_effect()
 
+    def test_terminal_same_tenant_foreign_actor_cannot_steal_rotated_lease(self):
+        """A new bearer is not a new lease owner, even inside the same tenant.
+
+        This is a Core-only HTTP/PG16 contract for Policy's separately
+        registered Worker activity; no actual Worker or Temporal process runs.
+        """
+        ids, digest, tokens = self._exhaust()
+        client = self._canonical_core_client()
+        root = f"/api/tenants/TEN-A/hitl/reject-delivery/{ids['event']}"
+        body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "incident_id": ids["inc"], "proposal_id": ids["proposal"],
+                "proposal_hash": digest, "proposal_revision": 1,
+                "execution_allowed": False, "effect_allowed": False}
+        outsider_token = "ci-core-same-tenant-foreign-" + "F" * 40
+        rotated_token = "ci-core-same-actor-rotation-" + "R" * 40
+        def entry(token, actor):
+            return {"token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                    "actor_id": actor, "tenant_ids": ["TEN-A"],
+                    "permissions": ["hitl:reject:deliver",
+                                    "hitl:reject:terminal", "hitl:reject:recover"]}
+        outsider = {"Authorization": "Bearer " + outsider_token}
+        rotated = {"Authorization": "Bearer " + rotated_token}
+        old = {"Authorization": "Bearer " + self.token_a}
+        with patch.dict(os.environ, {"AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([
+                entry(outsider_token, "svc-TEN-A-foreign"),
+                entry(rotated_token, "svc-TEN-A")])}):
+            self.assertEqual(client.post(root + "/terminal-recover",
+                json={**body, "owner": "svc-TEN-A-foreign"},
+                headers=outsider).json()["status"], "UNKNOWN")
+            self.assertEqual(client.post(root + "/terminal-recover",
+                json=body, headers=outsider).json()["status"], "UNKNOWN")
+            self.assertEqual(client.post(root + "/terminal-receipt",
+                json={**body, "owner": "svc-TEN-A-foreign"},
+                headers=outsider).json()["status"], "UNKNOWN")
+            self.assertEqual(client.post(root + "/terminal-recover",
+                json=body, headers=old).status_code, 401)
+            with self.psycopg.connect(self.url) as db:
+                self.assertEqual(db.execute(
+                    "select status,attempts from aiops.hitl_decision_outbox "
+                    "where event_id=%s", (ids["event"],)).fetchone(),
+                    ("LEASED", 8))
+                self.assertEqual(db.execute(
+                    "select count(*) from aiops.hitl_reject_terminal_receipts "
+                    "where event_id=%s", (ids["event"],)).fetchone()[0], 0)
+            recovered = client.post(root + "/terminal-recover",
+                                    json=body, headers=rotated)
+            readback = client.post(root + "/terminal-receipt",
+                                   json=body, headers=rotated)
+            self.assertEqual((recovered.status_code, recovered.json()["status"],
+                              recovered.json()["idempotent"]),
+                             (200, "DEAD", False))
+            self.assertEqual((readback.status_code, readback.json()["status"],
+                              readback.json()["idempotent"]),
+                             (200, "DEAD", True))
+            self.assertEqual(recovered.json()["receipt_sha256"],
+                             readback.json()["receipt_sha256"])
+            self.assertEqual(client.post(root + "/terminal-receipt",
+                json={**body, "owner": "svc-TEN-A-foreign"},
+                headers=outsider).json()["status"], "UNKNOWN")
+            self.assertNotIn(tokens[-1], recovered.text)
+            self.assertNotIn(rotated_token, recovered.text)
+        with patch.dict(os.environ, {"AIOPS_XREF_READ_AUTHZ_JSON":
+                json.dumps([entry(outsider_token, "svc-TEN-A-foreign")])}):
+            self.assertEqual(client.post(root + "/terminal-receipt",
+                json=body, headers=rotated).status_code, 401)
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=%s", (ids["event"],)).fetchone(), ("DEAD", 8))
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+        target = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if target:
+            receipt = {
+                "schema": "aiops.core-terminal-lease-owner-fence-ci.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "same_tenant_foreign_actor": "200_UNKNOWN_NO_MUTATION",
+                "foreign_owner_claim": "200_UNKNOWN_NO_MUTATION",
+                "old_bearer_revoked": 401,
+                "same_actor_rotated_bearer": "200_DEAD",
+                "readback": "200_DEAD_IDEMPOTENT",
+                "postcommit_foreign_actor": "200_UNKNOWN",
+                "rotated_bearer_revoked": 401,
+                "audit_014_rows": 1, "attempts": 8,
+                "receipt_sha256": readback.json()["receipt_sha256"],
+                "lease_token_exported": False,
+                "real_worker_os_processes": 0,
+                "human_glpi_authority": "UNKNOWN",
+                "execution_allowed": False, "effect_allowed": False,
+                "rollback": "REVERT_CORE_TEST_WORKFLOW_KEEP_013_014_015"}
+            receipt["payload_sha256"] = hashlib.sha256(json.dumps(
+                receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            Path(target).mkdir(parents=True, exist_ok=True)
+            (Path(target) / "lease-owner-fence.json").write_text(
+                json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+        self._no_effect()
+
     def test_terminal_restart_recovery_insert_rollback_and_concurrency(self):
         ids, digest, tokens = self._exhaust()
         body = {"owner": "svc-TEN-A", "run_id": ids["run"],
