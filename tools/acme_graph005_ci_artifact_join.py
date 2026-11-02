@@ -79,6 +79,17 @@ def read_artifact(path, json_name):
              "json_sha256": digest, "sha256_sidecar_verified": True})
 
 
+def _inner_receipt_integrity(document, digest_key):
+    """Check the producer's unkeyed canonical digest, never its authority."""
+    claimed = document.get(digest_key)
+    if type(claimed) is not str or not HEX64.fullmatch(claimed):
+        return False
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != digest_key},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(canonical).hexdigest() == claimed
+
+
 def validate(core, worker, expected_head):
     """Return structural reason; never attest actor, tenant or same runtime Run."""
     if type(expected_head) is not str or not HEX40.fullmatch(expected_head):
@@ -100,6 +111,12 @@ def validate(core, worker, expected_head):
             core.get("human_glpi_attested") is not False or
             core.get("acme_full_event_equivalence") != "NOT_VERIFIED"):
         return "UNTRUSTED_CORE_AUTHORITY_PROMOTION"
+    # Both producer receipts have their own unkeyed canonical digest.
+    # A ZIP SHA256 sidecar alone cannot detect rehashed inner JSON mutations.
+    # Even valid inner digests are integrity only, not same-Run authentication.
+    if (not _inner_receipt_integrity(core, "receipt_sha256") or
+            not _inner_receipt_integrity(worker, "payload_sha256")):
+        return "CORRUPT_OR_MISSING_INNER_RECEIPT_DIGEST"
     if (core.get("hash_domains") != DOMAINS or
             core.get("source_payload_sequence_domain") != "PINNED_SOURCE_ORDINAL" or
             core.get("source_run_sequence_domain") != "PHYSICAL_RUN_SEQUENCE" or
