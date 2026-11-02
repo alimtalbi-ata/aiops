@@ -44,6 +44,19 @@ def ids():
     return dict(incident_id='INC-SIM-001', run_id='RUN-SIM-001',
                 ticket_id='SIM-GLPI-001', proposal_id='PROP-SIM-001')
 
+
+def prepared_core():
+    return intent() | ids() | dict(
+        incident_status='PREPARED', run_status='PREPARED',
+        ticket_status='PREPARED', ticket_authority='SIMULATED_ONLY',
+        source='SYNTHETIC_SIMULATOR', source_event_count=7,
+        source_hashes_qualified=True,
+        source_event_ids=['SYN-EVT-%02d' % i for i in range(1, 8)],
+        request_sha256='a' * 64, analysis_validated=True,
+        critic_validated=True, evidence_count=2, human_approved=False,
+        execution_allowed=False, effect_allowed=False,
+        real_glpi_writes_allowed=False)
+
 def test_simulator_disabled_before_capability(monkeypatch):
     monkeypatch.delenv('AIOPS_ACME_SANDBOX_ENABLED')
     with pytest.raises(HTTPException) as e:
@@ -104,19 +117,47 @@ def test_twin_rejects_untrusted_intent_before_core(monkeypatch):
                             authorization='Bearer test-internal-token-not-real')
     assert e.value.status_code == 403
 
-def test_twin_rejects_unresolved_core():
+@pytest.mark.parametrize('state', ['RESOLVED', 'OPEN', 'CLOSED'])
+def test_twin_rejects_not_prepared_core(state):
     x = TWIN.ApprovalIntent(**(intent() | ids()))
     with pytest.raises(HTTPException) as e:
-        TWIN.check_core({'attempt_id': x.attempt_id, 'tenant_id': x.tenant_id,
-                         'incident_id': x.incident_id, 'run_id': x.run_id,
-                         'ticket_id': x.ticket_id, 'proposal_id': x.proposal_id,
-                         'incident_status': 'OPEN'}, x)
+        TWIN.check_core(prepared_core() | {'incident_status': state,
+                                            'run_status': state,
+                                            'ticket_status': state}, x)
     assert e.value.status_code == 503
+
+
+def test_twin_prepared_core_positive_and_cross_run_denied():
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    assert TWIN.check_core(prepared_core(), x) == ('a' * 64,
+                                                   tuple(prepared_core()['source_event_ids']))
+    with pytest.raises(HTTPException):
+        TWIN.check_core(prepared_core() | {'run_id': 'RUN-UNRELATED'}, x)
+
+
+def test_twin_prepared_fence_rejects_resolution_race(monkeypatch):
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    calls = iter([prepared_core(), prepared_core() | {'run_status': 'RESOLVED'}])
+    monkeypatch.setattr(TWIN, 'core_readback', lambda _x: next(calls))
+    with pytest.raises(HTTPException) as e:
+        TWIN.check_core_fence(x)
+    assert e.value.status_code == 503
+
+
+def test_twin_prepared_fence_rejects_source_replay(monkeypatch):
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    calls = iter([prepared_core(), prepared_core() | {'request_sha256': 'b' * 64}])
+    monkeypatch.setattr(TWIN, 'core_readback', lambda _x: next(calls))
+    with pytest.raises(HTTPException) as e:
+        TWIN.check_core_fence(x)
+    assert e.value.detail == 'core_prepared_snapshot_changed'
 
 def sample_record():
     now = datetime.now(timezone.utc)
     payload = intent() | ids() | dict(
         approval_id=TWIN.approval_id(intent()['attempt_id']),
+        core_request_sha256='a' * 64,
+        core_source_event_ids=prepared_core()['source_event_ids'],
         issuer_id='twin-acme-test', approval_actor=TWIN.ISSUER,
         approval_kind='SIMULATED', approval_status='SIMULATED',
         approval_nonce='SIMNONCE-1234567890ABCDEF',
@@ -160,9 +201,12 @@ def test_simulator_positive_structural_orchestration_only_simulated(monkeypatch)
                     'real_glpi_writes_allowed': False}
         base = intent() | ids()
         if component == 'core':
-            return base | {'glpi_mode': 'SIMULATED_ONLY'}
+            return prepared_core() | {'glpi_mode': 'SIMULATED_ONLY'}
         if component == 'twin':
             return base | {'approval_id': 'SIM-APP-UNIT001',
+                           'issuer_id': 'twin-acme-test',
+                           'core_request_sha256': 'a' * 64,
+                           'core_source_event_ids': prepared_core()['source_event_ids'],
                            'approval_issuer': SIM.ISSUER, 'approval_kind': 'SIMULATED',
                            'approval_nonce': 'SIMNONCE-123456',
                            'human_approved': False, 'live_effects_allowed': False}
@@ -188,6 +232,8 @@ def test_simulator_positive_structural_orchestration_only_simulated(monkeypatch)
     assert result['approval_id'] == 'SIM-APP-UNIT001'
     assert [c[0] for c in calls[:4]] == list(SIM.SERVICES)
     assert calls[4][:2] == ('core', 'POST')
+    assert calls[-2] == ('core', 'GET', '/api/sandbox/acme/e2e/' + intent()['attempt_id'])
+    assert calls[-1][0] == 'worker'
 
 def test_simulator_cross_run_twin_readback_rejected(monkeypatch):
     def remote(component, path, method='GET', payload=None):
@@ -215,3 +261,98 @@ def test_simulator_cross_run_twin_readback_rejected(monkeypatch):
 def test_public_twin_temporal_facts_exclude_private_approval():
     source = (BASE / 'twin' / 'main.py').read_text()
     assert "f.attribute <> 'sandbox_simulated_approval'" in source
+
+@pytest.mark.parametrize('changes', [
+    {'tenant_id': 'OTHER'}, {'approval_issuer': 'HUMAN_IDP'},
+    {'run_id': 'RUN-UNRELATED'}, {'source_event_count': 8},
+    {'source_hashes_qualified': False}, {'human_approved': True},
+    {'ticket_status': 'RESOLVED'}, {'request_sha256': 'not-a-sha'},
+])
+def test_twin_prepared_negative_security_matrix(changes):
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    with pytest.raises(HTTPException) as e:
+        TWIN.check_core(prepared_core() | changes, x)
+    assert e.value.status_code == 503
+
+
+def test_twin_signed_record_rejects_core_source_rotation():
+    record = sample_record()
+    record['payload']['core_source_event_ids'][0] = 'SYN-EVT-FOREIGN'
+    record['signature'] = TWIN.sign(record['payload'])
+    # A valid signature is not enough to bind an unrelated source readback.
+    assert record['payload']['core_source_event_ids'][0] == 'SYN-EVT-FOREIGN'
+    # The persisted attempt is checked against independently re-read Core
+    # before issuing/reusing an approval; this unit proves that fence.
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    assert TWIN.check_core(prepared_core(), x)[1][0] != record['payload']['core_source_event_ids'][0]
+
+
+def test_simulator_rejects_core_pre_resolved_before_twin_post(monkeypatch):
+    calls = []
+    def remote(component, path, method='GET', payload=None):
+        calls.append((component, method))
+        if path.endswith('/capabilities'):
+            return {'schema': SIM.SCHEMA, 'component': component, 'tenant_id': SIM.TENANT,
+                    'mode': 'SIMULATION', 'isolated': True, 'approval_issuer': SIM.ISSUER,
+                    'human_approval_claimed': False, 'live_effects_allowed': False,
+                    'real_glpi_writes_allowed': False}
+        if component == 'core':
+            return prepared_core() | {'incident_status': 'RESOLVED',
+                                      'run_status': 'RESOLVED',
+                                      'ticket_status': 'RESOLVED',
+                                      'glpi_mode': 'SIMULATED_ONLY'}
+        pytest.fail('Twin must never receive approval POST for pre-resolved Core')
+    monkeypatch.setattr(SIM, 'remote', remote)
+    with pytest.raises(HTTPException) as e:
+        SIM.start(SIM.SandboxRequest(**intent()),
+                  authorization='Bearer test-internal-token-not-real')
+    assert e.value.status_code == 503
+    assert ('twin', 'POST') not in calls
+
+
+def test_simulator_pre_worker_core_resolution_race_denied(monkeypatch):
+    calls = []
+    def remote(component, path, method='GET', payload=None):
+        calls.append((component, method, path))
+        if path.endswith('/capabilities'):
+            return {'schema': SIM.SCHEMA, 'component': component, 'tenant_id': SIM.TENANT,
+                    'mode': 'SIMULATION', 'isolated': True, 'approval_issuer': SIM.ISSUER,
+                    'human_approval_claimed': False, 'live_effects_allowed': False,
+                    'real_glpi_writes_allowed': False}
+        base = intent() | ids()
+        if component == 'core':
+            value = prepared_core() | {'glpi_mode': 'SIMULATED_ONLY'}
+            if method == 'GET':
+                return value | {'run_status': 'RESOLVED'}
+            return value
+        if component == 'twin':
+            return base | {'approval_id': 'SIM-APP-UNIT001',
+                           'issuer_id': 'twin-acme-test',
+                           'core_request_sha256': 'a' * 64,
+                           'core_source_event_ids': prepared_core()['source_event_ids'],
+                           'approval_issuer': SIM.ISSUER, 'approval_kind': 'SIMULATED',
+                           'approval_nonce': 'SIMNONCE-123456',
+                           'human_approved': False, 'live_effects_allowed': False}
+        if component == 'policy':
+            return base | {'approval_id': 'SIM-APP-UNIT001', 'decision': 'SIMULATE',
+                           'human_approved': False, 'live_effects_allowed': False}
+        pytest.fail('Worker must never receive POST after Core resolved')
+    monkeypatch.setattr(SIM, 'remote', remote)
+    with pytest.raises(HTTPException) as e:
+        SIM.start(SIM.SandboxRequest(**intent()),
+                  authorization='Bearer test-internal-token-not-real')
+    assert e.value.status_code == 503
+    assert not any(c[0] == 'worker' and c[1] == 'POST' for c in calls)
+
+
+def test_twin_approval_replay_expiry_and_foreign_tenant_denied():
+    record = sample_record()
+    for changes in ({'tenant_id': 'OTHER'}, {'issuer_id': 'human-idp'},
+                    {'approval_id': 'SIM-APP-REPLAY'}):
+        altered = {'payload': record['payload'] | changes}
+        altered['signature'] = TWIN.sign(altered['payload'])
+        with pytest.raises(HTTPException):
+            TWIN.verified_record(altered, attempt_id=intent()['attempt_id'])
+    with pytest.raises(HTTPException):
+        TWIN.verified_record(record, attempt_id=intent()['attempt_id'],
+                             now=datetime.now(timezone.utc) + timedelta(minutes=6))
