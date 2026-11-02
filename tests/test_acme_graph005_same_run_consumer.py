@@ -422,6 +422,64 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
         self.assert_join_has_no_human_or_production_authority(denied)
 
 
+    def test_17_nonanchor_unkeyed_receipt_cannot_attest_provenance(self):
+        """Rehashing a non-anchor Core row is not independent signed evidence.
+
+        An unkeyed checksum and a caller-supplied matching Worker projection
+        can agree on substituted bytes. The consumer MUST remain untrusted.
+        """
+        for index, replace in ((2, False), (6, True)):
+            with self.subTest(source_ordinal=index + 1, replace=replace):
+                self.setUp()
+                original_digest = self.receipt["receipt_sha256"]
+                original_rows = self.worker_projection()
+                source = self.receipt["events"][index]
+                if replace:
+                    source["payload_sha256"] = hashlib.sha256(
+                        b"TEST_ONLY_SUBSTITUTED_NONANCHOR_PAYLOAD").hexdigest()
+                    source["full_event_sha256"] = hashlib.sha256(
+                        b"TEST_ONLY_SUBSTITUTED_NONANCHOR_FULL").hexdigest()
+                else:
+                    source["payload_sha256"], source["full_event_sha256"] = (
+                        source["full_event_sha256"], source["payload_sha256"])
+                self.sign_untrusted()
+                self.assertNotEqual(self.receipt["receipt_sha256"], original_digest)
+
+                # Unmodified Worker projection catches the changed Core row.
+                mismatch = self.joined(original_rows, seen=set())
+                self.assertEqual(mismatch["source_concordance"],
+                                 "CONSISTENT_UNTRUSTED")
+                self.assertEqual(mismatch["worker_projection_concordance"],
+                                 "UNKNOWN")
+                self.assertEqual(mismatch["worker_projection_reason"],
+                                 "SOURCE_RUN_HASH_OR_ID_MISMATCH")
+                self.assert_join_has_no_human_or_production_authority(mismatch)
+
+                # A forged *matching* projection still cannot sign provenance.
+                physical_index = consumer.PHYSICAL_SEQUENCES[index] - 1
+                for field in ("payload_sha256", "full_event_sha256"):
+                    original_rows[physical_index][field] = source[field]
+                shape = self.joined(original_rows, seen=set())
+                self.assertEqual(shape["source_concordance"],
+                                 "CONSISTENT_UNTRUSTED")
+                self.assertEqual(shape["worker_projection_concordance"],
+                                 "CONSISTENT_UNTRUSTED")
+                self.assertEqual(shape["core_https_runtime_authentication"],
+                                 "NOT_ATTESTED")
+                self.assertEqual(shape["durable_replay_fence"],
+                                 "NOT_ATTESTED")
+                self.assert_join_has_no_human_or_production_authority(shape)
+
+                # Claiming a portable signature without one is rejected.
+                self.receipt["portable_signature"] = "SIGNED"
+                self.sign_untrusted()
+                forged = self.joined(original_rows, seen=set())
+                self.assertEqual(forged["source_concordance"], "UNKNOWN")
+                self.assertEqual(forged["worker_projection_reason"],
+                                 "SOURCE_NOT_CONCORDANT")
+                self.assert_join_has_no_human_or_production_authority(forged)
+
+
 
 if __name__ == "__main__":
     unittest.main()
