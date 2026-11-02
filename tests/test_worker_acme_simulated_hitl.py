@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
     ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
+    receipt_digest_valid,
     validate_intent, validate_readbacks,
 )
 
@@ -452,6 +453,26 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             validate_intent(bad)
         with self.assertRaisesRegex(SandboxDenied, "^sandbox_attempt_unqualified$"):
             canonical_source_ids("FOREIGN-ATTEMPT-001")
+
+    def test_28_temporal_readback_must_verify_receipt_digest(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertTrue(receipt_digest_valid(receipt))
+        for field, value in (
+            ("effect_receipts", 1),
+            ("core_request_sha256", "b" * 64),
+            ("receipt_sha256", "0" * 64),
+            ("core_source_event_ids", canonical_source_ids("ACME-SIM-FOREIGN-001")),
+        ):
+            altered = deepcopy(receipt)
+            altered[field] = value
+            with self.subTest(field=field):
+                self.assertFalse(receipt_digest_valid(altered))
+        self.assertFalse(receipt_digest_valid({"receipt_sha256": "0" * 64}))
+        main = (ROOT / "app/worker/main.py").read_text()
+        self.assertIn("or not receipt_digest_valid(result)", main)
 
 
 if __name__ == "__main__":
