@@ -152,6 +152,7 @@ class SandboxPG16(unittest.TestCase):
 
     def test_05_bearer_not_human_or_tenant_grant(self):
         self.assertEqual(self.post('ACME-SIM-BADTOKEN', token='wrong').status_code, 401)
+        self.assertEqual(self.post('ACME-SIM-BADUNICODE', token='nonascii-é').status_code, 401)
         self.assertEqual(self.get('ACME-SIM-COREPOSITIVE', token='wrong').status_code, 401)
         self.assertEqual(self.client.get('/api/sandbox/acme/e2e/ACME-SIM-COREPOSITIVE').status_code, 401)
         self.assertFalse(self.client.get('/api/sandbox/acme/capabilities').json()['real_glpi_writes_allowed'])
