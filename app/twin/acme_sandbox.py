@@ -258,6 +258,7 @@ def issue_approval(x: ApprovalIntent, authorization: str | None = Header(default
                 'incident_id': x.incident_id, 'run_id': x.run_id,
                 'ticket_id': x.ticket_id, 'proposal_id': x.proposal_id,
                 'approval_id': approval_id(x.attempt_id),
+                'idempotency_key': x.attempt_id,
                 'core_request_sha256': core_fingerprint[0],
                 'core_source_event_ids': list(core_fingerprint[1]),
                 'approval_issuer': ISSUER, 'issuer_id': 'twin-acme-test',
