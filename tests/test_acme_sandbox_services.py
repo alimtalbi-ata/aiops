@@ -51,7 +51,7 @@ def prepared_core():
         ticket_status='PREPARED', ticket_authority='SIMULATED_ONLY',
         source='SYNTHETIC_SIMULATOR', source_event_count=7,
         source_hashes_qualified=True,
-        source_event_ids=['SYN-EVT-%02d' % i for i in range(1, 8)],
+        source_event_ids=TWIN.canonical_source_ids(intent()['attempt_id']),
         request_sha256='a' * 64, analysis_validated=True,
         critic_validated=True, evidence_count=2, human_approved=False,
         execution_allowed=False, effect_allowed=False,
@@ -453,3 +453,101 @@ def test_simulator_rejects_forged_twin_independent_readback_before_policy_or_wor
     assert error.value.detail == 'sandbox_twin_readback_unqualified'
     assert ('twin', 'POST') in calls and ('twin', 'GET') in calls
     assert not any(c in ('policy', 'worker') and m == 'POST' for c, m in calls)
+
+
+@pytest.mark.parametrize('changes', [
+    {'incident_id': 'INC/INVALID'},
+    {'run_id': None},
+    {'ticket_id': 'GLPI-REAL-123'},
+    {'proposal_id': ''},
+    {'idempotency_key': 'ACME-SIM-REBOUND'},
+])
+def test_twin_signed_fact_rejects_resigned_invalid_correlation(changes):
+    """Even a correctly HMAC-signed malformed fact cannot imply human authority."""
+    record = sample_record()
+    record['payload'].update(changes)
+    record['signature'] = TWIN.sign(record['payload'])
+    with pytest.raises(HTTPException) as error:
+        TWIN.verified_record(record, attempt_id=intent()['attempt_id'])
+    assert error.value.status_code == 503
+
+
+@pytest.mark.parametrize('changes', [
+    {'source_event_count': 7, 'source_event_ids': ['SYN-EVT-OTHER'] * 7},
+    {'source_event_ids': list(reversed(TWIN.canonical_source_ids('ACME-SIM-UNIT001')))},
+    {'source_event_ids': TWIN.canonical_source_ids('ACME-SIM-FOREIGN')},
+])
+def test_twin_prepared_core_rejects_forged_or_reordered_seven_source_ids(changes):
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    with pytest.raises(HTTPException) as error:
+        TWIN.check_core(prepared_core() | changes, x)
+    assert error.value.status_code == 503
+
+
+def test_twin_signed_fact_rejects_resigned_foreign_source_set():
+    record = sample_record()
+    record['payload']['core_source_event_ids'] = TWIN.canonical_source_ids('ACME-SIM-FOREIGN')
+    record['signature'] = TWIN.sign(record['payload'])
+    with pytest.raises(HTTPException) as error:
+        TWIN.verified_record(record, attempt_id=intent()['attempt_id'])
+    assert error.value.status_code == 503
+
+
+def test_twin_post_resolution_readback_preserves_immutable_pre_resolution_fact(monkeypatch):
+    """The signed fact remains PRE_RESOLUTION after Core alone resolves the Run.
+
+    This is an isolated Twin readback contract test, not a PG16/host E2E proof.
+    """
+    record = sample_record()
+    original = json.dumps(record, sort_keys=True)
+    class ReadOnlyFacts:
+        def __init__(self):
+            self.queries = []
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def execute(self, query, params):
+            assert query.strip().lower().startswith('select value from aiops.twin_facts')
+            assert params == (TWIN.fact_id(intent()['attempt_id']),)
+            self.queries.append(query)
+            return self
+        def fetchone(self):
+            return (json.dumps(record),)
+    facts = ReadOnlyFacts()
+    monkeypatch.setattr(TWIN, 'db', lambda: facts)
+    monkeypatch.setattr(TWIN, 'core_readback',
+                        lambda _x: pytest.fail('readback must not rewrite or reopen Core'))
+    result = TWIN.approval_readback(
+        intent()['attempt_id'], authorization='Bearer test-internal-token-not-real')
+    assert result['approval_id'] == TWIN.approval_id(intent()['attempt_id'])
+    assert result['approval_phase'] == 'PRE_RESOLUTION'
+    assert result['core_status_at_issuance'] == 'PREPARED'
+    assert result['resolution_verified'] is False
+    assert result['post_resolution_readback_required'] is True
+    assert result['core_source_event_ids'] == TWIN.canonical_source_ids(intent()['attempt_id'])
+    assert result['human_approved'] is False
+    assert result['live_effects_allowed'] is False
+    assert len(facts.queries) == 1
+    assert json.dumps(record, sort_keys=True) == original
+
+
+def test_twin_post_resolution_readback_rejects_tampered_stored_hmac(monkeypatch):
+    record = sample_record()
+    record['payload']['human_approved'] = True  # signature is intentionally unchanged
+    class ReadOnlyFacts:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def execute(self, query, params):
+            assert 'select value from aiops.twin_facts' in query
+            return self
+        def fetchone(self):
+            return (json.dumps(record),)
+    monkeypatch.setattr(TWIN, 'db', lambda: ReadOnlyFacts())
+    with pytest.raises(HTTPException) as error:
+        TWIN.approval_readback(
+            intent()['attempt_id'], authorization='Bearer test-internal-token-not-real')
+    assert error.value.status_code == 503
+    assert error.value.detail == 'sandbox_approval_unqualified'
