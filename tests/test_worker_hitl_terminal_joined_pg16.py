@@ -15,9 +15,13 @@ import sys
 import tempfile
 import unittest
 
+# unittest discovery prepends Worker tests; force Core #344's pinned fixture.
+sys.path.insert(0, str(Path(os.environ['AIOPS_CORE344_ROOT']) / 'tests'))
+
 import psycopg
 import requests
 from temporalio.testing import WorkflowEnvironment
+from temporalio.client import WorkflowFailureError
 
 import test_core_hitl_reject_terminal_pg16 as core_fixture
 from worker.main import TerminalRejectWorkflow
@@ -153,7 +157,7 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
                     self.assertFalse(result["effect_allowed"])
                     self.assertEqual(result["human_glpi_authorization"], "UNKNOWN")
                 else:
-                    with self.assertRaises(Exception):
+                    with self.assertRaises(WorkflowFailureError):
                         await asyncio.wait_for(handle.result(), timeout=70)
                     result = None
                 history = await handle.fetch_history()
