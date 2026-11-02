@@ -17,7 +17,8 @@ class PollerContract(unittest.TestCase):
         script = ROOT / "deploy/deploy-demo-studio-v2.sh"
         src = script.read_text()
         self.assertEqual(subprocess.run(["bash", "-n", str(script)], capture_output=True).returncode, 0)
-        self.assertIn("debian-poller-qualification.py", src)
+        self.assertIn("debian-portal-preflight.py", src)
+        self.assertIn("debian-poller-qualification.py", (ROOT / "deploy/debian-portal-preflight.py").read_text())
         for bad in ("docker stop", "docker run", "docker rename", "docker rm", "docker compose up"):
             self.assertNotIn(bad, src)
 

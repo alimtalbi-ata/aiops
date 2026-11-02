@@ -1,0 +1,7 @@
+{
+  "schema": "aiops.debian-portal-release-intent.v1",
+  "enabled": false,
+  "candidate_sha": "e289e4d4374e6b0b4560fb074310c723ec87b4a8",
+  "scope": "aiops2-rebuild-portal on host TCP 7777",
+  "reason": "Read-only preflight; immutable build, backup/restore and Compose rollback not yet qualified"
+}
