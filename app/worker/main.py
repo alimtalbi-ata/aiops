@@ -7,6 +7,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
 from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
+from worker.hitl_reject_terminal_runtime import recover_terminal_once, validate_request, UnqualifiedTerminal
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -91,11 +92,55 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
  except WorkflowAlreadyStartedError:
   return {'workflow_id':args['run_id'],'run_id':args['run_id'],'executor':'temporal','idempotent':True}
+
+# Terminal-only REJECT recovery. This is NOT the old claim/signal/ACK harness.
+# Core #344 owns the expired eighth lease, immutable DEAD and 014/015 receipt.
+# No raw lease token is accepted or placed in Temporal history.
+@activity.defn(name='reject_terminal_recover')
+async def reject_terminal_recover(args):
+    owner=os.getenv('AIOPS_REJECT_TERMINAL_OWNER')
+    if not owner:
+        raise UnqualifiedTerminal('terminal_service_owner_not_configured')
+    async def post(path, body):
+        return await asyncio.to_thread(post_json, CORE, path, body, timeout=15, token=ADMIN)
+    return await recover_terminal_once(args, owner=owner, post=post)
+
+@workflow.defn
+class TerminalRejectWorkflow:
+    @workflow.run
+    async def run(self, args):
+        return await workflow.execute_activity(
+            reject_terminal_recover, args,
+            start_to_close_timeout=datetime.timedelta(seconds=60),
+            retry_policy=RETRY)
+
+@app.post('/api/execution/reject-terminal')
+async def start_reject_terminal(args:dict, authorization:str|None=Header(default=None)):
+    if (authorization or '').removeprefix('Bearer ')!=ADMIN:
+        raise HTTPException(401,'invalid internal token')
+    owner=os.getenv('AIOPS_REJECT_TERMINAL_OWNER')
+    if not owner:
+        raise HTTPException(503,'terminal service identity not configured')
+    try:
+        validate_request(args, owner)
+    except UnqualifiedTerminal:
+        raise HTTPException(422,'unqualified terminal request')
+    c=await Client.connect(TEMP)
+    workflow_id=f"reject-terminal-{args['tenant_id']}-{args['event_id']}"
+    try:
+        h=await c.start_workflow(TerminalRejectWorkflow.run,args,id=workflow_id,
+                                 task_queue='aiops-runner')
+        return {'workflow_id':h.id,'run_id':args['run_id'],
+                'status':'PENDING_CORE_TERMINAL','effect_allowed':False}
+    except WorkflowAlreadyStartedError:
+        return {'workflow_id':workflow_id,'run_id':args['run_id'],
+                'idempotent':True,'effect_allowed':False}
+
 async def worker_main():
  while True:
   try:
    c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):await asyncio.Event().wait()
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow,TerminalRejectWorkflow],activities=[execute_stage,start_run,finish_run,reject_terminal_recover]):await asyncio.Event().wait()
   except Exception:await asyncio.sleep(5)
 @app.on_event('startup')
 async def startup():asyncio.create_task(worker_main())
