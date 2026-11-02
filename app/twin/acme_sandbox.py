@@ -50,6 +50,12 @@ def fact_id(attempt):
 def approval_id(attempt):
     return 'SIM-APP-' + hashlib.sha256((TENANT + ':' + attempt).encode()).hexdigest()[:24].upper()
 
+def canonical_source_ids(attempt):
+    """Independently derive Core's seven sandbox SOURCE keys, in ordinal order."""
+    return ['SYN-EVT-' + hashlib.sha256(
+        (TENANT + ':' + attempt + ':' + str(index)).encode()
+    ).hexdigest()[:20].upper() for index in range(1, 8)]
+
 def utc(value):
     try:
         result = datetime.fromisoformat(value)
@@ -71,6 +77,11 @@ def verified_record(value, *, attempt_id, now=None):
                 or payload.get('tenant_id') != TENANT
                 or payload.get('scenario_id') != SCENARIO
                 or payload.get('approval_id') != approval_id(attempt_id)
+                or payload.get('idempotency_key') != attempt_id
+                or any(type(payload.get(k)) is not str
+                       or ID.fullmatch(payload[k]) is None
+                       for k in ('incident_id', 'run_id', 'ticket_id', 'proposal_id'))
+                or not payload['ticket_id'].startswith('SIM-GLPI-')
                 or payload.get('approval_issuer') != ISSUER
                 or payload.get('issuer_id') != 'twin-acme-test'
                 or payload.get('approval_actor') != ISSUER
@@ -90,6 +101,7 @@ def verified_record(value, *, attempt_id, now=None):
                 or re.fullmatch(r'[0-9a-f]{64}', payload['core_request_sha256']) is None
                 or type(payload.get('core_source_event_ids')) is not list
                 or len(payload['core_source_event_ids']) != 7
+                or payload['core_source_event_ids'] != canonical_source_ids(attempt_id)
                 or len(set(str(v) for v in payload['core_source_event_ids'])) != 7
                 or any(type(v) is not str or not v.startswith('SYN-EVT-')
                        or ID.fullmatch(v) is None for v in payload['core_source_event_ids'])
@@ -169,6 +181,7 @@ def check_core(core, x):
             or core.get('source_event_count') != 7
             or core.get('source_hashes_qualified') is not True
             or type(event_ids) is not list or len(event_ids) != 7
+            or event_ids != canonical_source_ids(x.attempt_id)
             or len(set(str(v) for v in event_ids)) != 7
             or any(type(v) is not str or not v.startswith('SYN-EVT-')
                    or ID.fullmatch(v) is None for v in event_ids)
