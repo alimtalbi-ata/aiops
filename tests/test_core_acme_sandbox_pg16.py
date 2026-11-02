@@ -30,7 +30,7 @@ CHAIN = ['001_schema.sql', '004_operational_model.sql',
 
 def intent(attempt):
     return {'attempt_id': attempt, 'tenant_id': 'ACME-TEST',
-            'scenario_id': 'ACME-TEST-SAN-PAYMENTS', 'mode': 'SIMULATION',
+            'scenario_id': 'ACME-SAN-PAYMENTS', 'mode': 'SIMULATION',
             'approval_issuer': 'TWIN_ACME_SIMULATED',
             'idempotency_key': attempt, 'live_effects_allowed': False}
 
