@@ -27,8 +27,22 @@ elif [ "$portal_enabled" != no ]; then
 fi
 # Anonymous, read-only host tests run even if upgrade was blocked; never promote E2E.
 /usr/bin/python3 "$delivery/deploy/debian-portal-host-contracts.py" || status=78
+# Optional five-service ACME sandbox in-place upgrade. Default disabled.
+acme_enabled="$(/usr/bin/python3 - "$delivery/deploy/debian-acme-sandbox-release.json" <<'PY'
+import json,sys
+try: print('yes' if json.load(open(sys.argv[1]))['enabled'] is True else 'no')
+except (OSError,ValueError,KeyError,TypeError): print('invalid')
+PY
+)"
+if [ "$acme_enabled" = yes ] && [ "$status" -eq 0 ]; then
+  /bin/bash "$delivery/deploy/debian-acme-sandbox-upgrade.sh" || status=78
+elif [ "$acme_enabled" = invalid ]; then
+  status=78
+fi
 # Synthetic E2E uses only the existing containers and never calls real GLPI.
 # Missing sandbox capabilities yield a BLOCKED receipt without any POST.
-/usr/bin/python3 "$delivery/deploy/debian-acme-sim-e2e.py" || status=78
+if [ "$status" -eq 0 ]; then
+  /usr/bin/python3 "$delivery/deploy/debian-acme-sim-e2e.py" || status=78
+fi
 /usr/bin/python3 "$delivery/deploy/debian-portal-preflight.py" || status=78
 exit "$status"
