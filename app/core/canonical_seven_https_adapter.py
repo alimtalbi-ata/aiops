@@ -24,7 +24,7 @@ def dispatch_canonical_seven(*, method: str, path: str, tls: bool,
                              authorization: str, body: bytes,
                              client_id: str, client_secret: str,
                              connect, source: str, source_issuer: str,
-                             now: datetime, producer=read_canonical_seven,
+                             now: datetime, producer=None,
                              expected_path: str = PATH) -> tuple[int, dict]:
     """Return HTTP status and JSON for a trusted HTTPS listener.
 
@@ -55,6 +55,8 @@ def dispatch_canonical_seven(*, method: str, path: str, tls: bool,
                 or any(type(v) is not str or not v for v in request.values())
                 or request["permission"] != "run:read"):
             return 404, dict(UNKNOWN)
+        if producer is None:
+            producer = read_canonical_seven
         with connect() as conn:
             proof = producer(
                 conn, request, source=source, issuer=source_issuer, now=now)
