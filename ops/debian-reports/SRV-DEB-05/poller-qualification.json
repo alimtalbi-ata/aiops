@@ -1,0 +1,67 @@
+{
+  "candidate_portal": {
+    "bindings": [
+      {
+        "container_port": "777/tcp",
+        "host_ip": "10.79.94.202",
+        "host_port": 17778
+      }
+    ],
+    "compose_project": "UNKNOWN",
+    "container_id": "80b33570aabf2ff14e70226c29809a40bb903ae49375bb1017f4745c675449ff",
+    "health": "UNKNOWN",
+    "image_id": "sha256:c86fd0bd8e8f2e85342dcdab56b93b49e7964cbcc78f9ec0ab1658296c82793b",
+    "inspection": "READ_ONLY",
+    "manifest_digests": [
+      "sha256:c86fd0bd8e8f2e85342dcdab56b93b49e7964cbcc78f9ec0ab1658296c82793b"
+    ],
+    "mount_count": 0,
+    "network_count": 1,
+    "state": "running"
+  },
+  "collected_at": "2026-11-02T10:35:03.068430+00:00",
+  "dev_checkout_sha": "5b3b9f327f517e8f5999766389abf69c8a035cf8",
+  "docker_mutations": 0,
+  "execution": "POLLER_ENTRYPOINT_READONLY",
+  "external_tls_sso_glpi_e2e": "NOT_VERIFIED",
+  "host_portal_7777": "PASS",
+  "http_7777": {
+    "qualified": true,
+    "status": 200
+  },
+  "poller": {
+    "mentions_entrypoint": true,
+    "mentions_stable": true,
+    "observed": true,
+    "sha256": "ccfe96805977953bfd3380301800991635181ed8a2c73b9544c32a1b62b10511"
+  },
+  "portal": {
+    "bindings": [
+      {
+        "container_port": "777/tcp",
+        "host_ip": "0.0.0.0",
+        "host_port": 7777
+      }
+    ],
+    "compose_project": "aiops2-rebuild",
+    "container_id": "2a82630dceee4ed6be779d278955b184a2f09141c683d01f8d9070531f2db821",
+    "health": "healthy",
+    "image_id": "sha256:ef93d301d50f5ab816917a29d277ae0a099b4e671b374d5e8618d93f11b3d092",
+    "inspection": "READ_ONLY",
+    "manifest_digests": [
+      "sha256:ef93d301d50f5ab816917a29d277ae0a099b4e671b374d5e8618d93f11b3d092"
+    ],
+    "mount_count": 0,
+    "network_count": 3,
+    "state": "running"
+  },
+  "release_stable": "NO_GO",
+  "schema": "aiops.debian-poller-qualification.v1",
+  "single_public_portal": "NOT_VERIFIED",
+  "stable_checkout_sha": "7de773e63851c4e90c9662225a41b96e4c0b3bed",
+  "tcp_loopback": {
+    "17777": false,
+    "17778": false,
+    "7777": true
+  }
+}
