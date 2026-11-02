@@ -4,8 +4,7 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
-from app.policy.main import Decision, evaluate
-from app.policy import autonomy_store
+from app.policy.main import Decision, evaluate, autonomy_store
 
 
 def decision(**overrides):
