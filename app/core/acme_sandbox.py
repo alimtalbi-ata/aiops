@@ -115,6 +115,10 @@ def read(c, attempt):
     source_ids, linked_evidence = [], []
     for index, (key, event, eids) in enumerate(proofs, 1):
         expected = ident('SYN-EVT-', attempt + ':' + str(index), 20)
+        payload_hash = digest({'tenant_id': TENANT, 'run_id': run,
+                               'sequence': index, 'source': 'SYNTHETIC_SIMULATOR'})
+        full_hash = digest({'source_event_id': expected,
+                            'payload_sha256': payload_hash})
         if (key != expected or type(event) is not dict
                 or event.get('tenant_id') != TENANT
                 or event.get('incident_id') != incident
@@ -125,12 +129,15 @@ def read(c, attempt):
                 or event.get('synthetic') is not True
                 or event.get('source_issuer') != 'sandbox-simulator'
                 or event.get('actor_issuer') != 'sandbox-simulated-actor'
+                or event.get('payload_sha256') != payload_hash
+                or event.get('full_event_sha256') != full_hash
+                or full_hash == payload_hash
                 or type(eids) is not list or len(eids) != 1):
             raise HTTPException(503, 'sandbox_source_binding_unqualified')
         source_ids.append(key)
         linked_evidence.append(eids[0])
     facts = c.execute(
-        "select evidence_id,provenance,observed_at,known_at from aiops.evidence "
+        "select evidence_id,provenance,observed_at,known_at,statement_timestamp() from aiops.evidence "
         "where provenance->>'sandbox_attempt_id'=%s "
         "and provenance->>'tenant_id'=%s and provenance->>'run_id'=%s",
         (attempt, TENANT, run)).fetchall()
@@ -140,7 +147,8 @@ def read(c, attempt):
             or any(f[1].get('incident_id') != incident for f in facts)
             or any(eid not in evidence_ids for eid in linked_evidence)
             or any(f[2] is None or f[3] is None or
-                   not (0 <= (f[3]-f[2]).total_seconds() <= 300) for f in facts)):
+                   not (0 <= (f[3]-f[2]).total_seconds() <= 300)
+                   or not (0 <= (f[4]-f[2]).total_seconds() <= 300) for f in facts)):
         raise HTTPException(503, 'sandbox_evidence_unqualified')
     ar = c.execute('select status,provider,evidence_ids,output from aiops.analysis_records '
                    'where analysis_id=%s and run_id=%s and incident_id=%s',
@@ -164,6 +172,7 @@ def read(c, attempt):
             'analysis_validated': True, 'critic_validated': True,
             'analysis_kind': 'SYNTHETIC_FIXTURE',
             'evidence_count': len(facts), 'source_event_count': len(proofs),
+            'source_hashes_qualified': True,
             'source_event_ids': source_ids, 'request_sha256': request_hash.strip(),
             'approval_id': None, 'approval_issuer': ISSUER,
             'human_approval_claimed': False, 'human_approved': False,
@@ -246,8 +255,14 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
                        digest(envelope), Jsonb(envelope)))
         for index in range(1, 8):
             key = ident('SYN-EVT-', attempt + ':' + str(index), 20)
+            payload_hash = digest({'tenant_id': TENANT, 'run_id': run,
+                                   'sequence': index, 'source': 'SYNTHETIC_SIMULATOR'})
+            full_hash = digest({'source_event_id': key,
+                                'payload_sha256': payload_hash})
             envelope = {'tenant_id': TENANT, 'incident_id': incident,
                         'run_id': run, 'source_event_id': key,
+                        'payload_sha256': payload_hash,
+                        'full_event_sha256': full_hash,
                         'sequence': index, 'source': 'SYNTHETIC_SIMULATOR',
                         'synthetic': True, 'source_issuer': 'sandbox-simulator',
                         'actor_issuer': 'sandbox-simulated-actor'}
