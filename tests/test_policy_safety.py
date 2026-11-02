@@ -44,6 +44,18 @@ class PolicySafetyTests(unittest.TestCase):
         cls._db.stop()
         cls._temp.cleanup()
 
+    def test_synthetic_simulation_never_becomes_live_effect_under_stop_auto(self):
+        # A synthetic diagnostic may SIMULATE while STOP_AUTO/emergency stop
+        # remain enforced for all LIVE commands; no executor is attached.
+        with mock.patch.object(autonomy_store, "status", return_value={
+            "healthy": True, "mode": "STOP_AUTO", "revision": 0
+        }), mock.patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "true"}):
+            result = evaluate(decision(mode="DEMO", freeze_active=None,
+                                       human_approved=False))
+        self.assertEqual(result["state"], "PASS")
+        self.assertEqual(result["decision"], "SIMULATE")
+        self.assertIn("no production mutation", result["reason"])
+
     def test_unavailable_autonomy_state_fails_closed(self):
         with mock.patch.object(autonomy_store, "status", return_value={
             "healthy": False, "mode": "STOP_AUTO", "revision": None
