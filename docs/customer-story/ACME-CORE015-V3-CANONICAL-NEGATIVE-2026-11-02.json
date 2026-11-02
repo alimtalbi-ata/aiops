@@ -1,7 +1,7 @@
 {
   "schema": "aiops.acme.core015-v3-canonical-negative.v1",
   "synthetic": true,
-  "comparison_provenance": "ACME_CONTRACT_TEST_ONLY_NO_CORE_PG16_READBACK",
+  "comparison_provenance": "ACME_CONTRACT_NEGATIVE_NO_CORE_PG16_READBACK",
   "core_source_pr": 333,
   "core_source_head": "78d3792ea4c83e9bd2e4dd4c48e518c90ce5c9bc",
   "candidate_base_head": "ae0bd68cb65151c35e2841c1b9221d570a7db382",
