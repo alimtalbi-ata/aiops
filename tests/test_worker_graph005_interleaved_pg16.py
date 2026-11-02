@@ -54,6 +54,7 @@ def append(stage, version, key, status, decision, payload):
             if response.status_code != 200 or response.json().get("idempotent"):
                 raise RuntimeError("worker_core_append_failed:" + str(response.status_code))
 async def main_loop():
+    global command
     if stage == "DGX_ANALYST":
         append(stage, version, "worker-graph005-analyst", "PASS", None,
                {"synthetic": True, "analysis": "UNVERIFIED"})
@@ -100,7 +101,8 @@ class Graph005TwoOSWorker(unittest.IsolatedAsyncioTestCase):
         fixture.CanonicalSevenSourcePG16.tearDownClass()
 
     async def test_same_run_interleaved_worker_pids_revoke_replay_no_effect(self):
-        from core import main
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": TOKEN}):
+            from core import main
         from tools import generate_acme_incidents as gen
 
         pg = self.pg
@@ -233,7 +235,8 @@ class Graph005TwoOSWorker(unittest.IsolatedAsyncioTestCase):
                     proc.wait(timeout=5)
 
         baseline = snapshot()
-        self.assertEqual(baseline["effects"], baseline["approves"], 0)
+        self.assertEqual(baseline["effects"], 0)
+        self.assertEqual(baseline["approves"], 0)
         with tempfile.TemporaryDirectory(prefix="worker-graph005-ci-") as root:
             tmp = Path(root)
             sqlite = str(tmp / "temporal.sqlite")
@@ -244,12 +247,13 @@ class Graph005TwoOSWorker(unittest.IsolatedAsyncioTestCase):
                 with TestClient(main.app) as api:
                     for ordinal in (1, 2):
                         append_source(api, ordinal, ordinal)
+                    temporal_port_one = port()
                     async with await WorkflowEnvironment.start_local(
-                            port=port(), dev_server_database_filename=sqlite) as first:
+                            port=temporal_port_one, dev_server_database_filename=sqlite) as first:
                         handle = await first.client.start_workflow(
                             __import__("test_worker_hitl_reject_notification").SyntheticRejectSink.run,
                             id=queue, task_queue=queue)
-                        worker_a = await launch(first.client.service_client.target_host,
+                        worker_a = await launch(f"127.0.0.1:{temporal_port_one}",
                                                 queue, tmp, "DGX_ANALYST", 3)
                         self.assertEqual(await handle.query(
                             __import__("test_worker_hitl_reject_notification").SyntheticRejectSink.count), 0)
@@ -257,10 +261,11 @@ class Graph005TwoOSWorker(unittest.IsolatedAsyncioTestCase):
                             append_source(api, ordinal, version)
                         stop(worker_a)
                     self.assertTrue(Path(sqlite).is_file())
+                    temporal_port_two = port()
                     async with await WorkflowEnvironment.start_local(
-                            port=port(), dev_server_database_filename=sqlite) as second:
+                            port=temporal_port_two, dev_server_database_filename=sqlite) as second:
                         handle = second.client.get_workflow_handle(queue)
-                        worker_b = await launch(second.client.service_client.target_host,
+                        worker_b = await launch(f"127.0.0.1:{temporal_port_two}",
                                                 queue, tmp, "VERIFY", 7)
                         self.assertNotEqual(worker_a.pid, worker_b.pid)
                         for ordinal, version in ((6, 8), (7, 9)):
