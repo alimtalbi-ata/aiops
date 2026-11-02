@@ -1772,3 +1772,149 @@ class AcmeCoreHttpsSevenTwinConcordanceTests(unittest.TestCase):
         self.assertIs(receipt["glpi_human_allow"], False)
         self.assertIs(receipt["hitl_approval"], None)
         self.assertNotIn("TEST_ONLY_", json.dumps(receipt))
+
+
+class AcmeGraph005CorePg16CiConsumerTests(unittest.TestCase):
+    """Core-owned PG16 CI artifact is a source comparison, never human ALLOW."""
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_graph005_core_ci_consumer as consumer
+        from tools import generate_acme_incidents as gen
+        cls.consumer = consumer
+        cls.gen = gen
+        cls.manifest = gen.replay(seed=20261018)
+        cls.fixture = (gen.ROOT / "tests/fixtures" /
+                       "acme_core_graph005_pg16_ci_fixture_v1.json")
+        cls.core = consumer._read_untrusted(
+            cls.fixture, expected_file_sha256=consumer.CORE_CI_FILE_SHA256)
+
+    def compare(self, core=None, *, head=None, digest=None):
+        c = self.consumer
+        return c.consume(
+            self.manifest, core_ci_receipt=self.core if core is None else core,
+            expected_core_head=c.CORE_CI_HEAD if head is None else head,
+            expected_receipt_sha256=(c.CORE_CI_RECEIPT_SHA256
+                                     if digest is None else digest))
+
+    def altered(self, mutate):
+        import copy
+        c = self.consumer
+        item = copy.deepcopy(self.core)
+        mutate(item)
+        item["receipt_sha256"] = c._sha256(
+            {k: v for k, v in item.items() if k != "receipt_sha256"})
+        return self.compare(item, digest=item["receipt_sha256"])
+
+    def assert_unexecuted(self, receipt):
+        self.assertEqual(receipt["result"], "UNKNOWN")
+        self.assertEqual(receipt["core_pg16_authority"], "UNKNOWN")
+        self.assertEqual(receipt["core_https_runtime_authentication"],
+                         "NOT_INDEPENDENTLY_ATTESTED")
+        self.assertEqual(receipt["verified_stage_count"], 0)
+        self.assertEqual(receipt["not_executed_stage_count"], 15)
+        self.assertEqual(receipt["verified_checkpoint_count"], 0)
+        self.assertEqual(receipt["not_executed_checkpoint_count"], 6)
+        self.assertTrue(all(x["status"] == "NOT_EXECUTED"
+                            for x in receipt["stages"] + receipt["checkpoints"]))
+        self.assertIsNone(receipt["runtime_incident_id"])
+        self.assertIsNone(receipt["runtime_run_id"])
+        self.assertEqual(receipt["glpi_human_allow"], "UNKNOWN")
+        self.assertEqual(receipt["hitl_approval"], "UNKNOWN")
+        self.assertFalse(receipt["live_effects_authorized"])
+        self.assertFalse(receipt["publishable_to_core_or_glpi"])
+
+    def test_01_real_core_pg16_ci_receipt_seven_graph005_concordant_not_authority(self):
+        result = self.compare()
+        self.assertEqual(result["core_ci_receipt_status"],
+                         "CI_CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["source_concordance"], "CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["ci_disposable_incident_run"],
+                         "CI_WRITTEN_REPORTED_ONLY")
+        self.assertEqual(len(result["events"]), 7)
+        self.assertEqual(result["twin_impact"]["candidate_ci_count"], 10)
+        self.assertEqual(result["twin_impact"]["path_node_ids"],
+                         list(self.consumer.concordance.PATH_NODES))
+        self.assertEqual(result["twin_impact"]["path_edge_ids"],
+                         list(self.consumer.concordance.PATH_EDGES))
+        for row in result["events"]:
+            self.assertEqual(row["acme_fixture_hash_comparison"], "MATCH_CI_ONLY")
+            self.assertEqual(row["core_vs_acme_full_hash_equivalence"],
+                             "DISTINCT_DOMAINS_UNKNOWN")
+            self.assertRegex(row["core_pg16_full_event_sha256"], r"^[0-9a-f]{64}$")
+            self.assertRegex(row["core_pg16_payload_sha256"], r"^[0-9a-f]{64}$")
+        self.assert_unexecuted(result)
+
+    def test_02_missing_readback_fails_closed(self):
+        result = self.consumer.consume(self.manifest)
+        self.assertEqual(result["core_ci_receipt_status"], "UNAVAILABLE")
+        self.assertTrue(all(r["core_pg16_full_event_sha256"] is None
+                            for r in result["events"]))
+        self.assert_unexecuted(result)
+
+    def test_03_unpinned_head_or_receipt_digest_rejected(self):
+        for head, digest in (("0" * 40, None), (None, "0" * 64),
+                             ("NOT_A_SHA", None), (None, "NOT_A_SHA")):
+            result = self.compare(head=head, digest=digest)
+            self.assertEqual(result["core_ci_receipt_status"], "REJECTED")
+            self.assert_unexecuted(result)
+
+    def test_04_reordered_or_duplicate_or_missing_event_rejected(self):
+        for mutate in (
+            lambda x: x["events"].reverse(),
+            lambda x: x["events"].__setitem__(1, x["events"][0]),
+            lambda x: x["events"].pop(),
+        ):
+            result = self.altered(mutate)
+            self.assertEqual(result["core_ci_receipt_status"], "REJECTED")
+            self.assert_unexecuted(result)
+
+    def test_05_acme_fixture_full_and_payload_hash_tamper_rejected(self):
+        for key in ("acme_fixture_full_sha256", "acme_fixture_payload_sha256"):
+            result = self.altered(lambda x: x["events"][0].__setitem__(key, "a" * 64))
+            self.assertEqual(result["core_ci_receipt_reason"],
+                             "ACME_FIXTURE_FULL_OR_PAYLOAD_HASH_MISMATCH")
+            self.assert_unexecuted(result)
+
+    def test_06_core_full_and_payload_domain_corruption_rejected(self):
+        for key in ("core_pg16_full_event_sha256", "core_pg16_payload_sha256"):
+            result = self.altered(lambda x: x["events"][0].__setitem__(key, "bad"))
+            self.assertEqual(result["core_ci_receipt_reason"],
+                             "INVALID_CORE_FULL_OR_PAYLOAD_HASH_DOMAIN")
+            self.assert_unexecuted(result)
+
+    def test_07_foreign_tenant_audit_revocation_and_glpi_claims_rejected(self):
+        mutations = (
+            lambda x: x.__setitem__("tenant_id", ""),
+            lambda x: x["audit_after"].__setitem__("nonce_013", 999),
+            lambda x: x["negative_cases"].__setitem__("revoked", "ALLOW"),
+            lambda x: x.__setitem__("human_glpi_attested", True),
+            lambda x: x.__setitem__("actor_issuer_distinct_from_source", False),
+            lambda x: x.__setitem__("graph_version", "0" * 40),
+        )
+        for mutate in mutations:
+            result = self.altered(mutate)
+            self.assertEqual(result["core_ci_receipt_status"], "REJECTED")
+            self.assert_unexecuted(result)
+
+    def test_08_core_ci_file_integrity_and_duplicate_json_keys(self):
+        import tempfile
+        c = self.consumer
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "core.json"
+            path.write_text('{"schema":"x","schema":"y"}', encoding="utf-8")
+            with self.assertRaises(ValueError):
+                c._read_untrusted(path, expected_file_sha256=c.CORE_CI_FILE_SHA256)
+            with self.assertRaises(ValueError):
+                c._read_untrusted(self.fixture, expected_file_sha256="0" * 64)
+
+    def test_09_redacted_machine_receipt_matches_core_ci_artifact(self):
+        path = (self.gen.ROOT / "docs/customer-story" /
+                "ACME-GRAPH005-CORE-PG16-CI-CONSUMER-2026-11-02.json")
+        stored = json.loads(path.read_text(encoding="utf-8"),
+                            object_pairs_hook=self.gen._unique_object)
+        self.assertEqual(stored, self.compare())
+        self.assertNotIn("TEN-GRAPH005", json.dumps(stored))
+        self.assertNotIn("INC-GRAPH005", json.dumps(stored))
+        self.assertNotIn("RUN-GRAPH005", json.dumps(stored))
+        self.assert_unexecuted(stored)
