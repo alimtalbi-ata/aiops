@@ -7,7 +7,8 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from fastapi.testclient import TestClient
-from portal import main, acme_sim_glpi
+with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": "ci-acme-sim-internal"}):
+    from portal import main, acme_sim_glpi
 
 ATTEMPT = "ACME-SIM-ABCDEF1234567890"
 TOKEN = "ci-acme-sim-viewer"
