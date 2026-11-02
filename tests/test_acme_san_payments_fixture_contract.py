@@ -1918,3 +1918,176 @@ class AcmeGraph005CorePg16CiConsumerTests(unittest.TestCase):
         self.assertNotIn("INC-GRAPH005", json.dumps(stored))
         self.assertNotIn("RUN-GRAPH005", json.dumps(stored))
         self.assert_unexecuted(stored)
+
+
+
+class AcmeGraph005InterleavedCore338CiHandoffTests(unittest.TestCase):
+    """Test-only projection of Core #338 disposable PG16/TLS artifact.
+
+    Source: https://github.com/alimtalbi-ata/aiops/actions/runs/41393467201/artifacts/13118725152
+    Source HEAD c3a87814084e703e528d0107c43cfd9f7fc0708a; canonical
+    Core receipt SHA256 987f4881c382cd5d9b1b5200673dd214828f111b686208f5560b19ee2353d226.
+    The projection is NOT a runtime readback, signature or GLPI authority.
+    """
+
+    SOURCE_PHYSICAL = (1, 2, 4, 5, 6, 8, 9)
+    CORE338_FULL = (
+        "08bb9b49fe7e9e2e635bbd2a8c35d21be3e9b15b30f2b3898c3bb21ec9ad8c93",
+        "388ab820aa568b3818c7cb3b95e5467968cae30c38795d87f69fb6f61eabb4af",
+        "db904218ee75bf183f23e84fedeca2c23861f4b2957074d0614e394a4c6eb75e",
+        "944f0c5fdd1aa980b7d9e527191de3352dc89a6f9add8c650e66235078b2eb8a",
+        "89c2487c0558541d7896ae80e3e2f2be7e2c2b4cb35ba1c4f240553c58c46ba3",
+        "3d26ddc1cd0df15edb3aadd149c002a3719fdcddd37e9389d943540bdb8723fa",
+        "a0ea97723f124b3a4f0457dcb67535081dddd82cc6a07e82fbb766d211b36878",
+    )
+    CORE338_HEAD = "c3a87814084e703e528d0107c43cfd9f7fc0708a"
+    CORE338_RECEIPT_SHA256 = "987f4881c382cd5d9b1b5200673dd214828f111b686208f5560b19ee2353d226"
+
+    @classmethod
+    def setUpClass(cls):
+        from tools import acme_graph005_core_ci_consumer as consumer
+        from tools import acme_synthetic_pg16_seven_bridge as bridge
+        from tools import generate_acme_incidents as gen
+        cls.consumer = consumer
+        cls.manifest = gen.replay(seed=20261018)
+        cls.local = bridge.build_receipt(cls.manifest)
+        cls.previous = json.loads((gen.ROOT / "tests/fixtures" /
+            "acme_core_graph005_pg16_ci_fixture_v1.json").read_text(
+                encoding="utf-8"), object_pairs_hook=gen._unique_object)
+
+    def projection(self):
+        """Pinned fields from source CI, not a replay of Core SQL/TLS."""
+        return [dict(row, physical_run_sequence=physical,
+                     pinned_source_ordinal=i,
+                     core_pg16_full_event_sha256=full)
+                for i, (row, physical, full) in enumerate(zip(
+                    self.previous["events"], self.SOURCE_PHYSICAL,
+                    self.CORE338_FULL), 1)]
+
+    def valid_projection(self, rows):
+        if type(rows) is not list or len(rows) != 7:
+            return False
+        for i, (row, previous, local) in enumerate(zip(
+                rows, self.previous["events"], self.local["events"]), 1):
+            if (type(row) is not dict or
+                    set(row) != set(previous) | {
+                        "physical_run_sequence", "pinned_source_ordinal"} or
+                    row["source_event_id"] != local["source_event_id"] or
+                    row["acme_fixture_full_sha256"] != local["acme_full_event_sha256"] or
+                    row["acme_fixture_payload_sha256"] !=
+                    local["acme_local_payload_sha256"] or
+                    row["core_pg16_payload_sha256"] !=
+                    previous["core_pg16_payload_sha256"] or
+                    row["core_pg16_full_event_sha256"] != self.CORE338_FULL[i - 1] or
+                    row["core_pg16_full_event_sha256"] ==
+                    row["core_pg16_payload_sha256"] or
+                    row["pinned_source_ordinal"] != i or
+                    row["physical_run_sequence"] != self.SOURCE_PHYSICAL[i - 1]):
+                return False
+        return len({r["source_event_id"] for r in rows}) == 7
+
+    def test_01_seven_exact_ids_and_distinct_fixture_payload_full_domains(self):
+        rows = self.projection()
+        self.assertTrue(self.valid_projection(rows))
+        self.assertEqual([r["source_event_id"] for r in rows],
+                         [r["source_event_id"] for r in self.local["events"]])
+        self.assertEqual(self.previous["hash_domains"], self.consumer.CORE_DOMAINS)
+        self.assertNotEqual(self.consumer.CORE_DOMAINS["payload"],
+                            self.consumer.CORE_DOMAINS["full_event"])
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", r["core_pg16_full_event_sha256"])
+                            for r in rows))
+        self.assertEqual(self.local["graph_version"], SEED_GIT_BLOB)
+        self.assertRegex(self.CORE338_HEAD, r"^[0-9a-f]{40}$")
+        self.assertRegex(self.CORE338_RECEIPT_SHA256, r"^[0-9a-f]{64}$")
+
+    def test_02_one_run_interleaving_and_append_not_eight_source_rows(self):
+        rows = self.projection()
+        timeline = {r["physical_run_sequence"]: ("SOURCE", r["source_event_id"])
+                    for r in rows}
+        timeline.update({3: ("DGX_ANALYST", None), 7: ("VERIFY", None),
+                         10: ("DGX_ANALYST", None), 11: ("VERIFY", None)})
+        self.assertEqual(sorted(timeline), list(range(1, 12)))
+        self.assertEqual(sum(stage == "SOURCE" for stage, _ in timeline.values()), 7)
+        self.assertEqual(sum(stage != "SOURCE" for stage, _ in timeline.values()), 4)
+        self.assertEqual([r["pinned_source_ordinal"] for r in rows], list(range(1, 8)))
+        self.assertEqual([r["physical_run_sequence"] for r in rows],
+                         list(self.SOURCE_PHYSICAL))
+        self.assertEqual([timeline[i][0] for i in (3, 7, 10, 11)],
+                         ["DGX_ANALYST", "VERIFY", "DGX_ANALYST", "VERIFY"])
+        # Worker-shaped events are not a second Incident/Run or SOURCE authority.
+        self.assertTrue(self.valid_projection(rows))
+
+    def test_03_reordered_missing_duplicate_eighth_and_forged_hash_fail_closed(self):
+        import copy
+        mutations = (
+            lambda r: r.reverse(),
+            lambda r: r.pop(),
+            lambda r: r.append(copy.deepcopy(r[0])),
+            lambda r: r[1].update(source_event_id=r[0]["source_event_id"]),
+            lambda r: r[2].update(physical_run_sequence=3),
+            lambda r: r[2].update(pinned_source_ordinal=4),
+            lambda r: r[2].update(core_pg16_full_event_sha256="0" * 64),
+            lambda r: r[2].update(core_pg16_payload_sha256="0" * 64),
+            lambda r: r[2].update(acme_fixture_payload_sha256="0" * 64),
+        )
+        for mutate in mutations:
+            rows = copy.deepcopy(self.projection())
+            mutate(rows)
+            with self.subTest(mutation=str(mutate)):
+                self.assertFalse(self.valid_projection(rows))
+
+    def test_04_twin_blast_radius_is_candidate_not_observed_payments(self):
+        impact = self.local["twin_impact"]
+        self.assertEqual(impact["source_ci_id"], "ACME-SAN-FABRIC-A")
+        self.assertEqual(impact["selected_service_id"], "ACME-SVC-PAYMENTS")
+        self.assertEqual(impact["candidate_ci_count"], 10)
+        self.assertEqual(tuple(impact["path_edge_ids"]),
+                         self.consumer.concordance.PATH_EDGES)
+        self.assertEqual(tuple(impact["path_node_ids"]),
+                         self.consumer.concordance.PATH_NODES)
+
+    def test_05_no_portable_authority_or_fifteen_stage_human_positive(self):
+        receipt = self.consumer.consume(self.manifest)
+        self.assertEqual(receipt["result"], "UNKNOWN")
+        self.assertEqual(receipt["core_ci_receipt_status"], "UNAVAILABLE")
+        self.assertEqual(receipt["core_https_runtime_authentication"],
+                         "NOT_INDEPENDENTLY_ATTESTED")
+        self.assertEqual((receipt["verified_stage_count"],
+                          receipt["not_executed_stage_count"]), (0, 15))
+        self.assertEqual((receipt["verified_checkpoint_count"],
+                          receipt["not_executed_checkpoint_count"]), (0, 6))
+        self.assertEqual((receipt["glpi_human_allow"], receipt["hitl_approval"]),
+                         ("UNKNOWN", "UNKNOWN"))
+        self.assertIsNone(receipt["runtime_incident_id"])
+        self.assertIsNone(receipt["runtime_run_id"])
+        self.assertFalse(receipt["live_effects_authorized"])
+        self.assertEqual(receipt["release_stable"], "NO_GO")
+
+    def test_06_core338_ci_shape_cannot_be_mistaken_for_runtime_authority(self):
+        import copy
+        core = copy.deepcopy(self.previous)
+        core["source_head"] = self.CORE338_HEAD
+        core["events"] = self.projection()
+        core["negative_cases"].update(foreign_actor_issuer="UNKNOWN",
+                                      foreign_source_issuer="UNKNOWN")
+        core.update(interleaved_workflow_events=2, appended_workflow_events=2,
+                    same_run_workflow_events=4, same_run_total_before_rogue=11,
+                    same_run_source_count=7,
+                    source_run_sequences=list(self.SOURCE_PHYSICAL),
+                    source_payload_ordinals=list(range(1, 8)))
+        core["receipt_sha256"] = self.consumer._sha256(
+            {k: v for k, v in core.items() if k != "receipt_sha256"})
+        output = self.consumer.consume(
+            self.manifest, core_ci_receipt=core,
+            expected_core_head=self.CORE338_HEAD,
+            expected_receipt_sha256=core["receipt_sha256"])
+        # Current ACME v1 consumer is not an interleaved Core #338 authority.
+        self.assertIn(output["core_ci_receipt_status"],
+                      ("REJECTED", "CI_CONSISTENT_UNTRUSTED"))
+        self.assertEqual(output["core_pg16_authority"], "UNKNOWN")
+        self.assertEqual(output["glpi_human_allow"], "UNKNOWN")
+        self.assertEqual(output["hitl_approval"], "UNKNOWN")
+        self.assertEqual(output["verified_stage_count"], 0)
+        self.assertEqual(output["verified_checkpoint_count"], 0)
+        self.assertIsNone(output["runtime_run_id"])
+        self.assertFalse(output["publishable_to_core_or_glpi"])
