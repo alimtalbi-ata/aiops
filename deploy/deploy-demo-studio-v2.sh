@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # One-shot V2 install. Does not change other containers.
 set -Eeuo pipefail
+# Hard stop until a separately qualified in-place Compose upgrade is approved.
+# Historical installer contains docker stop/rename/run and must NEVER replace
+# the healthy aiops2-rebuild-portal, even when Compose labels are absent.
+echo "BLOCKED: legacy standalone portal replacement disabled; use reviewed Compose in-place upgrade" >&2
+exit 78
 SRC="${SRC:-/home/aiops/aiops-v28-demo}"
 DELIVERY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV=/home/aiops/aiops-v28-test-venv/bin/python
@@ -27,6 +32,14 @@ trap cleanup EXIT
 test -f "$SRC/app/portal/main.py"
 test -x "$VENV"
 docker inspect "$OLD" >/dev/null
+# Safety gate: the live DEV portal is Compose-owned. Do not replace it with
+# a standalone docker run container; that would discard its network/env contract.
+# A targeted Compose update requires an explicit, separately reviewed procedure.
+owner="$(docker inspect "$OLD" --format '{{index .Config.Labels "com.docker.compose.project"}}')"
+if [[ -n "$owner" && "$owner" != "<no value>" ]]; then
+  echo "BLOCKED: $OLD belongs to Compose project $owner; standalone replacement forbidden" >&2
+  exit 78
+fi
 if docker inspect "$BACKUP" >/dev/null 2>&1; then
   echo "Rollback container already exists; refusing deployment" >&2
   exit 1
