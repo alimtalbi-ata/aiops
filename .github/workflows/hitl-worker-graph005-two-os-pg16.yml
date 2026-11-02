@@ -1,0 +1,123 @@
+name: HITL Worker graph005 two OS processes PG16 Temporal (disposable)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - tests/test_worker_graph005_interleaved_pg16.py
+      - .github/workflows/hitl-worker-graph005-two-os-pg16.yml
+      - app/core/actor_canonical_seven_source.py
+      - app/core/canonical_seven_pg_source.py
+      - app/core/main.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  graph005-two-os-negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-graph005-worker-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-graph005-worker-only@127.0.0.1:5432/aiops
+      PGPASSWORD: ci-graph005-worker-only
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      AIOPS_CI_GRAPH005_WORKER: "YES"
+      AIOPS_CI_GRAPH005_RECEIPT_DIR: /tmp/worker-graph005-receipts
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: app:tests
+    steps:
+      - name: Install disposable dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git ca-certificates socat openssl curl unzip
+          python3 -m venv /tmp/worker-graph005-venv
+          /tmp/worker-graph005-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.116.1" "httpx==0.28.1" "temporalio==1.16.0"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source head and PostgreSQL 16
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          /usr/lib/postgresql/16/bin/pg_isready --version | grep -F '16.'
+          /tmp/worker-graph005-venv/bin/python -m py_compile tests/test_worker_graph005_interleaved_pg16.py
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/worker-graph005-socat.log 2>&1 </dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          test "$(/usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | cut -c1-2)" = 16
+      - name: Run same-Run seven SOURCE and two OS Temporal Worker negative regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-graph005-venv/bin/python -m unittest discover -s tests -p 'test_worker_graph005_interleaved_pg16.py' -v 2>&1 | tee /tmp/worker-graph005-test.log
+          grep -E '^Ran 1 test in ' /tmp/worker-graph005-test.log
+          grep -x 'OK' /tmp/worker-graph005-test.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-graph005-test.log
+      - name: Validate exact-head redacted negative-only receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-graph005-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CI_GRAPH005_RECEIPT_DIR"]) / "two-os-negative.json"
+          data = json.loads(path.read_text())
+          digest = data.pop("payload_sha256")
+          assert digest == hashlib.sha256(json.dumps(
+              data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["source_physical_sequences"] == [1,2,4,5,6,8,9]
+          assert data["source_ordinals"] == list(range(1,8))
+          assert len(data["source_ids"]) == 7
+          assert data["worker_os_processes"] == 2 and data["distinct_pids"]
+          assert data["temporal_server_persisted_restart"] == 1
+          assert data["temporal_signal_count"] == data["effect_receipts"] == data["approve_count"] == 0
+          assert data["actor_source_revoked_before_replay"] and data["actor_source_revoked_after_replay"]
+          assert data["verification"] == "UNVERIFIED"
+          assert data["hitl_event"] == "REJECT_BLOCKED_SYNTHETIC"
+          assert data["reopen"] == "RECOMMENDED_NOT_EXECUTED"
+          assert data["audit_013_014_unchanged"]
+          assert data["core_event_key_replay_idempotent"]
+          assert not data["core_terminal_014_exercised"]
+          assert not data["core_outbox_replay_exercised"]
+          assert not data["human_glpi_attested"]
+          assert data["portable_signature"] == "NONE"
+          assert data["release_stable"] == "NO_GO"
+          for secret in ("postgresql://", "Bearer ", "idp|worker-ci", "ci-graph005-worker-only"):
+              assert secret not in path.read_text()
+          print("WORKER_GRAPH005_TWO_OS_NEGATIVE_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CI_GRAPH005_RECEIPT_DIR/two-os-negative.json" > "$AIOPS_CI_GRAPH005_RECEIPT_DIR/two-os-negative.sha256"
+          cd "$AIOPS_CI_GRAPH005_RECEIPT_DIR"
+          sha256sum --check two-os-negative.sha256
+      - name: Upload redacted disposable receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-graph005-two-os-negative-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/worker-graph005-receipts/two-os-negative.json
+            /tmp/worker-graph005-receipts/two-os-negative.sha256
+          retention-days: 7
+          if-no-files-found: warn
