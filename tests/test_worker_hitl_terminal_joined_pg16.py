@@ -86,11 +86,18 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
 
     async def launch(self, argv, env, ready):
         proc = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         self.addCleanup(stop, proc)
         for _ in range(150):
             if proc.poll() is not None:
-                self.fail("joined_service_process_exited")
+                stderr = proc.communicate(timeout=2)[1].decode("utf-8", "replace")
+                for secret in (getattr(self.pg, "token_a", ""),
+                               getattr(self.pg, "token_b", ""),
+                               getattr(self.pg, "url", ""),
+                               os.environ.get("AIOPS_XREF_OWNER_ATTESTATION_KEY", "")):
+                    if secret:
+                        stderr = stderr.replace(secret, "[REDACTED]")
+                self.fail("joined_service_process_exited:" + stderr[-1200:])
             if ready():
                 return proc
             await asyncio.sleep(0.1)
