@@ -143,7 +143,11 @@ def core_readback(x):
     """Independently authenticated Core read; never caller-supplied evidence."""
     base = os.getenv('CORE_URL', 'http://aiops2-core:810').rstrip('/')
     target = urlsplit(base)
-    if (target.scheme not in ('http', 'https') or not target.hostname
+    # Do not forward the internal bearer token to an arbitrary configured origin.
+    # Match the existing Compose Core DNS names and the disposable local test origin.
+    if (target.scheme not in ('http', 'https')
+            or target.hostname not in ('aiops2-core', 'aiops2-rebuild-core',
+                                       'localhost', '127.0.0.1')
             or target.username or target.password or target.path
             or target.query or target.fragment):
         raise HTTPException(503, 'independent_core_url_invalid')
