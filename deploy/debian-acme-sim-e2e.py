@@ -141,7 +141,9 @@ def execute(prober=probe, attempt_id=None):
     ids = {k: started.get(k) for k in keys} if isinstance(started, dict) else {}
     if (started.get('attempt_id') != attempt_id or started.get('tenant_id') != TENANT
             or any(not isinstance(ids.get(k), str) or not re.fullmatch(r'[A-Za-z0-9_-]{3,100}', ids[k]) for k in keys)
-            or started.get('glpi_mode') != 'SIMULATED_ONLY'):
+            or started.get('glpi_mode') != 'SIMULATED_ONLY'
+            or not ids.get('ticket_id', '').startswith('SIM-GLPI-')
+            or not ids.get('approval_id', '').startswith('SIM-APP-')):
         return receipt(attempt_id, 'FAIL', 'SIMULATOR_START_UNQUALIFIED', stages)
     stages['simulator_start'] = 'PASS'
     reads = {}
