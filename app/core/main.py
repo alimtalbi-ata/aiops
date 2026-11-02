@@ -6,9 +6,11 @@ from shared.db import db
 from core.denial_routes import register_denial_routes
 from core.critic_denial_block import block_with_denial
 from core.critic_denial_resume import resume_critic_denial
+from core.acme_sandbox import router as acme_sandbox_router
 from shared.ids import new
 from shared.domain import transition,STAGES
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
+app.include_router(acme_sandbox_router)
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or ADMIN_TOKEN must be configured')

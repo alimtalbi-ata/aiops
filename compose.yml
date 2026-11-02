@@ -26,6 +26,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       POLICY_URL: http://aiops2-policy:813
       WORKER_URL: http://aiops2-worker:815
+      TWIN_URL: http://aiops2-twin:811
+      AIOPS_ACME_SANDBOX_ENABLED: ${AIOPS_ACME_SANDBOX_ENABLED:-false}
       ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["810"]
@@ -40,6 +42,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@aiops2-postgres:5432/${POSTGRES_DB:-aiops}
       AIOPS_ADMIN_TOKEN: ${AIOPS_ADMIN_TOKEN:?AIOPS_ADMIN_TOKEN_required}
+      AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_ACME_TWIN_APPROVAL_KEY: ${AIOPS_ACME_TWIN_APPROVAL_KEY:-}
+      AIOPS_ACME_SANDBOX_ENABLED: ${AIOPS_ACME_SANDBOX_ENABLED:-false}
+      CORE_URL: http://aiops2-core:810
     expose: ["811"]
     networks: [aiops2-control, aiops2-data]
     depends_on: {aiops2-postgres: {condition: service_healthy}}
@@ -63,6 +69,9 @@ services:
     restart: unless-stopped
     environment:
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_ACME_SANDBOX_ENABLED: ${AIOPS_ACME_SANDBOX_ENABLED:-false}
+      CORE_URL: http://aiops2-core:810
+      TWIN_URL: http://aiops2-twin:811
     expose: ["813"]
     networks: [aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health')"], interval: 5s, timeout: 3s, retries: 20}
@@ -125,6 +134,7 @@ services:
       AIOPS_EVIDENCE_MAX_AGE_SECONDS: ${AIOPS_EVIDENCE_MAX_AGE_SECONDS:-900}
       TEMPORAL_ADDRESS: aiops2-temporal:7233
       TEMPORAL_NAMESPACE: default
+      AIOPS_ACME_SANDBOX_ENABLED: ${AIOPS_ACME_SANDBOX_ENABLED:-false}
     expose: ["815"]
     networks: [aiops2-control, aiops2-execution]
     depends_on:
@@ -142,9 +152,13 @@ services:
     restart: unless-stopped
     environment:
       CORE_URL: http://aiops2-core:810
+      TWIN_URL: http://aiops2-twin:811
+      POLICY_URL: http://aiops2-policy:813
+      WORKER_URL: http://aiops2-worker:815
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
+      AIOPS_ACME_SANDBOX_ENABLED: ${AIOPS_ACME_SANDBOX_ENABLED:-false}
     expose: ["816"]
-    networks: [aiops2-execution]
+    networks: [aiops2-execution, aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:816/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-portal:

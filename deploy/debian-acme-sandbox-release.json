@@ -1,0 +1,7 @@
+{
+  "schema": "aiops.debian-acme-sandbox-release-intent.v1",
+  "enabled": false,
+  "candidate_sha": "d671080ca6c20721c367679a425860d90a03a77c",
+  "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; portal 7777 untouched",
+  "reason": "Draft #358 not yet qualified; exact-head CI, PG16 backup, Compose rollback and host receipt required before enable"
+}

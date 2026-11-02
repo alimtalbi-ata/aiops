@@ -60,3 +60,13 @@ class IncidentWorkflow:
             result_type=dict,
         )
         return {"run_id": run_id, "status": result["status"], "final_version": result["version"]}
+
+@workflow.defn
+class AcmeSimulatedHitlWorkflow:
+    """Registered Temporal no-effect sandbox activity; never human/LIVE."""
+    @workflow.run
+    async def run(self, intent):
+        return await workflow.execute_activity(
+            "acme_simulated_no_effect", intent,
+            start_to_close_timeout=datetime.timedelta(seconds=60),
+            retry_policy=RetryPolicy(maximum_attempts=1))

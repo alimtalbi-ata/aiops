@@ -109,3 +109,68 @@ The repository is the source of truth. Do not preserve code for its own sake: re
 The new migration `009_ai_decision_ledger.sql` defines explicit analysis, critique, policy-decision, proposal, approval, effect, verification, reconciliation, learning and model-evaluation records. Synthetic cases cannot be gold-set eligible. Applied migrations are checksum-pinned; edits to an applied migration fail closed. The migration runner verifies a legacy schema signature before adopting migrations 000–008 as a baseline and refuses to guess when the schema is incomplete.
 
 **Qualification honesty:** a successful static or SQL test does not prove that the full stack or model inference works. CI must separately report compilation/unit tests, full image builds, disposable PostgreSQL migration execution and synthetic runtime E2E. LIVE execution remains disabled until real evidence adapters, policy/HITL and effect verification are qualified.
+
+## ACME-TEST causal incident-to-resolution sandbox (Draft #358; NOT deployed)
+
+The V28 vertical sandbox is opt-in (`AIOPS_ACME_SANDBOX_ENABLED=false` by
+default) and isolated to tenant `ACME-TEST`, scenario
+`ACME-SAN-PAYMENTS`. Its GLPI ticket is `SIM-GLPI-*` synthetic data,
+**not** an authenticated GLPI human ticket or an IdP/READ/READMY permission.
+Twin issues a short-lived HMAC-attested approval with
+`approval_kind=SIMULATED` and `approval_issuer=TWIN_ACME_SIMULATED`;
+the signing key is generated/stored privately on the Debian host, never in Git.
+
+The causal sequence is: Simulator POST → Core creates one synthetic Incident,
+Run, seven correlated source events, evidence, Analyst/Critic and a PREPARED
+simulated ticket → Twin calculates SAN→Payments impact and issues signed
+SIMULATED approval → Policy independently re-reads Core/Twin and returns
+SIMULATE only → Temporal Worker independently validates PREPARED and emits
+SIMULATED_NO_EFFECT with zero effect receipts → **Core alone** accepts a
+terminal POST after independently verifying Worker/Twin/Policy and persists
+RESOLVED → Debian runner performs two rounds of independent final GETs.
+Core migration 018 adds a separate append-only terminal SIM-GLPI ticket
+receipt, the canonical Worker `receipt_sha256` and the Twin nonce digest
+(uniquely consumed), all committed atomically with the Incident/Run
+transition. The Core readback independently validates these persisted
+records rather than deriving ticket status from the Run. Already-resolved
+replays use durable Core evidence without re-issuing a Policy decision or
+requiring an unexpired Twin HTTP approval. **RG-ACME-18** is covered by
+`test_10_core_only_finalization_after_independent_no_effect`,
+`test_13_terminal_ticket_is_independent_and_immutable`, and
+`test_15_native_pg16_terminal_backup_restore`; **RG-ACME-19** by
+`test_03_idempotent_replay_restart_and_concurrency` and
+`test_10_core_only_finalization_after_independent_no_effect`.
+These are disposable PG16 tests, not evidence of host E2E or Temporal
+positive joined runtime. No human ALLOW, real GLPI write, LIVE executor or effect is permitted.
+If any authority, freshness, signature, tenant, source hash or readback is
+unavailable, the chain fails closed; a 200 /health or source-only CI is not
+an E2E PASS.
+
+The single stable-based candidate is
+[PR #358](https://github.com/alimtalbi-ata/aiops/pull/358). Its
+`deploy/debian-acme-sandbox-release.json` stays `enabled:false` until
+exact-HEAD PG16 009→018 migration/restore, Worker/Temporal/Policy tests,
+Compose backup and rollback, security review and a qualified immutable SHA
+are recorded in [issue #186](https://github.com/alimtalbi-ata/aiops/issues/186).
+The existing Debian poller invokes the optional in-place
+`deploy/debian-acme-sandbox-upgrade.sh` only when this manifest is explicitly
+enabled. It must preserve the canonical portal :7777, GLPI, Temporal DB and
+all volumes; only the five existing Core/Twin/Policy/Worker/Simulator
+containers may be recreated after image build, PG16 native backup,
+**successful native restore into a new disposable scratch database** with
+headroom checks and cleanup, and read-only ownership/health checks. If
+scratch restore or cleanup fails, promotion stops before Compose mutation. It writes a private machine-readable
+upgrade receipt with stable/product/DEV SHA, image and container IDs,
+HTTP 200 JSON checks, backup checksum and rollback. The separate
+`acme-sim-e2e.json` receipt must contain correlated incident/run/ticket/
+proposal/approval IDs and a verified final RESOLVED state. The publisher
+sidecar reports `GO_SIMULATED_SANDBOX_ONLY` only if **both** fresh host
+receipts qualify; it never grants LIVE or human GLPI authority.
+
+**Rollback**: disable the sandbox flag, restore previous pinned application
+images for only those five services via targeted Compose `up --no-deps`
+and verify health. Preserve the additive 011–018 database schema and
+immutable audit, and retain the native PG16 backup; never use
+`down -v`, prune or automatic destructive DB restore. A failed or stale
+publisher does not convert local checks into host evidence: check the
+published Debian report timestamp before declaring DEPLOYED/E2E PASS.

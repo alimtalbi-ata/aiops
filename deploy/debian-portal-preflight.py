@@ -313,15 +313,19 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                     and (sim['reason'] in (
                         'SIMULATED_SANDBOX_ONLY',
                         'SIMULATOR_START_UNQUALIFIED',
-                        'INDEPENDENT_READBACK_OR_RESOLUTION_MISMATCH')
+                        'INDEPENDENT_READBACK_OR_RESOLUTION_MISMATCH',
+                        'WORKER_PRE_RESOLUTION_UNQUALIFIED',
+                        'CORE_FINALIZATION_UNQUALIFIED')
                         or re.fullmatch(
                             r'SANDBOX_CAPABILITY_MISSING_(SIMULATOR|CORE|TWIN|POLICY|WORKER)',
                             sim['reason']))
                     and status in ('PASS', 'FAIL', 'BLOCKED')
-                    and isinstance(steps, dict) and len(steps) <= 12
+                    and isinstance(steps, dict) and len(steps) <= 20
                     and all(k in {('capability_' + x) for x in expected} |
-                            {('readback_' + x) for x in expected} |
-                            {'simulator_start', 'resolved'}
+                            {('pre_resolution_' + x) for x in expected} |
+                            {('post_resolution_' + x) for x in expected} |
+                            {'simulator_start', 'worker_no_effect',
+                             'core_finalization', 'resolved'}
                             and v in ('PASS', 'FAIL', 'BLOCKED')
                             for k, v in steps.items())
                     and isinstance(ids, dict) and len(ids) <= 5
@@ -332,9 +336,12 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                 if status == 'PASS':
                     safe = (sim['reason'] == 'SIMULATED_SANDBOX_ONLY'
                             and all(steps.get('capability_' + x) == 'PASS' for x in expected)
-                            and all(steps.get('readback_' + x) == 'PASS'
+                            and all(steps.get('pre_resolution_' + x) == 'PASS'
+                                    and steps.get('post_resolution_' + x) == 'PASS'
                                     for x in ('core','twin','policy','worker'))
                             and steps.get('simulator_start') == 'PASS'
+                            and steps.get('worker_no_effect') == 'PASS'
+                            and steps.get('core_finalization') == 'PASS'
                             and steps.get('resolved') == 'PASS' and len(ids) == 5)
                 if status == 'BLOCKED':
                     safe = not ids and str(sim.get('reason','')).startswith('SANDBOX_CAPABILITY_MISSING_')
@@ -352,6 +359,79 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                     }
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
+    # Five-service SHA-pinned upgrade receipt is independent from host E2E.
+    # Never infer Docker mutation from CI or stale/unsigned local files.
+    report['acme_sandbox_upgrade'] = {'status': 'NOT_VERIFIED'}
+    try:
+        local_path = state_dir / 'acme-sandbox-upgrade.json'
+        if local_path.stat().st_size <= 16384:
+            local = json.loads(local_path.read_text(encoding='utf-8'))
+            when = dt.datetime.fromisoformat(local['collected_at'].replace('Z', '+00:00'))
+            age = (dt.datetime.now(dt.timezone.utc) - when).total_seconds()
+            images = local.get('images')
+            portal_http = local.get('portal_http')
+            manifest = json.loads((ROOT / 'deploy/debian-acme-sandbox-release.json').read_text())
+            safe = (when.tzinfo is not None and 0 <= age <= 900
+                    and local.get('schema') == 'aiops.debian-acme-sandbox-upgrade.v1'
+                    and manifest.get('enabled') is True
+                    and local.get('source_sha') == manifest.get('candidate_sha')
+                    and local.get('portal_7777_untouched') is True
+                    and local.get('glpi_write') is False
+                    and local.get('live_effects_allowed') is False
+                    and local.get('status') in ('PASS','FAIL')
+                    and type(local.get('docker_container_mutations')) is int
+                    and local['docker_container_mutations'] in (0,1)
+                    and type(local.get('docker_image_builds')) is int
+                    and 0 <= local['docker_image_builds'] <= 5
+                    and isinstance(images,list) and len(images) <= 5
+                    and all(isinstance(x,dict)
+                            and x.get('service') in ('core','twin','policy','worker','simulator')
+                            and isinstance(x.get('previous_image_id'),str)
+                            and x['previous_image_id'].startswith('sha256:')
+                            for x in images))
+            if safe and local['status'] == 'PASS':
+                safe = (local.get('exit_code') == 0
+                        and local['docker_container_mutations'] == 1
+                        and local['docker_image_builds'] == 5
+                        and len(images) == 5
+                        and len({x['service'] for x in images}) == 5
+                        and all(x.get('image_changed') is True
+                                and x.get('observed_health') == 'healthy'
+                                and x.get('http_status') == 200
+                                and x.get('json_status') == 'ok'
+                                and isinstance(x.get('observed_container_id'),str)
+                                and len(x['observed_container_id']) >= 12
+                                for x in images)
+                        and isinstance(portal_http,dict)
+                        and portal_http.get('http_status') == 200
+                        and portal_http.get('json_status') == 'ok'
+                        and portal_http.get('external_port') == 7777
+                        and local.get('rollback_status') == 'NOT_REQUIRED'
+                        and isinstance(local.get('pg16_backup_sha256'),str)
+                        and re.fullmatch(r'[0-9a-f]{64}',local['pg16_backup_sha256']))
+            if safe:
+                report['acme_sandbox_upgrade'] = {
+                    'collected_at': local['collected_at'],
+                    'status': local['status'], 'source_sha': local['source_sha'],
+                    'stable_checkout_sha': local.get('stable_checkout_sha'),
+                    'dev_checkout_sha': local.get('dev_checkout_sha'),
+                    'docker_container_mutations': local['docker_container_mutations'],
+                    'docker_image_builds': local['docker_image_builds'],
+                    'rollback_status': local.get('rollback_status'),
+                    'pg16_backup_sha256': local.get('pg16_backup_sha256'),
+                    'portal_http': portal_http,
+                    'images': [{k:x.get(k) for k in (
+                        'service','previous_image_id','observed_image_id',
+                        'observed_container_id','observed_health',
+                        'image_changed','http_status','json_status')} for x in images],
+                }
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
+    report['acme_sandbox_verdict'] = (
+        'GO_SIMULATED_SANDBOX_ONLY'
+        if report['acme_sim_e2e'].get('status') == 'PASS'
+        and report['acme_sandbox_upgrade'].get('status') == 'PASS'
+        else 'NO_GO_NOT_RUNTIME_VERIFIED')
     report['release_stable'] = 'NO_GO'
     report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
                            if report['deployment_preflight']['deployment_executed']

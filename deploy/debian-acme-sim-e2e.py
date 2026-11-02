@@ -91,6 +91,45 @@ def receipt(attempt_id, status, reason, stages=None, ids=None):
         'stages': stages or {}, 'ids': ids or {}, 'docker_mutations': 0,
     }
 
+def validate_pre(attempt_id, ids, reads):
+    """PREPARED must persist until Worker no-effect is independently observed."""
+    if not all(isinstance(x, dict) for x in reads.values()):
+        return False
+    core, twin, policy, worker = (reads[k] for k in ('core', 'twin', 'policy', 'worker'))
+    if any(x.get('attempt_id') != attempt_id or x.get('tenant_id') != TENANT
+           or x.get('incident_id') != ids['incident_id']
+           or x.get('run_id') != ids['run_id'] for x in reads.values()):
+        return False
+    return (core.get('incident_status') == 'PREPARED'
+            and core.get('run_status') == 'PREPARED'
+            and core.get('ticket_status') == 'PREPARED'
+            and core.get('ticket_id') == ids['ticket_id']
+            and core.get('proposal_id') == ids['proposal_id']
+            and core.get('ticket_authority') == 'SIMULATED_ONLY'
+            and core.get('source_event_count') == 7
+            and core.get('source_hashes_qualified') is True
+            and core.get('analysis_validated') is True
+            and core.get('critic_validated') is True
+            and twin.get('approval_id') == ids['approval_id']
+            and twin.get('approval_kind') == 'SIMULATED'
+            and twin.get('approval_phase') == 'PRE_RESOLUTION'
+            and twin.get('core_status_at_issuance') == 'PREPARED'
+            and policy.get('approval_id') == ids['approval_id']
+            and policy.get('decision') == 'SIMULATE'
+            and policy.get('approval_kind') == 'SIMULATED'
+            and worker.get('approval_id') == ids['approval_id']
+            and worker.get('receipt_status') == 'SIMULATED_NO_EFFECT'
+            and worker.get('receipt_phase') == 'PRE_RESOLUTION'
+            and worker.get('core_status_at_validation') == 'PREPARED'
+            and worker.get('resolution_verified') is False
+            and worker.get('post_resolution_readback_required') is True
+            and worker.get('effect_receipts') == 0
+            and all(x.get('human_approved') is False
+                    and x.get('execution_allowed') is False
+                    and x.get('effect_allowed') is False
+                    and x.get('live_effects_allowed') is False
+                    for x in reads.values()))
+
 def validate_final(attempt_id, ids, reads):
     if not all(isinstance(x, dict) for x in reads.values()):
         return False
@@ -121,7 +160,10 @@ def validate_final(attempt_id, ids, reads):
             and worker.get('action') == 'SIMULATE'
             and worker.get('receipt_status') == 'SIMULATED_NO_EFFECT'
             and worker.get('effect_receipts') == 0
-            and worker.get('execution_allowed') is False)
+            and worker.get('execution_allowed') is False
+            and worker.get('receipt_phase') == 'PRE_RESOLUTION'
+            and worker.get('core_status_at_validation') == 'PREPARED'
+            and worker.get('resolution_verified') is False)
 
 def execute(prober=probe, attempt_id=None):
     attempt_id = attempt_id or 'ACME-SIM-' + uuid.uuid4().hex[:16].upper()
@@ -150,13 +192,38 @@ def execute(prober=probe, attempt_id=None):
     for iteration in range(30):
         for component in ('core', 'twin', 'policy', 'worker'):
             reads[component] = prober(component, '/api/sandbox/acme/e2e/' + attempt_id, 'GET', None, True)
-            stages['readback_' + component] = 'PASS' if isinstance(reads[component], dict) and not reads[component].get('error') else 'FAIL'
-        if validate_final(attempt_id, ids, reads):
+            stages['pre_resolution_' + component] = ('PASS' if isinstance(reads[component], dict)
+                                                       and not reads[component].get('error') else 'FAIL')
+        if validate_pre(attempt_id, ids, reads):
             break
         if iteration < 29:
             time.sleep(2)
-    if not validate_final(attempt_id, ids, reads):
-        return receipt(attempt_id, 'FAIL', 'INDEPENDENT_READBACK_OR_RESOLUTION_MISMATCH', stages, ids)
+    if not validate_pre(attempt_id, ids, reads):
+        return receipt(attempt_id, 'FAIL', 'WORKER_PRE_RESOLUTION_UNQUALIFIED', stages, ids)
+    stages['worker_no_effect'] = 'PASS'
+    # Core is the sole authority that can transition PREPARED to RESOLVED.
+    resolved = prober('core', '/api/sandbox/acme/resolve', 'POST', request, True)
+    if (not isinstance(resolved, dict)
+            or resolved.get('attempt_id') != attempt_id
+            or resolved.get('tenant_id') != TENANT
+            or resolved.get('incident_id') != ids['incident_id']
+            or resolved.get('run_id') != ids['run_id']
+            or resolved.get('incident_status') != 'RESOLVED'
+            or resolved.get('run_status') != 'RESOLVED'
+            or resolved.get('ticket_status') != 'RESOLVED'
+            or resolved.get('human_approved') is not False
+            or resolved.get('execution_allowed') is not False
+            or resolved.get('effect_allowed') is not False):
+        return receipt(attempt_id, 'FAIL', 'CORE_FINALIZATION_UNQUALIFIED', stages, ids)
+    stages['core_finalization'] = 'PASS'
+    # Independent post-resolution reads, not a synthetic POST response alone.
+    for iteration in range(2):
+        for component in ('core', 'twin', 'policy', 'worker'):
+            reads[component] = prober(component, '/api/sandbox/acme/e2e/' + attempt_id, 'GET', None, True)
+            stages['post_resolution_' + component] = ('PASS' if isinstance(reads[component], dict)
+                                                       and not reads[component].get('error') else 'FAIL')
+        if not validate_final(attempt_id, ids, reads):
+            return receipt(attempt_id, 'FAIL', 'INDEPENDENT_READBACK_OR_RESOLUTION_MISMATCH', stages, ids)
     stages['resolved'] = 'PASS'
     return receipt(attempt_id, 'PASS', 'SIMULATED_SANDBOX_ONLY', stages, ids)
 
