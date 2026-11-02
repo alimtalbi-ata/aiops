@@ -81,3 +81,25 @@ def dispatch_core_written_seven(**kwargs) -> tuple[int, dict]:
     return dispatch_canonical_seven(
         **kwargs, producer=read_core_written_seven,
         expected_path=CORE_WRITTEN_PATH)
+
+
+GRAPH005_PATH = "/v4/graph005-core-written-seven-readback"
+
+
+def dispatch_graph005_core_written_seven(*, expected_events, graph_version,
+                                        **kwargs) -> tuple[int, dict]:
+    """Negative-only trusted-listener dispatch for pinned ACME graph-005.
+
+    The listener owns the expected IDs/hashes and graph Git blob, TLS state,
+    Basic credentials, source issuer and PostgreSQL connection. Request JSON
+    cannot choose any of these. Synthetic service auth is not human IdP auth.
+    """
+    from core.canonical_seven_pg_source import read_graph005_core_written_seven
+
+    def producer(conn, request, *, source, issuer, now):
+        return read_graph005_core_written_seven(
+            conn, request, source=source, issuer=issuer, now=now,
+            expected_events=expected_events, graph_version=graph_version)
+
+    return dispatch_canonical_seven(
+        **kwargs, producer=producer, expected_path=GRAPH005_PATH)
