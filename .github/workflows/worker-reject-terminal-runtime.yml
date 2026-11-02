@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Exact source and 27/27 no-skip tests
+      - name: Exact source and 30/30 no-skip tests
         shell: bash
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -45,9 +45,17 @@ jobs:
           grep -x 'OK' /tmp/worker-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-tests.log
           python - <<'PY'
-          import hashlib,json,os,pathlib
+          import hashlib,json,os,pathlib,re
+          logs=[pathlib.Path('/tmp/worker-terminal-tests.log'),
+                pathlib.Path('/tmp/worker-acme-tests.log')]
+          counts=[]
+          for log in logs:
+              matches=re.findall(r'^Ran ([0-9]+) tests in ',log.read_text(),re.MULTILINE)
+              assert len(matches)==1 and 'OK' in log.read_text().splitlines()
+              counts.append(int(matches[0]))
+          assert counts==[10,20]
           r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
-             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":27,
+             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":sum(counts),
              "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,
              "runtime_workflow_registered":True,"simulated_no_effect_registered":True,
              "simulated_approval_issuer":"TWIN_ACME_SIMULATED",
