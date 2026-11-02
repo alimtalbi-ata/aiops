@@ -405,10 +405,18 @@ def independent_readback(component, attempt):
                    {'aiops2-policy', 'aiops2-rebuild-policy', 'localhost', '127.0.0.1'}, 813),
     }[component]
     base = os.getenv(env, default).rstrip('/')
-    parsed = urlsplit(base)
-    if (parsed.scheme not in ('http', 'https') or parsed.hostname not in allowed
-            or parsed.port != port or parsed.username or parsed.password
-            or parsed.path or parsed.query or parsed.fragment):
+    # RG-ACME-18: parse port defensively before forwarding a shared bearer.
+    # Invalid IPv6/port syntax must fail closed with 503, never raise a 500.
+    try:
+        parsed = urlsplit(base)
+        valid_origin = (
+            parsed.scheme in ('http', 'https')
+            and parsed.hostname in allowed and parsed.port == port
+            and not parsed.username and not parsed.password
+            and not parsed.path and not parsed.query and not parsed.fragment)
+    except ValueError:
+        valid_origin = False
+    if not valid_origin:
         raise HTTPException(503, 'sandbox_service_url_invalid')
     try:
         response = requests.get(
