@@ -41,7 +41,7 @@ jobs:
           grep -x 'OK' /tmp/worker-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-terminal-tests.log
           python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v 2>&1 | tee /tmp/worker-acme-tests.log
-          grep -E '^Ran 17 tests in ' /tmp/worker-acme-tests.log
+          grep -E '^Ran 20 tests in ' /tmp/worker-acme-tests.log
           grep -x 'OK' /tmp/worker-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-tests.log
           python - <<'PY'
