@@ -128,7 +128,20 @@ SIMULATE only → Temporal Worker independently validates PREPARED and emits
 SIMULATED_NO_EFFECT with zero effect receipts → **Core alone** accepts a
 terminal POST after independently verifying Worker/Twin/Policy and persists
 RESOLVED → Debian runner performs two rounds of independent final GETs.
-No human ALLOW, real GLPI write, LIVE executor or effect is permitted.
+Core migration 018 adds a separate append-only terminal SIM-GLPI ticket
+receipt, the canonical Worker `receipt_sha256` and the Twin nonce digest
+(uniquely consumed), all committed atomically with the Incident/Run
+transition. The Core readback independently validates these persisted
+records rather than deriving ticket status from the Run. Already-resolved
+replays use durable Core evidence without re-issuing a Policy decision or
+requiring an unexpired Twin HTTP approval. **RG-ACME-18** is covered by
+`test_10_core_only_finalization_after_independent_no_effect`,
+`test_13_terminal_ticket_is_independent_and_immutable`, and
+`test_15_native_pg16_terminal_backup_restore`; **RG-ACME-19** by
+`test_03_idempotent_replay_restart_and_concurrency` and
+`test_10_core_only_finalization_after_independent_no_effect`.
+These are disposable PG16 tests, not evidence of host E2E or Temporal
+positive joined runtime. No human ALLOW, real GLPI write, LIVE executor or effect is permitted.
 If any authority, freshness, signature, tenant, source hash or readback is
 unavailable, the chain fails closed; a 200 /health or source-only CI is not
 an E2E PASS.
@@ -136,7 +149,7 @@ an E2E PASS.
 The single stable-based candidate is
 [PR #358](https://github.com/alimtalbi-ata/aiops/pull/358). Its
 `deploy/debian-acme-sandbox-release.json` stays `enabled:false` until
-exact-HEAD PG16 009→017 migration/restore, Worker/Temporal/Policy tests,
+exact-HEAD PG16 009→018 migration/restore, Worker/Temporal/Policy tests,
 Compose backup and rollback, security review and a qualified immutable SHA
 are recorded in [issue #186](https://github.com/alimtalbi-ata/aiops/issues/186).
 The existing Debian poller invokes the optional in-place
@@ -154,7 +167,7 @@ receipts qualify; it never grants LIVE or human GLPI authority.
 
 **Rollback**: disable the sandbox flag, restore previous pinned application
 images for only those five services via targeted Compose `up --no-deps`
-and verify health. Preserve the additive 011–017 database schema and
+and verify health. Preserve the additive 011–018 database schema and
 immutable audit, and retain the native PG16 backup; never use
 `down -v`, prune or automatic destructive DB restore. A failed or stale
 publisher does not convert local checks into host evidence: check the
