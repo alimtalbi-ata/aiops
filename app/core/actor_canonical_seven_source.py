@@ -72,6 +72,7 @@ def _validate(proof, request, record, issuer, now, actor_exp):
         return False
     seen_events, seen_evidence, matching = set(), set(), 0
     last_known = 0
+    last_run_sequence = 0
     for position, item in enumerate(events, 1):
         if not isinstance(item, dict) or set(item) != {
                 "sequence", "source_event_id", "evidence_id", "payload",
@@ -79,7 +80,8 @@ def _validate(proof, request, record, issuer, now, actor_exp):
             return False
         seq, event_id, evidence_id = (item["sequence"], item["source_event_id"],
                                       item["evidence_id"])
-        if (type(seq) is not int or seq != position
+        if (type(seq) is not int or seq < position
+                or seq <= last_run_sequence
                 or not isinstance(event_id, str) or not _ID.fullmatch(event_id)
                 or not isinstance(evidence_id, str) or not _ID.fullmatch(evidence_id)
                 or event_id in seen_events or evidence_id in seen_evidence):
@@ -87,6 +89,18 @@ def _validate(proof, request, record, issuer, now, actor_exp):
         seen_events.add(event_id)
         seen_evidence.add(evidence_id)
         payload, full = item["payload"], item["full_event"]
+        # Only pinned graph-shaped SOURCE events may have gaps in their
+        # physical Run sequence when Worker events are interleaved. The
+        # source ordinal remains payload.sequence; hashes cover the real
+        # physical sequence, not a normalized substitute. This grants no
+        # portable signature or human IdP/GLPI authorization.
+        graph_ordinal = (
+            isinstance(payload, dict)
+            and bool(re.fullmatch(r"SYN-EVT-[0-9A-F]{20}", event_id))
+            and type(payload.get("graph_version")) is str
+            and bool(re.fullmatch(r"[0-9a-f]{40}", payload["graph_version"]))
+        if not graph_ordinal and seq != position:
+            return False
         if (not isinstance(payload, dict) or not isinstance(full, dict)
                 or set(full) != set(_FULL)
                 or any(not isinstance(item.get(k), str) or not _HEX.fullmatch(item[k])
@@ -109,7 +123,7 @@ def _validate(proof, request, record, issuer, now, actor_exp):
                        for k in ("tenant_id", "run_id", "incident_id",
                                  "ticket_id", "glpi_entity_id"))
                 or payload.get("source_event_id") != event_id
-                or payload.get("sequence") != seq):
+                or payload.get("sequence") != (position if graph_ordinal else seq)):
             return False
         observed, known = full["observed_at"], full["known_at"]
         if (type(observed) is not int or type(known) is not int
@@ -117,6 +131,7 @@ def _validate(proof, request, record, issuer, now, actor_exp):
                 or known < last_known):
             return False
         last_known = known
+        last_run_sequence = seq
         if event_id == record.get("source_event_id"):
             if item["payload_hash"] != record.get("source_payload_hash"):
                 return False
