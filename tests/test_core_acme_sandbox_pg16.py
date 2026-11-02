@@ -30,7 +30,7 @@ CHAIN = ['001_schema.sql', '004_operational_model.sql',
 
 def intent(attempt):
     return {'attempt_id': attempt, 'tenant_id': 'ACME-TEST',
-            'scenario_id': 'ACME-SAN-PAYMENTS', 'mode': 'SIMULATION',
+            'scenario_id': 'ACME-TEST-SAN-PAYMENTS', 'mode': 'SIMULATION',
             'approval_issuer': 'TWIN_ACME_SIMULATED',
             'idempotency_key': attempt, 'live_effects_allowed': False}
 
@@ -615,13 +615,13 @@ class SandboxPG16(unittest.TestCase):
                 "where site='ACME-TEST-SIMULATION'").fetchone()[0],9)
             self.assertEqual(db.execute(
                 "select count(*) from aiops.twin_edges "
-                "where edge_id like 'ACME-SIM-EDGE-%'").fetchone()[0],8)
+                "where edge_id like 'ACME-TEST-SIM-EDGE-%'").fetchone()[0],8)
         with patch.dict(os.environ,{'AIOPS_ACME_TWIN_APPROVAL_KEY':'a'*64}):
             impacted=twin.sourced_impact()
-            self.assertIn('ACME-SAN-FABRIC-A',impacted)
-            self.assertIn('ACME-HOST-RHEL-MPATH-01',impacted)
-            self.assertIn('ACME-SVC-PAYMENTS',impacted)
-            self.assertIn('ACME-SVC-ERP',impacted)
+            self.assertIn('ACME-TEST-SAN-FABRIC-A',impacted)
+            self.assertIn('ACME-TEST-HOST-RHEL-MPATH-01',impacted)
+            self.assertIn('ACME-TEST-SVC-PAYMENTS',impacted)
+            self.assertIn('ACME-TEST-SVC-ERP',impacted)
             self.assertEqual(twin.capabilities()['component'],'twin')
 
     def test_19_mixed_live_twin_graph_refused_and_cleaned(self):
@@ -635,7 +635,7 @@ class SandboxPG16(unittest.TestCase):
             db.execute(
                 "insert into aiops.twin_edges "
                 "(edge_id,source_id,target_id,relation_type,confidence) "
-                "values('ACME-SIM-EDGE-FOREIGN-CI','ACME-SAN-FABRIC-A',"
+                "values('ACME-TEST-SIM-EDGE-FOREIGN-CI','ACME-TEST-SAN-FABRIC-A',"
                 "'FOREIGN-LIVE-CI-TEST','SIMULATED_DEPENDS_ON',1.0)")
         try:
             with self.assertRaises(HTTPException) as caught:
@@ -644,10 +644,10 @@ class SandboxPG16(unittest.TestCase):
         finally:
             with psycopg.connect(self.url) as db:
                 db.execute("delete from aiops.twin_edges "
-                           "where edge_id='ACME-SIM-EDGE-FOREIGN-CI'")
+                           "where edge_id='ACME-TEST-SIM-EDGE-FOREIGN-CI'")
                 db.execute("delete from aiops.twin_nodes "
                            "where node_id='FOREIGN-LIVE-CI-TEST'")
-        self.assertIn('ACME-SVC-PAYMENTS',twin.sourced_impact())
+        self.assertIn('ACME-TEST-SVC-PAYMENTS',twin.sourced_impact())
 
 if __name__ == '__main__':
     unittest.main()
