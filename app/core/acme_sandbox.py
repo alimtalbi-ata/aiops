@@ -141,8 +141,14 @@ def read(c, attempt):
             raise HTTPException(503, 'sandbox_source_binding_unqualified')
         source_ids.append(key)
         linked_evidence.append(eids[0])
+    # Freshness is assessed against immutable attempt creation, not the
+    # current clock: a correctly resolved Run must survive later restarts.
+    created = c.execute(
+        'select created_at from aiops.acme_sandbox_attempts '
+        'where tenant_id=%s and attempt_id=%s',
+        (TENANT, attempt)).fetchone()[0]
     facts = c.execute(
-        "select evidence_id,provenance,observed_at,known_at,statement_timestamp() from aiops.evidence "
+        "select evidence_id,provenance,observed_at,known_at from aiops.evidence "
         "where provenance->>'sandbox_attempt_id'=%s "
         "and provenance->>'tenant_id'=%s and provenance->>'run_id'=%s",
         (attempt, TENANT, run)).fetchall()
@@ -153,7 +159,7 @@ def read(c, attempt):
             or any(eid not in evidence_ids for eid in linked_evidence)
             or any(f[2] is None or f[3] is None or
                    not (0 <= (f[3]-f[2]).total_seconds() <= 300)
-                   or not (0 <= (f[4]-f[2]).total_seconds() <= 300) for f in facts)):
+                   or not (0 <= (created-f[2]).total_seconds() <= 300) for f in facts)):
         raise HTTPException(503, 'sandbox_evidence_unqualified')
     ar = c.execute('select status,provider,evidence_ids,output from aiops.analysis_records '
                    'where analysis_id=%s and run_id=%s and incident_id=%s',
@@ -201,7 +207,7 @@ def read(c, attempt):
                         'live_effects_allowed','real_glpi_writes_allowed'))
                 or digest({k: v for k, v in worker_doc.items()
                            if k != 'receipt_sha256'}) != worker_sha.strip()
-                or not (issued <= recorded + timedelta(seconds=30) < expires)
+                or not (issued <= recorded + timedelta(seconds=30) and recorded < expires)
                 or expires - issued > timedelta(minutes=5)
                 or type(nonce_sha) is not str
                 or not re.fullmatch(r'[0-9a-f]{64}', nonce_sha.strip())
