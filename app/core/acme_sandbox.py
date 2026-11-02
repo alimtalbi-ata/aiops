@@ -170,17 +170,18 @@ def read(c, attempt):
     # RG-ACME-08: independent append-only SIM-GLPI ticket ledger, not Run projection.
     ticket_rows = c.execute(
         "select transition_seq,status,ticket_id,incident_id,run_id,proposal_id,"
-        "approval_id,worker_receipt_sha256 from aiops.acme_sandbox_ticket_events "
+        "approval_id,worker_receipt_sha256,terminal_ticket_sha256 "
+        "from aiops.acme_sandbox_ticket_events "
         "where tenant_id=%s and attempt_id=%s order by transition_seq",
         (TENANT, attempt)).fetchall()
-    prepared = (1, 'PREPARED', ticket, incident, run, proposal, None, None)
+    prepared = (1, 'PREPARED', ticket, incident, run, proposal, None, None, None)
     if not ticket_rows or tuple(ticket_rows[0]) != prepared:
         raise HTTPException(503, 'sandbox_ticket_prepared_audit_missing')
     terminal = c.execute(
         "select payload from aiops.run_events where run_id=%s "
         "and stage='RUN' and event_type='SIMULATED_RESOLVED' "
         "and status='RESOLVED'", (run,)).fetchall()
-    ticket_state, resolved_approval, worker_sha = 'PREPARED', None, None
+    ticket_state, resolved_approval, worker_sha, ticket_sha = 'PREPARED', None, None, None
     if istate == 'RESOLVED':
         if len(ticket_rows) != 2 or len(terminal) != 1:
             raise HTTPException(503, 'sandbox_ticket_terminal_audit_missing')
@@ -191,6 +192,15 @@ def read(c, attempt):
                 or re.fullmatch(r'[0-9a-f]{64}', final[7].strip()) is None):
             raise HTTPException(503, 'sandbox_ticket_terminal_binding_unqualified')
         resolved_approval, worker_sha = final[6], final[7].strip()
+        ticket_sha = digest({
+            'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
+            'tenant_id': TENANT, 'attempt_id': attempt,
+            'incident_id': incident, 'run_id': run,
+            'ticket_id': ticket, 'ticket_status': 'RESOLVED',
+            'core_request_sha256': request_hash.strip(),
+            'worker_receipt_sha256': worker_sha})
+        if final[8] != ticket_sha:
+            raise HTTPException(503, 'sandbox_ticket_digest_mismatch')
         event = terminal[0][0]
         if (type(event) is not dict
                 or event.get('tenant_id') != TENANT
@@ -201,6 +211,7 @@ def read(c, attempt):
                 or event.get('proposal_id') != proposal
                 or event.get('approval_id') != resolved_approval
                 or event.get('worker_receipt_sha256') != worker_sha
+                or event.get('terminal_ticket_sha256') != ticket_sha
                 or event.get('worker_receipt_verified') is not True
                 or event.get('execution_allowed') is not False
                 or event.get('effect_allowed') is not False
@@ -224,6 +235,8 @@ def read(c, attempt):
             'source_event_ids': source_ids, 'request_sha256': request_hash.strip(),
             'approval_id': resolved_approval, 'approval_issuer': ISSUER,
             'worker_receipt_sha256': worker_sha,
+            'terminal_ticket_receipt_verified': istate == 'RESOLVED',
+            'terminal_ticket_sha256': ticket_sha,
             'human_approval_claimed': False, 'human_approved': False,
             'live_effects_allowed': False, 'real_glpi_writes_allowed': False,
             'execution_allowed': False, 'effect_allowed': False}
@@ -358,6 +371,13 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
                   (TENANT, attempt, request_hash, incident, run, ticket, proposal,
                    analysis, critique, 'PREPARED', 'SYNTHETIC_SIMULATOR'))
         # RG-ACME-08: immutable ticket PREPARED record exists before any approval.
+        ticket_sha = digest({
+            'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
+            'tenant_id': TENANT, 'attempt_id': attempt,
+            'incident_id': incident, 'run_id': run,
+            'ticket_id': ticket, 'ticket_status': 'RESOLVED',
+            'core_request_sha256': current['request_sha256'],
+            'worker_receipt_sha256': worker_sha})
         c.execute(
             "insert into aiops.acme_sandbox_ticket_events "
             "(tenant_id,attempt_id,transition_seq,status,ticket_id,incident_id,"
@@ -565,9 +585,9 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
         c.execute(
             "insert into aiops.acme_sandbox_ticket_events "
             "(tenant_id,attempt_id,transition_seq,status,ticket_id,incident_id,"
-            "run_id,proposal_id,approval_id,worker_receipt_sha256) "
-            "values (%s,%s,2,'RESOLVED',%s,%s,%s,%s,%s,%s)",
-            (TENANT, attempt, ticket, incident, run, proposal, approval, worker_sha))
+            "run_id,proposal_id,approval_id,worker_receipt_sha256,terminal_ticket_sha256) "
+            "values (%s,%s,2,'RESOLVED',%s,%s,%s,%s,%s,%s,%s)",
+            (TENANT, attempt, ticket, incident, run, proposal, approval, worker_sha, ticket_sha))
         c.execute(
             "insert into aiops.run_events "
             "(event_id,run_id,sequence,stage,event_type,status,payload,event_key) "
@@ -577,6 +597,7 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                     'incident_id': incident, 'run_id': run,
                     'ticket_id': ticket, 'proposal_id': proposal,
                     'approval_id': approval, 'worker_receipt_sha256': worker_sha,
+                    'terminal_ticket_sha256': ticket_sha,
                     'worker_receipt_verified': True, 'execution_allowed': False,
                     'effect_allowed': False, 'human_approved': False,
                     'live_effects_allowed': False}),
