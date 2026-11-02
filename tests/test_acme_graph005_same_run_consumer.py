@@ -746,5 +746,80 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
                 join.read_artifact(path, join.CORE_FILE)
 
 
+    def test_26_rehashed_cross_artifact_nonanchor_cannot_attest_same_run(self):
+        """A valid rehashed ZIP sidecar and matching claims are not signatures.
+
+        Core and Worker CI artifacts can share a HEAD and graph without a
+        cryptographically authenticated common Incident/Run or human IdP.
+        """
+        import tempfile
+        import zipfile
+        from pathlib import Path
+        from tools import acme_graph005_ci_artifact_join as join
+
+        core, worker, head = self.ci_artifact_pair()
+        original_full = core["events"][2]["core_pg16_full_event_sha256"]
+        core["events"][2]["core_pg16_full_event_sha256"] = hashlib.sha256(
+            b"TEST_ONLY_REHASHED_NONANCHOR_CORE_FULL").hexdigest()
+        self.assertNotEqual(
+            core["events"][2]["core_pg16_full_event_sha256"], original_full)
+        # These self-declared claims must never become independent authority.
+        core["same_run_authenticated"] = True
+        core["actor_idp_signature"] = "TEST_ONLY_FORGED_IDP_SIGNATURE"
+        worker["same_run_authenticated"] = True
+        worker["human_glpi_allow"] = True
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "core.zip"
+            data = json.dumps(core, sort_keys=True).encode()
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr(join.CORE_FILE, data)
+                z.writestr("core-graph005-seven-015.sha256",
+                           hashlib.sha256(data).hexdigest() + "  " +
+                           join.CORE_FILE + "\n")
+            parsed, meta = join.read_artifact(path, join.CORE_FILE)
+            self.assertTrue(meta["sha256_sidecar_verified"])
+            self.assertEqual(parsed["events"][2]["core_pg16_full_event_sha256"],
+                             core["events"][2]["core_pg16_full_event_sha256"])
+
+        receipt = join.build_receipt(parsed, worker, head, core_artifact=meta)
+        self.assertEqual(receipt["cross_artifact_concordance"],
+                         "CONSISTENT_UNTRUSTED")
+        self.assertEqual(receipt["independent_core_worker_same_run"],
+                         "NOT_ATTESTED")
+        self.assertEqual(receipt["independent_actor_tenant_incident_run"],
+                         "NOT_ATTESTED")
+        self.assertEqual(receipt["core_https_runtime_authentication"],
+                         "NOT_ATTESTED")
+        self.assertEqual(receipt["portable_signature"], "NONE")
+        self.assertEqual(receipt["glpi_human_allow"], "NOT_ATTESTED")
+        self.assertEqual(receipt["hitl_approval"], "NOT_ATTESTED")
+        self.assertEqual(receipt["stage_count"], 15)
+        self.assertEqual((receipt["verified_stage_count"],
+                          receipt["not_executed_stage_count"]), (0, 15))
+        self.assertEqual((receipt["verified_checkpoint_count"],
+                          receipt["not_executed_checkpoint_count"]), (0, 6))
+        self.assertTrue(all(s["status"] == "NOT_EXECUTED" and
+                            s["verification"] == "UNKNOWN" and
+                            s["runtime_id"] is None
+                            for s in receipt["stages"]))
+        self.assertEqual(receipt["twin_impact"]["candidate_impacted_ci_count"], 10)
+        self.assertEqual(receipt["twin_impact"]["observed_impact"], "UNKNOWN")
+        self.assertEqual(receipt["runtime_e2e"], "NOT_EXECUTED")
+        self.assertFalse(receipt["publishable_to_core_or_glpi"])
+        self.assertFalse(receipt["live_effects_authorized"])
+        self.assertEqual(receipt["release_stable"], "NO_GO")
+        self.assertNotIn("TEST_ONLY_FORGED_IDP_SIGNATURE", json.dumps(receipt))
+
+        # Even with matching HEAD, a claimed portable signature is invalid.
+        parsed["portable_signature"] = "SIGNED"
+        rejected = join.build_receipt(parsed, worker, head)
+        self.assertEqual(rejected["cross_artifact_concordance"], "UNKNOWN")
+        self.assertEqual(rejected["cross_artifact_reason"],
+                         "UNTRUSTED_CORE_AUTHORITY_PROMOTION")
+        self.assertEqual(rejected["not_executed_stage_count"], 15)
+        self.assertEqual(rejected["not_executed_checkpoint_count"], 6)
+
+
 if __name__ == "__main__":
     unittest.main()
