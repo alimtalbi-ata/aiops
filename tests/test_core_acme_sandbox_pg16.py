@@ -480,5 +480,128 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
 
+
+    def test_17_registered_temporal_worker_same_pg16_run(self):
+        """RG-ACME-21: real PG16 + registered Temporal activity, synthetic Twin/Policy.
+
+        This is disposable CI integration, not Debian E2E or human GLPI authority.
+        """
+        import asyncio
+        from copy import deepcopy
+        from unittest.mock import patch
+        from temporalio.testing import WorkflowEnvironment
+        from temporalio.worker import Worker
+        from worker.workflow import AcmeSimulatedHitlWorkflow
+        from worker import main as worker_main
+        from worker.acme_simulated_hitl import receipt_digest_valid
+        from test_worker_acme_simulated_hitl import fixtures, INTENT
+
+        attempt = 'ACME-SIM-PG16-TEMPORAL-001'
+        response = self.post(attempt)
+        self.assertEqual(response.status_code, 200, response.text)
+        state = self.get(attempt).json()
+        self.assertEqual(state['run_status'], 'PREPARED')
+        docs = fixtures()
+        approval = 'SIM-APP-PG16-TEMPORAL-001'
+        worker_intent = dict(INTENT, attempt_id=attempt,
+                             idempotency_key=attempt,
+                             incident_id=state['incident_id'],
+                             run_id=state['run_id'],
+                             proposal_id=state['proposal_id'],
+                             ticket_id=state['ticket_id'],
+                             approval_id=approval)
+        docs['core'] = deepcopy(state)
+        for component in ('twin', 'policy'):
+            docs[component].update({
+                k: worker_intent[k] for k in (
+                    'attempt_id', 'tenant_id', 'incident_id', 'run_id',
+                    'proposal_id', 'ticket_id', 'approval_id')})
+        now = datetime.now(timezone.utc)
+        docs['twin'].update(
+            core_request_sha256=state['request_sha256'],
+            core_source_event_ids=state['source_event_ids'],
+            approval_nonce='SIMNONCE-PG16-TEMPORAL-001',
+            issued_at=(now - timedelta(seconds=10)).isoformat(),
+            expires_at=(now + timedelta(minutes=3)).isoformat())
+
+        reads = []
+        class Response:
+            def __init__(self, payload):
+                self.status_code = 200
+                self._payload = payload
+                self.content = json.dumps(payload).encode()
+            def json(self):
+                return deepcopy(self._payload)
+
+        def fake_get(url, **kwargs):
+            component = next((key for key, origin in (
+                ('core', worker_main.CORE), ('twin', worker_main.TWIN),
+                ('policy', worker_main.POLICY))
+                if url == origin.rstrip('/') + '/api/sandbox/acme/e2e/' + attempt), None)
+            self.assertIsNotNone(component)
+            self.assertEqual(kwargs.get('allow_redirects'), False)
+            reads.append(component)
+            if component == 'core':
+                actual = self.get(attempt)
+                self.assertEqual(actual.status_code, 200)
+                return Response(actual.json())
+            return Response(docs[component])
+
+        async def run_temporal():
+            async with await WorkflowEnvironment.start_time_skipping() as env:
+                async with Worker(env.client, task_queue='acme-pg16-joined',
+                                  workflows=[AcmeSimulatedHitlWorkflow],
+                                  activities=[worker_main.acme_simulated_no_effect]):
+                    return await env.client.execute_workflow(
+                        AcmeSimulatedHitlWorkflow.run, worker_intent,
+                        id='acme-pg16-joined-' + attempt,
+                        task_queue='acme-pg16-joined')
+
+        with patch.object(worker_main.requests, 'get', side_effect=fake_get):
+            worker_receipt = asyncio.run(run_temporal())
+        self.assertEqual(reads, ['core','twin','policy'] * 2)
+        self.assertTrue(receipt_digest_valid(worker_receipt))
+        self.assertEqual(worker_receipt['receipt_status'], 'SIMULATED_NO_EFFECT')
+        self.assertEqual(worker_receipt['run_id'], state['run_id'])
+        self.assertEqual(worker_receipt['effect_receipts'], 0)
+        self.assertFalse(worker_receipt['human_approved'])
+        self.assertFalse(worker_receipt['live_effects_allowed'])
+        with patch.object(core, 'independent_readback',
+                          side_effect=[worker_receipt, docs['twin'], docs['policy']]):
+            terminal = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(terminal.status_code, 200, terminal.text)
+        resolved = terminal.json()
+        self.assertEqual(resolved['run_status'], 'RESOLVED')
+        self.assertEqual(resolved['incident_status'], 'RESOLVED')
+        self.assertEqual(resolved['ticket_status'], 'RESOLVED')
+        self.assertEqual(resolved['worker_receipt_sha256'], worker_receipt['receipt_sha256'])
+        self.assertEqual(self.get(attempt).json()['terminal_ticket_sha256'],
+                         resolved['terminal_ticket_sha256'])
+        with psycopg.connect(self.url) as db:
+            persisted = db.execute(
+                'select worker_receipt_sha256,ticket_status from '
+                'aiops.acme_sandbox_terminal_tickets where attempt_id=%s',
+                (attempt,)).fetchone()
+            self.assertEqual(persisted[0].strip(), worker_receipt['receipt_sha256'])
+            self.assertEqual(persisted[1], 'RESOLVED')
+        evidence = {
+            'schema': 'aiops.acme-pg16-temporal-joined-ci.v1',
+            'source_head': os.environ['AIOPS_EXPECTED_HEAD_SHA'],
+            'tenant_id': 'ACME-TEST', 'attempt_id': attempt,
+            'incident_id': state['incident_id'], 'run_id': state['run_id'],
+            'ticket_id': state['ticket_id'], 'approval_id': approval,
+            'worker_receipt_sha256': worker_receipt['receipt_sha256'],
+            'terminal_ticket_sha256': resolved['terminal_ticket_sha256'],
+            'pg16_terminal_readback': 'RESOLVED',
+            'registered_temporal_activity': True, 'worker_readback_count': len(reads),
+            'twin_policy_authorities': 'SYNTHETIC_CI_FIXTURES',
+            'human_glpi_attested': False, 'live_effects': 0,
+            'debian_host_deployed': False, 'release_stable': 'NO_GO'
+        }
+        out = Path('/tmp/acme-pg16-temporal-joined.json')
+        out.write_text(json.dumps(evidence, sort_keys=True, separators=(',', ':')) + '\\n')
+        self.assertEqual(json.loads(out.read_text())['run_id'], state['run_id'])
+
 if __name__ == '__main__':
     unittest.main()
