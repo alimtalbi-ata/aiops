@@ -1,4 +1,6 @@
 """Portal ACME SIM-GLPI: independent Core sandbox GET, no human READ/READMY."""
+import hashlib
+import json
 import os
 import sys
 import unittest
@@ -40,7 +42,9 @@ GOOD = {
     "proposal_id": "SIM-PROP-1234567890",
     "approval_id": "SIM-APP-1234567890",
     "source_event_count": 7, "source_hashes_qualified": True,
-    "source_event_ids": ["SYN-EVT-" + str(i).zfill(8) for i in range(7)],
+    "source_event_ids": ["SYN-EVT-" + hashlib.sha256(
+        ("ACME-TEST:" + ATTEMPT + ":" + str(i)).encode("ascii")
+    ).hexdigest()[:20].upper() for i in range(1, 8)],
     "request_sha256": "a" * 64,
     "worker_receipt_verified": True,
     "resolution_after_worker_receipt": True,
@@ -70,6 +74,25 @@ WORKER = {
 }
 
 
+# Controlled positive-shape fixtures: these are NOT Core/Worker authority.
+WORKER["core_request_sha256"] = GOOD["request_sha256"]
+WORKER["core_source_event_ids"] = list(GOOD["source_event_ids"])
+WORKER["twin_approval_nonce_sha256"] = "b" * 64
+WORKER["receipt_sha256"] = hashlib.sha256(json.dumps(
+    WORKER, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+).encode("ascii")).hexdigest()
+GOOD["worker_receipt_sha256"] = WORKER["receipt_sha256"]
+GOOD["terminal_ticket_receipt_verified"] = True
+GOOD["terminal_ticket_sha256"] = hashlib.sha256(json.dumps({
+    "schema": "aiops.portal.sim-glpi-ticket-digest.v1",
+    "tenant_id": "ACME-TEST", "attempt_id": ATTEMPT,
+    "incident_id": GOOD["incident_id"], "run_id": GOOD["run_id"],
+    "ticket_id": GOOD["ticket_id"], "ticket_status": "RESOLVED",
+    "core_request_sha256": GOOD["request_sha256"],
+    "worker_receipt_sha256": WORKER["receipt_sha256"],
+}, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+
+
 def upstream(value=None, code=200):
     response = Mock()
     response.status_code = code
@@ -80,7 +103,8 @@ def upstream(value=None, code=200):
 
 def good_reads(core=None, worker=None):
     receipt = WORKER if worker is None else worker
-    return [upstream(receipt), upstream(GOOD if core is None else core), upstream(receipt)]
+    final = GOOD if core is None else core
+    return [upstream(receipt), upstream(final), upstream(receipt), upstream(final)]
 
 
 class PortalSimulatedGlpiTests(unittest.TestCase):
@@ -213,6 +237,8 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                         {"AIOPS_INTERNAL_TOKEN": ""},
                         {"CORE_URL": "https://attacker.example/path"},
                         {"CORE_URL": "http://user:password@aiops2-core:810"},
+                        {"CORE_URL": "http://aiops2-core:811"},
+                        {"WORKER_URL": "http://aiops2-worker:810"},
                         {"WORKER_URL": "https://attacker.example/receipt"}):
             with self.subTest(changed=changed):
                 with patch.dict(os.environ, changed):
@@ -234,6 +260,8 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
         self.assertEqual(data["ticket"]["current_state"], "RESOLVED")
         self.assertTrue(data["worker_no_effect_verified"])
         self.assertTrue(data["core_resolution_after_worker_verified"])
+        self.assertTrue(data["terminal_ticket_digest_verified"])
+        self.assertEqual(data["independent_final_read_rounds"], 2)
         self.assertEqual(data["worker_receipt_status"], "SIMULATED_NO_EFFECT")
         self.assertFalse(data["ticket"]["transition_history_attested"])
         self.assertEqual(data["readback_source"], "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET")
@@ -244,9 +272,9 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
         self.assertFalse(data["host_e2e_qualified"])
         self.assertFalse(data["live_effects_allowed"])
         self.assertFalse(data["real_glpi_writes_allowed"])
-        self.assertEqual(get.call_count, 3)
+        self.assertEqual(get.call_count, 4)
         self.assertEqual([c.args[0] for c in get.call_args_list],
-                         [WORKER_URL, URL, WORKER_URL])
+                         [WORKER_URL, URL, WORKER_URL, URL])
         for call in get.call_args_list:
             self.assertEqual(call.kwargs["headers"]["Authorization"], "Bearer " + INTERNAL)
             self.assertEqual(call.kwargs["timeout"], 3)
@@ -306,12 +334,19 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                 with patch.object(acme_sim_glpi.requests, "get",
                                   side_effect=good_reads(worker=worker)) as get:
                     self.assert_unknown(self.get())
-                self.assertEqual(get.call_count, 3)
+                self.assertEqual(get.call_count, 4)
         # A changed Worker receipt across the final Core GET is a replay race.
         rotated = {**WORKER, "approval_id": "SIM-APP-ROTATED1234"}
         with patch.object(acme_sim_glpi.requests, "get",
-                          side_effect=[upstream(WORKER), upstream(GOOD), upstream(rotated)]):
+                          side_effect=[upstream(WORKER), upstream(GOOD), upstream(rotated), upstream(GOOD)]):
             self.assert_unknown(self.get())
+        # Core final read must also remain byte-for-byte consistent.
+        rotated_core = {**GOOD, "terminal_ticket_sha256": "f" * 64}
+        with patch.object(acme_sim_glpi.requests, "get",
+                          side_effect=[upstream(WORKER), upstream(GOOD),
+                                       upstream(WORKER), upstream(rotated_core)]) as get:
+            self.assert_unknown(self.get())
+        self.assertEqual(get.call_count, 4)
         # A Core 200 from the old producer with no post-Worker fence is UNKNOWN.
         old_core = {k: v for k, v in GOOD.items()
                     if k not in ("worker_receipt_verified",
@@ -322,6 +357,35 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
         with patch.object(acme_sim_glpi.requests, "get",
                           side_effect=good_reads(core=old_core)):
             self.assert_unknown(self.get())
+
+    def test_digest_and_durable_terminal_receipt_are_required(self):
+        for mutation in (
+            {"terminal_ticket_receipt_verified": False},
+            {"terminal_ticket_sha256": "0" * 64},
+            {"worker_receipt_sha256": "0" * 64},
+            {"source_event_ids": list(reversed(GOOD["source_event_ids"]))},
+        ):
+            with self.subTest(core=mutation):
+                with patch.object(acme_sim_glpi.requests, "get",
+                                  side_effect=good_reads(core={**GOOD, **mutation})):
+                    self.assert_unknown(self.get())
+        for missing in ("terminal_ticket_sha256", "worker_receipt_sha256",
+                        "terminal_ticket_receipt_verified"):
+            old = {k: v for k, v in GOOD.items() if k != missing}
+            with self.subTest(missing=missing):
+                with patch.object(acme_sim_glpi.requests, "get",
+                                  side_effect=good_reads(core=old)):
+                    self.assert_unknown(self.get())
+        for mutation in (
+            {"receipt_sha256": "0" * 64},
+            {"core_request_sha256": "0" * 64},
+            {"core_source_event_ids": list(reversed(GOOD["source_event_ids"]))},
+            {"twin_approval_nonce_sha256": "invalid"},
+        ):
+            with self.subTest(worker=mutation):
+                with patch.object(acme_sim_glpi.requests, "get",
+                                  side_effect=good_reads(worker={**WORKER, **mutation})):
+                    self.assert_unknown(self.get())
 
     def test_worker_unavailable_never_queries_core(self):
         with patch.object(acme_sim_glpi.requests, "get",
