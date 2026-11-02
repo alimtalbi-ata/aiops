@@ -98,7 +98,9 @@ class TerminalRuntimeTests(unittest.TestCase):
         worker=next(n for n in ast.walk(tree) if isinstance(n,ast.AsyncFunctionDef) and n.name=='worker_main')
         self.assertIn('reject_terminal_recover', ast.unparse(worker))
         self.assertIn('TerminalRejectWorkflow', ast.unparse(worker))
-        self.assertIn('execute_activity(reject_terminal_recover', source)
+        terminal = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == 'TerminalRejectWorkflow')
+        self.assertIn('execute_activity(', ast.unparse(terminal))
+        self.assertIn('reject_terminal_recover', ast.unparse(terminal))
         self.assertNotIn('signal_workflow', source)
 
 if __name__ == '__main__': unittest.main()
