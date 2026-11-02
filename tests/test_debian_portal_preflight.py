@@ -64,7 +64,7 @@ class PreflightContract(unittest.TestCase):
             (p / 'publish.log').write_text('REPORT_PUBLISH=PUBLISHED\\n')
             r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
                                  run=runner, dev=p, env=p / '.env', state=p)
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), 4)
             self.assertTrue(r['reporter_freshness']['fresh'])
             self.assertTrue(r['deployment_preflight']['portal_host_port_7777'])
             self.assertTrue(r['deployment_preflight']['portal_env_port_7777'])
@@ -125,16 +125,16 @@ class PreflightContract(unittest.TestCase):
             home = Path(td)
             script = home / '.local/bin/aiops-publish-report'
             script.parent.mkdir(parents=True)
-            script.write_text('#!/bin/sh\\necho PUBLISHED\\n')
+            script.write_text('#!/bin/sh\necho PUBLISHED\n')
             script.chmod(0o700)
             calls = []
             def runner(argv, **kwargs):
                 calls.append((argv, kwargs))
                 return subprocess.CompletedProcess(argv, 0,
-                    stdout='* * * * * flock -n /tmp/pub ~/.local/bin/aiops-publish-report TOKEN=SYNTHETIC_SECRET\\n'
-                           '* * * * * aiops-debian-reporter\\n'
-                           '* * * * * /home/aiops/aiops2-auto-deploy/poll.sh\\n'
-                           '# * * * * * aiops-publish-report\\n')
+                    stdout='* * * * * flock -n /tmp/pub ~/.local/bin/aiops-publish-report TOKEN=SYNTHETIC_SECRET\n'
+                           '* * * * * aiops-debian-reporter\n'
+                           '* * * * * /home/aiops/aiops2-auto-deploy/poll.sh\n'
+                           '# * * * * * aiops-publish-report\n')
             result = mod.publisher_cron_diagnostics(run=runner, home=home)
             self.assertTrue(result['cron_read_ok'])
             self.assertEqual(result['publisher_entry_count'], 1)
