@@ -5,6 +5,9 @@ receipt. The caller supplies IDs, never an approval document or human rights.
 Temporal history contains nonsecret IDs and a redacted result, not credentials.
 """
 from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import json
 import re
 
 TENANT = "ACME-TEST"
@@ -28,11 +31,24 @@ def _id(value):
     return type(value) is str and _ID.fullmatch(value) is not None
 
 
+def canonical_source_ids(attempt_id):
+    """Recompute Core 015 seven ordered SOURCE IDs, never trust signed claims alone."""
+    if not _id(attempt_id) or not attempt_id.startswith("ACME-SIM-"):
+        raise SandboxDenied("sandbox_attempt_unqualified")
+    return [
+        "SYN-EVT-" + hashlib.sha256(
+            (TENANT + ":" + attempt_id + ":" + str(index)).encode("ascii")
+        ).hexdigest()[:20].upper()
+        for index in range(1, 8)
+    ]
+
+
 def validate_intent(intent):
     if (type(intent) is not dict or frozenset(intent) != _KEYS
             or not all(_id(intent.get(k)) for k in (
                 "attempt_id", "incident_id", "run_id", "proposal_id",
                 "approval_id", "ticket_id"))
+            or not intent["attempt_id"].startswith("ACME-SIM-")
             or intent.get("tenant_id") != TENANT
             or intent.get("scenario_id") != SCENARIO
             or intent.get("mode") != "SIMULATION"
@@ -118,6 +134,7 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or any(type(v) is not str or not v.startswith("SYN-EVT-")
                    or not _id(v) for v in source_ids)
             or len(set(source_ids)) != 7
+            or source_ids != canonical_source_ids(intent["attempt_id"])
             or twin.get("core_request_sha256") != request_hash
             or twin.get("core_source_event_ids") != source_ids
             or twin.get("approval_phase") != "PRE_RESOLUTION"
@@ -199,7 +216,7 @@ async def simulate_no_effect(intent, *, get, now=None):
             or first["twin"]["issued_at"] != second["twin"]["issued_at"]
             or first["twin"]["expires_at"] != second["twin"]["expires_at"]):
         raise SandboxDenied("sandbox_approval_replay_or_rotation")
-    return {
+    receipt = {
         "schema": SCHEMA, "attempt_id": intent["attempt_id"],
         "tenant_id": TENANT, "incident_id": intent["incident_id"],
         "run_id": intent["run_id"], "proposal_id": intent["proposal_id"],
@@ -221,4 +238,44 @@ async def simulate_no_effect(intent, *, get, now=None):
         "resolution_verified": False,
         "post_resolution_readback_required": True,
         "core_014_015_written": False, "glpi_write": False,
+        # Core terminal must independently compare these to its persisted Run.
+        "core_request_sha256": second["core"]["request_sha256"],
+        "core_source_event_ids": list(second["core"]["source_event_ids"]),
+        "twin_approval_nonce_sha256": hashlib.sha256(
+            second["twin"]["approval_nonce"].encode("ascii")
+        ).hexdigest(),
     }
+    # Stable canonical digest is persisted with the Temporal result. It is NOT
+    # a signature, Core authority, or proof of a successful Core RESOLVED write.
+    receipt["receipt_sha256"] = hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"),
+                   ensure_ascii=True).encode("ascii")
+    ).hexdigest()
+    return receipt
+
+def receipt_digest_valid(receipt):
+    """Integrity check only; Core must also independently verify Run authority."""
+    if type(receipt) is not dict:
+        return False
+    expected = receipt.get("receipt_sha256")
+    if type(expected) is not str or re.fullmatch(r"[0-9a-f]{64}", expected) is None:
+        return False
+    if not _id(receipt.get("attempt_id")) or not receipt["attempt_id"].startswith("ACME-SIM-"):
+        return False
+    if (type(receipt.get("core_request_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", receipt["core_request_sha256"]) is None
+            or receipt.get("core_source_event_ids") !=
+                canonical_source_ids(receipt.get("attempt_id"))
+            or type(receipt.get("twin_approval_nonce_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}",
+                            receipt["twin_approval_nonce_sha256"]) is None):
+        return False
+    body = {key: value for key, value in receipt.items()
+            if key != "receipt_sha256"}
+    try:
+        actual = hashlib.sha256(json.dumps(
+            body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")).hexdigest()
+    except (TypeError, ValueError, UnicodeError):
+        return False
+    return hmac.compare_digest(actual, expected)
