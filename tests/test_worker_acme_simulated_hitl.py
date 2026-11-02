@@ -29,13 +29,20 @@ INTENT = {
 def fixtures():
     common = dict(attempt_id=INTENT["attempt_id"], tenant_id="ACME-TEST",
                   incident_id=INTENT["incident_id"], run_id=INTENT["run_id"])
-    core = dict(common, incident_status="RESOLVED", run_status="RESOLVED",
+    core = dict(common, incident_status="PREPARED", run_status="PREPARED",
                 ticket_id=INTENT["ticket_id"], ticket_authority="SIMULATED_ONLY",
-                ticket_status="RESOLVED", source="SYNTHETIC_SIMULATOR",
+                ticket_status="PREPARED", source="SYNTHETIC_SIMULATOR",
+                source_event_count=7, source_hashes_qualified=True,
+                source_event_ids=["SYN-EVT-TEST-%d" % i for i in range(1, 8)],
+                request_sha256="SHA256-TEST-IMMUTABLE",
+                human_approved=False, execution_allowed=False,
+                effect_allowed=False, live_effects_allowed=False,
+                real_glpi_writes_allowed=False,
                 analysis_validated=True, critic_validated=True, evidence_count=2,
                 proposal_id=INTENT["proposal_id"])
     twin = dict(common, approval_id=INTENT["approval_id"],
-                proposal_id=INTENT["proposal_id"], approval_issuer=ISSUER,
+                proposal_id=INTENT["proposal_id"], ticket_id=INTENT["ticket_id"],
+                issuer_id="twin-acme-test", approval_issuer=ISSUER,
                 approval_actor=ISSUER, approval_kind="SIMULATED",
                 approval_status="SIMULATED", mode="SIMULATION",
                 human_approved=False, execution_allowed=False,
@@ -51,7 +58,7 @@ def fixtures():
                   human_approved=False, execution_allowed=False,
                   effect_allowed=False, live_effects_allowed=False,
                   real_glpi_writes_allowed=False,
-                  proposal_id=INTENT["proposal_id"],
+                  proposal_id=INTENT["proposal_id"], ticket_id=INTENT["ticket_id"],
                   approval_id=INTENT["approval_id"])
     return dict(core=core, twin=twin, policy=policy)
 
@@ -68,7 +75,13 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertEqual({c for c, _ in calls}, {"core", "twin", "policy"})
         self.assertTrue(all(path.endswith(INTENT["attempt_id"]) for _, path in calls))
         self.assertEqual(result["receipt_status"], "SIMULATED_NO_EFFECT")
-        self.assertEqual(len(result["audit_transitions"]), 3)
+        self.assertEqual(len(result["audit_transitions"]), 4)
+        self.assertEqual(result["audit_transitions"][0], "CORE_PREPARED_INDEPENDENTLY_VERIFIED")
+        self.assertEqual(result["audit_transitions"][-1], "WORKER_NO_EFFECT")
+        self.assertEqual(result["receipt_phase"], "PRE_RESOLUTION")
+        self.assertEqual(result["core_status_at_validation"], "PREPARED")
+        self.assertFalse(result["resolution_verified"])
+        self.assertTrue(result["post_resolution_readback_required"])
         self.assertEqual(result["audit_authority"], "TEMPORAL_WORKFLOW_HISTORY_ONLY")
         self.assertFalse(result["human_approved"])
         self.assertFalse(result["execution_allowed"])
@@ -159,7 +172,10 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
 
     def test_08_core_resolution_and_id_mismatch_denied(self):
         for key, value in (
-            ("run_status", "RUNNING"), ("incident_status", "OPEN"),
+            ("run_status", "RUNNING"), ("run_status", "RESOLVED"),
+            ("incident_status", "OPEN"), ("incident_status", "RESOLVED"),
+            ("ticket_status", "RESOLVED"), ("source_event_count", 6),
+            ("source_hashes_qualified", False), ("human_approved", True),
             ("ticket_authority", "GLPI_REAL"), ("source", "REAL"),
             ("evidence_count", 1), ("critic_validated", False),
             ("proposal_id", "PROP-OTHER-001"), ("incident_id", "INC-FOREIGN"),
@@ -210,6 +226,76 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertIn("acme_simulated_no_effect", flows)
         self.assertNotIn("signal_workflow", flows)
         self.assertNotIn("shared.http", flows)
+
+
+    def test_13_resolution_before_worker_receipt_is_forbidden(self):
+        # PREPARED -> Twin SIMULATED -> Policy SIMULATE -> Worker no-effect
+        # -> Core RESOLVED is the only permissible causal order.
+        for component, field in (
+            ("core", "incident_status"), ("core", "run_status"),
+            ("core", "ticket_status"),
+        ):
+            docs = fixtures()
+            docs[component][field] = "RESOLVED"
+            with self.subTest(field=field), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_14_transition_to_resolved_between_independent_reads_denied(self):
+        docs = fixtures()
+        order = []
+        async def get(component, path):
+            order.append(component)
+            result = deepcopy(docs[component])
+            if len(order) > 3 and component == "core":
+                result["run_status"] = "RESOLVED"
+            return result
+        with self.assertRaises(SandboxDenied):
+            asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(order, ["core", "twin", "policy", "core"])
+
+    def test_15_immutable_source_and_policy_rotation_denied(self):
+        for component, field, changed in (
+            ("core", "source_event_ids", ["SYN-EVT-OTHER"]),
+            ("core", "request_sha256", "SHA256-REBOUND"),
+            ("policy", "decision", "REJECT"),
+            ("twin", "approval_id", "SIM-APP-REBOUND"),
+        ):
+            docs = fixtures()
+            seen = 0
+            async def get(which, path):
+                nonlocal seen
+                seen += 1
+                result = deepcopy(docs[which])
+                if seen > 3 and which == component:
+                    result[field] = changed
+                return result
+            with self.subTest(component=component, field=field), self.assertRaises(SandboxDenied):
+                asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+
+    def test_16_signed_twin_identity_and_ticket_binding(self):
+        for component, field, changed in (
+            ("twin", "issuer_id", "fake-issuer"),
+            ("twin", "ticket_id", "SIM-GLPI-FOREIGN"),
+            ("policy", "ticket_id", "SIM-GLPI-FOREIGN"),
+            ("core", "live_effects_allowed", True),
+        ):
+            docs = fixtures()
+            docs[component][field] = changed
+            with self.subTest(component=component, field=field), self.assertRaises(SandboxDenied):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_17_temporal_receipt_does_not_claim_core_resolution(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertNotIn("CORE_RESOLVED_INDEPENDENTLY_VERIFIED", receipt["audit_transitions"])
+        self.assertFalse(receipt["resolution_verified"])
+        self.assertFalse(receipt["glpi_write"])
+        self.assertEqual(receipt["effect_receipts"], 0)
+        self.assertNotIn("approval_nonce", receipt)
+        # The Core-only final RESOLVED readback must be performed *later*
+        # by the orchestrator, never manufactured by this Worker activity.
 
 
 if __name__ == "__main__":
