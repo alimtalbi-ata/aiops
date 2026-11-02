@@ -211,3 +211,7 @@ def test_simulator_cross_run_twin_readback_rejected(monkeypatch):
         SIM.start(SIM.SandboxRequest(**intent()),
                   authorization='Bearer test-internal-token-not-real')
     assert e.value.status_code == 503
+
+def test_public_twin_temporal_facts_exclude_private_approval():
+    source = (BASE / 'twin' / 'main.py').read_text()
+    assert "f.attribute <> 'sandbox_simulated_approval'" in source
