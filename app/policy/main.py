@@ -203,3 +203,7 @@ def simulation_decisions(authorization: str|None=Header(default=None)):
     authorize(authorization)
     try: return {"scope":"SIMULATION_ONLY","items":execution_fence.decisions()}
     except Exception: raise HTTPException(503,"policy_audit_unavailable")
+
+# Explicit ACME-TEST SIMULATION only; Policy never grants human or LIVE authority.
+from policy.acme_sandbox import router as acme_sandbox_router
+app.include_router(acme_sandbox_router)
