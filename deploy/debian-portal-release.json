@@ -1,7 +1,7 @@
 {
   "schema": "aiops.debian-portal-release-intent.v1",
-  "enabled": false,
+  "enabled": true,
   "candidate_sha": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
   "scope": "aiops2-rebuild-portal on host TCP 7777",
-  "reason": "Read-only preflight with reporter freshness and resolved Compose :7777 gates; immutable build, backup/restore and rollback NOT qualified"
+  "reason": "Pinned portal-only DEV upgrade with health contract, image change and rollback; independent reporter publication is not a deploy gate"
 }
