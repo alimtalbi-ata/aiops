@@ -69,7 +69,7 @@ jobs:
           set -euo pipefail
           /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
           /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
-          grep -E '^Ran 9 tests in ' /tmp/core-acme-tests.log
+          grep -E '^Ran 11 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
@@ -86,7 +86,7 @@ jobs:
           actual=hashlib.sha256(json.dumps(data,sort_keys=True,separators=(',',':')).encode()).hexdigest()
           assert actual==claimed
           assert data['source_head']==os.environ['AIOPS_EXPECTED_HEAD_SHA']
-          assert data['migration_chain']==['001','004','009','010','011','012','013','014','015','016']
+          assert data['migration_chain']==['001','004','009','010','011','012','013','014','015','016','017']
           assert data['source_event_count']==7 and data['evidence_count']==2
           assert data['source_hashes_qualified'] is True
           assert data['incident_status']==data['run_status']==data['ticket_status']=='PREPARED'

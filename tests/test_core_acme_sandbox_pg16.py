@@ -275,5 +275,68 @@ class SandboxPG16(unittest.TestCase):
                 "and event_type='SIMULATED_RESOLVED'",
                 (started['run_id'],)).fetchone()[0], 0)
 
+    def _qualified_no_effect(self, state):
+        common = {'attempt_id': state['attempt_id'], 'tenant_id': 'ACME-TEST',
+                  'incident_id': state['incident_id'], 'run_id': state['run_id'],
+                  'proposal_id': state['proposal_id']}
+        flags = {'human_approved': False, 'execution_allowed': False,
+                 'effect_allowed': False, 'live_effects_allowed': False,
+                 'real_glpi_writes_allowed': False}
+        approval = 'SIM-APP-TEST-VALID'
+        worker = dict(common, **flags, approval_id=approval,
+                      schema='aiops.worker-acme-simulated-no-effect.v1',
+                      receipt_status='SIMULATED_NO_EFFECT',
+                      receipt_phase='PRE_RESOLUTION',
+                      core_status_at_validation='PREPARED',
+                      resolution_verified=False, post_resolution_readback_required=True,
+                      action='SIMULATE', effect_receipts=0,
+                      approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        twin = dict(common, **flags, approval_id=approval,
+                    ticket_id=state['ticket_id'],
+                    approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED',
+                    core_status_at_issuance='PREPARED')
+        policy = dict(common, **flags, approval_id=approval,
+                      ticket_id=state['ticket_id'], decision='SIMULATE',
+                      approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        return [worker, twin, policy]
+
+    def test_10_core_only_finalization_after_independent_no_effect(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-FINALIZE'
+        state = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._qualified_no_effect(state)):
+            result = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['incident_status'], 'RESOLVED')
+        self.assertEqual(result.json()['run_status'], 'RESOLVED')
+        self.assertEqual(result.json()['ticket_status'], 'RESOLVED')
+        self.assertFalse(result.json()['effect_allowed'])
+        self.assertEqual(self.get(attempt).json()['run_status'], 'RESOLVED')
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._qualified_no_effect(state)):
+            repeat = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(repeat.status_code, 200, repeat.text)
+        self.assertTrue(repeat.json()['idempotent'])
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (state['run_id'],)).fetchone()[0], 1)
+
+    def test_11_forged_human_worker_receipt_cannot_resolve(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-FORGED-HUMAN'
+        state = self.post(attempt).json()
+        docs = self._qualified_no_effect(state)
+        docs[0]['human_approved'] = True
+        with patch.object(core, 'independent_readback', side_effect=docs):
+            result = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(result.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+
 if __name__ == '__main__':
     unittest.main()
