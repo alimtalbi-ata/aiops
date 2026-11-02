@@ -9,6 +9,8 @@ import hmac
 import json
 import os
 import re
+from urllib.parse import urlsplit
+import requests
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -94,8 +96,8 @@ def read(c, attempt):
     if not canonical_row:
         raise HTTPException(503, 'sandbox_canonical_identity_missing')
     istate, synthetic, isource, payload, rstatus, rmode, riid, scenario, idem = canonical_row
-    if (tenant != TENANT or aid != attempt or istate != 'RESOLVED'
-            or rstatus != 'RESOLVED' or synthetic is not True
+    if (tenant != TENANT or aid != attempt or istate not in ('PREPARED', 'RESOLVED')
+            or rstatus != istate or synthetic is not True
             or isource != 'SYNTHETIC_SIMULATOR' or source != isource
             or rmode != 'DEMO' or scenario != SCENARIO or riid != incident
             or idem != 'acme-sandbox-v1:' + TENANT + ':' + attempt
@@ -104,7 +106,7 @@ def read(c, attempt):
             or payload.get('mode') != 'SIMULATION'
             or payload.get('human_approved') is not False
             or payload.get('live_effects_allowed') is not False
-            or ticket_status != 'RESOLVED' or event_count != 7
+            or ticket_status != 'PREPARED' or event_count != 7
             or evidence_count != 2):
         raise HTTPException(503, 'sandbox_identity_or_status_unqualified')
     proofs = c.execute(
@@ -163,13 +165,23 @@ def read(c, attempt):
             or sorted(cr[2]) != evidence_ids or cr[3].get('synthetic') is not True
             or cr[4] != analysis):
         raise HTTPException(503, 'sandbox_analysis_critic_unqualified')
+    if istate == 'RESOLVED':
+        terminal = c.execute(
+            "select payload from aiops.run_events where run_id=%s "
+            "and stage='RUN' and event_type='SIMULATED_RESOLVED' "
+            "and status='RESOLVED'", (run,)).fetchall()
+        if (len(terminal) != 1 or type(terminal[0][0]) is not dict
+                or terminal[0][0].get('worker_receipt_verified') is not True
+                or terminal[0][0].get('execution_allowed') is not False
+                or terminal[0][0].get('effect_allowed') is not False):
+            raise HTTPException(503, 'sandbox_resolution_receipt_missing')
     return {'schema': 'aiops.core-acme-sandbox-readback.v1',
             'attempt_id': attempt, 'tenant_id': TENANT, 'scenario_id': SCENARIO,
             'mode': 'SIMULATION', 'incident_id': incident, 'run_id': run,
             'ticket_id': ticket, 'proposal_id': proposal,
             'incident_status': istate, 'run_status': rstatus,
             'ticket_authority': 'SIMULATED_ONLY', 'glpi_mode': 'SIMULATED_ONLY',
-            'ticket_status': ticket_status, 'source': source,
+            'ticket_status': rstatus, 'source': source,
             'analysis_validated': True, 'critic_validated': True,
             'analysis_kind': 'SYNTHETIC_FIXTURE',
             'evidence_count': len(facts), 'source_event_count': len(proofs),
@@ -225,14 +237,14 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
         c.execute('insert into aiops.incidents '
                   '(incident_id,external_id,title,severity,state,opened_at,resolved_at,'
                   'source,synthetic,payload) values '
-                  '(%s,%s,%s,%s,%s,now(),now(),%s,true,%s)',
+                  '(%s,%s,%s,%s,%s,now(),NULL,%s,true,%s)',
                   (incident, ident('EXT-SIM-', attempt),
-                   'ACME SAN to Payments synthetic sandbox', 'P2', 'RESOLVED',
+                   'ACME SAN to Payments synthetic sandbox', 'P2', 'PREPARED',
                    'SYNTHETIC_SIMULATOR', Jsonb(incident_payload)))
         c.execute('insert into aiops.runs '
                   '(run_id,incident_id,mode,scenario_id,status,idempotency_key,'
                   'version,started_at,completed_at) '
-                  "values (%s,%s,'DEMO',%s,'RESOLVED',%s,9,now(),now())",
+                  "values (%s,%s,'DEMO',%s,'PREPARED',%s,1,now(),NULL)",
                   (run, incident, SCENARIO,
                    'acme-sandbox-v1:' + TENANT + ':' + attempt))
         evidence_ids = []
@@ -276,12 +288,12 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
                        Jsonb(envelope), key))
         c.execute('insert into aiops.run_events '
                   '(event_id,run_id,sequence,stage,event_type,status,payload,event_key) '
-                  "values (%s,%s,8,'RUN','SIMULATED_RESOLVED','RESOLVED',%s,%s)",
+                  "values (%s,%s,8,'RUN','SIMULATED_PREPARED','PREPARED',%s,%s)",
                   (ident('EVT-SIM-', attempt + ':resolved'), run,
                    Jsonb({'tenant_id': TENANT, 'synthetic': True,
                           'ticket_id': ticket, 'proposal_id': proposal,
                           'execution_allowed': False, 'effect_allowed': False}),
-                   ident('SIM-RESOLVED-', attempt)))
+                   ident('SIM-PREPARED-', attempt)))
         c.execute('insert into aiops.analysis_records '
                   '(analysis_id,run_id,incident_id,idempotency_key,revision,'
                   'contract_version,provider,model,prompt_version,evidence_ids,'
@@ -308,7 +320,7 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
                   'source,evidence_count,source_event_count) '
                   'values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,2,7)',
                   (TENANT, attempt, request_hash, incident, run, ticket, proposal,
-                   analysis, critique, 'RESOLVED', 'SYNTHETIC_SIMULATOR'))
+                   analysis, critique, 'PREPARED', 'SYNTHETIC_SIMULATOR'))
         result = read(c, attempt)
         result['idempotent'] = False
         return result
@@ -326,3 +338,113 @@ def readback(attempt_id: str, authorization: str | None = Header(default=None)):
         raise
     except Exception:
         raise HTTPException(503, 'sandbox_readback_unavailable') from None
+
+def independent_readback(component, attempt):
+    """Only fixed internal sandbox service URLs; never a caller URL or LIVE."""
+    env, default = {
+        'worker': ('WORKER_URL', 'http://aiops2-worker:815'),
+        'twin': ('TWIN_URL', 'http://aiops2-twin:811'),
+        'policy': ('POLICY_URL', 'http://aiops2-policy:813'),
+    }[component]
+    base = os.getenv(env, default).rstrip('/')
+    parsed = urlsplit(base)
+    if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+            or parsed.username or parsed.password or parsed.path
+            or parsed.query or parsed.fragment):
+        raise HTTPException(503, 'sandbox_service_url_invalid')
+    try:
+        response = requests.get(
+            base + '/api/sandbox/acme/e2e/' + attempt,
+            headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
+                     'Accept': 'application/json'},
+            timeout=5, allow_redirects=False)
+        if response.status_code != 200 or len(response.content) > 32768:
+            raise ValueError('status_or_size')
+        value = response.json()
+        if type(value) is not dict:
+            raise ValueError('shape')
+        return value
+    except (requests.RequestException, ValueError, KeyError):
+        raise HTTPException(503, 'sandbox_' + component + '_readback_unavailable') from None
+
+@router.post('/api/sandbox/acme/resolve')
+def resolve(x: Intent, authorization: str | None = Header(default=None)):
+    """Core-only terminal transition after independent simulated no-effect."""
+    require_enabled()
+    auth(authorization)
+    validate(x)
+    attempt = x.attempt_id
+    worker = independent_readback('worker', attempt)
+    twin = independent_readback('twin', attempt)
+    policy = independent_readback('policy', attempt)
+    if any(d.get('attempt_id') != attempt or d.get('tenant_id') != TENANT
+           for d in (worker, twin, policy)):
+        raise HTTPException(503, 'sandbox_cross_tenant_or_attempt')
+    approval = worker.get('approval_id')
+    if (type(approval) is not str or not approval.startswith('SIM-APP-')
+            or twin.get('approval_id') != approval
+            or policy.get('approval_id') != approval
+            or worker.get('schema') != 'aiops.worker-acme-simulated-no-effect.v1'
+            or worker.get('receipt_status') != 'SIMULATED_NO_EFFECT'
+            or worker.get('receipt_phase') != 'PRE_RESOLUTION'
+            or worker.get('core_status_at_validation') != 'PREPARED'
+            or worker.get('resolution_verified') is not False
+            or worker.get('post_resolution_readback_required') is not True
+            or worker.get('action') != 'SIMULATE'
+            or worker.get('effect_receipts') != 0
+            or worker.get('approval_kind') != 'SIMULATED'
+            or worker.get('approval_issuer') != ISSUER
+            or twin.get('approval_kind') != 'SIMULATED'
+            or twin.get('approval_issuer') != ISSUER
+            or twin.get('core_status_at_issuance') != 'PREPARED'
+            or policy.get('decision') != 'SIMULATE'
+            or policy.get('approval_kind') != 'SIMULATED'
+            or policy.get('approval_issuer') != ISSUER
+            or any(d.get(k) is not False for d in (worker, twin, policy)
+                   for k in ('human_approved', 'execution_allowed',
+                             'effect_allowed', 'live_effects_allowed',
+                             'real_glpi_writes_allowed'))):
+        raise HTTPException(503, 'sandbox_no_effect_authority_unqualified')
+    with db() as c:
+        c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',
+                  ('core-acme-sandbox:' + TENANT + ':' + attempt,))
+        if not schema_ready(c):
+            raise HTTPException(503, 'core_sandbox_schema_unavailable')
+        record = row(c, attempt)
+        if record is None:
+            raise HTTPException(404, 'sandbox_attempt_not_found')
+        if record[2].strip() != digest(x.model_dump()):
+            raise HTTPException(409, 'sandbox_attempt_rebinding_denied')
+        current = read(c, attempt)
+        for doc in (worker, twin, policy):
+            if any(doc.get(k) != current[k] for k in
+                   ('incident_id', 'run_id', 'proposal_id')):
+                raise HTTPException(503, 'sandbox_independent_identity_mismatch')
+        if (twin.get('ticket_id') != current['ticket_id']
+                or policy.get('ticket_id') != current['ticket_id']):
+            raise HTTPException(503, 'sandbox_simulated_ticket_mismatch')
+        if current['run_status'] == 'RESOLVED':
+            current['idempotent'] = True
+            return current
+        if (current['run_status'] != 'PREPARED'
+                or current['incident_status'] != 'PREPARED'
+                or current['ticket_status'] != 'PREPARED'
+                or current['source_hashes_qualified'] is not True):
+            raise HTTPException(503, 'sandbox_core_not_prepared')
+        incident, run = current['incident_id'], current['run_id']
+        c.execute("update aiops.incidents set state='RESOLVED',resolved_at=now() "
+                  "where incident_id=%s and state='PREPARED'", (incident,))
+        c.execute("update aiops.runs set status='RESOLVED',completed_at=now(),version=version+1 "
+                  "where run_id=%s and status='PREPARED'", (run,))
+        c.execute("insert into aiops.run_events "
+                  "(event_id,run_id,sequence,stage,event_type,status,payload,event_key) "
+                  "values (%s,%s,9,'RUN','SIMULATED_RESOLVED','RESOLVED',%s,%s)",
+                  (ident('EVT-SIM-', attempt + ':resolved'), run,
+                   Jsonb({'tenant_id': TENANT, 'approval_id': approval,
+                          'worker_receipt_verified': True,
+                          'execution_allowed': False, 'effect_allowed': False,
+                          'human_approved': False, 'live_effects_allowed': False}),
+                   ident('SIM-RESOLVED-', attempt)))
+        result = read(c, attempt)
+        result['idempotent'] = False
+        return result

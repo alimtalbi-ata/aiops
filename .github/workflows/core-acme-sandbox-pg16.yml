@@ -8,6 +8,7 @@ on:
       - app/core/acme_sandbox.py
       - app/core/main.py
       - db/migrations/016_acme_sandbox_attempts.sql
+      - db/migrations/017_acme_sandbox_prepared_transition.sql
       - tests/test_core_acme_sandbox_pg16.py
       - .github/workflows/core-acme-sandbox-pg16.yml
   workflow_dispatch:
@@ -67,7 +68,7 @@ jobs:
           set -euo pipefail
           /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
           /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
-          grep -E '^Ran 8 tests in ' /tmp/core-acme-tests.log
+          grep -E '^Ran 9 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
@@ -87,7 +88,7 @@ jobs:
           assert data['migration_chain']==['001','004','009','010','011','012','013','014','015','016']
           assert data['source_event_count']==7 and data['evidence_count']==2
           assert data['source_hashes_qualified'] is True
-          assert data['incident_status']==data['run_status']==data['ticket_status']=='RESOLVED'
+          assert data['incident_status']==data['run_status']==data['ticket_status']=='PREPARED'
           assert data['ticket_authority']=='SIMULATED_ONLY'
           assert data['analysis_kind']=='SYNTHETIC_FIXTURE'
           assert data['analysis_validated'] is data['critic_validated'] is True

@@ -22,7 +22,8 @@ CHAIN = ['001_schema.sql', '004_operational_model.sql',
          '011_hitl_decision_outbox.sql', '012_itsm_xref_read.sql',
          '013_actor_delegation_replay_ledger.sql',
          '014_hitl_reject_terminal_receipts.sql',
-         '015_core_run_event_idempotency.sql', '016_acme_sandbox_attempts.sql']
+         '015_core_run_event_idempotency.sql', '016_acme_sandbox_attempts.sql',
+         '017_acme_sandbox_prepared_transition.sql']
 
 def intent(attempt):
     return {'attempt_id': attempt, 'tenant_id': 'ACME-TEST',
@@ -90,13 +91,13 @@ class SandboxPG16(unittest.TestCase):
         finally:
             os.environ['AIOPS_ACME_SANDBOX_ENABLED'] = 'true'
 
-    def test_02_one_run_seven_sources_evidence_and_resolved(self):
+    def test_02_one_run_seven_sources_evidence_and_prepared(self):
         attempt = 'ACME-SIM-COREPOSITIVE'
         response = self.post(attempt)
         self.assertEqual(response.status_code, 200, response.text)
         r = response.json()
         self.assertEqual((r['incident_status'], r['run_status'], r['ticket_status']),
-                         ('RESOLVED', 'RESOLVED', 'RESOLVED'))
+                         ('PREPARED', 'PREPARED', 'PREPARED'))
         self.assertEqual(r['ticket_authority'], 'SIMULATED_ONLY')
         self.assertEqual((r['source_event_count'], r['evidence_count']), (7, 2))
         self.assertEqual(len(set(r['source_event_ids'])), 7)
@@ -253,6 +254,26 @@ class SandboxPG16(unittest.TestCase):
         p = out / 'core-acme-sandbox.json'
         p.write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
         self.assertNotIn(TOKEN, p.read_text())
+
+    def test_09_no_resolution_without_independent_worker_twin_policy(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-NO-PREMATURE-RESOLUTION'
+        started = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=HTTPException(503, 'worker_unavailable')):
+            response = self.client.post('/api/sandbox/acme/resolve',
+                                        json=intent(attempt),
+                                        headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(response.status_code, 503)
+        state = self.get(attempt).json()
+        self.assertEqual((state['incident_status'], state['run_status'],
+                          state['ticket_status']),
+                         ('PREPARED', 'PREPARED', 'PREPARED'))
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (started['run_id'],)).fetchone()[0], 0)
 
 if __name__ == '__main__':
     unittest.main()
