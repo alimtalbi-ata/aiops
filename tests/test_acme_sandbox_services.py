@@ -556,3 +556,104 @@ def test_twin_post_resolution_readback_rejects_tampered_stored_hmac(monkeypatch)
             intent()['attempt_id'], authorization='Bearer test-internal-token-not-real')
     assert error.value.status_code == 503
     assert error.value.detail == 'sandbox_approval_unqualified'
+
+
+def test_twin_real_issue_persists_signed_idempotency_and_immutable_readback(monkeypatch):
+    """Exercise the real issuance branch, not only a hand-built signed fixture."""
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    monkeypatch.setattr(TWIN, 'core_readback', lambda _x: prepared_core())
+    monkeypatch.setattr(TWIN, 'sourced_impact', lambda: [TWIN.ROOT, TWIN.PAYMENTS])
+
+    class Facts:
+        record = None
+        inserts = 0
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def execute(self, sql, params):
+            statement = sql.strip().lower()
+            if statement.startswith('select value from aiops.twin_facts'):
+                assert params == (TWIN.fact_id(x.attempt_id),)
+            elif statement.startswith('insert into aiops.twin_facts'):
+                assert params[0] == TWIN.fact_id(x.attempt_id)
+                assert params[1] == TWIN.ROOT
+                if self.record is None:
+                    self.record = params[2]
+                    self.inserts += 1
+            else:
+                pytest.fail('unexpected database operation')
+            return self
+        def fetchone(self):
+            return (self.record,) if self.record is not None else None
+
+    facts = Facts()
+    monkeypatch.setattr(TWIN, 'db', lambda: facts)
+    issued = TWIN.issue_approval(
+        x, authorization='Bearer test-internal-token-not-real')
+    assert issued['idempotency_key'] == x.attempt_id
+    assert issued['approval_kind'] == 'SIMULATED'
+    assert issued['human_approved'] is False
+    assert issued['core_source_event_ids'] == TWIN.canonical_source_ids(x.attempt_id)
+    assert issued['approval_nonce'].startswith('SIMNONCE-')
+    assert 0 < (TWIN.utc(issued['expires_at']) -
+                TWIN.utc(issued['issued_at'])).total_seconds() <= 300
+    stored = json.loads(facts.record)
+    assert stored['payload'] == issued
+    assert stored['signature'] == TWIN.sign(issued)
+    assert TWIN.issue_approval(
+        x, authorization='Bearer test-internal-token-not-real') == issued
+    assert facts.inserts == 1
+    monkeypatch.setattr(TWIN, 'core_readback',
+                        lambda _x: pytest.fail('historical Twin GET must not contact Core'))
+    assert TWIN.approval_readback(
+        x.attempt_id, authorization='Bearer test-internal-token-not-real') == issued
+    assert facts.inserts == 1
+
+
+@pytest.mark.parametrize('component,bad_origin', [
+    ('core', 'http://evil.example:810'),
+    ('core', 'https://aiops2-core.example:810'),
+    ('core', 'http://169.254.169.254:810'),
+    ('core', 'http://aiops2-core:811'),
+    ('twin', 'http://aiops2-twin:810'),
+    ('policy', 'https://foreign.example:813'),
+    ('policy', 'http://aiops2-policy:815'),
+    ('worker', 'http://aiops2-worker:810'),
+    ('worker', 'http://user:password@aiops2-worker:815'),
+    ('worker', 'http://aiops2-worker:815@evil.example:815'),
+])
+def test_simulator_origin_rejects_ssrf_before_internal_bearer(
+        monkeypatch, component, bad_origin):
+    env, _ = SIM.SERVICES[component]
+    monkeypatch.setenv(env, bad_origin)
+    monkeypatch.setattr(SIM.requests, 'request',
+                        lambda *a, **kw: pytest.fail('outbound request before allowlist'))
+    with pytest.raises(HTTPException) as error:
+        SIM.remote(component, '/api/sandbox/acme/capabilities')
+    assert error.value.status_code == 503
+    assert error.value.detail == 'sandbox_service_url_invalid'
+
+
+@pytest.mark.parametrize('component,port', [
+    ('core', 810), ('twin', 811), ('policy', 813), ('worker', 815),
+])
+def test_simulator_origin_allows_exact_compose_service_only(
+        monkeypatch, component, port):
+    env, _ = SIM.SERVICES[component]
+    base = f'http://aiops2-{component}:{port}'
+    monkeypatch.setenv(env, base)
+    class Response:
+        status_code = 200
+        content = b'{}'
+        def json(self):
+            return {'component': component}
+    def request(method, url, **kwargs):
+        assert method == 'GET'
+        assert url == base + '/api/sandbox/acme/capabilities'
+        assert kwargs['allow_redirects'] is False
+        assert kwargs['headers']['Authorization'] == 'Bearer test-internal-token-not-real'
+        return Response()
+    monkeypatch.setattr(SIM.requests, 'request', request)
+    assert SIM.remote(component, '/api/sandbox/acme/capabilities') == {
+        'component': component}
