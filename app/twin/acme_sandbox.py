@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 import requests
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -129,6 +130,11 @@ def validate_intent(x):
 def core_readback(x):
     """Independently authenticated Core read; never caller-supplied evidence."""
     base = os.getenv('CORE_URL', 'http://aiops2-core:810').rstrip('/')
+    target = urlsplit(base)
+    if (target.scheme not in ('http', 'https') or not target.hostname
+            or target.username or target.password or target.path
+            or target.query or target.fragment):
+        raise HTTPException(503, 'independent_core_url_invalid')
     try:
         response = requests.get(
             base + '/api/sandbox/acme/e2e/' + x.attempt_id,
