@@ -67,6 +67,15 @@ case "$prior" in
   ALREADY_APPLIED) echo 'ACME_UPGRADE=ALREADY_APPLIED_VERIFIED'; exit 0 ;;
   *) echo "ACME_UPGRADE=$prior"; exit 78 ;;
 esac
+SOURCE_PR="$(python3 - "$MANIFEST" <<'PY'
+import json,sys
+m=json.load(open(sys.argv[1]))
+p=m.get('source_pr',358)
+if type(p) is not int or not 1<=p<=99999:
+ raise SystemExit('ACME_UPGRADE=NO_GO_SOURCE_PR_INVALID')
+print(p)
+PY
+)"
 test -f "$DEV/compose.yml" && test -f "$ENV" || { echo 'ACME_UPGRADE=NO_GO_COMPOSE_OR_ENV_MISSING'; exit 78; }
 TMP="$(mktemp -d "$STATE/.acme-upgrade-XXXXXX")"
 mutated=0
@@ -153,7 +162,7 @@ payload={'schema':'aiops.debian-acme-sandbox-upgrade.v1',
  'docker_container_mutations':int(mutated),'docker_image_builds':int(builds),
  'status':'PASS' if success=='1' and code=='0' else 'FAIL',
  'exit_code':int(code),'rollback_status':rollback,'pg16_backup_sha256':backup,
- 'migrations':'011-018 additive; retain on app rollback',
+ 'migrations':'011-019 additive; retain on app rollback',
  'pg16_scratch_restore':restore_status,'images':rows,
  'e2e':'SEPARATE_RECEIPT_REQUIRED'}
 fd,tmp=tempfile.mkstemp(prefix='.acme-upgrade-receipt-',dir=os.path.dirname(path))
@@ -173,12 +182,13 @@ trap finish EXIT
 # Ref is transport only: never deploy mutable PR HEAD unless it matches PIN.
 git init --bare "$TMP/source.git" >/dev/null
 GIT_TERMINAL_PROMPT=0 git --git-dir="$TMP/source.git" fetch --depth=1 \
-  https://github.com/alimtalbi-ata/aiops.git refs/pull/358/head >/dev/null 2>&1
+  https://github.com/alimtalbi-ata/aiops.git "refs/pull/$SOURCE_PR/head" >/dev/null 2>&1
 test "$(git --git-dir="$TMP/source.git" rev-parse FETCH_HEAD)" = "$PIN" ||
   { echo 'ACME_UPGRADE=NO_GO_SOURCE_PIN_MISMATCH'; exit 78; }
 git --git-dir="$TMP/source.git" archive "$PIN" app db/migrations | tar -xf - -C "$TMP"
 test -f "$TMP/db/migrations/017_acme_sandbox_prepared_transition.sql"
 test -f "$TMP/db/migrations/018_acme_sandbox_terminal_ticket_receipt.sql"
+test -f "$TMP/db/migrations/019_acme_sandbox_twin_topology.sql"
 
 # Read-only inspect canonical Compose ownership, mounts and health BEFORE build.
 compose config --quiet >/dev/null 2>&1
@@ -278,7 +288,7 @@ restore_status=PASS
 # Installed 009/010 prerequisites must be real, never silently inferred.
 test "$(docker exec aiops2-rebuild-postgres psql -U aiops -d aiops -Atqc \
  "select to_regclass('aiops.analysis_records') is not null and to_regclass('aiops.evidence') is not null")" = t
-for n in 011 012 013 014 015 016 017 018; do
+for n in 011 012 013 014 015 016 017 018 019; do
   file="$(find "$TMP/db/migrations" -maxdepth 1 -type f -name "$n"_\*.sql -print -quit)"
   test -n "$file"
   cat "$file" >> "$TMP/migrate.sql"
