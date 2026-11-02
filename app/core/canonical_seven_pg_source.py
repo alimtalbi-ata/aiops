@@ -83,7 +83,7 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
         + source_filter + " order by r.sequence",
         (request["run_id"], source, request["run_id"])).fetchall()
     total = conn.execute(
-        "select count(*) from aiops.run_events where run_id=%s"
+        "select count(*) from aiops.run_events r where r.run_id=%s"
         + source_filter,
         (request["run_id"],)).fetchone()[0]
     if len(rows) != 7 or total != 7:
