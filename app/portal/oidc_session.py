@@ -195,11 +195,26 @@ def oidc_login():
     return response
 
 
+def _unambiguous_state_cookie(request: Request) -> str:
+    """Reject duplicate/split OIDC state cookies before any IdP exchange.
+
+    Starlette collapses same-name cookies, so a browser or intermediary must
+    not select which CSRF state is used. This does not authenticate an actor.
+    """
+    raw_fields = request.headers.getlist("cookie")
+    if len(raw_fields) != 1:
+        return ""
+    pattern = r"(?:^|;)\\s*" + re.escape(_STATE_COOKIE) + r"\\s*="
+    if len(re.findall(pattern, raw_fields[0])) != 1:
+        return ""
+    return request.cookies.get(_STATE_COOKIE, "")
+
+
 @router.get("/auth/oidc/callback")
 def oidc_callback(request: Request, code: str = "", state: str = "",
                   error: str = ""):
     # No request body/header or browser bearer can inject actor/tenant.
-    cookie = request.cookies.get(_STATE_COOKIE, "")
+    cookie = _unambiguous_state_cookie(request)
     if (error or not _OPAQUE.fullmatch(state) or not _OPAQUE.fullmatch(cookie)
             or not hmac.compare_digest(state, cookie)
             or _CODE.fullmatch(code) is None):
