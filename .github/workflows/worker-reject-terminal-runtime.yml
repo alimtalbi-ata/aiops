@@ -8,7 +8,9 @@ on:
       - app/worker/main.py
       - app/worker/temporal_workflows.py
       - app/worker/hitl_reject_terminal_runtime.py
+      - app/worker/acme_simulated_hitl.py
       - tests/test_worker_hitl_reject_terminal_runtime.py
+      - tests/test_worker_acme_simulated_hitl.py
       - tests/test_worker_hitl_terminal_joined_pg16.py
       - .github/workflows/worker-reject-terminal-runtime.yml
   workflow_dispatch:
@@ -26,24 +28,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Exact source and 10/10 no-skip tests
+      - name: Exact source and 22/22 no-skip tests
         shell: bash
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          python -m compileall -q app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py
+          python -m compileall -q app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py app/worker/acme_simulated_hitl.py
           python -m unittest discover -s tests -p 'test_worker_hitl_reject_terminal_runtime.py' -v 2>&1 | tee /tmp/worker-terminal-tests.log
           grep -E '^Ran 10 tests in ' /tmp/worker-terminal-tests.log
           grep -x 'OK' /tmp/worker-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-terminal-tests.log
+          python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v 2>&1 | tee /tmp/worker-acme-tests.log
+          grep -E '^Ran 12 tests in ' /tmp/worker-acme-tests.log
+          grep -x 'OK' /tmp/worker-acme-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-tests.log
           python - <<'PY'
           import hashlib,json,os,pathlib
           r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
-             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":10,
+             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":22,
              "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,
-             "runtime_workflow_registered":True,"core_344_joined_pg16":False,
+             "runtime_workflow_registered":True,"simulated_no_effect_registered":True,\n             "simulated_approval_issuer":"TWIN_ACME_SIMULATED",\n             "human_approval_claimed":False,"simulated_effect_receipts":0,\n             "core_344_joined_pg16":False,
              "two_os_worker_restart":False,"temporal_persisted_restart":False,
              "human_glpi_allow":False,"live_effect":False,"host_deployed":False,
              "release_stable":"NO_GO"}
@@ -84,7 +90,7 @@ jobs:
       AIOPS_WORKER_CORE344_JOINED: "YES"
       AIOPS_INTERNAL_TOKEN: ci-worker-core344-import-only
       AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      AIOPS_CORE344_HEAD_SHA: a84c7ef2e08c237521ae2ade1725d2799a0069cd
+      AIOPS_CORE344_HEAD_SHA: 94b7cccb2398217ec568b03591fd4bf615191826
       AIOPS_CORE344_ROOT: ${{ github.workspace }}/core344
       AIOPS_WORKER_CORE344_RECEIPT_DIR: /tmp/worker-core344-joined-receipt
       PYTHONPATH: ${{ github.workspace }}/core344/app:${{ github.workspace }}/app:${{ github.workspace }}/core344/tests:${{ github.workspace }}/tests
@@ -101,7 +107,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: a84c7ef2e08c237521ae2ade1725d2799a0069cd
+          ref: 94b7cccb2398217ec568b03591fd4bf615191826
           path: core344
           persist-credentials: false
       - name: Exact two-source SHA and disposable PostgreSQL 16
@@ -116,7 +122,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat openssl ca-certificates
           python3 -m venv /tmp/worker-core344-venv
           /tmp/worker-core344-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.116.1" "httpx==0.28.1" "temporalio==1.16.0" "uvicorn==0.35.0"
-          /tmp/worker-core344-venv/bin/python -m py_compile tests/test_worker_hitl_terminal_joined_pg16.py app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py
+          /tmp/worker-core344-venv/bin/python -m py_compile tests/test_worker_hitl_terminal_joined_pg16.py app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py app/worker/acme_simulated_hitl.py tests/test_worker_acme_simulated_hitl.py
           socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/worker-core344-socat.log 2>&1 </dev/null &
           for i in $(seq 1 30); do
             if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
