@@ -158,6 +158,21 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                 self.assertIn(response.status_code, (403, 404))
                 get.assert_not_called()
 
+    def test_viewer_token_cannot_alias_internal_or_admin_credential(self):
+        for privileged in ("AIOPS_INTERNAL_TOKEN", "AIOPS_ADMIN_TOKEN"):
+            with self.subTest(privileged=privileged):
+                with patch.dict(os.environ, {privileged: TOKEN}):
+                    with patch.object(acme_sim_glpi.requests, "get") as upstream_get:
+                        response = self.get()
+                self.assert_unknown(response)
+                self.assertEqual(response.json()["reason"], "portal_viewer_privileged_token_reuse_denied")
+                upstream_get.assert_not_called()
+        self.assertNotIn("AIOPS_INTERNAL_TOKEN", acme_sim_glpi.PAGE)
+        self.assertNotIn("AIOPS_ADMIN_TOKEN", acme_sim_glpi.PAGE)
+        script = Path(acme_sim_glpi.__file__).with_name("acme_sim_glpi_client.js").read_text()
+        self.assertNotIn("AIOPS_INTERNAL_TOKEN", script)
+        self.assertNotIn("AIOPS_ADMIN_TOKEN", script)
+
     def test_stable_dependency_isolation_and_actor_acl_missing_fail_closed(self):
         # Stable does not ship portal.noc_runtime; no import-time dependency.
         self.assertNotIn("portal.noc_runtime", Path(acme_sim_glpi.__file__).read_text())
