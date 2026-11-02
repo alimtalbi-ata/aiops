@@ -6,6 +6,7 @@ Temporal history contains nonsecret IDs and a redacted result, not credentials.
 """
 from datetime import datetime, timedelta, timezone
 import hashlib
+import hmac
 import json
 import re
 
@@ -251,3 +252,28 @@ async def simulate_no_effect(intent, *, get, now=None):
                    ensure_ascii=True).encode("ascii")
     ).hexdigest()
     return receipt
+
+def receipt_digest_valid(receipt):
+    """Integrity check only; Core must also independently verify Run authority."""
+    if type(receipt) is not dict:
+        return False
+    expected = receipt.get("receipt_sha256")
+    if type(expected) is not str or re.fullmatch(r"[0-9a-f]{64}", expected) is None:
+        return False
+    if (type(receipt.get("core_request_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", receipt["core_request_sha256"]) is None
+            or receipt.get("core_source_event_ids") !=
+                canonical_source_ids(receipt.get("attempt_id"))
+            or type(receipt.get("twin_approval_nonce_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}",
+                            receipt["twin_approval_nonce_sha256"]) is None):
+        return False
+    body = {key: value for key, value in receipt.items()
+            if key != "receipt_sha256"}
+    try:
+        actual = hashlib.sha256(json.dumps(
+            body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("ascii")).hexdigest()
+    except (TypeError, ValueError, UnicodeError):
+        return False
+    return hmac.compare_digest(actual, expected)
