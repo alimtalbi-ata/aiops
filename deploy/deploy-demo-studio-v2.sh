@@ -5,13 +5,30 @@ umask 077
 delivery="$(cd "$(dirname "$0")/.." && pwd)"
 state=/home/aiops/.local/state/aiops-debian-agent
 # A previous PASS cannot qualify a later failed or unexecuted job.
-rm -f "$state/portal-deploy-result.json" "$state/portal-compose-result.json" "$state/portal-host-contracts.json"
+rm -f "$state/portal-deploy-result.json" "$state/portal-compose-result.json" "$state/portal-host-contracts.json" "$state/acme-sim-e2e.json"
 status=0
-/bin/bash "$delivery/deploy/debian-portal-deploy.sh" || status=$?
-if [ "$status" -eq 0 ]; then
-  /usr/bin/python3 "$delivery/deploy/debian-portal-canonicalize.py" || status=$?
+# An E2E-only stable SHA must not rebuild/recreate the already healthy portal.
+# Portal deployment is an explicit, separately pinned release intent.
+portal_enabled="$(/usr/bin/python3 - "$delivery/deploy/debian-portal-release.json" <<'PY'
+import json,sys
+try:
+ print('yes' if json.load(open(sys.argv[1]))['enabled'] is True else 'no')
+except (OSError,ValueError,KeyError,TypeError):
+ print('invalid')
+PY
+)"
+if [ "$portal_enabled" = yes ]; then
+  /bin/bash "$delivery/deploy/debian-portal-deploy.sh" || status=$?
+  if [ "$status" -eq 0 ]; then
+    /usr/bin/python3 "$delivery/deploy/debian-portal-canonicalize.py" || status=$?
+  fi
+elif [ "$portal_enabled" != no ]; then
+  status=78
 fi
 # Anonymous, read-only host tests run even if upgrade was blocked; never promote E2E.
 /usr/bin/python3 "$delivery/deploy/debian-portal-host-contracts.py" || status=78
+# Synthetic E2E uses only the existing containers and never calls real GLPI.
+# Missing sandbox capabilities yield a BLOCKED receipt without any POST.
+/usr/bin/python3 "$delivery/deploy/debian-acme-sim-e2e.py" || status=78
 /usr/bin/python3 "$delivery/deploy/debian-portal-preflight.py" || status=78
 exit "$status"

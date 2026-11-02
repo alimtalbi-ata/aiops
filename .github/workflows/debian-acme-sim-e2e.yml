@@ -1,0 +1,30 @@
+name: Debian ACME simulated E2E fail-closed qualification
+on:
+  pull_request:
+    branches: [deploy/aiops2-stable]
+    paths:
+      - deploy/debian-acme-sim-e2e.py
+      - deploy/deploy-demo-studio-v2.sh
+      - deploy/debian-portal-preflight.py
+      - deploy/debian-portal-release.json
+      - tests/test_debian_acme_sim_e2e.py
+      - .github/workflows/debian-acme-sim-e2e.yml
+  push:
+    branches: [ops/acme-simulated-e2e-debian-20261102]
+permissions:
+  contents: read
+jobs:
+  synthetic-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and non-destructive sandbox contract
+        run: |
+          set -euo pipefail
+          bash -n deploy/deploy-demo-studio-v2.sh
+          python3 -m py_compile deploy/debian-acme-sim-e2e.py deploy/debian-portal-preflight.py
+          python3 -m unittest discover -s tests -p 'test_debian_acme_sim_e2e.py' -v
+          python3 -m unittest discover -s tests -p 'test_debian_portal_preflight.py' -v
+          python3 -m unittest discover -s tests -p 'test_debian_portal_host_contracts.py' -v
+          python3 -m unittest discover -s tests -p 'test_debian_poller_qualification.py' -v

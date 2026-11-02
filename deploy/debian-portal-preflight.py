@@ -233,7 +233,7 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                     deployed_image_id=deployed.get('new_image_id'),
                     verdict=('DEPLOYED_HEALTH_PASS_E2E_PENDING' if passed
                              else 'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED'),
-                    reason=('E2E_HUMAN_GLPI_NOT_ATTESTED' if passed
+                    reason=('E2E_SANDBOX_SIMULATION_NOT_ATTESTED' if passed
                             else 'DEPLOYMENT_RECEIPT_OR_HOST_MISMATCH'))
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
@@ -280,11 +280,78 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                     'checks': [{k: c.get(k) for k in (
                         'name', 'path', 'status', 'http_status', 'reason')} for c in checks],
                     'image_id': local.get('image_id'),
-                    'acme_e2e': 'BLOCKED_NO_INDEPENDENT_HUMAN_GLPI_IDP_AUTHORITY',
+                    'acme_e2e': 'NOT_RUN_SANDBOX_SIMULATION_PENDING',
                     'incident_id': None, 'run_id': None, 'glpi_ticket_id': None,
                 }
         except (OSError, ValueError, TypeError, KeyError, AttributeError):
             pass
+    # Host-executed sandbox qualification is separate from nine anonymous GETs.
+    # Never promote CI, a simulator-only response or a stale local receipt to E2E.
+    report['acme_sim_e2e'] = {'status': 'NOT_VERIFIED'}
+    try:
+        sim_path = state_dir / 'acme-sim-e2e.json'
+        if sim_path.stat().st_size <= 8192:
+            sim = json.loads(sim_path.read_text(encoding='utf-8'))
+            when = dt.datetime.fromisoformat(sim['collected_at'].replace('Z', '+00:00'))
+            age = (dt.datetime.now(dt.timezone.utc) - when).total_seconds()
+            expected = ('simulator', 'core', 'twin', 'policy', 'worker')
+            steps = sim.get('stages', {})
+            ids = sim.get('ids', {})
+            status = sim.get('status')
+            safe = (when.tzinfo is not None and 0 <= age <= 900
+                    and sim.get('schema') == 'aiops.debian-acme-sim-e2e.v1'
+                    and sim.get('tenant_id') == 'ACME-TEST'
+                    and sim.get('mode') == 'SIMULATION'
+                    and sim.get('approval_issuer') == 'TWIN_ACME_SIMULATED'
+                    and sim.get('human_approval_claimed') is False
+                    and sim.get('live_effects_allowed') is False
+                    and sim.get('real_glpi_writes_allowed') is False
+                    and sim.get('docker_mutations') == 0
+                    and isinstance(sim.get('attempt_id'), str)
+                    and re.fullmatch(r'ACME-SIM-[A-F0-9]{16}', sim['attempt_id'])
+                    and isinstance(sim.get('reason'), str)
+                    and (sim['reason'] in (
+                        'SIMULATED_SANDBOX_ONLY',
+                        'SIMULATOR_START_UNQUALIFIED',
+                        'INDEPENDENT_READBACK_OR_RESOLUTION_MISMATCH')
+                        or re.fullmatch(
+                            r'SANDBOX_CAPABILITY_MISSING_(SIMULATOR|CORE|TWIN|POLICY|WORKER)',
+                            sim['reason']))
+                    and status in ('PASS', 'FAIL', 'BLOCKED')
+                    and isinstance(steps, dict) and len(steps) <= 12
+                    and all(k in {('capability_' + x) for x in expected} |
+                            {('readback_' + x) for x in expected} |
+                            {'simulator_start', 'resolved'}
+                            and v in ('PASS', 'FAIL', 'BLOCKED')
+                            for k, v in steps.items())
+                    and isinstance(ids, dict) and len(ids) <= 5
+                    and all(k in ('incident_id','run_id','ticket_id','proposal_id','approval_id')
+                            and isinstance(v, str) and re.fullmatch(r'[A-Za-z0-9_-]{3,100}', v)
+                            for k, v in ids.items()))
+            if safe:
+                if status == 'PASS':
+                    safe = (sim['reason'] == 'SIMULATED_SANDBOX_ONLY'
+                            and all(steps.get('capability_' + x) == 'PASS' for x in expected)
+                            and all(steps.get('readback_' + x) == 'PASS'
+                                    for x in ('core','twin','policy','worker'))
+                            and steps.get('simulator_start') == 'PASS'
+                            and steps.get('resolved') == 'PASS' and len(ids) == 5)
+                if status == 'BLOCKED':
+                    safe = not ids and str(sim.get('reason','')).startswith('SANDBOX_CAPABILITY_MISSING_')
+                if safe:
+                    report['acme_sim_e2e'] = {
+                        'collected_at': sim['collected_at'],
+                        'attempt_id': sim.get('attempt_id'),
+                        'tenant_id': 'ACME-TEST', 'mode': 'SIMULATION',
+                        'approval_issuer': 'TWIN_ACME_SIMULATED',
+                        'human_approval_claimed': False,
+                        'live_effects_allowed': False,
+                        'status': status, 'reason': sim.get('reason'),
+                        'stages': steps, 'ids': ids,
+                        'portal_image_id': report.get('portal', {}).get('image_id'),
+                    }
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
     report['release_stable'] = 'NO_GO'
     report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
                            if report['deployment_preflight']['deployment_executed']
