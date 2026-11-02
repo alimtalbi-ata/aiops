@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
     ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
-    receipt_digest_valid,
+    receipt_digest_valid, validated_service_origin,
     validate_intent, validate_readbacks,
 )
 
@@ -563,6 +563,44 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             wrong[component]["ticket_id"] = "SIM-GLPI-FOREIGN"
             with self.subTest(component=component), self.assertRaises(SandboxDenied):
                 validate_readbacks(INTENT, **wrong, now=NOW)
+
+
+    def test_32_registered_worker_service_origin_fence_before_bearer_egress(self):
+        defaults = {
+            "core": ("http://aiops2-core:810", 810),
+            "twin": ("http://aiops2-twin:811", 811),
+            "policy": ("http://aiops2-policy:813", 813),
+        }
+        for component, (origin, port) in defaults.items():
+            self.assertEqual(validated_service_origin(component, origin), origin)
+            self.assertEqual(
+                validated_service_origin(component, f"http://127.0.0.1:{port}"),
+                f"http://127.0.0.1:{port}")
+            for unsafe in (
+                "http://attacker.example:" + str(port),
+                "http://169.254.169.254:" + str(port),
+                "http://aiops2-core.evil:" + str(port),
+                origin.replace("http:", "ftp:"),
+                origin + "/api/sandbox/acme",
+                origin + "?redirect=evil",
+                origin + "#fragment",
+                origin.replace("://", "://user:password@"),
+                origin.rsplit(":", 1)[0] + ":9999",
+                "http://[::1",
+                "http://aiops2-core:invalid",
+                "",
+                None,
+            ):
+                with self.subTest(component=component, unsafe=unsafe):
+                    with self.assertRaisesRegex(
+                            SandboxDenied, "^sandbox_service_origin_unqualified$"):
+                        validated_service_origin(component, unsafe)
+        with self.assertRaises(SandboxDenied):
+            validated_service_origin("arbitrary", "http://aiops2-core:810")
+        main = (ROOT / "app/worker/main.py").read_text()
+        self.assertIn("origin = validated_service_origin(", main)
+        self.assertLess(main.index("origin = validated_service_origin("),
+                        main.index("headers={\"Authorization\": \"Bearer \" + ADMIN"))
 
 
 if __name__ == "__main__":
