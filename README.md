@@ -156,8 +156,10 @@ The existing Debian poller invokes the optional in-place
 `deploy/debian-acme-sandbox-upgrade.sh` only when this manifest is explicitly
 enabled. It must preserve the canonical portal :7777, GLPI, Temporal DB and
 all volumes; only the five existing Core/Twin/Policy/Worker/Simulator
-containers may be recreated after image build, PG16 native backup and
-read-only ownership/health checks. It writes a private machine-readable
+containers may be recreated after image build, PG16 native backup,
+**successful native restore into a new disposable scratch database** with
+headroom checks and cleanup, and read-only ownership/health checks. If
+scratch restore or cleanup fails, promotion stops before Compose mutation. It writes a private machine-readable
 upgrade receipt with stable/product/DEV SHA, image and container IDs,
 HTTP 200 JSON checks, backup checksum and rollback. The separate
 `acme-sim-e2e.json` receipt must contain correlated incident/run/ticket/
