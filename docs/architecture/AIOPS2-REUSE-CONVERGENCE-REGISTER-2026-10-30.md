@@ -848,3 +848,14 @@ Source-only selective reuse on #234: #324 Core HTTPS dispatcher/test/workflow/AD
 | Core 015 / Worker | Candidate `85848502` CI 14/14, Core 2/2 PG16, Worker 2/2+DR 5/5 | Already integrated on Draft #234, no re-port | Same-Run seven canonical ACME events, independent source/actor attestation, human GLPI authority |
 
 No old #201/#194 historical merge, no automatic stop of parallel portals, no main/stable promotion. Keep Draft #332 as source evidence until new candidate exact-head CI completes; compare before closing.
+
+
+## 2026-11-02 02:17 CET — source reuse decision (#333/#334)
+
+| Source | Exact source CI | Selective candidate action | Gate / rollback |
+| --- | --- | --- | --- |
+| Core Draft #333 HEAD `78d3792e` | PG16/TLS [#41367293060](https://github.com/alimtalbi-ata/aiops/actions/runs/41367293060) 17/17; Quality [#41367293193](https://github.com/alimtalbi-ata/aiops/actions/runs/41367293193) 3/3 | Five Core-owned paths only in candidate code commit `1490fcf1`; no migration | Core synthetic service source proof != real IdP/GLPI human rights; graph-005 identity mismatch; forward-revert code only |
+| ACME Draft #334 HEAD `11a8f13c` | Quality [#41370255409](https://github.com/alimtalbi-ata/aiops/actions/runs/41370255409) 3/3, targeted 271/271 | Two ACME-owned paths only in same candidate code commit `1490fcf1` | Negative mismatch receipt, 15/15 ITIL stages NOT_EXECUTED; forward-revert code only |
+| Debian reporter `ops/debian-runtime-reports` | Fresh GitHub report collected `2026-11-02T01:14:01.321319+00:00` | No installed host change; existing cron publishes v1, 61 total/53 running/8 exited, healthy rebuild portal | v2 reporter checkout/image digest/7777 probe NOT_ATTESTED; preserve Compose portal and all volumes |
+
+One Draft candidate #234, DEV main `ae7c3e5102b99a66bd7806d602146f1309a9749d`; new integrated CI pending after code commit. Do not merge stacked Drafts #333/#334 or historical #201/#194 wholesale. No main/stable merge, no Debian SSH/Docker/DB/GLPI/LIVE action. RELEASE_STABLE=NO_GO.
