@@ -226,7 +226,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
 
     def test_12_registered_production_worker_and_temporal_no_effect(self):
         main = (ROOT / "app/worker/main.py").read_text()
-        flows = (ROOT / "app/worker/temporal_workflows.py").read_text()
+        flows = (ROOT / "app/worker/workflow.py").read_text()
         tree = ast.parse(main)
         worker = next(n for n in ast.walk(tree)
                       if isinstance(n, ast.AsyncFunctionDef) and n.name == "worker_main")
