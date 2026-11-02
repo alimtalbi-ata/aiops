@@ -794,6 +794,30 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 dead_headers = {"Authorization": "Bearer " + self.token_a}
                 self.assertEqual(client.post(dead_path, json=dead_body).status_code,
                                  401)
+                # HMAC ownership is a signed synthetic Core integrity fence,
+                # NOT a human IdP assertion. A forged signed Run must not
+                # terminalize an exhausted outbox or create an 014 audit row.
+                proof_file = Path(self.proof_path)
+                signed = json.loads(proof_file.read_text())
+                proof_key = "run|" + ids["run"]
+                self.assertIn(proof_key, signed["proofs"])
+                original_mac = signed["proofs"][proof_key]
+                signed["proofs"][proof_key] = (
+                    "0" * 64 if original_mac != "0" * 64 else "1" * 64)
+                proof_file.write_text(json.dumps(signed))
+                forged = client.post(dead_path, json=dead_body,
+                                     headers=dead_headers)
+                self.assertEqual((forged.status_code, forged.json()["status"]),
+                                 (200, "UNKNOWN"))
+                with self.psycopg.connect(self.url) as db:
+                    self.assertEqual(db.execute(
+                        "select status,attempts from aiops.hitl_decision_outbox "
+                        "where event_id=%s", (ids["event"],)).fetchone(),
+                        ("LEASED", 8))
+                    self.assertEqual(db.execute(
+                        "select count(*) from aiops.hitl_reject_terminal_receipts "
+                        "where event_id=%s", (ids["event"],)).fetchone()[0], 0)
+                self._write_proofs()
                 first = client.post(dead_path, json=dead_body,
                                     headers=dead_headers)
                 self.assertEqual((first.status_code, first.json()["status"],
@@ -910,6 +934,48 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                     check=True, capture_output=True, timeout=120)
                 self.assertEqual(snapshot(restore_url), before)
                 self.assertIsNone(read(db_url=restore_url))
+                # Exercise the restored Core HTTP endpoints, not merely SQL
+                # equality: 015 event-key replay and 014 DEAD must be stable.
+                # Revoking the *service* bearer blocks terminal replay but
+                # does not establish human IdP/GLPI authority.
+                with patch.object(base.x, "db",
+                                  side_effect=lambda: self.psycopg.connect(restore_url)), \
+                     patch.object(main, "db",
+                                  side_effect=lambda: self.psycopg.connect(restore_url)), \
+                     patch.object(main, "ADMIN", internal):
+                    with TestClient(main.app) as restored:
+                        restored_source = restored.post(
+                            f"/api/runs/{ids['run']}/events", json=bodies[1],
+                            headers={"Authorization": "Bearer " + internal})
+                        self.assertEqual((
+                            restored_source.status_code,
+                            restored_source.json()["idempotent"],
+                            restored_source.json()["sequence"]), (200, True, 1))
+                        restored_dead = restored.post(
+                            dead_path, json=dead_body, headers=dead_headers)
+                        self.assertEqual((
+                            restored_dead.status_code,
+                            restored_dead.json()["status"],
+                            restored_dead.json()["idempotent"]), (200, "DEAD", True))
+                        self.assertEqual(
+                            restored_dead.json()["receipt_sha256"], receipt_sha)
+                        revoked_auth = [{
+                            "token_sha256": hashlib.sha256(
+                                self.token_b.encode()).hexdigest(),
+                            "actor_id": "svc-TEN-B", "tenant_ids": ["TEN-B"],
+                            "permissions": [
+                                "hitl:reject:deliver", "hitl:reject:terminal"]}]
+                        with patch.dict(os.environ, {
+                            "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps(revoked_auth)}):
+                            revoked = restored.post(
+                                dead_path, json=dead_body, headers=dead_headers)
+                            self.assertEqual((
+                                revoked.status_code, revoked.json()["status"]),
+                                (401, "UNKNOWN"))
+                        projected = restored.get(f"/api/runs/{ids['run']}")
+                        self.assertEqual(projected.status_code, 200)
+                        self.assertEqual(len(projected.json()["events"]), 10)
+                self.assertEqual(snapshot(restore_url), before)
         finally:
             if created:
                 with self.psycopg.connect(self.admin_url, autocommit=True) as admin:
@@ -956,6 +1022,12 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 "migration_015_reapply": True,
                 "native_pg16_restore": True,
                 "archive_sha256": archive_sha, "archive_retained": False,
+                "signed_run_ownership_tamper": "UNKNOWN_NO_MUTATION",
+                "restored_http_source_replay": "200_IDEMPOTENT",
+                "restored_http_dead_replay": "200_DEAD_IDEMPOTENT",
+                "restored_http_service_revocation": "401_UNKNOWN",
+                "restored_http_run_event_count": 10,
+                "human_idp_actor_authenticated": False,
                 "human_glpi_authority": "UNKNOWN",
                 "portable_signature": "NONE", "execution_allowed": False,
                 "effect_allowed": False, "release_stable": "NO_GO",
