@@ -1,5 +1,6 @@
 """ACME-TEST Policy SIMULATE-only readback; no human GLPI or LIVE authority.
 
+RG-ACME-07: new SIMULATE decisions require Core PREPARED, never RESOLVED.
 Independent Core PREPARED and HMAC-verified Twin GETs are required for every
 Policy readback. No mutable Policy shadow ticket or fabricated human approval.
 """
@@ -66,7 +67,7 @@ def qualify(attempt, core, twin):
             or any(not isinstance(core.get(k), str) or not core[k]
                    or core[k] != twin.get(k) for k in ids)
             or not core['ticket_id'].startswith('SIM-GLPI-')
-            or core.get('incident_status') not in ('PREPARED', 'RESOLVED')
+            or core.get('incident_status') != 'PREPARED'
             or core.get('run_status') != core.get('incident_status')
             or core.get('ticket_status') != core.get('run_status')
             or core.get('ticket_authority') != 'SIMULATED_ONLY'
