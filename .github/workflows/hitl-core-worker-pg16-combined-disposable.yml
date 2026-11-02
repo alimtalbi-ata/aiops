@@ -7,6 +7,7 @@ on:
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - tests/test_worker_core_pg16_temporal_combined.py
+      - tests/test_worker_graph005_interleaved_pg16.py
       - .github/workflows/hitl-core-worker-pg16-combined-disposable.yml
       - docs/qualification/HITL-CORE-WORKER-PG16-COMBINED-2026-11-01.md
 
