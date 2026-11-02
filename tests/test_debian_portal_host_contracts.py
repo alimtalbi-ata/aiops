@@ -67,13 +67,24 @@ class DebianPortalQualification(unittest.TestCase):
         self.assertIn('  aiops2-twin:\n    image: twin:test', updated)
         self.assertEqual(canon.canonical_text(updated, PIN), (updated, tag))
 
-    def test_canonical_rejects_conflict_or_ambiguous_blocks(self):
-        with self.assertRaisesRegex(ValueError, 'PORTAL_PORT_CONFLICT'):
+    def test_canonical_repairs_stale_local_values_with_backup_contract(self):
+        stale = BASE.replace('      CORE_URL:',
+            '      AIOPS_PORTAL_HOST_PORT: "17777"\n      CORE_URL:').replace(
+            '    build:', '    image: old-local:tag\n    build:')
+        updated, tag = canon.canonical_text(stale, PIN)
+        self.assertIn('image: "' + tag + '"', updated)
+        self.assertNotIn('old-local:tag', updated)
+        self.assertNotIn('17777', updated)
+        self.assertEqual(canon.canonical_text(updated, PIN), (updated, tag))
+
+    def test_canonical_rejects_duplicates_or_ambiguous_blocks(self):
+        with self.assertRaisesRegex(ValueError, 'PORTAL_PORT_DUPLICATED'):
             canon.canonical_text(BASE.replace('      CORE_URL:',
+                '      AIOPS_PORTAL_HOST_PORT: "7777"\n'
                 '      AIOPS_PORTAL_HOST_PORT: "17777"\n      CORE_URL:'), PIN)
-        with self.assertRaisesRegex(ValueError, 'PORTAL_IMAGE_CONFLICT'):
+        with self.assertRaisesRegex(ValueError, 'PORTAL_IMAGE_DUPLICATED'):
             canon.canonical_text(BASE.replace('    build:',
-                '    image: foreign:tag\n    build:'), PIN)
+                '    image: a:tag\n    image: b:tag\n    build:'), PIN)
         with self.assertRaisesRegex(ValueError, 'PORTAL_BLOCK_AMBIGUOUS'):
             canon.canonical_text(BASE + '  aiops2-portal:\n', PIN)
 
