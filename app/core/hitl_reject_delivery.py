@@ -171,7 +171,7 @@ def ack_reject(tenant_id: str, event_id: str, payload: dict,
     if (not _valid(tenant_id) or not _valid(event_id)
             or type(payload) is not dict or set(payload) != required
             or payload["owner"] != actor["actor_id"]
-            or not all(_valid(payload[k]) for k in ("run_id", "proposal_id"))
+            or not all(_valid(payload[k]) for k in ("run_id", "incident_id", "proposal_id"))
             or not _valid(payload["proposal_hash"], _HASH)
             or not _valid(payload["lease_token"], _TOKEN)
             or type(payload["proposal_revision"]) is not int
@@ -388,8 +388,8 @@ def terminal_reject(tenant_id: str, event_id: str, payload: dict,
 # authenticated service identity never needs to put that secret in Temporal
 # workflow arguments, logs or history. This is NOT a human GLPI authorization.
 _TERMINAL_RECOVERY_KEYS = {
-    "owner", "run_id", "proposal_id", "proposal_hash", "proposal_revision",
-    "execution_allowed", "effect_allowed"
+    "owner", "run_id", "incident_id", "proposal_id", "proposal_hash",
+    "proposal_revision", "execution_allowed", "effect_allowed"
 }
 
 
@@ -435,6 +435,13 @@ def _terminal_recovery(tenant_id, event_id, payload, authorization, *, mutate):
                     or not isinstance(expiry, datetime)
                     or expiry.tzinfo is None
                     or expiry > datetime.now(timezone.utc)):
+                return _response()
+            # Incident is resolved from Core's canonical Run; a caller
+            # cannot invent a parallel Incident/Run relationship.
+            incident = c.execute(
+                "select incident_id from aiops.runs where run_id=%s",
+                (run_id,)).fetchone()
+            if (not incident or incident[0] != payload["incident_id"]):
                 return _response()
             if status == "DEAD":
                 found = c.execute(_TERMINAL_READ_SQL,
