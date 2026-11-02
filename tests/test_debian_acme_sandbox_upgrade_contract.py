@@ -7,9 +7,13 @@ SCRIPT=(ROOT/'deploy/debian-acme-sandbox-upgrade.sh').read_text()
 ENTRY=(ROOT/'deploy/deploy-demo-studio-v2.sh').read_text()
 MANIFEST=json.loads((ROOT/'deploy/debian-acme-sandbox-release.json').read_text())
 class SafeUpgrade(unittest.TestCase):
-    def test_manifest_enabled_only_for_reviewed_immutable_source_sha(self):
-        self.assertIs(MANIFEST['enabled'],True)
-        self.assertEqual(MANIFEST['candidate_sha'],'35c244267b90dfa886eaabdfdcbcf20f18e223d7')
+    def test_manifest_requires_immutable_source_and_reviewed_pr(self):
+        self.assertIs(type(MANIFEST['enabled']),bool)
+        self.assertRegex(MANIFEST['candidate_sha'],r'^[0-9a-f]{40}\Z')
+        self.assertIs(type(MANIFEST['source_pr']),int)
+        self.assertGreater(MANIFEST['source_pr'],0)
+        self.assertIn('refs/pull/$SOURCE_PR/head',SCRIPT)
+        self.assertIn('NO_GO_SOURCE_PR_INVALID',SCRIPT)
         self.assertEqual(MANIFEST['schema'],'aiops.debian-acme-sandbox-release-intent.v1')
     def test_only_existing_five_services_no_portal_recreate(self):
         self.assertIn('services="core twin policy worker simulator"',SCRIPT)
@@ -27,8 +31,9 @@ class SafeUpgrade(unittest.TestCase):
         self.assertIn('image_changed',SCRIPT)
         self.assertIn('source_sha',SCRIPT)
     def test_terminal_migration_and_disposable_pg16_restore_before_mutation(self):
-        self.assertIn('for n in 011 012 013 014 015 016 017 018; do', SCRIPT)
+        self.assertIn('for n in 011 012 013 014 015 016 017 018 019; do', SCRIPT)
         self.assertIn('018_acme_sandbox_terminal_ticket_receipt.sql', SCRIPT)
+        self.assertIn('019_acme_sandbox_twin_topology.sql', SCRIPT)
         self.assertIn('restore_db="aiops_acme_restore_', SCRIPT)
         self.assertIn('NO_GO_SCRATCH_DB_ALREADY_EXISTS', SCRIPT)
         self.assertIn('NO_GO_RESTORE_DISK_HEADROOM', SCRIPT)

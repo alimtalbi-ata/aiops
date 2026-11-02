@@ -19,7 +19,7 @@ from shared.db import db
 router = APIRouter()
 TENANT, SCENARIO, ISSUER = 'ACME-TEST', 'ACME-SAN-PAYMENTS', 'TWIN_ACME_SIMULATED'
 SCHEMA = 'aiops.acme-sandbox-capabilities.v1'
-ROOT, PAYMENTS = 'ACME-SAN-FABRIC-A', 'ACME-SVC-PAYMENTS'
+ROOT, PAYMENTS = 'ACME-TEST-SAN-FABRIC-A', 'ACME-TEST-SVC-PAYMENTS'
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{2,99}\Z', re.ASCII)
 
 def enabled():
@@ -218,11 +218,13 @@ def sourced_impact():
         rows = c.execute("""with recursive down(id,depth) as (
             select %s,0 union select e.target_id,d.depth+1
             from aiops.twin_edges e join down d on e.source_id=d.id where d.depth<8)
-            select distinct id from down""", (ROOT,)).fetchall()
-        nodes = {r[0] for r in c.execute(
-            'select node_id from aiops.twin_nodes where node_id=%s', (ROOT,)).fetchall()}
-    affected = sorted({r[0] for r in rows})
-    if ROOT not in nodes or PAYMENTS not in affected:
+            select distinct d.id,n.site from down d
+            left join aiops.twin_nodes n on n.node_id=d.id""", (ROOT,)).fetchall()
+    affected = sorted({node_id for node_id, site in rows})
+    # A synthetic Twin approval may not inherit a path into live CMDB nodes.
+    # Missing or mixed provenance is UNKNOWN/503, never fabricated impact.
+    if (ROOT not in affected or PAYMENTS not in affected
+            or any(site != 'ACME-TEST-SIMULATION' for _, site in rows)):
         raise HTTPException(503, 'twin_sourced_payments_path_unavailable')
     return affected
 

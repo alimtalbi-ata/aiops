@@ -157,9 +157,9 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or twin.get("effect_allowed") is not False
             or twin.get("live_effects_allowed") is not False
             or twin.get("real_glpi_writes_allowed") is not False
-            or twin.get("impact_root") != "ACME-SAN-FABRIC-A"
+            or twin.get("impact_root") != "ACME-TEST-SAN-FABRIC-A"
             or type(twin.get("impacted_cis")) is not list
-            or "ACME-SVC-PAYMENTS" not in twin["impacted_cis"]
+            or "ACME-TEST-SVC-PAYMENTS" not in twin["impacted_cis"]
             or not _id(twin.get("approval_nonce"))):
         raise SandboxDenied("twin_simulated_approval_unqualified")
     now = datetime.now(timezone.utc) if now is None else now

@@ -52,11 +52,11 @@ class TestSimulation(unittest.TestCase):
                             human_approved=False,execution_allowed=False,
                             effect_allowed=False,live_effects_allowed=False)
             if component=='twin':
-                return dict(x,impact_root='ACME-SAN-FABRIC-A',approval_id='SIM-APP-123',
+                return dict(x,impact_root='ACME-TEST-SAN-FABRIC-A',approval_id='SIM-APP-123',
                             approval_issuer='TWIN_ACME_SIMULATED',
                             approval_kind='SIMULATED',approval_actor='TWIN_ACME_SIMULATED',
                             approval_phase='PRE_RESOLUTION',core_status_at_issuance='PREPARED',
-                            impacted_cis=['ACME-SVC-PAYMENTS'],
+                            impacted_cis=['ACME-TEST-SVC-PAYMENTS'],
                             human_approved=False,execution_allowed=False,
                             effect_allowed=False,live_effects_allowed=False)
             if component=='policy':
@@ -113,7 +113,7 @@ class TestSimulation(unittest.TestCase):
         ids={'incident_id':'INC-1','run_id':'RUN-1','ticket_id':'SIM-GLPI-1','approval_id':'SIM-APP-1'}
         base={'attempt_id':'A','tenant_id':'ACME-TEST','incident_id':'INC-1','run_id':'RUN-1'}
         reads={'core':dict(base,incident_status='RESOLVED',run_status='RESOLVED',ticket_id='SIM-GLPI-1'),
-               'twin':dict(base,impact_root='ACME-SAN-FABRIC-A',approval_id='SIM-APP-1',approval_issuer='HUMAN',approval_kind='SIMULATED'),
+               'twin':dict(base,impact_root='ACME-TEST-SAN-FABRIC-A',approval_id='SIM-APP-1',approval_issuer='HUMAN',approval_kind='SIMULATED'),
                'policy':dict(base,decision='SIMULATE',approval_kind='SIMULATED',human_approved=False,live_effects_allowed=False),
                'worker':dict(base,action='SIMULATE',receipt_status='SIMULATED_NO_EFFECT',effect_receipts=0,execution_allowed=False)}
         self.assertFalse(m.validate_final('A',ids,reads))

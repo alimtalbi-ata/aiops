@@ -147,12 +147,12 @@ def validate_final(attempt_id, ids, reads):
             and core.get('analysis_validated') is True
             and core.get('critic_validated') is True
             and type(core.get('evidence_count')) is int and core['evidence_count'] >= 2
-            and twin.get('impact_root') == 'ACME-SAN-FABRIC-A'
+            and twin.get('impact_root') == 'ACME-TEST-SAN-FABRIC-A'
             and twin.get('approval_id') == ids['approval_id']
             and twin.get('approval_issuer') == 'TWIN_ACME_SIMULATED'
             and twin.get('approval_kind') == 'SIMULATED'
             and twin.get('approval_actor') == 'TWIN_ACME_SIMULATED'
-            and 'ACME-SVC-PAYMENTS' in twin.get('impacted_cis', [])
+            and 'ACME-TEST-SVC-PAYMENTS' in twin.get('impacted_cis', [])
             and policy.get('decision') == 'SIMULATE'
             and policy.get('approval_kind') == 'SIMULATED'
             and policy.get('human_approved') is False

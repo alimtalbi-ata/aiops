@@ -1,7 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
-  "enabled": true,
+  "enabled": false,
   "candidate_sha": "35c244267b90dfa886eaabdfdcbcf20f18e223d7",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; portal 7777 untouched",
-  "reason": "Reviewed #358 exact-head 10/10 CI including PG16+registered Temporal same-Run CI; guarded five-service DEV rollout only after local Compose ownership, native PG16 backup/scratch restore, health and rollback preflight. No human/LIVE; host E2E separate."
+  "reason": "Topology migration 019 source PR not yet qualified; disable deployment until a separate immutable source PR pin and exact-head CI pass. Current five services remain deployed from #358.",
+  "source_pr": 358
 }
