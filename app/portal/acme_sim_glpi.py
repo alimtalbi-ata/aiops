@@ -7,6 +7,7 @@ Worker no-effect receipt alone proves a final Core transition.
 """
 from __future__ import annotations
 
+import hmac
 import os
 import re
 from pathlib import Path
@@ -16,7 +17,6 @@ import requests
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from portal.noc_runtime import _require_portal_read_auth
 
 router = APIRouter()
 SCHEMA = "aiops.portal.sim-glpi-readback.v1"
@@ -90,6 +90,27 @@ def denied(code: int, reason: str):
     }, status_code=code, headers={
         **HEADERS, **({"WWW-Authenticate": "Bearer"} if code == 401 else {}),
     })
+
+
+def _require_sim_viewer(authorization: str | None) -> None:
+    """Viewer authentication is not a human/tenant ACL or GLPI READ/READMY."""
+    expected = os.getenv("AIOPS_PORTAL_READ_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="portal_read_auth_not_configured")
+    scheme, separator, supplied = (authorization or "").partition(" ")
+    if (not separator or scheme.lower() != "bearer" or not supplied
+            or not hmac.compare_digest(supplied, expected)):
+        raise HTTPException(status_code=401, detail="invalid_portal_read_token")
+
+
+def _require_sim_actor_acl(attempt_id: str) -> bool:
+    """Fail closed on stable: no independently verified browser actor/tenant ACL.
+
+    Never promote the shared viewer bearer, caller headers, cookies or sandbox
+    enable flag into actor authority. Only a separately reviewed server-side
+    verifier may replace this guard; there is intentionally no env bypass.
+    """
+    return False
 
 
 def _sandbox_config(component: str) -> tuple[str, str]:
@@ -243,13 +264,15 @@ def simulated_glpi_script():
 def simulated_glpi_readback(attempt_id: str, authorization: str | None = Header(default=None)):
     # Authenticate before even considering a Core sandbox business GET.
     try:
-        _require_portal_read_auth(authorization)
+        _require_sim_viewer(authorization)
     except HTTPException as exc:
         return denied(exc.status_code, str(exc.detail))
     if not ATTEMPT.fullmatch(attempt_id):
         return denied(403, "SANDBOX_ATTEMPT_SCOPE_DENIED")
     if os.getenv("AIOPS_ACME_SANDBOX_ENABLED") != "true":
         return denied(503, "SANDBOX_DISABLED")
+    if not _require_sim_actor_acl(attempt_id):
+        return denied(503, "SANDBOX_ACTOR_TENANT_ACL_NOT_QUALIFIED")
     try:
         # Worker receipt first; Core final state only after that independent GET.
         # Re-read Worker to fence a changing/replaced receipt across Core GET.
