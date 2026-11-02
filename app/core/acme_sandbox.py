@@ -563,7 +563,8 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
             if any(doc.get(k) != current[k] for k in
                    ('incident_id', 'run_id', 'proposal_id')):
                 raise HTTPException(503, 'sandbox_independent_identity_mismatch')
-        if (twin.get('ticket_id') != current['ticket_id']
+        if (worker.get('ticket_id') != current['ticket_id']
+                or twin.get('ticket_id') != current['ticket_id']
                 or policy.get('ticket_id') != current['ticket_id']
                 or twin.get('core_request_sha256') != current['request_sha256']
                 or twin.get('core_source_event_ids') != current['source_event_ids']
@@ -573,6 +574,9 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                 or current['approval_id'] is not None
                 or current['ticket_status'] != 'PREPARED'):
             raise HTTPException(503, 'sandbox_simulated_ticket_or_source_mismatch')
+        # RG-ACME-19: approval may expire while waiting for the PG16 lock.
+        # Check it again inside the terminal transaction, before any mutation.
+        approval_fresh(twin)
         incident, run, ticket, proposal = (
             current[k] for k in ('incident_id', 'run_id', 'ticket_id', 'proposal_id'))
         changed = c.execute(
