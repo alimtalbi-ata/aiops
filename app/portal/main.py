@@ -43,7 +43,20 @@ app.include_router(glpi_operator_view_router)
 app.include_router(oidc_session_router)
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
-def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}
+def health():
+    # Canonical DEV ingress is host TCP 7777; never claim a different binding
+    # healthy. Keep external_port numeric for the Debian poller contract.
+    try:
+        external_port = int(os.getenv('AIOPS_PORTAL_HOST_PORT', '7777'))
+    except (TypeError, ValueError):
+        external_port = None
+    if external_port != 7777:
+        return JSONResponse(status_code=503, content={
+            'status': 'misconfigured', 'component': 'portal',
+            'external_port': None, 'internal_port': 777,
+        })
+    return {'status': 'ok', 'component': 'portal',
+            'external_port': external_port, 'internal_port': 777}
 @app.get('/api/portal/bootstrap')
 def bootstrap(authorization: str | None = Header(default=None)):
     # Shared PR #36 NOC viewer token; deny before any Core/Twin network access.
