@@ -260,6 +260,8 @@ def receipt_digest_valid(receipt):
     expected = receipt.get("receipt_sha256")
     if type(expected) is not str or re.fullmatch(r"[0-9a-f]{64}", expected) is None:
         return False
+    if not _id(receipt.get("attempt_id")) or not receipt["attempt_id"].startswith("ACME-SIM-"):
+        return False
     if (type(receipt.get("core_request_sha256")) is not str
             or re.fullmatch(r"[0-9a-f]{64}", receipt["core_request_sha256"]) is None
             or receipt.get("core_source_event_ids") !=
