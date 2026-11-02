@@ -143,7 +143,8 @@ def _acme_sandbox_guard():
 
 
 def _acme_sandbox_auth(authorization):
-    if (authorization or "").removeprefix("Bearer ") != ADMIN:
+    if (type(authorization) is not str or not authorization.startswith("Bearer ")
+            or authorization[7:] != ADMIN):
         raise HTTPException(401, "sandbox_service_denied")
 
 
@@ -218,10 +219,21 @@ async def read_acme_simulated(attempt_id: str, authorization: str | None = Heade
         raise
     except Exception:
         raise HTTPException(503, "sandbox_receipt_unqualified") from None
-    if (type(result) is not dict or result.get("attempt_id") != attempt_id
+    if (type(result) is not dict
+            or result.get("schema") != "aiops.worker-acme-simulated-no-effect.v1"
+            or result.get("attempt_id") != attempt_id
             or result.get("tenant_id") != "ACME-TEST"
+            or result.get("approval_issuer") != "TWIN_ACME_SIMULATED"
+            or result.get("approval_kind") != "SIMULATED"
+            or result.get("action") != "SIMULATE"
             or result.get("receipt_status") != "SIMULATED_NO_EFFECT"
+            or result.get("human_approved") is not False
             or result.get("execution_allowed") is not False
-            or result.get("effect_allowed") is not False):
+            or result.get("effect_allowed") is not False
+            or result.get("real_glpi_writes_allowed") is not False
+            or result.get("live_effects_allowed") is not False
+            or type(result.get("effect_receipts")) is not int
+            or result["effect_receipts"] != 0
+            or result.get("audit_authority") != "TEMPORAL_WORKFLOW_HISTORY_ONLY"):
         raise HTTPException(503, "sandbox_receipt_unqualified")
     return result
