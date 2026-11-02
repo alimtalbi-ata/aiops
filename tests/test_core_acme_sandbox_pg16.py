@@ -573,5 +573,16 @@ class SandboxPG16(unittest.TestCase):
                 "where attempt_id=%s and status='RESOLVED'",
                 (attempt,)).fetchone()[0], 0)
 
+    def test_18_authenticated_service_origin_fence(self):
+        from unittest.mock import patch
+        for value in ('https://external.example:815',
+                      'http://aiops2-worker:9999'):
+            with patch.dict(os.environ, {'WORKER_URL': value}):
+                with patch.object(core.requests, 'get',
+                                  side_effect=AssertionError('must not send bearer')):
+                    with self.assertRaises(HTTPException) as denied:
+                        core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
+            self.assertEqual(denied.exception.status_code, 503)
+
 if __name__ == '__main__':
     unittest.main()
