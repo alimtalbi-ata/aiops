@@ -396,16 +396,19 @@ def readback(attempt_id: str, authorization: str | None = Header(default=None)):
 
 def independent_readback(component, attempt):
     """Only fixed internal sandbox service URLs; never a caller URL or LIVE."""
-    env, default = {
-        'worker': ('WORKER_URL', 'http://aiops2-worker:815'),
-        'twin': ('TWIN_URL', 'http://aiops2-twin:811'),
-        'policy': ('POLICY_URL', 'http://aiops2-policy:813'),
+    env, default, allowed, port = {
+        'worker': ('WORKER_URL', 'http://aiops2-worker:815',
+                   {'aiops2-worker', 'aiops2-rebuild-worker', 'localhost', '127.0.0.1'}, 815),
+        'twin': ('TWIN_URL', 'http://aiops2-twin:811',
+                 {'aiops2-twin', 'aiops2-rebuild-twin', 'localhost', '127.0.0.1'}, 811),
+        'policy': ('POLICY_URL', 'http://aiops2-policy:813',
+                   {'aiops2-policy', 'aiops2-rebuild-policy', 'localhost', '127.0.0.1'}, 813),
     }[component]
     base = os.getenv(env, default).rstrip('/')
     parsed = urlsplit(base)
-    if (parsed.scheme not in ('http', 'https') or not parsed.hostname
-            or parsed.username or parsed.password or parsed.path
-            or parsed.query or parsed.fragment):
+    if (parsed.scheme not in ('http', 'https') or parsed.hostname not in allowed
+            or parsed.port != port or parsed.username or parsed.password
+            or parsed.path or parsed.query or parsed.fragment):
         raise HTTPException(503, 'sandbox_service_url_invalid')
     try:
         response = requests.get(
