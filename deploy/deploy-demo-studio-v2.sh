@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Existing poll.sh invokes this only on a new stable SHA. P0 is read-only.
+# Poller entrypoint: deploy pinned candidate, then publish independent read-only receipt.
 set -Eeuo pipefail
 umask 077
 delivery="$(cd "$(dirname "$0")/.." && pwd)"
-exec /usr/bin/python3 "$delivery/deploy/debian-portal-preflight.py"
+status=0
+/bin/bash "$delivery/deploy/debian-portal-deploy.sh" || status=$?
+/usr/bin/python3 "$delivery/deploy/debian-portal-preflight.py" || status=78
+exit "$status"
