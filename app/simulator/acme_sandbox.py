@@ -164,7 +164,10 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
             or twin.get('core_request_sha256') != fingerprint[0]
             or twin.get('core_source_event_ids') != list(fingerprint[1])
             or twin.get('human_approved') is not False
-            or twin.get('live_effects_allowed') is not False):
+            or twin.get('execution_allowed') is not False
+            or twin.get('effect_allowed') is not False
+            or twin.get('live_effects_allowed') is not False
+            or twin.get('real_glpi_writes_allowed') is not False):
         raise HTTPException(503, 'sandbox_twin_approval_unqualified')
     ids['approval_id'] = aid
     # Verify independent Twin GET rather than trusting the POST body.
@@ -176,7 +179,15 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
             or readback.get('approval_issuer') != ISSUER
             or readback.get('approval_kind') != 'SIMULATED'
             or readback.get('approval_phase') != 'PRE_RESOLUTION'
-            or readback.get('core_status_at_issuance') != 'PREPARED'):
+            or readback.get('core_status_at_issuance') != 'PREPARED'
+            or readback.get('issuer_id') != 'twin-acme-test'
+            or readback.get('resolution_verified') is not False
+            or readback.get('post_resolution_readback_required') is not True
+            or readback.get('human_approved') is not False
+            or readback.get('execution_allowed') is not False
+            or readback.get('effect_allowed') is not False
+            or readback.get('live_effects_allowed') is not False
+            or readback.get('real_glpi_writes_allowed') is not False):
         raise HTTPException(503, 'sandbox_twin_readback_unqualified')
     policy = remote('policy', '/api/sandbox/acme/e2e', 'POST', {**request, **ids})
     bound(policy, x, ids)
