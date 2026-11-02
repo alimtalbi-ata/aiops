@@ -6,6 +6,7 @@ on:
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - app/worker/main.py
+      - app/worker/temporal_workflows.py
       - app/worker/hitl_reject_terminal_runtime.py
       - tests/test_worker_hitl_reject_terminal_runtime.py
       - .github/workflows/worker-reject-terminal-runtime.yml
@@ -31,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          python -m compileall -q app/worker/main.py app/worker/hitl_reject_terminal_runtime.py
+          python -m compileall -q app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py
           python -m unittest discover -s tests -p 'test_worker_hitl_reject_terminal_runtime.py' -v 2>&1 | tee /tmp/worker-terminal-tests.log
           grep -E '^Ran 8 tests in ' /tmp/worker-terminal-tests.log
           grep -x 'OK' /tmp/worker-terminal-tests.log
@@ -114,7 +115,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat openssl ca-certificates
           python3 -m venv /tmp/worker-core344-venv
           /tmp/worker-core344-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.116.1" "httpx==0.28.1" "temporalio==1.16.0" "uvicorn==0.35.0"
-          /tmp/worker-core344-venv/bin/python -m py_compile tests/test_worker_hitl_terminal_joined_pg16.py app/worker/main.py app/worker/hitl_reject_terminal_runtime.py
+          /tmp/worker-core344-venv/bin/python -m py_compile tests/test_worker_hitl_terminal_joined_pg16.py app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py
           socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/worker-core344-socat.log 2>&1 </dev/null &
           for i in $(seq 1 30); do
             if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
