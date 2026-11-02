@@ -146,8 +146,8 @@ def core_readback(x):
     # Do not forward the internal bearer token to an arbitrary configured origin.
     # Match the existing Compose Core DNS names and the disposable local test origin.
     if (target.scheme not in ('http', 'https')
-            or target.hostname not in ('aiops2-core', 'aiops2-rebuild-core',
-                                       'localhost', '127.0.0.1')
+            or target.netloc not in ('aiops2-core:810', 'aiops2-rebuild-core:810',
+                                     'localhost:810', '127.0.0.1:810')
             or target.username or target.password or target.path
             or target.query or target.fragment):
         raise HTTPException(503, 'independent_core_url_invalid')
