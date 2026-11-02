@@ -37,7 +37,7 @@ jobs:
       AIOPS_CORE344_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       AIOPS_CORE344_ROOT: ${{ github.workspace }}
       AIOPS_WORKER_CORE344_RECEIPT_DIR: /tmp/worker-core344-crosshead-receipt
-      PYTHONPATH: ${{ github.workspace }}/worker348/app:${{ github.workspace }}/app:${{ github.workspace }}/tests:${{ github.workspace }}/worker348/tests
+      PYTHONPATH: ${{ github.workspace }}/app:${{ github.workspace }}/worker348/app:${{ github.workspace }}/tests:${{ github.workspace }}/worker348/tests
     steps:
       - name: Install Git for exact two-source checkouts
         shell: bash
