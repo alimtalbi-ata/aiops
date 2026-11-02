@@ -1086,3 +1086,14 @@ P0 ≤3: (1) Architect — prove existing cron v2 reporter installed through rea
 | ACME/Twin (P1) | 15-stage SAN→Payments ITIL replay, seven SOURCE physical [1,2,4,5,6,8,9], ten candidate impacts | Draft #345 `5193e7920beb50b029e1fd6d84ae1f2e47095410`, source CI 3/3 | signed Core provenance, human GLPI, Worker joined runtime | 0/15 ITIL host, 0/6 human, **NOT_EXECUTED** |
 
 **Truth levels:** SOURCE_REVIEWED=YES for #346; CI_PASS=11/11 exact source + 1/1 post-merge; INTEGRATION_PASS=safe stable only; RUNTIME_OBSERVED=existing cron job and local portal health; V28_DEPLOYED=NO/NOT_VERIFIED; E2E_ACME_HOST=NOT_EXECUTED; RELEASE_V28=NO_GO. Do not treat 17778 as loopback open (bound to 10.79.94.202) or claim single public portal. No host service stop/migration/DB/GLPI write. **Rollback:** forward fail-closed safe poller job, preserve healthy Compose and all volumes; future Compose upgrade must have exact image+backup and verified rollback before mutation. [Durable #186](https://github.com/alimtalbi-ata/aiops/issues/186#issuecomment-6575011794).
+
+
+### 2026-11-02 12:32 CET — GO/NO_GO operational board
+| Owner | P | Exact proof | Next action |
+|---|---|---|---|
+| Architect/Debian | P0 | #347 source `978e9d5` CI **11/11**, stable `bed7116` post-merge **1/1**, [new host preflight](https://github.com/alimtalbi-ata/aiops/blob/ops/debian-runtime-reports/ops/debian-reports/SRV-DEB-05/poller-qualification.json) 11:30:02Z; portal `sha256:cd844...`, :7777 HTTP200 **qualified=false**, Compose config/service PASS, 0 mutations | Diagnose numeric external_port, local Compose drift, service label, backup/rollback before one-service fix |
+| Core/NOC | P0 | #344 `923a9c2` PG16 19/19 + Quality 3/3, source-only | Signed token-free terminal recover/receipt joined Worker |
+| Policy/Worker | P0 | 6/6 local injected tests, no registered production activity | Registered Temporal terminal-only activity + disposable PG16 receipts |
+| Portal/GLPI | P1 | Candidate #234 prior 68/68 Portal CI, human IdP/GLPI UNKNOWN | Health external_port 7777 test and native READ/READMY negative authority |
+| ACME/Twin | P1 | #345 `b9b5ba2` 307/307 source, 0/15 host stages | Seven-source signed same-Run ITIL projection |
+**Telemetry:** latest minute report 11:01:01Z (61 containers, 53 running/8 exited) stale relative to 11:30:02Z sidecar; publisher freshness investigation P0. **GO=read-only cron transport; NO_GO=V28 release/GLPI HITL/E2E.** Rollback #347: forward restore safe read-only poller only, never legacy destructive docker-run. [Journal #186](https://github.com/alimtalbi-ata/aiops/issues/186#issuecomment-6576061996).
