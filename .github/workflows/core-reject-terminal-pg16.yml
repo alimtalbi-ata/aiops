@@ -231,6 +231,12 @@ jobs:
           assert receipt["migration_015_transaction_rollback"] is True
           assert receipt["migration_015_reapply"] is True
           assert receipt["native_pg16_restore"] is True
+          assert receipt["signed_run_ownership_tamper"] == "UNKNOWN_NO_MUTATION"
+          assert receipt["restored_http_source_replay"] == "200_IDEMPOTENT"
+          assert receipt["restored_http_dead_replay"] == "200_DEAD_IDEMPOTENT"
+          assert receipt["restored_http_service_revocation"] == "401_UNKNOWN"
+          assert receipt["restored_http_run_event_count"] == 10
+          assert receipt["human_idp_actor_authenticated"] is False
           assert len(receipt["archive_sha256"]) == 64
           assert receipt["archive_retained"] is False
           assert receipt["human_glpi_authority"] == "UNKNOWN"
