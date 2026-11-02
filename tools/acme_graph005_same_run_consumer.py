@@ -228,3 +228,95 @@ def consume_via_core_https(manifest, *, claims, expected, record,
         result["core_https_runtime_authentication"] = (
             "CORE_SOURCE_CLIENT_PREFLIGHT_NONPORTABLE")
     return result
+
+
+# A projection of the Worker #340 disposable harness, NOT a production
+# Worker/Temporal/GLPI readback. Only the independently fetched Core SOURCE
+# receipt can be compared here; these Worker rows have no portable authority.
+WORKER_HARNESS_PROJECTION = {
+    3: ("DGX_ANALYST", "PASS", None, "worker-graph005-analyst"),
+    7: ("VERIFY", "BLOCKED", "UNVERIFIED", "worker-graph005-verify"),
+    10: ("HITL", "BLOCKED", "REJECT", "worker-graph005-reject"),
+}
+RUN_PROJECTION_KEYS = frozenset((
+    "sequence", "run_id", "incident_id", "tenant_id", "stage",
+    "event_type", "status", "decision", "event_key", "source_event_id",
+    "payload_sha256", "full_event_sha256",
+))
+
+
+def consume_joined_worker_projection(
+        manifest, *, run_events=None, receipt=None, claims=None, expected=None,
+        record=None, source_issuer=None, now=None, seen_receipt_hashes=None):
+    """Fail-closed *structural* join of seven Core SOURCE and Worker harness rows.
+
+    run_events is a caller-provided redacted projection, not an authenticated
+    full-Run API. This method MUST NOT attest real Worker execution, terminal
+    014, outbox replay, IdP/GLPI rights or a human decision, even on a match.
+    """
+    result = consume(
+        manifest, receipt=receipt, claims=claims, expected=expected,
+        record=record, source_issuer=source_issuer, now=now,
+        seen_receipt_hashes=seen_receipt_hashes)
+    result.update({
+        "worker_projection_concordance": "UNKNOWN",
+        "worker_projection_reason": "NO_INDEPENDENT_WORKER_RUN_READBACK",
+        "worker_harness_rows_shape_matched": 0,
+        "worker_production_authority": "UNKNOWN",
+        "core_terminal_014_joined": "NOT_ATTESTED",
+        "core_outbox_replay_joined": "NOT_ATTESTED",
+    })
+    if result["source_concordance"] != "CONSISTENT_UNTRUSTED":
+        result["worker_projection_reason"] = "SOURCE_NOT_CONCORDANT"
+        return result
+    if type(run_events) is not list or len(run_events) != 10:
+        result["worker_projection_reason"] = "MISSING_OR_EXTRA_RUN_EVENTS"
+        return result
+    if type(expected) is not dict or type(receipt) is not dict:
+        result["worker_projection_reason"] = "MISSING_RUNTIME_SCOPE"
+        return result
+
+    source_pos = {seq: i for i, seq in enumerate(PHYSICAL_SEQUENCES)}
+    payload_hashes, full_hashes = set(), set()
+    for sequence, row in enumerate(run_events, 1):
+        if (type(row) is not dict or set(row) != RUN_PROJECTION_KEYS
+                or type(row["sequence"]) is not int
+                or row["sequence"] != sequence
+                or any(row[k] != expected[k] for k in (
+                    "tenant_id", "incident_id", "run_id"))
+                or any(type(row[k]) is not str or not HEX64.fullmatch(row[k])
+                       for k in ("payload_sha256", "full_event_sha256"))
+                or row["payload_sha256"] == row["full_event_sha256"]
+                or row["payload_sha256"] in payload_hashes
+                or row["full_event_sha256"] in full_hashes):
+            result["worker_projection_reason"] = "FOREIGN_REPLAYED_OR_FORGED_RUN_ROW"
+            return result
+        payload_hashes.add(row["payload_sha256"])
+        full_hashes.add(row["full_event_sha256"])
+        if sequence in source_pos:
+            core = receipt["events"][source_pos[sequence]]
+            if (row["stage"] != "SOURCE"
+                    or row["event_type"] != "OBSERVED"
+                    or row["status"] != "PASS"
+                    or row["decision"] is not None
+                    or row["source_event_id"] != core["source_event_id"]
+                    or row["event_key"] != core["source_event_id"]
+                    or row["payload_sha256"] != core["payload_sha256"]
+                    or row["full_event_sha256"] != core["full_event_sha256"]):
+                result["worker_projection_reason"] = "SOURCE_RUN_HASH_OR_ID_MISMATCH"
+                return result
+        else:
+            stage, status, decision, key = WORKER_HARNESS_PROJECTION[sequence]
+            if (row["stage"] != stage
+                    or row["event_type"] != "WORKFLOW_OBSERVATION"
+                    or row["status"] != status
+                    or row["decision"] != decision
+                    or row["event_key"] != key
+                    or row["source_event_id"] is not None):
+                result["worker_projection_reason"] = "UNTRUSTED_WORKER_STAGE_OR_APPROVAL"
+                return result
+
+    result["worker_projection_concordance"] = "CONSISTENT_UNTRUSTED"
+    result["worker_projection_reason"] = "DISPOSABLE_HARNESS_SHAPE_ONLY"
+    result["worker_harness_rows_shape_matched"] = 3
+    return result

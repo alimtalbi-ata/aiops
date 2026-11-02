@@ -589,6 +589,383 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 json.dumps(redacted, sort_keys=True, indent=2) + "\n")
         self._no_effect()
 
+    def test_graph005_interleaved_terminal_dead_015_restore(self):
+        """Core-owned joined regression, not a production Worker/GLPI assertion.
+
+        The real Core HTTP writer appends seven pinned graph005 SOURCE events
+        interleaved with synthetic Worker-shaped observations on the SAME Run
+        as a real Core REJECT outbox -> terminal 014 DEAD transaction.
+        Two real Worker OS processes are covered by the separate Policy gate.
+        """
+        import subprocess
+        import tempfile
+        from urllib.parse import urlsplit, urlunsplit
+        from fastapi.testclient import TestClient
+        import test_core_actor_canonical_seven_pg16 as fixture
+        from core import actor_canonical_seven_source as binding
+        from core import canonical_seven_pg_source as source
+        internal = "ci-core-graph005-terminal-only-token-0123456789"
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": internal}):
+            from core import main
+
+        ids, digest, tokens = self._exhaust()
+        pinned = json.loads((Path(__file__).resolve().parents[1] /
+            "docs/customer-story/ACME-CORE015-V3-CANONICAL-NEGATIVE-2026-11-02.json"
+            ).read_text(encoding="utf-8"))
+        expected = tuple((e["source_event_id"], e["acme_full_event_sha256"],
+                          e["acme_local_payload_sha256"]) for e in pinned["events"])
+        self.assertEqual(len(expected), 7)
+        self.assertEqual(len({e[0] for e in expected}), 7)
+        tenant, actor = "TEN-A", "idp|graph005-terminal-ci"
+        actor_issuer = fixture.ISSUER
+        source_issuer = "core-graph005-disposable-source"
+        scope = dict(tenant_id=tenant, incident_id=ids["inc"],
+                     run_id=ids["run"], glpi_instance_id="GLPI-GRAPH-CORE",
+                     ticket_id="777", glpi_entity_id="33",
+                     permission="run:read", actor_subject=actor,
+                     actor_issuer=actor_issuer)
+        migration = (Path(__file__).resolve().parents[1] /
+                     "db/migrations/015_core_run_event_idempotency.sql").read_text()
+        with self.psycopg.connect(self.url) as db:
+            self.assertIsNone(db.execute(
+                "select 1 from information_schema.columns where "
+                "table_schema='aiops' and table_name='run_events' "
+                "and column_name='event_key'").fetchone())
+            db.execute(migration)
+            db.rollback()
+        with self.psycopg.connect(self.url) as db:
+            self.assertIsNone(db.execute(
+                "select 1 from information_schema.columns where "
+                "table_schema='aiops' and table_name='run_events' "
+                "and column_name='event_key'").fetchone())
+            db.execute(migration)
+            db.execute(migration)
+            db.execute("create table public.ci_actor_source_grants ("
+                       "issuer text not null,actor_subject text not null,"
+                       "tenant_id text not null,run_id text not null,"
+                       "incident_id text not null,glpi_instance_id text not null,"
+                       "ticket_id text not null,glpi_entity_id text not null,"
+                       "permission text not null,expires_at timestamptz not null,"
+                       "revoked boolean not null default false)")
+            db.execute("update aiops.incidents set payload=%s::jsonb "
+                       "where incident_id=%s",
+                       (json.dumps({"tenant_id": tenant}), ids["inc"]))
+            db.execute("insert into public.ci_actor_source_grants "
+                       "(issuer,actor_subject,tenant_id,run_id,incident_id,"
+                       "glpi_instance_id,ticket_id,glpi_entity_id,permission,"
+                       "expires_at,revoked) values"
+                       "(%s,%s,%s,%s,%s,%s,%s,%s,'run:read',"
+                       "clock_timestamp()+interval '3 minutes',false)",
+                       (actor_issuer, actor, tenant, ids["run"], ids["inc"],
+                        scope["glpi_instance_id"], scope["ticket_id"],
+                        scope["glpi_entity_id"]))
+            for kind, rid in (("incident", ids["inc"]),
+                              ("glpi_instance", scope["glpi_instance_id"]),
+                              ("glpi_ticket", "GLPI-GRAPH-CORE:777"),
+                              ("glpi_entity", "GLPI-GRAPH-CORE:33")):
+                db.execute("insert into aiops.tenant_resource_ownership "
+                           "(resource_kind,resource_id,tenant_id,source_event_id,"
+                           "verified,observed_at,known_at) values"
+                           "(%s,%s,%s,'CI-GRAPH005-OWN',true,"
+                           "clock_timestamp()-interval '20 seconds',"
+                           "clock_timestamp()-interval '10 seconds')",
+                           (kind, rid, tenant))
+            for ordinal, (event_id, full_sha, payload_sha) in enumerate(expected, 1):
+                payload = dict(tenant_id=tenant, incident_id=ids["inc"],
+                    run_id=ids["run"], ticket_id="777", glpi_entity_id="33",
+                    source_event_id=event_id, sequence=ordinal,
+                    actor_subject=actor, actor_issuer=actor_issuer,
+                    source_issuer=source_issuer, synthetic=True,
+                    graph_version=pinned["graph_version"],
+                    acme_full_event_sha256=full_sha,
+                    acme_local_payload_sha256=payload_sha)
+                provenance = dict(tenant_id=tenant, incident_id=ids["inc"],
+                                  run_id=ids["run"], actor_subject=actor,
+                                  actor_issuer=actor_issuer,
+                                  source_issuer=source_issuer)
+                db.execute("insert into aiops.evidence "
+                           "(evidence_id,source,external_id,observed_at,known_at,"
+                           "claim,confidence,provenance,payload_hash,payload)"
+                           " values(%s,%s,%s,clock_timestamp()-interval '20 seconds',"
+                           "clock_timestamp()-interval '10 seconds','TEST_ONLY',1,"
+                           "%s::jsonb,%s,%s::jsonb)",
+                           (f"EVI-CORE-GRAPH-{ordinal:02d}", fixture.SOURCE,
+                            event_id, json.dumps(provenance),
+                            binding._digest(binding.PAYLOAD_DOMAIN, payload),
+                            json.dumps(payload)))
+            # Durable 013 facts are fixture-only and never human IdP grants.
+            hashval = lambda s: hashlib.sha256(s.encode()).hexdigest()
+            nonce_jti = hashval(ids["event"] + ":nonce")
+            revoke_jti = hashval(ids["event"] + ":revoked")
+            self.assertTrue(db.execute(
+                "select aiops.actor_delegation_consume(%s,%s,%s,%s,%s,%s,%s)",
+                (tenant, actor_issuer, hashval(actor), nonce_jti,
+                 hashval(ids["event"] + ":nonce-value"),
+                 hashval(ids["run"]), datetime.now(timezone.utc) +
+                 timedelta(minutes=2))).fetchone()[0])
+            self.assertTrue(db.execute(
+                "select aiops.actor_delegation_revoke(%s,%s,%s)",
+                (actor_issuer, revoke_jti, "CI-GRAPH005-REVOKED")).fetchone()[0])
+        self._write_proofs()
+
+        def read(request=None, issuer=source_issuer, db_url=None):
+            with self.psycopg.connect(db_url or self.url) as db:
+                return source.read_graph005_core_written_seven(
+                    db, request or scope, source=fixture.SOURCE, issuer=issuer,
+                    now=datetime.now(timezone.utc), expected_events=expected,
+                    graph_version=pinned["graph_version"])
+
+        bodies = {}
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": internal}), \
+             patch.object(main, "ADMIN", internal), \
+             patch.object(main, "db", side_effect=lambda: self.psycopg.connect(self.url)):
+            with TestClient(main.app) as client:
+                def append(version, stage, etype, status, key, evidence, payload,
+                           decision=None):
+                    body = dict(expected_version=version, stage=stage,
+                                event_type=etype, status=status, event_key=key,
+                                evidence_ids=evidence, decision=decision,
+                                payload=payload)
+                    response = client.post(f"/api/runs/{ids['run']}/events",
+                        json=body, headers={"Authorization": "Bearer " + internal})
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["sequence"], version)
+                    self.assertFalse(response.json()["idempotent"])
+                    return body
+
+                for ordinal in range(1, 8):
+                    if ordinal == 3:
+                        append(3, "DGX_ANALYST", "WORKFLOW_OBSERVATION",
+                               "PASS", "core-ci-graph005-analyst", [],
+                               {"synthetic": True, "analysis": "UNVERIFIED"})
+                    if ordinal == 6:
+                        append(7, "VERIFY", "WORKFLOW_OBSERVATION",
+                               "BLOCKED", "core-ci-graph005-verify", [],
+                               {"synthetic": True, "verification": "UNVERIFIED"},
+                               "UNVERIFIED")
+                    physical = (1, 2, 4, 5, 6, 8, 9)[ordinal - 1]
+                    event_id = expected[ordinal - 1][0]
+                    with self.psycopg.connect(self.url) as db:
+                        payload = db.execute(
+                            "select payload from aiops.evidence where external_id=%s",
+                            (event_id,)).fetchone()[0]
+                    bodies[ordinal] = append(
+                        physical, "SOURCE", "OBSERVED", "PASS", event_id,
+                        [f"EVI-CORE-GRAPH-{ordinal:02d}"], payload)
+                proof = read()
+                self.assertIsNotNone(proof)
+                self.assertEqual([e["sequence"] for e in proof["events"]],
+                                 [1, 2, 4, 5, 6, 8, 9])
+                self.assertEqual([e["payload"]["sequence"] for e in proof["events"]],
+                                 list(range(1, 8)))
+                self.assertTrue(all(e["full_event_hash"] != e["payload_hash"]
+                                    for e in proof["events"]))
+                for delta in ({"tenant_id": "TEN-FOREIGN"},
+                              {"actor_subject": "idp|foreign"},
+                              {"actor_issuer": "https://foreign.invalid"},
+                              {"incident_id": "INC-FOREIGN"},
+                              {"run_id": "RUN-FOREIGN"},
+                              {"ticket_id": "778"}):
+                    self.assertIsNone(read({**scope, **delta}))
+                self.assertIsNone(read(issuer="forged-source-issuer"))
+                with self.psycopg.connect(self.url) as db:
+                    db.execute("update public.ci_actor_source_grants "
+                               "set expires_at=clock_timestamp()-interval '1 second' "
+                               "where run_id=%s", (ids["run"],))
+                self.assertIsNone(read())
+                with self.psycopg.connect(self.url) as db:
+                    db.execute("update public.ci_actor_source_grants "
+                               "set expires_at=clock_timestamp()+interval '3 minutes' "
+                               "where run_id=%s", (ids["run"],))
+                self.assertIsNotNone(read())
+
+                append(10, "HITL", "WORKFLOW_OBSERVATION", "BLOCKED",
+                       "core-ci-graph005-reject", [],
+                       {"synthetic": True, "reopen": "RECOMMENDED_NOT_EXECUTED",
+                        "execution_allowed": False, "effect_allowed": False},
+                       "REJECT")
+                self.assertIsNotNone(read())
+                dead_path = (f"/api/tenants/TEN-A/hitl/reject-delivery/"
+                             f"{ids['event']}/dead")
+                dead_body = dict(owner="svc-TEN-A", run_id=ids["run"],
+                    proposal_id=ids["proposal"], proposal_hash=digest,
+                    proposal_revision=1, lease_token=tokens[-1],
+                    execution_allowed=False, effect_allowed=False)
+                dead_headers = {"Authorization": "Bearer " + self.token_a}
+                self.assertEqual(client.post(dead_path, json=dead_body).status_code,
+                                 401)
+                first = client.post(dead_path, json=dead_body,
+                                    headers=dead_headers)
+                self.assertEqual((first.status_code, first.json()["status"],
+                                  first.json()["idempotent"]), (200, "DEAD", False))
+                receipt_sha = first.json()["receipt_sha256"]
+                self.assertRegex(receipt_sha, r"^[0-9a-f]{64}$")
+                with self.psycopg.connect(self.url) as db:
+                    db.execute("update public.ci_actor_source_grants "
+                               "set revoked=true where run_id=%s", (ids["run"],))
+                self.assertIsNone(read())
+                repeated = client.post(dead_path, json=dead_body,
+                                       headers=dead_headers)
+                self.assertEqual((repeated.status_code, repeated.json()["status"],
+                                  repeated.json()["idempotent"]),
+                                 (200, "DEAD", True))
+                self.assertEqual(repeated.json()["receipt_sha256"], receipt_sha)
+                replay = client.post(f"/api/runs/{ids['run']}/events",
+                    json=bodies[1],
+                    headers={"Authorization": "Bearer " + internal})
+                self.assertEqual((replay.status_code, replay.json()["idempotent"],
+                                  replay.json()["sequence"]), (200, True, 1))
+                late = client.post(dead_path.removesuffix("/dead") + "/ack",
+                                   json=dead_body, headers=dead_headers)
+                self.assertEqual(late.json()["status"], "UNKNOWN")
+
+        def snapshot(db_url):
+            with self.psycopg.connect(db_url) as db:
+                return {
+                    "source": db.execute(
+                        "select sequence,event_key from aiops.run_events "
+                        "where run_id=%s and stage='SOURCE' order by sequence",
+                        (ids["run"],)).fetchall(),
+                    "all_events": db.execute(
+                        "select sequence,stage from aiops.run_events "
+                        "where run_id=%s order by sequence",
+                        (ids["run"],)).fetchall(),
+                    "outbox": db.execute(
+                        "select status,attempts from aiops.hitl_decision_outbox "
+                        "where event_id=%s", (ids["event"],)).fetchone(),
+                    "audit_014": db.execute(
+                        "select receipt_sha256 from aiops.hitl_reject_terminal_receipts "
+                        "where event_id=%s", (ids["event"],)).fetchall(),
+                    "nonce_013": db.execute(
+                        "select count(*) from aiops.actor_delegation_nonce_ledger "
+                        "where issuer=%s and jti_sha256=%s",
+                        (actor_issuer, nonce_jti)).fetchone()[0],
+                    "revocation_013": db.execute(
+                        "select count(*) from aiops.actor_delegation_revocations "
+                        "where issuer=%s and jti_sha256=%s",
+                        (actor_issuer, revoke_jti)).fetchone()[0],
+                    "effects": db.execute(
+                        "select count(*) from aiops.effect_receipts").fetchone()[0],
+                    "approves": db.execute(
+                        "select count(*) from aiops.hitl_decision_outbox "
+                        "where decision='APPROVE'").fetchone()[0],
+                }
+        before = snapshot(self.url)
+        self.assertEqual(before["source"], list(zip(
+            [1, 2, 4, 5, 6, 8, 9], [e[0] for e in expected])))
+        self.assertEqual(before["all_events"], [
+            (1, "SOURCE"), (2, "SOURCE"), (3, "DGX_ANALYST"),
+            (4, "SOURCE"), (5, "SOURCE"), (6, "SOURCE"),
+            (7, "VERIFY"), (8, "SOURCE"), (9, "SOURCE"),
+            (10, "HITL")])
+        self.assertEqual(before["outbox"], ("DEAD", 8))
+        self.assertEqual(before["audit_014"], [(receipt_sha,)])
+        self.assertEqual((before["nonce_013"], before["revocation_013"]), (1, 1))
+        self.assertEqual((before["effects"], before["approves"]), (0, 0))
+        with self.psycopg.connect(self.url) as db:
+            db.execute(migration)
+        self.assertEqual(snapshot(self.url), before)
+        for statement, params in (
+            ("update aiops.hitl_reject_terminal_receipts set attempts=9 "
+             "where event_id=%s", (ids["event"],)),
+            ("delete from aiops.hitl_reject_terminal_receipts "
+             "where event_id=%s", (ids["event"],)),
+            ("delete from aiops.actor_delegation_nonce_ledger "
+             "where issuer=%s and jti_sha256=%s", (actor_issuer, nonce_jti)),
+            ("update aiops.actor_delegation_revocations set "
+             "source_event_id='FORGED' where issuer=%s and jti_sha256=%s",
+             (actor_issuer, revoke_jti)),
+        ):
+            with self.assertRaises(self.psycopg.Error):
+                with self.psycopg.connect(self.url) as db:
+                    db.execute(statement, params)
+        self.assertEqual(snapshot(self.url), before)
+
+        parsed = urlsplit(self.url)
+        restore_name = "aiops_core_graph005_dead_restore_ci"
+        restore_url = urlunsplit((parsed.scheme, parsed.netloc,
+                                 "/" + restore_name, "", ""))
+        client_bin = Path("/usr/lib/postgresql/16/bin")
+        for binary in ("pg_dump", "pg_restore"):
+            self.assertIn("(PostgreSQL) 16.", subprocess.run(
+                [str(client_bin / binary), "--version"], check=True,
+                capture_output=True, text=True, timeout=10).stdout)
+        created = False
+        try:
+            with self.psycopg.connect(self.admin_url, autocommit=True) as admin:
+                admin.execute(self.sql.SQL("create database {}").format(
+                    self.sql.Identifier(restore_name)))
+                created = True
+            with tempfile.TemporaryDirectory(prefix="core-graph005-dead-ci-") as tmp:
+                archive = Path(tmp) / "synthetic.pgcustom"
+                subprocess.run([str(client_bin / "pg_dump"), "--format=custom",
+                    "--no-owner", "--no-acl", "--file=" + str(archive),
+                    "--dbname=" + self.url], check=True, capture_output=True,
+                    timeout=90)
+                archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+                self.assertGreater(archive.stat().st_size, 1000)
+                subprocess.run([str(client_bin / "pg_restore"), "--no-owner",
+                    "--no-acl", "--single-transaction", "--exit-on-error",
+                    "--dbname=" + restore_url, str(archive)],
+                    check=True, capture_output=True, timeout=120)
+                self.assertEqual(snapshot(restore_url), before)
+                self.assertIsNone(read(db_url=restore_url))
+        finally:
+            if created:
+                with self.psycopg.connect(self.admin_url, autocommit=True) as admin:
+                    admin.execute(self.sql.SQL("drop database {} with (force)").format(
+                        self.sql.Identifier(restore_name)))
+        self.assertEqual(snapshot(self.url), before)
+        self._no_effect()
+
+        out = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if out:
+            target = Path(out)
+            if not str(target).startswith("/tmp/core-terminal-"):
+                raise RuntimeError("refuse non-disposable receipt path")
+            target.mkdir(parents=True, exist_ok=True)
+            receipt = {
+                "schema": "aiops.core-graph005-terminal-014-015-joined.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "synthetic_only": True, "core_api_writes": 10,
+                "source_ids": [e[0] for e in expected],
+                "source_physical_sequences": [1, 2, 4, 5, 6, 8, 9],
+                "source_ordinals": list(range(1, 8)),
+                "core_hash_domains": {
+                    "full_event": binding.FULL_DOMAIN,
+                    "payload": binding.PAYLOAD_DOMAIN},
+                "core_hashes": [{
+                    "source_event_id": e["source_event_id"],
+                    "full_event_sha256": e["full_event_hash"],
+                    "payload_sha256": e["payload_hash"],
+                } for e in proof["events"]],
+                "fixture_hash_domains_separate": True,
+                "source_pre_revocation": "PASS_SYNTHETIC_ONLY",
+                "source_post_revocation": "UNKNOWN",
+                "negative_actor_source": 9,
+                "worker_events": "CORE_WRITTEN_SHAPED_FIXTURE_ONLY",
+                "real_worker_os_processes_in_this_test": 0,
+                "terminal_014_status": "DEAD", "terminal_attempts": 8,
+                "terminal_receipt_sha256": receipt_sha,
+                "terminal_replay_idempotent": True,
+                "core_event_key_replay_idempotent": True,
+                "audit_013_014_immutable": True,
+                "migration_chain": ["001", "004", "009", "010", "011", "012",
+                                    "013", "014", "015"],
+                "migration_015_transaction_rollback": True,
+                "migration_015_reapply": True,
+                "native_pg16_restore": True,
+                "archive_sha256": archive_sha, "archive_retained": False,
+                "human_glpi_authority": "UNKNOWN",
+                "portable_signature": "NONE", "execution_allowed": False,
+                "effect_allowed": False, "release_stable": "NO_GO",
+                "rollback": "REVERT_CORE_TEST_AND_WORKFLOW_ONLY_KEEP_AUDIT",
+            }
+            receipt["payload_sha256"] = hashlib.sha256(json.dumps(
+                receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            (target / "graph005-terminal-joined.json").write_text(
+                json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+
     def test_terminal_canonical_http_insert_failure_rolls_back_atomically(self):
         ids, digest, tokens = self._exhaust()
         client = self._canonical_core_client()

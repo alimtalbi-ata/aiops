@@ -260,5 +260,168 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
                          "FORGED_OR_CORRUPT_RECEIPT_HASH")
 
 
+    def worker_projection(self):
+        """TEST_ONLY projection of Core #338 + Worker #340 harness, not API."""
+        source = {r["sequence"]: r for r in self.receipt["events"]}
+        rows = []
+        for sequence in range(1, 11):
+            if sequence in source:
+                core = source[sequence]
+                row = {
+                    "stage": "SOURCE", "event_type": "OBSERVED",
+                    "status": "PASS", "decision": None,
+                    "event_key": core["source_event_id"],
+                    "source_event_id": core["source_event_id"],
+                    "payload_sha256": core["payload_sha256"],
+                    "full_event_sha256": core["full_event_sha256"],
+                }
+            else:
+                stage, status, decision, key = (
+                    consumer.WORKER_HARNESS_PROJECTION[sequence])
+                row = {
+                    "stage": stage, "event_type": "WORKFLOW_OBSERVATION",
+                    "status": status, "decision": decision,
+                    "event_key": key, "source_event_id": None,
+                    "payload_sha256": hashlib.sha256(
+                        ("TEST_ONLY_WORKER_PAYLOAD_" + str(sequence)).encode()
+                    ).hexdigest(),
+                    "full_event_sha256": hashlib.sha256(
+                        ("TEST_ONLY_WORKER_FULL_" + str(sequence)).encode()
+                    ).hexdigest(),
+                }
+            rows.append({
+                "sequence": sequence,
+                **{k: self.expected[k] for k in (
+                    "tenant_id", "incident_id", "run_id")},
+                **row,
+            })
+        return rows
+
+    def joined(self, rows, *, seen=None, receipt=None, claims=None):
+        return consumer.consume_joined_worker_projection(
+            self.manifest, run_events=rows,
+            receipt=self.receipt if receipt is None else receipt,
+            claims=self.claims if claims is None else claims,
+            expected=self.expected, record=self.record,
+            source_issuer=self.source_issuer, now=self.NOW,
+            seen_receipt_hashes=seen)
+
+    def assert_join_has_no_human_or_production_authority(self, result):
+        self.assert_no_authority(result)
+        self.assertEqual(result["worker_production_authority"], "UNKNOWN")
+        self.assertEqual(result["core_terminal_014_joined"], "NOT_ATTESTED")
+        self.assertEqual(result["core_outbox_replay_joined"], "NOT_ATTESTED")
+        self.assertNotIn("TEST_ONLY_WORKER", json.dumps(result))
+
+    def test_11_joined_worker_interleaving_is_shape_only(self):
+        result = self.joined(self.worker_projection(), seen=set())
+        self.assertEqual(result["worker_projection_concordance"],
+                         "CONSISTENT_UNTRUSTED")
+        self.assertEqual(result["worker_projection_reason"],
+                         "DISPOSABLE_HARNESS_SHAPE_ONLY")
+        self.assertEqual(result["worker_harness_rows_shape_matched"], 3)
+        self.assertEqual(result["physical_run_sequences"],
+                         [1, 2, 4, 5, 6, 8, 9])
+        self.assert_join_has_no_human_or_production_authority(result)
+
+    def test_12_join_requires_source_and_all_ten_run_rows(self):
+        rows = self.worker_projection()
+        for candidate in (None, [], rows[:-1], rows + [copy.deepcopy(rows[-1])]):
+            with self.subTest(length=None if candidate is None else len(candidate)):
+                result = self.joined(candidate, seen=set())
+                self.assertEqual(result["worker_projection_concordance"],
+                                 "UNKNOWN")
+                self.assertEqual(result["worker_projection_reason"],
+                                 "MISSING_OR_EXTRA_RUN_EVENTS")
+                self.assert_join_has_no_human_or_production_authority(result)
+        result = self.joined(rows, seen=None)
+        self.assertEqual(result["worker_projection_reason"],
+                         "SOURCE_NOT_CONCORDANT")
+        self.assert_join_has_no_human_or_production_authority(result)
+
+    def test_13_worker_forged_allow_live_stage_and_eighth_source_rejected(self):
+        changes = (
+            (2, "decision", "ALLOW"),
+            (6, "decision", "APPROVE"),
+            (9, "decision", "APPROVE"),
+            (9, "stage", "LIVE"),
+            (9, "event_type", "OBSERVED"),
+            (2, "source_event_id", self.receipt["events"][0]["source_event_id"]),
+            (6, "event_key", "TEST_ONLY_FORGED_KEY"),
+        )
+        for index, key, value in changes:
+            with self.subTest(index=index, key=key, value=value):
+                rows = self.worker_projection()
+                rows[index][key] = value
+                result = self.joined(rows, seen=set())
+                self.assertEqual(result["worker_projection_reason"],
+                                 "UNTRUSTED_WORKER_STAGE_OR_APPROVAL")
+                self.assert_join_has_no_human_or_production_authority(result)
+
+    def test_14_source_physical_ordinal_and_core_hash_mismatch_rejected(self):
+        changes = (
+            (3, "source_event_id", "SYN-EVT-" + "A" * 20),
+            (3, "event_key", "SYN-EVT-" + "A" * 20),
+            (3, "payload_sha256", "a" * 64),
+            (3, "full_event_sha256", "b" * 64),
+            (7, "status", "BLOCKED"),
+        )
+        for index, key, value in changes:
+            with self.subTest(index=index, key=key):
+                rows = self.worker_projection()
+                rows[index][key] = value
+                result = self.joined(rows, seen=set())
+                self.assertEqual(result["worker_projection_concordance"],
+                                 "UNKNOWN")
+                self.assertIn(result["worker_projection_reason"],
+                              ("SOURCE_RUN_HASH_OR_ID_MISMATCH",
+                               "FOREIGN_REPLAYED_OR_FORGED_RUN_ROW"))
+                self.assert_join_has_no_human_or_production_authority(result)
+        rows = self.worker_projection()
+        rows[3]["sequence"] = 3
+        self.assertEqual(self.joined(rows, seen=set())["worker_projection_reason"],
+                         "FOREIGN_REPLAYED_OR_FORGED_RUN_ROW")
+
+    def test_15_foreign_scope_duplicate_digest_and_extra_keys_rejected(self):
+        for index, key, value in (
+            (0, "tenant_id", "TEST_ONLY_FOREIGN_TENANT"),
+            (4, "run_id", "TEST_ONLY_FOREIGN_RUN"),
+            (9, "incident_id", "TEST_ONLY_FOREIGN_INCIDENT"),
+            (9, "payload_sha256", self.worker_projection()[2]["payload_sha256"]),
+            (9, "full_event_sha256", "not-a-sha"),
+            (9, "untrusted_human_allow", True),
+        ):
+            with self.subTest(index=index, key=key):
+                rows = self.worker_projection()
+                rows[index][key] = value
+                result = self.joined(rows, seen=set())
+                self.assertEqual(result["worker_projection_reason"],
+                                 "FOREIGN_REPLAYED_OR_FORGED_RUN_ROW")
+                self.assert_join_has_no_human_or_production_authority(result)
+
+    def test_16_replayed_or_revoked_source_never_validates_worker_join(self):
+        rows, seen = self.worker_projection(), set()
+        first = self.joined(rows, seen=seen)
+        self.assertEqual(first["worker_projection_concordance"],
+                         "CONSISTENT_UNTRUSTED")
+        second = self.joined(rows, seen=seen)
+        self.assertEqual(second["source_reason"], "REPLAYED_CORE_RECEIPT")
+        self.assertEqual(second["worker_projection_reason"],
+                         "SOURCE_NOT_CONCORDANT")
+        self.assert_join_has_no_human_or_production_authority(second)
+        self.setUp()
+        forged = copy.deepcopy(self.receipt)
+        forged["expires_at"] = self.NOW - 1
+        forged["receipt_sha256"] = consumer._digest(
+            consumer.RECEIPT_DOMAIN,
+            {k: v for k, v in forged.items() if k != "receipt_sha256"})
+        denied = self.joined(self.worker_projection(), seen=set(), receipt=forged)
+        self.assertEqual(denied["source_concordance"], "UNKNOWN")
+        self.assertEqual(denied["worker_projection_reason"],
+                         "SOURCE_NOT_CONCORDANT")
+        self.assert_join_has_no_human_or_production_authority(denied)
+
+
+
 if __name__ == "__main__":
     unittest.main()
