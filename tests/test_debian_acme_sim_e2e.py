@@ -42,6 +42,30 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(calls[5][2],'POST')
         self.assertFalse(r['human_approval_claimed'])
 
+    def test_partial_capability_never_posts(self):
+        calls=[]
+        def p(component,path,method='GET',payload=None,auth=False):
+            calls.append((component,method))
+            return capability(component) if component=='simulator' else {'error':'NOT_SUPPORTED'}
+        result=m.execute(p,'ACME-SIM-TEST0002')
+        self.assertEqual(result['status'],'BLOCKED')
+        self.assertEqual(result['reason'],'SANDBOX_CAPABILITY_MISSING_CORE')
+        self.assertEqual(calls,[('simulator','GET'),('core','GET')])
+
+    def test_real_glpi_ticket_namespace_rejected(self):
+        ids={'incident_id':'INC-123','run_id':'RUN-123','ticket_id':'GLPI-REAL-123',
+             'proposal_id':'PROP-123','approval_id':'SIM-APP-123'}
+        calls=[]
+        def p(component,path,method='GET',payload=None,auth=False):
+            calls.append(method)
+            if path.endswith('/capabilities'):return capability(component)
+            return dict(ids,attempt_id='ACME-SIM-TEST0003',tenant_id='ACME-TEST',glpi_mode='SIMULATED_ONLY')
+        result=m.execute(p,'ACME-SIM-TEST0003')
+        self.assertEqual(result['status'],'FAIL')
+        self.assertEqual(result['reason'],'SIMULATOR_START_UNQUALIFIED')
+        self.assertEqual(calls.count('POST'),1)
+        self.assertEqual(len(calls),6)
+
     def test_live_and_fake_human_capability_rejected(self):
         for change in ({'live_effects_allowed':True},{'human_approval_claimed':True},
                        {'tenant_id':'FOREIGN'},{'approval_issuer':'HUMAN'},
