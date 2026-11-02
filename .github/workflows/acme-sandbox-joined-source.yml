@@ -42,8 +42,23 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           python -m compileall -q app/core/acme_sandbox.py app/twin/acme_sandbox.py app/simulator/acme_sandbox.py app/worker/acme_simulated_hitl.py app/worker/workflow.py app/worker/main.py app/policy/acme_sandbox.py deploy/debian-acme-sim-e2e.py
       - name: Worker causal no-effect unit tests
-        run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v
+        run: |
+          set -o pipefail
+          PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v 2>&1 | tee /tmp/acme-worker-tests.log
+          grep -E '^Ran 20 tests in ' /tmp/acme-worker-tests.log
+          grep -x 'OK' /tmp/acme-worker-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/acme-worker-tests.log
       - name: Policy sandbox security unit tests
-        run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_policy_acme_sandbox.py' -v
+        run: |
+          set -o pipefail
+          PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_policy_acme_sandbox.py' -v 2>&1 | tee /tmp/acme-policy-tests.log
+          grep -E '^Ran 5 tests in ' /tmp/acme-policy-tests.log
+          grep -x 'OK' /tmp/acme-policy-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/acme-policy-tests.log
       - name: Debian runner pre-resolution and final readback unit tests
-        run: PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_debian_acme_sim_e2e.py' -v
+        run: |
+          set -o pipefail
+          PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_debian_acme_sim_e2e.py' -v 2>&1 | tee /tmp/acme-debian-tests.log
+          grep -E '^Ran 7 tests in ' /tmp/acme-debian-tests.log
+          grep -x 'OK' /tmp/acme-debian-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/acme-debian-tests.log
