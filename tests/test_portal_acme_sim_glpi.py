@@ -88,9 +88,13 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
         self.environment = patch.dict(os.environ, ENV)
         self.environment.start()
         self.client = TestClient(main.app)
+        # Controlled source-only fixture; production guard is always deny.
+        self.actor_acl_fixture = patch.object(acme_sim_glpi, "_require_sim_actor_acl", return_value=True)
+        self.actor_acl_fixture.start()
 
     def tearDown(self):
         self.client.close()
+        self.actor_acl_fixture.stop()
         self.environment.stop()
 
     def get(self, attempt=ATTEMPT, authorized=True, **headers):
@@ -153,6 +157,23 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                     response = self.get(attempt)
                 self.assertIn(response.status_code, (403, 404))
                 get.assert_not_called()
+
+    def test_stable_dependency_isolation_and_actor_acl_missing_fail_closed(self):
+        # Stable does not ship portal.noc_runtime; no import-time dependency.
+        self.assertNotIn("portal.noc_runtime", Path(acme_sim_glpi.__file__).read_text())
+        for forged in (
+            {},
+            {"X-Tenant-ID": "ACME-TEST", "X-Actor-ID": "admin"},
+            {"X-GLPI-Profile": "super-admin", "Cookie": "idp=forged"},
+            {"X-Run-ID": GOOD["run_id"], "X-GLPI-READMY": "ALLOW"},
+        ):
+            with self.subTest(forged=forged):
+                with patch.object(acme_sim_glpi, "_require_sim_actor_acl", return_value=False):
+                    with patch.object(acme_sim_glpi.requests, "get") as upstream_get:
+                        response = self.get(**forged)
+                self.assert_unknown(response)
+                self.assertEqual(response.json()["reason"], "SANDBOX_ACTOR_TENANT_ACL_NOT_QUALIFIED")
+                upstream_get.assert_not_called()
 
     def test_disabled_or_unconfigured_core_is_unknown_no_network(self):
         for changed in ({"AIOPS_ACME_SANDBOX_ENABLED": "false"},
