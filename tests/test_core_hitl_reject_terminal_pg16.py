@@ -1213,6 +1213,90 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 json.dumps(receipt, sort_keys=True, indent=2) + "\n")
         self._no_effect()
 
+    def test_terminal_rotated_service_credential_restart_fence(self):
+        """New bearer for the SAME service actor works; revoked old bearer fails.
+
+        This is a disposable Core auth rotation, NOT a human IdP identity,
+        production Worker restart, or independently signed external claim.
+        """
+        ids, digest, tokens = self._exhaust()
+        client = self._canonical_core_client()
+        path = (f"/api/tenants/TEN-A/hitl/reject-delivery/"
+                f"{ids['event']}")
+        body = {"owner": "svc-TEN-A", "run_id": ids["run"],
+                "incident_id": ids["inc"],
+                "proposal_id": ids["proposal"], "proposal_hash": digest,
+                "proposal_revision": 1, "execution_allowed": False,
+                "effect_allowed": False}
+        old = {"Authorization": "Bearer " + self.token_a}
+        rotated_token = "ci-core-rotated-service-" + "R" * 40
+        new = {"Authorization": "Bearer " + rotated_token}
+        rotated_entry = {
+            "token_sha256": hashlib.sha256(rotated_token.encode()).hexdigest(),
+            "actor_id": "svc-TEN-A", "tenant_ids": ["TEN-A"],
+            "permissions": ["hitl:reject:deliver", "hitl:reject:terminal",
+                            "hitl:reject:recover"]}
+        with patch.dict(os.environ, {
+                "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([rotated_entry])}):
+            # Rotation revokes the old bearer even though the owner string
+            # remains identical; no eighth lease token is supplied.
+            self.assertEqual(client.post(path + "/terminal-recover",
+                json=body, headers=old).status_code, 401)
+            self.assertEqual(client.post(path + "/terminal-receipt",
+                json=body, headers=new).json()["status"], "UNKNOWN")
+            recovered = client.post(path + "/terminal-recover",
+                                    json=body, headers=new)
+            self.assertEqual((recovered.status_code, recovered.json()["status"],
+                              recovered.json()["idempotent"]),
+                             (200, "DEAD", False))
+            readback = client.post(path + "/terminal-receipt",
+                                   json=body, headers=new)
+            self.assertEqual((readback.status_code, readback.json()["status"],
+                              readback.json()["idempotent"]),
+                             (200, "DEAD", True))
+            self.assertEqual(readback.json()["receipt_sha256"],
+                             recovered.json()["receipt_sha256"])
+            self.assertEqual(client.post(path + "/terminal-receipt",
+                json=body, headers=old).status_code, 401)
+            self.assertNotIn("lease_token", recovered.text)
+            self.assertNotIn(tokens[-1], recovered.text)
+            self.assertNotIn(rotated_token, recovered.text)
+        # Revoke the rotated bearer as well: immutable audit remains in PG16,
+        # but the endpoint must not expose it to a no-longer-authorized actor.
+        with patch.dict(os.environ, {
+                "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([{
+                    "token_sha256": hashlib.sha256(self.token_b.encode()).hexdigest(),
+                    "actor_id": "svc-TEN-B", "tenant_ids": ["TEN-B"],
+                    "permissions": ["hitl:reject:deliver", "hitl:reject:terminal",
+                                    "hitl:reject:recover"]}])}):
+            self.assertEqual(client.post(path + "/terminal-receipt",
+                json=body, headers=new).status_code, 401)
+        with self.psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select status,attempts from aiops.hitl_decision_outbox "
+                "where event_id=%s", (ids["event"],)).fetchone(), ("DEAD", 8))
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.hitl_reject_terminal_receipts "
+                "where event_id=%s", (ids["event"],)).fetchone()[0], 1)
+        target = os.environ.get("AIOPS_CORE_TERMINAL_RECEIPT_DIR")
+        if target:
+            receipt = {
+                "schema": "aiops.core-terminal-credential-rotation-ci.v1",
+                "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+                "old_bearer_revoked": 401, "rotated_bearer_recovered": "200_DEAD",
+                "rotated_bearer_readback": "200_DEAD_IDEMPOTENT",
+                "rotated_bearer_revoked": 401, "attempts": 8,
+                "audit_014_rows": 1, "lease_token_exported": False,
+                "real_worker_os_processes": 0, "human_glpi_authority": "UNKNOWN",
+                "execution_allowed": False, "effect_allowed": False,
+                "rollback": "REVERT_CORE_TEST_WORKFLOW_KEEP_013_014_015"}
+            receipt["payload_sha256"] = hashlib.sha256(json.dumps(
+                receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            Path(target).mkdir(parents=True, exist_ok=True)
+            (Path(target) / "credential-rotation.json").write_text(
+                json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+        self._no_effect()
+
     def test_terminal_restart_recovery_insert_rollback_and_concurrency(self):
         ids, digest, tokens = self._exhaust()
         body = {"owner": "svc-TEN-A", "run_id": ids["run"],
