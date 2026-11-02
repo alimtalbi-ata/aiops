@@ -4,6 +4,7 @@ One atomic PG16 transaction persists a canonical synthetic Incident/Run, seven
 deduplicated SOURCE observations, two evidence records, fixture analysis/critic
 and an immutable attempt. Independent GET recomputes the readback from PG16.
 """
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
@@ -408,6 +409,25 @@ def independent_readback(component, attempt):
     except (requests.RequestException, ValueError, KeyError):
         raise HTTPException(503, 'sandbox_' + component + '_readback_unavailable') from None
 
+def approval_fresh(twin):
+    """RG-ACME-09: Core independently fences stale/future Twin authority."""
+    try:
+        issued = datetime.fromisoformat(twin['issued_at'])
+        expires = datetime.fromisoformat(twin['expires_at'])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(503, 'sandbox_approval_clock_unqualified') from None
+    now = datetime.now(timezone.utc)
+    if (issued.tzinfo is None or expires.tzinfo is None
+            or issued.utcoffset() != timedelta(0)
+            or expires.utcoffset() != timedelta(0)
+            or issued > now + timedelta(seconds=30)
+            or expires <= now or expires <= issued
+            or expires - issued > timedelta(minutes=5)
+            or now - issued > timedelta(minutes=5)
+            or type(twin.get('approval_nonce')) is not str
+            or not twin['approval_nonce'].startswith('SIMNONCE-')):
+        raise HTTPException(503, 'sandbox_approval_stale_or_unqualified')
+
 @router.post('/api/sandbox/acme/resolve')
 def resolve(x: Intent, authorization: str | None = Header(default=None)):
     """RG-ACME-09: only Core commits after authenticated Temporal no-effect."""
@@ -470,6 +490,9 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                 'WORKER_NO_EFFECT']
             or worker.get('core_014_015_written') is not False
             or worker.get('glpi_write') is not False
+            or twin.get('issuer_id') != 'twin-acme-test'
+            or twin.get('approval_actor') != ISSUER
+            or twin.get('approval_status') != 'SIMULATED'
             or twin.get('approval_kind') != 'SIMULATED'
             or twin.get('approval_issuer') != ISSUER
             or twin.get('approval_phase') != 'PRE_RESOLUTION'
@@ -486,6 +509,7 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                              'effect_allowed', 'live_effects_allowed',
                              'real_glpi_writes_allowed'))):
         raise HTTPException(503, 'sandbox_no_effect_authority_unqualified')
+    approval_fresh(twin)
     worker_sha = digest(worker)
     with db() as c:
         c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',
