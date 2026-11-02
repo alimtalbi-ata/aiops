@@ -97,7 +97,7 @@ class RegisteredTerminalCore344Joined(unittest.IsolatedAsyncioTestCase):
                                os.environ.get("AIOPS_XREF_OWNER_ATTESTATION_KEY", "")):
                     if secret:
                         stderr = stderr.replace(secret, "[REDACTED]")
-                self.fail("joined_service_process_exited:" + stderr[-1200:])
+                self.fail("joined_service_process_exited:" + stderr[-6000:])
             if ready():
                 return proc
             await asyncio.sleep(0.1)
