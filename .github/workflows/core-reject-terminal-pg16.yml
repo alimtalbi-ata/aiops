@@ -231,6 +231,7 @@ jobs:
           assert receipt["migration_015_transaction_rollback"] is True
           assert receipt["migration_015_reapply"] is True
           assert receipt["native_pg16_restore"] is True
+          assert receipt["restored_http_token_free_readback"] == "200_DEAD_IDEMPOTENT"
           assert receipt["signed_run_ownership_tamper"] == "UNKNOWN_NO_MUTATION"
           assert receipt["restored_http_source_replay"] == "200_IDEMPOTENT"
           assert receipt["restored_http_dead_replay"] == "200_DEAD_IDEMPOTENT"
