@@ -215,7 +215,9 @@ def test_simulator_positive_structural_orchestration_only_simulated(monkeypatch)
                            'resolution_verified': False,
                            'post_resolution_readback_required': True,
                            'approval_nonce': 'SIMNONCE-123456',
-                           'human_approved': False, 'live_effects_allowed': False}
+                           'human_approved': False, 'execution_allowed': False,
+                           'effect_allowed': False, 'live_effects_allowed': False,
+                           'real_glpi_writes_allowed': False}
         if component == 'policy':
             return base | {'approval_id': 'SIM-APP-UNIT001', 'decision': 'SIMULATE',
                            'human_approved': False, 'live_effects_allowed': False}
@@ -362,3 +364,92 @@ def test_twin_approval_replay_expiry_and_foreign_tenant_denied():
     with pytest.raises(HTTPException):
         TWIN.verified_record(record, attempt_id=intent()['attempt_id'],
                              now=datetime.now(timezone.utc) + timedelta(minutes=6))
+
+
+@pytest.mark.parametrize('bad_url', [
+    'file:///etc/passwd',
+    'http://user:password@aiops2-core:810',
+    'http://aiops2-core:810/private',
+    'http://aiops2-core:810?redirect=1',
+    'http://aiops2-core:810/#fragment',
+    'http:///',
+    'https://aiops2-core:810/other',
+])
+def test_twin_independent_core_origin_rejects_untrusted_urls_before_http(monkeypatch, bad_url):
+    monkeypatch.setenv('CORE_URL', bad_url)
+    monkeypatch.setattr(TWIN.requests, 'get', lambda *a, **kw: pytest.fail('unexpected HTTP'))
+    with pytest.raises(HTTPException) as error:
+        TWIN.core_readback(TWIN.ApprovalIntent(**(intent() | ids())))
+    assert error.value.status_code == 503
+    assert error.value.detail == 'independent_core_url_invalid'
+
+
+def test_twin_never_persists_approval_for_already_resolved_run(monkeypatch):
+    monkeypatch.setattr(TWIN, 'core_readback',
+                        lambda _x: prepared_core() | {'run_status': 'RESOLVED'})
+    monkeypatch.setattr(TWIN, 'sourced_impact',
+                        lambda: pytest.fail('Twin graph read before PREPARED fence'))
+    monkeypatch.setattr(TWIN, 'db',
+                        lambda: pytest.fail('approval persistence after resolution'))
+    with pytest.raises(HTTPException) as error:
+        TWIN.issue_approval(TWIN.ApprovalIntent(**(intent() | ids())),
+                            authorization='Bearer test-internal-token-not-real')
+    assert error.value.status_code == 503
+
+
+@pytest.mark.parametrize('forgery', [
+    {'human_approved': True},
+    {'execution_allowed': True},
+    {'effect_allowed': True},
+    {'live_effects_allowed': True},
+    {'real_glpi_writes_allowed': True},
+    {'issuer_id': 'human-idp'},
+    {'resolution_verified': True},
+    {'post_resolution_readback_required': False},
+])
+def test_simulator_rejects_forged_twin_independent_readback_before_policy_or_worker(
+        monkeypatch, forgery):
+    calls = []
+    twin_valid = intent() | ids() | {
+        'approval_id': 'SIM-APP-UNIT001',
+        'issuer_id': 'twin-acme-test',
+        'core_request_sha256': 'a' * 64,
+        'core_source_event_ids': prepared_core()['source_event_ids'],
+        'approval_issuer': SIM.ISSUER,
+        'approval_kind': 'SIMULATED',
+        'approval_phase': 'PRE_RESOLUTION',
+        'core_status_at_issuance': 'PREPARED',
+        'resolution_verified': False,
+        'post_resolution_readback_required': True,
+        'approval_nonce': 'SIMNONCE-123456',
+        'human_approved': False,
+        'execution_allowed': False,
+        'effect_allowed': False,
+        'live_effects_allowed': False,
+        'real_glpi_writes_allowed': False,
+    }
+
+    def remote(component, path, method='GET', payload=None):
+        calls.append((component, method))
+        if path.endswith('/capabilities'):
+            return {'schema': SIM.SCHEMA, 'component': component,
+                    'tenant_id': SIM.TENANT, 'mode': 'SIMULATION',
+                    'isolated': True, 'approval_issuer': SIM.ISSUER,
+                    'human_approval_claimed': False,
+                    'live_effects_allowed': False,
+                    'real_glpi_writes_allowed': False}
+        if component == 'core':
+            assert method == 'POST'
+            return prepared_core() | {'glpi_mode': 'SIMULATED_ONLY'}
+        if component == 'twin':
+            return twin_valid | (forgery if method == 'GET' else {})
+        pytest.fail('Policy or Worker POST after forged Twin readback')
+
+    monkeypatch.setattr(SIM, 'remote', remote)
+    with pytest.raises(HTTPException) as error:
+        SIM.start(SIM.SandboxRequest(**intent()),
+                  authorization='Bearer test-internal-token-not-real')
+    assert error.value.status_code == 503
+    assert error.value.detail == 'sandbox_twin_readback_unqualified'
+    assert ('twin', 'POST') in calls and ('twin', 'GET') in calls
+    assert not any(c in ('policy', 'worker') and m == 'POST' for c, m in calls)
