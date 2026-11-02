@@ -119,6 +119,43 @@ class PreflightContract(unittest.TestCase):
                 2026, 11, 2, 12, 24, tzinfo=dt.timezone.utc))
             self.assertFalse(old['local_report']['fresh'])
 
+
+    def test_publisher_cron_diagnostics_never_exposes_crontab_secrets(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            script = home / '.local/bin/aiops-publish-report'
+            script.parent.mkdir(parents=True)
+            script.write_text('#!/bin/sh\\necho PUBLISHED\\n')
+            script.chmod(0o700)
+            calls = []
+            def runner(argv, **kwargs):
+                calls.append((argv, kwargs))
+                return subprocess.CompletedProcess(argv, 0,
+                    stdout='* * * * * flock -n /tmp/pub ~/.local/bin/aiops-publish-report TOKEN=SYNTHETIC_SECRET\\n'
+                           '* * * * * aiops-debian-reporter\\n'
+                           '* * * * * /home/aiops/aiops2-auto-deploy/poll.sh\\n'
+                           '# * * * * * aiops-publish-report\\n')
+            result = mod.publisher_cron_diagnostics(run=runner, home=home)
+            self.assertTrue(result['cron_read_ok'])
+            self.assertEqual(result['publisher_entry_count'], 1)
+            self.assertEqual(result['reporter_entry_count'], 1)
+            self.assertEqual(result['poller_entry_count'], 1)
+            self.assertTrue(result['publisher_script_present'])
+            self.assertTrue(result['publisher_script_executable'])
+            self.assertEqual(len(result['publisher_script_sha256']), 64)
+            self.assertNotIn('SYNTHETIC_SECRET', json.dumps(result))
+            self.assertEqual(calls[0][0], ['crontab', '-l'])
+            self.assertTrue(calls[0][1]['capture_output'])
+
+    def test_publisher_cron_diagnostics_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            def runner(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, 1, stdout='NO CRONTAB')
+            result = mod.publisher_cron_diagnostics(run=runner, home=Path(td))
+            self.assertFalse(result['cron_read_ok'])
+            self.assertIsNone(result['publisher_entry_count'])
+            self.assertFalse(result['publisher_script_present'])
+
     def test_entrypoint_is_only_readonly_preflight(self):
         entry = (ROOT / 'deploy/deploy-demo-studio-v2.sh').read_text()
         deploy = (ROOT / 'deploy/debian-portal-deploy.sh').read_text()
