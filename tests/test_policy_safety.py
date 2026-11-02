@@ -1,6 +1,11 @@
 import unittest
+import os
+import tempfile
+from pathlib import Path
+from unittest import mock
 
 from app.policy.main import Decision, evaluate
+from app.policy import autonomy_store
 
 
 def decision(**overrides):
@@ -16,12 +21,54 @@ def decision(**overrides):
         "preconditions_verified": True,
         "fencing_verified": True,
         "human_approved": True,
+        "freeze_active": False,
     }
     values.update(overrides)
     return Decision(**values)
 
 
 class PolicySafetyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Disposable, explicit NORMAL state; never relax the deployed fail-closed default.
+        cls._temp = tempfile.TemporaryDirectory()
+        cls._db = mock.patch.object(autonomy_store, "PATH", Path(cls._temp.name) / "autonomy.sqlite3")
+        cls._env = mock.patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "false"})
+        cls._db.start()
+        cls._env.start()
+        autonomy_store.set_mode("NORMAL", "ci-policy-fixture",
+                                "explicit isolated unit test baseline", 0)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._env.stop()
+        cls._db.stop()
+        cls._temp.cleanup()
+
+    def test_unavailable_autonomy_state_fails_closed(self):
+        with mock.patch.object(autonomy_store, "status", return_value={
+            "healthy": False, "mode": "STOP_AUTO", "revision": None
+        }):
+            result = evaluate(decision(command="OBSERVE"))
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertEqual(result["decision"], "ESCALATE")
+        self.assertEqual(result["reason"], "AUTONOMY_STATE_UNAVAILABLE")
+
+    def test_stop_auto_blocks_live_effect(self):
+        with mock.patch.object(autonomy_store, "status", return_value={
+            "healthy": True, "mode": "STOP_AUTO", "revision": 1
+        }):
+            result = evaluate(decision())
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertEqual(result["decision"], "ESCALATE")
+        self.assertEqual(result["reason"], "AUTONOMOUS_REMEDIATION_SUSPENDED")
+
+    def test_emergency_stop_blocks_live_effect(self):
+        with mock.patch.dict(os.environ, {"AIOPS_POLICY_EMERGENCY_STOP": "true"}):
+            result = evaluate(decision())
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertIn("EMERGENCY_STOP_ACTIVE", result["reason"])
+
     def test_p1_is_always_escalated_even_with_all_proofs(self):
         result = evaluate(decision(severity="P1"))
         self.assertEqual(result["state"], "BLOCKED")
