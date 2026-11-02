@@ -637,6 +637,13 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
         self.assertEqual(forged["source_provenance"], "NONPORTABLE_SHAPE_ONLY")
 
 
+    @staticmethod
+    def sign_unkeyed_ci_receipt(document, field):
+        """Producer-format SHA256 integrity; not an actor or source signature."""
+        document[field] = hashlib.sha256(json.dumps(
+            {k: v for k, v in document.items() if k != field},
+            sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
     def ci_artifact_pair(self):
         """Synthetic copies of two distinct disposable CI artifacts, no auth."""
         from tools import acme_graph005_ci_artifact_join as join
@@ -675,6 +682,8 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
             "source_after_revocation": "UNKNOWN",
             "reopen": "RECOMMENDED_NOT_EXECUTED",
         }
+        self.sign_unkeyed_ci_receipt(core, "receipt_sha256")
+        self.sign_unkeyed_ci_receipt(worker, "payload_sha256")
         return core, worker, head
 
     def test_22_cross_artifact_shape_never_promotes_itil_or_human(self):
@@ -768,6 +777,9 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
         core["actor_idp_signature"] = "TEST_ONLY_FORGED_IDP_SIGNATURE"
         worker["same_run_authenticated"] = True
         worker["human_glpi_allow"] = True
+        # A rehashed inner producer digest plus ZIP sidecar remains unkeyed.
+        self.sign_unkeyed_ci_receipt(core, "receipt_sha256")
+        self.sign_unkeyed_ci_receipt(worker, "payload_sha256")
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "core.zip"
@@ -819,6 +831,41 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
                          "UNTRUSTED_CORE_AUTHORITY_PROMOTION")
         self.assertEqual(rejected["not_executed_stage_count"], 15)
         self.assertEqual(rejected["not_executed_checkpoint_count"], 6)
+
+
+    def test_27_inner_core_worker_receipt_digest_required_not_authority(self):
+        """ZIP integrity cannot mask stale producer digests; rehash is not auth."""
+        from tools import acme_graph005_ci_artifact_join as join
+        core, worker, head = self.ci_artifact_pair()
+        self.assertEqual(join.build_receipt(core, worker, head)[
+            "cross_artifact_concordance"], "CONSISTENT_UNTRUSTED")
+        for owner in ("core", "worker"):
+            with self.subTest(owner=owner):
+                c, w = copy.deepcopy(core), copy.deepcopy(worker)
+                if owner == "core":
+                    c["events"][2]["core_pg16_full_event_sha256"] = hashlib.sha256(
+                        b"TEST_ONLY_REHASHED_NONANCHOR").hexdigest()
+                    changed, digest_field = c, "receipt_sha256"
+                else:
+                    w["test_only_unkeyed_marker"] = "TEST_ONLY_NOT_AN_ATTESTATION"
+                    changed, digest_field = w, "payload_sha256"
+                stale = join.build_receipt(c, w, head)
+                self.assertEqual(stale["cross_artifact_concordance"], "UNKNOWN")
+                self.assertEqual(stale["cross_artifact_reason"],
+                                 "CORRUPT_OR_MISSING_INNER_RECEIPT_DIGEST")
+                self.assertEqual(stale["verified_stage_count"], 0)
+                self.assertEqual(stale["verified_checkpoint_count"], 0)
+                self.sign_unkeyed_ci_receipt(changed, digest_field)
+                rehashed = join.build_receipt(c, w, head)
+                self.assertEqual(rehashed["cross_artifact_concordance"],
+                                 "CONSISTENT_UNTRUSTED")
+                self.assertEqual(rehashed["independent_core_worker_same_run"],
+                                 "NOT_ATTESTED")
+                self.assertEqual(rehashed["glpi_human_allow"], "NOT_ATTESTED")
+                self.assertEqual(rehashed["hitl_approval"], "NOT_ATTESTED")
+                self.assertEqual(rehashed["not_executed_stage_count"], 15)
+                self.assertEqual(rehashed["not_executed_checkpoint_count"], 6)
+                self.assertFalse(rehashed["live_effects_authorized"])
 
 
 if __name__ == "__main__":
