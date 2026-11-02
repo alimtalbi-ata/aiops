@@ -1,19 +1,17 @@
-import os,asyncio,datetime
+import os,asyncio
 from fastapi import FastAPI,HTTPException,Header
-from temporalio import activity,workflow
+from temporalio import activity
 from temporalio.client import Client
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
-from temporalio.common import RetryPolicy
 from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
 from worker.hitl_reject_terminal_runtime import recover_terminal_once, validate_request, UnqualifiedTerminal
+from worker.temporal_workflows import IncidentWorkflow, TerminalRejectWorkflow
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233')
-STAGES=['NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC','POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN']
-RETRY=RetryPolicy(initial_interval=datetime.timedelta(seconds=1),backoff_coefficient=2.0,maximum_interval=datetime.timedelta(seconds=10),maximum_attempts=3)
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
 @activity.defn
 async def start_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
@@ -69,15 +67,6 @@ async def execute_stage(a):
         finally: raise
 @activity.defn
 async def finish_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
-@workflow.defn
-class IncidentWorkflow:
- @workflow.run
- async def run(self,args):
-  r=await workflow.execute_activity(start_run,args,start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY);v=r['version']
-  for stage in STAGES:
-   r=await workflow.execute_activity(execute_stage,{'stage':stage,'run_id':args['run_id'],'version':v,'mode':args['mode'],'scenario_id':args['scenario_id']},start_to_close_timeout=datetime.timedelta(seconds=60),retry_policy=RETRY);v=r['version']
-   if r.get('status')=='BLOCKED': return {'run_id':args['run_id'],'status':'BLOCKED','final_version':v}
-  f=await workflow.execute_activity(finish_run,{'run_id':args['run_id'],'version':v},start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY);return {'run_id':args['run_id'],'final_version':f['version'],'status':f['status']}
 @app.get('/health')
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
@@ -104,15 +93,6 @@ async def reject_terminal_recover(args):
     async def post(path, body):
         return await asyncio.to_thread(post_json, CORE, path, body, timeout=15, token=ADMIN)
     return await recover_terminal_once(args, owner=owner, post=post)
-
-@workflow.defn
-class TerminalRejectWorkflow:
-    @workflow.run
-    async def run(self, args):
-        return await workflow.execute_activity(
-            reject_terminal_recover, args,
-            start_to_close_timeout=datetime.timedelta(seconds=60),
-            retry_policy=RETRY)
 
 @app.post('/api/execution/reject-terminal')
 async def start_reject_terminal(args:dict, authorization:str|None=Header(default=None)):
