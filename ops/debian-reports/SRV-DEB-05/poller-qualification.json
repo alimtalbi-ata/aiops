@@ -19,34 +19,37 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T13:30:03.353686+00:00",
+  "collected_at": "2026-11-02T14:50:13.096141+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
-    "canonical_portal_7777_healthy": false,
+    "canonical_portal_7777_healthy": true,
     "compose_config_valid": true,
     "compose_file_present": true,
     "compose_rollback_tested": false,
-    "current_portal_image_id": "sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a",
-    "deployment_executed": false,
-    "docker_mutations": 0,
+    "current_portal_image_id": "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985",
+    "deployed_image_id": "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985",
+    "deployment_executed": true,
+    "deployment_result_collected_at": "2026-11-02T14:50:12.775506+00:00",
+    "docker_mutations": 1,
     "env_file_present": true,
     "portal_container_name_matches": true,
     "portal_env_port_7777": false,
     "portal_host_port_7777": true,
     "portal_service_present": true,
-    "reason": "REPORTER_PUBLISHER_STALE_OR_MISSING",
-    "release_manifest_disabled": true,
+    "reason": "E2E_HUMAN_GLPI_NOT_ATTESTED",
+    "release_manifest_disabled": false,
+    "rollback_attempted": false,
     "schema": "aiops.debian-portal-preflight.v1",
-    "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
+    "verdict": "DEPLOYED_HEALTH_PASS_E2E_PENDING"
   },
   "dev_checkout_sha": "5b3b9f327f517e8f5999766389abf69c8a035cf8",
   "docker_mutations": 0,
-  "execution": "POLLER_ENTRYPOINT_READONLY_PREFLIGHT",
+  "execution": "POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION",
   "external_tls_sso_glpi_e2e": "NOT_VERIFIED",
-  "host_portal_7777": "FAIL_OR_UNKNOWN",
+  "host_portal_7777": "PASS",
   "http_7777": {
-    "qualified": false,
+    "qualified": true,
     "status": 200
   },
   "local_report_republish_eligible": true,
@@ -65,12 +68,12 @@
       }
     ],
     "compose_project": "aiops2-rebuild",
-    "container_id": "6f7e1545cc3763385ea6571d069b8b1d37613b0a6b065b3fb95e15a8c4162b54",
+    "container_id": "6b4e0ec57e52ae2ffe54cdf084e0f15c77c33502c5904db1be6f41484ed490a1",
     "health": "healthy",
-    "image_id": "sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a",
+    "image_id": "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985",
     "inspection": "READ_ONLY",
     "manifest_digests": [
-      "sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a"
+      "sha256:ffc853ae09ac0324a1e8543ea69b5d345f3cab5725915f691919db7bf714b985"
     ],
     "mount_count": 0,
     "network_count": 3,
@@ -88,23 +91,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 3362,
-    "collected_at": "2026-11-02T12:34:01.434978+00:00",
+    "age_seconds": 4811,
+    "collected_at": "2026-11-02T13:30:01.906491+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 62,
-      "collected_at": "2026-11-02T13:29:01.277240+00:00",
+      "age_seconds": 12,
+      "collected_at": "2026-11-02T14:50:01.231949+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 8878,
+    "publish_log_age_seconds": 13688,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "ac6b80a66053814fc090edffc7cd082c00baddf6",
+  "stable_checkout_sha": "4b92668f8f70aec82bbb3995c28186a6f848ed94",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
