@@ -95,7 +95,45 @@ def reporter_freshness(path, now=None):
     return result
 
 
-def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, env=ENV):
+
+def local_reporter_pipeline(state, now=None):
+    """Classify local collection vs SSH publisher without exposing log contents."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    local = reporter_freshness(state / 'latest.json', now=now)
+    status = {'local_report': local, 'publish_log_age_seconds': None,
+              'publish_log_recent': False, 'publish_last_class': 'UNKNOWN'}
+    log = state / 'publish.log'
+    try:
+        stat = log.stat()
+        age = int((now - dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc)).total_seconds())
+        if age < 0 or age > 365 * 86400:
+            return status
+        status['publish_log_age_seconds'] = age
+        status['publish_log_recent'] = age <= 900
+        with log.open('rb') as handle:
+            handle.seek(max(0, stat.st_size - 8192))
+            tail = handle.read(8192).decode('utf-8', errors='replace')
+        classes = (
+            ('REPORT_PUBLISH=PUBLISHED', 'PUBLISHED'),
+            ('REPORT_PUBLISH=UNCHANGED', 'UNCHANGED'),
+            ('reason=dirty_checkout', 'DIRTY_CHECKOUT'),
+            ('reason=missing_local_report', 'MISSING_LOCAL_REPORT'),
+            ('reason=push_rejected', 'PUSH_REJECTED'),
+            ('Permission denied', 'SSH_DENIED'),
+            ('Could not resolve hostname', 'SSH_DNS_FAILURE'),
+            ('fatal:', 'GIT_FATAL'),
+        )
+        for line in reversed(tail.splitlines()):
+            for needle, label in classes:
+                if needle in line:
+                    status['publish_last_class'] = label
+                    return status
+    except (OSError, ValueError, TypeError):
+        pass
+    return status
+
+
+def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, env=ENV, state=None):
     report = poller.collect()
     pinned = None
     disabled = False
@@ -111,6 +149,8 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
     reporter = reporter_freshness(getattr(poller, 'REPORT_GIT', Path('/nonexistent')) /
                                   'ops/debian-reports/SRV-DEB-05/latest.json')
     report['reporter_freshness'] = reporter
+    report['reporter_pipeline'] = local_reporter_pipeline(
+        state or Path.home() / '.local/state/aiops-debian-agent')
     healthy = (report.get('host_portal_7777') == 'PASS' and
                report.get('http_7777', {}).get('qualified') is True)
     report['deployment_preflight'] = {
@@ -125,7 +165,8 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
         'deployment_executed': False,
         'docker_mutations': 0,
         'verdict': 'NO_GO_DEPLOY_READONLY_PREFLIGHT',
-        'reason': ('REPORTER_STALE_OR_MISSING' if not reporter['fresh'] else
+        'reason': ('REPORTER_LOCAL_STALE_OR_MISSING' if not report['reporter_pipeline']['local_report']['fresh'] else
+                   'REPORTER_PUBLISHER_STALE_OR_MISSING' if not reporter['fresh'] else
                    'SOURCE_OR_COMPOSE_UNQUALIFIED' if not (pinned and disabled and
                     compose['compose_config_valid'] and compose['portal_service_present'] and
                     compose['portal_host_port_7777'] and compose['portal_env_port_7777'] and
