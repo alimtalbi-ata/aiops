@@ -378,8 +378,7 @@ class SandboxPG16(unittest.TestCase):
                 json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
         self.assertEqual(terminal.status_code, 200, terminal.text)
         sha = terminal.json()['worker_receipt_sha256']
-        self.assertRegex(sha, r'^[0-9a-f]{64}    unittest.main()
-)
+        self.assertRegex(sha, r'^[0-9a-f]{64}$')
         with psycopg.connect(self.url) as db:
             rows = db.execute(
                 'select transition_seq,status,worker_receipt_sha256 '
