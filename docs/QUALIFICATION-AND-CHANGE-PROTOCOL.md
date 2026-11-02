@@ -91,3 +91,10 @@ strict healthy. Re-run independent ACME E2E on Debian with unique IDs, two
 post-resolution read rounds, and a redacted receipt in #186. On failed health,
 rollback only changed service images via the existing manifest; preserve
 terminal ledgers and volumes, never `down -v`. Until runtime receipt: NO_GO.
+
+**RG-ACME-25 — internal bearer egress:** Policy's Core/Twin historical and
+pre-resolution GETs require an allowlisted fixed host AND port (810/811),
+no userinfo/path/query/fragment and `requests.Session(trust_env=False)`
+so `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `.netrc` cannot redirect
+the internal token. `test_09_rg_acme_25_fixed_origin_and_no_proxy_bearer`
+covers malformed/foreign origins and direct-only request properties.
