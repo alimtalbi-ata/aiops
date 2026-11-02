@@ -243,6 +243,8 @@ class SandboxPG16(unittest.TestCase):
         first, second = self.get(attempt).json(), self.get(attempt).json()
         self.assertEqual(first, second)
         self.assertEqual(first['worker_receipt_sha256'], result['worker_receipt_sha256'])
+        self.assertTrue(first['terminal_ticket_receipt_verified'])
+        self.assertEqual(len(first['terminal_ticket_sha256']), 64)
         receipt = {'schema': 'aiops.core-acme-sandbox-pg16-ci.v2',
                    'source_head': os.environ['AIOPS_EXPECTED_HEAD_SHA'],
                    'migration_chain': [x[:3] for x in CHAIN],
@@ -259,6 +261,7 @@ class SandboxPG16(unittest.TestCase):
                    'critic_validated': result['critic_validated'],
                    'idempotent_replay': self.post(attempt).json()['idempotent'],
                    'terminal_receipt_sha256': result['worker_receipt_sha256'],
+                   'terminal_ticket_sha256': result['terminal_ticket_sha256'],
                    'independent_final_reads': 2,
                    'ticket_transition_count': 2,
                    'worker_temporal_observed': False,
@@ -390,6 +393,7 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(terminal.status_code, 200, terminal.text)
         sha = terminal.json()['worker_receipt_sha256']
         self.assertRegex(sha, r'^[0-9a-f]{64}$')
+        self.assertTrue(terminal.json()['terminal_ticket_receipt_verified'])
         with psycopg.connect(self.url) as db:
             rows = db.execute(
                 'select transition_seq,status,worker_receipt_sha256 '
