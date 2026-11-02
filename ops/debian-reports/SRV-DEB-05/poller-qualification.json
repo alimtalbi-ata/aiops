@@ -19,10 +19,10 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T11:30:02.541321+00:00",
+  "collected_at": "2026-11-02T12:24:02.598223+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
-    "candidate_sha_pinned": "e289e4d4374e6b0b4560fb074310c723ec87b4a8",
+    "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
     "canonical_portal_7777_healthy": false,
     "compose_config_valid": true,
     "compose_file_present": true,
@@ -31,8 +31,11 @@
     "deployment_executed": false,
     "docker_mutations": 0,
     "env_file_present": true,
+    "portal_container_name_matches": true,
+    "portal_env_port_7777": false,
+    "portal_host_port_7777": true,
     "portal_service_present": true,
-    "reason": "SOURCE_OR_COMPOSE_UNQUALIFIED",
+    "reason": "REPORTER_STALE_OR_MISSING",
     "release_manifest_disabled": true,
     "schema": "aiops.debian-portal-preflight.v1",
     "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
@@ -73,9 +76,14 @@
     "state": "running"
   },
   "release_stable": "NO_GO",
+  "reporter_freshness": {
+    "age_seconds": 4981,
+    "collected_at": "2026-11-02T11:01:01.799223+00:00",
+    "fresh": false
+  },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "bed7116720e95d26e532df9fe9f5edade9cdb44b",
+  "stable_checkout_sha": "2b2dd3d8a1f3937127be3748897418c659bb7c85",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
