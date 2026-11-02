@@ -50,7 +50,7 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv socat openssl git ca-certificates
           python3 -m venv /tmp/core-seven-venv
-          /tmp/core-seven-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.115.12"
+          /tmp/core-seven-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.115.12" "httpx==0.28.1"
       - name: Checkout exact source head
         uses: actions/checkout@v4
         with:
@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
-          grep -E '^Ran 16 tests in ' /tmp/core-seven-results.log
+          grep -E '^Ran 17 tests in ' /tmp/core-seven-results.log
           grep -x 'OK' /tmp/core-seven-results.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
           echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
@@ -153,6 +153,35 @@ jobs:
                          "ci-seven-source-disposable-only", "s" * 48):
               assert secret not in adapter.read_text()
           print("CORE_HTTPS_ADAPTER_UNKNOWN_ONLY=PASS", adigest)
+          written = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "core-written-seven-015.json"
+          w = json.loads(written.read_text())
+          wdigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in w.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert w["receipt_sha256"] == wdigest
+          assert w["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert w["installed"] == ["001","004","009","010","011","012","013","014","015"]
+          assert w["schema"] == "aiops.core-written-seven-015-source-receipt.v1"
+          assert w["source_preflight"] == "PASS_SYNTHETIC_ONLY"
+          assert w["decision"] == w["link_status"] == "UNKNOWN"
+          assert w["human_glpi_attested"] is False
+          assert w["portable_signature"] == "NONE"
+          assert w["source_issuer_distinct_from_idp"] is True
+          assert w["native_pg16_restore"] is True
+          assert w["release_stable"] == "NO_GO"
+          assert len(w["events"]) == 7
+          assert [e["source_event_id"] for e in w["events"]] == [
+              f"SYN-EVT-{i:02d}" for i in range(1,8)]
+          assert all(e["payload_sha256"] != e["full_event_sha256"] for e in w["events"])
+          assert w["hash_domains"]["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          assert len(w["negative_cases"]) == 7
+          assert set(w["negative_cases"].values()) == {"UNKNOWN"}
+          assert w["stale"] == "UNKNOWN"
+          assert w["audit_before"] == w["audit_after"]
+          assert not any(secret in written.read_text() for secret in (
+              "idp|writer", "ci-core-writer-only", "source-reader-disposable",
+              "ci-seven-source-disposable-only", "postgresql://"))
+          print("CORE_WRITTEN_SEVEN_015_SOURCE_PASS", wdigest)
           raw = p.read_text()
           for secret in ("DISPOSABLE-LEASE-", "ci-seven-source-disposable-only",
                          "idp|alice", "source-reader-disposable"):
@@ -187,6 +216,8 @@ jobs:
           sha256sum --check core-owned-producer.sha256
           sha256sum core-https-adapter.json > core-https-adapter.sha256
           sha256sum --check core-https-adapter.sha256
+          sha256sum core-written-seven-015.json > core-written-seven-015.sha256
+          sha256sum --check core-written-seven-015.sha256
           sha256sum freshness-expiry-negative.json > freshness-expiry-negative.sha256
           sha256sum --check freshness-expiry-negative.sha256
       - name: Upload synthetic redacted receipt only
@@ -198,5 +229,6 @@ jobs:
             /tmp/core-seven-redacted-receipts/freshness-expiry-negative.*
             /tmp/core-seven-redacted-receipts/core-owned-producer.*
             /tmp/core-seven-redacted-receipts/core-https-adapter.*
+            /tmp/core-seven-redacted-receipts/core-written-seven-015.*
           retention-days: 7
           if-no-files-found: error
