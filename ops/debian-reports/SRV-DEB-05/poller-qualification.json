@@ -19,14 +19,31 @@
     "network_count": 1,
     "state": "running"
   },
-  "collected_at": "2026-11-02T10:35:03.068430+00:00",
+  "collected_at": "2026-11-02T11:30:02.541321+00:00",
+  "deployment_preflight": {
+    "backup_restoration_tested": false,
+    "candidate_sha_pinned": "e289e4d4374e6b0b4560fb074310c723ec87b4a8",
+    "canonical_portal_7777_healthy": false,
+    "compose_config_valid": true,
+    "compose_file_present": true,
+    "compose_rollback_tested": false,
+    "current_portal_image_id": "sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a",
+    "deployment_executed": false,
+    "docker_mutations": 0,
+    "env_file_present": true,
+    "portal_service_present": true,
+    "reason": "SOURCE_OR_COMPOSE_UNQUALIFIED",
+    "release_manifest_disabled": true,
+    "schema": "aiops.debian-portal-preflight.v1",
+    "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
+  },
   "dev_checkout_sha": "5b3b9f327f517e8f5999766389abf69c8a035cf8",
   "docker_mutations": 0,
-  "execution": "POLLER_ENTRYPOINT_READONLY",
+  "execution": "POLLER_ENTRYPOINT_READONLY_PREFLIGHT",
   "external_tls_sso_glpi_e2e": "NOT_VERIFIED",
-  "host_portal_7777": "PASS",
+  "host_portal_7777": "FAIL_OR_UNKNOWN",
   "http_7777": {
-    "qualified": true,
+    "qualified": false,
     "status": 200
   },
   "poller": {
@@ -44,12 +61,12 @@
       }
     ],
     "compose_project": "aiops2-rebuild",
-    "container_id": "2a82630dceee4ed6be779d278955b184a2f09141c683d01f8d9070531f2db821",
+    "container_id": "6f7e1545cc3763385ea6571d069b8b1d37613b0a6b065b3fb95e15a8c4162b54",
     "health": "healthy",
-    "image_id": "sha256:ef93d301d50f5ab816917a29d277ae0a099b4e671b374d5e8618d93f11b3d092",
+    "image_id": "sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a",
     "inspection": "READ_ONLY",
     "manifest_digests": [
-      "sha256:ef93d301d50f5ab816917a29d277ae0a099b4e671b374d5e8618d93f11b3d092"
+      "sha256:cd84446544effd351e02484fcb3ce7bd7a6570252b3fe5239aec2e4d72cd403a"
     ],
     "mount_count": 0,
     "network_count": 3,
@@ -58,7 +75,7 @@
   "release_stable": "NO_GO",
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "7de773e63851c4e90c9662225a41b96e4c0b3bed",
+  "stable_checkout_sha": "bed7116720e95d26e532df9fe9f5edade9cdb44b",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
