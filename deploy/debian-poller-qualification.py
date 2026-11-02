@@ -246,8 +246,10 @@ def publish(report, runner=run):
         local_latest = validated_fresh_local_report(LOCAL_LATEST)
         if local_latest is not None:
             latest_target = REPORT_GIT / LATEST_TARGET
-            latest_target.write_text(local_latest, encoding="utf-8")
-            latest_target.chmod(0o600)
+            latest_tmp = latest_target.with_suffix(".tmp")
+            latest_tmp.write_text(local_latest, encoding="utf-8")
+            latest_tmp.chmod(0o600)
+            latest_tmp.replace(latest_target)
         content = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if len(content.encode()) > 16384:
             raise RuntimeError("receipt_oversize")
