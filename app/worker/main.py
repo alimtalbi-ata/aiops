@@ -6,7 +6,7 @@ from temporalio.common import WorkflowIDReusePolicy
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from worker.workflow import IncidentWorkflow, AcmeSimulatedHitlWorkflow, STAGES, RETRY
-from worker.acme_simulated_hitl import SandboxDenied, capability, validate_intent, simulate_no_effect
+from worker.acme_simulated_hitl import SandboxDenied, capability, validate_intent, simulate_no_effect, receipt_digest_valid
 from shared.http import post_json,get_json
 from shared.freshness import assess_evidence_freshness
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
@@ -519,6 +519,7 @@ async def read_acme_simulated(attempt_id: str, authorization: str | None = Heade
             or result.get("live_effects_allowed") is not False
             or type(result.get("effect_receipts")) is not int
             or result["effect_receipts"] != 0
-            or result.get("audit_authority") != "TEMPORAL_WORKFLOW_HISTORY_ONLY"):
+            or result.get("audit_authority") != "TEMPORAL_WORKFLOW_HISTORY_ONLY"
+            or not receipt_digest_valid(result)):
         raise HTTPException(503, "sandbox_receipt_unqualified")
     return result
