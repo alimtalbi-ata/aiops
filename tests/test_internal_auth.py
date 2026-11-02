@@ -38,7 +38,10 @@ class BoundaryAuthTests(unittest.TestCase):
     def test_policy_check_requires_auth(self):
         values=POLICY.Decision(mode='DEMO',command='EXECUTE',severity='P1',confidence=.95,
             evidence_count=2,critic_validated=True,redundancy_ok=True,evidence_fresh=True)
-        with patch.object(POLICY,'INTERNAL_TOKEN','test-only-internal-token'):
+        # Auth contract uses a healthy STOP_AUTO fixture; DEMO is SIMULATE-only,
+        # and must never relax the persisted LIVE-effect safety state.
+        with patch.object(POLICY,'INTERNAL_TOKEN','test-only-internal-token'), \
+             patch.object(POLICY.autonomy_store,'status',return_value={'healthy':True,'mode':'STOP_AUTO'}):
             with self.assertRaises(HTTPException) as exc:
                 POLICY.check(values,authorization='Bearer wrong')
             valid=POLICY.check(values,authorization='Bearer test-only-internal-token')
