@@ -156,16 +156,60 @@ class PreflightContract(unittest.TestCase):
             self.assertIsNone(result['publisher_entry_count'])
             self.assertFalse(result['publisher_script_present'])
 
-    def test_entrypoint_is_only_readonly_preflight(self):
+    def test_entrypoint_requires_pinned_deploy_and_receipt(self):
         entry = (ROOT / 'deploy/deploy-demo-studio-v2.sh').read_text()
         deploy = (ROOT / 'deploy/debian-portal-deploy.sh').read_text()
-        self.assertEqual(subprocess.run(['bash', '-n', str(ROOT / 'deploy/deploy-demo-studio-v2.sh')], capture_output=True).returncode, 0)
+        self.assertEqual(subprocess.run(
+            ['bash', '-n', str(ROOT / 'deploy/deploy-demo-studio-v2.sh')],
+            capture_output=True).returncode, 0)
+        self.assertEqual(subprocess.run(
+            ['bash', '-n', str(ROOT / 'deploy/debian-portal-deploy.sh')],
+            capture_output=True).returncode, 0)
+        self.assertIn('debian-portal-deploy.sh', entry)
         self.assertIn('debian-portal-preflight.py', entry)
-        self.assertNotIn('debian-portal-deploy.sh', entry)
-        self.assertNotIn('docker', entry)
-        self.assertIn('NO_GO', deploy)
-        self.assertNotIn('docker build', deploy)
-        self.assertNotIn('docker compose', deploy)
+        self.assertIn('flock -n', deploy)
+        self.assertIn('SOURCE_SHA_CHANGED', deploy)
+        self.assertIn('portal-rollback-manifest.json', deploy)
+        self.assertIn('portal-deploy-result.json', deploy)
+        self.assertIn('--no-deps --no-build', deploy)
+        self.assertNotIn('docker stop', deploy)
+        self.assertNotIn('docker run', deploy)
+        self.assertNotIn('down -v', deploy)
+        self.assertNotIn('prune', deploy)
+
+    def test_deploy_receipt_requires_exact_sha_image_and_strict_host_health(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            (p / 'manifest.json').write_text(json.dumps({
+                'enabled': True, 'candidate_sha': 'a' * 40}))
+            (p / 'portal-deploy-result.json').write_text(json.dumps({
+                'schema': 'aiops.debian-portal-deploy-result.v1',
+                'collected_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'candidate_sha': 'a' * 40, 'status': 'PASS',
+                'deployment_executed': True, 'docker_mutations': 1,
+                'new_image_id': 'sha256:' + 'a' * 64,
+                'rollback_attempted': False}))
+            fake = FakePoller(good=True)
+            fake.REPORT_GIT = p
+            r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
+                                 dev=p, env=p / '.env', state=p)
+            self.assertEqual(r['deployment_preflight']['verdict'],
+                             'DEPLOYED_HEALTH_PASS_E2E_PENDING')
+            self.assertTrue(r['deployment_preflight']['deployment_executed'])
+            self.assertEqual(r['release_stable'], 'NO_GO')
+            fake.good = False
+            r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
+                                 dev=p, env=p / '.env', state=p)
+            self.assertEqual(r['deployment_preflight']['verdict'],
+                             'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED')
+            fake.good = True
+            record = json.loads((p / 'portal-deploy-result.json').read_text())
+            record['new_image_id'] = 'sha256:' + 'b' * 64
+            (p / 'portal-deploy-result.json').write_text(json.dumps(record))
+            r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
+                                 dev=p, env=p / '.env', state=p)
+            self.assertEqual(r['deployment_preflight']['verdict'],
+                             'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED')
 
 
 if __name__ == '__main__':
