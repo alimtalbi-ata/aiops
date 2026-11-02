@@ -216,7 +216,7 @@ def validated_fresh_local_report(path, now=None):
 
 
 def publish(report, runner=run):
-    """Never overwrite minute reporter latest.json; use its SSH checkout and lock."""
+    """Publish sidecar and, if validated, one fresh local reporter snapshot under the SSH lock."""
     if not (REPORT_GIT / ".git").is_dir():
         raise RuntimeError("report_checkout_missing")
     with (STATE / "publish.lock").open("a+") as lock:
@@ -244,6 +244,7 @@ def publish(report, runner=run):
         # publisher cron is currently stale. Recover ONE fresh validated
         # snapshot through this already-qualified Git writer under same lock.
         local_latest = validated_fresh_local_report(LOCAL_LATEST)
+        report["local_report_republish_eligible"] = local_latest is not None
         if local_latest is not None:
             latest_target = REPORT_GIT / LATEST_TARGET
             latest_tmp = latest_target.with_suffix(".tmp")
