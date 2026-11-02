@@ -231,6 +231,16 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
         "live_effects_allowed": False, "real_glpi_writes_allowed": False,
         "core_014_015_written": False, "glpi_write": False,
     }
+    # The Temporal no-effect producer emits a closed schema. A recomputed
+    # checksum must not launder extra human/GLPI/LIVE authority assertions.
+    # Core persists the same receipt, but the Portal independently rejects
+    # unknown fields before projecting a synthetic RESOLVED ticket.
+    worker_keys = set(worker_expected) | {
+        "audit_transitions", "receipt_sha256", "core_request_sha256",
+        "core_source_event_ids", "twin_approval_nonce_sha256",
+    }
+    if type(worker) is not dict or set(worker) != worker_keys:
+        raise ValueError("worker_receipt_schema_unqualified")
     if any(type(worker.get(k)) is not type(v) or worker.get(k) != v
            for k, v in worker_expected.items()):
         raise ValueError("worker_receipt_not_attested")
