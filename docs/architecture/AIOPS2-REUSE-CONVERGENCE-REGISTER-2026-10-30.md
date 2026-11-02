@@ -859,3 +859,8 @@ No old #201/#194 historical merge, no automatic stop of parallel portals, no mai
 | Debian reporter `ops/debian-runtime-reports` | Fresh GitHub report collected `2026-11-02T01:14:01.321319+00:00` | No installed host change; existing cron publishes v1, 61 total/53 running/8 exited, healthy rebuild portal | v2 reporter checkout/image digest/7777 probe NOT_ATTESTED; preserve Compose portal and all volumes |
 
 One Draft candidate #234, DEV main `ae7c3e5102b99a66bd7806d602146f1309a9749d`; new integrated CI pending after code commit. Do not merge stacked Drafts #333/#334 or historical #201/#194 wholesale. No main/stable merge, no Debian SSH/Docker/DB/GLPI/LIVE action. RELEASE_STABLE=NO_GO.
+
+
+### 2026-11-02 04:23 CET — selective reuse disposition
+
+**SOURCE_REVIEWED / INTEGRATED_CODE, CI_PENDING:** Core Draft [#335](https://github.com/alimtalbi-ata/aiops/pull/335) HEAD `37ab5ff1cf7e2dd7a1110995efc986b05d4d4d9f` supplied exactly six files to candidate [#234](https://github.com/alimtalbi-ata/aiops/pull/234) via focused commit `a7ec334c8c987b14a01471f2b31eebd66edf2167`. Source Quality [#41377609463](https://github.com/alimtalbi-ata/aiops/actions/runs/41377609463) 3/3, Core PG16/TLS [#41377609588](https://github.com/alimtalbi-ata/aiops/actions/runs/41377609588) 18/18 and source workflows 4/4 SUCCESS. These are **source-head**, not new candidate-head checks. Source remains Draft; no duplicate history merge. Same-Run synthetic seven-source contract is now code-present; human IdP→GLPI User/Profile/Entity/Ticket_User READMY, independent authority and Debian E2E are NOT_VERIFIED. Do not duplicate this Core slice in another team. Source #318 remains Draft on dangerous stable base; its reporter/cron v2 wiring is not installed. No merge to `deploy/aiops2-stable`.
