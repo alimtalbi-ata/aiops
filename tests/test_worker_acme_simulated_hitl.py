@@ -601,6 +601,16 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertIn("origin = validated_service_origin(", main)
         self.assertLess(main.index("origin = validated_service_origin("),
                         main.index("headers={\"Authorization\": \"Bearer \" + ADMIN"))
+        # Even an allowed internal origin must not leak the service bearer
+        # through HTTP_PROXY/HTTPS_PROXY/ALL_PROXY or ~/.netrc.
+        activity_source = main[main.index('async def acme_simulated_no_effect('):
+                               main.index('@app.get("/api/sandbox/acme/capabilities")')]
+        self.assertIn("with requests.Session() as session:", activity_source)
+        self.assertIn("session.trust_env = False", activity_source)
+        self.assertIn("response = session.get(", activity_source)
+        self.assertNotIn("response = requests.get(", activity_source)
+        self.assertLess(activity_source.index("session.trust_env = False"),
+                        activity_source.index("response = session.get("))
 
 
 if __name__ == "__main__":
