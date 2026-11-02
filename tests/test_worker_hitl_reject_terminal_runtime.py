@@ -98,9 +98,15 @@ class TerminalRuntimeTests(unittest.TestCase):
         worker=next(n for n in ast.walk(tree) if isinstance(n,ast.AsyncFunctionDef) and n.name=='worker_main')
         self.assertIn('reject_terminal_recover', ast.unparse(worker))
         self.assertIn('TerminalRejectWorkflow', ast.unparse(worker))
-        terminal = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == 'TerminalRejectWorkflow')
+        isolated = (pathlib.Path(__file__).resolve().parents[1] /
+                    'app/worker/temporal_workflows.py').read_text()
+        workflow_tree = ast.parse(isolated)
+        terminal = next(n for n in ast.walk(workflow_tree)
+                        if isinstance(n, ast.ClassDef) and n.name == 'TerminalRejectWorkflow')
         self.assertIn('execute_activity(', ast.unparse(terminal))
         self.assertIn('reject_terminal_recover', ast.unparse(terminal))
-        self.assertNotIn('signal_workflow', source)
+        self.assertNotIn('signal_workflow', source + isolated)
+        self.assertNotIn('shared.http', isolated)
+        self.assertNotIn('worker.main', isolated)
 
 if __name__ == '__main__': unittest.main()
