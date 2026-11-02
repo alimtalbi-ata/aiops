@@ -19,7 +19,7 @@ from worker.acme_simulated_hitl import (
 NOW = datetime(2026, 11, 2, 16, 0, tzinfo=timezone.utc)
 INTENT = {
     "attempt_id": "ACME-SIM-TEST-001", "tenant_id": "ACME-TEST",
-    "scenario_id": "ACME-TEST-SAN-PAYMENTS", "mode": "SIMULATION",
+    "scenario_id": "ACME-SAN-PAYMENTS", "mode": "SIMULATION",
     "approval_issuer": ISSUER, "incident_id": "INC-TEST-001",
     "run_id": "RUN-TEST-001", "proposal_id": "PROP-TEST-001",
     "approval_id": "SIM-APP-TEST-001", "ticket_id": "SIM-GLPI-TEST-001",
@@ -32,7 +32,7 @@ INTENT = {
 def fixtures():
     common = dict(attempt_id=INTENT["attempt_id"], tenant_id="ACME-TEST",
                   incident_id=INTENT["incident_id"], run_id=INTENT["run_id"])
-    core = dict(common, scenario_id="ACME-TEST-SAN-PAYMENTS",
+    core = dict(common, scenario_id="ACME-SAN-PAYMENTS",
                 mode="SIMULATION", approval_issuer=ISSUER,
                 glpi_mode="SIMULATED_ONLY", human_approval_claimed=False,
                 incident_status="PREPARED", run_status="PREPARED",
@@ -46,7 +46,7 @@ def fixtures():
                 real_glpi_writes_allowed=False,
                 analysis_validated=True, critic_validated=True, evidence_count=2,
                 proposal_id=INTENT["proposal_id"])
-    twin = dict(common, scenario_id="ACME-TEST-SAN-PAYMENTS",
+    twin = dict(common, scenario_id="ACME-SAN-PAYMENTS",
                 resolution_verified=False,
                 post_resolution_readback_required=True,
                 approval_id=INTENT["approval_id"],
