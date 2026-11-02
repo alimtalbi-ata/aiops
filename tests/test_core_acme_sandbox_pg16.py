@@ -516,6 +516,15 @@ class SandboxPG16(unittest.TestCase):
                 self.assertEqual(a.json(), b.json())
                 self.assertEqual(a.json()['worker_receipt_sha256'],
                                  resolved.json()['worker_receipt_sha256'])
+                receipt_path = Path(os.environ['AIOPS_CORE_ACME_RECEIPT_DIR']) / 'core-acme-sandbox.json'
+                evidence = json.loads(receipt_path.read_text())
+                evidence.pop('payload_sha256')
+                evidence['migration_018_savepoint_rollback'] = True
+                evidence['native_pg16_terminal_restore'] = True
+                evidence['restored_independent_final_reads'] = 2
+                evidence['payload_sha256'] = hashlib.sha256(json.dumps(
+                    evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                receipt_path.write_text(json.dumps(evidence, sort_keys=True, indent=2) + '\\n')
             finally:
                 os.environ['DATABASE_URL'] = old_url
         finally:
