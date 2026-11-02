@@ -96,7 +96,7 @@ payload={'schema':'aiops.debian-acme-sandbox-upgrade.v1',
  'docker_container_mutations':int(mutated),'docker_image_builds':int(builds),
  'status':'PASS' if success=='1' and code=='0' else 'FAIL',
  'exit_code':int(code),'rollback_status':rollback,'pg16_backup_sha256':backup,
- 'migrations':'011-017 additive; retain on app rollback','images':rows,
+ 'migrations':'011-018 additive; retain on app rollback','images':rows,
  'e2e':'SEPARATE_RECEIPT_REQUIRED'}
 fd,tmp=tempfile.mkstemp(prefix='.acme-upgrade-receipt-',dir=os.path.dirname(path))
 try:
@@ -120,6 +120,7 @@ test "$(git --git-dir="$TMP/source.git" rev-parse FETCH_HEAD)" = "$PIN" ||
   { echo 'ACME_UPGRADE=NO_GO_SOURCE_PIN_MISMATCH'; exit 78; }
 git --git-dir="$TMP/source.git" archive "$PIN" app db/migrations | tar -xf - -C "$TMP"
 test -f "$TMP/db/migrations/017_acme_sandbox_prepared_transition.sql"
+test -f "$TMP/db/migrations/018_acme_sandbox_terminal_ticket_receipt.sql"
 
 # Read-only inspect canonical Compose ownership, mounts and health BEFORE build.
 compose config --quiet >/dev/null 2>&1
@@ -199,7 +200,7 @@ backup_sha="$(sha256sum "$BACKUP" | awk '{print $1}')"
 # Installed 009/010 prerequisites must be real, never silently inferred.
 test "$(docker exec aiops2-rebuild-postgres psql -U aiops -d aiops -Atqc \
  "select to_regclass('aiops.analysis_records') is not null and to_regclass('aiops.evidence') is not null")" = t
-for n in 011 012 013 014 015 016 017; do
+for n in 011 012 013 014 015 016 017 018; do
   file="$(find "$TMP/db/migrations" -maxdepth 1 -type f -name "$n"_\*.sql -print -quit)"
   test -n "$file"
   cat "$file" >> "$TMP/migrate.sql"
