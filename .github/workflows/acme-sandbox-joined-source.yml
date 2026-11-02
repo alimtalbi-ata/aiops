@@ -52,7 +52,7 @@ jobs:
         run: |
           set -o pipefail
           PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_policy_acme_sandbox.py' -v 2>&1 | tee /tmp/acme-policy-tests.log
-          grep -E '^Ran 8 tests in ' /tmp/acme-policy-tests.log
+          grep -E '^Ran 9 tests in ' /tmp/acme-policy-tests.log
           grep -x 'OK' /tmp/acme-policy-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/acme-policy-tests.log
       - name: Debian runner pre-resolution and final readback unit tests
