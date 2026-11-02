@@ -2091,3 +2091,8 @@ class AcmeGraph005InterleavedCore338CiHandoffTests(unittest.TestCase):
         self.assertEqual(output["verified_checkpoint_count"], 0)
         self.assertIsNone(output["runtime_run_id"])
         self.assertFalse(output["publishable_to_core_or_glpi"])
+
+
+# ACME-owned focused same-Run regressions are included in the existing
+# Quality workflow's pinned fixture test entrypoint (no shared CI edit).
+from test_acme_graph005_same_run_consumer import AcmeGraph005SameRunConsumerTests
