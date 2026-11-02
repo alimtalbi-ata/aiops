@@ -1,5 +1,6 @@
 """Disposable PG16 Core ACME sandbox, zero GLPI/LIVE/host effects."""
 import concurrent.futures
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -22,7 +23,9 @@ CHAIN = ['001_schema.sql', '004_operational_model.sql',
          '011_hitl_decision_outbox.sql', '012_itsm_xref_read.sql',
          '013_actor_delegation_replay_ledger.sql',
          '014_hitl_reject_terminal_receipts.sql',
-         '015_core_run_event_idempotency.sql', '016_acme_sandbox_attempts.sql']
+         '015_core_run_event_idempotency.sql', '016_acme_sandbox_attempts.sql',
+         '017_acme_sandbox_prepared_transition.sql',
+         '018_acme_sandbox_ticket_terminal_receipts.sql']
 
 def intent(attempt):
     return {'attempt_id': attempt, 'tenant_id': 'ACME-TEST',
@@ -90,13 +93,13 @@ class SandboxPG16(unittest.TestCase):
         finally:
             os.environ['AIOPS_ACME_SANDBOX_ENABLED'] = 'true'
 
-    def test_02_one_run_seven_sources_evidence_and_resolved(self):
+    def test_02_one_run_seven_sources_evidence_and_prepared(self):
         attempt = 'ACME-SIM-COREPOSITIVE'
         response = self.post(attempt)
         self.assertEqual(response.status_code, 200, response.text)
         r = response.json()
         self.assertEqual((r['incident_status'], r['run_status'], r['ticket_status']),
-                         ('RESOLVED', 'RESOLVED', 'RESOLVED'))
+                         ('PREPARED', 'PREPARED', 'PREPARED'))
         self.assertEqual(r['ticket_authority'], 'SIMULATED_ONLY')
         self.assertEqual((r['source_event_count'], r['evidence_count']), (7, 2))
         self.assertEqual(len(set(r['source_event_ids'])), 7)
@@ -230,7 +233,19 @@ class SandboxPG16(unittest.TestCase):
         result = self.post(attempt).json()
         out = Path(os.environ['AIOPS_CORE_ACME_RECEIPT_DIR'])
         out.mkdir(parents=True, exist_ok=True)
-        receipt = {'schema': 'aiops.core-acme-sandbox-pg16-ci.v1',
+        from unittest.mock import patch
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(result)):
+            finalized = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(finalized.status_code, 200, finalized.text)
+        result = finalized.json()
+        first, second = self.get(attempt).json(), self.get(attempt).json()
+        self.assertEqual(first, second)
+        self.assertEqual(first['worker_receipt_sha256'], result['worker_receipt_sha256'])
+        self.assertTrue(first['terminal_ticket_receipt_verified'])
+        self.assertEqual(len(first['terminal_ticket_sha256']), 64)
+        receipt = {'schema': 'aiops.core-acme-sandbox-pg16-ci.v2',
                    'source_head': os.environ['AIOPS_EXPECTED_HEAD_SHA'],
                    'migration_chain': [x[:3] for x in CHAIN],
                    'attempt_sha256': hashlib.sha256(attempt.encode()).hexdigest(),
@@ -245,14 +260,411 @@ class SandboxPG16(unittest.TestCase):
                    'analysis_validated': result['analysis_validated'],
                    'critic_validated': result['critic_validated'],
                    'idempotent_replay': self.post(attempt).json()['idempotent'],
+                   'terminal_receipt_sha256': result['worker_receipt_sha256'],
+                   'terminal_ticket_sha256': result['terminal_ticket_sha256'],
+                   'independent_final_reads': 2,
+                   'ticket_transition_count': 2,
+                   'worker_temporal_observed': False,
                    'human_glpi_attested': False, 'execution_allowed': False,
                    'effect_allowed': False, 'host_deployed': False,
-                   'rollback': 'CODE_ONLY_KEEP_IMMUTABLE_013_014_015_016'}
+                   'rollback': 'CODE_ONLY_KEEP_IMMUTABLE_013_TO_018'}
         receipt['payload_sha256'] = hashlib.sha256(json.dumps(
             receipt, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         p = out / 'core-acme-sandbox.json'
         p.write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
         self.assertNotIn(TOKEN, p.read_text())
+
+    def test_09_no_resolution_without_independent_worker_twin_policy(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-NO-PREMATURE-RESOLUTION'
+        started = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=HTTPException(503, 'worker_unavailable')):
+            response = self.client.post('/api/sandbox/acme/resolve',
+                                        json=intent(attempt),
+                                        headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(response.status_code, 503)
+        state = self.get(attempt).json()
+        self.assertEqual((state['incident_status'], state['run_status'],
+                          state['ticket_status']),
+                         ('PREPARED', 'PREPARED', 'PREPARED'))
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (started['run_id'],)).fetchone()[0], 0)
+
+    def _qualified_no_effect(self, state):
+        common = {'attempt_id': state['attempt_id'], 'tenant_id': 'ACME-TEST',
+                  'incident_id': state['incident_id'], 'run_id': state['run_id'],
+                  'proposal_id': state['proposal_id']}
+        flags = {'human_approved': False, 'execution_allowed': False,
+                 'effect_allowed': False, 'live_effects_allowed': False,
+                 'real_glpi_writes_allowed': False}
+        approval = 'SIM-APP-TEST-VALID'
+        worker = dict(common, **flags, approval_id=approval,
+                      ticket_id=state['ticket_id'],
+                      schema='aiops.worker-acme-simulated-no-effect.v1',
+                      receipt_status='SIMULATED_NO_EFFECT',
+                      receipt_phase='PRE_RESOLUTION',
+                      core_status_at_validation='PREPARED',
+                      resolution_verified=False, post_resolution_readback_required=True,
+                      action='SIMULATE', effect_receipts=0,
+                      approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED',
+                      audit_authority='TEMPORAL_WORKFLOW_HISTORY_ONLY',
+                      audit_transitions=['CORE_PREPARED_INDEPENDENTLY_VERIFIED',
+                          'TWIN_SIMULATED_APPROVAL_VALIDATED',
+                          'POLICY_SIMULATE_INDEPENDENTLY_VERIFIED', 'WORKER_NO_EFFECT'],
+                      core_014_015_written=False, glpi_write=False)
+        now = datetime.now(timezone.utc)
+        twin = dict(common, **flags, approval_id=approval,
+                    ticket_id=state['ticket_id'],
+                    approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED',
+                    core_status_at_issuance='PREPARED',
+                    approval_phase='PRE_RESOLUTION', resolution_verified=False,
+                    post_resolution_readback_required=True,
+                    core_request_sha256=state['request_sha256'],
+                    core_source_event_ids=state['source_event_ids'],
+                    issuer_id='twin-acme-test', approval_actor='TWIN_ACME_SIMULATED',
+                    approval_status='SIMULATED', approval_nonce='SIMNONCE-TEST-VALID',
+                    issued_at=now.isoformat(),
+                    expires_at=(now + timedelta(minutes=4)).isoformat())
+        policy = dict(common, **flags, approval_id=approval,
+                      ticket_id=state['ticket_id'], decision='SIMULATE',
+                      state='PASS', mode='SIMULATION',
+                      approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
+        worker['core_request_sha256'] = state['request_sha256']
+        worker['core_source_event_ids'] = state['source_event_ids']
+        worker['twin_approval_nonce_sha256'] = hashlib.sha256(
+            twin['approval_nonce'].encode('ascii')).hexdigest()
+        worker['receipt_sha256'] = core.digest(worker)
+        return [worker, twin, policy]
+
+    def _service_reads(self, state):
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(state)))
+        return lambda component, attempt: docs[component]
+
+    def test_10_core_only_finalization_after_independent_no_effect(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-FINALIZE'
+        state = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(state)):
+            result = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['incident_status'], 'RESOLVED')
+        self.assertEqual(result.json()['run_status'], 'RESOLVED')
+        self.assertEqual(result.json()['ticket_status'], 'RESOLVED')
+        self.assertFalse(result.json()['effect_allowed'])
+        self.assertEqual(self.get(attempt).json()['run_status'], 'RESOLVED')
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._qualified_no_effect(state)):
+            repeat = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(repeat.status_code, 200, repeat.text)
+        self.assertTrue(repeat.json()['idempotent'])
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (state['run_id'],)).fetchone()[0], 1)
+
+    def test_11_forged_human_worker_receipt_cannot_resolve(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-FORGED-HUMAN'
+        state = self.post(attempt).json()
+        docs = self._qualified_no_effect(state)
+        docs[0]['human_approved'] = True
+        with patch.object(core, 'independent_readback', side_effect=lambda component, attempt: dict(zip(('worker', 'twin', 'policy'), docs))[component]):
+            result = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(result.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+
+    def test_12_immutable_ticket_digest_replay_after_restart(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-IMMUTABLE-TERMINAL'
+        prepared = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(prepared)):
+            terminal = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(terminal.status_code, 200, terminal.text)
+        sha = terminal.json()['worker_receipt_sha256']
+        self.assertRegex(sha, r'^[0-9a-f]{64}$')
+        self.assertTrue(terminal.json()['terminal_ticket_receipt_verified'])
+        with psycopg.connect(self.url) as db:
+            rows = db.execute(
+                'select transition_seq,status,worker_receipt_sha256 '
+                'from aiops.acme_sandbox_ticket_events where attempt_id=%s '
+                'order by transition_seq', (attempt,)).fetchall()
+            self.assertEqual([r[1] for r in rows], ['PREPARED', 'RESOLVED'])
+            self.assertEqual(rows[1][2].strip(), sha)
+            with self.assertRaises(psycopg.Error):
+                with db.transaction():
+                    db.execute("update aiops.acme_sandbox_ticket_events "
+                               "set status='PREPARED' where attempt_id=%s "
+                               "and transition_seq=2", (attempt,))
+        app = FastAPI()
+        app.include_router(core.router)
+        with TestClient(app) as restarted:
+            first = restarted.get('/api/sandbox/acme/e2e/' + attempt,
+                                  headers={'Authorization': 'Bearer ' + TOKEN})
+            second = restarted.get('/api/sandbox/acme/e2e/' + attempt,
+                                   headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json(), second.json())
+        self.assertEqual(first.json()['ticket_status'], 'RESOLVED')
+        with patch.object(core, 'independent_readback',
+                          side_effect=AssertionError('no Worker needed on durable replay')):
+            repeat = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(repeat.status_code, 200, repeat.text)
+        self.assertTrue(repeat.json()['idempotent'])
+
+    def test_13_foreign_tenant_and_digest_mismatch_fail_closed(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-DIGEST-FENCE'
+        prepared = self.post(attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(prepared)))
+        docs['worker']['tenant_id'] = 'FOREIGN'
+        with patch.object(core, 'independent_readback',
+                          side_effect=lambda component, attempt: docs[component]):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(prepared)):
+            accepted = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        with psycopg.connect(self.url) as db:
+            db.execute("update aiops.run_events set payload=payload||%s::jsonb "
+                       "where run_id=%s and event_type='SIMULATED_RESOLVED'",
+                       (json.dumps({'worker_receipt_sha256': '0'*64}),
+                        prepared['run_id']))
+        self.assertEqual(self.get(attempt).status_code, 503)
+
+    def test_14_concurrent_core_only_resolve_one_terminal_event(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CONCURRENT-RESOLVE'
+        prepared = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(prepared)):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda _: self.client.post(
+                    '/api/sandbox/acme/resolve', json=intent(attempt),
+                    headers={'Authorization': 'Bearer ' + TOKEN}), range(2)))
+        self.assertEqual([r.status_code for r in results], [200, 200])
+        self.assertEqual(sorted(r.json()['idempotent'] for r in results), [False, True])
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.acme_sandbox_ticket_events "
+                "where attempt_id=%s and status='RESOLVED'",
+                (attempt,)).fetchone()[0], 1)
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.run_events "
+                "where run_id=%s and event_type='SIMULATED_RESOLVED'",
+                (prepared['run_id'],)).fetchone()[0], 1)
+
+    def test_15_terminal_native_pg16_restore_and_018_rollback(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-TERMINAL-RESTORE'
+        prepared = self.post(attempt).json()
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(prepared)):
+            resolved = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(resolved.status_code, 200, resolved.text)
+        with psycopg.connect(self.url) as db:
+            db.execute('savepoint migration018_replay')
+            db.execute((ROOT / 'db/migrations/018_acme_sandbox_ticket_terminal_receipts.sql').read_text())
+            db.execute('rollback to savepoint migration018_replay')
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.acme_sandbox_ticket_events "
+                "where attempt_id=%s", (attempt,)).fetchone()[0], 2)
+        target = 'aiops_core_acme_terminal_restore_ci'
+        parsed = urlsplit(self.original)
+        url = urlunsplit((parsed.scheme, parsed.netloc, '/' + target, '', ''))
+        with psycopg.connect(self.original, autocommit=True) as admin:
+            admin.execute(sql.SQL('create database {}').format(sql.Identifier(target)))
+        try:
+            with tempfile.TemporaryDirectory(prefix='core-acme-terminal-') as tmp:
+                archive = Path(tmp) / 'terminal.pgcustom'
+                subprocess.run(['/usr/lib/postgresql/16/bin/pg_dump',
+                                '--format=custom', '--no-owner', '--no-acl',
+                                '--file=' + str(archive), '--dbname=' + self.url],
+                               check=True, timeout=90, capture_output=True)
+                subprocess.run(['/usr/lib/postgresql/16/bin/pg_restore',
+                                '--no-owner', '--no-acl', '--dbname=' + url,
+                                str(archive)],
+                               check=True, timeout=90, capture_output=True)
+            old_url = os.environ['DATABASE_URL']
+            try:
+                os.environ['DATABASE_URL'] = url
+                app = FastAPI()
+                app.include_router(core.router)
+                with TestClient(app) as restored:
+                    a = restored.get('/api/sandbox/acme/e2e/' + attempt,
+                                     headers={'Authorization': 'Bearer ' + TOKEN})
+                    b = restored.get('/api/sandbox/acme/e2e/' + attempt,
+                                     headers={'Authorization': 'Bearer ' + TOKEN})
+                self.assertEqual(a.status_code, 200, a.text)
+                self.assertEqual(a.json(), b.json())
+                self.assertEqual(a.json()['worker_receipt_sha256'],
+                                 resolved.json()['worker_receipt_sha256'])
+                receipt_path = Path(os.environ['AIOPS_CORE_ACME_RECEIPT_DIR']) / 'core-acme-sandbox.json'
+                evidence = json.loads(receipt_path.read_text())
+                evidence.pop('payload_sha256')
+                evidence['migration_018_savepoint_rollback'] = True
+                evidence['native_pg16_terminal_restore'] = True
+                evidence['restored_independent_final_reads'] = 2
+                evidence['payload_sha256'] = hashlib.sha256(json.dumps(
+                    evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                receipt_path.write_text(json.dumps(evidence, sort_keys=True, indent=2))
+            finally:
+                os.environ['DATABASE_URL'] = old_url
+        finally:
+            with psycopg.connect(self.original, autocommit=True) as admin:
+                admin.execute('select pg_terminate_backend(pid) from pg_stat_activity '
+                              'where datname=%s and pid<>pg_backend_pid()', (target,))
+                admin.execute(sql.SQL('drop database if exists {}').format(
+                    sql.Identifier(target)))
+
+    def test_16_stale_twin_and_service_credential_rotation_fail_closed(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-FRESHNESS-ROTATION'
+        prepared = self.post(attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(prepared)))
+        docs['twin']['issued_at'] = (
+            datetime.now(timezone.utc) - timedelta(minutes=12)).isoformat()
+        docs['twin']['expires_at'] = (
+            datetime.now(timezone.utc) - timedelta(minutes=8)).isoformat()
+        with patch.object(core, 'independent_readback',
+                          side_effect=lambda component, attempt: docs[component]):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
+        os.environ['AIOPS_INTERNAL_TOKEN'] = TOKEN + '-rotated'
+        try:
+            self.assertEqual(self.get(attempt).status_code, 401)
+            self.assertEqual(self.post(attempt).status_code, 401)
+        finally:
+            os.environ['AIOPS_INTERNAL_TOKEN'] = TOKEN
+        self.assertEqual(self.get(attempt).status_code, 200)
+
+    def test_17_double_worker_receipt_rotation_no_mutation(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-WORKER-ROTATION'
+        prepared = self.post(attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(prepared)))
+        calls = {'worker': 0}
+        def changed(component, attempt_id):
+            if component == 'worker':
+                calls['worker'] += 1
+                if calls['worker'] == 2:
+                    return dict(docs['worker'], approval_id='SIM-APP-ROTATED')
+            return docs[component]
+        with patch.object(core, 'independent_readback', side_effect=changed):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.acme_sandbox_ticket_events "
+                "where attempt_id=%s and status='RESOLVED'",
+                (attempt,)).fetchone()[0], 0)
+
+    def test_18_authenticated_service_origin_fence(self):
+        """RG-ACME-18: reject foreign and malformed origins before bearer egress."""
+        from unittest.mock import patch
+        rejected = (
+            'https://external.example:815',
+            'http://aiops2-worker:9999',
+            'http://169.254.169.254:815',
+            'http://127.0.0.2:815',
+            'http://aiops2-worker:abc',
+            'http://aiops2-worker:99999',
+            'http://[::1:815',
+            'http://user:password@aiops2-worker:815',
+            'http://aiops2-worker:815/unexpected',
+            'http://aiops2-worker:815?token=unexpected',
+        )
+        for value in rejected:
+            with self.subTest(origin=value):
+                with patch.dict(os.environ, {'WORKER_URL': value}):
+                    with patch.object(core.requests, 'get',
+                                      side_effect=AssertionError('must not send bearer')) as get:
+                        with self.assertRaises(HTTPException) as denied:
+                            core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
+                        self.assertEqual(denied.exception.status_code, 503)
+                        get.assert_not_called()
+
+        class Response:
+            status_code = 200
+            content = b'{"sandbox":"synthetic"}'
+            def json(self):
+                return {'sandbox': 'synthetic'}
+
+        for origin in ('http://aiops2-worker:815', 'http://127.0.0.1:815'):
+            with self.subTest(allowed=origin):
+                with patch.dict(os.environ, {'WORKER_URL': origin}):
+                    with patch.object(core.requests, 'get', return_value=Response()) as get:
+                        result = core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
+                        self.assertEqual(result, {'sandbox': 'synthetic'})
+                        self.assertEqual(get.call_count, 1)
+                        self.assertFalse(get.call_args.kwargs['allow_redirects'])
+                        self.assertEqual(get.call_args.kwargs['timeout'], 5)
+
+    def test_19_rg_acme_19_worker_ticket_and_post_lock_freshness(self):
+        """RG-ACME-19: receipt ticket binding and lock-wait TTL are mandatory."""
+        from unittest.mock import patch
+        foreign_attempt = 'ACME-SIM-WORKER-TICKET-FENCE'
+        foreign = self.post(foreign_attempt).json()
+        docs = dict(zip(('worker', 'twin', 'policy'),
+                        self._qualified_no_effect(foreign)))
+        docs['worker']['ticket_id'] = 'SIM-GLPI-FOREIGN-TICKET'
+        docs['worker']['receipt_sha256'] = core.digest({
+            k: v for k, v in docs['worker'].items() if k != 'receipt_sha256'})
+        with patch.object(core, 'independent_readback',
+                          side_effect=lambda component, attempt: docs[component]):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(foreign_attempt),
+                headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(foreign_attempt).json()['ticket_status'], 'PREPARED')
+
+        attempt = 'ACME-SIM-POSTLOCK-EXPIRY'
+        prepared = self.post(attempt).json()
+        original_fresh = core.approval_fresh
+        checks = []
+        def freshness(twin):
+            checks.append(len(checks) + 1)
+            if len(checks) == 2:
+                raise HTTPException(503, 'sandbox_approval_expired_after_lock')
+            return original_fresh(twin)
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._service_reads(prepared)):
+            with patch.object(core, 'approval_fresh', side_effect=freshness):
+                denied = self.client.post('/api/sandbox/acme/resolve',
+                    json=intent(attempt),
+                    headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(checks, [1, 2])
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                "select count(*) from aiops.acme_sandbox_ticket_events "
+                "where attempt_id=%s and status='RESOLVED'",
+                (attempt,)).fetchone()[0], 0)
 
 if __name__ == '__main__':
     unittest.main()
