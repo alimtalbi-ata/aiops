@@ -10,7 +10,7 @@ from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
 from worker.hitl_reject_terminal_runtime import recover_terminal_once, validate_request, UnqualifiedTerminal
 from worker.temporal_workflows import IncidentWorkflow, TerminalRejectWorkflow, AcmeSimulatedHitlWorkflow
-from worker.acme_simulated_hitl import (SandboxDenied, capability, validate_intent, simulate_no_effect, receipt_digest_valid)
+from worker.acme_simulated_hitl import (SandboxDenied, capability, validate_intent, simulate_no_effect, receipt_digest_valid, validated_service_origin)
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
@@ -154,9 +154,8 @@ async def acme_simulated_no_effect(intent):
         raise SandboxDenied("sandbox_disabled")
 
     async def read(component, path):
-        origin = {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component)
-        if origin is None:
-            raise SandboxDenied("sandbox_component_denied")
+        origin = validated_service_origin(
+            component, {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component))
 
         def fetch():
             response = requests.get(
