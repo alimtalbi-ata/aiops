@@ -623,6 +623,7 @@ def test_twin_real_issue_persists_signed_idempotency_and_immutable_readback(monk
     ('worker', 'http://aiops2-worker:810'),
     ('worker', 'http://user:password@aiops2-worker:815'),
     ('worker', 'http://aiops2-worker:815@evil.example:815'),
+    ('core', 'http://[::1:810'),  # malformed IPv6 must fail closed
 ])
 def test_simulator_origin_rejects_ssrf_before_internal_bearer(
         monkeypatch, component, bad_origin):
