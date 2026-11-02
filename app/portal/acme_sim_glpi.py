@@ -6,7 +6,6 @@ no browser-provided ticket/tenant/URL is used as authority.
 """
 from __future__ import annotations
 
-import hmac
 import os
 import re
 from pathlib import Path
