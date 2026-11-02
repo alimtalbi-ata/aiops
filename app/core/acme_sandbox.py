@@ -289,7 +289,7 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
         c.execute('insert into aiops.run_events '
                   '(event_id,run_id,sequence,stage,event_type,status,payload,event_key) '
                   "values (%s,%s,8,'RUN','SIMULATED_PREPARED','PREPARED',%s,%s)",
-                  (ident('EVT-SIM-', attempt + ':resolved'), run,
+                  (ident('EVT-SIM-', attempt + ':prepared'), run,
                    Jsonb({'tenant_id': TENANT, 'synthetic': True,
                           'ticket_id': ticket, 'proposal_id': proposal,
                           'execution_allowed': False, 'effect_allowed': False}),
