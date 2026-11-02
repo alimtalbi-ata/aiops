@@ -100,6 +100,7 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(r['ticket_authority'], 'SIMULATED_ONLY')
         self.assertEqual((r['source_event_count'], r['evidence_count']), (7, 2))
         self.assertEqual(len(set(r['source_event_ids'])), 7)
+        self.assertTrue(r['source_hashes_qualified'])
         self.assertEqual(r['source'], 'SYNTHETIC_SIMULATOR')
         self.assertEqual(r['analysis_kind'], 'SYNTHETIC_FIXTURE')
         self.assertTrue(r['analysis_validated'] and r['critic_validated'])
@@ -163,6 +164,12 @@ class SandboxPG16(unittest.TestCase):
                        "where run_id=%s and stage='SOURCE' and sequence=1",
                        (json.dumps({'tenant_id': 'FOREIGN'}), run))
         self.assertEqual(self.get(attempt).status_code, 503)
+        stale = 'ACME-SIM-STALE'
+        stale_run = self.post(stale).json()['run_id']
+        with psycopg.connect(self.url) as db:
+            db.execute("update aiops.evidence set observed_at=now()-interval '10 minutes' "
+                       "where provenance->>'run_id'=%s", (stale_run,))
+        self.assertEqual(self.get(stale).status_code, 503)
         with psycopg.connect(self.url) as db:
             with self.assertRaises(psycopg.Error):
                 with db.transaction():
@@ -224,6 +231,7 @@ class SandboxPG16(unittest.TestCase):
                    'attempt_sha256': hashlib.sha256(attempt.encode()).hexdigest(),
                    'source_event_count': result['source_event_count'],
                    'evidence_count': result['evidence_count'],
+                   'source_hashes_qualified': result['source_hashes_qualified'],
                    'incident_status': result['incident_status'],
                    'run_status': result['run_status'],
                    'ticket_authority': result['ticket_authority'],
