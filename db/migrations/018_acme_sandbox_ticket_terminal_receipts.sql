@@ -13,6 +13,7 @@ create table if not exists aiops.acme_sandbox_ticket_events (
  proposal_id text not null,
  approval_id text,
  worker_receipt_sha256 char(64),
+ terminal_ticket_sha256 char(64),
  recorded_at timestamptz not null default now(),
  primary key (tenant_id,attempt_id,transition_seq),
  unique (tenant_id,attempt_id,status),
@@ -20,10 +21,12 @@ create table if not exists aiops.acme_sandbox_ticket_events (
    references aiops.acme_sandbox_attempts(tenant_id,attempt_id),
  constraint acme_ticket_transition_binding check (
    (transition_seq=1 and status='PREPARED'
-      and approval_id is null and worker_receipt_sha256 is null)
+      and approval_id is null and worker_receipt_sha256 is null
+      and terminal_ticket_sha256 is null)
    or (transition_seq=2 and status='RESOLVED'
       and approval_id like 'SIM-APP-%'
-      and worker_receipt_sha256 ~ '^[0-9a-f]{64}$'))
+      and worker_receipt_sha256 ~ '^[0-9a-f]{64}$'
+      and terminal_ticket_sha256 ~ '^[0-9a-f]{64}$'))
 );
 drop trigger if exists trg_acme_ticket_events_immutable on aiops.acme_sandbox_ticket_events;
 create trigger trg_acme_ticket_events_immutable before update or delete
