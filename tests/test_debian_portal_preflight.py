@@ -1,4 +1,5 @@
 """Disposable preflight negative gates: no Docker or host execution."""
+import datetime as dt
 import importlib.util
 import json
 from pathlib import Path
@@ -39,18 +40,61 @@ class PreflightContract(unittest.TestCase):
             (p / 'compose.yml').write_text('services: {}\n')
             (p / '.env').write_text('FAKE=1\n')
             (p / 'manifest.json').write_text(json.dumps({'enabled': False, 'candidate_sha': 'a' * 40}))
+            latest = p / 'ops/debian-reports/SRV-DEB-05/latest.json'
+            latest.parent.mkdir(parents=True)
+            latest.write_text(json.dumps({'collected_at': dt.datetime.now(dt.timezone.utc).isoformat()}))
             calls = []
             def runner(argv, **kwargs):
                 calls.append(argv)
                 self.assertEqual(kwargs['capture_output'], True)
+                if argv[-2:] == ['--format', 'json']:
+                    return subprocess.CompletedProcess(argv, 0, stdout=json.dumps({
+                        'services': {'aiops2-portal': {
+                            'container_name': 'aiops2-rebuild-portal',
+                            'environment': {'AIOPS_PORTAL_HOST_PORT': '7777',
+                                            'A_SECRET': 'SYNTHETIC_SECRET'},
+                            'ports': [{'published': '7777', 'target': 777, 'protocol': 'tcp'}]}}}))
                 return subprocess.CompletedProcess(argv, 0,
-                    stdout='aiops2-portal\n' if argv[-1] == '--services' else '', stderr='SYNTHETIC_SECRET')
-            r = mod.make_receipt(FakePoller(), manifest_path=p / 'manifest.json',
+                    stdout='aiops2-portal\n' if argv[-1] == '--services' else '',
+                    stderr='SYNTHETIC_SECRET')
+            fake = FakePoller()
+            fake.REPORT_GIT = p
+            r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
                                  run=runner, dev=p, env=p / '.env')
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 3)
+            self.assertTrue(r['reporter_freshness']['fresh'])
+            self.assertTrue(r['deployment_preflight']['portal_host_port_7777'])
+            self.assertTrue(r['deployment_preflight']['portal_env_port_7777'])
+            self.assertTrue(r['deployment_preflight']['portal_container_name_matches'])
             self.assertEqual(r['deployment_preflight']['reason'], 'BACKUP_ROLLBACK_AND_E2E_GATES_MISSING')
             self.assertNotIn('SYNTHETIC_SECRET', json.dumps(r))
             self.assertFalse(r['deployment_preflight']['deployment_executed'])
+
+    def test_reporter_stale_and_bad_compose_port_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            latest = p / 'latest.json'
+            now = dt.datetime(2026, 11, 2, 12, 18, tzinfo=dt.timezone.utc)
+            latest.write_text(json.dumps({'collected_at': '2026-11-02T11:01:01Z'}))
+            stale = mod.reporter_freshness(latest, now=now)
+            self.assertFalse(stale['fresh'])
+            self.assertGreater(stale['age_seconds'], 3600)
+            latest.write_text(json.dumps({'collected_at': '2026-11-02T12:17:00Z'}))
+            self.assertTrue(mod.reporter_freshness(latest, now=now)['fresh'])
+            (p / 'compose.yml').write_text('services: {}\n')
+            (p / '.env').write_text('FAKE=1\n')
+            def runner(argv, **kwargs):
+                if argv[-2:] == ['--format', 'json']:
+                    return subprocess.CompletedProcess(argv, 0, stdout=json.dumps({
+                        'services': {'aiops2-portal': {
+                            'container_name': 'aiops2-rebuild-portal',
+                            'environment': {'AIOPS_PORTAL_HOST_PORT': '17777'},
+                            'ports': [{'published': '17777', 'target': 777, 'protocol': 'tcp'}]}}}))
+                return subprocess.CompletedProcess(argv, 0,
+                    stdout='aiops2-portal\n' if argv[-1] == '--services' else '')
+            flags = mod.compose_status(run=runner, dev=p, env=p / '.env')
+            self.assertFalse(flags['portal_host_port_7777'])
+            self.assertFalse(flags['portal_env_port_7777'])
 
     def test_entrypoint_is_only_readonly_preflight(self):
         entry = (ROOT / 'deploy/deploy-demo-studio-v2.sh').read_text()
