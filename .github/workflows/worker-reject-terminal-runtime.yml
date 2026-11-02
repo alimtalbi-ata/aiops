@@ -87,6 +87,12 @@ jobs:
       AIOPS_WORKER_CORE344_RECEIPT_DIR: /tmp/worker-core344-joined-receipt
       PYTHONPATH: ${{ github.workspace }}/core344/app:${{ github.workspace }}/app:${{ github.workspace }}/core344/tests:${{ github.workspace }}/tests
     steps:
+      - name: Install git before SHA-pinned checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git ca-certificates
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
