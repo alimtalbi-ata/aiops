@@ -20,16 +20,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install policy test dependencies
-        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "psycopg[binary]==3.2.13"
       - name: Daily quality schedule contract
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
+      - name: Core ITSM xref real HTTP router adversarial unit tests (mock DB)
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_core_itsm_xref_api.py" -v
+      - name: Core ITSM xref read contract (mock-only, no network)
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_core_itsm_xref_read.py" -v
+      - name: P0 Core xref adversarial negative readback and Evidence freshness (explicit exact-head gate)
+        run: |
+          PYTHONPATH=app:tests python -m unittest -v \
+            test_core_itsm_xref_read.CoreXrefReadContractTests.test_evidence_freshness_fails_closed_before_core_get \
+            test_core_itsm_xref_read.CoreXrefReadContractTests.test_real_core_negative_readback_has_no_business_identifiers \
+            test_core_itsm_xref_read.CoreXrefReadContractTests.test_negative_readback_requires_transport_acl_and_rejects_wrong_scope
+      - name: ACME read-only Core Evidence locator focused tests
+        run: python -m unittest discover -s tests -p "test_find_acme_demo_run.py" -v
+      - name: ACME SAN to Payments synthetic fixture hash and edge contract
+        run: python -m unittest discover -s tests -p "test_acme_san_payments_fixture_contract.py" -v
+      - name: ACME graph-bound synthetic catalog and replay contract tests
+        run: python -m unittest discover -s tests -p "test_acme_synthetic_incident_catalog.py" -v
+      - name: ACME pinned graph and catalog override type integrity regressions (3 tests)
+        run: python -m unittest discover -s tests -p "test_acme_fixture_override_types.py" -v
+      - name: Generate pinned offline ACME replay and checksum
+        run: |
+          python tools/generate_acme_incidents.py --scenario REDUNDANT_SAN_PATH_LOSS --seed 20261018 --output "$RUNNER_TEMP/acme-synthetic-replay.json"
+          sha256sum "$RUNNER_TEMP/acme-synthetic-replay.json"
+      - name: Upload offline synthetic replay (NOT Core or GLPI Evidence)
+        uses: actions/upload-artifact@v4
+        with:
+          name: acme-graph-bound-synthetic-replay
+          path: ${{ runner.temp }}/acme-synthetic-replay.json
+          retention-days: 7
+      - name: Compile ACME Core locator
+        run: python -m py_compile tools/find_acme_demo_run.py
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Portal registry and integration navigation unit tests
@@ -116,6 +153,13 @@ jobs:
       AIOPS_INTERNAL_TOKEN: ci-noc-internal-ephemeral-token-20261028-only
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -128,9 +172,42 @@ jobs:
           from pathlib import Path
           import psycopg
           with psycopg.connect(os.environ["DATABASE_URL"]) as c:
-              for name in ("001_schema.sql", "004_operational_model.sql"):
+              for name in ("001_schema.sql", "004_operational_model.sql", "009_ai_decision_ledger.sql", "010_evidence_identity.sql", "011_hitl_decision_outbox.sql", "012_itsm_xref_read.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
+      - name: Configure disposable xref service auth and independent attestation key
+        run: |
+          python - <<'PY'
+          import os, json, secrets, hashlib
+          a, b, n = (secrets.token_hex(32) for _ in range(3))
+          def entry(token, tenant, permissions):
+              return {"token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                      "actor_id": "ci-" + tenant, "tenant_ids": [tenant],
+                      "permissions": permissions}
+          config = json.dumps([entry(a, "TEN-A", ["itsm:xref:read"]),
+                               entry(b, "TEN-B", ["itsm:xref:read"]),
+                               entry(n, "TEN-A", [])], separators=(",", ":"))
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              for key, value in {
+                  "AIOPS_XREF_READ_AUTHZ_JSON": config,
+                  "AIOPS_XREF_ATTESTATION_KEY": secrets.token_hex(48),
+                  "AIOPS_XREF_OWNER_ATTESTATION_KEY": secrets.token_hex(48),
+                  "AIOPS_XREF_OWNER_PROOFS_PATH": os.path.join(os.environ["RUNNER_TEMP"],"xref-owner-proofs.json"),
+                  "AIOPS_XREF_CI_TOKEN_A": a,
+                  "AIOPS_XREF_CI_TOKEN_B": b,
+                  "AIOPS_XREF_CI_TOKEN_NO_PERM": n,
+                  "AIOPS_XREF_CI_DISPOSABLE": "1",
+              }.items():
+                  if key not in ("AIOPS_XREF_CI_DISPOSABLE", "AIOPS_XREF_OWNER_PROOFS_PATH"):
+                      print("::add-mask::" + value)
+                  print(key + "=" + value, file=f)
+          PY
+      - name: P0 combined 009 AI / 010 Evidence / 011 HITL / 012 xref PG16 disposable chain, idempotence and DDL rollback
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_core_itsm_xref_migration_chain.py" -v
+      - name: P0 installed 009-012 real SQL PostgreSQL 16 transactional rollback and idempotence
+        env:
+          AIOPS_XREF_CI_DISPOSABLE: "1"
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_core_xref_installed_migrations.py" -v
       - name: Start actual Core HTTP service and verify readiness
         run: |
           PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &
@@ -154,6 +231,8 @@ jobs:
           PY
       - name: Real Core PostgreSQL NOC read security and regression
         run: python -m unittest discover -s tests -p "test_core_noc_real_integration.py" -v
+      - name: Real Core PostgreSQL tenant ITSM xref HTTP + append-only regression
+        run: PYTHONPATH=app python -m unittest discover -s tests -p "test_core_itsm_xref_postgres_integration.py" -v
       - name: Start actual Policy HTTP service (ephemeral CI only)
         run: |
           PYTHONPATH=app python -m uvicorn policy.main:app --host 127.0.0.1 --port 1813 > /tmp/aiops-policy-ci.log 2>&1 &
@@ -197,6 +276,13 @@ jobs:
       AIOPS_GRAFANA_READ_URL: http://127.0.0.1:3000
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

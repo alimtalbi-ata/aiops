@@ -7,7 +7,12 @@ from shared.ids import new
 from shared.domain import transition,STAGES
 from shared.tenant_scope import reject_unqualified_tenant_scope
 from shared.demo_policy_gate_read_model import project_demo_policy_gate
+from core.itsm_xref import router as itsm_xref_router
+from core.hitl_reject_delivery import router as hitl_reject_delivery_router
 app=FastAPI(title='ACME AioOps Core',version='2.0.0')
+app.include_router(itsm_xref_router)
+# Core owns the REJECT-only terminal route; Worker may not mutate the outbox.
+app.include_router(hitl_reject_delivery_router)
 POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813'); WORKER=os.getenv('WORKER_URL','http://aiops2-worker:815')
 ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or ADMIN_TOKEN must be configured')
@@ -30,7 +35,7 @@ def append_event(c,rid,stage,etype,status,eids=None,decision=None,confidence=Non
     return seq,row[0],False
 def set_stage(c,rid,stage,state,attempt=None,error=None):
     if attempt is None:
-        c.execute('select attempt from aiops.run_stage_state where run_id=%s and stage=%s',(rid,stage)); row=c.fetchone(); attempt=(row[0] if row else 0)
+        row=c.execute('select attempt from aiops.run_stage_state where run_id=%s and stage=%s',(rid,stage)).fetchone(); attempt=(row[0] if row else 0)
     c.execute('insert into aiops.run_stage_state(run_id,stage,state,attempt,last_error) values(%s,%s,%s,%s,%s) on conflict(run_id,stage) do update set state=excluded.state,attempt=excluded.attempt,last_error=excluded.last_error,completed_at=case when excluded.state in (\'PASS\',\'BLOCKED\',\'FAIL\') then now() else aiops.run_stage_state.completed_at end,started_at=case when excluded.state=\'RUNNING\' then coalesce(aiops.run_stage_state.started_at,now()) else aiops.run_stage_state.started_at end',(rid,stage,state,attempt,error))
 @app.get('/health')
 def health():
@@ -69,8 +74,11 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
-        rec=c.execute('select response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
-        if rec:return rec[0]
+        rec=c.execute('select run_id,command,response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
+        if rec:
+            if rec[0]!=rid or rec[1]!=x.command:
+                raise HTTPException(409,'idempotency key bound to another command or Run')
+            return rec[2]
         status,version,mode=row
         if version!=x.expected_version:raise HTTPException(409,'stale run version')
         target={'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED','RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'}[x.command]
@@ -151,6 +159,22 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select version,status from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
+        # Check the existing keyed event BEFORE the version fence: an exact
+        # retry is safe even after the first request advanced the Run version.
+        # A key cannot silently authorize different event content.
+        if x.event_key:
+            previous=c.execute(
+                'select sequence,stage,event_type,status,evidence_ids,decision,confidence,payload '
+                'from aiops.run_events where run_id=%s and event_key=%s',
+                (rid,x.event_key)).fetchone()
+            if previous:
+                seq,stage,etype,status,eids,decision,confidence,payload=previous
+                if (stage!=x.stage or etype!=x.event_type or status!=x.status
+                        or eids!=x.evidence_ids or decision!=x.decision
+                        or (float(confidence) if confidence is not None else None)!=x.confidence
+                        or payload!=x.payload):
+                    raise HTTPException(409,'event key bound to different content')
+                return {'run_id':rid,'sequence':seq,'version':row[0],'idempotent':True}
         if row[0]!=x.expected_version:raise HTTPException(409,'stale run version')
         if x.evidence_ids:
             n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(x.evidence_ids,)).fetchone()[0]

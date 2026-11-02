@@ -1,0 +1,202 @@
+name: Core canonical seven-event receipts and full/payload binding (disposable)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - .github/workflows/core-canonical-seven-binding-pg16.yml
+      - tests/test_core_actor_canonical_seven_pg16.py
+      - tests/test_core_actor_canonical_seven_binding_pg16.py
+      - app/core/actor_canonical_seven_source.py
+      - app/core/canonical_seven_pg_source.py
+      - app/core/canonical_seven_https_adapter.py
+      - docs/architecture/ADR-CORE-HTTPS-SEVEN-SOURCE-ADAPTER-20261101.md
+      - docs/architecture/ADR-CORE-CANONICAL-SEVEN-BINDING-20261101.md
+      - docs/architecture/ADR-CORE-CANONICAL-SEVEN-EVENT-SOURCE-20261101.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-seven-binding-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-seven-source-disposable-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-seven-source-disposable-only@127.0.0.1:5432/aiops
+      PGPASSWORD: ci-seven-source-disposable-only
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      AIOPS_CORE_SEVEN_RECEIPT_DIR: /tmp/core-seven-redacted-receipts
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Install disposable test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv socat openssl git ca-certificates
+          python3 -m venv /tmp/core-seven-venv
+          /tmp/core-seven-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.115.12"
+      - name: Checkout exact source head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact SHA and PostgreSQL 16
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$EXPECTED_SHA"
+          /usr/lib/postgresql/16/bin/pg_isready --version | grep -F '16.'
+      - name: Forward service to loopback-only disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/core-seven-socat.log 2>&1 </dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          test "$(/usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | cut -c1-2)" = 16
+      - name: Run real PG16 canonical seven-event source authority tests with zero skips
+        shell: bash
+        env:
+          PYTHONPATH: app
+        run: |
+          set -euo pipefail
+          /tmp/core-seven-venv/bin/python -m unittest discover -s tests -p 'test_core_actor_canonical_seven_binding_pg16.py' -v 2>&1 | tee /tmp/core-seven-results.log
+          grep -E '^Ran 16 tests in ' /tmp/core-seven-results.log
+          grep -x 'OK' /tmp/core-seven-results.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-seven-results.log
+          echo "SYNTHETIC_ONLY=TRUE; AUTHORIZATION=UNKNOWN; GLPI_REAL=FALSE; FULL_HASH_DOMAIN_DISTINCT=TRUE; RECEIPT_PORTABLE_SIGNATURE=NONE"
+      - name: Validate redacted seven-source 013/014 recovery receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-seven-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "seven-014-recovery.json"
+          obj = json.loads(p.read_text())
+          expected = hashlib.sha256(json.dumps(
+              {k: v for k, v in obj.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert obj["receipt_sha256"] == expected
+          assert obj["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert obj["decision"] == obj["link_status"] == "UNKNOWN"
+          assert obj["source_preflight"] == "PASS_SYNTHETIC_ONLY"
+          assert obj["human_glpi_attested"] is False
+          assert obj["native_restore"] and obj["audit_013_014_immutable"]
+          assert obj["rows"] == {"evidence": 7, "run_events": 7, "nonce_013": 1,
+                                  "revocation_013": 1, "audit_014": 1}
+          assert len(obj["source_event_hashes"]) == 7
+          assert all(e["payload_sha256"] != e["full_event_sha256"]
+                     for e in obj["source_event_hashes"])
+          assert obj["hash_domains"]["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          producer = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "core-owned-producer.json"
+          c = json.loads(producer.read_text())
+          cdigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in c.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert c["receipt_sha256"] == cdigest
+          assert c["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert c["schema"] == "aiops.core-owned-seven-pg-producer-receipt.v1"
+          assert c["decision"] == c["link_status"] == "UNKNOWN"
+          assert c["human_glpi_attested"] is False and c["portable_signature"] == "NONE"
+          assert c["acme_full_event_equivalence"] == "NOT_VERIFIED"
+          assert len(c["events"]) == 7
+          assert all(e["payload_sha256"] != e["full_event_sha256"] for e in c["events"])
+          assert len(c["negative_cases"]) == 7
+          assert set(c["negative_cases"].values()) == {"UNKNOWN"}
+          assert c["audit_013_014"] == {"nonce_013": 1, "revocation_013": 1, "terminal_014": 0}
+          assert not any(secret in producer.read_text() for secret in
+                         ("idp|alice", "source-reader-disposable", "ci-seven-source-disposable-only"))
+          print("CORE_PG_PRODUCER_7_NEGATIVE=PASS", cdigest)
+          adapter = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "core-https-adapter.json"
+          a = json.loads(adapter.read_text())
+          adigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in a.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert a["receipt_sha256"] == adigest
+          assert a["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert a["schema"] == "aiops.core-https-seven-adapter-receipt.v1"
+          assert a["decision"] == a["link_status"] == "UNKNOWN"
+          assert a["actor_issuer_distinct"] is True
+          assert a["portable_signature"] == "NONE"
+          assert a["human_glpi_attested"] is False
+          assert a["execution_allowed"] is a["effect_allowed"] is False
+          assert len(a["events"]) == 7
+          assert all(e["payload_sha256"] != e["full_event_sha256"] for e in a["events"])
+          assert a["audit_before"] == a["audit_after"] == {
+              "nonce_013": 1, "revocation_013": 1, "terminal_014": 0}
+          assert a["negative_http"] == {
+              "missing_tls": 503, "invalid_basic": 401,
+              "malformed_scope": 404, "foreign_actor": 404,
+              "sql_failure": 503, "invalid_basic_over_tls": 401}
+          for secret in ("idp|alice", "source-reader-disposable",
+                         "ci-seven-source-disposable-only", "s" * 48):
+              assert secret not in adapter.read_text()
+          print("CORE_HTTPS_ADAPTER_UNKNOWN_ONLY=PASS", adigest)
+          raw = p.read_text()
+          for secret in ("DISPOSABLE-LEASE-", "ci-seven-source-disposable-only",
+                         "idp|alice", "source-reader-disposable"):
+              assert secret not in raw
+          neg = Path(os.environ["AIOPS_CORE_SEVEN_RECEIPT_DIR"]) / "freshness-expiry-negative.json"
+          n = json.loads(neg.read_text())
+          ndigest = hashlib.sha256(json.dumps(
+              {k: v for k, v in n.items() if k != "receipt_sha256"},
+              sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert n["receipt_sha256"] == ndigest
+          assert n["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert n["schema"] == "aiops.core-seven-freshness-negative.v1"
+          assert n["decision"] == n["link_status"] == "UNKNOWN"
+          assert n["negative_cases"] == {
+              "stale_attestation": "UNKNOWN", "expired_attestation": "UNKNOWN"}
+          assert n["audit_before"] == n["audit_after"] == {
+              "nonce_013": 1, "revocation_013": 1, "terminal_014": 0}
+          assert n["valid_source_recovery"] is True
+          assert n["portable_signature"] == "NONE"
+          assert n["human_glpi_attested"] is False
+          assert n["execution_allowed"] is n["effect_allowed"] is False
+          for secret in ("idp|alice", "source-reader-disposable",
+                         "ci-seven-source-disposable-only"):
+              assert secret not in neg.read_text()
+          print("CORE_SEVEN_FRESHNESS_NEGATIVE=PASS", ndigest)
+          PY
+          sha256sum "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.json" \
+            > "$AIOPS_CORE_SEVEN_RECEIPT_DIR/seven-014-recovery.sha256"
+          cd "$AIOPS_CORE_SEVEN_RECEIPT_DIR"
+          sha256sum --check seven-014-recovery.sha256
+          sha256sum core-owned-producer.json > core-owned-producer.sha256
+          sha256sum --check core-owned-producer.sha256
+          sha256sum core-https-adapter.json > core-https-adapter.sha256
+          sha256sum --check core-https-adapter.sha256
+          sha256sum freshness-expiry-negative.json > freshness-expiry-negative.sha256
+          sha256sum --check freshness-expiry-negative.sha256
+      - name: Upload synthetic redacted receipt only
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-seven-014-redacted-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/core-seven-redacted-receipts/seven-014-recovery.*
+            /tmp/core-seven-redacted-receipts/freshness-expiry-negative.*
+            /tmp/core-seven-redacted-receipts/core-owned-producer.*
+            /tmp/core-seven-redacted-receipts/core-https-adapter.*
+          retention-days: 7
+          if-no-files-found: error

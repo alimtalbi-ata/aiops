@@ -1,0 +1,204 @@
+name: HITL combined Core HTTP Worker Temporal PG16 disposable
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - tests/test_worker_core_pg16_temporal_combined.py
+      - .github/workflows/hitl-core-worker-pg16-combined-disposable.yml
+      - docs/qualification/HITL-CORE-WORKER-PG16-COMBINED-2026-11-01.md
+
+permissions:
+  contents: read
+
+jobs:
+  core-worker-temporal-pg16-disposable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: ubuntu:24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-hitl-ephemeral-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DATABASE_URL: postgresql://aiops:ci-hitl-ephemeral-only@postgres:5432/aiops
+      AIOPS_CI_COMBINED_DISPOSABLE: "YES"
+      AIOPS_CI_OUTBOX_DISPOSABLE: "YES"
+      AIOPS_CI_WORKER_DISPOSABLE: "YES"
+      AIOPS_CI_COMBINED_RECEIPT_DIR: /tmp/hitl-combined-receipts
+      HITL_DR_ARTIFACT: /tmp/hitl-combined-pg16-dr.dump
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Install pinned PostgreSQL 16 client in disposable container
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv postgresql-client-16
+          pg_dump --version | grep -E ' 16[.]'
+          pg_restore --version | grep -E ' 16[.]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Assert exact HEAD and install pinned test-only clients
+        run: |
+          set -eu
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          python3 -m venv /tmp/hitl-combined-venv
+          /tmp/hitl-combined-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "uvicorn==0.35.0"
+          /tmp/hitl-combined-venv/bin/python -m py_compile tests/test_worker_core_pg16_temporal_combined.py
+      - name: Combined Core ASGI HTTP PG16 and Temporal test Worker restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app:tests /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_worker_core_pg16_temporal_combined.py' -v 2>&1 | tee /tmp/hitl-combined.log
+      - name: Validate redacted runtime DEAD-negative receipt against exact HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CI_COMBINED_RECEIPT_DIR"]) / "dead-negative-matrix.json"
+          receipt = json.loads(path.read_text())
+          digest = receipt.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert digest == actual, "receipt_hash_mismatch"
+          assert receipt["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"], "not_exact_head"
+          assert receipt["schema"] == "aiops.worker-core-dead-negative-receipt.v1"
+          assert receipt["core_dead_runtime"] == "NEGATIVE_OBSERVED_LEASED_ATTEMPTS_8"
+          assert receipt["terminal_status"] == ["LEASED", "LEASED"]
+          assert receipt["lease_attempts"] == [8, 8]
+          assert receipt["lease_expired"] == [True, True]
+          assert receipt["event_decisions"] == ["REJECT", "REJECT"]
+          assert receipt["temporal_persisted_restarts"] == 2
+          assert len(receipt["generations"]) == 3
+          assert len({x["postgres_state_sha256"] for x in receipt["generations"]}) == 1
+          assert all(x["rows"] == 2 and x["temporal_signal_count"] == 0
+                     and x["effect_receipts"] == 0 and x["approve_outbox"] == 0
+                     for x in receipt["generations"])
+          assert receipt["execution_allowed"] is False and receipt["effect_allowed"] is False
+          assert receipt["approve_count"] == receipt["effect_receipt_count"] == receipt["delivered_receipts"] == 0
+          assert receipt["dead_sql_injection_in_this_case"] is False
+          assert receipt["physical_packet_loss"] == "NOT_TESTED"
+          assert receipt["oidc_glpi_identity"] == "NOT_ATTESTED"
+          assert receipt["universal_exactly_once"] == "NOT_CLAIMED"
+          assert not any(secret in path.read_text() for secret in ("lease_token", "Bearer ", "owner_key", "signed-synthetic-owner"))
+          receipt["payload_sha256"] = digest
+          print("CORE_DEAD_NEGATIVE_RECEIPT_PASS", digest, receipt["source_head"])
+          PY
+          sha256sum "$AIOPS_CI_COMBINED_RECEIPT_DIR/dead-negative-matrix.json" > /tmp/hitl-dead-negative-receipt.sha256
+          sha256sum --check /tmp/hitl-dead-negative-receipt.sha256
+      - name: Preserve independent PG16 SQL-model and DR regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-combined-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v 2>&1 | tee /tmp/hitl-combined-dr.log
+          sha256sum /tmp/hitl-combined-pg16-dr.dump | tee /tmp/hitl-combined-pg16-dr.sha256
+      - name: Write explicit synthetic evidence classification
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          log_path = "/tmp/hitl-combined.log"
+          log = open(log_path).read() if os.path.isfile(log_path) else ""
+          combined_ok = bool(
+              re.search(r"(?m)^Ran 10 tests in [0-9.]+s$", log)
+              and re.search(r"(?m)^OK$", log))
+          tcp_boundary_pass = (combined_ok and
+              "test_04_tcp_gateway_drops_committed_ack_and_worker_restart_no_duplicate" in log)
+          independent_core_temporal_restart_pass = (combined_ok and
+              "test_05_independent_core_tcp_temporal_server_restart_persistent_reject" in log)
+          multiworker_race_pass = (combined_ok and
+              "test_06_two_temporal_workers_race_one_core_lease_and_restart_server" in log)
+          multiprocess_restart_pass = (combined_ok and
+              "test_07_multiprocess_worker_restart_stale_ack_and_two_durable_rejects" in log)
+          cross_tenant_pass = (combined_ok and
+              "test_08_cross_tenant_run_fencing_after_two_os_worker_restarts" in log)
+          multi_server_dead_retry_pass = cross_tenant_pass  # asserted inside case 08
+          core_dead_negative_pass = (combined_ok and
+              "test_09_no_core_runtime_dead_transition_after_eighth_lease" in log)
+          dead_matrix_pass = (combined_ok and
+              "test_10_core_dead_contract_matrix_no_signal_across_temporal_restarts" in log)
+          worker_restart_pass = (combined_ok and
+              "test_02_core_http_temporal_worker_restart_and_ack_response_loss" in log)
+          report = {
+              "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+              "core_claim_ack": "ACTUAL_FASTAPI_ASGI_HTTP_AND_POPULATED_PG16_IF_PASS",
+              "core_http": ("INDEPENDENT_LOOPBACK_CORE_TCP_PROCESS" if independent_core_temporal_restart_pass else "ASGI_TESTCLIENT_UPSTREAM_NOT_DEPLOYED_TCP_CORE"),
+              "http_network": ("LOOPBACK_TCP_GATEWAY_AND_INDEPENDENT_CORE" if independent_core_temporal_restart_pass else ("LOOPBACK_TCP_GATEWAY_IF_PASS" if tcp_boundary_pass else "NOT_QUALIFIED")),
+              "tcp_ack_response_drop": (
+                  "OBSERVED_CI_DISPOSABLE_GATEWAY_CLOSE_AFTER_CORE_COMMIT"
+                  if tcp_boundary_pass else "NOT_TESTED_OR_FAILED"),
+              "ownership": "SIGNED_CI_SYNTHETIC_NOT_GLPI_SOURCE_AUTHORITY",
+              "real_oidc_human": "NOT_ATTESTED",
+              "temporal_test_worker_restart": (
+                  "OBSERVED_CI_DISPOSABLE" if worker_restart_pass
+                  else "NOT_TESTED_OR_FAILED"),
+              "temporal_server_restart": ("OBSERVED_CI_DISPOSABLE_SQLITE_PERSISTED" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "independent_core_tcp_service": ("OBSERVED_CI_DISPOSABLE_SEPARATE_PID" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "temporal_partition": "CONTROLLED_SERVER_STOP_START_NOT_NETWORK_PARTITION",
+              "two_worker_lease_race": ("OBSERVED_CI_DISPOSABLE_ONE_CORE_LEASE_ONE_SIGNAL" if multiworker_race_pass else "NOT_TESTED_OR_FAILED"),
+              "durable_ack_fencing_after_server_restart": ("OBSERVED_CI_DISPOSABLE" if multiworker_race_pass else "NOT_TESTED_OR_FAILED"),
+              "exactly_once_scope": "TWO_CI_REJECT_EVENTS_DETERMINISTIC_ONLY_NOT_GLOBAL_EXACTLY_ONCE",
+              "multiprocess_worker_restart": ("OBSERVED_CI_DISPOSABLE_SEPARATE_OS_PIDS" if multiprocess_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "stale_ack_after_process_and_server_restart": ("FENCED_CI_DISPOSABLE" if multiprocess_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "cross_tenant_run_lease_fencing": ("OBSERVED_CI_DISPOSABLE_TWO_TENANTS_TWO_OS_RESTARTS" if cross_tenant_pass else "NOT_TESTED_OR_FAILED"),
+              "cross_tenant_actor_scope": ("SEPARATE_SYNTHETIC_SERVICE_BEARERS_NO_REAL_OIDC" if cross_tenant_pass else "NOT_TESTED_OR_FAILED"),
+              "cross_tenant_replay_scope": "TWO_CI_REJECT_EVENTS_ONLY_NO_UNIVERSAL_EXACTLY_ONCE",
+              "persisted_temporal_server_restart_count": ("TWO_STOP_STARTS_IN_CASE_08" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "worker_os_restart_count": ("THREE_RESTARTS_FOUR_PIDS_IN_CASE_08" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "core_eighth_lease_retry": ("OBSERVED_CI_DISPOSABLE_CORE_HTTP_PG16" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "terminal_dead_transition": ("CI_INJECTED_SQL_AFTER_EIGHTH_EXPIRED_LEASE_NOT_CORE_RUNTIME_DEAD_LETTER" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "core_runtime_dead_negative": ("OBSERVED_CI_DISPOSABLE_LEASED_ATTEMPTS_8_NOT_DEAD" if core_dead_negative_pass else "NOT_TESTED_OR_FAILED"),
+              "core_runtime_dead_contract": "BLOCKED_CORE_OWNS_TERMINAL_DEAD_TRANSITION_NO_WORKER_ENDPOINT",
+              "core_dead_negative_contract_matrix": ("OBSERVED_CI_DISPOSABLE_TWO_TENANTS_EIGHTH_LEASE_FENCED" if dead_matrix_pass else "NOT_TESTED_OR_FAILED"),
+              "core_dead_negative_matrix_temporal": ("TWO_PERSISTED_SERVER_RESTARTS_ZERO_SIGNALS" if dead_matrix_pass else "NOT_TESTED_OR_FAILED"),
+              "core_dead_negative_matrix_dimensions": ["tenant", "run", "proposal_id", "proposal_hash", "proposal_revision", "lease_owner", "lease_token", "lease_expiry", "execution_allowed", "effect_allowed"],
+              "core_dead_negative_matrix_runtime_dead": "NOT_IMPLEMENTED_NO_SQL_DEAD_IN_TEST_10",
+              "core_dead_after_eighth_claim_in_test_08": ("NEGATIVE_OBSERVED_LEASED_ATTEMPTS_8_BEFORE_SQL_INJECTION" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "dead_transition_evidence_class": "SQL_INJECTED_NOT_RUNTIME",
+              "core_dead_test_09_sql_injection": False,
+              "dead_event_temporal_signal_count": (0 if multi_server_dead_retry_pass and dead_matrix_pass else None),
+              "durable_delivered_event_count": (2 if multi_server_dead_retry_pass else None),
+              "forged_and_stale_ack_after_second_server_restart": ("FENCED_CI_DISPOSABLE" if multi_server_dead_retry_pass else "NOT_TESTED_OR_FAILED"),
+              "two_durable_reject_notifications": ("OBSERVED_CI_DISPOSABLE_UNIQUE_EVENT_IDS" if multiprocess_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "lost_ack_response": "INJECTED_AFTER_REAL_DB_COMMIT",
+              "boundary_scope": ("GATEWAY_CLOSE_AFTER_INDEPENDENT_CORE_TCP_COMMIT_NOT_PACKET_LOSS" if independent_core_temporal_restart_pass else "GATEWAY_CLOSE_NOT_RANDOM_PACKET_LOSS_OR_CORE_TCP_SERVER"),
+              "real_network_ack_loss": "NOT_TESTED",
+              "ack_gateway_close_upstream": ("INDEPENDENT_CORE_TCP_AFTER_DB_COMMIT" if independent_core_temporal_restart_pass else "NOT_TESTED_OR_FAILED"),
+              "decision": "REJECT",
+              "execution_allowed": False,
+              "effect_allowed": False,
+              "effect_receipts_expected": 0,
+              "live": "DISABLED",
+          }
+          with open("/tmp/hitl-combined-report.json", "w") as f:
+              json.dump(report, f, indent=2, sort_keys=True)
+          PY
+      - name: Upload disposable combined test evidence and DR
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-core-worker-temporal-pg16-combined-disposable
+          path: |
+            /tmp/hitl-combined.log
+            /tmp/hitl-combined-dr.log
+            /tmp/hitl-combined-report.json
+            /tmp/hitl-combined-receipts/dead-negative-matrix.json
+            /tmp/hitl-dead-negative-receipt.sha256
+            /tmp/hitl-combined-pg16-dr.dump
+            /tmp/hitl-combined-pg16-dr.sha256
+          retention-days: 7
+          if-no-files-found: warn

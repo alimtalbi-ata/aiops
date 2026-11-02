@@ -1,0 +1,210 @@
+name: Core terminal REJECT DEAD PG16 audit (disposable)
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/core/hitl_reject_delivery.py
+      - app/core/main.py
+      - db/migrations/014_hitl_reject_terminal_receipts.sql
+      - tests/test_core_hitl_reject_terminal_pg16.py
+      - .github/workflows/core-reject-terminal-pg16.yml
+      - docs/architecture/ADR-CORE-REJECT-TERMINAL-DEAD-AUDIT-20261101.md
+      - docs/architecture/ADR-CORE-TERMINAL-MAIN-HTTP-WORKER-CONTRACT-20261101.md
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-terminal-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-terminal-disposable-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-terminal-disposable-only@127.0.0.1:5432/aiops
+      PGPASSWORD: ci-terminal-disposable-only
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      PYTHONPATH: app:tests
+      AIOPS_CORE_TERMINAL_RECEIPT_DIR: /tmp/core-terminal-receipts
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Install isolated test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
+          python3 -m venv /tmp/core-terminal-venv
+          /tmp/core-terminal-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "requests==2.32.4" "httpx==0.28.1"
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact SHA and same-major PostgreSQL
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$EXPECTED_SHA"
+          /usr/lib/postgresql/16/bin/pg_dump --version | grep -F '(PostgreSQL) 16.'
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/core-terminal-socat.log 2>&1 </dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
+      - name: Run installed 001/004/009-014 adversarial terminal transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python -m unittest discover -s tests -p 'test_core_hitl_reject_terminal_pg16.py' -v 2>&1 | tee /tmp/core-terminal-tests.log
+          grep -E '^Ran 15 tests in ' /tmp/core-terminal-tests.log
+          grep -x 'OK' /tmp/core-terminal-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-terminal-tests.log
+          echo "SYNTHETIC_ONLY=TRUE; HUMAN_GLPI_AUTH=UNKNOWN; EFFECT_ALLOWED=FALSE; HOST_DEPLOY=FALSE"
+      - name: Verify redacted Core DEAD receipt and SHA256 manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-dead.json"
+          payload = json.loads(path.read_text())
+          expected = payload.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert actual == expected
+          assert payload["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert payload["schema"] == "aiops.core-terminal-pg16-ci-receipt.v1"
+          assert payload["terminal_status"] == "DEAD" and payload["attempts"] == 8
+          assert payload["actor_authorization"] == "UNKNOWN"
+          assert payload["human_glpi_attested"] is False
+          assert payload["execution_allowed"] is False and payload["effect_allowed"] is False
+          assert payload["synthetic_disposable"] is True
+          assert len(payload["receipt_sha256"]) == 64
+          assert not any(x in path.read_text() for x in ("lease_token", "Bearer ", "signed-synthetic-owner"))
+          print("CORE_TERMINAL_RECEIPT_PASS", expected)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-dead.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-dead.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-dead.sha256"
+      - name: Verify native PG16 013+014 archive recovery receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-native-restore.json"
+          manifest = json.loads(p.read_text())
+          digest = manifest.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert digest == actual
+          assert manifest["schema"] == "aiops.core-terminal-native-restore-ci.v1"
+          assert manifest["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert manifest["postgres_server_major"] == manifest["pg_dump_major"] == manifest["pg_restore_major"] == 16
+          assert manifest["installed"] == ["001", "004", "009", "010", "011", "012", "013", "014"]
+          assert manifest["audit_rows_preserved"] == {"terminal_014": 1, "nonce_013": 1, "revocation_013": 1}
+          assert len(manifest["archive_sha256"]) == 64
+          assert manifest["archive_retained"] is False
+          assert manifest["restored_to_new_disposable_database"] is True
+          assert manifest["actor_authorization"] == "UNKNOWN"
+          assert manifest["execution_allowed"] is False and manifest["effect_allowed"] is False
+          assert manifest["rollback"] == "CODE_ONLY_KEEP_013_014_AUDIT"
+          assert not any(s in p.read_text() for s in ("lease_token", "Bearer ", "signed-synthetic-owner", "postgresql://"))
+          print("CORE_TERMINAL_NATIVE_PG16_RESTORE_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-native-restore.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-native-restore.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-native-restore.sha256"
+      - name: Verify canonical Core app HTTP /dead receipt and negative contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-main-http-contract.json"
+          data = json.loads(p.read_text())
+          expected = data.pop("payload_sha256")
+          actual = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert actual == expected
+          assert data["schema"] == "aiops.core-terminal-main-http-contract.v1"
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["core_app_route_registered"] is True
+          assert data["http"] == {
+              "unauthenticated": 401, "wrong_tenant_permission": 403,
+              "foreign_tenant_non_enumerating": 200, "mismatched_bindings": 6,
+              "dead": 200, "idempotent_replay": 200, "late_ack": 200}
+          assert data["terminal_status"] == "DEAD"
+          assert data["late_ack_status"] == "UNKNOWN"
+          assert data["audit_014_rows"] == 1 and data["attempts"] == 8
+          assert len(data["receipt_sha256"]) == 64
+          assert data["human_glpi_attested"] is False
+          assert data["actor_authorization"] == "UNKNOWN"
+          assert data["execution_allowed"] is False and data["effect_allowed"] is False
+          assert data["synthetic_disposable"] is True
+          assert not any(x in p.read_text() for x in ("lease_token", "Bearer ", "postgresql://"))
+          print("CORE_TERMINAL_MAIN_HTTP_CONTRACT_PASS", expected)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-main-http-contract.sha256"
+      - name: Verify post-commit revocation fence receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-postcommit-revocation.json"
+          data = json.loads(p.read_text())
+          digest = data.pop("payload_sha256")
+          assert digest == hashlib.sha256(json.dumps(
+              data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["schema"] == "aiops.core-terminal-postcommit-revocation.v1"
+          assert data["http"] == {
+              "committed_dead": 200, "credential_revoked": 401,
+              "terminal_permission_revoked": 403, "source_proof_revoked": 200,
+              "late_ack": 200, "revalidated_idempotent_replay": 200}
+          assert data["revoked_status"] == data["late_ack_status"] == "UNKNOWN"
+          assert data["terminal_status"] == "DEAD" and data["attempts"] == 8
+          assert data["audit_014_rows"] == 1 and len(data["receipt_sha256"]) == 64
+          assert data["actor_authorization"] == "UNKNOWN"
+          assert data["human_glpi_attested"] is False
+          assert data["execution_allowed"] is False and data["effect_allowed"] is False
+          assert data["rollback"] == "CODE_ONLY_KEEP_013_014_AUDIT"
+          assert data["synthetic_disposable"] is True and data["canonical_core_app"] is True
+          assert not any(s in p.read_text() for s in (
+              "lease_token", "Bearer ", "postgresql://", "signed-synthetic-owner"))
+          print("CORE_TERMINAL_POSTCOMMIT_REVOCATION_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-postcommit-revocation.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-postcommit-revocation.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-postcommit-revocation.sha256"
+      - name: Preserve redacted exact-head qualification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-terminal-pg16-redacted-${{ github.run_id }}
+          path: |
+            /tmp/core-terminal-tests.log
+            /tmp/core-terminal-receipts/terminal-dead.json
+            /tmp/core-terminal-receipts/terminal-dead.sha256
+            /tmp/core-terminal-receipts/terminal-native-restore.json
+            /tmp/core-terminal-receipts/terminal-native-restore.sha256
+            /tmp/core-terminal-receipts/terminal-main-http-contract.json
+            /tmp/core-terminal-receipts/terminal-main-http-contract.sha256
+            /tmp/core-terminal-receipts/terminal-postcommit-revocation.json
+            /tmp/core-terminal-receipts/terminal-postcommit-revocation.sha256
+          retention-days: 7

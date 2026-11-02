@@ -1,0 +1,122 @@
+{
+  "schema": "aiops.acme.synthetic-vertical-contract.v1",
+  "provenance": "SYNTHETIC_FIXTURE",
+  "authority": "OFFLINE_SCRIPT_ONLY",
+  "scenario_id": "SCN-GOLDEN-PAYMENT-P1",
+  "seed": 20261018,
+  "graph_git_blob": "67f0124a2c3b450e5249165e719a5d943fdd7237",
+  "governance_index_git_blob": "e77a0abbb53176488ec49d7c0c9f8581d4620b3f",
+  "source": "db/migrations/005_seed_acme.sql",
+  "source_selector": "scenario_steps",
+  "tenant_scope": "UNKNOWN",
+  "runtime_readback": "NOT_EXECUTED",
+  "execution_status": "NOT_EXECUTED",
+  "live_effects_authorized": false,
+  "stages": [
+    {
+      "stage": "EVENT_ALERT",
+      "itil_practice": "Monitoring & Event Management",
+      "source_step": 1,
+      "expected_action": "INCIDENT_OPEN",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "GLPI_TICKET",
+      "itil_practice": "Service Desk",
+      "source_step": 1,
+      "expected_action": "INCIDENT_OPEN",
+      "runtime_checkpoint": "GLPI_TICKET"
+    },
+    {
+      "stage": "CORE_INCIDENT",
+      "itil_practice": "Incident Management",
+      "source_step": 1,
+      "expected_action": "INCIDENT_OPEN",
+      "runtime_checkpoint": "CORE_INCIDENT"
+    },
+    {
+      "stage": "CORE_RUN",
+      "itil_practice": "Incident Management",
+      "source_step": 2,
+      "expected_action": "SET_STATE",
+      "runtime_checkpoint": "CORE_RUN"
+    },
+    {
+      "stage": "TWIN_IMPACT_CANDIDATE",
+      "itil_practice": "Service Configuration Management",
+      "source_step": 2,
+      "expected_action": "SET_STATE",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "ANALYST",
+      "itil_practice": "Incident diagnosis (advisory)",
+      "source_step": 3,
+      "expected_action": "OBSERVE",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "CRITIC",
+      "itil_practice": "Independent diagnostic challenge (advisory)",
+      "source_step": 3,
+      "expected_action": "OBSERVE",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "EVIDENCE",
+      "itil_practice": "Evidence Management",
+      "source_step": 3,
+      "expected_action": "OBSERVE",
+      "runtime_checkpoint": "EVIDENCE"
+    },
+    {
+      "stage": "POLICY_PROPOSAL",
+      "itil_practice": "Change Enablement (proposed)",
+      "source_step": 5,
+      "expected_action": "POLICY_CHECK",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "HITL_APPROVAL",
+      "itil_practice": "Change Enablement (human decision)",
+      "source_step": 5,
+      "expected_action": "POLICY_CHECK",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "SIMULATE",
+      "itil_practice": "Controlled simulation (no effects)",
+      "source_step": 5,
+      "expected_action": "POLICY_CHECK",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "POST_ACTION_VERIFICATION",
+      "itil_practice": "Service Validation and Testing",
+      "source_step": 6,
+      "expected_action": "VERIFY",
+      "runtime_checkpoint": null
+    },
+    {
+      "stage": "RESOLUTION",
+      "itil_practice": "Incident Management",
+      "source_step": 7,
+      "expected_action": "RECONCILE",
+      "runtime_checkpoint": "RESOLUTION"
+    },
+    {
+      "stage": "REOPEN",
+      "itil_practice": "Incident Management",
+      "source_step": 7,
+      "expected_action": "RECONCILE",
+      "runtime_checkpoint": "REOPEN"
+    },
+    {
+      "stage": "PROBLEM_KNOWLEDGE_CHANGE",
+      "itil_practice": "Continual Improvement",
+      "source_step": 7,
+      "expected_action": "RECONCILE",
+      "runtime_checkpoint": null
+    }
+  ]
+}

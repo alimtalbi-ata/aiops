@@ -371,12 +371,15 @@ class RunDetailTests(unittest.TestCase):
     def test_authenticated_unqualified_session_never_issues_cookie_or_reads_core(self):
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
-            response = self.client.post(
-                "/api/portal/run-session",
-                headers={"Authorization": "Bearer " + TOKEN, "Origin": "http://testserver",
-                         "X-Portal-Run-ID": RID, "X-Tenant-ID": "foreign",
-                         "X-Actor-ID": "forged"},
-            )
+            # The positive same-origin shape is HTTPS at the ASGI boundary;
+            # an HTTP request with a forged HTTPS Origin is separately denied.
+            with TestClient(main.app, base_url="https://testserver") as tls_client:
+                response = tls_client.post(
+                    "/api/portal/run-session",
+                    headers={"Authorization": "Bearer " + TOKEN, "Origin": "https://testserver",
+                             "X-Portal-Run-ID": RID, "X-Tenant-ID": "foreign",
+                             "X-Actor-ID": "forged"},
+                )
             page = self.client.get("/runs/" + RID)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["state"], "UNKNOWN")
@@ -434,16 +437,14 @@ class RunDetailTests(unittest.TestCase):
         self.assertNotIn("set-cookie", unconfigured.headers)
 
     def test_expired_or_tampered_session_never_reads_core(self):
-        with patch.object(acme_run_detail.time, "time", return_value=1000):
-            expired = acme_run_detail._issue_session(RID, now=1000)
-        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, expired, path="/runs")
-        with patch.object(acme_run_detail.time, "time", return_value=1400), patch.object(
+        self.client.cookies.set("aiops_portal_run_session", "expired.legacy", path="/runs")
+        with patch.object(
             acme_run_detail, "_read_core_run", side_effect=AssertionError("no Core read")
         ) as core:
             response = self.client.get("/runs/" + RID)
         self.assertEqual(response.status_code, 401)
         core.assert_not_called()
-        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, "tampered.payload", path="/runs")
+        self.client.cookies.set("aiops_portal_run_session", "tampered.payload", path="/runs")
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
             response = self.client.get("/runs/" + RID)
@@ -451,9 +452,7 @@ class RunDetailTests(unittest.TestCase):
         core.assert_not_called()
 
     def test_json_run_api_remains_bearer_only_even_with_html_session_cookie(self):
-        self.client.cookies.set(
-            acme_run_detail.SESSION_COOKIE, acme_run_detail._issue_session(RID), path="/runs"
-        )
+        self.client.cookies.set("aiops_portal_run_session", "old.signed-cookie", path="/runs")
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
             response = self.client.get("/api/portal/runs/" + RID)
@@ -463,9 +462,8 @@ class RunDetailTests(unittest.TestCase):
     def test_legacy_signed_cookie_is_never_actor_tenant_authority(self):
         # A cookie minted by an older Portal version remains cryptographically
         # valid, but must not authenticate the Run page without an ACL.
-        cookie = acme_run_detail._issue_session(RID)
-        self.assertTrue(acme_run_detail._valid_session(cookie, RID))
-        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+        # Legacy cookies are deliberately ignored, regardless of prior signature.
+        self.client.cookies.set("aiops_portal_run_session", "old.signed-cookie", path="/runs")
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("no Core read")) as core:
             page = self.client.get("/runs/" + RID)
@@ -493,23 +491,18 @@ class RunDetailTests(unittest.TestCase):
                 self.assertNotIn("set-cookie", response.headers)
             core.assert_not_called()
 
-    def test_cookie_cannot_open_another_run_even_with_valid_signature(self):
-        cookie = acme_run_detail._issue_session(RID)
-        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+    def test_cookie_cannot_open_another_run(self):
+        self.client.cookies.set("aiops_portal_run_session", "old.signed-cookie", path="/runs")
         with patch.object(acme_run_detail, "_read_core_run",
                           side_effect=AssertionError("foreign Core read")) as core:
             foreign = self.client.get("/runs/RUN-OTHER-123")
         self.assertEqual(foreign.status_code, 401)
         self.assertIn("NOT VERIFIED", foreign.text)
         core.assert_not_called()
-        self.assertTrue(acme_run_detail._valid_session(cookie, RID))
-        self.assertFalse(acme_run_detail._valid_session(cookie, "RUN-OTHER-123"))
 
-    def test_rotated_read_token_revokes_existing_run_session(self):
-        cookie = acme_run_detail._issue_session(RID)
-        self.client.cookies.set(acme_run_detail.SESSION_COOKIE, cookie, path="/runs")
+    def test_legacy_cookie_cannot_authenticate_after_token_rotation(self):
+        self.client.cookies.set("aiops_portal_run_session", "old.signed-cookie", path="/runs")
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "rotated-ci-only-viewer-token"}):
-            self.assertFalse(acme_run_detail._valid_session(cookie, RID))
             with patch.object(acme_run_detail, "_read_core_run",
                               side_effect=AssertionError("no Core read")) as core:
                 response = self.client.get("/runs/" + RID)

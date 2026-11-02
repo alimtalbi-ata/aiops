@@ -1,0 +1,94 @@
+name: Core Run event_key 015 native PG16 writer and recovery (disposable)
+
+on:
+  pull_request:
+    branches:
+      - integration/enterprise-slice-main-20261031-2230
+      - main
+    paths:
+      - app/core/main.py
+      - db/migrations/015_core_run_event_idempotency.sql
+      - tests/test_core_run_event_key_015_pg16.py
+      - .github/workflows/core-run-event-key-015-pg16.yml
+      - docs/architecture/ADR-CORE-RUN-EVENT-KEY-015-20261102.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-run-writer-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-core-015-disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-core-015-disposable@127.0.0.1:5432/aiops
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      GITHUB_ACTIONS: "true"
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      AIOPS_CORE_WRITER_RECEIPT_DIR: /tmp/core-015-receipts
+      PYTHONPATH: app:tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Exact HEAD, disposable PG16 and pinned Python dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+          pg_dump --version | grep -E ' 16[.]'
+          pg_restore --version | grep -E ' 16[.]'
+          python3 -m venv /tmp/core-015-venv
+          /tmp/core-015-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4"
+          /tmp/core-015-venv/bin/python -m py_compile app/core/main.py tests/test_core_run_event_key_015_pg16.py
+      - name: Real Core ASGI PG16 migration, writer and native restore
+        run: |
+          set -euo pipefail
+          /tmp/core-015-venv/bin/python -m unittest discover -s tests -p test_core_run_event_key_015_pg16.py -v 2>&1 | tee /tmp/core-015-tests.log
+          grep -E '^Ran 2 tests in ' /tmp/core-015-tests.log
+          grep -x 'OK' /tmp/core-015-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-015-tests.log
+      - name: Validate redacted exact-head machine receipt
+        run: |
+          set -euo pipefail
+          /tmp/core-015-venv/bin/python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          path=Path(os.environ["AIOPS_CORE_WRITER_RECEIPT_DIR"])/"core-writer-015.json"
+          raw=path.read_text()
+          obj=json.loads(raw)
+          expected=obj.pop("payload_sha256")
+          assert hashlib.sha256(json.dumps(obj,sort_keys=True,separators=(",",":")).encode()).hexdigest()==expected
+          assert obj["source_head"]==os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert obj["installed"]==["001","004","009","010","011","012","013","014","015"]
+          assert obj["source_events"]==7 and obj["run_events"]==8
+          assert obj["command_receipts"]==1 and obj["native_pg16_restore"] is True
+          assert obj["human_glpi_allow"] is False and obj["actor_tenant_attested"] is False
+          assert obj["release_stable"]=="NO_GO"
+          assert len(obj["negative_http"])==7 and all(v in (401,404,409,422) for v in obj["negative_http"].values())
+          assert obj["audit_rows"]=={"nonce_013":0,"revocation_013":0,"terminal_014":0}
+          assert not any(x in raw.lower() for x in ("bearer ","lease_token","postgresql://","ci-core-015-disposable"))
+          print("CORE_015_RECEIPT_PASS",expected)
+          PY
+          cd "$AIOPS_CORE_WRITER_RECEIPT_DIR"
+          sha256sum core-writer-015.json > core-writer-015.sha256
+          sha256sum -c core-writer-015.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-015-pg16-redacted-${{ github.sha }}
+          path: /tmp/core-015-receipts/
+          retention-days: 7

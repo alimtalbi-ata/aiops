@@ -14,6 +14,7 @@ from portal.acme_impact_read_model import router as acme_impact_router
 from portal.acme_explore_story import router as acme_explore_story_router
 from portal.acme_run_detail import router as acme_run_detail_router
 from portal.glpi_operator_view import router as glpi_operator_view_router
+from portal.oidc_session import router as oidc_session_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 @app.middleware('http')
 async def portal_security_headers(request: Request, call_next):
@@ -39,6 +40,7 @@ app.include_router(acme_impact_router)
 app.include_router(acme_explore_story_router)
 app.include_router(acme_run_detail_router)
 app.include_router(glpi_operator_view_router)
+app.include_router(oidc_session_router)
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');COPILOT=os.getenv('COPILOT_URL','http://aiops2-copilot:814');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811')
 @app.get('/health')
 def health():return {'status':'ok','component':'portal','external_port':os.getenv('AIOPS_PORTAL_HOST_PORT','17777'),'internal_port':777}

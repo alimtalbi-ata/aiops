@@ -165,9 +165,18 @@ class PortalReconciliationQualityBridgeTests(unittest.TestCase):
               "\\n" + completed.stdout + completed.stderr)
 
     def test_run_glpi_copilot_python_suites(self):
+        # Existing shared CI step invokes this Portal-owned bridge. Install the
+        # declared pinned RSA dependency before subprocess tests; never SKIP
+        # signature verification or silently rely on the runner image.
+        self._run([sys.executable, "-m", "pip", "install",
+                   "--disable-pip-version-check", "--only-binary=:all:",
+                   "-r", "app/portal/requirements-oidc-ci.txt"])
         for pattern in ("test_portal_run_detail.py",
                         "test_portal_glpi_operator_view.py",
-                        "test_portal_copilot_tenant_fence.py"):
+                        "test_portal_copilot_tenant_fence.py",
+                        "test_portal_oidc_identity.py",
+                        "test_portal_oidc_session.py",
+                        "test_portal_core_acl_consumer.py"):
             with self.subTest(pattern=pattern):
                 self._run([sys.executable, "-m", "unittest", "discover",
                            "-s", "tests", "-p", pattern, "-v"])
