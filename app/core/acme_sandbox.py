@@ -371,13 +371,6 @@ def start(x: Intent, authorization: str | None = Header(default=None)):
                   (TENANT, attempt, request_hash, incident, run, ticket, proposal,
                    analysis, critique, 'PREPARED', 'SYNTHETIC_SIMULATOR'))
         # RG-ACME-08: immutable ticket PREPARED record exists before any approval.
-        ticket_sha = digest({
-            'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
-            'tenant_id': TENANT, 'attempt_id': attempt,
-            'incident_id': incident, 'run_id': run,
-            'ticket_id': ticket, 'ticket_status': 'RESOLVED',
-            'core_request_sha256': current['request_sha256'],
-            'worker_receipt_sha256': worker_sha})
         c.execute(
             "insert into aiops.acme_sandbox_ticket_events "
             "(tenant_id,attempt_id,transition_seq,status,ticket_id,incident_id,"
@@ -582,6 +575,13 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
         if changed.rowcount != 1:
             raise HTTPException(503, 'sandbox_run_transition_conflict')
         # Separate immutable SIM-GLPI terminal record; 016 attempt remains immutable.
+        ticket_sha = digest({
+            'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
+            'tenant_id': TENANT, 'attempt_id': attempt,
+            'incident_id': incident, 'run_id': run,
+            'ticket_id': ticket, 'ticket_status': 'RESOLVED',
+            'core_request_sha256': current['request_sha256'],
+            'worker_receipt_sha256': worker_sha})
         c.execute(
             "insert into aiops.acme_sandbox_ticket_events "
             "(tenant_id,attempt_id,transition_seq,status,ticket_id,incident_id,"
