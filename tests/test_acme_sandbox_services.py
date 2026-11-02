@@ -379,6 +379,7 @@ def test_twin_approval_replay_expiry_and_foreign_tenant_denied():
     'http://169.254.169.254:810',
     'http://aiops2-core:9999',
     'http://localhost:9999',
+    'http://[::1:810',  # malformed IPv6 must fail 503, never 500 or outbound
 ])
 def test_twin_independent_core_origin_rejects_untrusted_urls_before_http(monkeypatch, bad_url):
     monkeypatch.setenv('CORE_URL', bad_url)
