@@ -49,7 +49,10 @@ jobs:
           r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
              "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":22,
              "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,
-             "runtime_workflow_registered":True,"simulated_no_effect_registered":True,\n             "simulated_approval_issuer":"TWIN_ACME_SIMULATED",\n             "human_approval_claimed":False,"simulated_effect_receipts":0,\n             "core_344_joined_pg16":False,
+             "runtime_workflow_registered":True,"simulated_no_effect_registered":True,
+             "simulated_approval_issuer":"TWIN_ACME_SIMULATED",
+             "human_approval_claimed":False,"simulated_effect_receipts":0,
+             "core_344_joined_pg16":False,
              "two_os_worker_restart":False,"temporal_persisted_restart":False,
              "human_glpi_allow":False,"live_effect":False,"host_deployed":False,
              "release_stable":"NO_GO"}
