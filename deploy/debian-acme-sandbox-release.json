@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "dc005534aedcdb23cd5c19b4e9c930c1428d4478",
+  "candidate_sha": "5691d31b648885dc74036875d9027a2877016e73",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; portal 7777 untouched",
-  "reason": "Reviewed #362 exact-head 9/9 workflows SUCCESS (Core PG16 19/19, registered Temporal same-Run in disposable CI, isolated synthetic SAN graph 019). Second guarded five-service DEV rollout only via existing Debian poller with native PG16 backup/scratch restore, image/health and rollback gates. E2E incident-to-RESOLVED must be separately observed; no LIVE or human GLPI.",
-  "source_pr": 362
+  "reason": "RG-ACME-24/25 reviewed #364 exact-head source: Policy historical RESOLVED SIMULATE GET verifies immutable Core terminal SIM-GLPI digest and Worker receipt SHA256 without issuing new approval; Policy POST remains PREPARED-only; internal bearer direct-only fixed origin. Execute only after #364 merged and all exact-head required CI SUCCESS; existing guarded five-service DEV poller with PG16 native backup/scratch restore, health and rollback. E2E must be independently observed on host, no LIVE/human GLPI.",
+  "source_pr": 364
 }
