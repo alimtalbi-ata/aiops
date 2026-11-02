@@ -46,7 +46,7 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
           python3 -m venv /tmp/core-acme-venv
-          /tmp/core-acme-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4"
+          /tmp/core-acme-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0"
       - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
@@ -64,13 +64,13 @@ jobs:
             sleep 1
           done
           /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
-      - name: Sixteen real PG16 sandbox regressions and terminal restore, no skip
+      - name: Seventeen PG16 regressions including registered Temporal same-Run, no skip
         shell: bash
         run: |
           set -euo pipefail
           /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
           /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
-          grep -E '^Ran 16 tests in ' /tmp/core-acme-tests.log
+          grep -E '^Ran 17 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
@@ -101,6 +101,29 @@ jobs:
           PY
           sha256sum "$AIOPS_CORE_ACME_RECEIPT_DIR/core-acme-sandbox.json" > "$AIOPS_CORE_ACME_RECEIPT_DIR/core-acme-sandbox.sha256"
           (cd "$AIOPS_CORE_ACME_RECEIPT_DIR" && sha256sum --check core-acme-sandbox.sha256)
+      - name: Verify joined registered Temporal + PG16 same-Run receipt (CI only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-acme-venv/bin/python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path('/tmp/acme-pg16-temporal-joined.json')
+          d=json.loads(p.read_text())
+          assert d['source_head']==os.environ['AIOPS_EXPECTED_HEAD_SHA']
+          assert d['registered_temporal_activity'] is True
+          assert d['pg16_terminal_readback']=='RESOLVED'
+          assert d['worker_readback_count']==6
+          assert d['twin_policy_authorities']=='SYNTHETIC_CI_FIXTURES'
+          assert d['human_glpi_attested'] is False
+          assert d['live_effects']==0 and d['debian_host_deployed'] is False
+          assert d['release_stable']=='NO_GO'
+          assert all(d[k] for k in ('incident_id','run_id','ticket_id','approval_id','worker_receipt_sha256','terminal_ticket_sha256'))
+          assert not any(s in p.read_text() for s in ('Bearer ','postgresql://','ci-core-acme-disposable-only'))
+          print('JOINED_PG16_TEMPORAL_CI_ONLY',hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+          sha256sum /tmp/acme-pg16-temporal-joined.json > /tmp/acme-pg16-temporal-joined.sha256
+          (cd /tmp && sha256sum --check acme-pg16-temporal-joined.sha256)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -108,4 +131,6 @@ jobs:
           path: |
             /tmp/core-acme-sandbox-receipt/core-acme-sandbox.json
             /tmp/core-acme-sandbox-receipt/core-acme-sandbox.sha256
+            /tmp/acme-pg16-temporal-joined.json
+            /tmp/acme-pg16-temporal-joined.sha256
           retention-days: 7
