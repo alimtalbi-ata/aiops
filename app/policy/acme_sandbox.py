@@ -1,10 +1,13 @@
 """ACME-TEST Policy SIMULATE-only readback; no human GLPI or LIVE authority.
 
 RG-ACME-07: new SIMULATE decisions require Core PREPARED, never RESOLVED.
-Independent Core PREPARED and HMAC-verified Twin GETs are required for every
-Policy readback. No mutable Policy shadow ticket or fabricated human approval.
+A new decision requires PREPARED. Historical RESOLVED GET requires Core's
+independently persisted terminal ticket and Worker receipt digest; it never
+issues a fresh decision or authorizes human/LIVE effects.
 """
+import hashlib
 import hmac
+import json
 import os
 import re
 from urllib.parse import urlsplit
@@ -60,16 +63,17 @@ def fetch_component(component, attempt):
     except (ValueError, KeyError, requests.RequestException):
         raise HTTPException(503, 'sandbox_' + component + '_readback_unavailable') from None
 
-def qualify(attempt, core, twin):
+def qualify(attempt, core, twin, *, historical=False):
+    expected_status = 'RESOLVED' if historical else 'PREPARED'
     ids = ('incident_id', 'run_id', 'ticket_id', 'proposal_id')
     if (any(doc.get('attempt_id') != attempt or doc.get('tenant_id') != TENANT
             for doc in (core, twin))
             or any(not isinstance(core.get(k), str) or not core[k]
                    or core[k] != twin.get(k) for k in ids)
             or not core['ticket_id'].startswith('SIM-GLPI-')
-            or core.get('incident_status') != 'PREPARED'
+            or core.get('incident_status') != expected_status
             or core.get('run_status') != core.get('incident_status')
-            or core.get('ticket_status') != core.get('run_status')
+            or core.get('ticket_status') != expected_status
             or core.get('ticket_authority') != 'SIMULATED_ONLY'
             or core.get('glpi_mode') != 'SIMULATED_ONLY'
             or core.get('source_event_count') != 7
@@ -93,22 +97,55 @@ def qualify(attempt, core, twin):
                              'effect_allowed', 'live_effects_allowed',
                              'real_glpi_writes_allowed'))):
         raise HTTPException(503, 'sandbox_policy_join_unqualified')
+    if historical:
+        # RG-ACME-24: read-only replay of a persisted simulated decision,
+        # never an approval or new Policy evaluation after Core RESOLVED.
+        worker_sha = core.get('worker_receipt_sha256')
+        ticket_sha = core.get('terminal_ticket_sha256')
+        if (core.get('source') != 'SYNTHETIC_SIMULATOR'
+                or core.get('approval_id') != twin.get('approval_id')
+                or core.get('worker_receipt_verified') is not True
+                or core.get('terminal_ticket_receipt_verified') is not True
+                or core.get('resolution_after_worker_receipt') is not True
+                or core.get('approval_fresh_at_resolution') is not True
+                or core.get('approval_nonce_consumed') is not True
+                or core.get('approval_nonce_revoked') is not False
+                or not isinstance(worker_sha, str)
+                or not re.fullmatch(r'[a-f0-9]{64}', worker_sha)
+                or not isinstance(ticket_sha, str)
+                or not re.fullmatch(r'[a-f0-9]{64}', ticket_sha)):
+            raise HTTPException(503, 'sandbox_historical_receipts_unqualified')
+        binding = {
+            'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
+            'tenant_id': TENANT, 'attempt_id': attempt,
+            'incident_id': core['incident_id'], 'run_id': core['run_id'],
+            'ticket_id': core['ticket_id'], 'ticket_status': 'RESOLVED',
+            'core_request_sha256': core.get('request_sha256'),
+            'worker_receipt_sha256': worker_sha}
+        expected_sha = hashlib.sha256(json.dumps(
+            binding, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        if not hmac.compare_digest(ticket_sha, expected_sha):
+            raise HTTPException(503, 'sandbox_historical_ticket_digest_mismatch')
     return ids
 
-def read(attempt):
+def read(attempt, *, allow_historical=True):
     if not ID.fullmatch(attempt):
         raise HTTPException(422, 'invalid_sandbox_attempt')
     core = fetch_component('core', attempt)
     twin = fetch_component('twin', attempt)
-    qualify(attempt, core, twin)
-    # Reuse existing deterministic Policy engine; never invent an ALLOW.
-    from policy.main import Decision, evaluate
-    result = evaluate(Decision(
-        mode='DEMO', command='RESOLVE', severity='P2', confidence=1.0,
-        evidence_count=core['evidence_count'], critic_validated=True,
-        redundancy_ok=True, evidence_fresh=True, human_approved=False))
-    if result.get('state') != 'PASS' or result.get('decision') != 'SIMULATE':
-        raise HTTPException(503, 'sandbox_policy_not_simulate')
+    historical = core.get('incident_status') == 'RESOLVED'
+    if historical and not allow_historical:
+        raise HTTPException(503, 'sandbox_new_decision_after_resolution_denied')
+    qualify(attempt, core, twin, historical=historical)
+    if not historical:
+        # Only PREPARED can evaluate a new SIMULATE decision.
+        from policy.main import Decision, evaluate
+        result = evaluate(Decision(
+            mode='DEMO', command='RESOLVE', severity='P2', confidence=1.0,
+            evidence_count=core['evidence_count'], critic_validated=True,
+            redundancy_ok=True, evidence_fresh=True, human_approved=False))
+        if result.get('state') != 'PASS' or result.get('decision') != 'SIMULATE':
+            raise HTTPException(503, 'sandbox_policy_not_simulate')
     return {'schema': 'aiops.policy-acme-simulated.v1',
             'attempt_id': attempt, 'tenant_id': TENANT,
             'incident_id': core['incident_id'], 'run_id': core['run_id'],
@@ -116,6 +153,7 @@ def read(attempt):
             'approval_id': twin['approval_id'], 'approval_issuer': ISSUER,
             'approval_kind': 'SIMULATED', 'mode': 'SIMULATION',
             'decision': 'SIMULATE', 'state': 'PASS',
+            'historical_readback': historical, 'new_approval_issued': False,
             'human_approved': False, 'human_approval_claimed': False,
             'execution_allowed': False, 'effect_allowed': False,
             'live_effects_allowed': False, 'real_glpi_writes_allowed': False}
@@ -152,7 +190,7 @@ def start(intent: dict, authorization: str | None = Header(default=None)):
             or intent.get('idempotency_key') != intent['attempt_id']
             or intent.get('live_effects_allowed') is not False):
         raise HTTPException(403, 'sandbox_policy_intent_denied')
-    result = read(intent['attempt_id'])
+    result = read(intent['attempt_id'], allow_historical=False)
     if any(intent[k] != result[k] for k in
            ('incident_id', 'run_id', 'ticket_id', 'proposal_id', 'approval_id')):
         raise HTTPException(503, 'sandbox_policy_intent_binding_mismatch')
