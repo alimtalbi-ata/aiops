@@ -92,8 +92,8 @@ def denied(code: int, reason: str):
     })
 
 
-def _sandbox_read(component: str, attempt_id: str) -> dict:
-    """Fixed service allowlist, bearer and GET only; never native GLPI."""
+def _sandbox_config(component: str) -> tuple[str, str]:
+    """Preflight both trusted origins before issuing any business GET."""
     token = os.getenv("AIOPS_INTERNAL_TOKEN", "")
     config = {
         "core": ("CORE_URL", "http://aiops2-core:810",
@@ -112,6 +112,12 @@ def _sandbox_read(component: str, attempt_id: str) -> dict:
             or parsed.hostname not in hosts or not port
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise ValueError("sandbox_service_configuration_unavailable")
+    return base, token
+
+
+def _sandbox_read(component: str, attempt_id: str) -> dict:
+    """Fixed service allowlist, bearer and GET only; never native GLPI."""
+    base, token = _sandbox_config(component)
     try:
         response = requests.get(
             base + "/api/sandbox/acme/e2e/" + attempt_id,
@@ -245,6 +251,8 @@ def simulated_glpi_readback(attempt_id: str, authorization: str | None = Header(
     try:
         # Worker receipt first; Core final state only after that independent GET.
         # Re-read Worker to fence a changing/replaced receipt across Core GET.
+        _sandbox_config("core")
+        _sandbox_config("worker")
         worker_before = _sandbox_read("worker", attempt_id)
         core_final = _sandbox_read("core", attempt_id)
         worker_after = _sandbox_read("worker", attempt_id)
