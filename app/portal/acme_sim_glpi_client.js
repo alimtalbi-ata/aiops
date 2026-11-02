@@ -13,6 +13,7 @@
     el("sim-state").textContent = "UNKNOWN";
     el("sim-run").textContent = "UNKNOWN";
     el("sim-transition").textContent = "UNKNOWN — historique non attesté";
+    el("sim-worker").textContent = "UNKNOWN — aucun reçu no-effect";
     el("sim-provenance").textContent = "UNKNOWN — aucune lecture qualifiée";
   };
   const qualified = (data, attempt) => {
@@ -22,7 +23,11 @@
         data.tenant_id !== "ACME-TEST" || data.scenario_id !== "ACME-SAN-PAYMENTS" ||
         data.attempt_id !== attempt || data.mode !== "SIMULATION" ||
         data.provenance !== "SIMULATED" ||
-        data.readback_source !== "CORE_SANDBOX_READBACK" ||
+        data.readback_source !== "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET" ||
+        data.worker_receipt_status !== "SIMULATED_NO_EFFECT" ||
+        data.worker_receipt_phase !== "PRE_RESOLUTION" ||
+        data.worker_no_effect_verified !== true ||
+        data.core_resolution_after_worker_verified !== true ||
         data.source_freshness !== "UNKNOWN" || data.observed_at !== null ||
         data.human_allow !== false || data.native_glpi_readmy_attested !== false ||
         data.real_glpi_writes_allowed !== false ||
@@ -30,7 +35,7 @@
         !data.ticket || typeof data.ticket !== "object" ||
         typeof data.ticket.id !== "string" || !idPattern.test(data.ticket.id) ||
         !data.ticket.id.startsWith("SIM-GLPI-") ||
-        data.ticket.status !== "RESOLVED" || data.ticket.transition_to !== "RESOLVED" ||
+        data.ticket.status !== "RESOLVED" || data.ticket.current_state !== "RESOLVED" ||
         data.ticket.transition_history_attested !== false ||
         typeof data.incident_id !== "string" || typeof data.run_id !== "string" ||
         !idPattern.test(data.incident_id) || !idPattern.test(data.run_id)) return false;
@@ -59,13 +64,14 @@
       const data = await response.json();
       if (current !== epoch) return;
       if (!qualified(data, attempt)) return reset("503 UNKNOWN — readback 200 non qualifié");
-      el("sim-status").textContent = "SIMULATED · RESOLVED — Core sandbox uniquement";
+      el("sim-status").textContent = "SIMULATED · RESOLVED — Core final + Worker no-effect vérifiés";
       el("sim-ticket").textContent = data.ticket.id;
       el("sim-state").textContent = "RESOLVED · SIMULATED";
       el("sim-run").textContent = data.incident_id + " / " + data.run_id;
-      el("sim-transition").textContent = "→ RESOLVED ; historique de transition NOT_ATTESTED";
+      el("sim-transition").textContent = "État final RESOLVED ; historique de transition NOT_ATTESTED";
+      el("sim-worker").textContent = "SIMULATED_NO_EFFECT · PRE_RESOLUTION · 0 effet";
       el("sim-provenance").textContent =
-        "CORE_SANDBOX_READBACK · ACME-TEST · SIMULATED ; GLPI humain UNKNOWN ; E2E UNKNOWN";
+        "CORE_AND_WORKER_INDEPENDENT_SANDBOX_GET · ACME-TEST · SIMULATED ; GLPI humain UNKNOWN ; E2E hôte UNKNOWN";
     } catch (_) {
       if (current === epoch) reset("503 UNKNOWN — Core sandbox indisponible");
     } finally {
