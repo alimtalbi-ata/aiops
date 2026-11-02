@@ -170,7 +170,7 @@ def validate(core, worker, expected_head):
 
 
 def build_receipt(core, worker, expected_head, *, core_artifact=None,
-                  worker_artifact=None):
+                  worker_artifact=None, host_sidecar=None):
     reason = validate(core, worker, expected_head)
     matched = reason is None
     # A source HEAD and synthetic IDs overlap, but the Worker artifact does NOT
@@ -215,6 +215,8 @@ def build_receipt(core, worker, expected_head, *, core_artifact=None,
         "resolution_verified": False, "reopen_verified": False,
         "publishable_to_core_or_glpi": False, "live_effects_authorized": False,
         "release_stable": "NO_GO",
+        "portal_host_readonly": (assess_host_readonly(host_sidecar)
+                                 if host_sidecar is not None else None),
     }
 
 
@@ -242,17 +244,101 @@ def negative_controls(core, worker, expected_head):
     return out
 
 
+
+HOST_ANONYMOUS_CONTRACTS = (
+    ("health", "/health", 200),
+    ("shell", "/", 200),
+    ("itsm_shell", "/itsm", 200),
+    ("oidc_session", "/api/portal/session", 401),
+    ("bootstrap", "/api/portal/bootstrap", 401),
+    ("components", "/api/portal/components", 401),
+    ("glpi_authority", "/api/portal/itsm", 401),
+    ("noc_runtime", "/api/noc/runtime-state", 401),
+    ("noc_correlation", "/api/noc/correlation", 401),
+)
+
+
+def assess_host_readonly(sidecar):
+    """Classify a redacted Debian sidecar as shape only, never human authority.
+
+    Even a valid 9/9 report is self-described host telemetry, not authenticated
+    Core 015/014, IdP READMY, GLPI ALLOW, or an executed ITIL stage.
+    """
+    reason = None
+    if type(sidecar) is not dict or sidecar.get("schema") != "aiops.debian-poller-qualification.v1":
+        reason = "FOREIGN_OR_MISSING_HOST_SCHEMA"
+    else:
+        portal = sidecar.get("portal")
+        preflight = sidecar.get("deployment_preflight")
+        contracts = sidecar.get("portal_nine_readonly_contracts")
+        if any(type(x) is not dict for x in (portal, preflight, contracts)):
+            reason = "MISSING_HOST_CONTRACTS"
+        else:
+            image = portal.get("image_id")
+            bindings = portal.get("bindings")
+            if (type(image) is not str or not image.startswith("sha256:") or
+                    not HEX64.fullmatch(image.removeprefix("sha256:")) or
+                    preflight.get("deployed_image_id") != image or
+                    contracts.get("image_id") != image or
+                    portal.get("state") != "running" or
+                    portal.get("health") != "healthy" or
+                    type(bindings) is not list or
+                    not any(type(b) is dict and b.get("host_port") == 7777 and
+                            b.get("host_ip") == "0.0.0.0" for b in bindings) or
+                    preflight.get("portal_env_port_7777") is not True or
+                    preflight.get("portal_host_port_7777") is not True or
+                    preflight.get("verdict") != "DEPLOYED_HEALTH_PASS_E2E_PENDING" or
+                    sidecar.get("http_7777") != {"status": 200, "qualified": True}):
+                reason = "PORTAL_IMAGE_OR_STRICT_HEALTH_MISMATCH"
+            elif (contracts.get("status") != "PASS_READONLY_ONLY" or
+                  type(contracts.get("total")) is not int or contracts["total"] != 9 or
+                  type(contracts.get("passed")) is not int or contracts["passed"] != 9 or
+                  contracts.get("acme_e2e") !=
+                  "BLOCKED_NO_INDEPENDENT_HUMAN_GLPI_IDP_AUTHORITY" or
+                  any(contracts.get(k) is not None for k in
+                      ("incident_id", "run_id", "glpi_ticket_id")) or
+                  sidecar.get("external_tls_sso_glpi_e2e") != "NOT_VERIFIED" or
+                  sidecar.get("release_stable") != "NO_GO"):
+                reason = "HOST_RUNTIME_OR_HUMAN_AUTHORITY_PROMOTION"
+            else:
+                checks = contracts.get("checks")
+                if (type(checks) is not list or len(checks) != 9 or
+                        any(type(c) is not dict or c.get("status") != "PASS"
+                            for c in checks) or
+                        [(c.get("name"), c.get("path"), c.get("http_status"))
+                         for c in checks] != list(HOST_ANONYMOUS_CONTRACTS)):
+                    reason = "FOREIGN_OR_PROMOTED_ANONYMOUS_HTTP_CONTRACT"
+    return {
+        "classification": "CONSISTENT_UNTRUSTED" if reason is None else "UNKNOWN",
+        "reason": "NINE_ANONYMOUS_GETS_NOT_HUMAN_GLPI_E2E" if reason is None else reason,
+        "anonymous_gets_shape_matched": 9 if reason is None else 0,
+        "independently_authenticated_host_receipt": "NOT_ATTESTED",
+        "independent_core_worker_same_run": "NOT_ATTESTED",
+        "human_idp_glpi_authority": "NOT_ATTESTED",
+        "itil_stage_execution": "NOT_EXECUTED",
+        "release_stable": "NO_GO",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core-zip", type=Path, required=True)
     parser.add_argument("--worker-zip", type=Path, required=True)
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--host-sidecar", type=Path, help="Redacted read-only Debian sidecar; never human authority")
     args = parser.parse_args()
     core, core_meta = read_artifact(args.core_zip, CORE_FILE)
     worker, worker_meta = read_artifact(args.worker_zip, WORKER_FILE)
+    host_sidecar = None
+    if args.host_sidecar is not None:
+        if args.host_sidecar.stat().st_size > 250_000:
+            raise ValueError("oversized host sidecar")
+        host_sidecar = json.loads(args.host_sidecar.read_text(encoding="utf-8"),
+                                  object_pairs_hook=_unique_object)
     receipt = build_receipt(core, worker, args.expected_head,
-                            core_artifact=core_meta, worker_artifact=worker_meta)
+                            core_artifact=core_meta, worker_artifact=worker_meta,
+                            host_sidecar=host_sidecar)
     if receipt["cross_artifact_concordance"] != "CONSISTENT_UNTRUSTED":
         receipt["negative_controls"] = []
     else:
