@@ -1226,6 +1226,27 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                                  "hitl:reject:recover"]}
         with patch.dict(os.environ, {
                 "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps([entry])}):
+            # Neither the seventh attempt nor an unexpired eighth lease
+            # may be promoted to DEAD by token-free recovery.
+            with self.psycopg.connect(self.url) as db:
+                db.execute("update aiops.hitl_decision_outbox "
+                           "set attempts=7 where event_id=%s", (ids["event"],))
+            early = delivery.terminal_recover(
+                "TEN-A", ids["event"], body,
+                authorization="Bearer " + self.token_a)
+            self.assertEqual(json.loads(early.body)["status"], "UNKNOWN")
+            with self.psycopg.connect(self.url) as db:
+                db.execute("update aiops.hitl_decision_outbox "
+                           "set attempts=8,lease_until=now()+interval '30 seconds' "
+                           "where event_id=%s", (ids["event"],))
+            unexpired = delivery.terminal_recover(
+                "TEN-A", ids["event"], body,
+                authorization="Bearer " + self.token_a)
+            self.assertEqual(json.loads(unexpired.body)["status"], "UNKNOWN")
+            with self.psycopg.connect(self.url) as db:
+                db.execute("update aiops.hitl_decision_outbox "
+                           "set lease_until=now()-interval '2 seconds' "
+                           "where event_id=%s", (ids["event"],))
             with patch.object(delivery, "_TERMINAL_INSERT_SQL",
                               "insert into aiops.hitl_reject_terminal_receipts "
                               "(no_such_column) values (%s)"):
