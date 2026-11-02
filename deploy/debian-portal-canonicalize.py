@@ -107,6 +107,7 @@ def main():
     path = DEV / 'compose.yml'
     old_image = None
     wrote = False
+    recreate_attempted = False
     try:
         manifest = json.loads((ROOT / 'deploy/debian-portal-release.json').read_text())
         pin = manifest['candidate_sha']
@@ -157,6 +158,7 @@ def main():
             raise ValueError('CANONICAL_COMPOSE_CONTRACT_FAILED')
         result['base_compose_verified'] = True
         if wrote:
+            recreate_attempted = True
             command(base + ['up', '-d', '--no-deps', '--no-build', '--force-recreate',
                             'aiops2-portal'], timeout=120)
             for _ in range(40):
@@ -183,30 +185,33 @@ def main():
     except Exception as exc:
         result['reason'] = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
         if wrote and original is not None:
-            result['rollback_attempted'] = True
+            result['rollback_attempted'] = recreate_attempted
             try:
                 atomic_write(path, original, mode)
-                # Old Compose may omit the environment port; rollback explicitly preserves 7777.
-                with tempfile.TemporaryDirectory(prefix='portal-rollback-', dir=str(STATE)) as td:
-                    override = Path(td) / 'rollback.yml'
-                    atomic_write(override, 'services:\n  aiops2-portal:\n    image: "' +
-                                 old_image + '"\n    environment:\n      AIOPS_PORTAL_HOST_PORT: "7777"\n', 0o600)
-                    command(['docker', 'compose', '--project-name', 'aiops2-rebuild',
-                             '--env-file', str(ENV), '-f', str(path), '-f', str(override),
-                             'up', '-d', '--no-deps', '--no-build', '--force-recreate',
-                             'aiops2-portal'], timeout=120)
-                for _ in range(20):
-                    try:
-                        if (strict_health() and
-                            command(['docker', 'inspect', 'aiops2-rebuild-portal',
-                                     '--format', '{{.Image}}']) == old_image):
-                            result['rollback_succeeded'] = True
-                            break
-                    except Exception:
-                        pass
-                    time.sleep(3)
-                if result['rollback_succeeded'] is not True:
-                    result['rollback_succeeded'] = False
+                if not recreate_attempted:
+                    result['rollback_succeeded'] = True  # only Compose file was restored
+                else:
+                    # Restore old image and strict 7777, never touch DB or volumes.
+                    with tempfile.TemporaryDirectory(prefix='portal-rollback-', dir=str(STATE)) as td:
+                        override = Path(td) / 'rollback.yml'
+                        atomic_write(override, 'services:\n  aiops2-portal:\n    image: "' +
+                                     old_image + '"\n    environment:\n      AIOPS_PORTAL_HOST_PORT: "7777"\n', 0o600)
+                        command(['docker', 'compose', '--project-name', 'aiops2-rebuild',
+                                 '--env-file', str(ENV), '-f', str(path), '-f', str(override),
+                                 'up', '-d', '--no-deps', '--no-build', '--force-recreate',
+                                 'aiops2-portal'], timeout=120)
+                    for _ in range(20):
+                        try:
+                            if (strict_health() and
+                                command(['docker', 'inspect', 'aiops2-rebuild-portal',
+                                         '--format', '{{.Image}}']) == old_image):
+                                result['rollback_succeeded'] = True
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(3)
+                    if result['rollback_succeeded'] is not True:
+                        result['rollback_succeeded'] = False
             except Exception:
                 result['rollback_succeeded'] = False
     finally:
