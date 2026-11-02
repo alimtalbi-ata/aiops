@@ -20,6 +20,53 @@ if m.get('enabled') is not True or not isinstance(s,str) or not re.fullmatch('[0
 print(s)
 PY
 )"
+# Idempotency and fail-stop: a previous exact-PIN PASS is never rebuilt again.
+# Verify current container/image/health and canonical portal before accepting it.
+# A previous same-PIN FAIL or drift requires a new reviewed release SHA.
+prior="$(python3 - "$STATE/acme-sandbox-upgrade.json" "$PIN" <<'PY'
+import json,os,subprocess,sys,urllib.request
+path,pin=sys.argv[1:]
+if not os.path.isfile(path):
+ print('NO_PRIOR_RECEIPT');raise SystemExit(0)
+try:
+ if os.path.getsize(path)>16384:raise ValueError('oversized')
+ r=json.load(open(path))
+ if r.get('source_sha')!=pin:
+  print('NO_PRIOR_RECEIPT');raise SystemExit(0)
+ if r.get('status')!='PASS' or r.get('exit_code')!=0:
+  print('NO_GO_PRIOR_SAME_PIN_FAILURE');raise SystemExit(0)
+ rows=r.get('images')
+ if (r.get('docker_container_mutations')!=1 or r.get('docker_image_builds')!=5
+     or r.get('pg16_scratch_restore')!='PASS' or r.get('portal_7777_untouched') is not True
+     or not isinstance(rows,list) or len(rows)!=5
+     or {x.get('service') for x in rows}!=set(('core','twin','policy','worker','simulator'))):
+  raise ValueError('invalid_receipt')
+ for row in rows:
+  p=subprocess.run(['docker','inspect','aiops2-rebuild-'+row['service'],
+                    '--format','{{.Image}} {{.Id}} {{if .State.Health}}{{.State.Health.Status}}{{end}}'],
+                   capture_output=True,text=True,timeout=8,check=False)
+  parts=p.stdout.strip().split()
+  if (p.returncode!=0 or len(parts)!=3 or parts[2]!='healthy'
+      or parts[0]!=row.get('observed_image_id')
+      or parts[1]!=row.get('observed_container_id')
+      or row.get('image_changed') is not True):
+   raise ValueError('container_drift')
+ with urllib.request.urlopen('http://127.0.0.1:7777/health',timeout=5) as response:
+  h=json.load(response)
+  if (response.status!=200 or h.get('status')!='ok'
+      or type(h.get('external_port')) is not int or h['external_port']!=7777):
+   raise ValueError('portal_drift')
+ print('ALREADY_APPLIED')
+except (OSError,ValueError,TypeError,KeyError,subprocess.TimeoutExpired,
+        urllib.error.URLError,AssertionError):
+ print('NO_GO_PRIOR_RECEIPT_OR_RUNTIME_DRIFT')
+PY
+)"
+case "$prior" in
+  NO_PRIOR_RECEIPT) ;;
+  ALREADY_APPLIED) echo 'ACME_UPGRADE=ALREADY_APPLIED_VERIFIED'; exit 0 ;;
+  *) echo "ACME_UPGRADE=$prior"; exit 78 ;;
+esac
 test -f "$DEV/compose.yml" && test -f "$ENV" || { echo 'ACME_UPGRADE=NO_GO_COMPOSE_OR_ENV_MISSING'; exit 78; }
 TMP="$(mktemp -d "$STATE/.acme-upgrade-XXXXXX")"
 mutated=0
