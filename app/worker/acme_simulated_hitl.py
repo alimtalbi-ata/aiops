@@ -84,7 +84,12 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
     for document in (core, twin, policy):
         _bound(document, intent)
     # PREPARED is a causal fence: this activity must run BEFORE Core resolution.
-    if (core.get("incident_status") != "PREPARED"
+    if (core.get("scenario_id") != SCENARIO
+            or core.get("mode") != "SIMULATION"
+            or core.get("approval_issuer") != ISSUER
+            or core.get("glpi_mode") != "SIMULATED_ONLY"
+            or core.get("human_approval_claimed") is not False
+            or core.get("incident_status") != "PREPARED"
             or core.get("run_status") != "PREPARED"
             or core.get("ticket_id") != intent["ticket_id"]
             or core.get("ticket_authority") != "SIMULATED_ONLY"
@@ -118,7 +123,10 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or twin.get("approval_phase") != "PRE_RESOLUTION"
             or twin.get("core_status_at_issuance") != "PREPARED"):
         raise SandboxDenied("twin_core_prepared_snapshot_unqualified")
-    if (twin.get("approval_id") != intent["approval_id"]
+    if (twin.get("scenario_id") != SCENARIO
+            or twin.get("resolution_verified") is not False
+            or twin.get("post_resolution_readback_required") is not True
+            or twin.get("approval_id") != intent["approval_id"]
             or twin.get("proposal_id") != intent["proposal_id"]
             or twin.get("ticket_id") != intent["ticket_id"]
             or twin.get("issuer_id") != "twin-acme-test"
@@ -148,7 +156,9 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or expires - issued > timedelta(minutes=5)
             or now - issued > timedelta(minutes=5)):
         raise SandboxDenied("twin_approval_expired_or_future")
-    if (policy.get("decision") != "SIMULATE"
+    if (policy.get("state") != "PASS"
+            or policy.get("human_approval_claimed") is not False
+            or policy.get("decision") != "SIMULATE"
             or policy.get("approval_kind") != "SIMULATED"
             or policy.get("approval_issuer") != ISSUER
             or policy.get("mode") != "SIMULATION"
