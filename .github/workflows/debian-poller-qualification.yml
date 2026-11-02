@@ -7,7 +7,10 @@ on:
       - 'deploy/debian-portal-preflight.py'
       - 'deploy/debian-portal-release.json'
       - 'deploy/debian-portal-deploy.sh'
+      - 'deploy/debian-portal-canonicalize.py'
+      - 'deploy/debian-portal-host-contracts.py'
       - 'tests/test_debian_portal_preflight.py'
+      - 'tests/test_debian_portal_host_contracts.py'
       - 'tests/test_debian_poller_qualification.py'
       - '.github/workflows/debian-poller-qualification.yml'
   push:
@@ -23,6 +26,7 @@ jobs:
       - run: |
           git rev-parse HEAD
           bash -n deploy/deploy-demo-studio-v2.sh
-          python3 -m py_compile deploy/debian-poller-qualification.py deploy/debian-portal-preflight.py
+          python3 -m py_compile deploy/debian-poller-qualification.py deploy/debian-portal-preflight.py deploy/debian-portal-canonicalize.py deploy/debian-portal-host-contracts.py
           python3 -m unittest discover -s tests -p test_debian_poller_qualification.py -v
           python3 -m unittest discover -s tests -p test_debian_portal_preflight.py -v
+          python3 -m unittest discover -s tests -p test_debian_portal_host_contracts.py -v
