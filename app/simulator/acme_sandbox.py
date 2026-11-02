@@ -142,14 +142,23 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
             or policy.get('human_approved') is not False
             or policy.get('live_effects_allowed') is not False):
         raise HTTPException(503, 'sandbox_policy_unqualified')
-    worker = remote('worker', '/api/sandbox/acme/e2e', 'POST',
-                    {**request, **ids, 'human_approved': False,
-                     'execution_allowed': False, 'effect_allowed': False})
-    bound(worker, x, ids)
-    if (worker.get('receipt_status') != 'SIMULATED_NO_EFFECT'
-            or worker.get('effect_receipts') != 0
-            or worker.get('execution_allowed') is not False):
-        raise HTTPException(503, 'sandbox_worker_unqualified')
+    # Worker #348 requires exactly its 14 intent keys, and returns PENDING
+    # while Temporal independently validates Core/Twin/Policy. The Debian
+    # runner, not this POST response, qualifies the final no-effect GET.
+    worker_intent = {
+        'attempt_id': x.attempt_id, 'tenant_id': TENANT,
+        'scenario_id': SCENARIO, 'mode': 'SIMULATION',
+        'approval_issuer': ISSUER, **ids, 'idempotency_key': x.attempt_id,
+        'human_approved': False, 'execution_allowed': False,
+        'effect_allowed': False,
+    }
+    worker = remote('worker', '/api/sandbox/acme/e2e', 'POST', worker_intent)
+    if (worker.get('attempt_id') != x.attempt_id
+            or worker.get('effect_allowed') is not False
+            or not valid_id(worker.get('workflow_id'))
+            or not (worker.get('status') == 'PENDING_INDEPENDENT_READBACK'
+                    or worker.get('idempotent') is True)):
+        raise HTTPException(503, 'sandbox_worker_start_unqualified')
     return {**ids, 'attempt_id': x.attempt_id, 'tenant_id': TENANT,
             'scenario_id': SCENARIO, 'mode': 'SIMULATION',
             'glpi_mode': 'SIMULATED_ONLY', 'approval_issuer': ISSUER,
