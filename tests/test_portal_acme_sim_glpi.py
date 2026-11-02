@@ -239,7 +239,10 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                         {"CORE_URL": "http://user:password@aiops2-core:810"},
                         {"CORE_URL": "http://aiops2-core:811"},
                         {"WORKER_URL": "http://aiops2-worker:810"},
-                        {"WORKER_URL": "https://attacker.example/receipt"}):
+                        {"WORKER_URL": "https://attacker.example/receipt"},
+                        {"CORE_URL": "http://[::1:810"},
+                        {"WORKER_URL": "http://aiops2-worker:notaport"},
+                        {"CORE_URL": "http://aiops2-core:810#fragment"}):
             with self.subTest(changed=changed):
                 with patch.dict(os.environ, changed):
                     with patch.object(acme_sim_glpi.requests, "get") as get:
@@ -279,6 +282,27 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
             self.assertEqual(call.kwargs["headers"]["Authorization"], "Bearer " + INTERNAL)
             self.assertEqual(call.kwargs["timeout"], 3)
             self.assertIs(call.kwargs["allow_redirects"], False)
+            self.assertEqual(call.kwargs["proxies"],
+                             {"http": "", "https": "", "all": ""})
+
+    def test_poisoned_proxy_environment_never_receives_internal_bearer(self):
+        # Controlled fixture only: actor+tenant verifier is still absent on host.
+        # An environment proxy must not intercept the fixed Core/Worker GETs.
+        with patch.dict(os.environ, {
+            "HTTP_PROXY": "http://untrusted.example:8080",
+            "HTTPS_PROXY": "http://untrusted.example:8080",
+            "ALL_PROXY": "http://untrusted.example:8080",
+        }):
+            with patch.object(acme_sim_glpi.requests, "get",
+                              side_effect=good_reads()) as get:
+                response = self.get()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(get.call_count, 4)
+        for call in get.call_args_list:
+            self.assertEqual(call.kwargs["proxies"],
+                             {"http": "", "https": "", "all": ""})
+            self.assertEqual(call.kwargs["headers"]["Authorization"],
+                             "Bearer " + INTERNAL)
 
     def test_forged_200_is_never_human_allow_or_ticket_readback(self):
         mutations = [
