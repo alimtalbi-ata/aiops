@@ -1,8 +1,12 @@
 {
+  "acme_sandbox_upgrade": {
+    "status": "NOT_VERIFIED"
+  },
+  "acme_sandbox_verdict": "NO_GO_NOT_RUNTIME_VERIFIED",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-CEB8BAC7227144EA",
-    "collected_at": "2026-11-02T16:30:03.767765+00:00",
+    "attempt_id": "ACME-SIM-A2251571936947D0",
+    "collected_at": "2026-11-02T22:22:03.694513+00:00",
     "human_approval_claimed": false,
     "ids": {},
     "live_effects_allowed": false,
@@ -38,7 +42,7 @@
   "canonical_compose_receipt": {
     "status": "NOT_VERIFIED"
   },
-  "collected_at": "2026-11-02T16:30:04.063880+00:00",
+  "collected_at": "2026-11-02T22:22:03.980341+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -97,7 +101,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261102T163003Z",
+    "attempt_id": "ACME-READONLY-20261102T222203Z",
     "checks": [
       {
         "http_status": 200,
@@ -163,7 +167,7 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-02T16:30:03.524236+00:00",
+    "collected_at": "2026-11-02T22:22:03.406035+00:00",
     "glpi_ticket_id": null,
     "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "incident_id": null,
@@ -184,23 +188,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 3182,
-    "collected_at": "2026-11-02T15:37:01.769393+00:00",
+    "age_seconds": 21122,
+    "collected_at": "2026-11-02T16:30:02.056089+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
       "age_seconds": 2,
-      "collected_at": "2026-11-02T16:30:02.056089+00:00",
+      "collected_at": "2026-11-02T22:22:02.049087+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 19679,
+    "publish_log_age_seconds": 40799,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "d6a3458a04186dd3822bad3a13c85aed6c720565",
+  "stable_checkout_sha": "f54a8b916c4fe042fb43bc079fa583fc8aad094a",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
