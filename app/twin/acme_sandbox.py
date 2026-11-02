@@ -81,6 +81,13 @@ def verified_record(value, *, attempt_id, now=None):
                 or payload.get('effect_allowed') is not False
                 or payload.get('live_effects_allowed') is not False
                 or payload.get('real_glpi_writes_allowed') is not False
+                or type(payload.get('core_request_sha256')) is not str
+                or re.fullmatch(r'[0-9a-f]{64}', payload['core_request_sha256']) is None
+                or type(payload.get('core_source_event_ids')) is not list
+                or len(payload['core_source_event_ids']) != 7
+                or len(set(str(v) for v in payload['core_source_event_ids'])) != 7
+                or any(type(v) is not str or not v.startswith('SYN-EVT-')
+                       or ID.fullmatch(v) is None for v in payload['core_source_event_ids'])
                 or payload.get('impact_root') != ROOT
                 or PAYMENTS not in payload.get('impacted_cis', [])
                 or not isinstance(payload.get('approval_nonce'), str)
@@ -133,6 +140,10 @@ def core_readback(x):
         raise HTTPException(503, 'independent_core_readback_unavailable') from None
 
 def check_core(core, x):
+    """Approval is PRE-RESOLUTION. A resolved or foreign Run cannot authorize it."""
+    if not isinstance(core, dict):
+        raise HTTPException(503, 'core_sandbox_authority_unqualified')
+    event_ids = core.get('source_event_ids')
     if (core.get('attempt_id') != x.attempt_id
             or core.get('tenant_id') != TENANT
             or core.get('incident_id') != x.incident_id
@@ -140,15 +151,39 @@ def check_core(core, x):
             or core.get('ticket_id') != x.ticket_id
             or core.get('proposal_id') != x.proposal_id
             or core.get('ticket_authority') != 'SIMULATED_ONLY'
-            or core.get('ticket_status') != 'RESOLVED'
-            or core.get('incident_status') != 'RESOLVED'
-            or core.get('run_status') != 'RESOLVED'
+            or core.get('ticket_status') != 'PREPARED'
+            or core.get('incident_status') != 'PREPARED'
+            or core.get('run_status') != 'PREPARED'
             or core.get('source') != 'SYNTHETIC_SIMULATOR'
+            or core.get('source_event_count') != 7
+            or core.get('source_hashes_qualified') is not True
+            or type(event_ids) is not list or len(event_ids) != 7
+            or len(set(str(v) for v in event_ids)) != 7
+            or any(type(v) is not str or not v.startswith('SYN-EVT-')
+                   or ID.fullmatch(v) is None for v in event_ids)
+            or type(core.get('request_sha256')) is not str
+            or re.fullmatch(r'[0-9a-f]{64}', core['request_sha256']) is None
+            or core.get('human_approved') is not False
+            or core.get('execution_allowed') is not False
+            or core.get('effect_allowed') is not False
+            or core.get('live_effects_allowed') is not False
+            or core.get('real_glpi_writes_allowed') is not False
             or core.get('analysis_validated') is not True
             or core.get('critic_validated') is not True
             or type(core.get('evidence_count')) is not int
             or core['evidence_count'] < 2):
-        raise HTTPException(503, 'core_sandbox_authority_unqualified')
+        raise HTTPException(503, 'core_prepared_authority_unqualified')
+    return (core['request_sha256'], tuple(event_ids))
+
+
+def check_core_fence(x):
+    """Two independent Core GETs must agree before any Twin approval write."""
+    first = core_readback(x)
+    fingerprint = check_core(first, x)
+    second = core_readback(x)
+    if check_core(second, x) != fingerprint:
+        raise HTTPException(503, 'core_prepared_snapshot_changed')
+    return fingerprint
 
 def sourced_impact():
     with db() as c:
@@ -177,8 +212,11 @@ def issue_approval(x: ApprovalIntent, authorization: str | None = Header(default
     auth(authorization)
     require_enabled()
     validate_intent(x)
-    check_core(core_readback(x), x)
+    core_fingerprint = check_core_fence(x)
     affected = sourced_impact()
+    # A third authenticated GET closes the graph-read-to-approval-write race.
+    if check_core(core_readback(x), x) != core_fingerprint:
+        raise HTTPException(503, 'core_prepared_snapshot_changed')
     fid = fact_id(x.attempt_id)
     with db() as c:
         existing = c.execute('select value from aiops.twin_facts where fact_id=%s', (fid,)).fetchone()
@@ -192,6 +230,8 @@ def issue_approval(x: ApprovalIntent, authorization: str | None = Header(default
                 'incident_id': x.incident_id, 'run_id': x.run_id,
                 'ticket_id': x.ticket_id, 'proposal_id': x.proposal_id,
                 'approval_id': approval_id(x.attempt_id),
+                'core_request_sha256': core_fingerprint[0],
+                'core_source_event_ids': list(core_fingerprint[1]),
                 'approval_issuer': ISSUER, 'issuer_id': 'twin-acme-test',
                 'approval_actor': ISSUER, 'approval_kind': 'SIMULATED',
                 'approval_status': 'SIMULATED',
@@ -211,8 +251,10 @@ def issue_approval(x: ApprovalIntent, authorization: str | None = Header(default
             if not stored:
                 raise HTTPException(503, 'sandbox_approval_persistence_unavailable')
             result = verified_record(stored[0], attempt_id=x.attempt_id)
-        if any(result.get(k) != getattr(x, k)
-               for k in ('incident_id', 'run_id', 'ticket_id', 'proposal_id')):
+        if (any(result.get(k) != getattr(x, k)
+                for k in ('incident_id', 'run_id', 'ticket_id', 'proposal_id'))
+                or result.get('core_request_sha256') != core_fingerprint[0]
+                or result.get('core_source_event_ids') != list(core_fingerprint[1])):
             raise HTTPException(409, 'sandbox_attempt_rebinding_denied')
         return result
 
