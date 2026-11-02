@@ -165,29 +165,49 @@ def read(c, attempt):
             or sorted(cr[2]) != evidence_ids or cr[3].get('synthetic') is not True
             or cr[4] != analysis):
         raise HTTPException(503, 'sandbox_analysis_critic_unqualified')
+    resolved_approval, resolved_ticket_status = None, 'PREPARED'
     if istate == 'RESOLVED':
         terminal = c.execute(
-            "select payload from aiops.run_events where run_id=%s "
+            "select event_id,event_key,payload from aiops.run_events where run_id=%s "
             "and stage='RUN' and event_type='SIMULATED_RESOLVED' "
             "and status='RESOLVED'", (run,)).fetchall()
-        if (len(terminal) != 1 or type(terminal[0][0]) is not dict
-                or terminal[0][0].get('worker_receipt_verified') is not True
-                or terminal[0][0].get('execution_allowed') is not False
-                or terminal[0][0].get('effect_allowed') is not False):
+        fact = terminal[0][2] if len(terminal) == 1 else None
+        if (len(terminal) != 1
+                or terminal[0][0] != ident('EVT-SIM-', attempt + ':resolved')
+                or terminal[0][1] != ident('SIM-RESOLVED-', attempt)
+                or type(fact) is not dict
+                or fact.get('tenant_id') != TENANT
+                or fact.get('ticket_id') != ticket
+                or fact.get('proposal_id') != proposal
+                or fact.get('request_sha256') != request_hash.strip()
+                or fact.get('source_event_ids') != source_ids
+                or fact.get('ticket_status') != 'RESOLVED'
+                or type(fact.get('approval_id')) is not str
+                or not fact['approval_id'].startswith('SIM-APP-')
+                or any(type(fact.get(k)) is not str
+                       or re.fullmatch(r'[0-9a-f]{64}', fact[k]) is None
+                       for k in ('worker_receipt_sha256', 'twin_readback_sha256',
+                                 'policy_readback_sha256'))
+                or fact.get('worker_receipt_verified') is not True
+                or any(fact.get(k) is not False for k in
+                       ('execution_allowed', 'effect_allowed',
+                        'human_approved', 'live_effects_allowed'))):
             raise HTTPException(503, 'sandbox_resolution_receipt_missing')
+        resolved_approval = fact['approval_id']
+        resolved_ticket_status = 'RESOLVED'
     return {'schema': 'aiops.core-acme-sandbox-readback.v1',
             'attempt_id': attempt, 'tenant_id': TENANT, 'scenario_id': SCENARIO,
             'mode': 'SIMULATION', 'incident_id': incident, 'run_id': run,
             'ticket_id': ticket, 'proposal_id': proposal,
             'incident_status': istate, 'run_status': rstatus,
             'ticket_authority': 'SIMULATED_ONLY', 'glpi_mode': 'SIMULATED_ONLY',
-            'ticket_status': rstatus, 'source': source,
+            'ticket_status': resolved_ticket_status, 'source': source,
             'analysis_validated': True, 'critic_validated': True,
             'analysis_kind': 'SYNTHETIC_FIXTURE',
             'evidence_count': len(facts), 'source_event_count': len(proofs),
             'source_hashes_qualified': True,
             'source_event_ids': source_ids, 'request_sha256': request_hash.strip(),
-            'approval_id': None, 'approval_issuer': ISSUER,
+            'approval_id': resolved_approval, 'approval_issuer': ISSUER,
             'human_approval_claimed': False, 'human_approved': False,
             'live_effects_allowed': False, 'real_glpi_writes_allowed': False,
             'execution_allowed': False, 'effect_allowed': False}
