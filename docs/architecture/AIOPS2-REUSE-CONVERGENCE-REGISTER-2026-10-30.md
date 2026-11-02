@@ -836,3 +836,15 @@ Source-only selective reuse on #234: #324 Core HTTPS dispatcher/test/workflow/AD
 - Core #331 (015 PG16 migration and writer) is Draft, source HEAD `19aa1310b13f8d8ae43a8d19a6f90e6410afdcfc`, based on older #234 `ee1c7b49`. First CI failed at `set_stage`; fixed source, dedicated PG16 2/2 + 7 negative + native restore now success, Quality pending. Hold until all exact-head gates green, then selective Core-only port and rerun combined Worker/ACME integration. No actor/tenant GLPI human ALLOW claim.
 - Debian #318 Draft source from old `deploy/aiops2-stable` lineage, Quality failed (three unrelated jobs) although dedicated hard-stop succeeded. The legacy installer path is **absent from current main/candidate**: do not import it wholesale. #286 duplicate observer/publisher remains HOLD. Canonical existing cron publishes branch reports but no 7777/checkout/image-digest receipt; bridge is unqualified and cannot be asserted deployed.
 - Rollback is forward-revert of candidate commits, never reset/force-push main, and retention of immutable Core 013/014 and Debian Docker volumes/DB. Single stack `aiops2-rebuild-*` KEEP; portal candidate 17778 and V27/E2E groups UNKNOWN until traffic, networks, ownership and backups are read-only attested. No stop, prune or `down -v`.
+
+
+## 2026-11-02 01:25 CET — selective reuse and Debian truth
+
+| Source | Exact source HEAD / qualification | Candidate decision | Remaining gate |
+| --- | --- | --- | --- |
+| Portal Draft #332 | `5dcedd4f9561f713a35f881757f44512e4cfa526`, Quality #41365826261 3/3, Chromium/API 68/68 | Three exact Portal blobs selectively ported in `d869f1f31d8a2303daf0ca7cc8c17c8d066b5714`; no five-commit source-history merge | Candidate exact-head 14-workflow CI, independently governed GLPI/IdP human rights |
+| Debian Draft #318 | `d2943ddc8a92d923e98aa44bb123c543357b91ee`; old stable-derived base | Only standalone read-only probe/test selectively reused earlier in `85848502`; **not** legacy installer or stable branch | Existing cron installed reporter still v1; no host receipt for new probe |
+| Existing reporter | Candidate `scripts/debian-readonly-reporter.py` imports `scripts/debian_runtime_probe.py` | Canonical intended v2 reporter path, distinct from standalone deploy probe; no duplicate publisher | GitHub ops branch report must contain schema v2, image/checkout/7777 and fresh timestamp before host gate |
+| Core 015 / Worker | Candidate `85848502` CI 14/14, Core 2/2 PG16, Worker 2/2+DR 5/5 | Already integrated on Draft #234, no re-port | Same-Run seven canonical ACME events, independent source/actor attestation, human GLPI authority |
+
+No old #201/#194 historical merge, no automatic stop of parallel portals, no main/stable promotion. Keep Draft #332 as source evidence until new candidate exact-head CI completes; compare before closing.
