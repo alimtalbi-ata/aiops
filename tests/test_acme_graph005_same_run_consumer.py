@@ -918,5 +918,82 @@ class AcmeGraph005SameRunConsumerTests(unittest.TestCase):
             self.assertNotIn("TEST_ONLY_UNTRUSTED", json.dumps(result))
 
 
+    def test_29_debian_nine_anonymous_gets_never_grant_glpi_or_itil(self):
+        """Strict healthy :7777 plus 6x401 is not an authenticated ACME Run.
+
+        Mirrors the redacted 2026-11-02 15:37Z host contract shape; fixture
+        is synthetic and never claims independent host/IdP/GLPI authority.
+        """
+        from tools import acme_graph005_ci_artifact_join as join
+
+        core, worker, head = self.ci_artifact_pair()
+        image = "sha256:" + "a" * 64
+        sidecar = {
+            "schema": "aiops.debian-poller-qualification.v1",
+            "portal": {"image_id": image, "state": "running",
+                       "health": "healthy",
+                       "bindings": [{"host_ip": "0.0.0.0", "host_port": 7777}]},
+            "deployment_preflight": {
+                "deployed_image_id": image, "portal_env_port_7777": True,
+                "portal_host_port_7777": True,
+                "verdict": "DEPLOYED_HEALTH_PASS_E2E_PENDING"},
+            "portal_nine_readonly_contracts": {
+                "image_id": image, "status": "PASS_READONLY_ONLY",
+                "total": 9, "passed": 9,
+                "acme_e2e": "BLOCKED_NO_INDEPENDENT_HUMAN_GLPI_IDP_AUTHORITY",
+                "incident_id": None, "run_id": None, "glpi_ticket_id": None,
+                "checks": [
+                    {"name": name, "path": path, "http_status": status,
+                     "status": "PASS"}
+                    for name, path, status in join.HOST_ANONYMOUS_CONTRACTS]},
+            "http_7777": {"status": 200, "qualified": True},
+            "external_tls_sso_glpi_e2e": "NOT_VERIFIED",
+            "release_stable": "NO_GO",
+        }
+        receipt = join.build_receipt(core, worker, head, host_sidecar=sidecar)
+        host = receipt["portal_host_readonly"]
+        self.assertEqual(host["classification"], "CONSISTENT_UNTRUSTED")
+        self.assertEqual(host["anonymous_gets_shape_matched"], 9)
+        self.assertEqual(host["human_idp_glpi_authority"], "NOT_ATTESTED")
+        self.assertEqual(host["independent_core_worker_same_run"], "NOT_ATTESTED")
+        self.assertEqual((receipt["verified_stage_count"],
+                          receipt["not_executed_stage_count"]), (0, 15))
+        self.assertEqual((receipt["verified_checkpoint_count"],
+                          receipt["not_executed_checkpoint_count"]), (0, 6))
+        self.assertEqual(receipt["glpi_human_allow"], "NOT_ATTESTED")
+        self.assertIsNone(receipt["runtime_run_id"])
+        self.assertEqual(receipt["runtime_e2e"], "NOT_EXECUTED")
+
+        for mutation in ("fake_glpi_200", "fake_run", "wrong_image",
+                         "compose_mismatch", "fake_release_go",
+                         "missing_denied_route"):
+            with self.subTest(mutation=mutation):
+                forged = copy.deepcopy(sidecar)
+                contracts = forged["portal_nine_readonly_contracts"]
+                if mutation == "fake_glpi_200":
+                    contracts["checks"][6]["http_status"] = 200
+                elif mutation == "fake_run":
+                    contracts["run_id"] = "TEST_ONLY_FORGED_RUN"
+                elif mutation == "wrong_image":
+                    contracts["image_id"] = "sha256:" + "b" * 64
+                elif mutation == "compose_mismatch":
+                    forged["deployment_preflight"]["portal_env_port_7777"] = False
+                elif mutation == "fake_release_go":
+                    forged["release_stable"] = "GO"
+                elif mutation == "missing_denied_route":
+                    contracts["checks"].pop()
+                result = join.build_receipt(core, worker, head,
+                                            host_sidecar=forged)
+                self.assertEqual(result["portal_host_readonly"]["classification"],
+                                 "UNKNOWN")
+                self.assertEqual(result["portal_host_readonly"][
+                    "anonymous_gets_shape_matched"], 0)
+                self.assertEqual(result["not_executed_stage_count"], 15)
+                self.assertEqual(result["not_executed_checkpoint_count"], 6)
+                self.assertEqual(result["glpi_human_allow"], "NOT_ATTESTED")
+                self.assertEqual(result["release_stable"], "NO_GO")
+                self.assertNotIn("TEST_ONLY_FORGED_RUN", json.dumps(result))
+
+
 if __name__ == "__main__":
     unittest.main()
