@@ -70,7 +70,7 @@ jobs:
           set -euo pipefail
           /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
           /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
-          grep -E '^Ran 15 tests in ' /tmp/core-acme-tests.log
+          grep -E '^Ran 16 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
