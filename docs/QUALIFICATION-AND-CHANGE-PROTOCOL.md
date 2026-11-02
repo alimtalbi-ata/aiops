@@ -44,3 +44,11 @@ Always list failed, skipped and not-run tests. Expected output is not evidence o
 - [ ] Cumulative ZIP includes required source/scripts/docs/evidence, without secrets or runtime databases.
 - [ ] Commit and PR verified on GitHub.
 - [ ] Next steps, unresolved risks and current runtime snapshot recorded in `docs/PROJECT-CONTINUITY.md`.
+
+## ACME-TEST V28 terminal promotion gates (ADR-0015)
+
+- [ ] Verify exact #358 HEAD and all required CI, including PG16 001/004/009–018 and 15/15 named tests with native backup/restore, zero SKIP.
+- [ ] Verify Worker canonical `receipt_sha256` and ordered seven SOURCE IDs, Twin signed nonce/TTL, Policy SIMULATE, Core append-only terminal ticket receipt and 503 on missing proof.
+- [ ] Review Compose five-service-only scope, host PG16 backup integrity, disk headroom, immutable source pin, image/port health and safe rollback before enabling release manifest.
+- [ ] On Debian, require a fresh poller upgrade receipt with five changed image/container IDs and portal 7777 strict PASS; separately require correlated ACME incident/ticket/approval/Worker/Run terminal `RESOLVED` evidence and two independent read rounds.
+- [ ] Do not treat 9/9 anonymous GET, isolated CI or a mock as host E2E; preserve NO_GO if reporter/poller timestamps are stale or missing.
