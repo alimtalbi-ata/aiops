@@ -33,7 +33,7 @@ jobs:
       AIOPS_XREF_CI_DISPOSABLE: "1"
       AIOPS_WORKER_CORE344_JOINED: "YES"
       AIOPS_INTERNAL_TOKEN: ci-crosshead-import-only
-      AIOPS_EXPECTED_HEAD_SHA: 6c3ec2c07404786868a0bcba20bacfc14ef7b66b
+      AIOPS_EXPECTED_HEAD_SHA: 653033bb02b721bd0f4ce90d64d95a4d83a1c4ea
       AIOPS_CORE344_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       AIOPS_CORE344_ROOT: ${{ github.workspace }}
       AIOPS_WORKER_CORE344_RECEIPT_DIR: /tmp/worker-core344-crosshead-receipt
@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: 6c3ec2c07404786868a0bcba20bacfc14ef7b66b
+          ref: 653033bb02b721bd0f4ce90d64d95a4d83a1c4ea
           path: worker348
           persist-credentials: false
       - name: Exact Core and Worker SHAs and disposable PostgreSQL 16
