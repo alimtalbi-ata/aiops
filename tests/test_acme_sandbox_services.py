@@ -170,9 +170,15 @@ def test_simulator_positive_structural_orchestration_only_simulated(monkeypatch)
             return base | {'approval_id': 'SIM-APP-UNIT001', 'decision': 'SIMULATE',
                            'human_approved': False, 'live_effects_allowed': False}
         if component == 'worker':
-            return base | {'approval_id': 'SIM-APP-UNIT001',
-                           'receipt_status': 'SIMULATED_NO_EFFECT',
-                           'effect_receipts': 0, 'execution_allowed': False}
+            assert set(payload) == {
+                'attempt_id', 'tenant_id', 'scenario_id', 'mode',
+                'approval_issuer', 'incident_id', 'run_id', 'ticket_id',
+                'proposal_id', 'approval_id', 'idempotency_key',
+                'human_approved', 'execution_allowed', 'effect_allowed'}
+            return {'attempt_id': intent()['attempt_id'],
+                    'workflow_id': 'acme-simulated-ACME-TEST-ACME-SIM-UNIT001',
+                    'status': 'PENDING_INDEPENDENT_READBACK',
+                    'effect_allowed': False}
         pytest.fail('unexpected component')
     monkeypatch.setattr(SIM, 'remote', remote)
     result = SIM.start(SIM.SandboxRequest(**intent()),
