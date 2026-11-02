@@ -59,10 +59,20 @@ class PolicySandboxTests(unittest.TestCase):
         with self.assertRaises(Exception):
             p.qualify(ATTEMPT,core,twin)
     def test_03_resolved_before_worker_denied(self):
+        # RG-ACME-07: even a fully consistent RESOLVED snapshot must not
+        # authorize a *new* SIMULATE decision or invoke the Policy engine.
         core,twin=docs()
+        core['incident_status']='RESOLVED'
         core['run_status']='RESOLVED'
+        core['ticket_status']='RESOLVED'
         with self.assertRaises(Exception):
             p.qualify(ATTEMPT,core,twin)
+        with patch.object(p,'fetch_component',side_effect=[core,twin]), patch(
+                'policy.main.evaluate') as evaluate:
+            response = self.client.get('/api/sandbox/acme/e2e/'+ATTEMPT,
+                headers={'Authorization':'Bearer '+TOKEN})
+            self.assertEqual(response.status_code,503)
+            evaluate.assert_not_called()
     def test_04_cross_tenant_or_live_denied(self):
         core,twin=docs()
         twin['tenant_id']='FOREIGN'
