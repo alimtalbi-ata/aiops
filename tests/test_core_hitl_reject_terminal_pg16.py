@@ -604,7 +604,9 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
         import test_core_actor_canonical_seven_pg16 as fixture
         from core import actor_canonical_seven_source as binding
         from core import canonical_seven_pg_source as source
-        from core import main
+        internal = "ci-core-graph005-terminal-only-token-0123456789"
+        with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": internal}):
+            from core import main
 
         ids, digest, tokens = self._exhaust()
         pinned = json.loads((Path(__file__).resolve().parents[1] /
@@ -710,7 +712,6 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                     now=datetime.now(timezone.utc), expected_events=expected,
                     graph_version=pinned["graph_version"])
 
-        internal = "ci-core-graph005-terminal-only-token-0123456789"
         bodies = {}
         with patch.dict(os.environ, {"AIOPS_INTERNAL_TOKEN": internal}), \
              patch.object(main, "ADMIN", internal), \
