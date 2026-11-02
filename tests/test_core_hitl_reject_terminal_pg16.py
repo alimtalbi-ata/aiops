@@ -959,6 +959,32 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                             restored_dead.json()["idempotent"]), (200, "DEAD", True))
                         self.assertEqual(
                             restored_dead.json()["receipt_sha256"], receipt_sha)
+                        # Native PG16 restored 014 receipt is independently
+                        # readable over canonical Core HTTP without the
+                        # pre-restart eighth lease token.
+                        recovery_auth = [{
+                            "token_sha256": hashlib.sha256(
+                                self.token_a.encode()).hexdigest(),
+                            "actor_id": "svc-TEN-A", "tenant_ids": ["TEN-A"],
+                            "permissions": ["hitl:reject:deliver",
+                                            "hitl:reject:terminal",
+                                            "hitl:reject:recover"]}]
+                        with patch.dict(os.environ, {
+                                "AIOPS_XREF_READ_AUTHZ_JSON": json.dumps(recovery_auth)}):
+                            token_free = restored.post(
+                                dead_path.removesuffix("/dead") +
+                                "/terminal-receipt",
+                                json={k: v for k, v in dead_body.items()
+                                      if k != "lease_token"},
+                                headers=dead_headers)
+                            self.assertEqual((
+                                token_free.status_code,
+                                token_free.json()["status"],
+                                token_free.json()["idempotent"]),
+                                (200, "DEAD", True))
+                            self.assertEqual(
+                                token_free.json()["receipt_sha256"], receipt_sha)
+                            self.assertNotIn("lease_token", token_free.text)
                         revoked_auth = [{
                             "token_sha256": hashlib.sha256(
                                 self.token_b.encode()).hexdigest(),
@@ -1025,6 +1051,7 @@ class CoreTerminalPopulatedPG16(base.CoreRejectPopulatedPG16):
                 "signed_run_ownership_tamper": "UNKNOWN_NO_MUTATION",
                 "restored_http_source_replay": "200_IDEMPOTENT",
                 "restored_http_dead_replay": "200_DEAD_IDEMPOTENT",
+                "restored_http_token_free_readback": "200_DEAD_IDEMPOTENT",
                 "restored_http_service_revocation": "401_UNKNOWN",
                 "restored_http_run_event_count": 10,
                 "human_idp_actor_authenticated": False,
