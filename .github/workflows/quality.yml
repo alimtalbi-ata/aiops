@@ -27,7 +27,7 @@ jobs:
       - name: Compile Python source
         run: python -m compileall -q app tests tools
       - name: Policy safety unit tests
-        run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
+        run: PYTHONPATH=app:. python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Intelligence contract and adversarial tests
         run: python -m unittest discover -s tests -p "test_intelligence_contract.py" -v
       - name: Analyst Critic fail-closed fault injection
