@@ -34,7 +34,7 @@ def fixtures():
                 ticket_status="PREPARED", source="SYNTHETIC_SIMULATOR",
                 source_event_count=7, source_hashes_qualified=True,
                 source_event_ids=["SYN-EVT-TEST-%d" % i for i in range(1, 8)],
-                request_sha256="SHA256-TEST-IMMUTABLE",
+                request_sha256="a" * 64,
                 human_approved=False, execution_allowed=False,
                 effect_allowed=False, live_effects_allowed=False,
                 real_glpi_writes_allowed=False,
@@ -50,6 +50,10 @@ def fixtures():
                 real_glpi_writes_allowed=False,
                 impact_root="ACME-SAN-FABRIC-A",
                 impacted_cis=["ACME-SVC-PAYMENTS"],
+                approval_phase="PRE_RESOLUTION",
+                core_status_at_issuance="PREPARED",
+                core_request_sha256=core["request_sha256"],
+                core_source_event_ids=list(core["source_event_ids"]),
                 approval_nonce="NONCE-TEST-001",
                 issued_at=(NOW-timedelta(seconds=30)).isoformat(),
                 expires_at=(NOW+timedelta(minutes=2)).isoformat())
@@ -296,6 +300,48 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertNotIn("approval_nonce", receipt)
         # The Core-only final RESOLVED readback must be performed *later*
         # by the orchestrator, never manufactured by this Worker activity.
+
+
+    def test_18_twin_approval_must_bind_exact_core_prepared_snapshot(self):
+        for field, value in (
+            ("core_request_sha256", "b" * 64),
+            ("core_source_event_ids", ["SYN-EVT-OTHER-001"] * 7),
+            ("approval_phase", "POST_RESOLUTION"),
+            ("core_status_at_issuance", "RESOLVED"),
+        ):
+            docs = fixtures()
+            docs["twin"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    SandboxDenied, "^twin_core_prepared_snapshot_unqualified$"):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_19_core_source_snapshot_must_be_complete_and_unique(self):
+        for field, value in (
+            ("request_sha256", "not-a-sha256"),
+            ("source_event_ids", ["SYN-EVT-DUPLICATE"] * 7),
+            ("source_event_ids", ["SYN-EVT-ONE"] * 6),
+            ("source_event_ids", ["SYN-EVT-ONE"] * 6 + [None]),
+        ):
+            docs = fixtures()
+            docs["core"][field] = value
+            with self.subTest(field=field, value=str(value)[:32]), self.assertRaisesRegex(
+                    SandboxDenied, "^twin_core_prepared_snapshot_unqualified$"):
+                validate_readbacks(INTENT, **docs, now=NOW)
+
+    def test_20_twin_source_fingerprint_rotated_between_reads_denied(self):
+        docs = fixtures()
+        calls = 0
+        async def get(component, path):
+            nonlocal calls
+            calls += 1
+            result = deepcopy(docs[component])
+            if calls > 3 and component == "twin":
+                result["core_request_sha256"] = "b" * 64
+            return result
+        with self.assertRaisesRegex(
+                SandboxDenied, "^twin_core_prepared_snapshot_unqualified$"):
+            asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(calls, 6)
 
 
 if __name__ == "__main__":
