@@ -292,6 +292,13 @@ class SandboxPG16(unittest.TestCase):
                       core_status_at_validation='PREPARED',
                       resolution_verified=False, post_resolution_readback_required=True,
                       action='SIMULATE', effect_receipts=0,
+                      core_014_015_written=False, glpi_write=False,
+                      audit_authority='TEMPORAL_WORKFLOW_HISTORY_ONLY',
+                      audit_transitions=[
+                          'CORE_PREPARED_INDEPENDENTLY_VERIFIED',
+                          'TWIN_SIMULATED_APPROVAL_VALIDATED',
+                          'POLICY_SIMULATE_INDEPENDENTLY_VERIFIED',
+                          'WORKER_NO_EFFECT'],
                       approval_kind='SIMULATED', approval_issuer='TWIN_ACME_SIMULATED')
         twin = dict(common, **flags, approval_id=approval,
                     ticket_id=state['ticket_id'],
@@ -457,6 +464,21 @@ class SandboxPG16(unittest.TestCase):
                               'where datname=%s and pid<>pg_backend_pid()', (target,))
                 admin.execute(sql.SQL('drop database if exists {}').format(
                     sql.Identifier(target)))
+
+
+    def test_16_forged_worker_glpi_write_denied_even_with_valid_digest(self):
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-CORE-FORGED-GLPI'
+        state = self.post(attempt).json()
+        docs = self._qualified_no_effect(state)
+        docs[0]['glpi_write'] = True
+        docs[0]['receipt_sha256'] = core.digest({
+            k:v for k,v in docs[0].items() if k != 'receipt_sha256'})
+        with patch.object(core, 'independent_readback', side_effect=docs):
+            response = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
 
 if __name__ == '__main__':
     unittest.main()
