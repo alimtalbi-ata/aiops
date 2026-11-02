@@ -9,7 +9,12 @@ MANIFEST=json.loads((ROOT/'deploy/debian-acme-sandbox-release.json').read_text()
 class SafeUpgrade(unittest.TestCase):
     def test_manifest_requires_immutable_source_and_reviewed_pr(self):
         self.assertIs(type(MANIFEST['enabled']),bool)
-        self.assertRegex(MANIFEST['candidate_sha'],r'^[0-9a-f]{40}
+        self.assertRegex(MANIFEST['candidate_sha'],r'^[0-9a-f]{40}\\Z')
+        self.assertIs(type(MANIFEST['source_pr']),int)
+        self.assertGreater(MANIFEST['source_pr'],0)
+        self.assertIn('refs/pull/$SOURCE_PR/head',SCRIPT)
+        self.assertIn('NO_GO_SOURCE_PR_INVALID',SCRIPT)
+        self.assertEqual(MANIFEST['schema'],'aiops.debian-acme-sandbox-release-intent.v1')
     def test_only_existing_five_services_no_portal_recreate(self):
         self.assertIn('services="core twin policy worker simulator"',SCRIPT)
         self.assertIn('up -d --no-deps --no-build --force-recreate',SCRIPT)
