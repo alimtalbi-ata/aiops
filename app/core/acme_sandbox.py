@@ -202,6 +202,14 @@ def read(c, attempt):
                 or worker_doc.get('receipt_status') != 'SIMULATED_NO_EFFECT'
                 or worker_doc.get('receipt_phase') != 'PRE_RESOLUTION'
                 or worker_doc.get('effect_receipts') != 0
+                or worker_doc.get('core_014_015_written') is not False
+                or worker_doc.get('glpi_write') is not False
+                or worker_doc.get('audit_authority') != 'TEMPORAL_WORKFLOW_HISTORY_ONLY'
+                or worker_doc.get('audit_transitions') != [
+                    'CORE_PREPARED_INDEPENDENTLY_VERIFIED',
+                    'TWIN_SIMULATED_APPROVAL_VALIDATED',
+                    'POLICY_SIMULATE_INDEPENDENTLY_VERIFIED',
+                    'WORKER_NO_EFFECT']
                 or any(worker_doc.get(k) is not False for k in
                        ('human_approved','execution_allowed','effect_allowed',
                         'live_effects_allowed','real_glpi_writes_allowed'))
@@ -497,6 +505,14 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
             or worker.get('post_resolution_readback_required') is not True
             or worker.get('action') != 'SIMULATE'
             or worker.get('effect_receipts') != 0
+            or worker.get('core_014_015_written') is not False
+            or worker.get('glpi_write') is not False
+            or worker.get('audit_authority') != 'TEMPORAL_WORKFLOW_HISTORY_ONLY'
+            or worker.get('audit_transitions') != [
+                'CORE_PREPARED_INDEPENDENTLY_VERIFIED',
+                'TWIN_SIMULATED_APPROVAL_VALIDATED',
+                'POLICY_SIMULATE_INDEPENDENTLY_VERIFIED',
+                'WORKER_NO_EFFECT']
             or worker.get('approval_kind') != 'SIMULATED'
             or worker.get('approval_issuer') != ISSUER
             or twin.get('approval_kind') != 'SIMULATED'
