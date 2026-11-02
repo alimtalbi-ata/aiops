@@ -524,7 +524,7 @@ class SandboxPG16(unittest.TestCase):
                 evidence['restored_independent_final_reads'] = 2
                 evidence['payload_sha256'] = hashlib.sha256(json.dumps(
                     evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-                receipt_path.write_text(json.dumps(evidence, sort_keys=True, indent=2) + '\\n')
+                receipt_path.write_text(json.dumps(evidence, sort_keys=True, indent=2))
             finally:
                 os.environ['DATABASE_URL'] = old_url
         finally:
