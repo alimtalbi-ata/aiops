@@ -510,7 +510,19 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                              'real_glpi_writes_allowed'))):
         raise HTTPException(503, 'sandbox_no_effect_authority_unqualified')
     approval_fresh(twin)
-    worker_sha = digest(worker)
+    # #348 Worker contract: receipt digest is canonical and source/nonce bound.
+    worker_sha = worker.get('receipt_sha256')
+    body = {k: v for k, v in worker.items() if k != 'receipt_sha256'}
+    nonce = twin.get('approval_nonce')
+    if (type(worker_sha) is not str
+            or re.fullmatch(r'[0-9a-f]{64}', worker_sha) is None
+            or not hmac.compare_digest(digest(body), worker_sha)
+            or worker.get('core_request_sha256') != current['request_sha256']
+            or worker.get('core_source_event_ids') != current['source_event_ids']
+            or type(nonce) is not str or not nonce.isascii()
+            or worker.get('twin_approval_nonce_sha256') !=
+                hashlib.sha256(nonce.encode('ascii')).hexdigest()):
+        raise HTTPException(503, 'sandbox_worker_canonical_receipt_unqualified')
     with db() as c:
         c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',
                   ('core-acme-sandbox:' + TENANT + ':' + attempt,))
@@ -531,6 +543,8 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                 or policy.get('ticket_id') != current['ticket_id']
                 or twin.get('core_request_sha256') != current['request_sha256']
                 or twin.get('core_source_event_ids') != current['source_event_ids']
+                or worker.get('core_request_sha256') != current['request_sha256']
+                or worker.get('core_source_event_ids') != current['source_event_ids']
                 or current['source_hashes_qualified'] is not True
                 or current['approval_id'] is not None
                 or current['ticket_status'] != 'PREPARED'):
