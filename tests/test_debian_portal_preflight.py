@@ -59,8 +59,11 @@ class PreflightContract(unittest.TestCase):
                     stderr='SYNTHETIC_SECRET')
             fake = FakePoller()
             fake.REPORT_GIT = p
+            (p / 'latest.json').write_text(json.dumps({
+                'collected_at': dt.datetime.now(dt.timezone.utc).isoformat()}))
+            (p / 'publish.log').write_text('REPORT_PUBLISH=PUBLISHED\\n')
             r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
-                                 run=runner, dev=p, env=p / '.env')
+                                 run=runner, dev=p, env=p / '.env', state=p)
             self.assertEqual(len(calls), 3)
             self.assertTrue(r['reporter_freshness']['fresh'])
             self.assertTrue(r['deployment_preflight']['portal_host_port_7777'])
@@ -95,6 +98,26 @@ class PreflightContract(unittest.TestCase):
             flags = mod.compose_status(run=runner, dev=p, env=p / '.env')
             self.assertFalse(flags['portal_host_port_7777'])
             self.assertFalse(flags['portal_env_port_7777'])
+
+    def test_local_collection_vs_publisher_stale_and_log_redaction(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            now = dt.datetime.now(dt.timezone.utc)
+            (p / 'latest.json').write_text(json.dumps({
+                'collected_at': now.isoformat()}))
+            (p / 'publish.log').write_text(
+                'PRIVATE_SYNTHETIC_TOKEN=do_not_publish\n'
+                'REPORT_PUBLISH=FAILED reason=push_rejected\n')
+            report = mod.local_reporter_pipeline(p, now=now)
+            self.assertTrue(report['local_report']['fresh'])
+            self.assertTrue(report['publish_log_recent'])
+            self.assertEqual(report['publish_last_class'], 'PUSH_REJECTED')
+            self.assertNotIn('PRIVATE_SYNTHETIC_TOKEN', json.dumps(report))
+            (p / 'latest.json').write_text(json.dumps({
+                'collected_at': '2026-11-02T11:01:01Z'}))
+            old = mod.local_reporter_pipeline(p, now=dt.datetime(
+                2026, 11, 2, 12, 24, tzinfo=dt.timezone.utc))
+            self.assertFalse(old['local_report']['fresh'])
 
     def test_entrypoint_is_only_readonly_preflight(self):
         entry = (ROOT / 'deploy/deploy-demo-studio-v2.sh').read_text()
