@@ -158,13 +158,17 @@ async def acme_simulated_no_effect(intent):
             component, {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component))
 
         def fetch():
-            response = requests.get(
-                origin.rstrip("/") + path,
-                headers={"Authorization": "Bearer " + ADMIN, "Accept": "application/json"},
-                timeout=8, allow_redirects=False)
-            if response.status_code != 200 or len(response.content) > 32768:
-                raise SandboxDenied("sandbox_service_denied_or_unavailable")
-            return response.json()
+            # The internal bearer must not traverse HTTP(S)/ALL_PROXY or .netrc.
+            # Fixed-origin validation alone does not disable requests' env proxies.
+            with requests.Session() as session:
+                session.trust_env = False
+                response = session.get(
+                    origin.rstrip("/") + path,
+                    headers={"Authorization": "Bearer " + ADMIN, "Accept": "application/json"},
+                    timeout=8, allow_redirects=False)
+                if response.status_code != 200 or len(response.content) > 32768:
+                    raise SandboxDenied("sandbox_service_denied_or_unavailable")
+                return response.json()
 
         return await asyncio.to_thread(fetch)
 
