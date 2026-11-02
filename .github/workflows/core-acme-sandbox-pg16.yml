@@ -106,6 +106,7 @@ jobs:
           assert data['idempotent_replay'] is True
           assert data['independent_final_reads']==2 and data['ticket_transition_count']==2
           assert len(data['terminal_receipt_sha256'])==64
+          assert len(data['terminal_ticket_sha256'])==64
           assert data['worker_temporal_observed'] is False
           assert data['human_glpi_attested'] is data['execution_allowed'] is data['effect_allowed'] is data['host_deployed'] is False
           assert not any(secret in p.read_text() for secret in ('Bearer ','postgresql://','ci-core-acme-sandbox-internal-only-not-human'))
