@@ -11,7 +11,7 @@ import json
 import re
 
 TENANT = "ACME-TEST"
-SCENARIO = "ACME-TEST-SAN-PAYMENTS"
+SCENARIO = "ACME-SAN-PAYMENTS"
 ISSUER = "TWIN_ACME_SIMULATED"
 SCHEMA = "aiops.worker-acme-simulated-no-effect.v1"
 CAPABILITY_SCHEMA = "aiops.acme-sandbox-capabilities.v1"
