@@ -1312,7 +1312,7 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                     patch.object(main, "db",
                                  side_effect=lambda: self.psycopg.connect(self.db_url)):
                 with TestClient(main.app) as client:
-                    for version, stage in ((8, "ANALYST"), (9, "VERIFY")):
+                    for version, stage in ((8, "DGX_ANALYST"), (9, "VERIFY")):
                         body = {
                             "expected_version": version, "stage": stage,
                             "event_type": "WORKFLOW_OBSERVATION", "status": "PASS",
