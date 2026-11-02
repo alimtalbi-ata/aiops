@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from shared.db import db
 
 router = APIRouter()
-TENANT, SCENARIO, ISSUER = 'ACME-TEST', 'ACME-TEST-SAN-PAYMENTS', 'TWIN_ACME_SIMULATED'
+TENANT, SCENARIO, ISSUER = 'ACME-TEST', 'ACME-SAN-PAYMENTS', 'TWIN_ACME_SIMULATED'
 SCHEMA = 'aiops.acme-sandbox-capabilities.v1'
 ROOT, PAYMENTS = 'ACME-TEST-SAN-FABRIC-A', 'ACME-TEST-SVC-PAYMENTS'
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{2,99}\Z', re.ASCII)
