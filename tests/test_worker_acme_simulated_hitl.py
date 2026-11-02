@@ -475,5 +475,66 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertIn("or not receipt_digest_valid(result)", main)
 
 
+    def test_29_rehashed_forged_receipt_cannot_elevate_authority(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        valid = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertTrue(receipt_digest_valid(valid))
+        for field, forged in (
+            ("schema", "aiops.worker-live.v1"),
+            ("tenant_id", "FOREIGN-TENANT"),
+            ("action", "LIVE"),
+            ("receipt_status", "EXECUTED"),
+            ("approval_issuer", "HUMAN_IDP"),
+            ("approval_kind", "HUMAN"),
+            ("human_approved", True),
+            ("execution_allowed", True),
+            ("effect_allowed", True),
+            ("live_effects_allowed", True),
+            ("real_glpi_writes_allowed", True),
+            ("effect_receipts", 1),
+            ("effect_receipts", False),
+            ("audit_transitions", ["WORKER_LIVE_EXECUTED"]),
+            ("audit_authority", "CORE_TERMINAL_CONFIRMED"),
+            ("receipt_phase", "POST_RESOLUTION"),
+            ("core_status_at_validation", "RESOLVED"),
+            ("resolution_verified", True),
+            ("post_resolution_readback_required", False),
+            ("core_014_015_written", True),
+            ("glpi_write", True),
+            ("approval_id", "HUMAN-APP-001"),
+        ):
+            forged_receipt = deepcopy(valid)
+            forged_receipt[field] = forged
+            forged_receipt["receipt_sha256"] = hashlib.sha256(json.dumps(
+                {k: v for k, v in forged_receipt.items()
+                 if k != "receipt_sha256"},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")).hexdigest()
+            with self.subTest(field=field, forged=forged):
+                self.assertFalse(receipt_digest_valid(forged_receipt))
+
+    def test_30_rehashed_extra_or_missing_receipt_fields_denied(self):
+        docs = fixtures()
+        async def get(component, path):
+            return deepcopy(docs[component])
+        valid = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        for change in ("extra", "missing", "raw_nonce"):
+            forged = deepcopy(valid)
+            if change == "extra":
+                forged["execution_receipt"] = "LIVE"
+            elif change == "missing":
+                del forged["glpi_write"]
+            else:
+                forged["approval_nonce"] = "RAW-NONCE-MUST-NOT-LEAK"
+            forged["receipt_sha256"] = hashlib.sha256(json.dumps(
+                {k: v for k, v in forged.items() if k != "receipt_sha256"},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")).hexdigest()
+            with self.subTest(change=change):
+                self.assertFalse(receipt_digest_valid(forged))
+
+
 if __name__ == "__main__":
     unittest.main()
