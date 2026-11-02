@@ -23,8 +23,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          git rev-parse HEAD
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exact-head reporter/preflight tests
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          bash -n deploy/debian-acme-sandbox-upgrade.sh
           bash -n deploy/deploy-demo-studio-v2.sh
           python3 -m py_compile deploy/debian-poller-qualification.py deploy/debian-portal-preflight.py deploy/debian-portal-canonicalize.py deploy/debian-portal-host-contracts.py
           python3 -m unittest discover -s tests -p test_debian_poller_qualification.py -v
