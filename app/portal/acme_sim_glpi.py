@@ -151,6 +151,9 @@ def _sandbox_read(component: str, attempt_id: str) -> dict:
             base + "/api/sandbox/acme/e2e/" + attempt_id,
             headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
             timeout=3, allow_redirects=False,
+            # Requests otherwise honors HTTP(S)_PROXY/ALL_PROXY and can send
+            # the internal bearer to a process-external proxy. Direct only.
+            proxies={"http": "", "https": "", "all": ""},
         )
         if response.status_code != 200 or len(response.content) > 32768:
             raise ValueError("sandbox_readback_unavailable")
