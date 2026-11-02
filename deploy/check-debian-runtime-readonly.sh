@@ -11,6 +11,12 @@ if docker inspect "$portal" >/dev/null 2>&1; then
   project="$(docker inspect "$portal" --format '{{index .Config.Labels "com.docker.compose.project"}}')"
   health="$(docker inspect "$portal" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')"
   binding="$(docker inspect "$portal" --format '{{json .HostConfig.PortBindings}}')"
+  # Immutable deployment fingerprint: allows successive cron receipts to prove
+  # whether the running portal image/container actually changed.
+  container_id="$(docker inspect "$portal" --format '{{.Id}}')"
+  image_id="$(docker inspect "$portal" --format '{{.Image}}')"
+  image_created="$(docker image inspect "$image_id" --format '{{.Created}}' 2>/dev/null || true)"
+  printf 'portal_container_id=%s\nportal_image_id=%s\nportal_image_created=%s\n' "$container_id" "$image_id" "$image_created"
   [[ "$project" == "$expected_project" ]] && check compose_owner PASS || check compose_owner FAIL
   [[ "$health" == healthy ]] && check portal_health PASS || check portal_health FAIL
   [[ "$binding" == *'"HostPort":"7777"'* ]] && check portal_7777_binding PASS || check portal_7777_binding FAIL
