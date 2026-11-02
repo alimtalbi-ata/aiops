@@ -50,7 +50,8 @@ dt{font-weight:700}dd{margin:0;color:#b5c9d7}
 </style></head><body><main>
 <nav aria-label="Navigation Portal"><a href="/">Cockpit AIOps</a>
 <a href="/#integrations">Liens natifs configurés, dont GLPI</a>
-<a href="/demo/explore-story">Demo Studio / Story</a></nav>
+<a href="/demo/explore-story">Demo Studio / Story</a>
+<a href="/demo/acme-sim-glpi">Ticket GLPI simulé ACME (sans droits humains)</a></nav>
 <h1>GLPI / ITSM — point de passage opérateur</h1>
 <p role="note" data-story-provenance="SYNTHETIC">ACME P1 SAN→Payments —
 <strong>SYNTHETIC</strong> uniquement. Aucun ticket, CI, impact ou Run réel attesté.</p>
