@@ -27,6 +27,9 @@ success=0
 rollback_status=NOT_REQUIRED
 backup_sha=NOT_CREATED
 image_builds=0
+restore_status=NOT_RUN
+restore_created=0
+restore_db="aiops_acme_restore_$(printf '%s' "$PIN" | cut -c1-12)"
 receipt="$STATE/acme-sandbox-upgrade.json"
 services="core twin policy worker simulator"
 compose() { docker compose --project-name aiops2-rebuild --env-file "$ENV" -f "$DEV/compose.yml" "$@"; }
@@ -50,9 +53,16 @@ finish() {
   code=$?
   trap - EXIT
   rollback
-  python3 - "$receipt" "$PIN" "$success" "$mutated" "$image_builds" "$code" "$rollback_status" "$backup_sha" "$TMP/images.tsv" "$TMP/health.tsv" "$TMP/portal-health.tsv" "$ROOT" "$DEV" <<'PY'
+  if [ "$restore_created" = 1 ]; then
+    if docker exec aiops2-rebuild-postgres dropdb -U aiops "$restore_db" >/dev/null 2>&1; then
+      restore_created=0
+    else
+      restore_status=FAILED_SCRATCH_CLEANUP
+    fi
+  fi
+  python3 - "$receipt" "$PIN" "$success" "$mutated" "$image_builds" "$code" "$rollback_status" "$backup_sha" "$TMP/images.tsv" "$TMP/health.tsv" "$TMP/portal-health.tsv" "$ROOT" "$DEV" "$restore_status" <<'PY'
 import datetime,json,os,sys,tempfile,subprocess
-path,pin,success,mutated,builds,code,rollback,backup,images,health,portal,stable,dev=sys.argv[1:]
+path,pin,success,mutated,builds,code,rollback,backup,images,health,portal,stable,dev,restore_status=sys.argv[1:]
 def sha(path):
  try:
   p=subprocess.run(['git','-C',path,'rev-parse','HEAD'],capture_output=True,text=True,timeout=5,check=False)
@@ -96,7 +106,8 @@ payload={'schema':'aiops.debian-acme-sandbox-upgrade.v1',
  'docker_container_mutations':int(mutated),'docker_image_builds':int(builds),
  'status':'PASS' if success=='1' and code=='0' else 'FAIL',
  'exit_code':int(code),'rollback_status':rollback,'pg16_backup_sha256':backup,
- 'migrations':'011-018 additive; retain on app rollback','images':rows,
+ 'migrations':'011-018 additive; retain on app rollback',
+ 'pg16_scratch_restore':restore_status,'images':rows,
  'e2e':'SEPARATE_RECEIPT_REQUIRED'}
 fd,tmp=tempfile.mkstemp(prefix='.acme-upgrade-receipt-',dir=os.path.dirname(path))
 try:
@@ -197,6 +208,26 @@ chmod 600 "$BACKUP"
 test -s "$BACKUP"
 docker exec -i aiops2-rebuild-postgres pg_restore --list < "$BACKUP" >/dev/null
 backup_sha="$(sha256sum "$BACKUP" | awk '{print $1}')"
+# RG-ACME-20: prove a native restore into a NEW disposable database on the
+# existing PG16 server before migrations or any service recreation. Never
+# restore over live aiops or drop a database that was not created by this job.
+test "$(docker exec aiops2-rebuild-postgres psql -U aiops -d postgres -Atqc \
+ "select count(*) from pg_database where datname='$restore_db'")" = 0 || \
+ { echo 'ACME_UPGRADE=NO_GO_SCRATCH_DB_ALREADY_EXISTS'; exit 78; }
+db_bytes="$(docker exec aiops2-rebuild-postgres psql -U aiops -d postgres -Atqc \
+ "select pg_database_size('aiops')")"
+free_kb="$(docker exec aiops2-rebuild-postgres df -Pk /var/lib/postgresql/data | awk 'NR==2{print $4}')"
+test "$free_kb" -gt 0 && test $((free_kb*1024)) -gt $((db_bytes*2+1073741824)) || \
+ { echo 'ACME_UPGRADE=NO_GO_RESTORE_DISK_HEADROOM'; exit 78; }
+docker exec aiops2-rebuild-postgres createdb -U aiops -T template0 "$restore_db"
+restore_created=1
+docker exec -i aiops2-rebuild-postgres pg_restore -U aiops -d "$restore_db" \
+  --no-owner --no-acl --exit-on-error < "$BACKUP" >/dev/null
+test "$(docker exec aiops2-rebuild-postgres psql -U aiops -d "$restore_db" -Atqc \
+ "select to_regclass('aiops.runs') is not null and to_regclass('aiops.incidents') is not null")" = t
+docker exec aiops2-rebuild-postgres dropdb -U aiops "$restore_db"
+restore_created=0
+restore_status=PASS
 # Installed 009/010 prerequisites must be real, never silently inferred.
 test "$(docker exec aiops2-rebuild-postgres psql -U aiops -d aiops -Atqc \
  "select to_regclass('aiops.analysis_records') is not null and to_regclass('aiops.evidence') is not null")" = t
