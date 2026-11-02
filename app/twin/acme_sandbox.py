@@ -75,6 +75,10 @@ def verified_record(value, *, attempt_id, now=None):
                 or payload.get('approval_actor') != ISSUER
                 or payload.get('approval_kind') != 'SIMULATED'
                 or payload.get('approval_status') != 'SIMULATED'
+                or payload.get('approval_phase') != 'PRE_RESOLUTION'
+                or payload.get('core_status_at_issuance') != 'PREPARED'
+                or payload.get('resolution_verified') is not False
+                or payload.get('post_resolution_readback_required') is not True
                 or payload.get('mode') != 'SIMULATION'
                 or payload.get('human_approved') is not False
                 or payload.get('execution_allowed') is not False
@@ -235,6 +239,10 @@ def issue_approval(x: ApprovalIntent, authorization: str | None = Header(default
                 'approval_issuer': ISSUER, 'issuer_id': 'twin-acme-test',
                 'approval_actor': ISSUER, 'approval_kind': 'SIMULATED',
                 'approval_status': 'SIMULATED',
+                'approval_phase': 'PRE_RESOLUTION',
+                'core_status_at_issuance': 'PREPARED',
+                'resolution_verified': False,
+                'post_resolution_readback_required': True,
                 'approval_nonce': 'SIMNONCE-' + secrets.token_hex(16).upper(),
                 'issued_at': now.isoformat(),
                 'expires_at': (now + timedelta(minutes=4)).isoformat(),
