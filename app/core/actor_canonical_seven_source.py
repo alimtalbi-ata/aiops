@@ -98,7 +98,7 @@ def _validate(proof, request, record, issuer, now, actor_exp):
             isinstance(payload, dict)
             and bool(re.fullmatch(r"SYN-EVT-[0-9A-F]{20}", event_id))
             and type(payload.get("graph_version")) is str
-            and bool(re.fullmatch(r"[0-9a-f]{40}", payload["graph_version"]))
+            and bool(re.fullmatch(r"[0-9a-f]{40}", payload["graph_version"])))
         if not graph_ordinal and seq != position:
             return False
         if (not isinstance(payload, dict) or not isinstance(full, dict)
