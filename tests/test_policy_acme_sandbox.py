@@ -170,5 +170,33 @@ class PolicySandboxTests(unittest.TestCase):
         with self.assertRaises(Exception):
             p.qualify(ATTEMPT,core,twin,historical=True)
 
+    def test_09_rg_acme_25_fixed_origin_and_no_proxy_bearer(self):
+        for origin in ('http://evil.example:810',
+                       'http://aiops2-rebuild-core:9999',
+                       'http://user@aiops2-rebuild-core:810',
+                       'http://aiops2-rebuild-core:810/redirect',
+                       'http://[::1:810'):
+            with self.subTest(origin=origin), patch.dict(os.environ,{'CORE_URL':origin}), patch.object(
+                    p.requests,'Session') as session:
+                with self.assertRaises(Exception):
+                    p.fetch_component('core',ATTEMPT)
+                session.assert_not_called()
+        class DirectSession:
+            trust_env=True
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def get(self,url,**kwargs):
+                self.url,self.kwargs=url,kwargs
+                return type('Response',(),{'status_code':200,'content':b'{}',
+                                           'json':lambda self:{'tenant_id':'ACME-TEST'}})()
+        direct=DirectSession()
+        with patch.dict(os.environ,{'CORE_URL':'http://aiops2-rebuild-core:810'}), patch.object(
+                p.requests,'Session',return_value=direct):
+            self.assertEqual(p.fetch_component('core',ATTEMPT)['tenant_id'],'ACME-TEST')
+        self.assertIs(direct.trust_env,False)
+        self.assertEqual(direct.url,'http://aiops2-rebuild-core:810/api/sandbox/acme/e2e/'+ATTEMPT)
+        self.assertIs(direct.kwargs['allow_redirects'],False)
+        self.assertEqual(direct.kwargs['headers']['Authorization'],'Bearer '+TOKEN)
+
 if __name__ == '__main__':
     unittest.main()
