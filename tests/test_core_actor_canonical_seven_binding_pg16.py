@@ -1391,6 +1391,13 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                 "expires_at=clock_timestamp()-interval '1 second' "
                 "where run_id=%s", (run,))
         negatives["expired"] = "UNKNOWN" if read(request) is None else "ERROR"
+        # Restore a valid grant before testing the independently pinned
+        # SOURCE issuer; otherwise an expired grant would mask this denial.
+        with self.psycopg.connect(self.db_url) as conn:
+            conn.execute(
+                "update public.ci_actor_source_grants "
+                "set expires_at=clock_timestamp()+interval '10 minutes' "
+                "where run_id=%s", (run,))
         with self.psycopg.connect(self.db_url) as conn:
             negatives["foreign_source_issuer"] = (
                 "UNKNOWN" if pgsource.read_graph005_core_written_seven(
@@ -1399,11 +1406,8 @@ class CanonicalSevenBindingPG16(fixture.CanonicalSevenSourcePG16):
                     expected_events=expected_events,
                     graph_version=pinned["graph_version"]) is None else "ERROR")
         self.assertEqual(negatives, {k: "UNKNOWN" for k in negatives})
-        with self.psycopg.connect(self.db_url) as conn:
-            conn.execute(
-                "update public.ci_actor_source_grants "
-                "set expires_at=clock_timestamp()+interval '3 minutes' "
-                "where run_id=%s", (run,))
+        # Source and ownership observations age out after five minutes even
+        # while the synthetic grant itself remains unexpired for ten minutes.
         self.assertIsNone(read(request, at=datetime.now(timezone.utc)
                                + timedelta(minutes=6)))
         changed = list(expected_events)
