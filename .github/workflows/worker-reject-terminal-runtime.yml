@@ -1,0 +1,61 @@
+name: Worker registered REJECT terminal activity (source-only)
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/worker/main.py
+      - app/worker/hitl_reject_terminal_runtime.py
+      - tests/test_worker_hitl_reject_terminal_runtime.py
+      - .github/workflows/worker-reject-terminal-runtime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  terminal-runtime-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact source and 8/8 no-skip tests
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python -m compileall -q app/worker/main.py app/worker/hitl_reject_terminal_runtime.py
+          python -m unittest discover -s tests -p 'test_worker_hitl_reject_terminal_runtime.py' -v 2>&1 | tee /tmp/worker-terminal-tests.log
+          grep -E '^Ran 8 tests in ' /tmp/worker-terminal-tests.log
+          grep -x 'OK' /tmp/worker-terminal-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-terminal-tests.log
+          python - <<'PY'
+          import hashlib,json,os,pathlib
+          r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
+             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":8,
+             "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,
+             "runtime_workflow_registered":True,"core_344_joined_pg16":False,
+             "two_os_worker_restart":False,"temporal_persisted_restart":False,
+             "human_glpi_allow":False,"live_effect":False,"host_deployed":False,
+             "release_stable":"NO_GO"}
+          p=pathlib.Path('/tmp/worker-terminal-runtime-receipt.json')
+          p.write_text(json.dumps(r,sort_keys=True,separators=(',',':'))+'\n')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          pathlib.Path('/tmp/worker-terminal-runtime-receipt.sha256').write_text(digest+'  '+p.name+'\n')
+          print('SOURCE_ONLY_SHA256='+digest)
+          PY
+          (cd /tmp && sha256sum --check worker-terminal-runtime-receipt.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worker-terminal-runtime-source-receipt
+          path: |
+            /tmp/worker-terminal-runtime-receipt.json
+            /tmp/worker-terminal-runtime-receipt.sha256
+          retention-days: 7
