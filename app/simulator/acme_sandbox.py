@@ -155,6 +155,10 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
     if (not valid_id(aid) or not aid.startswith('SIM-APP-')
             or twin.get('approval_issuer') != ISSUER
             or twin.get('approval_kind') != 'SIMULATED'
+            or twin.get('approval_phase') != 'PRE_RESOLUTION'
+            or twin.get('core_status_at_issuance') != 'PREPARED'
+            or twin.get('resolution_verified') is not False
+            or twin.get('post_resolution_readback_required') is not True
             or twin.get('issuer_id') != 'twin-acme-test'
             or twin.get('core_request_sha256') != fingerprint[0]
             or twin.get('core_source_event_ids') != list(fingerprint[1])
@@ -169,7 +173,9 @@ def start(x: SandboxRequest, authorization: str | None = Header(default=None)):
             or readback.get('core_request_sha256') != fingerprint[0]
             or readback.get('core_source_event_ids') != list(fingerprint[1])
             or readback.get('approval_issuer') != ISSUER
-            or readback.get('approval_kind') != 'SIMULATED'):
+            or readback.get('approval_kind') != 'SIMULATED'
+            or readback.get('approval_phase') != 'PRE_RESOLUTION'
+            or readback.get('core_status_at_issuance') != 'PREPARED'):
         raise HTTPException(503, 'sandbox_twin_readback_unqualified')
     policy = remote('policy', '/api/sandbox/acme/e2e', 'POST', {**request, **ids})
     bound(policy, x, ids)
