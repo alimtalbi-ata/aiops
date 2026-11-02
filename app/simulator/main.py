@@ -31,3 +31,7 @@ def launch(x:Launch,authorization:str|None=Header(default=None)):
 def golden(authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=TOKEN:raise HTTPException(401,'invalid internal token')
  return launch(Launch(),authorization)
+
+# Strict opt-in ACME-TEST coordinator, never LIVE.
+from simulator.acme_sandbox import router as acme_sandbox_router
+app.include_router(acme_sandbox_router)

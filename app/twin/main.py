@@ -69,3 +69,7 @@ def metrics():
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
     return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'
+
+# Strict opt-in ACME-TEST synthetic approval only, no human IdP.
+from twin.acme_sandbox import router as acme_sandbox_router
+app.include_router(acme_sandbox_router)
