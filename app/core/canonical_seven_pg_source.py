@@ -68,9 +68,11 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
                    or not now - timedelta(minutes=5) <= r[5] <= r[6] <= now
                    for r in owned)):
         return None
-    # A canonical graph-005 SOURCE proof may coexist with subsequent Worker
-    # ITIL events on the same Run. Count only SOURCE/OBSERVED, but reject any
-    # eighth source observation (even when it is not in the pinned manifest).
+    # Graph-005 SOURCE events can be interleaved with Worker ITIL events.
+    # Preserve the physical Run sequence in the full-event SHA256 domain,
+    # while payload.sequence is the pinned SOURCE ordinal (1..7). The
+    # generic numeric reader remains strictly contiguous. Reject an eighth
+    # SOURCE observation even when it is not in the pinned manifest.
     source_filter = (" and r.stage='SOURCE' and r.event_type='OBSERVED'"
                      if source_only else "")
     rows = conn.execute(
@@ -89,11 +91,13 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
     if len(rows) != 7 or total != 7:
         return None
     events, seen_ids, seen_evidence = [], set(), set()
+    last_run_sequence = 0
     for pos, row in enumerate(rows, 1):
         (source_id, evidence_id, payload_hash, payload, provenance, observed,
          known, event_id, sequence, stage, event_type, status,
          run_payload, evidence_ids) = row
-        if (type(sequence) is not int or sequence != pos
+        if (type(sequence) is not int or sequence <= last_run_sequence
+                or (not source_only and sequence != pos)
                 or not isinstance(payload, dict) or payload != run_payload
                 or evidence_ids != [evidence_id]
                 or not isinstance(provenance, dict)
@@ -110,6 +114,7 @@ def read_canonical_seven(conn, request, *, source: str, issuer: str,
             return None
         seen_ids.add(source_id)
         seen_evidence.add(evidence_id)
+        last_run_sequence = sequence
         full = {
             "event_id": event_id, "run_id": request["run_id"],
             "incident_id": request["incident_id"],
@@ -227,7 +232,7 @@ def read_graph005_core_written_seven(conn, request, *, source: str, issuer: str,
     for pos, row in enumerate(rows, 1):
         sequence, key, stage, event_type, status, payload, provenance = row
         expected_id, acme_full, acme_payload = expected_events[pos - 1]
-        if (sequence != pos or key != expected_id
+        if (sequence != proof["events"][pos - 1]["sequence"] or key != expected_id
                 or stage != "SOURCE" or event_type != "OBSERVED"
                 or status != "PASS"
                 or not isinstance(payload, dict)
