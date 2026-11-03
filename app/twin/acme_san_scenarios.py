@@ -199,9 +199,12 @@ def catalog(authorization: str | None = Header(default=None)):
     auth(authorization)
     require_enabled()
     provenance = provenance_snapshot()
+    # One graph per catalog, not eight repeated copies; scenario references
+    # retain the exact digest but cannot be mistaken for Run-bound observations.
+    summary = {key: value for key, value in provenance.items() if key != 'graph'}
     return {'schema': 'aiops.acme-san-scenario-catalog.v1', 'tenant_id': TENANT,
             'mode': 'SIMULATION', 'topology': provenance,
-            'scenarios': [scenario_assessment(key, provenance) for key in SCENARIOS],
+            'scenarios': [scenario_assessment(key, summary) for key in SCENARIOS],
             'no_live_or_human_authority': True}
 
 
