@@ -49,28 +49,43 @@ def runner(args,**kw):
 class UXGateTests(unittest.TestCase):
     def test_rg_ux_07_positive_readonly_not_browser(self):
         r=ux.make_receipt(PIN,Opener(),runner)
-        self.assertEqual((r['passed'],r['total']),(7,7))
+        self.assertEqual((r['passed'],r['total']),(8,8))
         self.assertEqual(r['verdict'],'PASS_READONLY_ROUTE_ONLY')
         self.assertEqual(r['browser_ux'],'NOT_VERIFIED')
         self.assertEqual(r['glpi_human_acl'],'NOT_VERIFIED')
     def test_rg_ux_07_missing_route_rejected(self):
         r=ux.make_receipt(PIN,Opener('demo_center'),runner)
-        self.assertEqual(r['passed'],6)
+        self.assertEqual(r['passed'],7)
         self.assertEqual(r['verdict'],'FAIL')
+    def test_rg_ux_13_recorder_station_required_and_fail_closed(self):
+        station=next(c for c in ux.CASES if c[0]=='recorder_station')
+        self.assertEqual(station[1],'/demo-center/recorder')
+        self.assertIn('LOCAL_ONLY / NO LIVE EFFECT',station[3])
+        receipt=ux.make_receipt(PIN,Opener('recorder_station'),runner)
+        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual(receipt['verdict'],'FAIL')
+
+    def test_rg_ux_13_demo_center_links_to_station(self):
+        center=next(c for c in ux.CASES if c[0]=='demo_center')
+        self.assertIn('href="/demo-center/recorder"',center[3])
+        receipt=ux.make_receipt(PIN,Opener('demo_center'),runner)
+        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual(receipt['verdict'],'FAIL')
+
     def test_rg_ux_12_historical_studio_route_required(self):
         case=next(c for c in ux.CASES if c[0]=='historical_demo_studio')
         self.assertEqual(case[1],'/demo-studio')
         self.assertIn('SYNTHETIC_REFERENCE_ONLY',case[3])
         self.assertIn('UNKNOWN',case[3])
         receipt=ux.make_receipt(PIN,Opener('historical_demo_studio'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(6,7))
+        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_12_demo_center_must_link_historical_studio(self):
         case=next(c for c in ux.CASES if c[0]=='demo_center')
         self.assertIn('href="/demo-studio"',case[3])
         receipt=ux.make_receipt(PIN,Opener('demo_center'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(6,7))
+        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_11_noc_synthetic_provenance_required(self):
@@ -79,19 +94,19 @@ class UXGateTests(unittest.TestCase):
         self.assertIn('LOCAL_SYNTHETIC_FIXTURE',case[3])
         self.assertIn('PG16 ACME-TEST migration 019',case[3])
         receipt=ux.make_receipt(PIN,Opener('noc_operator'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(6,7))
+        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_10_twin_model_cannot_claim_live_authority(self):
         r=ux.make_receipt(PIN,Opener('twin_read_model'),runner)
-        self.assertEqual(r['passed'],6)
+        self.assertEqual(r['passed'],7)
         self.assertEqual(r['verdict'],'FAIL')
         self.assertEqual(next(c for c in r['checks'] if c['name']=='twin_read_model')['reason'],
                          'TWIN_MODEL_CONTRACT_MISMATCH')
 
     def test_rg_ux_10_twin_nav_missing_link_rejected(self):
         r=ux.make_receipt(PIN,Opener('twin_navigation'),runner)
-        self.assertEqual(r['passed'],6)
+        self.assertEqual(r['passed'],7)
         self.assertEqual(r['verdict'],'FAIL')
 
     def test_rg_ux_07_missing_security_header_rejected(self):
@@ -109,7 +124,7 @@ class UXGateTests(unittest.TestCase):
         portal=json.loads((root/'deploy/debian-portal-release.json').read_text())
         acme=json.loads((root/'deploy/debian-acme-sandbox-release.json').read_text())
         self.assertIs(portal['enabled'],True)
-        self.assertEqual(portal['candidate_sha'],'558c5776501642ceb0daf32e575be678ff13bc57')
+        self.assertEqual(portal['candidate_sha'],'f8921bf2c46534022fc3ac0aa0be02bf4d1880cb')
         self.assertIs(acme['enabled'],False)
         self.assertEqual(acme['candidate_sha'],'e9a21e3e13f9c13bff461325426f12f171285b22')
 
