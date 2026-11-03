@@ -245,6 +245,7 @@ def host_playwright_receipt(state, stable_sha, portal_image, now=None):
         if local.get('status') == 'FAIL':
             failure = local.get('failure_type')
             stage = local.get('failure_stage')
+            category = local.get('console_error_category')
             counts = {k: local.get(k) for k in (
                 'page_errors_count', 'console_errors_count',
                 'failed_requests_count', 'blocked_requests_count')}
@@ -253,6 +254,10 @@ def host_playwright_receipt(state, stable_sha, portal_image, now=None):
                     and re.fullmatch(r'[A-Za-z]{3,50}', failure) else 'UNKNOWN',
                     'failure_stage': stage if isinstance(stage, str)
                     and re.fullmatch(r'[A-Za-z0-9_-]{3,50}', stage) else 'UNKNOWN',
+                    'console_error_category': category if category in (
+                        'NONE','PORTAL_SESSION','ACME_FIXTURE','FAVICON',
+                        'STATIC_ASSET','HTTP_401','HTTP_404',
+                        'RESOURCE_OTHER','OTHER') else 'UNKNOWN',
                     **{k: v if type(v) is int and 0 <= v <= 1000 else None
                        for k, v in counts.items()},
                     'stable_checkout_sha': stable_sha, 'portal_image_id': portal_image}
