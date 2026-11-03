@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import subprocess
 import sys
 import tempfile
 from urllib.parse import urlsplit
@@ -103,6 +104,27 @@ def capture(page, folder: Path, name: str, receipt: dict) -> None:
     })
 
 
+
+def observed_provenance(runner=subprocess.run) -> dict:
+    """Read exact local checkout and Docker image IDs, never environment/labels."""
+    def probe(argv):
+        try:
+            result = runner(argv, capture_output=True, text=True, timeout=8, check=False)
+            return result.stdout.strip() if result.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+    stable = probe(["git", "-C", str(Path(__file__).resolve().parents[1]),
+                    "rev-parse", "HEAD"])
+    image = probe(["docker", "inspect", "--type", "container", "--format",
+                   "{{.Image}}", "aiops2-rebuild-portal"])
+    return {
+        "stable_checkout_sha": stable if isinstance(stable, str)
+        and re.fullmatch(r"[0-9a-f]{40}", stable) else None,
+        "portal_image_id": image if isinstance(image, str)
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", image) else None,
+    }
+
+
 def run(args) -> dict:
     base = verify_base_url(args.base_url)
     hostname = platform.node()
@@ -125,9 +147,12 @@ def run(args) -> dict:
         "checks": [],
         "screenshots": [],
         "page_errors_count": 0,
+        "console_errors_count": 0,
+        "failed_requests_count": 0,
         "blocked_requests_count": 0,
         "status": "FAIL",
     }
+    receipt.update(observed_provenance())
     # Imports are deferred so missing browser tooling fails with a precise error.
     from playwright.sync_api import sync_playwright, expect
 
@@ -140,6 +165,8 @@ def run(args) -> dict:
             )
             page = context.new_page()
             errors = []
+            console_errors = []
+            failed_requests = []
             blocked = []
 
             def fence(route):
@@ -155,6 +182,9 @@ def run(args) -> dict:
 
             context.route("**/*", fence)
             page.on("pageerror", lambda _: errors.append("PAGE_ERROR"))
+            page.on("console", lambda msg: console_errors.append("CONSOLE_ERROR")
+                    if msg.type == "error" else None)
+            page.on("requestfailed", lambda _: failed_requests.append("REQUEST_FAILED"))
 
             def visit(label, path, selector, expected):
                 response = page.goto(base + path, wait_until="domcontentloaded", timeout=15000)
@@ -219,6 +249,10 @@ def run(args) -> dict:
             try:
                 mobile.route("**/*", fence)
                 mp = mobile.new_page()
+                mp.on("pageerror", lambda _: errors.append("PAGE_ERROR"))
+                mp.on("console", lambda msg: console_errors.append("CONSOLE_ERROR")
+                      if msg.type == "error" else None)
+                mp.on("requestfailed", lambda _: failed_requests.append("REQUEST_FAILED"))
                 response = mp.goto(base + "/", wait_until="domcontentloaded", timeout=15000)
                 if response is None or response.status != 200:
                     raise AssertionError("mobile home unavailable")
@@ -231,9 +265,11 @@ def run(args) -> dict:
                 mobile.close()
 
             receipt["page_errors_count"] = len(errors)
+            receipt["console_errors_count"] = len(console_errors)
+            receipt["failed_requests_count"] = len(failed_requests)
             receipt["blocked_requests_count"] = len(blocked)
-            if errors:
-                raise AssertionError("JavaScript pageerror observed")
+            if errors or console_errors or failed_requests:
+                raise AssertionError("browser JavaScript/console/network failure observed")
             if blocked:
                 raise AssertionError("non-GET or off-origin request attempted")
             receipt["status"] = "PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY"
@@ -259,6 +295,7 @@ def main() -> int:
             "host": platform.node(), "mode": "ANONYMOUS_SYNTHETIC_UI_ONLY",
             "status": "FAIL", "failure_type": type(exc).__name__,
             "real_screen_capture": "NOT_VERIFIED", "live_effects": 0,
+            **observed_provenance(),
         }
     try:
         secure_dir(folder)
