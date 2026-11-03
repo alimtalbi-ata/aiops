@@ -29,7 +29,7 @@ shared = types.ModuleType('shared')
 shared.__path__ = []
 shared_db = types.ModuleType('shared.db')
 shared_db.db = lambda: None
-_keys = ('core', 'core.acme_sandbox', 'shared', 'shared.db')
+_keys = ('core', 'core.acme_sandbox', 'core.acme_sandbox_journey', 'shared', 'shared.db')
 _previous = {key: sys.modules.get(key) for key in _keys}
 sys.modules.update({'core': core_pkg, 'core.acme_sandbox': core,
                     'shared': shared, 'shared.db': shared_db})
