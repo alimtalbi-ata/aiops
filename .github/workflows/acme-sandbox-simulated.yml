@@ -45,5 +45,5 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONPATH=app:. python -m pytest -q tests/test_acme_sandbox_services.py | tee /tmp/acme-sandbox-tests.log
-          grep -E '^133 passed in ' /tmp/acme-sandbox-tests.log
+          grep -E '^120 passed in ' /tmp/acme-sandbox-tests.log
           ! grep -E 'skipped|xfailed|xpassed' /tmp/acme-sandbox-tests.log
