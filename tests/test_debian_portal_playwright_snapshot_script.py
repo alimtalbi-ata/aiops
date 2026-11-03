@@ -125,8 +125,29 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
         self.assertIn('failed_requests_count', src)
         self.assertIn('failure_stage', src)
         self.assertIn('final-browser-diagnostics', src)
-        self.assertIn('page.wait_for_load_state("networkidle", timeout=10000)', src)
-        self.assertIn('mp.wait_for_load_state("networkidle", timeout=10000)', src)
+        self.assertNotIn('wait_for_load_state("networkidle"', src)
+        self.assertIn('page.wait_for_load_state("load", timeout=10000)', src)
+        self.assertIn('mp.wait_for_load_state("load", timeout=10000)', src)
+        self.assertIn('await_synthetic_workspace_ready(page, expect)', src)
+        self.assertIn('await_synthetic_workspace_ready(mp, expect)', src)
+
+    def test_workspace_async_wait_is_specific_and_fail_closed(self):
+        calls = []
+
+        class Page:
+            def locator(self, selector):
+                return selector
+
+        class Expectation:
+            def to_have_attribute(self, name, value, timeout):
+                calls.append((name, value, timeout))
+
+        def expect(selector):
+            self.assertEqual(selector, "#fixture-status")
+            return Expectation()
+
+        module.await_synthetic_workspace_ready(Page(), expect)
+        self.assertEqual(calls, [("data-state", "ready", 10000)])
 
 
 if __name__ == "__main__":
