@@ -57,6 +57,15 @@ class UXGateTests(unittest.TestCase):
         r=ux.make_receipt(PIN,Opener('demo_center'),runner)
         self.assertEqual(r['passed'],5)
         self.assertEqual(r['verdict'],'FAIL')
+    def test_rg_ux_11_noc_synthetic_provenance_required(self):
+        case=next(c for c in ux.CASES if c[0]=='noc_operator')
+        self.assertIn('SYNTHETIC_REFERENCE_ONLY',case[3])
+        self.assertIn('LOCAL_SYNTHETIC_FIXTURE',case[3])
+        self.assertIn('PG16 ACME-TEST migration 019',case[3])
+        receipt=ux.make_receipt(PIN,Opener('noc_operator'),runner)
+        self.assertEqual((receipt['passed'],receipt['total']),(5,6))
+        self.assertEqual(receipt['verdict'],'FAIL')
+
     def test_rg_ux_10_twin_model_cannot_claim_live_authority(self):
         r=ux.make_receipt(PIN,Opener('twin_read_model'),runner)
         self.assertEqual(r['passed'],5)
@@ -84,7 +93,7 @@ class UXGateTests(unittest.TestCase):
         portal=json.loads((root/'deploy/debian-portal-release.json').read_text())
         acme=json.loads((root/'deploy/debian-acme-sandbox-release.json').read_text())
         self.assertIs(portal['enabled'],True)
-        self.assertEqual(portal['candidate_sha'],'41d531655cd6bb89918c9f9055eecd064827c5f6')
+        self.assertEqual(portal['candidate_sha'],'c6df1eaec829be6b7158356db2c72a863f173d76')
         self.assertIs(acme['enabled'],False)
         self.assertEqual(acme['candidate_sha'],'e9a21e3e13f9c13bff461325426f12f171285b22')
 
