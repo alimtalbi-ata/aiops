@@ -1,0 +1,68 @@
+"""P0 #385: dedicated NOC operator surface; no implicit tenant authorization."""
+from pathlib import Path
+from fastapi import APIRouter
+from fastapi.responses import HTMLResponse, FileResponse
+
+router = APIRouter()
+HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": (
+        "default-src 'none'; script-src 'self'; connect-src 'self'; "
+        "style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; "
+        "frame-ancestors 'none'"
+    ),
+}
+PAGE = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NOC opérateur — ACME AIOps2</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#081521;color:#edf5fa;font:15px/1.55 system-ui,sans-serif}
+main{max-width:1150px;margin:auto;padding:24px}nav{display:flex;flex-wrap:wrap;gap:16px}
+a{color:#a6ddff}h1{font-size:clamp(1.5rem,4vw,2.5rem)}.panel{background:#102538;border:1px solid #38566d;border-radius:14px;padding:18px;margin:16px 0}
+label{display:block;margin:10px 0 5px}input,select{background:#06111e;color:#fff;border:1px solid #7291a5;border-radius:8px;padding:10px;max-width:100%}
+button{background:#236b99;color:#fff;border:1px solid #7cb9de;border-radius:8px;padding:10px;margin:10px 8px 10px 0}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #f9d87b;outline-offset:3px}
+table{border-collapse:collapse;width:100%}td,th{padding:10px;border-bottom:1px solid #38566d;text-align:left}td{overflow-wrap:anywhere}
+.status{color:#f9d87b;font-weight:700}.muted{color:#bed1dd}.table-wrap{overflow-x:auto}
+@media(max-width:640px){main{padding:14px}td,th{padding:7px}}
+</style></head><body><main>
+<nav aria-label="Navigation opérateur"><a href="/">Cockpit</a><a href="/itsm">GLPI réel / droits humains</a>
+<a href="/demo/explore-story">ACME Story (simulation)</a><a href="/demo/acme-impact">Impact Twin (simulation)</a></nav>
+<h1>NOC opérateur — incidents SAN / Payments / ERP</h1>
+<p class="muted">Lecture seule. Aucun incident, impact, ticket, diagnostic Analyst/Critic ni droit humain n'est déduit d'un HTTP 200.
+Les sources sans ACL acteur+tenant vérifiée restent UNKNOWN / 503. Les actions LIVE sont interdites.</p>
+<section class="panel"><h2>Source NOC et corrélation Core</h2>
+<label for="noc-viewer-token">Jeton de lecture portail (non conservé)</label>
+<input id="noc-viewer-token" type="password" autocomplete="off" spellcheck="false">
+<button type="button" id="noc-load">Lire NOC</button><button type="button" id="noc-clear">Effacer</button>
+<p id="noc-state" class="status" role="status" aria-live="polite">UNKNOWN — authentification et ACL non vérifiées</p>
+<p id="noc-correlation" class="muted">Corrélation Core : NOT_ATTESTED</p>
+</section>
+<section class="panel"><h2>File d'incidents</h2>
+<label for="noc-filter">Filtre état</label><select id="noc-filter">
+<option value="ALL">Tous</option><option value="OK">OK</option><option value="WARN">WARN</option>
+<option value="CRIT">CRIT</option><option value="UNKNOWN">UNKNOWN</option></select>
+<div class="table-wrap"><table><thead><tr><th scope="col">Incident / Run</th>
+<th scope="col">État source</th><th scope="col">Provenance</th><th scope="col">Preuve / impact</th></tr></thead>
+<tbody id="noc-rows"><tr><td colspan="4">UNKNOWN — aucun incident autorisé</td></tr></tbody></table></div>
+</section>
+<section class="panel"><h2>Diagnostic et limites</h2><p>Le modèle NOC signé n'est pas une attestation de panne SAN.
+Le lien incident→Run exige une lecture Core indépendante et un contrôle ACL côté serveur.
+Analyst/Critic doivent s'abstenir sans preuve ; SIM-GLPI n'est jamais un ticket humain.</p>
+<p id="noc-diagnostic" role="status">NOC : NOT_VERIFIED · n8n login : NOT_VERIFIED · GLPI humain : NOT_VERIFIED</p></section>
+</main><script src="/assets/noc-operator.js" defer></script></body></html>"""
+
+
+@router.get("/noc", response_class=HTMLResponse)
+def noc_operator_page():
+    return HTMLResponse(PAGE, headers=HEADERS)
+
+
+@router.get("/assets/noc-operator.js")
+def noc_operator_script():
+    return FileResponse(Path(__file__).with_name("noc_operator_client.js"),
+                        media_type="application/javascript", headers=HEADERS)
