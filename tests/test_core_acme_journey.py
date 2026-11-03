@@ -74,7 +74,7 @@ def fixture(resolved=False):
         payload = {'tenant_id': core.TENANT, 'run_id': RUN, 'incident_id': INC,
                    'source_event_id': eid, 'sequence': i, 'synthetic': True}
         rows.append((i, 'SOURCE', 'OBSERVED', 'PASS', TIME, eid,
-                     [core.ident('EVID-SIM-', ATTEMPT + ':' + str(1+(i%2)))], payload))
+                     [core.ident('EVID-SIM-', ATTEMPT + ':' + str(1+((i-1)%2)))], payload))
     rows.append((8, 'RUN', 'SIMULATED_PREPARED', 'PREPARED', TIME,
                  core.ident('SIM-PREPARED-', ATTEMPT), [],
                  {'tenant_id': core.TENANT, 'synthetic': True,
