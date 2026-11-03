@@ -143,16 +143,27 @@ def _sandbox_config(component: str) -> tuple[str, str]:
     return base, token
 
 
+def _direct_get(url: str, **kwargs):
+    """One fresh session, no ambient proxy or .netrc credentials.
+
+    Explicit empty proxy kwargs alone do NOT disable requests' .netrc lookup:
+    a matching host entry can replace our Authorization bearer. Never inherit
+    machine/user transport credentials for internal sandbox readback.
+    """
+    with requests.Session() as session:
+        session.trust_env = False
+        return session.get(url, **kwargs)
+
+
 def _sandbox_read(component: str, attempt_id: str) -> dict:
     """Fixed service allowlist, bearer and GET only; never native GLPI."""
     base, token = _sandbox_config(component)
     try:
-        response = requests.get(
+        response = _direct_get(
             base + "/api/sandbox/acme/e2e/" + attempt_id,
             headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
             timeout=3, allow_redirects=False,
-            # Requests otherwise honors HTTP(S)_PROXY/ALL_PROXY and can send
-            # the internal bearer to a process-external proxy. Direct only.
+            # Session(trust_env=False) also blocks ambient .netrc and proxies.
             proxies={"http": "", "https": "", "all": ""},
         )
         if response.status_code != 200 or len(response.content) > 32768:
