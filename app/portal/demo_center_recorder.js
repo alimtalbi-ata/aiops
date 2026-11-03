@@ -14,6 +14,7 @@
   let recorder = null;
   let chunks = [];
   let objectUrl = null;
+  let requestEpoch = 0; // cancel a pending browser permission prompt on Clear/pagehide
 
   function setStatus(message) { status.textContent = message; }
   function supported() {
@@ -58,13 +59,19 @@
       setStatus("BLOCKED — consentement, HTTPS/localhost et API navigateur requis.");
       return;
     }
+    const epoch = ++requestEpoch;
     discardVideo();
     setStatus("PERMISSION_PENDING — choisissez explicitement un onglet de démonstration.");
     start.disabled = true;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
+      const selectedStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: "browser" }, audio: false
       });
+      if (epoch !== requestEpoch) {
+        for (const track of selectedStream.getTracks()) { track.stop(); }
+        return;
+      }
+      stream = selectedStream;
       const mimeType = selectMime();
       recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       const active = recorder;
@@ -103,6 +110,7 @@
       setStatus("RECORDING_LOCAL — capture en cours, aucune donnée transmise au serveur.");
       refresh();
     } catch (error) {
+      if (epoch !== requestEpoch) { return; }
       releaseStream();
       recorder = null;
       chunks = [];
@@ -118,6 +126,7 @@
     }
   });
   clear.addEventListener("click", () => {
+    ++requestEpoch;
     if (recorder && recorder.state === "recording") { recorder.stop(); }
     // A pending stop event must not re-expose the recording after an explicit clear.
     const pending = recorder;
@@ -133,6 +142,7 @@
     refresh();
   });
   window.addEventListener("pagehide", () => {
+    ++requestEpoch;
     releaseStream();
     if (objectUrl) { URL.revokeObjectURL(objectUrl); }
   }, { once: true });
