@@ -30,6 +30,14 @@ elif [ "$portal_enabled" != no ]; then
 fi
 # Anonymous, read-only host tests run even if upgrade was blocked; never promote E2E.
 /usr/bin/python3 "$delivery/deploy/debian-portal-host-contracts.py" || status=78
+# P0 T1: one-shot anonymous Chromium ON DEBIAN via the existing stable poller.
+# This is read-only and non-blocking for Core/ACME; FAIL remains NO_GO in its
+# private receipt and in the sanitized preflight report. Never upload PNGs.
+if [ "$status" -eq 0 ]; then
+  /usr/bin/timeout 180 /usr/bin/python3 "$delivery/deploy/debian-portal-playwright-snapshot.py" \
+    --base-url http://127.0.0.1:7777 --assert-host SRV-DEB-05 \
+    --output-dir "$state/portal-playwright" || echo "HOST_PLAYWRIGHT_NOT_VERIFIED"
+fi
 # Optional five-service ACME sandbox in-place upgrade. Default disabled.
 acme_enabled="$(/usr/bin/python3 - "$delivery/deploy/debian-acme-sandbox-release.json" <<'PY'
 import json,sys
