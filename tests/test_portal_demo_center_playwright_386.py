@@ -256,5 +256,23 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
 
 
+    def test_07_twin_noc_demonstration_links_allow_browser_return(self):
+        # Real Chromium navigation, not just anonymous HTTP 200 route checks.
+        # The target remains synthetic and NOC data remains ACL-gated UNKNOWN.
+        self.page.goto(self.base + "/demo-center")
+        self.page.get_by_role("link", name="Voir le graphe existant").click()
+        expect(self.page).to_have_url(self.base + "/demo/acme-impact")
+        twin_nav = self.page.get_by_role("navigation", name="Parcours de démonstration")
+        twin_nav.get_by_role("link", name="DemoCenter").click()
+        expect(self.page).to_have_url(self.base + "/demo-center")
+        self.page.get_by_role("link", name="Ouvrir NOC").click()
+        expect(self.page).to_have_url(self.base + "/noc")
+        expect(self.page.locator("#noc-state")).to_contain_text("UNKNOWN")
+        noc_nav = self.page.get_by_role("navigation", name="Navigation opérateur")
+        noc_nav.get_by_role("link", name="DemoCenter").click()
+        expect(self.page).to_have_url(self.base + "/demo-center")
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+
 if __name__ == "__main__":
     unittest.main()
