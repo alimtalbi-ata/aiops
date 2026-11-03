@@ -57,6 +57,51 @@ def prepared_core():
         execution_allowed=False, effect_allowed=False,
         real_glpi_writes_allowed=False)
 
+def test_rg_acme_34_simulator_canonical_source_positive():
+    """Exact ordered Core SOURCE facts survive independent Simulator validation."""
+    x = SIM.SandboxRequest(**intent())
+    assert SIM.canonical_source_ids(x.attempt_id) == TWIN.canonical_source_ids(x.attempt_id)
+    assert SIM.prepared_core(prepared_core(), x, ids()) == (
+        'a' * 64, tuple(TWIN.canonical_source_ids(x.attempt_id)))
+
+
+@pytest.mark.parametrize('changes', [
+    {'source_event_count': 7.0},
+    {'source_event_count': True},
+    {'source_event_count': '7'},
+    {'source_event_count': None},
+    {'source_event_ids': list(reversed(TWIN.canonical_source_ids('ACME-SIM-UNIT001')))},
+    {'source_event_ids': TWIN.canonical_source_ids('ACME-SIM-FOREIGN')},
+    {'source_event_ids': ['SYN-EVT-FOREIGN' + str(i) for i in range(7)]},
+    {'source_event_ids': tuple(TWIN.canonical_source_ids('ACME-SIM-UNIT001'))},
+])
+def test_rg_acme_34_simulator_rejects_forged_source_before_twin_post(monkeypatch, changes):
+    """Malformed Core authority cannot reach a Twin approval write, even in sandbox."""
+    calls = []
+
+    def remote(component, path, method='GET', payload=None):
+        calls.append((component, method))
+        if path.endswith('/capabilities'):
+            return {'schema': SIM.SCHEMA, 'component': component,
+                    'tenant_id': SIM.TENANT, 'mode': 'SIMULATION',
+                    'isolated': True, 'approval_issuer': SIM.ISSUER,
+                    'human_approval_claimed': False, 'live_effects_allowed': False,
+                    'real_glpi_writes_allowed': False}
+        if component == 'core' and method == 'POST':
+            return prepared_core() | {'glpi_mode': 'SIMULATED_ONLY'} | changes
+        pytest.fail('Twin/Policy/Worker must not be contacted after invalid Core SOURCE')
+
+    monkeypatch.setattr(SIM, 'remote', remote)
+    with pytest.raises(HTTPException) as error:
+        SIM.start(SIM.SandboxRequest(**intent()),
+                  authorization='Bearer test-internal-token-not-real')
+    assert error.value.status_code == 503
+    assert error.value.detail == 'sandbox_core_not_prepared'
+    assert ('twin', 'POST') not in calls
+    assert ('policy', 'POST') not in calls
+    assert ('worker', 'POST') not in calls
+
+
 def test_simulator_disabled_before_capability(monkeypatch):
     monkeypatch.delenv('AIOPS_ACME_SANDBOX_ENABLED')
     with pytest.raises(HTTPException) as e:
