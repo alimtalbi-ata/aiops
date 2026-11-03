@@ -89,6 +89,8 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertEqual({c for c, _ in calls}, {"core", "twin", "policy"})
         self.assertTrue(all(path.endswith(INTENT["attempt_id"]) for _, path in calls))
         self.assertEqual(result["receipt_status"], "SIMULATED_NO_EFFECT")
+        # RG-ACME-19: Temporal receipt must carry canonical SIM-GLPI identity.
+        self.assertEqual(result["ticket_id"], INTENT["ticket_id"])
         self.assertEqual(len(result["audit_transitions"]), 4)
         self.assertEqual(result["audit_transitions"][0], "CORE_PREPARED_INDEPENDENTLY_VERIFIED")
         self.assertEqual(result["audit_transitions"][-1], "WORKER_NO_EFFECT")
@@ -461,6 +463,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
         self.assertTrue(receipt_digest_valid(receipt))
         for field, value in (
+            ("ticket_id", "SIM-GLPI-FOREIGN-001"),
             ("effect_receipts", 1),
             ("core_request_sha256", "b" * 64),
             ("receipt_sha256", "0" * 64),
