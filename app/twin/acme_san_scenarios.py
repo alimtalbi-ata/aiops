@@ -100,9 +100,9 @@ def provenance_snapshot():
                 or redundancy != 1 or confidence != 1):
             raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
     normalized = {
-        'nodes': sorted((node_id, node_type, site, state, criticality, confidence)
+        'nodes': sorted((node_id, node_type, site, state, criticality, float(confidence))
                         for node_id, node_type, site, state, criticality, confidence in nodes),
-        'edges': sorted((edge_id, source, target, relation, redundancy, confidence)
+        'edges': sorted((edge_id, source, target, relation, redundancy, float(confidence))
                         for edge_id, source, target, relation, redundancy, confidence in edges),
     }
     digest = hashlib.sha256(json.dumps(normalized, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
