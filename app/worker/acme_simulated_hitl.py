@@ -64,6 +64,40 @@ class SandboxDenied(ValueError):
     """Fail closed without echoing untrusted service responses."""
 
 
+def decode_authority_json(body):
+    """Parse authenticated readbacks without ambiguous duplicate JSON claims.
+
+    requests.Response.json() silently keeps the last occurrence of a duplicate
+    object key, including escaped aliases. That must never establish sandbox
+    Core/Twin/Policy authority. No response bytes or credentials are logged.
+    """
+    if type(body) is not bytes or len(body) > 32768:
+        raise SandboxDenied("sandbox_readback_json_unqualified")
+
+    def unique_object(pairs):
+        document = {}
+        for key, value in pairs:
+            if key in document:
+                raise SandboxDenied("sandbox_readback_json_unqualified")
+            document[key] = value
+        return document
+
+    def reject_nonfinite(_value):
+        raise SandboxDenied("sandbox_readback_json_unqualified")
+
+    try:
+        document = json.loads(
+            body.decode("utf-8"), object_pairs_hook=unique_object,
+            parse_constant=reject_nonfinite)
+    except SandboxDenied:
+        raise
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise SandboxDenied("sandbox_readback_json_unqualified") from None
+    if type(document) is not dict:
+        raise SandboxDenied("sandbox_readback_json_unqualified")
+    return document
+
+
 def _id(value):
     return type(value) is str and _ID.fullmatch(value) is not None
 
