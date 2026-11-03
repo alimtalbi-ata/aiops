@@ -115,11 +115,11 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.page.screenshot(path=str(target / "democenter-ci-synthetic.png"), full_page=True)
 
     def test_02_permission_refusal_does_not_claim_recording(self):
-        self.page.add_init_script("""() => {
+        self.page.add_init_script("""(() => {
           Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
             configurable: true, value: async () => { throw new DOMException("Denied", "NotAllowedError"); }
           });
-        }""")
+        })();""")
         self.page.goto(self.base + "/demo-center")
         expect(self.page.locator("#record-start")).to_be_disabled()
         self.page.locator("#recording-consent").check()
@@ -131,7 +131,7 @@ class DemoCenter386Chromium(unittest.TestCase):
 
     def test_03_local_recorder_start_stop_preview_export_mock_device(self):
         # Browser state test with an explicit mock device, NOT a real screen capture.
-        self.page.add_init_script("""() => {
+        self.page.add_init_script("""(() => {
           const track = { stop() {}, addEventListener() {} };
           Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
             configurable: true,
@@ -148,7 +148,7 @@ class DemoCenter386Chromium(unittest.TestCase):
               this.handlers.stop();
             }
           };
-        }""")
+        })();""")
         self.page.goto(self.base + "/demo-center")
         self.page.locator("#recording-consent").check()
         self.page.locator("#record-start").click()
