@@ -197,6 +197,70 @@ class TestSimulation(unittest.TestCase):
         forged['receipt_sha256']=sha(forged)
         self.assertFalse(m.validate_terminal_receipts(ids,core,forged))
 
+    def test_rg_acme_30_pre_resolution_requires_signed_twin_identity_and_worker_digest(self):
+        attempt = 'ACME-SIM-RG30'
+        ids = dict(incident_id='INC-SIM-RG30', run_id='RUN-SIM-RG30',
+                   ticket_id='SIM-GLPI-RG30', proposal_id='PROP-SIM-RG30',
+                   approval_id='SIM-APP-RG30')
+        shared = dict(attempt_id=attempt, tenant_id='ACME-TEST',
+                      incident_id=ids['incident_id'], run_id=ids['run_id'],
+                      human_approved=False, execution_allowed=False,
+                      effect_allowed=False, live_effects_allowed=False)
+        sources = ['SRC-%d' % n for n in range(7)]
+        core = dict(shared, incident_status='PREPARED', run_status='PREPARED',
+                    ticket_status='PREPARED', ticket_id=ids['ticket_id'],
+                    proposal_id=ids['proposal_id'], ticket_authority='SIMULATED_ONLY',
+                    source_event_count=7, source_hashes_qualified=True,
+                    analysis_validated=True, critic_validated=True,
+                    request_sha256='a'*64, source_event_ids=sources)
+        twin = dict(shared, impact_root='ACME-TEST-SAN-FABRIC-A',
+                    approval_id=ids['approval_id'],
+                    approval_issuer='TWIN_ACME_SIMULATED',
+                    approval_actor='TWIN_ACME_SIMULATED',
+                    approval_kind='SIMULATED', approval_phase='PRE_RESOLUTION',
+                    core_status_at_issuance='PREPARED')
+        policy = dict(shared, approval_id=ids['approval_id'],
+                      decision='SIMULATE', approval_kind='SIMULATED')
+        worker = dict(shared, approval_id=ids['approval_id'],
+                      ticket_id=ids['ticket_id'], proposal_id=ids['proposal_id'],
+                      action='SIMULATE', receipt_status='SIMULATED_NO_EFFECT',
+                      receipt_phase='PRE_RESOLUTION',
+                      core_status_at_validation='PREPARED',
+                      resolution_verified=False, post_resolution_readback_required=True,
+                      effect_receipts=0, core_request_sha256='a'*64,
+                      core_source_event_ids=sources)
+        def digest(document):
+            return m.hashlib.sha256(m.json.dumps(
+                document, sort_keys=True, separators=(',', ':'),
+                ensure_ascii=True, allow_nan=False).encode('ascii')).hexdigest()
+        worker['receipt_sha256'] = digest(worker)
+        reads = dict(core=core, twin=twin, policy=policy, worker=worker)
+        self.assertTrue(m.validate_pre(attempt, ids, reads))
+        for component, change in (
+                ('worker', dict(receipt_sha256='0'*64)),
+                ('worker', dict(core_request_sha256='b'*64)),
+                ('worker', dict(ticket_id='SIM-GLPI-FOREIGN')),
+                ('worker', dict(action='EXECUTE')),
+                ('twin', dict(approval_issuer='HUMAN')),
+                ('twin', dict(approval_actor='HUMAN')),
+                ('twin', dict(impact_root='FOREIGN-FABRIC')),
+                ('core', dict(source_event_ids=['FOREIGN']*7))):
+            with self.subTest(component=component, change=change):
+                tampered = dict(reads)
+                tampered[component] = dict(reads[component], **change)
+                self.assertFalse(m.validate_pre(attempt, ids, tampered))
+        # A rehashed, internally consistent foreign Worker document must
+        # still fail the independent Core source/request/ticket binding.
+        forged = dict(worker, ticket_id='SIM-GLPI-FOREIGN')
+        forged.pop('receipt_sha256')
+        forged['receipt_sha256'] = digest(forged)
+        self.assertFalse(m.validate_pre(attempt, ids, dict(reads, worker=forged)))
+        # Malformed canonical JSON never becomes a trusted pre-resolution receipt.
+        nonfinite = dict(worker, source_float=float('nan'))
+        nonfinite.pop('receipt_sha256')
+        nonfinite['receipt_sha256'] = '0'*64
+        self.assertFalse(m.validate_pre(attempt, ids, dict(reads, worker=nonfinite)))
+
     def test_receipt_private_and_redacted(self):
         with tempfile.TemporaryDirectory() as td:
             path=Path(td)/'receipt.json';r=m.receipt('A','BLOCKED','SANDBOX_CAPABILITY_MISSING_CORE')

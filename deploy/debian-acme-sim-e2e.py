@@ -92,6 +92,36 @@ def receipt(attempt_id, status, reason, stages=None, ids=None):
         'stages': stages or {}, 'ids': ids or {}, 'docker_mutations': 0,
     }
 
+def validate_pre_worker_receipt(core, worker, ids):
+    """RG-ACME-30: fail closed *before* Core RESOLVED on a forged Temporal
+    no-effect receipt. The independent Worker readback is not human authority.
+    """
+    if type(core) is not dict or type(worker) is not dict:
+        return False
+    digest = worker.get('receipt_sha256')
+    request_sha = core.get('request_sha256')
+    sources = core.get('source_event_ids')
+    if (type(digest) is not str or not re.fullmatch(r'[0-9a-f]{64}', digest)
+            or type(request_sha) is not str or not re.fullmatch(r'[0-9a-f]{64}', request_sha)
+            or type(sources) is not list or len(sources) != 7
+            or any(type(x) is not str or not x for x in sources)
+            or worker.get('core_request_sha256') != request_sha
+            or worker.get('core_source_event_ids') != sources
+            or worker.get('ticket_id') != ids.get('ticket_id')
+            or worker.get('proposal_id') != ids.get('proposal_id')
+            or worker.get('approval_id') != ids.get('approval_id')
+            or worker.get('action') != 'SIMULATE'):
+        return False
+    try:
+        unsigned = {k: v for k, v in worker.items() if k != 'receipt_sha256'}
+        observed = hashlib.sha256(json.dumps(
+            unsigned, sort_keys=True, separators=(',', ':'),
+            ensure_ascii=True, allow_nan=False).encode('ascii')).hexdigest()
+    except (ValueError, TypeError, UnicodeError, RecursionError):
+        return False
+    return observed == digest
+
+
 def validate_pre(attempt_id, ids, reads):
     """PREPARED must persist until Worker no-effect is independently observed."""
     if not all(isinstance(x, dict) for x in reads.values()):
@@ -111,6 +141,10 @@ def validate_pre(attempt_id, ids, reads):
             and core.get('source_hashes_qualified') is True
             and core.get('analysis_validated') is True
             and core.get('critic_validated') is True
+            and validate_pre_worker_receipt(core, worker, ids)
+            and twin.get('impact_root') == 'ACME-TEST-SAN-FABRIC-A'
+            and twin.get('approval_issuer') == 'TWIN_ACME_SIMULATED'
+            and twin.get('approval_actor') == 'TWIN_ACME_SIMULATED'
             and twin.get('approval_id') == ids['approval_id']
             and twin.get('approval_kind') == 'SIMULATED'
             and twin.get('approval_phase') == 'PRE_RESOLUTION'
