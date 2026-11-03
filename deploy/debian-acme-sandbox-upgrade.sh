@@ -256,8 +256,7 @@ for svc in $services; do
   # Every image carries immutable source provenance, including unchanged
   # components in the five-service guarded upgrade. This ensures all five
   # images actually change on a new reviewed PIN (no meaningless tag-only GO).
-  docker build --quiet --label "aiops.source_sha=$PIN" \\
-    -f "$TMP/app/$svc/Dockerfile" -t "$tag" "$TMP/app" >/dev/null
+  docker build --quiet --label "aiops.source_sha=$PIN" -f "$TMP/app/$svc/Dockerfile" -t "$tag" "$TMP/app" >/dev/null
   test "$(docker image inspect "$tag" --format '{{index .Config.Labels "aiops.source_sha"}}')" = "$PIN"
   image_builds=$((image_builds+1))
 done
