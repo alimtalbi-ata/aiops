@@ -308,6 +308,32 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                                  "CORE_SIMULATED_TICKET_NOT_ATTESTED")
                 self.assertEqual(get.call_count, 4)
 
+    def test_overdeep_sandbox_json_is_503_not_uncaught_500(self):
+        # Even a forged 200 from an upstream must never turn a malformed
+        # deeply nested receipt into a Portal 500 or a RESOLVED projection.
+        invalid = upstream(WORKER)
+        invalid.json.side_effect = RecursionError("overdeep JSON decoder")
+        with patch.object(acme_sim_glpi, "_direct_get", return_value=invalid) as get:
+            response = self.get()
+        self.assert_unknown(response)
+        self.assertEqual(response.json()["reason"],
+                         "CORE_SIMULATED_TICKET_NOT_ATTESTED")
+        self.assertEqual(get.call_count, 1)
+
+        # Defensive second boundary: a JSON-shaped object accepted by the
+        # decoder may still exceed the canonical serializer's recursion limit.
+        nested = {}
+        for _ in range(1100):
+            nested = {"nested": nested}
+        forged_core = {**GOOD, "untrusted_nested": nested}
+        with patch.object(acme_sim_glpi, "_direct_get",
+                          side_effect=good_reads(core=forged_core)) as get:
+            response = self.get()
+        self.assert_unknown(response)
+        self.assertEqual(response.json()["reason"],
+                         "CORE_SIMULATED_TICKET_NOT_ATTESTED")
+        self.assertEqual(get.call_count, 4)
+
     def test_poisoned_proxy_environment_never_receives_internal_bearer(self):
         # Controlled fixture only: actor+tenant verifier is still absent on host.
         # An environment proxy must not intercept the fixed Core/Worker GETs.
