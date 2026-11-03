@@ -53,6 +53,16 @@ class UXGateTests(unittest.TestCase):
             return p
         self.assertEqual(ux.make_receipt(PIN,Opener(),bad)['verdict'],'FAIL')
         self.assertEqual(ux.make_receipt('invalid',Opener(),runner)['verdict'],'FAIL')
+    def test_rg_ux_07_portal_only_release_no_acme_rebuild(self):
+        import json
+        root=Path(__file__).resolve().parents[1]
+        portal=json.loads((root/'deploy/debian-portal-release.json').read_text())
+        acme=json.loads((root/'deploy/debian-acme-sandbox-release.json').read_text())
+        self.assertIs(portal['enabled'],True)
+        self.assertEqual(portal['candidate_sha'],'3c87aa54fac9d370aab42afae8639e6c7d887baa')
+        self.assertIs(acme['enabled'],False)
+        self.assertEqual(acme['candidate_sha'],'e9a21e3e13f9c13bff461325426f12f171285b22')
+
     def test_rg_ux_07_no_redirect_and_only_get(self):
         self.assertIsNone(ux.NoRedirect().redirect_request(None,None,302,None,{},'https://elsewhere'))
         self.assertTrue(all(c[1].startswith('/') for c in ux.CASES))
