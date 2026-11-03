@@ -117,6 +117,24 @@
       "Hypothèse indisponible. Aucune exécution lancée.";
   });
 
+  // Drain the small, same-origin session status response before updating the
+  // UI. Otherwise Chromium can keep a 401 fetch in flight and abort it when
+  // the operator navigates to DemoCenter; no body is retained or displayed.
+  async function finishSessionResponse(response) {
+    if (!response.body) return;
+    const reader = response.body.getReader();
+    let bytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      bytes += value ? value.byteLength : 0;
+      if (bytes > 8192) {
+        await reader.cancel();
+        throw new Error("SESSION_RESPONSE_TOO_LARGE");
+      }
+    }
+  }
+
   let checkingSession = false;
   async function checkSession() {
     if (checkingSession) return;
@@ -128,6 +146,7 @@
         credentials: "same-origin", cache: "no-store", redirect: "error",
         headers: { Accept: "application/json" }
       });
+      await finishSessionResponse(response);
       if (response.status === 401) {
         text.textContent = "Aucune session d'entreprise valide. Les données opérationnelles restent protégées.";
       } else if (response.status === 503) {
