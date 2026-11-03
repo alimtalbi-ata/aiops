@@ -60,7 +60,8 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
                 self.last = (full_page, animations)
                 return b"PNG_SYNTHETIC_TEST_ONLY"
         with tempfile.TemporaryDirectory() as d:
-            folder = Path(d)
+            folder = Path(d) / "snapshots"
+            folder.mkdir(mode=0o700)
             record = {"screenshots": []}
             page = DummyPage()
             module.capture(page, folder, "01-overview", record)
