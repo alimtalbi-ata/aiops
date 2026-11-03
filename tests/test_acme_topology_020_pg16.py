@@ -109,8 +109,8 @@ class ACME019ReplayFencePG16(unittest.TestCase):
               "(node_id,type,name,site,state) "
               "VALUES ('FOREIGN-LIVE-ARRAY','STORAGE','live','PARIS','HEALTHY')", ()),
              ("INSERT INTO aiops.twin_edges "
-              "(edge_id,source_id,target_id,relation_type) "
-              "VALUES ('FOREIGN-INBOUND','FOREIGN-LIVE-ARRAY',%s,'REAL_DEPENDS_ON')",
+              "(edge_id,source_id,target_id,relation_type,confidence) "
+              "VALUES ('FOREIGN-INBOUND','FOREIGN-LIVE-ARRAY',%s,'REAL_DEPENDS_ON',1)",
               (NODE,))],
             "acme_sandbox_twin_edge_provenance_conflict")
 
@@ -120,9 +120,9 @@ class ACME019ReplayFencePG16(unittest.TestCase):
               "VALUES ('FOREIGN-LEFT','STORAGE','left','PARIS','HEALTHY'),"
               "('FOREIGN-RIGHT','STORAGE','right','PARIS','HEALTHY')", ()),
              ("INSERT INTO aiops.twin_edges "
-              "(edge_id,source_id,target_id,relation_type) "
+              "(edge_id,source_id,target_id,relation_type,confidence) "
               "VALUES ('ACME-TEST-SIM-EDGE-009','FOREIGN-LEFT',"
-              "'FOREIGN-RIGHT','REAL_DEPENDS_ON')", ())],
+              "'FOREIGN-RIGHT','REAL_DEPENDS_ON',1)", ())],
             "acme_sandbox_twin_edge_provenance_conflict")
 
     def test_06_unrelated_foreign_graph_is_not_rejected(self):
@@ -133,8 +133,8 @@ class ACME019ReplayFencePG16(unittest.TestCase):
                 "('FOREIGN-RIGHT','STORAGE','right','PARIS','HEALTHY')")
             conn.execute(
                 "INSERT INTO aiops.twin_edges "
-                "(edge_id,source_id,target_id,relation_type) "
-                "VALUES ('FOREIGN-EDGE','FOREIGN-LEFT','FOREIGN-RIGHT','PATH')")
+                "(edge_id,source_id,target_id,relation_type,confidence) "
+                "VALUES ('FOREIGN-EDGE','FOREIGN-LEFT','FOREIGN-RIGHT','PATH',1)")
             conn.execute(MIGRATION_020)
             conn.rollback()
 
