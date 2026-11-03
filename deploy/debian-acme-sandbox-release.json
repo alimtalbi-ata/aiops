@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "56d3c87bef8819011f0c037482a5cf6019065d5f",
+  "candidate_sha": "e9a21e3e13f9c13bff461325426f12f171285b22",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; canonical portal TCP 7777 untouched",
-  "reason": "RG-ACME-34 Simulator Core PREPARED SOURCE readback strictly requires integer count 7 and exact ordered canonical seven ACME-TEST attempt-bound SYN-EVT IDs before Twin approval POST. Stable-based source PR #380 exact HEAD 56d3c87bef8819011f0c037482a5cf6019065d5f, protected squash-integrated c1c7485d6d12f0431102e3dbd8ffd00d81afc8d1. Exact-head 18/18 checks SUCCESS, sandbox-no-effect pytest 95/95 PASS; CI disposable only. DEV-only existing poller targeted five-service upgrade from immutable source SHA; canonical portal TCP 7777 untouched, no LIVE/human GLPI/IdP. Require local PG16 backup/scratch restore, Compose ownership/image/health/rollback, fresh 17/17 ACME-TEST same Incident/Run E2E and new poller receipt before host GO. Previous Debian receipt 2026-11-03T06:25:43Z stable fa537432d8ef392f231a2075f0d35fb8691e671f is historical and cannot qualify RG-34.",
-  "source_pr": 380
+  "reason": "RG-ACME-35 selective Worker #348 finite_float fence: authenticated Core/Twin/Policy JSON numeric exponent overflow (1e309) must fail closed before simulated Temporal receipt. Source PR #382 exact HEAD e9a21e3e13f9c13bff461325426f12f171285b22, squash-integrated stable b21107a022bbd7e8a798cd164ce176e7dad317b5; exact-head 5/5 workflows SUCCESS, joined source 32 Worker + 9 Policy + 9 Debian tests PASS. Existing Debian poller only, targeted five-service immutable-SHA DEV upgrade with local PG16 backup/scratch restore, Compose ownership, image-change and health gates, rollback. Previous host 2026-11-03T07:25:44Z source 56d3c87 17/17 ACME-TEST E2E PASS is historical; require NEW host 17/17 and image/SHA receipt before host GO. Canonical portal TCP 7777 untouched. No LIVE/GLPI human approval. Publisher telemetry >45min stale at release preparation: do not claim deployment until fresh receipt.",
+  "source_pr": 382
 }
