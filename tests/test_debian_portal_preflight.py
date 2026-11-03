@@ -284,6 +284,10 @@ class PreflightContract(unittest.TestCase):
         self.assertIn('NOOP_PINNED_RUNNING_IMAGE', deploy)
         self.assertIn('debian-portal-playwright-snapshot.py', entry)
         self.assertIn('--assert-host SRV-DEB-05', entry)
+        self.assertIn('playwright==1.55.0', entry)
+        self.assertIn('chromium --only-shell', entry.replace('\\\n', ' '))
+        self.assertIn('HOST_PLAYWRIGHT_BOOTSTRAP_PIP_FAILED', entry)
+        self.assertNotIn('sudo apt', entry)
         self.assertIn('--no-deps --no-build', deploy)
         self.assertNotIn('docker stop', deploy)
         self.assertNotIn('docker run', deploy)
@@ -375,6 +379,35 @@ class PreflightContract(unittest.TestCase):
             path.write_text(json.dumps(payload))
             self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now),
                              {'status': 'NOT_VERIFIED'})
+
+
+    def test_pinned_noop_receipt_is_not_falsely_classified_as_deployment(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            image = 'sha256:' + 'a' * 64
+            (p / 'manifest.json').write_text(json.dumps({
+                'enabled': True, 'candidate_sha': 'a' * 40}))
+            (p / 'portal-deploy-result.json').write_text(json.dumps({
+                'schema': 'aiops.debian-portal-deploy-result.v1',
+                'collected_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'candidate_sha': 'a' * 40, 'status': 'PASS',
+                'deployment_executed': False, 'docker_mutations': 0,
+                'previous_image_id': image, 'new_image_id': None,
+                'rollback_attempted': False}))
+            fake = FakePoller(good=True)
+            fake.REPORT_GIT = p
+            r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
+                                 dev=p, env=p / '.env', state=p)
+            self.assertEqual(r['deployment_preflight']['verdict'],
+                             'ALREADY_PINNED_HEALTH_PASS_NO_MUTATION')
+            self.assertFalse(r['deployment_preflight']['deployment_executed'])
+            self.assertEqual(r['deployment_preflight']['docker_mutations'], 0)
+            self.assertEqual(r['release_stable'], 'NO_GO')
+            fake.good = False
+            r = mod.make_receipt(fake, manifest_path=p / 'manifest.json',
+                                 dev=p, env=p / '.env', state=p)
+            self.assertEqual(r['deployment_preflight']['verdict'],
+                             'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED')
 
 
 if __name__ == '__main__':
