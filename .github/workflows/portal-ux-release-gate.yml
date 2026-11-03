@@ -7,6 +7,7 @@ on:
       - deploy/debian-portal-deploy.sh
       - deploy/deploy-demo-studio-v2.sh
       - deploy/debian-portal-release.json
+      - deploy/debian-acme-sandbox-release.json
       - tests/test_debian_portal_ux_contracts.py
       - .github/workflows/portal-ux-release-gate.yml
   workflow_dispatch:
