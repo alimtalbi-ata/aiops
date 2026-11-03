@@ -1,7 +1,9 @@
 """P0 #385: dedicated NOC operator surface; no implicit tenant authorization."""
+import html
 from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, FileResponse
+from portal.acme_impact_read_model import build_acme_impact_read_model
 
 router = APIRouter()
 HEADERS = {
@@ -42,6 +44,7 @@ Les sources sans ACL acteur+tenant vérifiée restent UNKNOWN / 503. Les actions
 <p id="noc-state" class="status" role="status" aria-live="polite">UNKNOWN — authentification et ACL non vérifiées</p>
 <p id="noc-correlation" class="muted">Corrélation Core : NOT_ATTESTED</p>
 </section>
+<!-- SYNTHETIC_REFERENCE_SLOT -->
 <section class="panel"><h2>File d'incidents</h2>
 <label for="noc-filter">Filtre état</label><select id="noc-filter">
 <option value="ALL">Tous</option><option value="OK">OK</option><option value="WARN">WARN</option>
@@ -57,9 +60,62 @@ Analyst/Critic doivent s'abstenir sans preuve ; SIM-GLPI n'est jamais un ticket 
 </main><script src="/assets/noc-operator.js" defer></script></body></html>"""
 
 
+
+def _synthetic_reference() -> str:
+    """Reuse the validated local Twin fixture, never an authorized NOC incident.
+
+    This six-CI reference is NOT the independent PG16 migration-019 9/8 graph.
+    The real incident queue and actor/tenant ACL remain UNKNOWN.
+    """
+    unavailable = (
+        '<section class="panel" id="noc-synthetic-reference" '
+        'aria-label="Référence SAN synthétique">'
+        '<h2>Référence SAN → Payments — simulation</h2>'
+        '<p id="noc-synthetic-status">UNKNOWN — fixture locale absente ou invalide ; '
+        'aucune observation runtime.</p></section>'
+    )
+    try:
+        model = build_acme_impact_read_model()
+        if (model.get("schema") != "aiops.synthetic-impact-read-model.v1"
+                or model.get("provenance") != "SIMULATED_TARGET"
+                or model.get("evidence_source") != "LOCAL_SYNTHETIC_FIXTURE"
+                or model.get("runtime_attested") is not False
+                or model.get("live_remediation_authorized") is not False
+                or model.get("ticket_id") is not None
+                or model.get("source_artifact") != "app/portal/acme-fixtures.json"
+                or not isinstance(model.get("impact_path"), list)
+                or not all(isinstance(node, str) for node in model["impact_path"])):
+            return unavailable
+        escape = lambda value: html.escape(str(value), quote=True)
+        path = " → ".join(model["impact_path"])
+        return (
+            '<section class="panel" id="noc-synthetic-reference" '
+            'aria-label="Référence SAN synthétique">'
+            '<h2>Référence SAN → Payments — simulation</h2>'
+            '<p id="noc-synthetic-status">SYNTHETIC_REFERENCE_ONLY · '
+            'LOCAL_SYNTHETIC_FIXTURE · aucun incident NOC autorisé.</p>'
+            '<p>Cette référence locale comporte ' + escape(model["ci_count"]) +
+            ' CI. Elle ne représente PAS le graphe PG16 ACME-TEST migration 019 '
+            '(9 nœuds / 8 arêtes), qui exige une preuve de provenance distincte.</p>'
+            '<p id="noc-synthetic-path">Chemin calculé : ' + escape(path) + '</p>'
+            '<p>Incidents fictifs : ' + escape(model["incident_id"]) + ' → ' +
+            escape(model["impact_incident_id"]) + '</p>'
+            '<p id="noc-synthetic-source">Source : ' +
+            escape(model["source_artifact"]) + ' · SHA-256 : ' +
+            escape(model["source_sha256"]) + '</p>'
+            '<p>Analyst/Critic : NOT_ATTESTED · impact ERP : UNKNOWN · '
+            'SIM-GLPI : pas de ticket humain · Worker : NO LIVE EFFECT.</p>'
+            '<p><a href="/demo/acme-impact">Ouvrir le graphe synthétique</a> · '
+            '<a href="/demo-center">Retour DemoCenter</a></p></section>'
+        )
+    except (OSError, ValueError, UnicodeError, TypeError, KeyError, AttributeError):
+        return unavailable
+
+
 @router.get("/noc", response_class=HTMLResponse)
 def noc_operator_page():
-    return HTMLResponse(PAGE, headers=HEADERS)
+    return HTMLResponse(PAGE.replace("<!-- SYNTHETIC_REFERENCE_SLOT -->",
+                                     _synthetic_reference()), headers=HEADERS)
 
 
 @router.get("/assets/noc-operator.js")
