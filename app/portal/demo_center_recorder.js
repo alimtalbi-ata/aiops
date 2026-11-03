@@ -120,9 +120,9 @@
   });
   stop.addEventListener("click", () => {
     if (recorder && recorder.state === "recording") {
-      recorder.stop();
       stop.disabled = true;
       setStatus("STOPPING — finalisation locale en cours.");
+      recorder.stop();
     }
   });
   clear.addEventListener("click", () => {
