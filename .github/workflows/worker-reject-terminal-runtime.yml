@@ -12,6 +12,7 @@ on:
       - tests/test_worker_hitl_reject_terminal_runtime.py
       - tests/test_worker_acme_simulated_hitl.py
       - tests/test_worker_hitl_terminal_joined_pg16.py
+      - tests/test_worker_acme_temporal_persisted.py
       - .github/workflows/worker-reject-terminal-runtime.yml
   workflow_dispatch:
 permissions:
@@ -151,6 +152,43 @@ jobs:
           grep -E '^Ran 1 test in ' /tmp/worker-core344-joined.log
           grep -x 'OK' /tmp/worker-core344-joined.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-core344-joined.log
+      - name: Positive registered ACME Temporal persisted restart and replay denial (synthetic HTTP only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-core344-venv/bin/python -m unittest discover -s tests -p 'test_worker_acme_temporal_persisted.py' -v 2>&1 | tee /tmp/worker-acme-temporal-persisted.log
+          grep -E '^Ran 1 test in ' /tmp/worker-acme-temporal-persisted.log
+          grep -x 'OK' /tmp/worker-acme-temporal-persisted.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-temporal-persisted.log
+      - name: Verify redacted positive Temporal persisted history receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-core344-venv/bin/python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path(os.environ["AIOPS_WORKER_CORE344_RECEIPT_DIR"])/"worker-acme-positive-temporal-restart.json"
+          data=json.loads(p.read_text())
+          digest=data.pop("payload_sha256")
+          assert digest==hashlib.sha256(json.dumps(data,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+          assert data["worker_head"]==os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["worker_os_processes"]==2 and data["distinct_pids"]
+          assert data["temporal_persisted_restarts"]==1
+          assert data["registered_activity"]=="acme_simulated_no_effect"
+          assert data["same_run_history_digest_stable"] and data["workflow_id_replay_rejected"]
+          assert data["policy_revoked_denied"] and data["expired_twin_denied"] and data["cross_tenant_denied"]
+          assert data["receipt_status"]=="SIMULATED_NO_EFFECT" and data["effect_receipts"]==0
+          assert data["direct_only_bearer_gets"]==12
+          assert not data["human_glpi_allow"] and not data["live_effect"] and not data["glpi_write"]
+          assert data["readbacks"]=="SYNTHETIC_AUTHENTICATED_LOOPBACK"
+          assert not data["core_pg16_positive_same_run_joined"] and not data["host_deployed"]
+          for secret in ("Bearer ", "ci-acme-temporal-synthetic-bearer", "postgresql://"):
+              assert secret not in p.read_text()
+          print("REGISTERED_ACME_POSITIVE_TEMPORAL_RESTART_PASS",digest)
+          PY
+          cd "$AIOPS_WORKER_CORE344_RECEIPT_DIR"
+          sha256sum worker-acme-positive-temporal-restart.json > worker-acme-positive-temporal-restart.sha256
+          sha256sum --check worker-acme-positive-temporal-restart.sha256
       - name: Verify exact-head redacted Core/Worker joined receipt and SHA256
         shell: bash
         run: |
@@ -195,5 +233,7 @@ jobs:
           path: |
             /tmp/worker-core344-joined-receipt/worker-core344-joined.json
             /tmp/worker-core344-joined-receipt/worker-core344-joined.sha256
+            /tmp/worker-core344-joined-receipt/worker-acme-positive-temporal-restart.json
+            /tmp/worker-core344-joined-receipt/worker-acme-positive-temporal-restart.sha256
           retention-days: 7
           if-no-files-found: warn
