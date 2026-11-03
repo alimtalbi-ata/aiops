@@ -641,5 +641,25 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                     asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
                 self.assertEqual(calls, 6)
 
+
+    def test_34_stable_float_source_count_denied_before_temporal_receipt(self):
+        # Python 7.0 == 7, but Core SOURCE count is a typed integer
+        # authority claim. A stable 7.0 in both reads must not qualify.
+        for malformed in (7.0, "7", True, None):
+            docs = fixtures()
+            docs["core"]["source_event_count"] = malformed
+            calls = []
+
+            async def get(component, path):
+                calls.append(component)
+                return deepcopy(docs[component])
+
+            with self.subTest(malformed=malformed):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^core_resolution_unqualified$"):
+                    asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+                self.assertEqual(calls, ["core", "twin", "policy"])
+
+
 if __name__ == "__main__":
     unittest.main()
