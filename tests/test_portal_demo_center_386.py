@@ -83,6 +83,25 @@ class DemoCenter386Tests(unittest.TestCase):
         self.assertIn("SIMULATION LOCALE UNIQUEMENT", twin.text)
         self.assertEqual(self.client.post("/demo/acme-impact").status_code, 405)
 
+    def test_rg_ux_13_recorder_station_is_same_origin_and_no_backend_io(self):
+        # A recorder inside the navigating tab dies on pagehide. The existing
+        # recorder can instead stay alive in a second tab; no new recorder API.
+        with patch("shared.http.get_json", side_effect=AssertionError("upstream read")), \
+             patch("shared.http.post_json", side_effect=AssertionError("upstream write")):
+            home = self.client.get("/demo-center")
+            station = self.client.get("/demo-center/recorder")
+        self.assertEqual(home.status_code, 200)
+        self.assertEqual(station.status_code, 200)
+        self.assertIn('href="/demo-center/recorder" target="_blank" rel="noopener noreferrer"', home.text)
+        self.assertIn("Poste de capture locale", station.text)
+        self.assertIn('id="record-start"', station.text)
+        self.assertIn('src="/assets/demo-center-recorder.js"', station.text)
+        self.assertIn("LOCAL_ONLY / NO LIVE EFFECT", station.text)
+        self.assertIn("SIMULATION_ONLY", station.text)
+        self.assertEqual(station.headers["cache-control"], "no-store")
+        self.assertIn("connect-src 'none'", station.headers["content-security-policy"])
+        self.assertEqual(self.client.post("/demo-center/recorder").status_code, 405)
+
     def test_rg_ux_06_recorder_is_local_consent_and_secure_context_only(self):
         response = self.client.get("/assets/demo-center-recorder.js")
         self.assertEqual(response.status_code, 200)

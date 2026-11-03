@@ -84,6 +84,18 @@ Incident, Analyst/Critic, Policy, SIM-GLPI et readback : UNKNOWN
 tant que les preuves de même Run et tenant ne sont pas qualifiées.</p>
 <a href="/noc">Ouvrir NOC</a> · <a href="/itsm">Ouvrir ITSM</a></section>
 </div>
+<section class="panel" aria-labelledby="recording-workflow-title">
+<h2 id="recording-workflow-title">Enregistrer la démonstration entre plusieurs pages</h2>
+<p>Une capture démarrée dans cet onglet s'arrête lorsque vous quittez la page.
+Pour filmer le parcours Twin → NOC → Demo Studio sans perdre la vidéo,
+ouvrez le <strong>même enregistreur historique</strong> dans un second onglet
+et gardez ce second onglet ouvert pendant la navigation.</p>
+<p><a id="recorder-station-link" href="/demo-center/recorder" target="_blank" rel="noopener noreferrer">Ouvrir le poste de capture dans un nouvel onglet</a></p>
+<p class="muted">Dans le poste de capture : consentir, démarrer, puis choisir
+explicitement l'onglet de démonstration dans le sélecteur du navigateur.
+Revenir au premier onglet pour naviguer ; arrêter, relire et exporter
+depuis le poste de capture. Ne pas capturer de secrets. Aucun upload.</p>
+</section>
 <section class="panel" aria-labelledby="recorder-title">
 <h2 id="recorder-title">Capture vidéo locale · enregistreur navigateur</h2>
 <p class="warning">La capture peut inclure tout ce qui est visible dans la fenêtre
@@ -111,6 +123,28 @@ ni un reçu E2E Debian.</p>
 def demo_center_page():
     """Public navigation shell only: zero Core/Twin/GLPI/n8n reads or writes."""
     return HTMLResponse(PAGE, headers=HEADERS)
+
+
+
+@router.get("/demo-center/recorder", response_class=HTMLResponse)
+def demo_center_recorder_station():
+    """Reuse the exact recorder page in a separate tab for cross-route capture.
+
+    Browser capture permission is still user-mediated; no backend access or
+    persistence is introduced. A station tab must stay open during navigation.
+    """
+    station = PAGE.replace(
+        "<title>DemoCenter ACME — SAN / Digital Twin</title>",
+        "<title>Poste de capture locale — DemoCenter ACME</title>",
+    ).replace(
+        "<h1>DemoCenter · SAN / ACME</h1>",
+        '<h1>Poste de capture locale · SAN / ACME</h1>'
+        '<p class="warning"><strong>LOCAL_ONLY / NO LIVE EFFECT.</strong> '
+        'Gardez cet onglet ouvert ; choisissez l’onglet de démonstration '
+        'dans la permission navigateur, puis naviguez dans cet autre onglet. '
+        'La vidéo reste locale et non attestée.</p>',
+    )
+    return HTMLResponse(station, headers=HEADERS)
 
 
 @router.get("/assets/demo-center-recorder.js")

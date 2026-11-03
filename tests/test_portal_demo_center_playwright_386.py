@@ -406,5 +406,54 @@ class DemoCenter386Chromium(unittest.TestCase):
                              full_page=True)
 
 
+    def test_09_recorder_station_survives_twin_noc_navigation(self):
+        # Real Chromium tab lifecycle, with an explicitly MOCKED capture device.
+        # Actual user permission + Debian HTTPS capture remain separate host gates.
+        self.context.add_init_script("""(() => {
+          const track = { stop() {}, addEventListener() {} };
+          Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
+            configurable: true,
+            value: async () => ({getTracks: () => [track], getVideoTracks: () => [track]})
+          });
+          window.MediaRecorder = class {
+            constructor() { this.state = "inactive"; this.mimeType = "video/webm"; this.handlers = {}; }
+            static isTypeSupported(t) { return t === "video/webm"; }
+            addEventListener(name, callback) { this.handlers[name] = callback; }
+            start() { this.state = "recording"; }
+            stop() {
+              this.state = "inactive";
+              this.handlers.dataavailable({data: new Blob(["mock-local-video"], {type: "video/webm"})});
+              this.handlers.stop();
+            }
+          };
+        })();""")
+        self.page.goto(self.base + "/demo-center")
+        with self.context.expect_page() as opened:
+            self.page.get_by_role(
+                "link", name="Ouvrir le poste de capture dans un nouvel onglet"
+            ).click()
+        station = opened.value
+        expect(station).to_have_url(self.base + "/demo-center/recorder")
+        self.assertTrue(station.evaluate("window.opener === null"))
+        expect(station.get_by_role("heading", name="Poste de capture locale · SAN / ACME")).to_be_visible()
+        station.locator("#recording-consent").check()
+        station.locator("#record-start").click()
+        expect(station.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+
+        self.page.get_by_role("link", name="Voir le graphe existant").click()
+        expect(self.page).to_have_url(self.base + "/demo/acme-impact")
+        self.page.get_by_role("navigation", name="Parcours de démonstration").get_by_role(
+            "link", name="NOC (ACL requise)"
+        ).click()
+        expect(self.page).to_have_url(self.base + "/noc")
+        expect(station.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+        station.locator("#record-stop").click()
+        expect(station.locator("#recording-status")).to_contain_text("LOCAL_ONLY")
+        expect(station.locator("#record-download")).to_be_visible()
+        self.assertTrue(station.locator("#record-download").get_attribute("href").startswith("blob:"))
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+        station.close()
+
+
 if __name__ == "__main__":
     unittest.main()
