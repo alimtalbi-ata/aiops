@@ -244,9 +244,17 @@ def host_playwright_receipt(state, stable_sha, portal_image, now=None):
             return out
         if local.get('status') == 'FAIL':
             failure = local.get('failure_type')
+            stage = local.get('failure_stage')
+            counts = {k: local.get(k) for k in (
+                'page_errors_count', 'console_errors_count',
+                'failed_requests_count', 'blocked_requests_count')}
             return {'status': 'FAIL', 'collected_at': local['collected_at'],
                     'failure_type': failure if isinstance(failure, str)
                     and re.fullmatch(r'[A-Za-z]{3,50}', failure) else 'UNKNOWN',
+                    'failure_stage': stage if isinstance(stage, str)
+                    and re.fullmatch(r'[A-Za-z0-9_-]{3,50}', stage) else 'UNKNOWN',
+                    **{k: v if type(v) is int and 0 <= v <= 1000 else None
+                       for k, v in counts.items()},
                     'stable_checkout_sha': stable_sha, 'portal_image_id': portal_image}
         if (local.get('status') != 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY'
                 or local.get('real_screen_capture') != 'NOT_VERIFIED'
