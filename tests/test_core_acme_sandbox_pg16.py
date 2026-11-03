@@ -858,5 +858,74 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
 
 
+
+    def test_24_rg_acme_30_real_pg16_lock_wait_rechecks_freshness(self):
+        """RG-ACME-30: real PG16 lock contention fences post-read terminal writes."""
+        import threading
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-RG30-REAL-LOCK-WAIT'
+        prepared = self.post(attempt).json()
+        worker, twin, policy = self._qualified_no_effect(prepared)
+        documents = {'worker': worker, 'twin': twin, 'policy': policy}
+        at_policy = threading.Event()
+        allow_policy = threading.Event()
+        first_fresh = threading.Event()
+        second_fresh = threading.Event()
+        checks = []
+        original_fresh = core.approval_fresh
+
+        def independent(component, observed_attempt):
+            self.assertEqual(observed_attempt, attempt)
+            if component == 'policy':
+                at_policy.set()
+                if not allow_policy.wait(10):
+                    raise AssertionError('policy readback gate timed out')
+            return documents[component]
+
+        def fresh_under_lock(issued, expires):
+            checks.append(len(checks) + 1)
+            if len(checks) == 1:
+                original_fresh(issued, expires)
+                first_fresh.set()
+            else:
+                second_fresh.set()
+                raise HTTPException(503, 'sandbox_twin_approval_expired_after_lock')
+
+        def resolve_once():
+            return self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+
+        with patch.object(core, 'independent_readback', side_effect=independent):
+            with patch.object(core, 'approval_fresh', side_effect=fresh_under_lock):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(resolve_once)
+                    try:
+                        self.assertTrue(at_policy.wait(10))
+                        with psycopg.connect(self.url) as blocker:
+                            with blocker.transaction():
+                                blocker.execute(
+                                    'select pg_advisory_xact_lock(hashtextextended(%s,0))',
+                                    ('core-acme-sandbox:ACME-TEST:' + attempt,))
+                                allow_policy.set()
+                                self.assertTrue(first_fresh.wait(10))
+                                # The second freshness check must not run
+                                # before the real PostgreSQL lock is released.
+                                self.assertFalse(second_fresh.wait(0.2))
+                        denied = future.result(timeout=10)
+                    finally:
+                        allow_policy.set()
+        self.assertEqual(denied.status_code, 503, denied.text)
+        self.assertEqual(checks, [1, 2])
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
+        with psycopg.connect(self.url) as conn:
+            self.assertEqual(conn.execute(
+                'select count(*) from aiops.acme_sandbox_terminal_tickets '
+                'where tenant_id=%s and attempt_id=%s',
+                ('ACME-TEST', attempt)).fetchone()[0], 0)
+            self.assertEqual(conn.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (prepared['run_id'],)).fetchone()[0], 0)
+
 if __name__ == '__main__':
     unittest.main()
