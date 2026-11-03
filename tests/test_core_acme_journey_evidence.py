@@ -19,6 +19,15 @@ def test_evidence_references_are_canonical_and_explicitly_unattested(resolved):
         assert result["timeline"][8]["event_key"] == core.ident("SIM-RESOLVED-", ATTEMPT)
     expected = sorted(core.ident("EVID-SIM-", ATTEMPT + ":" + str(i)) for i in (1, 2))
     assert result["source_evidence_refs"] == expected
+    for i, event in enumerate(result["timeline"][:7], 1):
+        assert event["evidence_ids"] == [
+            core.ident("EVID-SIM-", ATTEMPT + ":" + str(1 + ((i - 1) % 2)))
+        ]
+    # Both IDs are valid, but a swapped source→evidence link is not.
+    rows[0] = (*rows[0][:6], [core.ident("EVID-SIM-", ATTEMPT + ":2")], rows[0][7])
+    with pytest.raises(Exception) as caught:
+        journey.project_journey(snapshot, rows, ATTEMPT)
+    assert getattr(caught.value, "status_code", None) == 503
     assert result["source_evidence_authority"] == "CORE_PG16_SYNTHETIC_FIXTURE_REFS_ONLY"
     assert result["source_evidence_independently_attested"] is False
     assert result["journey_digest_kind"] == "LOCAL_CORE_READBACK_SHA256_NOT_SIGNATURE"
