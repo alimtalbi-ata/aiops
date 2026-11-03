@@ -760,5 +760,24 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertEqual(receipt["effect_receipts"], 0)
 
 
+    def test_38_unpaired_unicode_surrogates_denied_before_temporal_receipt(self):
+        # json.loads preserves lone escaped UTF-16 surrogates, although they
+        # are not valid Unicode scalars. Reject nested values and object keys.
+        for raw in (
+            b'{"state":"PASS","note":"\ud800"}',
+            b'{"state":"PASS","\udc00":"ambiguous"}',
+            b'{"state":"PASS","nested":{"issuer":"\udfff"}}',
+        ):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^sandbox_readback_json_unqualified$"):
+                    decode_authority_json(raw)
+        # Valid escaped surrogate pairs remain accepted.
+        self.assertEqual(
+            decode_authority_json(
+                b'{"state":"PASS","note":"\ud83d\ude80"}')["note"],
+            "\U0001f680")
+
+
 if __name__ == "__main__":
     unittest.main()

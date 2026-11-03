@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Exact source and 47/47 no-skip tests
+      - name: Exact source and 48/48 no-skip tests
         shell: bash
         env:
           EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -42,7 +42,7 @@ jobs:
           grep -x 'OK' /tmp/worker-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-terminal-tests.log
           python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v 2>&1 | tee /tmp/worker-acme-tests.log
-          grep -E '^Ran 37 tests in ' /tmp/worker-acme-tests.log
+          grep -E '^Ran 38 tests in ' /tmp/worker-acme-tests.log
           grep -x 'OK' /tmp/worker-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-tests.log
           python - <<'PY'
@@ -54,7 +54,7 @@ jobs:
               matches=re.findall(r'^Ran ([0-9]+) tests in ',log.read_text(),re.MULTILINE)
               assert len(matches)==1 and 'OK' in log.read_text().splitlines()
               counts.append(int(matches[0]))
-          assert counts==[10,37]
+          assert counts==[10,38]
           r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
              "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":sum(counts),
              "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,

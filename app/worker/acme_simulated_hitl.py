@@ -102,6 +102,14 @@ def decode_authority_json(body):
         raise SandboxDenied("sandbox_readback_json_unqualified") from None
     if type(document) is not dict:
         raise SandboxDenied("sandbox_readback_json_unqualified")
+    # json.loads accepts lone escaped UTF-16 surrogates (\\ud800/\\udc00).
+    # Such non-Unicode strings cannot be round-tripped as UTF-8 and must not
+    # become authenticated Core/Twin/Policy claims or Temporal receipts.
+    # Properly paired surrogate escapes decode to a valid code point.
+    try:
+        json.dumps(document, ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise SandboxDenied("sandbox_readback_json_unqualified") from None
     return document
 
 
