@@ -42,6 +42,16 @@ PAGES = (
     ("noc", "/noc", "SYNTHETIC_REFERENCE_ONLY"),
 )
 SENSITIVE_NAMES = ("portal-read-token", "noc-token", "demo-token", "portal-navigation-token")
+# CLI-only bounded diagnostic state. No messages, URLs, headers or tokens.
+BROWSER_PROGRESS = {"stage": "NOT_STARTED", "page_errors_count": 0,
+                    "console_errors_count": 0, "failed_requests_count": 0,
+                    "blocked_requests_count": 0}
+
+
+def note_failure(kind):
+    if kind in BROWSER_PROGRESS and kind.endswith("_count"):
+        BROWSER_PROGRESS[kind] += 1
+
 
 
 def verify_base_url(raw: str) -> str:
@@ -126,6 +136,9 @@ def observed_provenance(runner=subprocess.run) -> dict:
 
 
 def run(args) -> dict:
+    BROWSER_PROGRESS.update(stage="VERIFY_HOST", page_errors_count=0,
+                            console_errors_count=0, failed_requests_count=0,
+                            blocked_requests_count=0)
     base = verify_base_url(args.base_url)
     hostname = platform.node()
     if args.assert_host and hostname.casefold().split(".")[0] != args.assert_host.casefold():
@@ -153,10 +166,12 @@ def run(args) -> dict:
         "status": "FAIL",
     }
     receipt.update(observed_provenance())
+    BROWSER_PROGRESS["stage"] = "IMPORT_PLAYWRIGHT"
     # Imports are deferred so missing browser tooling fails with a precise error.
     from playwright.sync_api import sync_playwright, expect
 
     with sync_playwright() as playwright:
+        BROWSER_PROGRESS["stage"] = "LAUNCH_CHROMIUM"
         browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
         try:
             context = browser.new_context(
@@ -178,15 +193,19 @@ def run(args) -> dict:
                     route.continue_()
                 else:
                     blocked.append((request.method, target.scheme))
+                    note_failure("blocked_requests_count")
                     route.abort()
 
             context.route("**/*", fence)
-            page.on("pageerror", lambda _: errors.append("PAGE_ERROR"))
-            page.on("console", lambda msg: console_errors.append("CONSOLE_ERROR")
-                    if msg.type == "error" else None)
-            page.on("requestfailed", lambda _: failed_requests.append("REQUEST_FAILED"))
+            page.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
+                                             note_failure("page_errors_count")))
+            page.on("console", lambda msg: (console_errors.append("CONSOLE_ERROR"),
+                      note_failure("console_errors_count")) if msg.type == "error" else None)
+            page.on("requestfailed", lambda _: (failed_requests.append("REQUEST_FAILED"),
+                                                 note_failure("failed_requests_count")))
 
             def visit(label, path, selector, expected):
+                BROWSER_PROGRESS["stage"] = label
                 response = page.goto(base + path, wait_until="domcontentloaded", timeout=15000)
                 # Playwright returns None for a same-document fragment navigation.
                 if response is None and not path.startswith("/#"):
@@ -206,6 +225,7 @@ def run(args) -> dict:
                 capture(page, folder, label, receipt)
 
             visit("01-overview", "/", *MARKERS["overview"])
+            BROWSER_PROGRESS["stage"] = "fixture-contract"
             expect(page.locator("#fixture-status")).to_contain_text(
                 "Référence locale chargée", timeout=10000)
             if page.locator('input[type="password"]').count() != 0:
@@ -222,6 +242,7 @@ def run(args) -> dict:
             visit("02-journey", "/#journey", *MARKERS["journey"])
             if page.locator("#scenario-select option").count() != 8:
                 raise AssertionError("eight teaching scenarios not mounted")
+            BROWSER_PROGRESS["stage"] = "scenario-catalog"
             page.locator("#scenario-select").select_option("storm")
             expect(page.locator("#scenario-description")).to_contain_text(
                 "Aucune alarme n'est supprimée")
@@ -249,10 +270,13 @@ def run(args) -> dict:
             try:
                 mobile.route("**/*", fence)
                 mp = mobile.new_page()
-                mp.on("pageerror", lambda _: errors.append("PAGE_ERROR"))
-                mp.on("console", lambda msg: console_errors.append("CONSOLE_ERROR")
-                      if msg.type == "error" else None)
-                mp.on("requestfailed", lambda _: failed_requests.append("REQUEST_FAILED"))
+                BROWSER_PROGRESS["stage"] = "mobile-390px"
+                mp.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
+                                             note_failure("page_errors_count")))
+                mp.on("console", lambda msg: (console_errors.append("CONSOLE_ERROR"),
+                      note_failure("console_errors_count")) if msg.type == "error" else None)
+                mp.on("requestfailed", lambda _: (failed_requests.append("REQUEST_FAILED"),
+                                                 note_failure("failed_requests_count")))
                 response = mp.goto(base + "/", wait_until="domcontentloaded", timeout=15000)
                 if response is None or response.status != 200:
                     raise AssertionError("mobile home unavailable")
@@ -264,6 +288,7 @@ def run(args) -> dict:
             finally:
                 mobile.close()
 
+            BROWSER_PROGRESS["stage"] = "final-browser-diagnostics"
             receipt["page_errors_count"] = len(errors)
             receipt["console_errors_count"] = len(console_errors)
             receipt["failed_requests_count"] = len(failed_requests)
@@ -298,6 +323,10 @@ def main() -> int:
             "origin": "http://127.0.0.1:7777" if args.base_url.rstrip("/") ==
                 "http://127.0.0.1:7777" else "UNVERIFIED",
             "status": "FAIL", "failure_type": type(exc).__name__,
+            "failure_stage": BROWSER_PROGRESS["stage"],
+            **{k: BROWSER_PROGRESS[k] for k in (
+                "page_errors_count", "console_errors_count",
+                "failed_requests_count", "blocked_requests_count")},
             "real_screen_capture": "NOT_VERIFIED", "live_effects": 0,
             **observed_provenance(),
         }

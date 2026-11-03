@@ -372,9 +372,14 @@ class PreflightContract(unittest.TestCase):
             payload['console_errors_count'] = 0
             payload['status'] = 'FAIL'
             payload['failure_type'] = 'ModuleNotFoundError'
+            payload['failure_stage'] = 'IMPORT_PLAYWRIGHT'
+            payload['page_errors_count'] = 0
             path.write_text(json.dumps(payload))
-            self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now)['failure_type'],
-                             'ModuleNotFoundError')
+            failed = mod.host_playwright_receipt(p, sha, image, now=now)
+            self.assertEqual(failed['failure_type'], 'ModuleNotFoundError')
+            self.assertEqual(failed['failure_stage'], 'IMPORT_PLAYWRIGHT')
+            self.assertEqual(failed['page_errors_count'], 0)
+            self.assertNotIn('SYNTHETIC_SECRET_NEVER_EXPORT', json.dumps(failed))
             payload['collected_at'] = (now - dt.timedelta(hours=1)).isoformat()
             path.write_text(json.dumps(payload))
             self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now),
