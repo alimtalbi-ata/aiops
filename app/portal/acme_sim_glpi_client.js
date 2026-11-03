@@ -7,6 +7,22 @@
   let epoch = 0;
   const attemptPattern = /^ACME-SIM-[A-Z0-9_-]{8,80}$/;
   const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{2,99}$/;
+  // The server projects a closed, simulation-only schema. A forged 200 must
+  // not smuggle human IdP/GLPI/ACL/LIVE claims into the browser readback.
+  const readbackKeys = [
+    "schema", "authority", "ticket_authority", "state", "simulated",
+    "tenant_id", "attempt_id", "scenario_id", "mode", "ticket",
+    "incident_id", "run_id", "worker_receipt_status", "worker_receipt_phase",
+    "worker_no_effect_verified", "core_resolution_after_worker_verified",
+    "terminal_ticket_digest_verified", "independent_final_read_rounds",
+    "provenance", "readback_source", "source_freshness", "observed_at",
+    "human_allow", "native_glpi_readmy_attested",
+    "real_glpi_writes_allowed", "live_effects_allowed", "host_e2e_qualified"
+  ];
+  const ticketKeys = ["id", "status", "current_state", "transition_history_attested"];
+  const exactKeys = (value, keys) =>
+    Object.keys(value).length === keys.length &&
+    keys.every(key => Object.prototype.hasOwnProperty.call(value, key));
   const reset = message => {
     el("sim-status").textContent = message;
     el("sim-ticket").textContent = "UNKNOWN";
@@ -18,6 +34,7 @@
   };
   const qualified = (data, attempt) => {
     if (!data || typeof data !== "object" || Array.isArray(data) ||
+        !exactKeys(data, readbackKeys) ||
         data.schema !== "aiops.portal.sim-glpi-readback.v1" ||
         data.authority !== "SIMULATED_ONLY" || data.ticket_authority !== "SIMULATED_ONLY" ||
         data.state !== "RESOLVED" || data.simulated !== true ||
@@ -35,7 +52,8 @@
         data.human_allow !== false || data.native_glpi_readmy_attested !== false ||
         data.real_glpi_writes_allowed !== false ||
         data.live_effects_allowed !== false || data.host_e2e_qualified !== false ||
-        !data.ticket || typeof data.ticket !== "object" ||
+        !data.ticket || typeof data.ticket !== "object" || Array.isArray(data.ticket) ||
+        !exactKeys(data.ticket, ticketKeys) ||
         typeof data.ticket.id !== "string" || !idPattern.test(data.ticket.id) ||
         !data.ticket.id.startsWith("SIM-GLPI-") ||
         data.ticket.status !== "RESOLVED" || data.ticket.current_state !== "RESOLVED" ||
