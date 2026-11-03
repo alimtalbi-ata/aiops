@@ -155,10 +155,14 @@ def core_readback(x):
             or target.query or target.fragment):
         raise HTTPException(503, 'independent_core_url_invalid')
     try:
-        response = requests.get(
-            base + '/api/sandbox/acme/e2e/' + x.attempt_id,
-            headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN']},
-            timeout=5, allow_redirects=False)
+        # A host/port allowlist is insufficient if HTTP(S)_PROXY is inherited:
+        # requests would otherwise forward the internal bearer to that proxy.
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.get(
+                base + '/api/sandbox/acme/e2e/' + x.attempt_id,
+                headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN']},
+                timeout=5, allow_redirects=False)
         if response.status_code != 200 or len(response.content) > 32768:
             raise ValueError('unavailable')
         result = response.json()
