@@ -65,6 +65,27 @@ PY
 }
 trap finish EXIT
 
+# Stable instrumentation-only merges must not rebuild an unchanged pinned
+# portal source. Require both the running container tag and immutable image ID
+# to match the already-present pin; otherwise follow the normal rebuild path.
+SHORT="$(printf '%s' "$PIN" | cut -c1-12)"
+TAG="aiops2-portal:pinned-$SHORT"
+RUNNING_TAG="$(docker inspect aiops2-rebuild-portal --format '{{.Config.Image}}')"
+TAG_IMAGE="$(docker image inspect "$TAG" --format '{{.Id}}' 2>/dev/null || true)"
+if [ "$RUNNING_TAG" = "$TAG" ] && [ "$TAG_IMAGE" = "$OLD" ]; then
+  python3 - <<'PY'
+import json,urllib.request
+with urllib.request.urlopen('http://127.0.0.1:7777/health',timeout=5) as r:
+    v=json.load(r)
+    assert r.status==200 and v.get('status')=='ok'
+    assert type(v.get('external_port')) is int and v['external_port']==7777
+PY
+  /usr/bin/python3 "$ROOT/deploy/debian-portal-ux-contracts.py" || exit 78
+  success=1
+  echo 'PORTAL_DEPLOY=NOOP_PINNED_RUNNING_IMAGE'
+  exit 0
+fi
+
 # PR ref is only transport; exact immutable commit equality is mandatory.
 git init --bare "$TMP/source.git" >/dev/null
 GIT_TERMINAL_PROMPT=0 git --git-dir="$TMP/source.git" fetch --depth=1 \

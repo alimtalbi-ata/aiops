@@ -281,6 +281,9 @@ class PreflightContract(unittest.TestCase):
         self.assertIn('portal-rollback-manifest.json', deploy)
         self.assertIn('portal-deploy-result.json', deploy)
         self.assertIn('NOOP_ALREADY_SAME_IMAGE', deploy)
+        self.assertIn('NOOP_PINNED_RUNNING_IMAGE', deploy)
+        self.assertIn('debian-portal-playwright-snapshot.py', entry)
+        self.assertIn('--assert-host SRV-DEB-05', entry)
         self.assertIn('--no-deps --no-build', deploy)
         self.assertNotIn('docker stop', deploy)
         self.assertNotIn('docker run', deploy)
@@ -320,6 +323,58 @@ class PreflightContract(unittest.TestCase):
                                  dev=p, env=p / '.env', state=p)
             self.assertEqual(r['deployment_preflight']['verdict'],
                              'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED')
+
+
+    def test_host_browser_receipt_requires_exact_host_sha_image_and_private_hashes(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            folder = p / 'portal-playwright'
+            folder.mkdir()
+            now = dt.datetime.now(dt.timezone.utc)
+            sha = 'a' * 40
+            image = 'sha256:' + 'b' * 64
+            names = ('01-overview','02-journey','03-runs','04-connections',
+                     'demo-center','recorder-station','demo-studio','noc',
+                     '09-mobile-overview')
+            payload = {
+                'schema': 'aiops.portal-host-playwright-snapshots.v1',
+                'collected_at': now.isoformat(), 'host': 'SRV-DEB-05',
+                'host_asserted': True, 'mode': 'ANONYMOUS_SYNTHETIC_UI_ONLY',
+                'origin': 'http://127.0.0.1:7777',
+                'stable_checkout_sha': sha, 'portal_image_id': image,
+                'live_effects': 0, 'status': 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY',
+                'real_screen_capture': 'NOT_VERIFIED', 'human_glpi_acl': 'NOT_VERIFIED',
+                'n8n_login': 'NOT_VERIFIED', 'oidc_https': 'NOT_VERIFIED',
+                'page_errors_count': 0, 'console_errors_count': 0,
+                'failed_requests_count': 0, 'blocked_requests_count': 0,
+                'checks': [{'name': 'check-%02d' % i, 'status': 'PASS'}
+                           for i in range(11)],
+                'screenshots': [{'name': n + '.png', 'bytes': 100,
+                                 'sha256': 'c' * 64} for n in names],
+                'secret': 'SYNTHETIC_SECRET_NEVER_EXPORT',
+            }
+            path = folder / 'portal-playwright-receipt.json'
+            path.write_text(json.dumps(payload))
+            result = mod.host_playwright_receipt(p, sha, image, now=now)
+            self.assertEqual(result['status'], 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY')
+            self.assertEqual(len(result['screenshots_sha256']), 9)
+            self.assertNotIn('SYNTHETIC_SECRET_NEVER_EXPORT', json.dumps(result))
+            self.assertEqual(mod.host_playwright_receipt(p, 'd' * 40, image, now=now),
+                             {'status': 'NOT_VERIFIED'})
+            payload['console_errors_count'] = 1
+            path.write_text(json.dumps(payload))
+            self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now),
+                             {'status': 'NOT_VERIFIED'})
+            payload['console_errors_count'] = 0
+            payload['status'] = 'FAIL'
+            payload['failure_type'] = 'ModuleNotFoundError'
+            path.write_text(json.dumps(payload))
+            self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now)['failure_type'],
+                             'ModuleNotFoundError')
+            payload['collected_at'] = (now - dt.timedelta(hours=1)).isoformat()
+            path.write_text(json.dumps(payload))
+            self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now),
+                             {'status': 'NOT_VERIFIED'})
 
 
 if __name__ == '__main__':
