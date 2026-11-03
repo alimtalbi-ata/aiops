@@ -248,6 +248,18 @@ class PreflightContract(unittest.TestCase):
                 self.assertEqual(good['acme_sandbox_upgrade']['pg16_scratch_restore'],
                                  'PASS')
                 self.assertEqual(good['acme_sandbox_runtime']['status'], 'PASS')
+                self.assertFalse(good['acme_sandbox_upgrade']['historical_receipt'])
+                # An older receipt must not hide the present live Docker readback.
+                # E2E still needs its own fresh, independently verified receipt.
+                receipt['collected_at'] = (dt.datetime.now(dt.timezone.utc)
+                    - dt.timedelta(minutes=45)).isoformat()
+                path.write_text(json.dumps(receipt))
+                historical = report()
+                self.assertEqual(historical['acme_sandbox_upgrade']['status'], 'PASS')
+                self.assertTrue(historical['acme_sandbox_upgrade']['historical_receipt'])
+                self.assertEqual(historical['acme_sandbox_runtime']['status'], 'PASS')
+                self.assertEqual(historical['acme_sandbox_verdict'],
+                                 'NO_GO_NOT_RUNTIME_VERIFIED')
                 self.assertEqual(good['acme_sandbox_verdict'],
                                  'NO_GO_NOT_RUNTIME_VERIFIED')
             finally:
