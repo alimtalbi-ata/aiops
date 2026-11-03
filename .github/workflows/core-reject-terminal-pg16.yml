@@ -71,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           /tmp/core-terminal-venv/bin/python -m unittest discover -s tests -p 'test_core_hitl_reject_terminal_pg16.py' -v 2>&1 | tee /tmp/core-terminal-tests.log
-          grep -E '^Ran 16 tests in ' /tmp/core-terminal-tests.log
+          grep -E '^Ran 20 tests in ' /tmp/core-terminal-tests.log
           grep -x 'OK' /tmp/core-terminal-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-terminal-tests.log
           echo "SYNTHETIC_ONLY=TRUE; HUMAN_GLPI_AUTH=UNKNOWN; EFFECT_ALLOWED=FALSE; HOST_DEPLOY=FALSE"
@@ -231,6 +231,13 @@ jobs:
           assert receipt["migration_015_transaction_rollback"] is True
           assert receipt["migration_015_reapply"] is True
           assert receipt["native_pg16_restore"] is True
+          assert receipt["restored_http_token_free_readback"] == "200_DEAD_IDEMPOTENT"
+          assert receipt["signed_run_ownership_tamper"] == "UNKNOWN_NO_MUTATION"
+          assert receipt["restored_http_source_replay"] == "200_IDEMPOTENT"
+          assert receipt["restored_http_dead_replay"] == "200_DEAD_IDEMPOTENT"
+          assert receipt["restored_http_service_revocation"] == "401_UNKNOWN"
+          assert receipt["restored_http_run_event_count"] == 10
+          assert receipt["human_idp_actor_authenticated"] is False
           assert len(receipt["archive_sha256"]) == 64
           assert receipt["archive_retained"] is False
           assert receipt["human_glpi_authority"] == "UNKNOWN"
@@ -245,6 +252,102 @@ jobs:
           PY
           sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/graph005-terminal-joined.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/graph005-terminal-joined.sha256"
           sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/graph005-terminal-joined.sha256"
+      - name: Verify token-free terminal recovery and readback receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "terminal-recovery.json"
+          data = json.loads(p.read_text())
+          digest = data.pop("payload_sha256")
+          assert digest == hashlib.sha256(json.dumps(
+              data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert data["schema"] == "aiops.core-terminal-restart-recovery-ci.v1"
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["core_http_recovery"] == data["readback"] == "200_DEAD"
+          assert data["replay_idempotent"] is True
+          assert data["attempts"] == 8 and data["audit_014_rows"] == 1
+          assert data["wrong_permission"] == 403 and data["revoked_bearer"] == 401
+          assert data["revoked_source_proof"] == "UNKNOWN"
+          assert data["lease_token_exported"] is False
+          assert data["incident_id_core_readback"] is True
+          assert data["post_dead_foreign_incident"] == "200_UNKNOWN"
+          assert data["real_worker_os_processes"] == 0
+          assert data["human_glpi_authority"] == "UNKNOWN"
+          assert data["execution_allowed"] is data["effect_allowed"] is False
+          assert len(data["receipt_sha256"]) == 64
+          assert not any(s in p.read_text() for s in (
+              "lease_token_sha256", "Bearer ", "postgresql://", "ci-core-graph005-terminal-only-token"))
+          print("CORE_TERMINAL_RECOVERY_READBACK_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-recovery.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-recovery.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/terminal-recovery.sha256"
+      - name: Verify rotated service bearer credential fence
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "credential-rotation.json"
+          data = json.loads(p.read_text())
+          digest = data.pop("payload_sha256")
+          assert digest == hashlib.sha256(json.dumps(
+              data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert data["schema"] == "aiops.core-terminal-credential-rotation-ci.v1"
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["old_bearer_revoked"] == data["rotated_bearer_revoked"] == 401
+          assert data["rotated_bearer_recovered"] == "200_DEAD"
+          assert data["rotated_bearer_readback"] == "200_DEAD_IDEMPOTENT"
+          assert data["attempts"] == 8 and data["audit_014_rows"] == 1
+          assert data["lease_token_exported"] is False
+          assert data["real_worker_os_processes"] == 0
+          assert data["human_glpi_authority"] == "UNKNOWN"
+          assert data["execution_allowed"] is data["effect_allowed"] is False
+          assert data["rollback"] == "REVERT_CORE_TEST_WORKFLOW_KEEP_013_014_015"
+          assert not any(s in p.read_text() for s in (
+              "Bearer ", "lease_token_sha256", "postgresql://",
+              "ci-core-rotated-service-", "ci-core-graph005-terminal-only-token"))
+          print("CORE_TERMINAL_CREDENTIAL_ROTATION_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/credential-rotation.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/credential-rotation.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/credential-rotation.sha256"
+      - name: Verify same-tenant foreign actor lease-owner fence
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-terminal-venv/bin/python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p = Path(os.environ["AIOPS_CORE_TERMINAL_RECEIPT_DIR"]) / "lease-owner-fence.json"
+          data = json.loads(p.read_text())
+          digest = data.pop("payload_sha256")
+          assert digest == hashlib.sha256(json.dumps(
+              data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+          assert data["schema"] == "aiops.core-terminal-lease-owner-fence-ci.v1"
+          assert data["source_head"] == os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["same_tenant_foreign_actor"] == "200_UNKNOWN_NO_MUTATION"
+          assert data["foreign_owner_claim"] == "200_UNKNOWN_NO_MUTATION"
+          assert data["old_bearer_revoked"] == data["rotated_bearer_revoked"] == 401
+          assert data["same_actor_rotated_bearer"] == "200_DEAD"
+          assert data["readback"] == "200_DEAD_IDEMPOTENT"
+          assert data["postcommit_foreign_actor"] == "200_UNKNOWN"
+          assert data["audit_014_rows"] == 1 and data["attempts"] == 8
+          assert len(data["receipt_sha256"]) == 64
+          assert data["lease_token_exported"] is False
+          assert data["real_worker_os_processes"] == 0
+          assert data["human_glpi_authority"] == "UNKNOWN"
+          assert data["execution_allowed"] is data["effect_allowed"] is False
+          assert data["rollback"] == "REVERT_CORE_TEST_WORKFLOW_KEEP_013_014_015"
+          assert not any(x in p.read_text() for x in (
+              "Bearer ", "lease_token_sha256", "postgresql://",
+              "ci-core-same-tenant-foreign-", "ci-core-same-actor-rotation-"))
+          print("CORE_TERMINAL_LEASE_OWNER_FENCE_PASS", digest)
+          PY
+          sha256sum "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/lease-owner-fence.json" > "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/lease-owner-fence.sha256"
+          sha256sum --check "$AIOPS_CORE_TERMINAL_RECEIPT_DIR/lease-owner-fence.sha256"
       - name: Preserve redacted exact-head qualification
         if: always()
         uses: actions/upload-artifact@v4
@@ -262,4 +365,10 @@ jobs:
             /tmp/core-terminal-receipts/terminal-postcommit-revocation.sha256
             /tmp/core-terminal-receipts/graph005-terminal-joined.json
             /tmp/core-terminal-receipts/graph005-terminal-joined.sha256
+            /tmp/core-terminal-receipts/terminal-recovery.json
+            /tmp/core-terminal-receipts/terminal-recovery.sha256
+            /tmp/core-terminal-receipts/credential-rotation.json
+            /tmp/core-terminal-receipts/credential-rotation.sha256
+            /tmp/core-terminal-receipts/lease-owner-fence.json
+            /tmp/core-terminal-receipts/lease-owner-fence.sha256
           retention-days: 7
