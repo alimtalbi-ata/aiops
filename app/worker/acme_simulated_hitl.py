@@ -86,10 +86,16 @@ def decode_authority_json(body):
     def reject_nonfinite(_value):
         raise SandboxDenied("sandbox_readback_json_unqualified")
 
+    def finite_float(raw):
+        value = float(raw)
+        if not math.isfinite(value):
+            raise SandboxDenied("sandbox_readback_json_unqualified")
+        return value
+
     try:
         document = json.loads(
             body.decode("utf-8"), object_pairs_hook=unique_object,
-            parse_constant=reject_nonfinite)
+            parse_constant=reject_nonfinite, parse_float=finite_float)
     except SandboxDenied:
         raise
     except (TypeError, ValueError, UnicodeError, RecursionError):
