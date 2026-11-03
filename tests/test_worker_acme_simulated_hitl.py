@@ -830,5 +830,25 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertNotIn("response.content", main)
 
 
+    def test_40_twin_expiry_after_second_policy_read_denied(self):
+        # Both independent snapshots are valid, but Twin expires before the
+        # Worker can construct its no-effect Temporal receipt.
+        docs = fixtures()
+        docs["twin"]["expires_at"] = (NOW + timedelta(seconds=2)).isoformat()
+        clock = iter((NOW, NOW + timedelta(seconds=1),
+                      NOW + timedelta(seconds=2)))
+        calls = []
+
+        async def get(component, path):
+            calls.append(component)
+            return deepcopy(docs[component])
+
+        with self.assertRaisesRegex(
+                SandboxDenied, "^twin_approval_expired_or_future$"):
+            asyncio.run(simulate_no_effect(
+                INTENT, get=get, now=lambda: next(clock)))
+        self.assertEqual(calls, ["core", "twin", "policy"] * 2)
+
+
 if __name__ == "__main__":
     unittest.main()

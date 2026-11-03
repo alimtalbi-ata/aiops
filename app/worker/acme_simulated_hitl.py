@@ -313,13 +313,19 @@ async def simulate_no_effect(intent, *, get, now=None):
     """
     intent = validate_intent(intent)
     path = "/api/sandbox/acme/e2e/" + intent["attempt_id"]
+
+    def validation_time():
+        # Sample independently at every fence. A Twin approval can expire
+        # during the second round of authenticated Core/Twin/Policy GETs.
+        return now() if callable(now) else now
+
     try:
         first = {component: await get(component, path)
                  for component in ("core", "twin", "policy")}
-        validate_readbacks(intent, **first, now=now)
+        validate_readbacks(intent, **first, now=validation_time())
         second = {component: await get(component, path)
                   for component in ("core", "twin", "policy")}
-        validate_readbacks(intent, **second, now=now)
+        validate_readbacks(intent, **second, now=validation_time())
     except SandboxDenied:
         raise
     except Exception:
@@ -346,6 +352,9 @@ async def simulate_no_effect(intent, *, get, now=None):
         raise SandboxDenied("sandbox_readback_snapshot_unqualified") from None
     if not snapshot_stable:
         raise SandboxDenied("sandbox_readback_snapshot_rotated")
+    # Final freshness fence after the second Policy response and comparison;
+    # never issue a no-effect receipt from an approval expired in transit.
+    validate_readbacks(intent, **second, now=validation_time())
     receipt = {
         "schema": SCHEMA, "attempt_id": intent["attempt_id"],
         "tenant_id": TENANT, "incident_id": intent["incident_id"],
