@@ -135,6 +135,18 @@ def observed_provenance(runner=subprocess.run) -> dict:
     }
 
 
+def await_synthetic_workspace_ready(page, expect) -> None:
+    """Wait for the one known asynchronous read, not global network quiescence.
+
+    The anonymous operator workspace loads a strictly local synthetic fixture
+    and can independently probe a fail-closed session endpoint. A permanent
+    background request must never turn an otherwise rendered page into a
+    networkidle timeout. An unavailable fixture must still fail this gate.
+    """
+    expect(page.locator("#fixture-status")).to_have_attribute(
+        "data-state", "ready", timeout=10000)
+
+
 def run(args) -> dict:
     BROWSER_PROGRESS.update(stage="VERIFY_HOST", page_errors_count=0,
                             console_errors_count=0, failed_requests_count=0,
@@ -215,11 +227,12 @@ def run(args) -> dict:
                 if page.url != base + path:
                     raise AssertionError(label + " unexpected origin or route")
                 expect(page.locator(selector)).to_contain_text(expected, timeout=10000)
-                # Full navigations trigger an async synthetic fixture GET. Wait
-                # for network idle before leaving a route; otherwise our own
-                # immediate next goto aborts the GET and creates a false
-                # requestfailed/console error in the host gate.
-                page.wait_for_load_state("networkidle", timeout=10000)
+                # Wait for document resources, then the exact async fixture
+                # contract on workspace routes. networkidle is not reliable
+                # when an unrelated session/poll request remains active.
+                page.wait_for_load_state("load", timeout=10000)
+                if path in ("/", "/runs", "/#journey", "/#connections"):
+                    await_synthetic_workspace_ready(page, expect)
                 if label == "01-overview":
                     expect(page.locator("#fixture-status")).to_contain_text(
                         "Référence locale chargée", timeout=10000)
@@ -286,7 +299,8 @@ def run(args) -> dict:
                 if response is None or response.status != 200:
                     raise AssertionError("mobile home unavailable")
                 expect(mp.locator("#overview-heading")).to_be_visible()
-                mp.wait_for_load_state("networkidle", timeout=10000)
+                mp.wait_for_load_state("load", timeout=10000)
+                await_synthetic_workspace_ready(mp, expect)
                 if mp.evaluate("document.documentElement.scrollWidth > window.innerWidth + 2"):
                     raise AssertionError("mobile horizontal overflow")
                 capture(mp, folder, "09-mobile-overview", receipt)
