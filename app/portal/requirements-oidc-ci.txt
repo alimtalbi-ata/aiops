@@ -1,0 +1,2 @@
+# Explicit Portal-only RSA/JWKS test dependency. Shared quality.yml is architect-owned.
+cryptography==46.0.4

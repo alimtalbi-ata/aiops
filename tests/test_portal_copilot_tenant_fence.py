@@ -98,7 +98,7 @@ class CopilotTenantFenceTests(unittest.TestCase):
 
     def test_home_copilot_renders_http_error_and_is_noncacheable(self):
         with patch.object(main, "get_json", side_effect=AssertionError("Core called")) as upstream:
-            response = self.client.get("/")
+            response = self.client.get("/legacy")
         self.assertEqual(response.status_code, 200)
         self.assertIn("HTTP '+r.status", response.text)
         self.assertIn("UNAUTHORIZED", response.text)

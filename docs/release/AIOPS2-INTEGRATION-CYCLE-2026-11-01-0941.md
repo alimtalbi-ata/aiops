@@ -1,0 +1,20 @@
+# ADR — AIOps2 architect selective integration 2026-11-01 09:41 CET
+
+**Status:** Proposed, DEV-only, RELEASE_STABLE=NO_GO. **Owner:** architect integrator. **Sole candidate:** Draft [#234](https://github.com/alimtalbi-ata/aiops/pull/234) `integration/enterprise-slice-main-20261031-2230`; main `ae7c3e5102b99a66bd7806d602146f1309a9749d` at read. Product commit `b354c44f26a26a5567b3cf57e0a7d3aa6cf64968`. New docs commit SHA and exact CI to be recorded in #186 after observation.
+
+## Decision and ownership
+
+Only copy 12 reviewed source blobs from four Draft PRs, not histories or overlapping migrations. ACME owns synthetic read-only binding probe; Portal owns revocable OIDC session negative consumer; Core owns native same-major PG16 restore test/CI; Policy owns Worker/Temporal cross-tenant REJECT tests. The Core dedicated workflow PR trigger is extended to `main` to qualify the main-based integration PR, rather than relying on a source-only workflow. All other source paths are copied by exact blob SHA. No second GLPI/CMDB authority, Core state ledger, policy engine or Portal shell.
+
+## Provenance and tests
+
+| ACME/Twin P1 | #272 `8ce1c26ef284166c42770d81b58b1c30b5810677` | Quality [41287105440](https://github.com/alimtalbi-ata/aiops/actions/runs/41287105440) 3/3, 148/148 targeted | 3 ACME paths; offline probe only; actor/tenant binding UNKNOWN | Core independently authenticated seven-event binding; ACME may only validate a real readback, never invent receipts |
+| Portal/GLPI P0 | #273 `2c2cda0a6dfcbf526bca491338dd40e9054aba7a` | Quality [41288065952](https://github.com/alimtalbi-ata/aiops/actions/runs/41288065952) 3/3, consumer 22/22, Chromium 18/18 | 3 Portal paths; session recheck and Core negative TLS; positive ALLOW prohibited | Native GLPI profile/entity ACL + signed Core response required; test revocation and no browser bearer |
+| Core/NOC P0 | #274 `308bf92c311b7f8b07c8bb9f51adc64e8b3ff903` | Dedicated [41288738108](https://github.com/alimtalbi-ata/aiops/actions/runs/41288738108) 1/1 no SKIP, Quality [41288738180](https://github.com/alimtalbi-ata/aiops/actions/runs/41288738180) 3/3 | 3 Core paths; native PG16 16.15 archive/restore 001/004/009–013, audit preserved | Core actor+tenant+source hash readback contract, no positive human authority without independent GLPI |
+| Policy/HITL P0 | #275 `2d44dd25eab684104b43cf704d6bb8aef227617f` | Dedicated [41289152239](https://github.com/alimtalbi-ata/aiops/actions/runs/41289152239) 1/1 (8/8 + DR 5/5), Quality [41289152249](https://github.com/alimtalbi-ata/aiops/actions/runs/41289152249) 3/3 | 3 Worker paths; two tenant-scoped synthetic principals, two OS restarts, REJECT-only | Continue isolated ACK/lease replay adversarial checks; no approval/effect/LIVE |
+
+Source SHA CI is not integrated HEAD CI. Test-only Core PG16 16.15 archive/restore verifies SHA256, tamper rejection, 001/004/009→013 and immutable nonce/JTI/revocation replay fencing; not a persistent in-place downgrade. Worker 8/8 + 5/5 DR uses separate disposable OS PIDs, real loopback Core TCP/PG16 and persisted Temporal, with injected gateway-close, **not** physical network partition. Portal negative-only consumer never grants read on Core 200 UNKNOWN or forged ALLOW. ACME internal Bearer is not actor+tenant authority, 15 stages and six checkpoints remain NOT_EXECUTED.
+
+## Release gates and rollback
+
+SOURCE_REVIEWED yes; source CI_PASS yes; integrated exact-head CI_PENDING; D1 only partial synthetic REJECT; D2 full Event→Incident→Twin→Analyst/Critic→Evidence→Policy/HITL→SIMULATE→verify→resolution/reopen NOT_VERIFIED; D3 kit install/upgrade/rollback NO_GO; D4 customer signoff NOT_ATTESTED. No real IdP/GLPI authorization, GLPI write, LIVE effect, SSH/sudo, Debian host or production. Revert `b354c44f26a26a5567b3cf57e0a7d3aa6cf64968` and subsequent docs commit by new commits, re-run CI; never delete 013 audit, force-push, reset or rewrite main. Promote only by non-Draft PR, mergeable, exact-head all checks green and independently qualified gates, expected_head_sha.

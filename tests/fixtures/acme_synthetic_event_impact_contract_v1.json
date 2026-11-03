@@ -1,0 +1,103 @@
+{
+  "authority": "OFFLINE_SCRIPT_ONLY",
+  "blast_radius_candidate": {
+    "candidate_ci_count": 10,
+    "candidate_service_ids": [
+      "ACME-SVC-ERP",
+      "ACME-SVC-PAYMENTS"
+    ],
+    "estimated_impact_level": "HIGH",
+    "observed_service_impact": "UNKNOWN",
+    "path_edge_ids": [
+      "ACME-E08",
+      "ACME-E06",
+      "ACME-E04",
+      "ACME-E02"
+    ],
+    "path_node_ids": [
+      "ACME-SAN-FABRIC-A",
+      "ACME-STO-PURE01",
+      "ACME-VM-PAY01",
+      "ACME-APP-ORACLEPAY",
+      "ACME-SVC-PAYMENTS"
+    ],
+    "selected_service_id": "ACME-SVC-PAYMENTS",
+    "source_ci_id": "ACME-SAN-FABRIC-A"
+  },
+  "correlation_key": "SYN-CORR-406EBF166A17BEB7E248",
+  "events": [
+    {
+      "action": "INCIDENT_OPEN",
+      "ci_id": "ACME-SVC-PAYMENTS",
+      "dedupe_key": "SYN-DEDUP-1E29D476FFFF202F8563",
+      "event_time": "2026-10-31T09:42:00Z",
+      "offset_seconds": 0,
+      "source_event_id": "SYN-EVT-D339C4CF0B5DD5FBE166",
+      "step": 1
+    },
+    {
+      "action": "SET_STATE",
+      "ci_id": "ACME-SAN-FABRIC-A",
+      "dedupe_key": "SYN-DEDUP-213BABE1C5CA9A99C698",
+      "event_time": "2026-10-31T09:42:15Z",
+      "offset_seconds": 15,
+      "source_event_id": "SYN-EVT-5085CE4F452216CA6368",
+      "step": 2
+    },
+    {
+      "action": "OBSERVE",
+      "ci_id": "ACME-SAN-FABRIC-A",
+      "dedupe_key": "SYN-DEDUP-FD187F1F37857102EA40",
+      "event_time": "2026-10-31T09:42:30Z",
+      "offset_seconds": 30,
+      "source_event_id": "SYN-EVT-07FBFC9BA5CF807877E9",
+      "step": 3
+    },
+    {
+      "action": "CHANGE_LOOKUP",
+      "ci_id": "ACME-SAN-FABRIC-A",
+      "dedupe_key": "SYN-DEDUP-40A1485DEE5A0DDEA67B",
+      "event_time": "2026-10-31T09:42:45Z",
+      "offset_seconds": 45,
+      "source_event_id": "SYN-EVT-C09C5E66551CFA5D66E5",
+      "step": 4
+    },
+    {
+      "action": "POLICY_CHECK",
+      "ci_id": "ACME-SVC-PAYMENTS",
+      "dedupe_key": "SYN-DEDUP-065C49F0C5A13A18FDAE",
+      "event_time": "2026-10-31T09:43:00Z",
+      "offset_seconds": 60,
+      "source_event_id": "SYN-EVT-CA2638D022EF7BBAFFF2",
+      "step": 5
+    },
+    {
+      "action": "VERIFY",
+      "ci_id": "ACME-SVC-PAYMENTS",
+      "dedupe_key": "SYN-DEDUP-E39B4BF07274A4EE6F41",
+      "event_time": "2026-10-31T09:43:30Z",
+      "offset_seconds": 90,
+      "source_event_id": "SYN-EVT-DD341274D02FFBC6763E",
+      "step": 6
+    },
+    {
+      "action": "RECONCILE",
+      "ci_id": "ACME-SAN-FABRIC-A",
+      "dedupe_key": "SYN-DEDUP-A9188A2BBAAD5D03893E",
+      "event_time": "2026-10-31T09:43:50Z",
+      "offset_seconds": 110,
+      "source_event_id": "SYN-EVT-E3DBA69E2B38BD179315",
+      "step": 7
+    }
+  ],
+  "governance_index_git_blob": "e77a0abbb53176488ec49d7c0c9f8581d4620b3f",
+  "graph_git_blob": "67f0124a2c3b450e5249165e719a5d943fdd7237",
+  "provenance": "SYNTHETIC_FIXTURE",
+  "scenario_category": "REDUNDANT_SAN_PATH_LOSS",
+  "scenario_id": "SCN-GOLDEN-PAYMENT-P1",
+  "schema": "aiops.acme.synthetic-event-impact-contract.v1",
+  "seed": 20261018,
+  "source_dataset_sha256": "ce0aef74222699da695c2e894e622b0625c992ef654dda34a84cff26b5e64f3f",
+  "tenant_scope": "UNKNOWN",
+  "vertical_contract_git_blob": "e74e7b67d0d58e8eb1c2e4b54b1b0bf688694d13"
+}

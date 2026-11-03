@@ -117,5 +117,64 @@ class PolicySafetyTests(unittest.TestCase):
                     self.assertEqual(response.json()["decision"], "SIMULATE")
 
 
+    def test_all_synthetic_policy_paths_are_explicitly_no_effect(self):
+        # Cross disposition, evidence and caller-controlled approval booleans.
+        # These are offline contract tests, not OIDC or Temporal attestation.
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for command in ("OBSERVE", "EXECUTE", "REMEDIATE", "CANCEL"):
+                for evidence_count in (0, 2):
+                    for human_approved in (False, True):
+                        with self.subTest(mode=mode, command=command,
+                                          evidence_count=evidence_count,
+                                          human_approved=human_approved):
+                            result = evaluate(decision(mode=mode, command=command,
+                                evidence_count=evidence_count, human_approved=human_approved))
+                            self.assertIs(result["execution_allowed"], False)
+                            self.assertIs(result["effect_allowed"], False)
+                            self.assertIn(result["decision"], ("SIMULATE", "HUMAN_APPROVAL"))
+                            self.assertNotEqual(result["decision"], "ALLOW")
+
+    def test_read_only_allow_and_live_denial_never_grant_effect(self):
+        # Even PASS/ALLOW on a read-only LIVE query is not an execution receipt.
+        for severity, command, approved in (
+            ("P2", "OBSERVE", True),
+            ("P1", "OBSERVE", True),
+            ("P2", "REMEDIATE", False),
+            ("P2", "REMEDIATE", True),
+        ):
+            with self.subTest(severity=severity, command=command, approved=approved):
+                result = evaluate(decision(mode="LIVE", severity=severity,
+                                           command=command, human_approved=approved))
+                self.assertIs(result["execution_allowed"], False)
+                self.assertIs(result["effect_allowed"], False)
+
+    def test_http_contract_remains_strict_and_internal_verdict_no_effect(self):
+        with TestClient(app) as client:
+            for mode, command, evidence_count in (
+                ("DEMO", "REMEDIATE", 2),
+                ("REPLAY", "EXECUTE", 0),
+                ("STORY", "CANCEL", 2),
+                ("LIVE", "OBSERVE", 2),
+                ("LIVE", "REMEDIATE", 2),
+            ):
+                with self.subTest(mode=mode, command=command, evidence_count=evidence_count):
+                    response = client.post("/api/policy/check", json=decision(
+                        mode=mode, command=command, evidence_count=evidence_count).model_dump())
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(set(response.json()), {"state", "decision", "reason"})
+                    self.assertIs(evaluate(decision(mode=mode, command=command,
+                        evidence_count=evidence_count))["execution_allowed"], False)
+                    self.assertIs(evaluate(decision(mode=mode, command=command,
+                        evidence_count=evidence_count))["effect_allowed"], False)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+# Shared Quality is architect-owned. Run the 9 synthetic fixture regressions
+# alongside the 17 Policy safety cases without changing that workflow.
+def load_tests(loader, tests, pattern):
+    from test_policy_simulate_fixture import PolicySimulateFixtureTests
+    tests.addTests(loader.loadTestsFromTestCase(PolicySimulateFixtureTests))
+    return tests

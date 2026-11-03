@@ -68,3 +68,8 @@ The current development architecture, ITIL 4 operating model, ACME SAN→Payment
 - [Automation control plane](docs/operations/AIOPS2-AUTOMATION-CONTROL-PLANE-2026-10-31.md)
 
 These are development architecture and synthetic qualification plans; they do not claim production deployment or live connector qualification.
+
+
+## Single Debian DEV stack / canonical Portal 7777 (plan only)
+
+The only approved target is the **existing** SRV-DEB-05 DEV stack with **one** operator Portal at host TCP **7777** (not 17777). Binding, reverse proxy, TLS and firewall remain **NOT_VERIFIED**; no second portal, no new persistent Compose project or deploy-branch push. See the [read-only inventory, KEEP/MIGRATE/STOP-LATER/UNKNOWN plan](docs/operations/AIOPS2-SRV-DEB-05-SINGLE-STACK-7777-PLAN-2026-11-01.md) and [intentionally non-deployable manifest](ops/debian/compose.canonical.plan.yml). Existing Docker volumes, DBs, immutable 013/014 audit and rollback assets must be preserved. `RELEASE_STABLE=NO_GO`.
