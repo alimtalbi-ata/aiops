@@ -214,6 +214,84 @@ def acme_runtime_snapshot(poller, images):
     return out
 
 
+
+def host_playwright_receipt(state, stable_sha, portal_image, now=None):
+    """Publish only bounded, independently correlated host-browser metadata.
+
+    PNG bytes stay private on Debian until operator review. A CI screenshot,
+    stale receipt, missing provenance or anonymous HTTP cannot qualify OIDC.
+    """
+    out = {'status': 'NOT_VERIFIED'}
+    try:
+        path = state / 'portal-playwright/portal-playwright-receipt.json'
+        if path.stat().st_size > 8192:
+            return out
+        local = json.loads(path.read_text(encoding='utf-8'))
+        when = dt.datetime.fromisoformat(local['collected_at'].replace('Z', '+00:00'))
+        age = ((now or dt.datetime.now(dt.timezone.utc)) - when).total_seconds()
+        if (when.tzinfo is None or not 0 <= age <= 900
+                or local.get('schema') != 'aiops.portal-host-playwright-snapshots.v1'
+                or local.get('host', '').split('.')[0].casefold() != 'srv-deb-05'
+                or local.get('host_asserted') is not True
+                or local.get('mode') != 'ANONYMOUS_SYNTHETIC_UI_ONLY'
+                or local.get('origin') != 'http://127.0.0.1:7777'
+                or local.get('stable_checkout_sha') != stable_sha
+                or not isinstance(stable_sha, str) or not SHA.fullmatch(stable_sha)
+                or local.get('portal_image_id') != portal_image
+                or not isinstance(portal_image, str)
+                or not re.fullmatch(r'sha256:[0-9a-f]{64}', portal_image)
+                or local.get('live_effects') != 0):
+            return out
+        if local.get('status') == 'FAIL':
+            failure = local.get('failure_type')
+            return {'status': 'FAIL', 'collected_at': local['collected_at'],
+                    'failure_type': failure if isinstance(failure, str)
+                    and re.fullmatch(r'[A-Za-z]{3,50}', failure) else 'UNKNOWN',
+                    'stable_checkout_sha': stable_sha, 'portal_image_id': portal_image}
+        if (local.get('status') != 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY'
+                or local.get('real_screen_capture') != 'NOT_VERIFIED'
+                or local.get('human_glpi_acl') != 'NOT_VERIFIED'
+                or local.get('n8n_login') != 'NOT_VERIFIED'
+                or local.get('oidc_https') != 'NOT_VERIFIED'
+                or any(type(local.get(k)) is not int or local[k] != 0 for k in
+                       ('page_errors_count','console_errors_count',
+                        'failed_requests_count','blocked_requests_count'))):
+            return out
+        checks, shots = local.get('checks'), local.get('screenshots')
+        expected = {'01-overview.png','02-journey.png','03-runs.png',
+                    '04-connections.png','demo-center.png',
+                    'recorder-station.png','demo-studio.png','noc.png',
+                    '09-mobile-overview.png'}
+        if (not isinstance(checks, list) or len(checks) < 11 or len(checks) > 20
+                or any(type(x) is not dict or x.get('status') != 'PASS'
+                       or not isinstance(x.get('name'), str)
+                       or not re.fullmatch(r'[a-z0-9-]{3,50}', x['name'])
+                       for x in checks)
+                or not isinstance(shots, list) or len(shots) != 9
+                or {x.get('name') for x in shots if type(x) is dict} != expected
+                or any(type(x) is not dict
+                       or type(x.get('bytes')) is not int or x['bytes'] <= 0
+                       or x['bytes'] > 10000000
+                       or not isinstance(x.get('sha256'), str)
+                       or not re.fullmatch(r'[0-9a-f]{64}', x['sha256'])
+                       for x in shots)):
+            return out
+        return {
+            'status': 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY',
+            'collected_at': local['collected_at'],
+            'stable_checkout_sha': stable_sha, 'portal_image_id': portal_image,
+            'screenshots_sha256': [
+                {'name': x['name'], 'sha256': x['sha256']} for x in shots],
+            'checks_passed': len(checks), 'checks_total': len(checks),
+            'page_errors_count': 0, 'console_errors_count': 0,
+            'failed_requests_count': 0, 'blocked_requests_count': 0,
+            'oidc_https': 'NOT_VERIFIED', 'real_screen_capture': 'NOT_VERIFIED',
+            'human_glpi_acl': 'NOT_VERIFIED', 'n8n_login': 'NOT_VERIFIED',
+        }
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return out
+
+
 def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, env=ENV, state=None):
     report = poller.collect()
     pinned = None
@@ -490,6 +568,9 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
         and report['acme_sandbox_upgrade'].get('status') == 'PASS'
         and report['acme_sandbox_runtime'].get('status') == 'PASS'
         else 'NO_GO_NOT_RUNTIME_VERIFIED')
+    report['host_playwright'] = host_playwright_receipt(
+        state_dir, report.get('stable_checkout_sha'),
+        report.get('portal', {}).get('image_id'))
     report['release_stable'] = 'NO_GO'
     report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
                            if report['deployment_preflight']['deployment_executed']
