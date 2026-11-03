@@ -32,6 +32,8 @@ def test_evidence_references_are_canonical_and_explicitly_unattested(resolved):
 ])
 def test_evidence_and_source_corruption_fail_closed(mutation):
     snapshot, rows = fixture()
+    # The parent fixture reuses a module-level list; never mutate it across cases.
+    snapshot["source_event_ids"] = list(snapshot["source_event_ids"])
     if mutation == "foreign_evidence":
         rows[0] = (*rows[0][:6], ["EVID-SIM-FOREIGN"], rows[0][7])
     elif mutation == "boolean_evidence":
