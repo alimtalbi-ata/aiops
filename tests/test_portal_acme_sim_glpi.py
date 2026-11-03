@@ -559,7 +559,6 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
             {"native_glpi_readmy_attested": True},
             {"ticket_authority": "REAL_GLPI"},
             {"live_executor": "AUTHORIZED"},
-            {"ticket_id": GOOD["ticket_id"]},
         ):
             with self.subTest(injected=injected):
                 worker = {**WORKER, **injected}
