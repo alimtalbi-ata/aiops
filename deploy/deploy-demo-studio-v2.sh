@@ -34,9 +34,40 @@ fi
 # This is read-only and non-blocking for Core/ACME; FAIL remains NO_GO in its
 # private receipt and in the sanitized preflight report. Never upload PNGs.
 if [ "$status" -eq 0 ]; then
-  /usr/bin/timeout 180 /usr/bin/python3 "$delivery/deploy/debian-portal-playwright-snapshot.py" \
+  # P0 #396: the first real host attempt proved ModuleNotFoundError. Bootstrap
+  # Playwright 1.55.0 + its Chromium headless shell in the aiops USER state,
+  # never apt/sudo/system Python. Existing cron flock serializes this one-shot.
+  playwright_dir="$state/portal-playwright"
+  playwright_python="$playwright_dir/venv/bin/python"
+  export PLAYWRIGHT_BROWSERS_PATH="$playwright_dir/browsers"
+  host_short="$(/bin/hostname -s | /usr/bin/tr '[:upper:]' '[:lower:]')"
+  if [ "$host_short" = "srv-deb-05" ] && [ ! -L "$playwright_dir" ]; then
+    /bin/mkdir -p "$playwright_dir"
+    /bin/chmod 700 "$playwright_dir"
+    if [ ! -x "$playwright_python" ]; then
+      /usr/bin/timeout 60 /usr/bin/python3 -m venv "$playwright_dir/venv" \
+        >/dev/null 2>&1 || echo "HOST_PLAYWRIGHT_BOOTSTRAP_VENV_FAILED"
+    fi
+    if [ -x "$playwright_python" ]; then
+      if ! "$playwright_python" -c 'import playwright' >/dev/null 2>&1; then
+        /usr/bin/timeout 180 "$playwright_python" -m pip install \
+          --disable-pip-version-check --no-input --no-cache-dir playwright==1.55.0 \
+          >/dev/null 2>&1 || echo "HOST_PLAYWRIGHT_BOOTSTRAP_PIP_FAILED"
+      fi
+      /usr/bin/timeout 240 "$playwright_python" -m playwright install \
+        chromium --only-shell >/dev/null 2>&1 || \
+        echo "HOST_PLAYWRIGHT_BOOTSTRAP_CHROMIUM_FAILED"
+    fi
+  else
+    echo "HOST_PLAYWRIGHT_BOOTSTRAP_HOST_OR_PATH_REJECTED"
+  fi
+  if [ ! -x "$playwright_python" ]; then
+    playwright_python=/usr/bin/python3
+  fi
+  /usr/bin/timeout 180 "$playwright_python" \
+    "$delivery/deploy/debian-portal-playwright-snapshot.py" \
     --base-url http://127.0.0.1:7777 --assert-host SRV-DEB-05 \
-    --output-dir "$state/portal-playwright" || echo "HOST_PLAYWRIGHT_NOT_VERIFIED"
+    --output-dir "$playwright_dir" || echo "HOST_PLAYWRIGHT_NOT_VERIFIED"
 fi
 # Optional five-service ACME sandbox in-place upgrade. Default disabled.
 acme_enabled="$(/usr/bin/python3 - "$delivery/deploy/debian-acme-sandbox-release.json" <<'PY'
