@@ -45,13 +45,38 @@ SENSITIVE_NAMES = ("portal-read-token", "noc-token", "demo-token", "portal-navig
 # CLI-only bounded diagnostic state. No messages, URLs, headers or tokens.
 BROWSER_PROGRESS = {"stage": "NOT_STARTED", "page_errors_count": 0,
                     "console_errors_count": 0, "failed_requests_count": 0,
-                    "blocked_requests_count": 0}
+                    "blocked_requests_count": 0,
+                    "console_error_category": "NONE"}
 
 
 def note_failure(kind):
     if kind in BROWSER_PROGRESS and kind.endswith("_count"):
         BROWSER_PROGRESS[kind] += 1
 
+
+
+
+def classify_console_error(message) -> str:
+    """Only enum categories leave memory; never persist text, URL or headers."""
+    location = getattr(message, "location", None) or {}
+    path = urlsplit(location.get("url", "")).path if isinstance(location, dict) else ""
+    if path == "/api/portal/session":
+        return "PORTAL_SESSION"
+    if path == "/api/demo/acme-impact":
+        return "ACME_FIXTURE"
+    if path == "/favicon.ico":
+        return "FAVICON"
+    if path.endswith((".js", ".css", ".png", ".svg")):
+        return "STATIC_ASSET"
+    raw = getattr(message, "text", "")
+    if isinstance(raw, str):
+        if "401" in raw:
+            return "HTTP_401"
+        if "404" in raw:
+            return "HTTP_404"
+        if "Failed to load resource" in raw:
+            return "RESOURCE_OTHER"
+    return "OTHER"
 
 
 def verify_base_url(raw: str) -> str:
@@ -138,7 +163,8 @@ def observed_provenance(runner=subprocess.run) -> dict:
 def run(args) -> dict:
     BROWSER_PROGRESS.update(stage="VERIFY_HOST", page_errors_count=0,
                             console_errors_count=0, failed_requests_count=0,
-                            blocked_requests_count=0)
+                            blocked_requests_count=0,
+                            console_error_category="NONE")
     base = verify_base_url(args.base_url)
     hostname = platform.node()
     if args.assert_host and hostname.casefold().split(".")[0] != args.assert_host.casefold():
@@ -184,6 +210,13 @@ def run(args) -> dict:
             failed_requests = []
             blocked = []
 
+            def note_console(message):
+                if message.type == "error":
+                    console_errors.append("CONSOLE_ERROR")
+                    note_failure("console_errors_count")
+                    if BROWSER_PROGRESS["console_error_category"] == "NONE":
+                        BROWSER_PROGRESS["console_error_category"] = classify_console_error(message)
+
             def fence(route):
                 request = route.request
                 target = urlsplit(request.url)
@@ -199,8 +232,7 @@ def run(args) -> dict:
             context.route("**/*", fence)
             page.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
                                              note_failure("page_errors_count")))
-            page.on("console", lambda msg: (console_errors.append("CONSOLE_ERROR"),
-                      note_failure("console_errors_count")) if msg.type == "error" else None)
+            page.on("console", note_console)
             page.on("requestfailed", lambda _: (failed_requests.append("REQUEST_FAILED"),
                                                  note_failure("failed_requests_count")))
 
@@ -215,11 +247,12 @@ def run(args) -> dict:
                 if page.url != base + path:
                     raise AssertionError(label + " unexpected origin or route")
                 expect(page.locator(selector)).to_contain_text(expected, timeout=10000)
-                # Full navigations trigger an async synthetic fixture GET. Wait
-                # for network idle before leaving a route; otherwise our own
-                # immediate next goto aborts the GET and creates a false
-                # requestfailed/console error in the host gate.
-                page.wait_for_load_state("networkidle", timeout=10000)
+                # Wait for the actual async fixture contract on workspace
+                # routes, not global networkidle (which timed out on host
+                # #connections due unrelated background requests).
+                if label in ("01-overview", "02-journey", "03-runs", "04-connections"):
+                    expect(page.locator("#fixture-status")).to_contain_text(
+                        "Référence locale chargée", timeout=10000)
                 if label == "01-overview":
                     expect(page.locator("#fixture-status")).to_contain_text(
                         "Référence locale chargée", timeout=10000)
@@ -278,15 +311,15 @@ def run(args) -> dict:
                 BROWSER_PROGRESS["stage"] = "mobile-390px"
                 mp.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
                                              note_failure("page_errors_count")))
-                mp.on("console", lambda msg: (console_errors.append("CONSOLE_ERROR"),
-                      note_failure("console_errors_count")) if msg.type == "error" else None)
+                mp.on("console", note_console)
                 mp.on("requestfailed", lambda _: (failed_requests.append("REQUEST_FAILED"),
                                                  note_failure("failed_requests_count")))
                 response = mp.goto(base + "/", wait_until="domcontentloaded", timeout=15000)
                 if response is None or response.status != 200:
                     raise AssertionError("mobile home unavailable")
                 expect(mp.locator("#overview-heading")).to_be_visible()
-                mp.wait_for_load_state("networkidle", timeout=10000)
+                expect(mp.locator("#fixture-status")).to_contain_text(
+                    "Référence locale chargée", timeout=10000)
                 if mp.evaluate("document.documentElement.scrollWidth > window.innerWidth + 2"):
                     raise AssertionError("mobile horizontal overflow")
                 capture(mp, folder, "09-mobile-overview", receipt)
@@ -332,7 +365,8 @@ def main() -> int:
             "failure_stage": BROWSER_PROGRESS["stage"],
             **{k: BROWSER_PROGRESS[k] for k in (
                 "page_errors_count", "console_errors_count",
-                "failed_requests_count", "blocked_requests_count")},
+                "failed_requests_count", "blocked_requests_count",
+                "console_error_category")},
             "real_screen_capture": "NOT_VERIFIED", "live_effects": 0,
             **observed_provenance(),
         }
