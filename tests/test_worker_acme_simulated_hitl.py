@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
     ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
     receipt_digest_valid, validated_service_origin, decode_authority_json,
+    read_bounded_authority_response,
     validate_intent, validate_readbacks,
 )
 
@@ -777,6 +778,56 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             decode_authority_json(
                 b'{"state":"PASS","note":"\ud83d\ude80"}')["note"],
             "\U0001f680")
+
+
+    def test_39_bounded_streaming_authority_get_denies_oversized_before_buffering(self):
+        # A response.content check is too late: requests has already buffered
+        # the entire peer body. Stream and abort after the first excess chunk.
+        class FakeResponse:
+            def __init__(self, status, chunks):
+                self.status_code = status
+                self.chunks = chunks
+                self.reads = 0
+
+            def iter_content(self, chunk_size):
+                self.chunk_size = chunk_size
+                for chunk in self.chunks:
+                    self.reads += 1
+                    yield chunk
+
+        good = FakeResponse(200, [b'{"state":', b'"PASS"}'])
+        self.assertEqual(read_bounded_authority_response(good), {"state": "PASS"})
+        self.assertEqual(good.chunk_size, 8192)
+        self.assertEqual(good.reads, 2)
+        for status in (302, 401, 403, 503):
+            denied = FakeResponse(status, [b'{"state":"PASS"}'])
+            with self.subTest(status=status), self.assertRaisesRegex(
+                    SandboxDenied, "^sandbox_service_denied_or_unavailable$"):
+                read_bounded_authority_response(denied)
+            self.assertEqual(denied.reads, 0)
+
+        # The peer must not be able to force unbounded memory usage or make
+        # a late valid-looking PASS JSON qualify after exceeding the cap.
+        for chunks in (
+            [b"x" * 32769, b'{"state":"PASS"}'],
+            [b"x" * 8192] * 5 + [b'{"state":"PASS"}'],
+        ):
+            denied = FakeResponse(200, chunks)
+            with self.assertRaisesRegex(
+                    SandboxDenied, "^sandbox_service_denied_or_unavailable$"):
+                read_bounded_authority_response(denied)
+            self.assertLess(denied.reads, len(chunks))
+        malformed = FakeResponse(200, [b'{"state":"PASS"', b''])
+        with self.assertRaisesRegex(
+                SandboxDenied, "^sandbox_readback_json_unqualified$"):
+            read_bounded_authority_response(malformed)
+
+        main = (ROOT / "app/worker/main.py").read_text()
+        self.assertIn("session.trust_env = False", main)
+        self.assertIn("allow_redirects=False, stream=True", main)
+        self.assertIn("with session.get(", main)
+        self.assertIn("read_bounded_authority_response(response)", main)
+        self.assertNotIn("response.content", main)
 
 
 if __name__ == "__main__":
