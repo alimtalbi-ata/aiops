@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "5691d31b648885dc74036875d9027a2877016e73",
+  "candidate_sha": "577cbcaf8430aad7af46c2ccbb13c041b50df90e",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; portal 7777 untouched",
-  "reason": "RG-ACME-24/25 reviewed #364 exact-head source: Policy historical RESOLVED SIMULATE GET verifies immutable Core terminal SIM-GLPI digest and Worker receipt SHA256 without issuing new approval; Policy POST remains PREPARED-only; internal bearer direct-only fixed origin. Execute only after #364 merged and all exact-head required CI SUCCESS; existing guarded five-service DEV poller with PG16 native backup/scratch restore, health and rollback. E2E must be independently observed on host, no LIVE/human GLPI.",
-  "source_pr": 364
+  "reason": "RG-ACME-18/19 Core direct-only origin, post-lock Twin TTL and canonical SIM-GLPI ticket receipt bound to Worker Temporal SHA256; preserve immutable legacy RESOLVED readback. DEPENDENCY: merge #369 exact HEAD 577cbcaf8430aad7af46c2ccbb13c041b50df90e only after all required CI SUCCESS. Existing guarded five-service DEV poller with PG16 native backup/scratch restore, Compose/health/image rollback, portal :7777 untouched; separately observe new 17-stage ACME-TEST SAN E2E. No LIVE, human GLPI or IdP ALLOW.",
+  "source_pr": 369
 }
