@@ -148,7 +148,6 @@
     link.removeAttribute("href");
     link.setAttribute("aria-disabled", "true");
     link.title = "Connexion d'entreprise : origine HTTPS requise";
-    link.style.opacity = ".6";
     byId("secure-origin-hint").textContent =
       "La page est ouverte en HTTP. Une URL HTTPS configurée est nécessaire pour la connexion OIDC et pour la capture vidéo du navigateur.";
   } else {
