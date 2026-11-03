@@ -1,7 +1,7 @@
 {
   "schema": "aiops.debian-portal-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "c6df1eaec829be6b7158356db2c72a863f173d76",
+  "candidate_sha": "558c5776501642ceb0daf32e575be678ff13bc57",
   "scope": "aiops2-rebuild-portal on host TCP 7777",
-  "reason": "P0 #385/#386 reviewed #392 source-backed SAN→Payments NOC reference and actor+tenant browser fail-closed gates; targeted portal-only 7777 release, no LIVE; browser Debian/n8n/GLPI human ACL NO_GO pending independent checks"
+  "reason": "P0 #385/#386: historical Demo Studio V2 renderer + browser recorder reset merged #394 source 558c577; targeted canonical portal 7777, strict 7-route host provenance and 17/17 sandbox requalification; no LIVE, n8n login/GLPI human ACL/browser host remain NO_GO until independently verified"
 }
