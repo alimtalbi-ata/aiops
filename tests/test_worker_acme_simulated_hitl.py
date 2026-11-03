@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
     ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
-    receipt_digest_valid, validated_service_origin,
+    receipt_digest_valid, validated_service_origin, decode_authority_json,
     validate_intent, validate_readbacks,
 )
 
@@ -669,6 +669,44 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                         SandboxDenied, "^core_resolution_unqualified$"):
                     asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
                 self.assertEqual(calls, ["core", "twin", "policy"])
+
+
+    def test_35_duplicate_authority_json_denied_before_simulated_receipt(self):
+        # A 200 from an authenticated service is not sufficient authority if
+        # the JSON wire representation is ambiguous. Python's default JSON
+        # decoder silently overwrites duplicate keys, including escaped ones.
+        docs = fixtures()
+        for component in ("core", "twin", "policy"):
+            body = json.dumps(docs[component], separators=(",", ":")).encode("utf-8")
+            with self.subTest(component=component):
+                self.assertEqual(decode_authority_json(body), docs[component])
+        malformed = (
+            b'{"state":"BLOCKED","state":"PASS"}',
+            b'{"state":"BLOCKED","\\u0073tate":"PASS"}',
+            b'{"nested":{"source_event_count":8,"source_event_count":7}}',
+            b'{"state":"PASS","risk":NaN}',
+            b'{"state":"PASS","risk":Infinity}',
+            b'{"state":"PASS","risk":-Infinity}',
+            b'[]', b'null', b'', b'{"state":"PASS",}',
+            b'{"state":"PASS"}' + bytes([255]),
+            b'{"state":"PASS"}' + b" " * 32768,
+        )
+        for body in malformed:
+            with self.subTest(body=repr(body[:70])):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^sandbox_readback_json_unqualified$"):
+                    decode_authority_json(body)
+        for nonbytes in (None, '{"state":"PASS"}', bytearray(b'{}')):
+            with self.subTest(nonbytes=type(nonbytes).__name__):
+                with self.assertRaises(SandboxDenied):
+                    decode_authority_json(nonbytes)
+        main = (ROOT / "app/worker/main.py").read_text()
+        activity = main[main.index("async def acme_simulated_no_effect("):
+                        main.index('@app.get("/api/sandbox/acme/capabilities")')]
+        self.assertIn("return decode_authority_json(response.content)", activity)
+        self.assertIn("session.trust_env = False", activity)
+        self.assertIn("allow_redirects=False", activity)
+        self.assertNotIn("return response.json()", activity)
 
 
 if __name__ == "__main__":
