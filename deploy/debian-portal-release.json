@@ -1,7 +1,7 @@
 {
   "schema": "aiops.debian-portal-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "41d531655cd6bb89918c9f9055eecd064827c5f6",
+  "candidate_sha": "c6df1eaec829be6b7158356db2c72a863f173d76",
   "scope": "aiops2-rebuild-portal on host TCP 7777",
-  "reason": "P0 #385/#386 reviewed #390 same-origin Twin navigation integrated in #234; targeted portal-only upgrade with six strict host probes; browser/ACL/n8n/GLPI remain NO_GO pending independent verification"
+  "reason": "P0 #385/#386 reviewed #392 source-backed SAN→Payments NOC reference and actor+tenant browser fail-closed gates; targeted portal-only 7777 release, no LIVE; browser Debian/n8n/GLPI human ACL NO_GO pending independent checks"
 }
