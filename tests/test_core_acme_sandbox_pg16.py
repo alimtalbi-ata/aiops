@@ -287,7 +287,7 @@ class SandboxPG16(unittest.TestCase):
                  'real_glpi_writes_allowed': False}
         approval = 'SIM-APP-TEST-VALID'
         worker = dict(common, **flags, approval_id=approval,
-                      schema='aiops.worker-acme-simulated-no-effect.v1',
+                      ticket_id=state['ticket_id'], schema='aiops.worker-acme-simulated-no-effect.v1',
                       receipt_status='SIMULATED_NO_EFFECT',
                       receipt_phase='PRE_RESOLUTION',
                       core_status_at_validation='PREPARED',
@@ -648,6 +648,88 @@ class SandboxPG16(unittest.TestCase):
                 db.execute("delete from aiops.twin_nodes "
                            "where node_id='FOREIGN-LIVE-CI-TEST'")
         self.assertIn('ACME-TEST-SVC-PAYMENTS',twin.sourced_impact())
+
+    def test_20_rg_acme_18_direct_origin_and_proxy_fence(self):
+        """RG-ACME-18: no bearer egress to malformed or foreign origins."""
+        from unittest.mock import patch
+        rejected = ('https://external.example:815', 'http://aiops2-worker:9999',
+                    'http://169.254.169.254:815', 'http://127.0.0.2:815',
+                    'http://aiops2-worker:abc', 'http://aiops2-worker:99999',
+                    'http://[::1:815', 'http://user:pass@aiops2-worker:815',
+                    'http://aiops2-worker:815/unexpected',
+                    'http://aiops2-worker:815?token=unexpected')
+        for origin in rejected:
+            with self.subTest(origin=origin):
+                with patch.dict(os.environ, {'WORKER_URL': origin}):
+                    with patch.object(core.requests, 'Session') as make:
+                        with self.assertRaises(HTTPException) as denied:
+                            core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE')
+                        self.assertEqual(denied.exception.status_code, 503)
+                        make.assert_not_called()
+
+        class Response:
+            status_code = 200
+            content = b'{"sandbox":"synthetic"}'
+            def json(self):
+                return {'sandbox': 'synthetic'}
+
+        for origin in ('http://aiops2-worker:815', 'http://127.0.0.1:815'):
+            with self.subTest(allowed=origin):
+                with patch.dict(os.environ, {
+                        'WORKER_URL': origin, 'HTTP_PROXY': 'http://hostile.example:3128',
+                        'HTTPS_PROXY': 'http://hostile.example:3128',
+                        'ALL_PROXY': 'http://hostile.example:3128',
+                        'NETRC': '/tmp/hostile-netrc-do-not-read'}):
+                    with patch.object(core.requests, 'Session') as make:
+                        session = make.return_value
+                        session.get.return_value = Response()
+                        self.assertEqual(
+                            core.independent_readback('worker', 'ACME-SIM-ORIGIN-FENCE'),
+                            {'sandbox': 'synthetic'})
+                        self.assertIs(session.trust_env, False)
+                        self.assertFalse(session.get.call_args.kwargs['allow_redirects'])
+                        self.assertEqual(session.get.call_args.kwargs['timeout'], 5)
+                        self.assertEqual(
+                            session.get.call_args.kwargs['headers']['Authorization'],
+                            'Bearer ' + TOKEN)
+                        session.close.assert_called_once()
+
+    def test_21_rg_acme_19_worker_ticket_and_post_lock_expiry(self):
+        """RG-ACME-19: digest cannot rebind ticket or outlive PG16 lock wait."""
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-WORKER-TICKET-REBOUND'
+        prepared = self.post(attempt).json()
+        docs = self._qualified_no_effect(prepared)
+        docs[0]['ticket_id'] = 'SIM-GLPI-FOREIGN-TICKET'
+        docs[0]['receipt_sha256'] = core.digest({
+            k: v for k, v in docs[0].items() if k != 'receipt_sha256'})
+        with patch.object(core, 'independent_readback', side_effect=docs):
+            denied = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
+
+        attempt = 'ACME-SIM-APPROVAL-LOCK-EXPIRED'
+        prepared = self.post(attempt).json()
+        original = core.approval_fresh
+        checks = []
+        def expire_on_second(issued, expires):
+            checks.append(len(checks) + 1)
+            if len(checks) == 2:
+                raise HTTPException(503, 'sandbox_twin_approval_expired_after_lock')
+            return original(issued, expires)
+        with patch.object(core, 'independent_readback',
+                          side_effect=self._qualified_no_effect(prepared)):
+            with patch.object(core, 'approval_fresh', side_effect=expire_on_second):
+                denied = self.client.post('/api/sandbox/acme/resolve',
+                    json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied.status_code, 503)
+        self.assertEqual(checks, [1, 2])
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+        with psycopg.connect(self.url) as db:
+            self.assertEqual(db.execute(
+                'select count(*) from aiops.acme_sandbox_terminal_tickets '
+                'where attempt_id=%s', (attempt,)).fetchone()[0], 0)
 
 if __name__ == '__main__':
     unittest.main()
