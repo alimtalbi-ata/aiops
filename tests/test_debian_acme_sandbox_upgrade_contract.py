@@ -54,6 +54,15 @@ class SafeUpgrade(unittest.TestCase):
         self.assertLess(SCRIPT.index('ALREADY_APPLIED_VERIFIED'),
                         SCRIPT.index('docker build --quiet'))
 
+    def test_immutable_source_label_and_changed_image_fence(self):
+        # RG-ACME-28: unchanged Twin/Policy/Simulator code must not create a
+        # false five-image GO through tag-only Docker rebuilds.
+        self.assertIn('docker build --quiet --label "aiops.source_sha=$PIN"', SCRIPT)
+        self.assertIn('docker image inspect "$tag" --format', SCRIPT)
+        self.assertIn('docker inspect "aiops2-rebuild-$svc" --format', SCRIPT)
+        self.assertEqual(SCRIPT.count('aiops.source_sha'), 3)
+        self.assertIn('test "$old" != "$new"', SCRIPT)
+
     def test_private_key_and_manifest_gated_poller(self):
         self.assertIn('acme-twin-hmac.key',SCRIPT)
         self.assertIn('os.fchmod(f.fileno(),0o600)',SCRIPT)
