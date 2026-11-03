@@ -156,6 +156,103 @@ class PreflightContract(unittest.TestCase):
             self.assertIsNone(result['publisher_entry_count'])
             self.assertFalse(result['publisher_script_present'])
 
+
+    def test_post_upgrade_live_image_readback_detects_drift(self):
+        services = ('core', 'twin', 'policy', 'worker', 'simulator')
+        images = [
+            {'service': service, 'observed_image_id': 'sha256:' + 'a' * 64,
+             'observed_container_id': 'b' * 64}
+            for service in services
+        ]
+        class Host:
+            def __init__(self):
+                self.drift = False
+            def inspect(self, name):
+                return {
+                    'inspection': 'READ_ONLY', 'compose_project': 'aiops2-rebuild',
+                    'state': 'running', 'health': 'healthy',
+                    'image_id': 'sha256:' + ('c' if self.drift and name.endswith('worker')
+                                            else 'a') * 64,
+                    'container_id': 'b' * 64,
+                    'environment': 'SYNTHETIC_SECRET_NEVER_PUBLISH',
+                }
+        host = Host()
+        verified = mod.acme_runtime_snapshot(host, images)
+        self.assertEqual(verified['status'], 'PASS')
+        self.assertEqual(len(verified['services']), 5)
+        self.assertNotIn('SYNTHETIC_SECRET_NEVER_PUBLISH', json.dumps(verified))
+        host.drift = True
+        drift = mod.acme_runtime_snapshot(host, images)
+        self.assertEqual(drift['status'], 'DRIFT_OR_UNKNOWN')
+        self.assertFalse(next(x for x in drift['services']
+                              if x['service'] == 'worker')['matches_upgrade_receipt'])
+        self.assertEqual(mod.acme_runtime_snapshot(object(), images)['status'],
+                         'NOT_VERIFIED')
+        self.assertEqual(mod.acme_runtime_snapshot(host, images[:-1])['status'],
+                         'NOT_VERIFIED')
+
+    def test_upgrade_pass_requires_native_pg16_scratch_restore_proof(self):
+        services = ('core', 'twin', 'policy', 'worker', 'simulator')
+        images = [
+            {'service': service, 'previous_image_id': 'sha256:' + 'c' * 64,
+             'observed_image_id': 'sha256:' + 'a' * 64,
+             'observed_container_id': 'b' * 64, 'observed_health': 'healthy',
+             'image_changed': True, 'http_status': 200, 'json_status': 'ok'}
+            for service in services
+        ]
+        class Host(FakePoller):
+            def inspect(self, name):
+                return {'inspection': 'READ_ONLY',
+                        'compose_project': 'aiops2-rebuild',
+                        'state': 'running', 'health': 'healthy',
+                        'image_id': 'sha256:' + 'a' * 64,
+                        'container_id': 'b' * 64}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / 'deploy').mkdir()
+            (root / 'deploy/debian-acme-sandbox-release.json').write_text(
+                json.dumps({'enabled': True, 'candidate_sha': 'a' * 40}))
+            receipt = {
+                'schema': 'aiops.debian-acme-sandbox-upgrade.v1',
+                'collected_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'source_sha': 'a' * 40, 'status': 'PASS', 'exit_code': 0,
+                'docker_container_mutations': 1, 'docker_image_builds': 5,
+                'portal_7777_untouched': True, 'glpi_write': False,
+                'live_effects_allowed': False, 'rollback_status': 'NOT_REQUIRED',
+                'pg16_backup_sha256': 'd' * 64,
+                'portal_http': {'http_status': 200, 'json_status': 'ok',
+                                'external_port': 7777}, 'images': images,
+            }
+            path = root / 'acme-sandbox-upgrade.json'
+            host = Host()
+            host.REPORT_GIT = root
+            original_root = mod.ROOT
+            mod.ROOT = root
+            try:
+                def report():
+                    return mod.make_receipt(
+                        host, state=root, dev=root, env=root / 'missing',
+                        manifest_path=root / 'missing',
+                        run=lambda argv, **kwargs: subprocess.CompletedProcess(
+                            argv, 1, stdout='', stderr=''))
+                path.write_text(json.dumps(receipt))
+                missing = report()
+                self.assertEqual(missing['acme_sandbox_upgrade']['status'],
+                                 'NOT_VERIFIED')
+                self.assertEqual(missing['acme_sandbox_runtime']['status'],
+                                 'NOT_VERIFIED')
+                receipt['pg16_scratch_restore'] = 'PASS'
+                path.write_text(json.dumps(receipt))
+                good = report()
+                self.assertEqual(good['acme_sandbox_upgrade']['status'], 'PASS')
+                self.assertEqual(good['acme_sandbox_upgrade']['pg16_scratch_restore'],
+                                 'PASS')
+                self.assertEqual(good['acme_sandbox_runtime']['status'], 'PASS')
+                self.assertEqual(good['acme_sandbox_verdict'],
+                                 'NO_GO_NOT_RUNTIME_VERIFIED')
+            finally:
+                mod.ROOT = original_root
+
     def test_entrypoint_requires_pinned_deploy_and_receipt(self):
         entry = (ROOT / 'deploy/deploy-demo-studio-v2.sh').read_text()
         deploy = (ROOT / 'deploy/debian-portal-deploy.sh').read_text()
