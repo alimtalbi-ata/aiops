@@ -1,5 +1,6 @@
 """RG-UX-07: strict route+image gate; no simulated browser or human ALLOW."""
 import importlib.util
+import json
 import io
 from pathlib import Path
 import subprocess
@@ -20,14 +21,26 @@ class Response:
             'Content-Type':'text/html' if case[2]=='text/html' else 'application/javascript',
             'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
         values=case[3][:-1] if tamper==case[0] else case[3]
-        self.body=io.BytesIO(' '.join(values).encode())
+        if case[0]=='twin_read_model':
+            model={'schema':'aiops.synthetic-impact-read-model.v1',
+                'entrypoint':'/demo-center','provenance':'SIMULATED_TARGET',
+                'run_id_provenance':'DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN',
+                'ticket_id':None,'runtime_evidence_present':False,
+                'runtime_attested':False,'live_remediation_authorized':False,
+                'production_qualified':False}
+            if tamper=='twin_read_model':
+                model['live_remediation_authorized']=True
+            self.headers['Content-Type']='application/json'
+            self.body=io.BytesIO(json.dumps(model).encode())
+        else:
+            self.body=io.BytesIO(' '.join(values).encode())
     def __enter__(self):return self
     def __exit__(self,*args):self.body.close()
     def read(self,n):return self.body.read(n)
 class Opener:
     def __init__(self,tamper=None):self.tamper=tamper
     def open(self,req,timeout=5):
-        return Response(next(c for c in ux.CASES if req.full_url.endswith(c[1])),self.tamper)
+        return Response(next(c for c in ux.CASES if req.full_url=='http://127.0.0.1:7777'+c[1]),self.tamper)
 def runner(args,**kw):
     if args[:2]==['docker','inspect']:
         out=IMAGE+'|'+'c'*64+'|healthy|aiops2-portal:pinned-'+PIN[:12]+'\n'
@@ -36,14 +49,26 @@ def runner(args,**kw):
 class UXGateTests(unittest.TestCase):
     def test_rg_ux_07_positive_readonly_not_browser(self):
         r=ux.make_receipt(PIN,Opener(),runner)
-        self.assertEqual((r['passed'],r['total']),(4,4))
+        self.assertEqual((r['passed'],r['total']),(6,6))
         self.assertEqual(r['verdict'],'PASS_READONLY_ROUTE_ONLY')
         self.assertEqual(r['browser_ux'],'NOT_VERIFIED')
         self.assertEqual(r['glpi_human_acl'],'NOT_VERIFIED')
     def test_rg_ux_07_missing_route_rejected(self):
         r=ux.make_receipt(PIN,Opener('demo_center'),runner)
-        self.assertEqual(r['passed'],3)
+        self.assertEqual(r['passed'],5)
         self.assertEqual(r['verdict'],'FAIL')
+    def test_rg_ux_10_twin_model_cannot_claim_live_authority(self):
+        r=ux.make_receipt(PIN,Opener('twin_read_model'),runner)
+        self.assertEqual(r['passed'],5)
+        self.assertEqual(r['verdict'],'FAIL')
+        self.assertEqual(next(c for c in r['checks'] if c['name']=='twin_read_model')['reason'],
+                         'TWIN_MODEL_CONTRACT_MISMATCH')
+
+    def test_rg_ux_10_twin_nav_missing_link_rejected(self):
+        r=ux.make_receipt(PIN,Opener('twin_navigation'),runner)
+        self.assertEqual(r['passed'],5)
+        self.assertEqual(r['verdict'],'FAIL')
+
     def test_rg_ux_07_missing_security_header_rejected(self):
         self.assertEqual(ux.make_receipt(PIN,Opener('headers'),runner)['verdict'],'FAIL')
     def test_rg_ux_07_image_drift_and_invalid_pin_rejected(self):
@@ -59,7 +84,7 @@ class UXGateTests(unittest.TestCase):
         portal=json.loads((root/'deploy/debian-portal-release.json').read_text())
         acme=json.loads((root/'deploy/debian-acme-sandbox-release.json').read_text())
         self.assertIs(portal['enabled'],True)
-        self.assertEqual(portal['candidate_sha'],'3c87aa54fac9d370aab42afae8639e6c7d887baa')
+        self.assertEqual(portal['candidate_sha'],'41d531655cd6bb89918c9f9055eecd064827c5f6')
         self.assertIs(acme['enabled'],False)
         self.assertEqual(acme['candidate_sha'],'e9a21e3e13f9c13bff461325426f12f171285b22')
 

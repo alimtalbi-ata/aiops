@@ -18,10 +18,29 @@ CASES = (
  ('noc_operator','/noc','text/html',('UNKNOWN','tenant','/assets/noc-operator.js','NOC opérateur')),
  ('recorder_asset','/assets/demo-center-recorder.js','javascript',('getDisplayMedia','MediaRecorder','isSecureContext','CONSENT_WITHDRAWN')),
  ('noc_asset','/assets/noc-operator.js','javascript',('tenant_acl_qualified','actor_identity_server_derived','UNKNOWN')),
+ ('twin_navigation','/demo/acme-impact','text/html',('SIMULATION LOCALE UNIQUEMENT','aria-label="Parcours de démonstration"','href="/demo-center"','href="/noc"')),
+ ('twin_read_model','/api/demo/acme-impact','application/json',()),
 )
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+def valid_synthetic_twin_model(raw):
+    """RG-UX-10: same-origin synthetic fixture only, never runtime or LIVE authority."""
+    try:
+        model=json.loads(raw)
+    except (ValueError, UnicodeError, TypeError):
+        return False
+    return (type(model) is dict
+        and model.get('schema')=='aiops.synthetic-impact-read-model.v1'
+        and model.get('entrypoint')=='/demo-center'
+        and model.get('provenance')=='SIMULATED_TARGET'
+        and model.get('run_id_provenance')=='DERIVED_FROM_FIXTURE_SHA256_NOT_RUNTIME_RUN'
+        and model.get('ticket_id') is None
+        and model.get('runtime_evidence_present') is False
+        and model.get('runtime_attested') is False
+        and model.get('live_remediation_authorized') is False
+        and model.get('production_qualified') is False)
 
 def qualify_route(case, opener):
     name,path,kind,markers=case
@@ -40,6 +59,7 @@ def qualify_route(case, opener):
         elif 'no-store' not in headers.get('Cache-Control','').lower() or headers.get('X-Content-Type-Options','').lower()!='nosniff': reason='SECURITY_HEADERS_MISSING'
         elif kind not in headers.get('Content-Type','').lower(): reason='CONTENT_TYPE_MISMATCH'
         elif kind=='text/html' and ("default-src 'none'" not in headers.get('Content-Security-Policy','') or "frame-ancestors 'none'" not in headers.get('Content-Security-Policy','')): reason='HTML_CSP_MISSING'
+        elif kind=='application/json' and not valid_synthetic_twin_model(raw): reason='TWIN_MODEL_CONTRACT_MISMATCH'
         elif not all(m in raw.decode('utf-8') for m in markers): reason='ROUTE_MARKERS_MISSING'
         else:
             result.update(status='PASS',reason='READONLY_ROUTE_PRESENT_NOT_UX_ATTESTED')
