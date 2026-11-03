@@ -408,5 +408,41 @@ class DemoCenter386Chromium(unittest.TestCase):
                              full_page=True)
 
 
+
+    def test_09_modern_tokenless_operator_home_navigation(self):
+        """Real Chromium on disposable loopback; not Debian authenticated UX."""
+        self.page.goto(self.base + "/")
+        expect(self.page.locator("#overview-heading")).to_contain_text(
+            "Comprendre l'incident")
+        expect(self.page.locator("#fixture-status")).to_contain_text(
+            "Référence locale chargée")
+        self.assertGreaterEqual(self.page.locator("#impact-path li").count(), 2)
+        self.assertEqual(self.page.locator('input[type="password"]').count(), 0)
+        self.assertEqual(self.page.locator("#ci-count").inner_text(), "6")
+
+        self.page.locator('.side-nav a[data-view="journey"]').click()
+        expect(self.page.locator("#journey")).to_be_visible()
+        expect(self.page.locator("#scenario-select option")).to_have_count(8)
+        self.page.locator("#scenario-select").select_option("storm")
+        expect(self.page.locator("#scenario-description")).to_contain_text(
+            "Aucune alarme n'est supprimée")
+
+        self.page.locator('.side-nav a[data-view="runs"]').click()
+        expect(self.page.locator("#runs")).to_be_visible()
+        expect(self.page.locator("#runs")).to_contain_text(
+            "Liste d'incidents réels non disponible")
+        self.page.locator('.side-nav a[data-view="connections"]').click()
+        expect(self.page.locator("#session-status")).to_contain_text(
+            "Aucune session d'entreprise valide")
+        self.assertIsNone(self.page.locator("#sso-link").get_attribute("href"))
+        self.assertEqual(self.page.locator('input[type="password"]').count(), 0)
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+        target = Path(os.environ.get("AIOPS_E2E_ARTIFACT_DIR", self.tmp.name))
+        target.mkdir(parents=True, exist_ok=True)
+        self.page.locator('.side-nav a[data-view="overview"]').click()
+        self.page.screenshot(path=str(target / "portal-modern-workspace-ci-synthetic.png"),
+                             full_page=True)
+
+
 if __name__ == "__main__":
     unittest.main()
