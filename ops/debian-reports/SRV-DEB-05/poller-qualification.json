@@ -44,7 +44,7 @@
     "dev_checkout_sha": "5b3b9f327f517e8f5999766389abf69c8a035cf8",
     "docker_container_mutations": 1,
     "docker_image_builds": 5,
-    "historical_receipt": false,
+    "historical_receipt": true,
     "images": [
       {
         "http_status": 200,
@@ -112,15 +112,15 @@
   "acme_sandbox_verdict": "GO_SIMULATED_SANDBOX_ONLY",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-A5CB8B704493423C",
-    "collected_at": "2026-11-03T07:25:44.005147+00:00",
+    "attempt_id": "ACME-SIM-ED5216D1F1D94D3B",
+    "collected_at": "2026-11-03T08:20:08.498085+00:00",
     "human_approval_claimed": false,
     "ids": {
-      "approval_id": "SIM-APP-85EF4BD947C6276386C38E23",
-      "incident_id": "INC-SIM-85EF4BD947C6276386C38E23",
-      "proposal_id": "PROP-SIM-85EF4BD947C6276386C38E23",
-      "run_id": "RUN-SIM-85EF4BD947C6276386C38E23",
-      "ticket_id": "SIM-GLPI-85EF4BD947C6276386C38E23"
+      "approval_id": "SIM-APP-0E1E73D26AC4B341B35DDCFE",
+      "incident_id": "INC-SIM-0E1E73D26AC4B341B35DDCFE",
+      "proposal_id": "PROP-SIM-0E1E73D26AC4B341B35DDCFE",
+      "run_id": "RUN-SIM-0E1E73D26AC4B341B35DDCFE",
+      "ticket_id": "SIM-GLPI-0E1E73D26AC4B341B35DDCFE"
     },
     "live_effects_allowed": false,
     "mode": "SIMULATION",
@@ -171,7 +171,7 @@
   "canonical_compose_receipt": {
     "status": "NOT_VERIFIED"
   },
-  "collected_at": "2026-11-03T07:25:44.320178+00:00",
+  "collected_at": "2026-11-03T08:20:08.791618+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -187,7 +187,7 @@
     "portal_env_port_7777": true,
     "portal_host_port_7777": true,
     "portal_service_present": true,
-    "reason": "BACKUP_ROLLBACK_AND_E2E_GATES_MISSING",
+    "reason": "REPORTER_PUBLISHER_STALE_OR_MISSING",
     "release_manifest_disabled": true,
     "schema": "aiops.debian-portal-preflight.v1",
     "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
@@ -230,7 +230,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261103T072503Z",
+    "attempt_id": "ACME-READONLY-20261103T082002Z",
     "checks": [
       {
         "http_status": 200,
@@ -296,7 +296,7 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-03T07:25:03.238308+00:00",
+    "collected_at": "2026-11-03T08:20:03.044948+00:00",
     "glpi_ticket_id": null,
     "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "incident_id": null,
@@ -317,23 +317,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 163,
-    "collected_at": "2026-11-03T07:23:01.703704+00:00",
-    "fresh": true
+    "age_seconds": 3307,
+    "collected_at": "2026-11-03T07:25:01.966949+00:00",
+    "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 42,
-      "collected_at": "2026-11-03T07:25:01.966949+00:00",
+      "age_seconds": 7,
+      "collected_at": "2026-11-03T08:20:01.731351+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 73419,
+    "publish_log_age_seconds": 76684,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "5fef0504d12866f05af9ec313e9e4a5ef0f9cf46",
+  "stable_checkout_sha": "b21107a022bbd7e8a798cd164ce176e7dad317b5",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
