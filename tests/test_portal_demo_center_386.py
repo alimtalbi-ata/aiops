@@ -86,7 +86,7 @@ class DemoCenter386Tests(unittest.TestCase):
     def test_rg_ux_13_recorder_station_is_same_origin_and_no_backend_io(self):
         # A recorder inside the navigating tab dies on pagehide. The existing
         # recorder can instead stay alive in a second tab; no new recorder API.
-        with patch("shared.http.get_json", side_effect=AssertionError("upstream read")), \\
+        with patch("shared.http.get_json", side_effect=AssertionError("upstream read")), \
              patch("shared.http.post_json", side_effect=AssertionError("upstream write")):
             home = self.client.get("/demo-center")
             station = self.client.get("/demo-center/recorder")
