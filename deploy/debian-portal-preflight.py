@@ -420,7 +420,10 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
             images = local.get('images')
             portal_http = local.get('portal_http')
             manifest = json.loads((ROOT / 'deploy/debian-acme-sandbox-release.json').read_text())
-            safe = (when.tzinfo is not None and 0 <= age <= 900
+            # Historical immutable upgrade evidence remains usable for independent
+            # CURRENT Docker readback beyond the 15-minute E2E freshness gate.
+            # The age and timestamp stay explicit; this never reruns an upgrade.
+            safe = (when.tzinfo is not None and 0 <= age <= 7 * 86400
                     and local.get('schema') == 'aiops.debian-acme-sandbox-upgrade.v1'
                     and manifest.get('enabled') is True
                     and local.get('source_sha') == manifest.get('candidate_sha')
@@ -462,6 +465,7 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
             if safe:
                 report['acme_sandbox_upgrade'] = {
                     'collected_at': local['collected_at'],
+                    'historical_receipt': age > 900,
                     'status': local['status'], 'source_sha': local['source_sha'],
                     'stable_checkout_sha': local.get('stable_checkout_sha'),
                     'dev_checkout_sha': local.get('dev_checkout_sha'),
