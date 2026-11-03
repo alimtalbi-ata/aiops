@@ -58,7 +58,10 @@ class ReadOnlyGraph:
         assert sql.strip().lower().startswith('select '), 'no writes allowed'
         assert self.sql[(len(self.sql) - 1) // 3 * 3] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
         if 'twin_nodes' in sql:
-            return Cursor(self.nodes)
+            # Model the actual SQL predicate: unrelated IDs in the sandbox
+            # site must be visible to the exact-nine-node verifier.
+            return Cursor([row for row in self.nodes if row[0].startswith('ACME-TEST-')
+                           or ("site = 'ACME-TEST-SIMULATION'" in sql and row[2] == SAN.SITE)])
         assert 'twin_edges' in sql
         return Cursor(self.edges)
 
@@ -142,7 +145,7 @@ def test_replication_lag_only_recovery_risk_not_payments_outage(graph):
 
 
 @pytest.mark.parametrize('mutation', [
-    'node_missing', 'node_extra', 'node_site_live', 'node_state_live',
+    'node_missing', 'node_extra', 'node_foreign_same_site', 'node_site_live', 'node_state_live',
     'node_wrong_type', 'node_low_confidence', 'node_wrong_criticality', 'edge_missing',
     'edge_extra', 'edge_foreign_inbound', 'edge_wrong_relation',
     'edge_swapped_fabrics', 'edge_low_confidence', 'edge_bad_redundancy',
@@ -153,6 +156,8 @@ def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
         graph.nodes.pop()
     elif mutation == 'node_extra':
         graph.nodes.append(('ACME-TEST-FOREIGN', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 5, 1.0))
+    elif mutation == 'node_foreign_same_site':
+        graph.nodes.append(('UNPREFIXED-SAN-NODE', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 5, 1.0))
     elif mutation.startswith('node_'):
         row = list(graph.nodes[0])
         row[{'node_site_live': 2, 'node_state_live': 3,
@@ -194,6 +199,7 @@ def test_snapshot_isolation_precedes_node_and_edge_reads(graph):
     assert len(graph.sql) == 3
     assert graph.sql[0] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
     assert 'twin_nodes' in graph.sql[1]
+    assert "site = 'ACME-TEST-SIMULATION'" in graph.sql[1]
     assert 'twin_edges' in graph.sql[2]
 
 
