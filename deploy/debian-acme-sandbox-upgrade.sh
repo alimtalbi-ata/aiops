@@ -253,8 +253,12 @@ compose -f "$TMP/upgrade.yml" config --quiet >/dev/null 2>&1
 # Build immutable images before touching DB/containers.
 for svc in $services; do
   tag="$(awk -F '\t' -v s="$svc" '$1==s{print $4}' "$TMP/images.tsv")"
-  docker build --quiet -f "$TMP/app/$svc/Dockerfile" -t "$tag" "$TMP/app" >/dev/null
-  docker image inspect "$tag" >/dev/null
+  # Every image carries immutable source provenance, including unchanged
+  # components in the five-service guarded upgrade. This ensures all five
+  # images actually change on a new reviewed PIN (no meaningless tag-only GO).
+  docker build --quiet --label "aiops.source_sha=$PIN" \\
+    -f "$TMP/app/$svc/Dockerfile" -t "$tag" "$TMP/app" >/dev/null
+  test "$(docker image inspect "$tag" --format '{{index .Config.Labels "aiops.source_sha"}}')" = "$PIN"
   image_builds=$((image_builds+1))
 done
 
@@ -336,6 +340,7 @@ for svc in $services; do
   old="$(awk -F '\t' -v s="$svc" '$1==s{print $2}' "$TMP/images.tsv")"
   new="$(docker inspect "aiops2-rebuild-$svc" --format '{{.Image}}')"
   test "$old" != "$new"
+  test "$(docker inspect "aiops2-rebuild-$svc" --format '{{index .Config.Labels "aiops.source_sha"}}')" = "$PIN"
 done
 success=1
 echo 'ACME_UPGRADE=PASS_IMAGES_RECREATED_E2E_SEPARATE'
