@@ -1,0 +1,145 @@
+"use strict";
+// Local-only screen capture. No network calls, cookies, token storage or upload.
+(() => {
+  const consent = document.getElementById("recording-consent");
+  const start = document.getElementById("record-start");
+  const stop = document.getElementById("record-stop");
+  const clear = document.getElementById("record-clear");
+  const status = document.getElementById("recording-status");
+  const preview = document.getElementById("record-preview");
+  const download = document.getElementById("record-download");
+  const scenario = document.getElementById("san-scenario");
+  const scenarioStatus = document.getElementById("scenario-status");
+  let stream = null;
+  let recorder = null;
+  let chunks = [];
+  let objectUrl = null;
+
+  function setStatus(message) { status.textContent = message; }
+  function supported() {
+    return window.isSecureContext === true &&
+      !!navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getDisplayMedia === "function" &&
+      typeof window.MediaRecorder === "function";
+  }
+  function refresh() {
+    start.disabled = !supported() || !consent.checked || recorder !== null;
+    stop.disabled = recorder === null || recorder.state !== "recording";
+  }
+  function releaseStream() {
+    if (stream) {
+      for (const track of stream.getTracks()) { track.stop(); }
+      stream = null;
+    }
+  }
+  function discardVideo() {
+    if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+    preview.removeAttribute("src");
+    preview.load();
+    download.hidden = true;
+    download.removeAttribute("href");
+    download.removeAttribute("download");
+    chunks = [];
+  }
+  function selectMime() {
+    for (const candidate of ["video/webm;codecs=vp9", "video/webm", "video/mp4"]) {
+      if (MediaRecorder.isTypeSupported(candidate)) { return candidate; }
+    }
+    return "";
+  }
+  scenario.addEventListener("change", () => {
+    scenarioStatus.textContent =
+      "CATALOG_ONLY — " + scenario.options[scenario.selectedIndex].text +
+      " : non exécuté. Analyst/Critic NOT_ATTESTED ; impact Payments/ERP UNKNOWN.";
+  });
+  consent.addEventListener("change", refresh);
+  start.addEventListener("click", async () => {
+    if (!supported() || !consent.checked || recorder) {
+      setStatus("BLOCKED — consentement, HTTPS/localhost et API navigateur requis.");
+      return;
+    }
+    discardVideo();
+    setStatus("PERMISSION_PENDING — choisissez explicitement un onglet de démonstration.");
+    start.disabled = true;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "browser" }, audio: false
+      });
+      const mimeType = selectMime();
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const active = recorder;
+      chunks = [];
+      active.addEventListener("dataavailable", (event) => {
+        if (event.data && event.data.size > 0) { chunks.push(event.data); }
+      });
+      active.addEventListener("error", () => {
+        setStatus("ERROR — capture interrompue, aucune preuve attestée.");
+        releaseStream();
+      });
+      active.addEventListener("stop", () => {
+        releaseStream();
+        recorder = null;
+        if (chunks.length === 0) {
+          setStatus("EMPTY — aucune vidéo capturée.");
+          refresh();
+          return;
+        }
+        const blob = new Blob(chunks, { type: active.mimeType || "video/webm" });
+        objectUrl = URL.createObjectURL(blob);
+        preview.src = objectUrl;
+        download.href = objectUrl;
+        download.download = "acme-demo-local." +
+          (blob.type.includes("mp4") ? "mp4" : "webm");
+        download.hidden = false;
+        setStatus("LOCAL_ONLY — capture arrêtée. Lecture et export manuel disponibles ; NON ATTESTÉ.");
+        refresh();
+      }, { once: true });
+      for (const track of stream.getVideoTracks()) {
+        track.addEventListener("ended", () => {
+          if (recorder === active && active.state === "recording") { active.stop(); }
+        }, { once: true });
+      }
+      active.start(1000);
+      setStatus("RECORDING_LOCAL — capture en cours, aucune donnée transmise au serveur.");
+      refresh();
+    } catch (error) {
+      releaseStream();
+      recorder = null;
+      chunks = [];
+      setStatus("DENIED_OR_UNAVAILABLE — partage refusé, annulé ou non supporté. Aucune vidéo.");
+      refresh();
+    }
+  });
+  stop.addEventListener("click", () => {
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      stop.disabled = true;
+      setStatus("STOPPING — finalisation locale en cours.");
+    }
+  });
+  clear.addEventListener("click", () => {
+    if (recorder && recorder.state === "recording") { recorder.stop(); }
+    // A pending stop event must not re-expose the recording after an explicit clear.
+    const pending = recorder;
+    if (pending) {
+      pending.addEventListener("stop", () => {
+        discardVideo();
+        setStatus("CLEARED — aucune vidéo conservée.");
+      }, { once: true });
+    }
+    releaseStream();
+    discardVideo();
+    setStatus("CLEARED — aucune vidéo conservée.");
+    refresh();
+  });
+  window.addEventListener("pagehide", () => {
+    releaseStream();
+    if (objectUrl) { URL.revokeObjectURL(objectUrl); }
+  }, { once: true });
+  if (!window.isSecureContext) {
+    setStatus("BLOCKED_INSECURE_ORIGIN — HTTPS ou localhost requis pour enregistrer.");
+  } else if (!supported()) {
+    setStatus("UNSUPPORTED — capture d'écran non disponible dans ce navigateur.");
+  }
+  refresh();
+})();
