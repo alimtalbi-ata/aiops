@@ -18,7 +18,7 @@ class Response:
         self.status=200
         self.headers={'Cache-Control':'public' if tamper=='headers' else 'no-store',
             'X-Content-Type-Options':'nosniff',
-            'Content-Type':'text/html' if case[2]=='text/html' else 'application/javascript',
+            'Content-Type':case[2] if case[2] != 'javascript' else 'application/javascript',
             'Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"}
         values=case[3][:-1] if tamper==case[0] else case[3]
         if case[0]=='twin_read_model':
@@ -49,27 +49,53 @@ def runner(args,**kw):
 class UXGateTests(unittest.TestCase):
     def test_rg_ux_07_positive_readonly_not_browser(self):
         r=ux.make_receipt(PIN,Opener(),runner)
-        self.assertEqual((r['passed'],r['total']),(8,8))
+        self.assertEqual((r['passed'],r['total']),(12,12))
         self.assertEqual(r['verdict'],'PASS_READONLY_ROUTE_ONLY')
         self.assertEqual(r['browser_ux'],'NOT_VERIFIED')
         self.assertEqual(r['glpi_human_acl'],'NOT_VERIFIED')
     def test_rg_ux_07_missing_route_rejected(self):
         r=ux.make_receipt(PIN,Opener('demo_center'),runner)
-        self.assertEqual(r['passed'],7)
+        self.assertEqual(r['passed'],11)
         self.assertEqual(r['verdict'],'FAIL')
+    def test_rg_ux_14_modern_home_no_bearer_entrypoint(self):
+        home=next(c for c in ux.CASES if c[0]=='modern_home')
+        self.assertEqual(home[1],'/')
+        self.assertIn('operator-workspace.js',home[3])
+        self.assertIn('data-panel="runs"',home[3])
+        js=next(c for c in ux.CASES if c[0]=='modern_js')
+        self.assertIn('/api/demo/acme-impact',js[3])
+        self.assertIn('/api/portal/session',js[3])
+        self.assertEqual(ux.make_receipt(PIN,Opener('modern_home'),runner)['verdict'],'FAIL')
+
+    def test_rg_ux_14_readonly_host_gate_rejects_old_password_form(self):
+        class LegacyResponse(Response):
+            def __init__(self,case):
+                super().__init__(case)
+                if case[0]=='modern_home':
+                    self.body=io.BytesIO(b'id="portal-read-token" type="password" '+
+                                         ' '.join(case[3]).encode())
+        class LegacyOpener:
+            def open(self,req,timeout=5):
+                return LegacyResponse(next(case for case in ux.CASES
+                    if req.full_url=='http://127.0.0.1:7777'+case[1]))
+        receipt=ux.make_receipt(PIN,LegacyOpener(),runner)
+        self.assertEqual(receipt['verdict'],'FAIL')
+        self.assertEqual(next(c for c in receipt['checks'] if c['name']=='modern_home')['reason'],
+                         'LEGACY_BEARER_PROMPT_PRESENT')
+
     def test_rg_ux_13_recorder_station_required_and_fail_closed(self):
         station=next(c for c in ux.CASES if c[0]=='recorder_station')
         self.assertEqual(station[1],'/demo-center/recorder')
         self.assertIn('LOCAL_ONLY / NO LIVE EFFECT',station[3])
         receipt=ux.make_receipt(PIN,Opener('recorder_station'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual((receipt['passed'],receipt['total']),(11,12))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_13_demo_center_links_to_station(self):
         center=next(c for c in ux.CASES if c[0]=='demo_center')
         self.assertIn('href="/demo-center/recorder"',center[3])
         receipt=ux.make_receipt(PIN,Opener('demo_center'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual((receipt['passed'],receipt['total']),(11,12))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_12_historical_studio_route_required(self):
@@ -78,14 +104,14 @@ class UXGateTests(unittest.TestCase):
         self.assertIn('SYNTHETIC_REFERENCE_ONLY',case[3])
         self.assertIn('UNKNOWN',case[3])
         receipt=ux.make_receipt(PIN,Opener('historical_demo_studio'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual((receipt['passed'],receipt['total']),(11,12))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_12_demo_center_must_link_historical_studio(self):
         case=next(c for c in ux.CASES if c[0]=='demo_center')
         self.assertIn('href="/demo-studio"',case[3])
         receipt=ux.make_receipt(PIN,Opener('demo_center'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual((receipt['passed'],receipt['total']),(11,12))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_11_noc_synthetic_provenance_required(self):
@@ -94,19 +120,19 @@ class UXGateTests(unittest.TestCase):
         self.assertIn('LOCAL_SYNTHETIC_FIXTURE',case[3])
         self.assertIn('PG16 ACME-TEST migration 019',case[3])
         receipt=ux.make_receipt(PIN,Opener('noc_operator'),runner)
-        self.assertEqual((receipt['passed'],receipt['total']),(7,8))
+        self.assertEqual((receipt['passed'],receipt['total']),(11,12))
         self.assertEqual(receipt['verdict'],'FAIL')
 
     def test_rg_ux_10_twin_model_cannot_claim_live_authority(self):
         r=ux.make_receipt(PIN,Opener('twin_read_model'),runner)
-        self.assertEqual(r['passed'],7)
+        self.assertEqual(r['passed'],11)
         self.assertEqual(r['verdict'],'FAIL')
         self.assertEqual(next(c for c in r['checks'] if c['name']=='twin_read_model')['reason'],
                          'TWIN_MODEL_CONTRACT_MISMATCH')
 
     def test_rg_ux_10_twin_nav_missing_link_rejected(self):
         r=ux.make_receipt(PIN,Opener('twin_navigation'),runner)
-        self.assertEqual(r['passed'],7)
+        self.assertEqual(r['passed'],11)
         self.assertEqual(r['verdict'],'FAIL')
 
     def test_rg_ux_07_missing_security_header_rejected(self):
