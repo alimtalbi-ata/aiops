@@ -185,7 +185,8 @@ def check_core(core, x):
             or core.get('incident_status') != 'PREPARED'
             or core.get('run_status') != 'PREPARED'
             or core.get('source') != 'SYNTHETIC_SIMULATOR'
-            or core.get('source_event_count') != 7
+            or type(core.get('source_event_count')) is not int
+            or core['source_event_count'] != 7
             or core.get('source_hashes_qualified') is not True
             or type(event_ids) is not list or len(event_ids) != 7
             or event_ids != canonical_source_ids(x.attempt_id)
