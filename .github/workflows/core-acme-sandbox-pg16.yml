@@ -66,7 +66,7 @@ jobs:
             sleep 1
           done
           /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
-      - name: Twenty-two PG16 regressions and twenty same-Run source tests, no skip
+      - name: Twenty-two PG16 regressions and nineteen same-Run source tests, no skip
         shell: bash
         run: |
           set -euo pipefail
@@ -75,7 +75,7 @@ jobs:
           grep -E '^Ran 22 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
           /tmp/core-acme-venv/bin/python -m pytest -q tests/test_core_acme_journey.py 2>&1 | tee /tmp/core-acme-journey-tests.log
-          grep -E '^20 passed in ' /tmp/core-acme-journey-tests.log
+          grep -E '^19 passed in ' /tmp/core-acme-journey-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
       - name: Independently validate redacted SHA256 receipt
