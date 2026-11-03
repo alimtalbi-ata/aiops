@@ -239,6 +239,11 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or twin.get("impact_root") != "ACME-SAN-FABRIC-A"
             or type(twin.get("impacted_cis")) is not list
             or "ACME-SVC-PAYMENTS" not in twin["impacted_cis"]
+            # A signed Twin impact claim still must be a typed set of CIs:
+            # malformed/duplicate entries must not qualify a no-effect receipt.
+            or any(type(ci) is not str or not _id(ci)
+                   for ci in twin["impacted_cis"])
+            or len(set(twin["impacted_cis"])) != len(twin["impacted_cis"])
             or not _id(twin.get("approval_nonce"))):
         raise SandboxDenied("twin_simulated_approval_unqualified")
     now = datetime.now(timezone.utc) if now is None else now
