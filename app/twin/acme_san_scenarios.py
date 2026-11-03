@@ -28,6 +28,17 @@ NODES = {
     'ACME-TEST-SAN-REPLICATION-01': 'SIMULATED_REPLICATION',
     'ACME-TEST-SAN-BACKUP-01': 'SIMULATED_BACKUP',
 }
+NODE_NAMES = {
+    'ACME-TEST-SAN-ARRAY-DELL-01': 'ACME-TEST Dell SAN array',
+    'ACME-TEST-SAN-ARRAY-PURE-01': 'ACME-TEST Pure SAN array',
+    'ACME-TEST-SAN-FABRIC-A': 'ACME-TEST FC fabric A',
+    'ACME-TEST-SAN-FABRIC-B': 'ACME-TEST FC fabric B',
+    'ACME-TEST-HOST-RHEL-MPATH-01': 'ACME-TEST RHEL multipath host',
+    PAYMENTS: 'ACME-TEST payments service',
+    ERP: 'ACME-TEST ERP service',
+    'ACME-TEST-SAN-REPLICATION-01': 'ACME-TEST replication target',
+    'ACME-TEST-SAN-BACKUP-01': 'ACME-TEST backup target',
+}
 NODE_CRITICALITY = {
     'ACME-TEST-SAN-ARRAY-DELL-01': 5,
     'ACME-TEST-SAN-ARRAY-PURE-01': 5,
@@ -84,7 +95,7 @@ def provenance_snapshot():
         # This transaction is read-only and never mutates the graph.
         conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         nodes = conn.execute(
-            "select node_id,type,site,state,criticality,confidence from aiops.twin_nodes "
+            "select node_id,type,name,site,state,criticality,confidence from aiops.twin_nodes "
             "where node_id like 'ACME-TEST-%' or site = 'ACME-TEST-SIMULATION'").fetchall()
         edges = conn.execute(
             "select edge_id,source_id,target_id,relation_type,redundancy,confidence "
@@ -94,8 +105,9 @@ def provenance_snapshot():
             or len({row[0] for row in nodes}) != 9
             or len({row[0] for row in edges}) != 8):
         raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
-    for node_id, node_type, site, state, criticality, confidence in nodes:
-        if (NODES.get(node_id) != node_type or site != SITE
+    for node_id, node_type, name, site, state, criticality, confidence in nodes:
+        if (NODES.get(node_id) != node_type or NODE_NAMES.get(node_id) != name
+                or site != SITE
                 or state != 'SIMULATED' or NODE_CRITICALITY.get(node_id) != criticality
                 or confidence != 1):
             raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
@@ -104,8 +116,8 @@ def provenance_snapshot():
                 or redundancy != 1 or confidence != 1):
             raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
     normalized = {
-        'nodes': sorted((node_id, node_type, site, state, criticality, float(confidence))
-                        for node_id, node_type, site, state, criticality, confidence in nodes),
+        'nodes': sorted((node_id, node_type, name, site, state, criticality, float(confidence))
+                        for node_id, node_type, name, site, state, criticality, confidence in nodes),
         'edges': sorted((edge_id, source, target, relation, redundancy, float(confidence))
                         for edge_id, source, target, relation, redundancy, confidence in edges),
     }
