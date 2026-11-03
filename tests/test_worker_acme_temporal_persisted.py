@@ -189,6 +189,21 @@ class PositiveAcmeTemporalPersistedRestart(unittest.IsolatedAsyncioTestCase):
                     timeout=30)
                 self.assertEqual(replay, initial)
                 self.assertEqual(replay["receipt_sha256"], initial["receipt_sha256"])
+                # Core alone resolves after the receipt. Historical Temporal
+                # replay must remain immutable and must not reauthorize a
+                # second Worker activity against a now-RESOLVED Core Run.
+                with lock:
+                    for field in ("incident_status", "run_status", "ticket_status"):
+                        docs["core"][field] = "RESOLVED"
+                historical = await asyncio.wait_for(
+                    second.client.get_workflow_handle(workflow_id).result(),
+                    timeout=30)
+                self.assertEqual(historical, initial)
+                self.assertEqual(historical["receipt_sha256"], initial["receipt_sha256"])
+                with lock:
+                    self.assertEqual(len(seen), 6)  # zero new authority GETs
+                    for field in ("incident_status", "run_status", "ticket_status"):
+                        docs["core"][field] = "PREPARED"
                 with self.assertRaises(WorkflowAlreadyStartedError):
                     await second.client.start_workflow(
                         AcmeSimulatedHitlWorkflow.run, INTENT, id=workflow_id,
