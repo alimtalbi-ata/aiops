@@ -172,7 +172,8 @@ def _sandbox_read(component: str, attempt_id: str) -> dict:
         if type(data) is not dict:
             raise ValueError("sandbox_readback_unqualified")
         return data
-    except (requests.RequestException, ValueError, TypeError):
+    except (requests.RequestException, ValueError, TypeError, RecursionError):
+        # A 200 with over-deep JSON must never escape as a Portal 500.
         raise ValueError("sandbox_readback_unavailable") from None
 
 
@@ -388,5 +389,7 @@ def simulated_glpi_readback(attempt_id: str, authorization: str | None = Header(
             raise ValueError("sandbox_final_readback_rotated")
         return JSONResponse(_project(core_second, worker_second, attempt_id),
                             headers=HEADERS)
-    except ValueError:
+    except (ValueError, TypeError, RecursionError):
+        # Independent JSON canonicalization also fails closed on over-deep
+        # upstream objects; do not leak a 500 or project RESOLVED.
         return denied(503, "CORE_SIMULATED_TICKET_NOT_ATTESTED")
