@@ -199,6 +199,28 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
     if any(type(core.get(k)) is not type(v) or core.get(k) != v
            for k, v in expected.items()):
         raise ValueError("core_final_resolution_not_attested")
+    # Closed producer schema from Core's persisted terminal readback (018).
+    # A recomputed ticket SHA256 is not authority: reject extra IdP/GLPI,
+    # actor, tenant, or LIVE assertions even when the legitimate fields match.
+    core_keys = {
+        "schema", "attempt_id", "tenant_id", "scenario_id", "mode",
+        "incident_id", "run_id", "ticket_id", "proposal_id",
+        "incident_status", "run_status", "ticket_authority", "glpi_mode",
+        "ticket_status", "source", "analysis_validated", "critic_validated",
+        "analysis_kind", "evidence_count", "source_event_count",
+        "source_hashes_qualified", "source_event_ids", "request_sha256",
+        "approval_id", "approval_issuer", "worker_receipt_verified",
+        "worker_receipt_sha256", "terminal_ticket_receipt_verified",
+        "terminal_ticket_sha256", "resolution_after_worker_receipt",
+        "approval_fresh_at_resolution", "approval_nonce_consumed",
+        "approval_nonce_revoked", "human_approval_claimed", "human_approved",
+        "live_effects_allowed", "real_glpi_writes_allowed",
+        "execution_allowed", "effect_allowed",
+    }
+    if type(core) is not dict or set(core) != core_keys:
+        raise ValueError("core_terminal_schema_unqualified")
+    if core["analysis_kind"] != "SYNTHETIC_FIXTURE":
+        raise ValueError("core_analysis_kind_unqualified")
     # Core's canonical readback has no human_allow key; absence never grants it.
     if (core.get("human_allow") not in (None, False)
             or any(core.get(k) is not False for k in (
