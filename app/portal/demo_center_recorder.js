@@ -54,6 +54,9 @@
   function cancelCapture(message) {
     ++requestEpoch; // invalidate pending permission prompts and delayed recorder events
     const active = recorder;
+    // Detach immediately: a browser may delay or omit MediaRecorder.stop.
+    // A canceled session must not block a fresh, consented recording.
+    recorder = null;
     if (active && active.state === "recording") {
       try { active.stop(); } catch (_) { /* stream cleanup below still applies */ }
     }

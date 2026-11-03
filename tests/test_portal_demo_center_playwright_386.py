@@ -256,6 +256,61 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
 
 
+    def test_06b_clear_allows_new_capture_when_old_stop_event_never_arrives(self):
+        # A browser can delay/omit MediaRecorder.stop after Clear. A canceled
+        # recorder must not trap the operator in a permanently disabled Start.
+        # A stale first-session blob must not interrupt or overwrite session 2.
+        self.page.add_init_script("""(() => {
+          window.__recorders = [];
+          Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
+            configurable: true,
+            value: async () => {
+              const track = { stop() {}, addEventListener() {} };
+              return {getTracks: () => [track], getVideoTracks: () => [track]};
+            }
+          });
+          window.MediaRecorder = class {
+            constructor() {
+              this.state = "inactive"; this.mimeType = "video/webm"; this.handlers = {};
+              window.__recorders.push(this);
+            }
+            static isTypeSupported(t) { return t === "video/webm"; }
+            addEventListener(name, callback) { this.handlers[name] = callback; }
+            start() { this.state = "recording"; }
+            stop() {
+              this.state = "inactive";
+              if (window.__recorders[1] === this) {
+                this.handlers.dataavailable({data: new Blob(["second-session"], {type: "video/webm"})});
+                this.handlers.stop();
+              }
+              // First session deliberately never dispatches stop.
+            }
+          };
+        })();""")
+        self.page.goto(self.base + "/demo-center")
+        self.page.locator("#recording-consent").check()
+        self.page.locator("#record-start").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+        self.page.locator("#record-clear").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("CLEARED")
+        expect(self.page.locator("#record-start")).to_be_enabled()
+        self.page.locator("#record-start").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+        self.page.evaluate("""() => {
+          const old = window.__recorders[0];
+          old.handlers.dataavailable({data: new Blob(["stale-secret"], {type: "video/webm"})});
+          old.handlers.stop();
+        }""")
+        expect(self.page.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+        expect(self.page.locator("#record-stop")).to_be_enabled()
+        expect(self.page.locator("#record-download")).to_be_hidden()
+        self.page.locator("#record-stop").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("LOCAL_ONLY")
+        expect(self.page.locator("#record-download")).to_be_visible()
+        self.assertEqual(self.page.evaluate("window.__recorders.length"), 2)
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+
     def test_07_twin_noc_demonstration_links_allow_browser_return(self):
         # Real Chromium navigation, not just anonymous HTTP 200 route checks.
         # The target remains synthetic and NOC data remains ACL-gated UNKNOWN.
@@ -329,6 +384,26 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertNotIn("FORGED-GRAFANA-SECRET",
                          self.page.locator("#noc-grafana-result").inner_text())
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+
+    def test_08_historical_demo_studio_renderer_navigation(self):
+        # Real Chromium on disposable loopback, not a Debian browser claim.
+        self.page.goto(self.base + "/demo-center")
+        self.page.get_by_role("link", name="Demo Studio V2 historique").click()
+        expect(self.page).to_have_url(self.base + "/demo-studio")
+        expect(self.page.locator("body")).to_contain_text("Mission Control V2")
+        expect(self.page.locator("body")).to_contain_text("SYNTHETIC_REFERENCE_ONLY")
+        expect(self.page.locator("body")).to_contain_text("INCONNU")
+        expect(self.page.locator("body")).not_to_contain_text("EVD-1")
+        self.page.get_by_role("navigation", name="Parcours Demo Studio").get_by_role(
+            "link", name="DemoCenter").click()
+        expect(self.page).to_have_url(self.base + "/demo-center")
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+        target = Path(os.environ.get("AIOPS_E2E_ARTIFACT_DIR", self.tmp.name))
+        target.mkdir(parents=True, exist_ok=True)
+        self.page.goto(self.base + "/demo-studio")
+        self.page.screenshot(path=str(target / "demo-studio-v2-historical-ci-synthetic.png"),
+                             full_page=True)
 
 
 if __name__ == "__main__":
