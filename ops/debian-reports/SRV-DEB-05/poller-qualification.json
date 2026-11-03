@@ -9,19 +9,19 @@
   "acme_sandbox_verdict": "NO_GO_NOT_RUNTIME_VERIFIED",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-497DFEACCF6E4465",
-    "collected_at": "2026-11-03T14:48:27.396225+00:00",
+    "attempt_id": "ACME-SIM-067C167E0CC84DCC",
+    "collected_at": "2026-11-03T15:10:18.903717+00:00",
     "human_approval_claimed": false,
     "ids": {
-      "approval_id": "SIM-APP-44598E65F62D59ACB382B79A",
-      "incident_id": "INC-SIM-44598E65F62D59ACB382B79A",
-      "proposal_id": "PROP-SIM-44598E65F62D59ACB382B79A",
-      "run_id": "RUN-SIM-44598E65F62D59ACB382B79A",
-      "ticket_id": "SIM-GLPI-44598E65F62D59ACB382B79A"
+      "approval_id": "SIM-APP-19F515416EAAD152CF03600F",
+      "incident_id": "INC-SIM-19F515416EAAD152CF03600F",
+      "proposal_id": "PROP-SIM-19F515416EAAD152CF03600F",
+      "run_id": "RUN-SIM-19F515416EAAD152CF03600F",
+      "ticket_id": "SIM-GLPI-19F515416EAAD152CF03600F"
     },
     "live_effects_allowed": false,
     "mode": "SIMULATION",
-    "portal_image_id": "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944",
+    "portal_image_id": "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3",
     "reason": "SIMULATED_SANDBOX_ONLY",
     "stages": {
       "capability_core": "PASS",
@@ -67,17 +67,17 @@
   },
   "canonical_compose_receipt": {
     "base_compose_verified": true,
-    "collected_at": "2026-11-03T14:48:21.670321+00:00",
-    "compose_changed": true,
-    "docker_mutations": 1,
-    "image_id": "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944",
+    "collected_at": "2026-11-03T15:10:13.193112+00:00",
+    "compose_changed": false,
+    "docker_mutations": 0,
+    "image_id": "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3",
     "portal_health_strict": true,
-    "reason": "CANONICALIZED_RECREATED",
+    "reason": "ALREADY_CANONICAL_NOOP",
     "rollback_attempted": false,
     "rollback_succeeded": null,
     "status": "PASS"
   },
-  "collected_at": "2026-11-03T14:48:27.705587+00:00",
+  "collected_at": "2026-11-03T15:10:19.219597+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8",
@@ -85,10 +85,10 @@
     "compose_config_valid": true,
     "compose_file_present": true,
     "compose_rollback_tested": false,
-    "current_portal_image_id": "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944",
-    "deployed_image_id": "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944",
+    "current_portal_image_id": "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3",
+    "deployed_image_id": "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3",
     "deployment_executed": true,
-    "deployment_result_collected_at": "2026-11-03T14:48:13.040064+00:00",
+    "deployment_result_collected_at": "2026-11-03T15:10:12.565678+00:00",
     "docker_mutations": 1,
     "env_file_present": true,
     "portal_container_name_matches": true,
@@ -126,12 +126,12 @@
       }
     ],
     "compose_project": "aiops2-rebuild",
-    "container_id": "e67a2bf6488dc320a7007822aab8168cf3ed6af93824d693ecfe83d0028e8af9",
+    "container_id": "b9154819034f86ae8827ae195f2b2ef5f1353eb0650c20efae64ab3109b1a769",
     "health": "healthy",
-    "image_id": "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944",
+    "image_id": "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3",
     "inspection": "READ_ONLY",
     "manifest_digests": [
-      "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944"
+      "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3"
     ],
     "mount_count": 0,
     "network_count": 3,
@@ -139,7 +139,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261103T144821Z",
+    "attempt_id": "ACME-READONLY-20261103T151013Z",
     "checks": [
       {
         "http_status": 200,
@@ -205,9 +205,9 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-03T14:48:22.082694+00:00",
+    "collected_at": "2026-11-03T15:10:13.608474+00:00",
     "glpi_ticket_id": null,
-    "image_id": "sha256:5d40bdcff5dfea993b63d2e6b6207930c91783babec31791511f77d12bccd944",
+    "image_id": "sha256:ee957a45bf3833c71faddd932f3b7364fba8fdcb4c6934a96e8b095bb40f5fa3",
     "incident_id": null,
     "passed": 9,
     "run_id": null,
@@ -226,23 +226,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 1286,
-    "collected_at": "2026-11-03T14:27:01.299472+00:00",
+    "age_seconds": 1338,
+    "collected_at": "2026-11-03T14:48:01.340273+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 26,
-      "collected_at": "2026-11-03T14:48:01.340273+00:00",
+      "age_seconds": 18,
+      "collected_at": "2026-11-03T15:10:01.110581+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 99983,
+    "publish_log_age_seconds": 101294,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "8907f22db78ee3dd53ac278057313ac8dcffeceb",
+  "stable_checkout_sha": "32358b3cc2fa76068e18ba9cc81766bb2f1f2132",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
