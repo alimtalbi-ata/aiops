@@ -219,8 +219,10 @@ class PositiveAcmeTemporalPersistedRestart(unittest.IsolatedAsyncioTestCase):
                 stop(worker_b)
 
             self.assertEqual(len(set(pids)), 2)
-            self.assertEqual(len(seen), 6)
-            self.assertEqual([x[0] for x in seen],
+            self.assertEqual(len(seen), 12)
+            self.assertEqual([x[0] for x in seen[:6]],
+                             ["core", "twin", "policy", "core", "twin", "policy"])
+            self.assertEqual([x[0] for x in seen[6:]],
                              ["core", "twin", "policy", "core", "twin", "policy"])
             self.assertTrue(all(path.endswith(INTENT["attempt_id"])
                                 and auth == "Bearer " + token
