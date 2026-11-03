@@ -148,6 +148,12 @@ def run(args) -> dict:
                 if response is None or response.status != 200:
                     raise AssertionError(label + " HTTP response failed")
                 expect(page.locator(selector)).to_contain_text(expected, timeout=10000)
+                if label == "01-overview":
+                    expect(page.locator("#fixture-status")).to_contain_text(
+                        "Référence locale chargée", timeout=10000)
+                if label == "04-connections":
+                    expect(page.locator("#session-status")).to_contain_text(
+                        "Aucune session d\u0027entreprise valide", timeout=10000)
                 receipt["checks"].append({"name": label, "status": "PASS"})
                 capture(page, folder, label, receipt)
 
