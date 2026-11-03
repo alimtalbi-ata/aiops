@@ -709,5 +709,18 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertNotIn("return response.json()", activity)
 
 
+    def test_36_exponent_overflow_nonfinite_json_denied_at_transport_boundary(self):
+        # json.loads(parse_constant=...) does not catch float overflow.
+        # The HTTP decoder must reject it before a PASS/SIMULATE readback.
+        for raw in (b'{"risk":1e999}', b'{"risk":-1e999}',
+                    b'{"nested":{"value":9.9e999}}'):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^sandbox_readback_json_unqualified$"):
+                    decode_authority_json(raw)
+        self.assertEqual(decode_authority_json(b'{"risk":1.25e2}'),
+                         {"risk":125.0})
+
+
 if __name__ == "__main__":
     unittest.main()
