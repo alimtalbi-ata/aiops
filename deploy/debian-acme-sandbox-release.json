@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "9cf5f086789892355e924f35e9f1997b57b69d6e",
+  "candidate_sha": "8115f28d0af6e719d9579d5af2f1c402ecb69d57",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; canonical portal TCP 7777 untouched",
-  "reason": "RG-ACME-32 typed Core SOURCE count fence before Twin TWIN_ACME_SIMULATED approval: reviewed #356 source fcbb38a1b11e1698fc489c64c48244ef7b5b3c45, selective stable-based #376 exact HEAD 9cf5f086789892355e924f35e9f1997b57b69d6e, squash-integrated stable b9510460fa7c5f665e8ec64fb7df5488ced82d5f. Exact-head CI 6/6 workflows SUCCESS, 6/6 Quality jobs SUCCESS, Twin 86/86 pytest PASS (four negative SOURCE types). Five-service DEV-only guarded poller upgrade from immutable PR HEAD; no portal 7777 mutation, no LIVE or human GLPI/IdP approval. Require local PG16 backup/scratch restore, Compose ownership/image/health/rollback, and NEW 17/17 ACME-TEST SAN E2E host receipt. Prior Debian telemetry 04:28Z stale at release; do not infer deployment from this intent.",
-  "source_pr": 376
+  "reason": "RG-ACME-33 Worker fail-closed authenticated Core/Twin/Policy readback: strict duplicate-key/nonfinite/UTF8/size JSON parser and exact service origin plus requests Session(trust_env=False) bearer egress fence. Selectively reviewed source Draft #348 HEAD ae1b3446e05b7b12f6ee6d98686c7e26b2a792de; stable-based #378 exact HEAD 8115f28d0af6e719d9579d5af2f1c402ecb69d57, protected squash-integrated stable 92cc7a31a085e7bed16c3a19371e70a37b0361d9. Exact-head 5/5 workflows SUCCESS, source-join Worker 32/32 + Policy 9/9 + runner 9/9, Quality 6/6 jobs SUCCESS. DEV-only guarded five-service poller upgrade from immutable candidate SHA; canonical portal TCP 7777 untouched, no LIVE/human GLPI/IdP approval. Require local PG16 backup/scratch restore, Compose ownership/image/health/rollback, fresh 17/17 ACME-TEST same Incident/Run E2E and new poller receipt before host GO. Prior 05:24Z Debian report historical; no deployment inferred from intent.",
+  "source_pr": 378
 }
