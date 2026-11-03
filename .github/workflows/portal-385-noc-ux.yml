@@ -41,6 +41,6 @@ jobs:
         run: |
           set -o pipefail
           python -m unittest discover -s tests -p test_portal_noc_operator_385.py -v 2>&1 | tee /tmp/noc-ux-tests.log
-          grep -E '^Ran 3 tests in ' /tmp/noc-ux-tests.log
+          grep -E '^Ran 5 tests in ' /tmp/noc-ux-tests.log
           grep -x 'OK' /tmp/noc-ux-tests.log
           ! grep -E 'skipped=|FAILED|ERROR' /tmp/noc-ux-tests.log
