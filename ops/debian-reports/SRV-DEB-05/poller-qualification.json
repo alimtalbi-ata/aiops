@@ -2,37 +2,37 @@
   "acme_sandbox_runtime": {
     "services": [
       {
-        "container_id": "23e23ca45a5103dbc36778df95f022dfd7a1392674fe158ad64811197fe279ce",
+        "container_id": "856072a8c3e68a67db1bc1aca519727b41c91272ce9c7af41489fb8a2976b7a6",
         "health": "healthy",
-        "image_id": "sha256:d90b4010a3e93762d797de6fb3672ab573b6a3a32ed00de7e85ccb04f45b496b",
+        "image_id": "sha256:8d2702bcb7fd0ee40961b22799a677be471e2f16e9d4803c8b6140d88c174c9a",
         "matches_upgrade_receipt": true,
         "service": "core"
       },
       {
-        "container_id": "a3cade3910a4b1f5c72ca5e8e313df61620aa7691e73ce3d4ad58794d0d34526",
+        "container_id": "f6aab294b7173fb1246ec2847f40b0efb780fd277f558b5d5c75c5638b165b68",
         "health": "healthy",
-        "image_id": "sha256:0388dc0639bb41b45fc0b4ee7af91145f7031d368477630b596502a2c7ce504d",
+        "image_id": "sha256:b5c057719332477678c31184e99c26a2179d928ea956f2e0fec314ed8c08d591",
         "matches_upgrade_receipt": true,
         "service": "twin"
       },
       {
-        "container_id": "08ef5e094ca5299d067935eb8b16c09159911c703db66523733ee654bff1a040",
+        "container_id": "d4f6c73588bc7936249f36264ba10bebde25d6baca942523bcdee8a7cf41b4d8",
         "health": "healthy",
-        "image_id": "sha256:2c1ad125330b6c8d691788e57be77eb1998e724e4eed7388484626765ccda4f5",
+        "image_id": "sha256:87df84c9e102a44de3a2b33433759e3550ac5827771d1a78aa6212bd0418fa2f",
         "matches_upgrade_receipt": true,
         "service": "policy"
       },
       {
-        "container_id": "c8ef18145dba16d205f9e8d4225a65e16458636f7204cbf6d8010bdf59ee2fc1",
+        "container_id": "1b264087e336835ff59507a3a59edd850995b7b076bec3bfc2fe22c8ea380c02",
         "health": "healthy",
-        "image_id": "sha256:c1d59d4bb654a00004603e7d933ee9f8f1e491d515befcb1ad1a51982ac23c3d",
+        "image_id": "sha256:2223c15610993cb016e57b909f35adbb24a4026a4e6961304a2ddf63f0e4f4e2",
         "matches_upgrade_receipt": true,
         "service": "worker"
       },
       {
-        "container_id": "73383ae19cdce7f0fa9a6c87ecc5bf4235f8d7a2893d0c52193efb38689b531e",
+        "container_id": "74e8b392281ed155e889ba8f61b47ef379f6d47278025b4d9fd309d8001e5f73",
         "health": "healthy",
-        "image_id": "sha256:df03e2bfebae6e0f56b7927f33d04544510a3a38912dac4b52523d2ebfa424b6",
+        "image_id": "sha256:42083002a571eab19baf4a65cb4778c311728eb1e8afcbe2b8a80d64cd5fc78d",
         "matches_upgrade_receipt": true,
         "service": "simulator"
       }
@@ -40,64 +40,64 @@
     "status": "PASS"
   },
   "acme_sandbox_upgrade": {
-    "collected_at": "2026-11-03T04:28:37.657180+00:00",
+    "collected_at": "2026-11-03T05:24:38.298281+00:00",
     "dev_checkout_sha": "5b3b9f327f517e8f5999766389abf69c8a035cf8",
     "docker_container_mutations": 1,
     "docker_image_builds": 5,
-    "historical_receipt": true,
+    "historical_receipt": false,
     "images": [
       {
         "http_status": 200,
         "image_changed": true,
         "json_status": "ok",
-        "observed_container_id": "23e23ca45a5103dbc36778df95f022dfd7a1392674fe158ad64811197fe279ce",
+        "observed_container_id": "856072a8c3e68a67db1bc1aca519727b41c91272ce9c7af41489fb8a2976b7a6",
         "observed_health": "healthy",
-        "observed_image_id": "sha256:d90b4010a3e93762d797de6fb3672ab573b6a3a32ed00de7e85ccb04f45b496b",
-        "previous_image_id": "sha256:c235fa8797070dc2f0f2387087d44bf03545ba004a9a3a05e63175a91b641ce4",
+        "observed_image_id": "sha256:8d2702bcb7fd0ee40961b22799a677be471e2f16e9d4803c8b6140d88c174c9a",
+        "previous_image_id": "sha256:d90b4010a3e93762d797de6fb3672ab573b6a3a32ed00de7e85ccb04f45b496b",
         "service": "core"
       },
       {
         "http_status": 200,
         "image_changed": true,
         "json_status": "ok",
-        "observed_container_id": "a3cade3910a4b1f5c72ca5e8e313df61620aa7691e73ce3d4ad58794d0d34526",
+        "observed_container_id": "f6aab294b7173fb1246ec2847f40b0efb780fd277f558b5d5c75c5638b165b68",
         "observed_health": "healthy",
-        "observed_image_id": "sha256:0388dc0639bb41b45fc0b4ee7af91145f7031d368477630b596502a2c7ce504d",
-        "previous_image_id": "sha256:514908d7c532ae3b376534ae839e0dad90780698e99273779df5bb40c1142d0c",
+        "observed_image_id": "sha256:b5c057719332477678c31184e99c26a2179d928ea956f2e0fec314ed8c08d591",
+        "previous_image_id": "sha256:0388dc0639bb41b45fc0b4ee7af91145f7031d368477630b596502a2c7ce504d",
         "service": "twin"
       },
       {
         "http_status": 200,
         "image_changed": true,
         "json_status": "ok",
-        "observed_container_id": "08ef5e094ca5299d067935eb8b16c09159911c703db66523733ee654bff1a040",
+        "observed_container_id": "d4f6c73588bc7936249f36264ba10bebde25d6baca942523bcdee8a7cf41b4d8",
         "observed_health": "healthy",
-        "observed_image_id": "sha256:2c1ad125330b6c8d691788e57be77eb1998e724e4eed7388484626765ccda4f5",
-        "previous_image_id": "sha256:bee682d1b900255bf5f9a528d3c4feb0c5910b5abec62437f46b96db79a786c4",
+        "observed_image_id": "sha256:87df84c9e102a44de3a2b33433759e3550ac5827771d1a78aa6212bd0418fa2f",
+        "previous_image_id": "sha256:2c1ad125330b6c8d691788e57be77eb1998e724e4eed7388484626765ccda4f5",
         "service": "policy"
       },
       {
         "http_status": 200,
         "image_changed": true,
         "json_status": "ok",
-        "observed_container_id": "c8ef18145dba16d205f9e8d4225a65e16458636f7204cbf6d8010bdf59ee2fc1",
+        "observed_container_id": "1b264087e336835ff59507a3a59edd850995b7b076bec3bfc2fe22c8ea380c02",
         "observed_health": "healthy",
-        "observed_image_id": "sha256:c1d59d4bb654a00004603e7d933ee9f8f1e491d515befcb1ad1a51982ac23c3d",
-        "previous_image_id": "sha256:0ffb89a34e88346b7f0ae694e89483a6d5e51005b58bdc0e70b7515de2e24c5d",
+        "observed_image_id": "sha256:2223c15610993cb016e57b909f35adbb24a4026a4e6961304a2ddf63f0e4f4e2",
+        "previous_image_id": "sha256:c1d59d4bb654a00004603e7d933ee9f8f1e491d515befcb1ad1a51982ac23c3d",
         "service": "worker"
       },
       {
         "http_status": 200,
         "image_changed": true,
         "json_status": "ok",
-        "observed_container_id": "73383ae19cdce7f0fa9a6c87ecc5bf4235f8d7a2893d0c52193efb38689b531e",
+        "observed_container_id": "74e8b392281ed155e889ba8f61b47ef379f6d47278025b4d9fd309d8001e5f73",
         "observed_health": "healthy",
-        "observed_image_id": "sha256:df03e2bfebae6e0f56b7927f33d04544510a3a38912dac4b52523d2ebfa424b6",
-        "previous_image_id": "sha256:24d5772ace0576a598352eb5798c01ac5b7272b39aa8d8464136d326b2eff1be",
+        "observed_image_id": "sha256:42083002a571eab19baf4a65cb4778c311728eb1e8afcbe2b8a80d64cd5fc78d",
+        "previous_image_id": "sha256:df03e2bfebae6e0f56b7927f33d04544510a3a38912dac4b52523d2ebfa424b6",
         "service": "simulator"
       }
     ],
-    "pg16_backup_sha256": "837d5cbea5fefcd943e85296bda46666ca6940d3e7bbc73e98507465c7187af2",
+    "pg16_backup_sha256": "eaad4b26e34c7c7fad5f0cb77952d798df5f63588a08a438b064bd7e6bae1c40",
     "pg16_scratch_restore": "PASS",
     "portal_http": {
       "external_port": 7777,
@@ -105,22 +105,22 @@
       "json_status": "ok"
     },
     "rollback_status": "NOT_REQUIRED",
-    "source_sha": "7a2c843f98a0c28ddd4763565721f621ad66d502",
-    "stable_checkout_sha": "6f9cab8552f478d4ead9436cda6910743888ce02",
+    "source_sha": "9cf5f086789892355e924f35e9f1997b57b69d6e",
+    "stable_checkout_sha": "4e3c7c686fde667f9667bec34af388d05af4d1ac",
     "status": "PASS"
   },
   "acme_sandbox_verdict": "GO_SIMULATED_SANDBOX_ONLY",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-F4688FBC2FD44BCA",
-    "collected_at": "2026-11-03T05:22:08.824169+00:00",
+    "attempt_id": "ACME-SIM-9085D5BCCA604981",
+    "collected_at": "2026-11-03T05:24:43.560263+00:00",
     "human_approval_claimed": false,
     "ids": {
-      "approval_id": "SIM-APP-E3FA95AE2BA6CBEFACEC536D",
-      "incident_id": "INC-SIM-E3FA95AE2BA6CBEFACEC536D",
-      "proposal_id": "PROP-SIM-E3FA95AE2BA6CBEFACEC536D",
-      "run_id": "RUN-SIM-E3FA95AE2BA6CBEFACEC536D",
-      "ticket_id": "SIM-GLPI-E3FA95AE2BA6CBEFACEC536D"
+      "approval_id": "SIM-APP-633E565FC7B566212511F0FD",
+      "incident_id": "INC-SIM-633E565FC7B566212511F0FD",
+      "proposal_id": "PROP-SIM-633E565FC7B566212511F0FD",
+      "run_id": "RUN-SIM-633E565FC7B566212511F0FD",
+      "ticket_id": "SIM-GLPI-633E565FC7B566212511F0FD"
     },
     "live_effects_allowed": false,
     "mode": "SIMULATION",
@@ -171,7 +171,7 @@
   "canonical_compose_receipt": {
     "status": "NOT_VERIFIED"
   },
-  "collected_at": "2026-11-03T05:22:09.177731+00:00",
+  "collected_at": "2026-11-03T05:24:43.902279+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -187,7 +187,7 @@
     "portal_env_port_7777": true,
     "portal_host_port_7777": true,
     "portal_service_present": true,
-    "reason": "REPORTER_PUBLISHER_STALE_OR_MISSING",
+    "reason": "BACKUP_ROLLBACK_AND_E2E_GATES_MISSING",
     "release_manifest_disabled": true,
     "schema": "aiops.debian-portal-preflight.v1",
     "verdict": "NO_GO_DEPLOY_READONLY_PREFLIGHT"
@@ -230,7 +230,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261103T052203Z",
+    "attempt_id": "ACME-READONLY-20261103T052402Z",
     "checks": [
       {
         "http_status": 200,
@@ -296,7 +296,7 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-03T05:22:03.251083+00:00",
+    "collected_at": "2026-11-03T05:24:02.975980+00:00",
     "glpi_ticket_id": null,
     "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "incident_id": null,
@@ -317,23 +317,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 3248,
-    "collected_at": "2026-11-03T04:28:01.292812+00:00",
-    "fresh": false
+    "age_seconds": 162,
+    "collected_at": "2026-11-03T05:22:01.859904+00:00",
+    "fresh": true
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 7,
-      "collected_at": "2026-11-03T05:22:01.859904+00:00",
+      "age_seconds": 42,
+      "collected_at": "2026-11-03T05:24:01.718115+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 66004,
+    "publish_log_age_seconds": 66159,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "b9510460fa7c5f665e8ec64fb7df5488ced82d5f",
+  "stable_checkout_sha": "4e3c7c686fde667f9667bec34af388d05af4d1ac",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
