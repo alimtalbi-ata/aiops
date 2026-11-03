@@ -285,6 +285,29 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
             self.assertEqual(call.kwargs["proxies"],
                              {"http": "", "https": "", "all": ""})
 
+    def test_independent_rounds_reject_bool_int_equivalence_forgery(self):
+        # Python considers True == 1 and False == 0 in nested dicts.  The
+        # first round must be JSON-type-identical to the second, not merely
+        # Python-equal, before any SIM-GLPI RESOLVED projection is allowed.
+        for core_change, worker_change in (
+            ({"worker_receipt_verified": 1}, {}),
+            ({}, {"human_approved": 0}),
+        ):
+            with self.subTest(core_change=core_change, worker_change=worker_change):
+                first_core = {**GOOD, **core_change}
+                first_worker = {**WORKER, **worker_change}
+                self.assertEqual(first_core, GOOD)
+                self.assertEqual(first_worker, WORKER)
+                reads = [upstream(first_worker), upstream(first_core),
+                         upstream(WORKER), upstream(GOOD)]
+                with patch.object(acme_sim_glpi, "_direct_get",
+                                  side_effect=reads) as get:
+                    response = self.get()
+                self.assert_unknown(response)
+                self.assertEqual(response.json()["reason"],
+                                 "CORE_SIMULATED_TICKET_NOT_ATTESTED")
+                self.assertEqual(get.call_count, 4)
+
     def test_poisoned_proxy_environment_never_receives_internal_bearer(self):
         # Controlled fixture only: actor+tenant verifier is still absent on host.
         # An environment proxy must not intercept the fixed Core/Worker GETs.
