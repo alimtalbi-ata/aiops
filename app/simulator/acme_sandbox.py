@@ -1,4 +1,5 @@
 """Fail-closed ACME SAN->Payments sandbox coordinator; no LIVE or GLPI effects."""
+import hashlib
 import hmac
 import os
 import re
@@ -102,6 +103,13 @@ def valid_id(value):
     return type(value) is str and ID.fullmatch(value) is not None
 
 
+def canonical_source_ids(attempt_id):
+    """Independently derive Core's ordered synthetic SOURCE IDs, never trust the readback order."""
+    return ['SYN-EVT-' + hashlib.sha256(
+        (TENANT + ':' + attempt_id + ':' + str(index)).encode()
+    ).hexdigest()[:20].upper() for index in range(1, 8)]
+
+
 def prepared_core(value, x, ids=None):
     """Core is the sole state authority; never approve a pre-resolved Run."""
     bound(value, x, ids)
@@ -112,11 +120,12 @@ def prepared_core(value, x, ids=None):
             or value.get('ticket_authority') != 'SIMULATED_ONLY'
             or value.get('approval_issuer') != ISSUER
             or value.get('source') != 'SYNTHETIC_SIMULATOR'
-            or value.get('source_event_count') != 7
+            or type(value.get('source_event_count')) is not int
+            or value['source_event_count'] != 7
             or value.get('source_hashes_qualified') is not True
             or type(event_ids) is not list or len(event_ids) != 7
-            or len(set(str(v) for v in event_ids)) != 7
-            or any(not valid_id(v) or not v.startswith('SYN-EVT-') for v in event_ids)
+            or event_ids != canonical_source_ids(x.attempt_id)
+            or any(not valid_id(v) for v in event_ids)
             or type(value.get('request_sha256')) is not str
             or re.fullmatch(r'[0-9a-f]{64}', value['request_sha256']) is None
             or value.get('analysis_validated') is not True
