@@ -166,6 +166,54 @@ def publisher_cron_diagnostics(run=subprocess.run, home=None):
     return out
 
 
+
+def acme_runtime_snapshot(poller, images):
+    """Independent post-upgrade Docker readback, never a deployment action.
+
+    The private upgrade receipt alone is historical evidence. Compare its five
+    exact container IDs and image IDs against the containers running NOW.
+    Do not expose Docker environment, labels, mounts, or secrets.
+    """
+    out = {'status': 'NOT_VERIFIED', 'services': []}
+    expected_services = ('core', 'twin', 'policy', 'worker', 'simulator')
+    inspector = getattr(poller, 'inspect', None)
+    if (not callable(inspector) or type(images) is not list or len(images) != 5
+            or {x.get('service') for x in images if type(x) is dict}
+            != set(expected_services)):
+        return out
+    expected = {x['service']: x for x in images}
+    for service in expected_services:
+        prior = expected[service]
+        try:
+            observed = inspector('aiops2-rebuild-' + service)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            observed = {}
+        if type(observed) is not dict:
+            observed = {}
+        image = observed.get('image_id')
+        container = observed.get('container_id')
+        match = (observed.get('inspection') == 'READ_ONLY'
+                 and observed.get('compose_project') == 'aiops2-rebuild'
+                 and observed.get('state') == 'running'
+                 and observed.get('health') == 'healthy'
+                 and isinstance(image, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', image)
+                 and isinstance(container, str) and re.fullmatch(r'[0-9a-f]{64}', container)
+                 and image == prior.get('observed_image_id')
+                 and container == prior.get('observed_container_id'))
+        out['services'].append({
+            'service': service, 'image_id': image if isinstance(image, str)
+            and re.fullmatch(r'sha256:[0-9a-f]{64}', image) else None,
+            'container_id': container if isinstance(container, str)
+            and re.fullmatch(r'[0-9a-f]{64}', container) else None,
+            'health': observed.get('health') if observed.get('health')
+            in ('healthy', 'unhealthy', 'starting') else 'UNKNOWN',
+            'matches_upgrade_receipt': bool(match),
+        })
+    out['status'] = ('PASS' if all(x['matches_upgrade_receipt']
+                                  for x in out['services']) else 'DRIFT_OR_UNKNOWN')
+    return out
+
+
 def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, env=ENV, state=None):
     report = poller.collect()
     pinned = None
@@ -362,6 +410,7 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
     # Five-service SHA-pinned upgrade receipt is independent from host E2E.
     # Never infer Docker mutation from CI or stale/unsigned local files.
     report['acme_sandbox_upgrade'] = {'status': 'NOT_VERIFIED'}
+    report['acme_sandbox_runtime'] = {'status': 'NOT_VERIFIED', 'services': []}
     try:
         local_path = state_dir / 'acme-sandbox-upgrade.json'
         if local_path.stat().st_size <= 16384:
@@ -407,6 +456,7 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                         and portal_http.get('json_status') == 'ok'
                         and portal_http.get('external_port') == 7777
                         and local.get('rollback_status') == 'NOT_REQUIRED'
+                        and local.get('pg16_scratch_restore') == 'PASS'
                         and isinstance(local.get('pg16_backup_sha256'),str)
                         and re.fullmatch(r'[0-9a-f]{64}',local['pg16_backup_sha256']))
             if safe:
@@ -419,18 +469,22 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                     'docker_image_builds': local['docker_image_builds'],
                     'rollback_status': local.get('rollback_status'),
                     'pg16_backup_sha256': local.get('pg16_backup_sha256'),
+                    'pg16_scratch_restore': local.get('pg16_scratch_restore'),
                     'portal_http': portal_http,
                     'images': [{k:x.get(k) for k in (
                         'service','previous_image_id','observed_image_id',
                         'observed_container_id','observed_health',
                         'image_changed','http_status','json_status')} for x in images],
                 }
+                if local['status'] == 'PASS':
+                    report['acme_sandbox_runtime'] = acme_runtime_snapshot(poller, images)
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
     report['acme_sandbox_verdict'] = (
         'GO_SIMULATED_SANDBOX_ONLY'
         if report['acme_sim_e2e'].get('status') == 'PASS'
         and report['acme_sandbox_upgrade'].get('status') == 'PASS'
+        and report['acme_sandbox_runtime'].get('status') == 'PASS'
         else 'NO_GO_NOT_RUNTIME_VERIFIED')
     report['release_stable'] = 'NO_GO'
     report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
