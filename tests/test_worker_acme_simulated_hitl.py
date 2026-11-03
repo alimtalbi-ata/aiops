@@ -614,10 +614,10 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                                main.index('@app.get("/api/sandbox/acme/capabilities")')]
         self.assertIn("with requests.Session() as session:", activity_source)
         self.assertIn("session.trust_env = False", activity_source)
-        self.assertIn("response = session.get(", activity_source)
+        self.assertIn("with session.get(", activity_source)
         self.assertNotIn("response = requests.get(", activity_source)
         self.assertLess(activity_source.index("session.trust_env = False"),
-                        activity_source.index("response = session.get("))
+                        activity_source.index("with session.get("))
 
 
 
@@ -704,7 +704,7 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         main = (ROOT / "app/worker/main.py").read_text()
         activity = main[main.index("async def acme_simulated_no_effect("):
                         main.index('@app.get("/api/sandbox/acme/capabilities")')]
-        self.assertIn("return decode_authority_json(response.content)", activity)
+        self.assertIn("return read_bounded_authority_response(response)", activity)
         self.assertIn("session.trust_env = False", activity)
         self.assertIn("allow_redirects=False", activity)
         self.assertNotIn("return response.json()", activity)
