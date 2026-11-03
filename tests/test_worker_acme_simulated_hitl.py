@@ -584,6 +584,12 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                 origin + "/api/sandbox/acme",
                 origin + "?redirect=evil",
                 origin + "#fragment",
+                # urlsplit normalizes these into the allowed hostname or
+                # discards empty delimiters: reject noncanonical raw origins.
+                origin.replace("aiops2-", "aiops2-\t", 1),
+                origin.replace("aiops2-", "AIOPS2-", 1),
+                origin + "?",
+                origin + "#",
                 origin.replace("://", "://user:password@"),
                 origin.rsplit(":", 1)[0] + ":9999",
                 "http://[::1",
