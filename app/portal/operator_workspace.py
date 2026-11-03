@@ -49,7 +49,7 @@ PAGE = """<!doctype html>
   <p class="side-label">OUTILS DU PORTAIL</p>
   <nav class="side-nav" aria-label="Fonctions existantes">
     <a href="/noc"><span aria-hidden="true">▤</span> Cockpit NOC</a>
-    <a href="/demo-center"><span aria-hidden="true">▣</span> DemoCenter &amp; vidéo</a>
+    <a href="/demo-center"><span aria-hidden="true">▣</span> DemoCenter / Vidéo</a>
     <a href="/demo-studio"><span aria-hidden="true">◷</span> Demo Studio V2</a>
     <a href="/demo/acme-impact"><span aria-hidden="true">⌁</span> Digital Twin</a>
     <a href="/itsm"><span aria-hidden="true">▥</span> GLPI / ITSM</a>
