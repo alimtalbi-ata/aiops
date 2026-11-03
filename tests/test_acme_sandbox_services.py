@@ -664,6 +664,7 @@ from test_acme_san_scenarios import (
     graph,
     test_migration_019_has_exact_independent_9_node_8_edge_contract,
     test_catalog_eight_hypotheses_abstain_without_analyst_critic,
+    test_verified_pg19_graph_is_ui_ready_but_not_a_run_observation,
     test_forward_san_candidate_payments_and_erp_not_observed,
     test_replication_lag_only_recovery_risk_not_payments_outage,
     test_provenance_rejects_drift_mixed_live_and_foreign_edges,
