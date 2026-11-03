@@ -251,11 +251,15 @@ def _project(core: dict, worker: dict, attempt_id: str) -> dict:
             or ids["incident_id"].startswith("SIM-GLPI-")
             or ids["run_id"].startswith("SIM-GLPI-")):
         raise ValueError("core_identity_unqualified")
+    # RG-ACME-19 stable Worker now binds the canonical synthetic ticket into
+    # its signed-by-no-one SHA256 receipt; a missing or foreign ticket must
+    # never qualify even when an attacker recomputes both integrity digests.
     worker_expected = {
         "schema": "aiops.worker-acme-simulated-no-effect.v1",
         "attempt_id": attempt_id, "tenant_id": TENANT,
         "incident_id": ids["incident_id"], "run_id": ids["run_id"],
-        "proposal_id": ids["proposal_id"], "approval_id": ids["approval_id"],
+        "proposal_id": ids["proposal_id"], "ticket_id": ids["ticket_id"],
+        "approval_id": ids["approval_id"],
         "approval_issuer": "TWIN_ACME_SIMULATED",
         "approval_kind": "SIMULATED", "action": "SIMULATE",
         "receipt_status": "SIMULATED_NO_EFFECT",
