@@ -15,7 +15,7 @@ STATE = Path('/home/aiops/.local/state/aiops-debian-agent')
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
  ('demo_center','/demo-center','text/html',('SIMULATION_ONLY','CATALOG_ONLY','recording-consent','/demo/acme-impact')),
- ('noc_operator','/noc','text/html',('UNKNOWN','tenant','/assets/noc-operator.js','NOC opérateur')),
+ ('noc_operator','/noc','text/html',('UNKNOWN','tenant','/assets/noc-operator.js','NOC opérateur','SYNTHETIC_REFERENCE_ONLY','LOCAL_SYNTHETIC_FIXTURE','noc-synthetic-source','PG16 ACME-TEST migration 019')),
  ('recorder_asset','/assets/demo-center-recorder.js','javascript',('getDisplayMedia','MediaRecorder','isSecureContext','CONSENT_WITHDRAWN')),
  ('noc_asset','/assets/noc-operator.js','javascript',('tenant_acl_qualified','actor_identity_server_derived','UNKNOWN')),
  ('twin_navigation','/demo/acme-impact','text/html',('SIMULATION LOCALE UNIQUEMENT','aria-label="Parcours de démonstration"','href="/demo-center"','href="/noc"')),
