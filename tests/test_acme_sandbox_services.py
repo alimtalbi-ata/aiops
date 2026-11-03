@@ -135,6 +135,25 @@ def test_twin_prepared_core_positive_and_cross_run_denied():
         TWIN.check_core(prepared_core() | {'run_id': 'RUN-UNRELATED'}, x)
 
 
+@pytest.mark.parametrize('source_count', [7.0, '7', True, None])
+def test_twin_rejects_noninteger_seven_source_count_before_approval_write(monkeypatch, source_count):
+    """Core JSON 7.0 must not masquerade as an exact seven-event integer."""
+    x = TWIN.ApprovalIntent(**(intent() | ids()))
+    calls = []
+    monkeypatch.setattr(TWIN, 'core_readback',
+                        lambda _x: (calls.append('core') or
+                                    (prepared_core() | {'source_event_count': source_count})))
+    monkeypatch.setattr(TWIN, 'sourced_impact',
+                        lambda: pytest.fail('graph read after unqualified SOURCE count'))
+    monkeypatch.setattr(TWIN, 'db',
+                        lambda: pytest.fail('approval persisted after unqualified SOURCE count'))
+    with pytest.raises(HTTPException) as error:
+        TWIN.issue_approval(x, authorization='Bearer test-internal-token-not-real')
+    assert error.value.status_code == 503
+    assert error.value.detail == 'core_prepared_authority_unqualified'
+    assert calls == ['core']
+
+
 def test_twin_prepared_fence_rejects_resolution_race(monkeypatch):
     x = TWIN.ApprovalIntent(**(intent() | ids()))
     calls = iter([prepared_core(), prepared_core() | {'run_status': 'RESOLVED'}])
