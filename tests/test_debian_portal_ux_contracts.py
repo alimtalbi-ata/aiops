@@ -40,7 +40,7 @@ class Response:
 class Opener:
     def __init__(self,tamper=None):self.tamper=tamper
     def open(self,req,timeout=5):
-        return Response(next(c for c in ux.CASES if req.full_url.endswith(c[1])),self.tamper)
+        return Response(next(c for c in ux.CASES if req.full_url=='http://127.0.0.1:7777'+c[1]),self.tamper)
 def runner(args,**kw):
     if args[:2]==['docker','inspect']:
         out=IMAGE+'|'+'c'*64+'|healthy|aiops2-portal:pinned-'+PIN[:12]+'\n'
