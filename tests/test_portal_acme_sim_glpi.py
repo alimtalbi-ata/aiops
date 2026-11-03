@@ -311,7 +311,7 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as folder:
             netrc = Path(folder) / "hostile.netrc"
-            netrc.write_text("machine aiops2-worker login attacker password forged\\n")
+            netrc.write_text("machine aiops2-worker login attacker password forged\n")
             netrc.chmod(0o600)
             with patch.dict(os.environ, {
                 "NETRC": str(netrc),
