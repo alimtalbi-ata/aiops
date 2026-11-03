@@ -81,11 +81,24 @@ def capture(page, folder: Path, name: str, receipt: dict) -> None:
     if re.fullmatch(r"[a-z0-9-]{3,50}", name) is None:
         raise ValueError("invalid screenshot name")
     dest = folder / (name + ".png")
-    page.screenshot(path=str(dest), full_page=True, animations="disabled")
-    os.chmod(dest, 0o600)
-    digest = hashlib.sha256(dest.read_bytes()).hexdigest()
+    # Playwright's path= write may briefly create a world-readable file under
+    # the host umask and may follow an existing screenshot symlink. Keep bytes
+    # in memory, write to a private temporary file, then atomically replace.
+    data = page.screenshot(full_page=True, animations="disabled")
+    if not isinstance(data, bytes) or not data:
+        raise ValueError("empty screenshot")
+    fd, tmp = tempfile.mkstemp(prefix=".shot-", suffix=".png", dir=folder)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+        os.replace(tmp, dest)  # replaces a symlink, never follows its target
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
     receipt["screenshots"].append({
-        "name": dest.name, "bytes": dest.stat().st_size, "sha256": digest,
+        "name": dest.name, "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
         "viewport": page.viewport_size,
     })
 
