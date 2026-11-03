@@ -722,5 +722,43 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                          {"risk":125.0})
 
 
+    def test_37_malformed_twin_impact_claim_denied_before_temporal_receipt(self):
+        # A signed, independently fetched Twin response is not a license to
+        # accept malformed topology data. Python membership checks alone
+        # would accept these as long as Payments was also present.
+        malformed = (
+            ["ACME-SVC-PAYMENTS", "ACME-SVC-PAYMENTS"],
+            ["ACME-SVC-PAYMENTS", True],
+            ["ACME-SVC-PAYMENTS", None],
+            ["ACME-SVC-PAYMENTS", 123],
+            ["ACME-SVC-PAYMENTS", {"ci": "ACME-SVC-ERP"}],
+            ["ACME-SVC-PAYMENTS", ""],
+        )
+        for impacted_cis in malformed:
+            docs = fixtures()
+            docs["twin"]["impacted_cis"] = impacted_cis
+            calls = []
+
+            async def get(component, path):
+                calls.append(component)
+                return deepcopy(docs[component])
+
+            with self.subTest(impacted_cis=repr(impacted_cis)):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^twin_simulated_approval_unqualified$"):
+                    asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+                self.assertEqual(calls, ["core", "twin", "policy"])
+
+        docs = fixtures()
+        docs["twin"]["impacted_cis"] = [
+            "ACME-SVC-PAYMENTS", "ACME-SVC-ERP"]
+        async def valid_get(component, path):
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=valid_get, now=NOW))
+        self.assertTrue(receipt_digest_valid(receipt))
+        self.assertEqual(receipt["receipt_status"], "SIMULATED_NO_EFFECT")
+        self.assertEqual(receipt["effect_receipts"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
