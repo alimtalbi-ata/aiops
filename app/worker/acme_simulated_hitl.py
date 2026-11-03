@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
+import math
 import re
 from urllib.parse import urlsplit
 
@@ -85,10 +86,18 @@ def decode_authority_json(body):
     def reject_nonfinite(_value):
         raise SandboxDenied("sandbox_readback_json_unqualified")
 
+    def finite_float(raw):
+        # JSON 1e309 is syntactically valid but float() overflows to Infinity.
+        # Never accept an infinite authority value from Core/Twin/Policy.
+        value = float(raw)
+        if not math.isfinite(value):
+            raise SandboxDenied("sandbox_readback_json_unqualified")
+        return value
+
     try:
         document = json.loads(
             body.decode("utf-8"), object_pairs_hook=unique_object,
-            parse_constant=reject_nonfinite)
+            parse_constant=reject_nonfinite, parse_float=finite_float)
     except SandboxDenied:
         raise
     except (TypeError, ValueError, UnicodeError, RecursionError):
