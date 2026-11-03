@@ -53,10 +53,10 @@ class ReadOnlyGraph:
     def execute(self, sql):
         self.sql.append(sql)
         if sql == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY':
-            assert len(self.sql) == 1, 'snapshot isolation must precede both reads'
+            assert (len(self.sql) - 1) % 3 == 0, 'each snapshot starts with isolation'
             return None
         assert sql.strip().lower().startswith('select '), 'no writes allowed'
-        assert self.sql[0] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
+        assert self.sql[(len(self.sql) - 1) // 3 * 3] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
         if 'twin_nodes' in sql:
             return Cursor(self.nodes)
         assert 'twin_edges' in sql
