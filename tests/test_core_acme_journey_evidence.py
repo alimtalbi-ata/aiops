@@ -23,16 +23,20 @@ def test_evidence_references_are_canonical_and_explicitly_unattested(resolved):
         assert event["evidence_ids"] == [
             core.ident("EVID-SIM-", ATTEMPT + ":" + str(1 + ((i - 1) % 2)))
         ]
-    # Both IDs are valid, but a swapped source→evidence link is not.
-    rows[0] = (*rows[0][:6], [core.ident("EVID-SIM-", ATTEMPT + ":2")], rows[0][7])
-    with pytest.raises(Exception) as caught:
-        journey.project_journey(snapshot, rows, ATTEMPT)
-    assert getattr(caught.value, "status_code", None) == 503
     assert result["source_evidence_authority"] == "CORE_PG16_SYNTHETIC_FIXTURE_REFS_ONLY"
     assert result["source_evidence_independently_attested"] is False
     assert result["journey_digest_kind"] == "LOCAL_CORE_READBACK_SHA256_NOT_SIGNATURE"
     assert len(result["journey_sha256"]) == 64
     assert result["twin_graph_019"] == "NOT_BOUND_TO_THIS_RUN"
+
+
+def test_valid_but_wrong_source_evidence_binding_fails_closed():
+    snapshot, rows = fixture()
+    # EVID-SIM-2 exists and is valid, but SOURCE #1 must cite EVID-SIM-1.
+    rows[0] = (*rows[0][:6], [core.ident("EVID-SIM-", ATTEMPT + ":2")], rows[0][7])
+    with pytest.raises(Exception) as caught:
+        journey.project_journey(snapshot, rows, ATTEMPT)
+    assert getattr(caught.value, "status_code", None) == 503
 
 
 @pytest.mark.parametrize("mutation", [
