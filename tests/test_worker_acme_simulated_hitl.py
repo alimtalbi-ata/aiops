@@ -578,6 +578,10 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
             b'{"state":"PASS","risk":NaN}',
             b'{"state":"PASS","risk":Infinity}',
             b'{"state":"PASS","risk":-Infinity}',
+            # RG-ACME-35: valid JSON exponents must not overflow Python float.
+            b'{"state":"PASS","risk":1e309}',
+            b'{"state":"PASS","risk":-1e309}',
+            b'{"state":"PASS","nested":{"risk":9.9e999}}',
             b'[]', b'null', b'', b'{"state":"PASS",}',
             b'{"state":"PASS"}' + bytes([255]),
             b'{"state":"PASS"}' + b" " * 32768,
@@ -587,6 +591,10 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                         SandboxDenied, "^sandbox_readback_json_unqualified$"):
                     decode_authority_json(body)
+        # Ordinary finite JSON fractions remain valid; only nonfinite values
+        # and ambiguous/invalid representations are rejected.
+        self.assertEqual(decode_authority_json(b'{"risk":1.25}'), {"risk": 1.25})
+        self.assertEqual(decode_authority_json(b'{"risk":-2.5e2}'), {"risk": -250.0})
         for nonbytes in (None, '{"state":"PASS"}', bytearray(b'{}')):
             with self.subTest(nonbytes=type(nonbytes).__name__):
                 with self.assertRaises(SandboxDenied):
