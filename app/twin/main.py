@@ -73,3 +73,7 @@ def metrics():
 # Strict opt-in ACME-TEST synthetic approval only, no human IdP.
 from twin.acme_sandbox import router as acme_sandbox_router
 app.include_router(acme_sandbox_router)
+
+# Read-only ACME-TEST 019 SAN hypotheses; no evidence/approval promotion.
+from twin.acme_san_scenarios import router as acme_san_scenarios_router
+app.include_router(acme_san_scenarios_router)
