@@ -1,5 +1,7 @@
 """ACME-TEST 019 topology / eight SAN hypotheses; no DB, network or LIVE writes."""
 import importlib.util
+import hashlib
+import json
 import re
 import sys
 import types
@@ -36,7 +38,7 @@ TOKEN = 'test-internal-token-not-real'
 
 class ReadOnlyGraph:
     def __init__(self):
-        self.nodes = [(k, v, SAN.SITE, 'SIMULATED', 1.0)
+        self.nodes = [(k, v, SAN.SITE, 'SIMULATED', SAN.NODE_CRITICALITY[k], 1.0)
                       for k, v in SAN.NODES.items()]
         self.edges = [(k, *v, 1, 1.0) for k, v in SAN.EDGES.items()]
         self.sql = []
@@ -77,6 +79,8 @@ def graph(monkeypatch):
 def test_migration_019_has_exact_independent_9_node_8_edge_contract():
     sql = (ROOT / 'db/migrations/019_acme_sandbox_twin_topology.sql').read_text()
     assert len(SAN.NODES) == 9 and len(SAN.EDGES) == 8
+    assert len(SAN.NODE_CRITICALITY) == 9
+    assert set(SAN.NODE_CRITICALITY) == set(SAN.NODES)
     for node, node_type in SAN.NODES.items():
         assert f"('{node}','{node_type}'," in sql
     for edge, (src, dst, relation) in SAN.EDGES.items():
@@ -132,7 +136,7 @@ def test_replication_lag_only_recovery_risk_not_payments_outage(graph):
 
 @pytest.mark.parametrize('mutation', [
     'node_missing', 'node_extra', 'node_site_live', 'node_state_live',
-    'node_wrong_type', 'node_low_confidence', 'edge_missing',
+    'node_wrong_type', 'node_low_confidence', 'node_wrong_criticality', 'edge_missing',
     'edge_extra', 'edge_foreign_inbound', 'edge_wrong_relation',
     'edge_swapped_fabrics', 'edge_low_confidence', 'edge_bad_redundancy',
     'edge_duplicate',
@@ -141,13 +145,15 @@ def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
     if mutation == 'node_missing':
         graph.nodes.pop()
     elif mutation == 'node_extra':
-        graph.nodes.append(('ACME-TEST-FOREIGN', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 1.0))
+        graph.nodes.append(('ACME-TEST-FOREIGN', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 5, 1.0))
     elif mutation.startswith('node_'):
         row = list(graph.nodes[0])
         row[{'node_site_live': 2, 'node_state_live': 3,
-             'node_wrong_type': 1, 'node_low_confidence': 4}[mutation]] = {
+             'node_wrong_type': 1, 'node_low_confidence': 5,
+             'node_wrong_criticality': 4}[mutation]] = {
                  'node_site_live': 'PARIS', 'node_state_live': 'LIVE',
-                 'node_wrong_type': 'REAL_SAN_ARRAY', 'node_low_confidence': 0.3}[mutation]
+                 'node_wrong_type': 'REAL_SAN_ARRAY', 'node_low_confidence': 0.3,
+                 'node_wrong_criticality': 1}[mutation]
         graph.nodes[0] = tuple(row)
     elif mutation == 'edge_missing':
         graph.edges.pop()
@@ -179,6 +185,27 @@ def test_digest_is_deterministic_independent_of_db_order(graph):
     graph.nodes.reverse()
     graph.edges.reverse()
     assert SAN.provenance_snapshot()['graph_sha256'] == first
+
+
+def test_digest_binds_criticality_confidence_and_redundancy(graph):
+    receipt = SAN.provenance_snapshot()
+    normalized = {
+        'nodes': sorted(graph.nodes),
+        'edges': sorted(graph.edges),
+    }
+    expected = hashlib.sha256(json.dumps(
+        normalized, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    assert receipt['graph_sha256'] == expected
+    # The prior weak digest omitted operational criticality and edge confidence.
+    old = {
+        'nodes': sorted((node_id, node_type, site, state)
+                        for node_id, node_type, site, state, _, _ in graph.nodes),
+        'edges': sorted((edge_id, source, target, relation)
+                        for edge_id, source, target, relation, _, _ in graph.edges),
+    }
+    old_digest = hashlib.sha256(json.dumps(
+        old, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    assert receipt['graph_sha256'] != old_digest
 
 
 def test_no_token_or_disabled_sandbox_never_reads_graph(graph, monkeypatch):
