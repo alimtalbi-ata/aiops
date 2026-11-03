@@ -65,7 +65,7 @@ ni approbation humaine, ni exécution Worker, ni ticket GLPI réel.</p>
 <option value="change">Changement SAN</option>
 <option value="storm">Tempête de faux positifs</option>
 </select>
-<p id="scenario-status" role="status">CATALOG_ONLY — aucune observation SAN LIVE ni décision Analyst/Critic attestée.</p>
+<p id="scenario-status" role="status">CATALOG_ONLY — Analyst/Critic NOT_ATTESTED ; aucune observation SAN LIVE.</p>
 <p class="muted">Le catalogue P1 #366 n'est pas intégré à ce portail.
 La sélection ne modifie pas la fixture ni ne prétend lancer un scénario.</p>
 </section>
