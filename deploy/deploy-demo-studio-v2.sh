@@ -21,6 +21,9 @@ if [ "$portal_enabled" = yes ]; then
   /bin/bash "$delivery/deploy/debian-portal-deploy.sh" || status=$?
   if [ "$status" -eq 0 ]; then
     /usr/bin/python3 "$delivery/deploy/debian-portal-canonicalize.py" || status=$?
+    if [ "$status" -eq 0 ]; then
+      /usr/bin/python3 "$delivery/deploy/debian-portal-ux-contracts.py" || status=$?
+    fi
   fi
 elif [ "$portal_enabled" != no ]; then
   status=78
