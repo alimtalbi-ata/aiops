@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 from worker.acme_simulated_hitl import (
     ISSUER, SandboxDenied, capability, canonical_source_ids, simulate_no_effect,
-    receipt_digest_valid,
+    receipt_digest_valid, validated_service_origin, decode_authority_json,
     validate_intent, validate_readbacks,
 )
 
@@ -504,6 +504,100 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertEqual(calls, ["core", "twin", "policy"] * 2)
         self.assertEqual(receipt["effect_receipts"], 0)
         self.assertTrue(receipt_digest_valid(receipt))
+
+
+    def test_32_registered_worker_service_origin_fence_before_bearer_egress(self):
+        defaults = {
+            "core": ("http://aiops2-core:810", 810),
+            "twin": ("http://aiops2-twin:811", 811),
+            "policy": ("http://aiops2-policy:813", 813),
+        }
+        for component, (origin, port) in defaults.items():
+            self.assertEqual(validated_service_origin(component, origin), origin)
+            self.assertEqual(
+                validated_service_origin(component, f"http://127.0.0.1:{port}"),
+                f"http://127.0.0.1:{port}")
+            for unsafe in (
+                "http://attacker.example:" + str(port),
+                "http://169.254.169.254:" + str(port),
+                "http://aiops2-core.evil:" + str(port),
+                origin.replace("http:", "ftp:"),
+                origin + "/api/sandbox/acme",
+                origin + "?redirect=evil",
+                origin + "#fragment",
+                # urlsplit normalizes these into the allowed hostname or
+                # discards empty delimiters: reject noncanonical raw origins.
+                origin.replace("aiops2-", "aiops2-\t", 1),
+                origin.replace("aiops2-", "AIOPS2-", 1),
+                origin + "?",
+                origin + "#",
+                origin.replace("://", "://user:password@"),
+                origin.rsplit(":", 1)[0] + ":9999",
+                "http://[::1",
+                "http://aiops2-core:invalid",
+                "",
+                None,
+            ):
+                with self.subTest(component=component, unsafe=unsafe):
+                    with self.assertRaisesRegex(
+                            SandboxDenied, "^sandbox_service_origin_unqualified$"):
+                        validated_service_origin(component, unsafe)
+        with self.assertRaises(SandboxDenied):
+            validated_service_origin("arbitrary", "http://aiops2-core:810")
+        main = (ROOT / "app/worker/main.py").read_text()
+        self.assertIn("origin = validated_service_origin(", main)
+        self.assertLess(main.index("origin = validated_service_origin("),
+                        main.index("headers={\"Authorization\": \"Bearer \" + ADMIN"))
+        # Even an allowed internal origin must not leak the service bearer
+        # through HTTP_PROXY/HTTPS_PROXY/ALL_PROXY or ~/.netrc.
+        activity_source = main[main.index('async def acme_simulated_no_effect('):
+                               main.index('@app.get("/api/sandbox/acme/capabilities")')]
+        self.assertIn("with requests.Session() as session:", activity_source)
+        self.assertIn("session.trust_env = False", activity_source)
+        self.assertIn("response = session.get(", activity_source)
+        self.assertNotIn("response = requests.get(", activity_source)
+        self.assertLess(activity_source.index("session.trust_env = False"),
+                        activity_source.index("response = session.get("))
+
+
+
+
+    def test_35_duplicate_authority_json_denied_before_simulated_receipt(self):
+        # A 200 from an authenticated service is not sufficient authority if
+        # the JSON wire representation is ambiguous. Python's default JSON
+        # decoder silently overwrites duplicate keys, including escaped ones.
+        docs = fixtures()
+        for component in ("core", "twin", "policy"):
+            body = json.dumps(docs[component], separators=(",", ":")).encode("utf-8")
+            with self.subTest(component=component):
+                self.assertEqual(decode_authority_json(body), docs[component])
+        malformed = (
+            b'{"state":"BLOCKED","state":"PASS"}',
+            b'{"state":"BLOCKED","\\u0073tate":"PASS"}',
+            b'{"nested":{"source_event_count":8,"source_event_count":7}}',
+            b'{"state":"PASS","risk":NaN}',
+            b'{"state":"PASS","risk":Infinity}',
+            b'{"state":"PASS","risk":-Infinity}',
+            b'[]', b'null', b'', b'{"state":"PASS",}',
+            b'{"state":"PASS"}' + bytes([255]),
+            b'{"state":"PASS"}' + b" " * 32768,
+        )
+        for body in malformed:
+            with self.subTest(body=repr(body[:70])):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^sandbox_readback_json_unqualified$"):
+                    decode_authority_json(body)
+        for nonbytes in (None, '{"state":"PASS"}', bytearray(b'{}')):
+            with self.subTest(nonbytes=type(nonbytes).__name__):
+                with self.assertRaises(SandboxDenied):
+                    decode_authority_json(nonbytes)
+        main = (ROOT / "app/worker/main.py").read_text()
+        activity = main[main.index("async def acme_simulated_no_effect("):
+                        main.index('@app.get("/api/sandbox/acme/capabilities")')]
+        self.assertIn("return decode_authority_json(response.content)", activity)
+        self.assertIn("session.trust_env = False", activity)
+        self.assertIn("allow_redirects=False", activity)
+        self.assertNotIn("return response.json()", activity)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from temporalio.common import WorkflowIDReusePolicy
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from worker.workflow import IncidentWorkflow, AcmeSimulatedHitlWorkflow, STAGES, RETRY
-from worker.acme_simulated_hitl import SandboxDenied, capability, validate_intent, simulate_no_effect, receipt_digest_valid
+from worker.acme_simulated_hitl import SandboxDenied, capability, validate_intent, simulate_no_effect, receipt_digest_valid, validated_service_origin, decode_authority_json
 from shared.http import post_json,get_json
 from shared.freshness import assess_evidence_freshness
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
@@ -430,18 +430,20 @@ async def acme_simulated_no_effect(intent):
         raise SandboxDenied("sandbox_disabled")
 
     async def read(component, path):
-        origin = {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component)
-        if origin is None:
-            raise SandboxDenied("sandbox_component_denied")
+        origin = validated_service_origin(
+            component, {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component))
 
         def fetch():
-            response = requests.get(
-                origin.rstrip("/") + path,
-                headers={"Authorization": "Bearer " + ADMIN, "Accept": "application/json"},
-                timeout=8, allow_redirects=False)
-            if response.status_code != 200 or len(response.content) > 32768:
-                raise SandboxDenied("sandbox_service_denied_or_unavailable")
-            return response.json()
+            # Fixed service allowlist plus no inherited proxy/.netrc bearer egress.
+            with requests.Session() as session:
+                session.trust_env = False
+                response = session.get(
+                    origin.rstrip("/") + path,
+                    headers={"Authorization": "Bearer " + ADMIN, "Accept": "application/json"},
+                    timeout=8, allow_redirects=False)
+                if response.status_code != 200 or len(response.content) > 32768:
+                    raise SandboxDenied("sandbox_service_denied_or_unavailable")
+                return decode_authority_json(response.content)
 
         return await asyncio.to_thread(fetch)
 

@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import re
+from urllib.parse import urlsplit
 
 TENANT = "ACME-TEST"
 SCENARIO = "ACME-SAN-PAYMENTS"
@@ -23,8 +24,78 @@ _KEYS = frozenset((
 ))
 
 
+# The shared internal bearer must never be sent to a caller-configured or
+# foreign origin. These are exact service DNS names and fixed service ports,
+# not suffix checks or arbitrary private-network destinations.
+_SERVICE_ORIGINS = {
+    "core": (frozenset(("aiops2-core", "aiops2-rebuild-core",
+                         "localhost", "127.0.0.1")), 810),
+    "twin": (frozenset(("aiops2-twin", "aiops2-rebuild-twin",
+                         "localhost", "127.0.0.1")), 811),
+    "policy": (frozenset(("aiops2-policy", "aiops2-rebuild-policy",
+                           "localhost", "127.0.0.1")), 813),
+}
+
+
+def validated_service_origin(component, configured):
+    """Fence bearer egress before an authenticated sandbox GET."""
+    if component not in _SERVICE_ORIGINS or type(configured) is not str:
+        raise SandboxDenied("sandbox_service_origin_unqualified")
+    allowed, port = _SERVICE_ORIGINS[component]
+    try:
+        parsed = urlsplit(configured)
+        valid = (
+            parsed.scheme in ("http", "https")
+            and parsed.hostname in allowed and parsed.port == port
+            and parsed.username is None and parsed.password is None
+            and not parsed.path and not parsed.query and not parsed.fragment
+            # urlsplit silently discards embedded TAB/CR/LF and empty ?/#;
+            # require the exact canonical origin before sending the bearer.
+            and configured == f"{parsed.scheme}://{parsed.hostname}:{port}"
+        )
+    except ValueError:
+        valid = False
+    if not valid:
+        raise SandboxDenied("sandbox_service_origin_unqualified")
+    return configured
+
+
 class SandboxDenied(ValueError):
     """Fail closed without echoing untrusted service responses."""
+
+
+def decode_authority_json(body):
+    """Parse authenticated readbacks without ambiguous duplicate JSON claims.
+
+    requests.Response.json() silently keeps the last occurrence of a duplicate
+    object key, including escaped aliases. That must never establish sandbox
+    Core/Twin/Policy authority. No response bytes or credentials are logged.
+    """
+    if type(body) is not bytes or len(body) > 32768:
+        raise SandboxDenied("sandbox_readback_json_unqualified")
+
+    def unique_object(pairs):
+        document = {}
+        for key, value in pairs:
+            if key in document:
+                raise SandboxDenied("sandbox_readback_json_unqualified")
+            document[key] = value
+        return document
+
+    def reject_nonfinite(_value):
+        raise SandboxDenied("sandbox_readback_json_unqualified")
+
+    try:
+        document = json.loads(
+            body.decode("utf-8"), object_pairs_hook=unique_object,
+            parse_constant=reject_nonfinite)
+    except SandboxDenied:
+        raise
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        raise SandboxDenied("sandbox_readback_json_unqualified") from None
+    if type(document) is not dict:
+        raise SandboxDenied("sandbox_readback_json_unqualified")
+    return document
 
 
 def _id(value):
