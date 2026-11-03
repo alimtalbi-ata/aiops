@@ -14,7 +14,8 @@ import urllib.request
 STATE = Path('/home/aiops/.local/state/aiops-debian-agent')
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
- ('demo_center','/demo-center','text/html',('SIMULATION_ONLY','CATALOG_ONLY','recording-consent','/demo/acme-impact','href="/demo-studio"')),
+ ('demo_center','/demo-center','text/html',('SIMULATION_ONLY','CATALOG_ONLY','recording-consent','/demo/acme-impact','href="/demo-studio"','href="/demo-center/recorder"')),
+ ('recorder_station','/demo-center/recorder','text/html',('Poste de capture locale','LOCAL_ONLY / NO LIVE EFFECT','recording-consent','id="record-start"','src="/assets/demo-center-recorder.js"','SIMULATION_ONLY')),
  ('historical_demo_studio','/demo-studio','text/html',('Demo Studio V2','SYNTHETIC_REFERENCE_ONLY','UNKNOWN','href="/demo-center"')),
  ('noc_operator','/noc','text/html',('UNKNOWN','tenant','/assets/noc-operator.js','NOC opérateur','SYNTHETIC_REFERENCE_ONLY','LOCAL_SYNTHETIC_FIXTURE','noc-synthetic-source','PG16 ACME-TEST migration 019')),
  ('recorder_asset','/assets/demo-center-recorder.js','javascript',('getDisplayMedia','MediaRecorder','isSecureContext','CONSENT_WITHDRAWN')),
