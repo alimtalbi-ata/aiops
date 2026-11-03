@@ -1,7 +1,7 @@
 {
   "schema": "aiops.debian-portal-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8",
+  "candidate_sha": "e6dc55536a1e2daabc59420a94c48eae8e9c042a",
   "scope": "aiops2-rebuild-portal on host TCP 7777",
-  "reason": "P0 #396 modern token-free operator UX: source #401 merged into #234 SHA 9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8; 12-route host gate including new homepage, /runs and CSS/JS; exact-head Quality + Portal/Chromium snapshot passed. Existing recorder station, Twin and NOC preserved. NO LIVE, real SSO/GLPI/recorder permission still NOT_VERIFIED."
+  "reason": "P0 #396 T1 host Chromium: targeted source #415 merged into #234 at immutable SHA e6dc55536a1e2daabc59420a94c48eae8e9c042a (source tree equals exact-head CI tested 2652542c17503d9772510b003044cb8e94b54a47). Bounded OIDC 401 response drain prevents navigation-aborted session GET. Existing targeted portal :7777 Compose upgrade with rollback; 9/9 read-only, 17/17 sandbox and host browser receipt required. No LIVE, human GLPI/HTTPS/recorder still NOT_VERIFIED."
 }

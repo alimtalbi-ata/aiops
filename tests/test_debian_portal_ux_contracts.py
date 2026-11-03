@@ -150,7 +150,7 @@ class UXGateTests(unittest.TestCase):
         portal=json.loads((root/'deploy/debian-portal-release.json').read_text())
         acme=json.loads((root/'deploy/debian-acme-sandbox-release.json').read_text())
         self.assertIs(portal['enabled'],True)
-        self.assertEqual(portal['candidate_sha'],'9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8')
+        self.assertEqual(portal['candidate_sha'],'e6dc55536a1e2daabc59420a94c48eae8e9c042a')
         self.assertIs(acme['enabled'],False)
         self.assertEqual(acme['candidate_sha'],'e9a21e3e13f9c13bff461325426f12f171285b22')
 
