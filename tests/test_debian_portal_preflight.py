@@ -379,6 +379,20 @@ class PreflightContract(unittest.TestCase):
             self.assertEqual(failed['failure_type'], 'ModuleNotFoundError')
             self.assertEqual(failed['failure_stage'], 'IMPORT_PLAYWRIGHT')
             self.assertEqual(failed['page_errors_count'], 0)
+            payload['console_error_class'] = 'http_401_resource'
+            payload['failed_request_class'] = 'aborted'
+            payload['console_error_stage'] = '04-connections'
+            payload['failed_request_stage'] = 'demo-studio'
+            path.write_text(json.dumps(payload))
+            failed = mod.host_playwright_receipt(p, sha, image, now=now)
+            self.assertEqual(failed['console_error_class'], 'http_401_resource')
+            self.assertEqual(failed['failed_request_class'], 'aborted')
+            self.assertEqual(failed['console_error_stage'], '04-connections')
+            self.assertEqual(failed['failed_request_stage'], 'demo-studio')
+            payload['console_error_class'] = 'SYNTHETIC_SECRET_NEVER_EXPORT'
+            path.write_text(json.dumps(payload))
+            self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now)[
+                'console_error_class'], 'UNKNOWN')
             self.assertNotIn('SYNTHETIC_SECRET_NEVER_EXPORT', json.dumps(failed))
             payload['collected_at'] = (now - dt.timedelta(hours=1)).isoformat()
             path.write_text(json.dumps(payload))

@@ -115,12 +115,22 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
             "stable_checkout_sha": None, "portal_image_id": None,
         })
 
+    def test_redacted_browser_error_categories_are_bounded(self):
+        class Message:
+            text = "Failed to load resource: the server responded with a status of 401 SECRET"
+        class Request:
+            failure = "net::ERR_ABORTED SECRET"
+        self.assertEqual(module.classify_console_error(Message()), "http_401_resource")
+        self.assertEqual(module.classify_failed_request(Request()), "aborted")
+        self.assertNotIn("SECRET", module.classify_console_error(Message()))
+        self.assertNotIn("SECRET", module.classify_failed_request(Request()))
+
     def test_browser_source_records_console_and_network_failures(self):
         src = FILE.read_text()
-        self.assertIn('page.on("console"', src)
-        self.assertIn('page.on("requestfailed"', src)
-        self.assertIn('mp.on("console"', src)
-        self.assertIn('mp.on("requestfailed"', src)
+        self.assertIn('page.on("console", record_console)', src)
+        self.assertIn('page.on("requestfailed", record_request_failure)', src)
+        self.assertIn('mp.on("console", record_console)', src)
+        self.assertIn('mp.on("requestfailed", record_request_failure)', src)
         self.assertIn('console_errors_count', src)
         self.assertIn('failed_requests_count', src)
         self.assertIn('failure_stage', src)

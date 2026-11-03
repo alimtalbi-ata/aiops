@@ -45,7 +45,30 @@ SENSITIVE_NAMES = ("portal-read-token", "noc-token", "demo-token", "portal-navig
 # CLI-only bounded diagnostic state. No messages, URLs, headers or tokens.
 BROWSER_PROGRESS = {"stage": "NOT_STARTED", "page_errors_count": 0,
                     "console_errors_count": 0, "failed_requests_count": 0,
-                    "blocked_requests_count": 0}
+                    "blocked_requests_count": 0, "console_error_class": "none",
+                    "failed_request_class": "none", "console_error_stage": "none",
+                    "failed_request_stage": "none"}
+
+
+def classify_console_error(msg):
+    """Return a fixed enum; never persist browser text, headers or URLs."""
+    value = str(getattr(msg, "text", ""))
+    if "Failed to load resource" in value and "401" in value:
+        return "http_401_resource"
+    if "Failed to load resource" in value and "404" in value:
+        return "http_404_resource"
+    if "Refused to" in value or "Content Security Policy" in value:
+        return "csp_rejected"
+    return "other_console_error"
+
+
+def classify_failed_request(request):
+    value = str(getattr(request, "failure", "") or "")
+    if "ERR_ABORTED" in value:
+        return "aborted"
+    if "ERR_CONNECTION" in value or "ERR_NETWORK" in value:
+        return "connection"
+    return "other_request_failure"
 
 
 def note_failure(kind):
@@ -150,7 +173,9 @@ def await_synthetic_workspace_ready(page, expect) -> None:
 def run(args) -> dict:
     BROWSER_PROGRESS.update(stage="VERIFY_HOST", page_errors_count=0,
                             console_errors_count=0, failed_requests_count=0,
-                            blocked_requests_count=0)
+                            blocked_requests_count=0, console_error_class="none",
+                            failed_request_class="none", console_error_stage="none",
+                            failed_request_stage="none")
     base = verify_base_url(args.base_url)
     hostname = platform.node()
     if args.assert_host and hostname.casefold().split(".")[0] != args.assert_host.casefold():
@@ -209,12 +234,24 @@ def run(args) -> dict:
                     route.abort()
 
             context.route("**/*", fence)
+            def record_console(msg):
+                if msg.type != "error":
+                    return
+                console_errors.append("CONSOLE_ERROR")
+                note_failure("console_errors_count")
+                BROWSER_PROGRESS["console_error_class"] = classify_console_error(msg)
+                BROWSER_PROGRESS["console_error_stage"] = BROWSER_PROGRESS["stage"]
+
+            def record_request_failure(request):
+                failed_requests.append("REQUEST_FAILED")
+                note_failure("failed_requests_count")
+                BROWSER_PROGRESS["failed_request_class"] = classify_failed_request(request)
+                BROWSER_PROGRESS["failed_request_stage"] = BROWSER_PROGRESS["stage"]
+
             page.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
                                              note_failure("page_errors_count")))
-            page.on("console", lambda msg: (console_errors.append("CONSOLE_ERROR"),
-                      note_failure("console_errors_count")) if msg.type == "error" else None)
-            page.on("requestfailed", lambda _: (failed_requests.append("REQUEST_FAILED"),
-                                                 note_failure("failed_requests_count")))
+            page.on("console", record_console)
+            page.on("requestfailed", record_request_failure)
 
             def visit(label, path, selector, expected):
                 BROWSER_PROGRESS["stage"] = label
@@ -291,10 +328,8 @@ def run(args) -> dict:
                 BROWSER_PROGRESS["stage"] = "mobile-390px"
                 mp.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
                                              note_failure("page_errors_count")))
-                mp.on("console", lambda msg: (console_errors.append("CONSOLE_ERROR"),
-                      note_failure("console_errors_count")) if msg.type == "error" else None)
-                mp.on("requestfailed", lambda _: (failed_requests.append("REQUEST_FAILED"),
-                                                 note_failure("failed_requests_count")))
+                mp.on("console", record_console)
+                mp.on("requestfailed", record_request_failure)
                 response = mp.goto(base + "/", wait_until="domcontentloaded", timeout=15000)
                 if response is None or response.status != 200:
                     raise AssertionError("mobile home unavailable")
@@ -346,7 +381,9 @@ def main() -> int:
             "failure_stage": BROWSER_PROGRESS["stage"],
             **{k: BROWSER_PROGRESS[k] for k in (
                 "page_errors_count", "console_errors_count",
-                "failed_requests_count", "blocked_requests_count")},
+                "failed_requests_count", "blocked_requests_count",
+                "console_error_class", "failed_request_class",
+                "console_error_stage", "failed_request_stage")},
             "real_screen_capture": "NOT_VERIFIED", "live_effects": 0,
             **observed_provenance(),
         }
