@@ -46,7 +46,7 @@ video{width:100%;max-height:380px;background:#030c13}
 <nav aria-label="Navigation portail">
 <a href="/">Portail :7777</a><a href="/noc">NOC</a>
 <a href="/demo/acme-impact">Twin SAN → Payments (fixture)</a>
-<a href="/demo/explore-story">Explore / Story</a><a href="/itsm">ITSM / GLPI</a>
+<a href="/demo/explore-story">Explore / Story</a><a href="/demo-studio">Demo Studio V2 historique</a><a href="/itsm">ITSM / GLPI</a>
 </nav>
 <h1>DemoCenter · SAN / ACME</h1>
 <p class="warning"><strong>SIMULATION_ONLY / NO LIVE EFFECT.</strong>
@@ -120,3 +120,38 @@ def demo_center_script():
         media_type="application/javascript",
         headers=HEADERS,
     )
+
+
+@router.get("/demo-studio", response_class=HTMLResponse)
+def historical_demo_studio():
+    """Recover the original Demo V2 renderer without unauthorised Core reads.
+
+    The existing exact-Run /runs/{rid} endpoint remains the sole source
+    of tenant-authorized Run detail. No fixture can impersonate a Run.
+    """
+    from portal.demo_v2 import render_demo_v2
+    from portal.ui_theme import THEME
+    body = render_demo_v2(
+        {"run": {"status": "INCONNU"}},
+        {"status": "UNKNOWN", "error_type": "Unauthorized"},
+        {"status": "UNKNOWN"},
+    )
+    page = (
+        '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>Demo Studio V2 historique — ACME</title>'
+        '<style>' + THEME + '</style></head><body>'
+        '<main><nav aria-label="Parcours Demo Studio">'
+        '<a href="/demo-center">DemoCenter</a> · '
+        '<a href="/demo/acme-impact">Twin SAN → Payments synthétique</a> · '
+        '<a href="/noc">NOC</a> · <a href="/itsm">ITSM</a></nav>'
+        '<h1>Demo Studio V2 — rendu historique restauré</h1>'
+        '<p><strong>SYNTHETIC_REFERENCE_ONLY / NO LIVE EFFECT.</strong> '
+        'Aucun Run, incident, événement, ticket, Analyst/Critic ou décision '
+        'Policy n’est attesté par cette page anonyme.</p>'
+        '<p>Pour une lecture de Run réel, utiliser le parcours existant '
+        '<code>/runs/{rid}</code> avec une autorisation serveur acteur/tenant '
+        'et un identifiant exact. Sans ACL, le résultat reste UNKNOWN.</p>'
+        + body + '</main></body></html>'
+    )
+    return HTMLResponse(page, headers=HEADERS)
