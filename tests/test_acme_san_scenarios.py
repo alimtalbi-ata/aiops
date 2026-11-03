@@ -39,7 +39,7 @@ TOKEN = 'test-internal-token-not-real'
 
 class ReadOnlyGraph:
     def __init__(self):
-        self.nodes = [(k, v, SAN.SITE, 'SIMULATED', SAN.NODE_CRITICALITY[k], 1.0)
+        self.nodes = [(k, v, SAN.NODE_NAMES[k], SAN.SITE, 'SIMULATED', SAN.NODE_CRITICALITY[k], 1.0)
                       for k, v in SAN.NODES.items()]
         self.edges = [(k, *v, 1, 1.0) for k, v in SAN.EDGES.items()]
         self.sql = []
@@ -61,7 +61,7 @@ class ReadOnlyGraph:
             # Model the actual SQL predicate: unrelated IDs in the sandbox
             # site must be visible to the exact-nine-node verifier.
             return Cursor([row for row in self.nodes if row[0].startswith('ACME-TEST-')
-                           or ("site = 'ACME-TEST-SIMULATION'" in sql and row[2] == SAN.SITE)])
+                           or ("site = 'ACME-TEST-SIMULATION'" in sql and row[3] == SAN.SITE)])
         assert 'twin_edges' in sql
         return Cursor(self.edges)
 
@@ -87,10 +87,11 @@ def graph(monkeypatch):
 def test_migration_019_has_exact_independent_9_node_8_edge_contract():
     sql = (ROOT / 'db/migrations/019_acme_sandbox_twin_topology.sql').read_text()
     assert len(SAN.NODES) == 9 and len(SAN.EDGES) == 8
-    assert len(SAN.NODE_CRITICALITY) == 9
+    assert len(SAN.NODE_CRITICALITY) == 9 and len(SAN.NODE_NAMES) == 9
     assert set(SAN.NODE_CRITICALITY) == set(SAN.NODES)
+    assert set(SAN.NODE_NAMES) == set(SAN.NODES)
     for node, node_type in SAN.NODES.items():
-        assert f"('{node}','{node_type}'," in sql
+        assert f"('{node}','{node_type}','{SAN.NODE_NAMES[node]}'," in sql
     for edge, (src, dst, relation) in SAN.EDGES.items():
         assert f"('{edge}','{src}','{dst}','{relation}',1,1.0,now())" in sql
     assert 'acme_sandbox_twin_node_provenance_conflict' in sql
@@ -146,7 +147,7 @@ def test_replication_lag_only_recovery_risk_not_payments_outage(graph):
 
 @pytest.mark.parametrize('mutation', [
     'node_missing', 'node_extra', 'node_foreign_same_site', 'node_site_live', 'node_state_live',
-    'node_wrong_type', 'node_low_confidence', 'node_wrong_criticality', 'edge_missing',
+    'node_wrong_type', 'node_wrong_name', 'node_low_confidence', 'node_wrong_criticality', 'edge_missing',
     'edge_extra', 'edge_foreign_inbound', 'edge_wrong_relation',
     'edge_swapped_fabrics', 'edge_low_confidence', 'edge_bad_redundancy',
     'edge_duplicate',
@@ -155,16 +156,18 @@ def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
     if mutation == 'node_missing':
         graph.nodes.pop()
     elif mutation == 'node_extra':
-        graph.nodes.append(('ACME-TEST-FOREIGN', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 5, 1.0))
+        graph.nodes.append(('ACME-TEST-FOREIGN', 'SIMULATED_SAN_ARRAY', 'foreign SAN', SAN.SITE, 'SIMULATED', 5, 1.0))
     elif mutation == 'node_foreign_same_site':
-        graph.nodes.append(('UNPREFIXED-SAN-NODE', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 5, 1.0))
+        graph.nodes.append(('UNPREFIXED-SAN-NODE', 'SIMULATED_SAN_ARRAY', 'foreign SAN', SAN.SITE, 'SIMULATED', 5, 1.0))
     elif mutation.startswith('node_'):
         row = list(graph.nodes[0])
-        row[{'node_site_live': 2, 'node_state_live': 3,
-             'node_wrong_type': 1, 'node_low_confidence': 5,
-             'node_wrong_criticality': 4}[mutation]] = {
+        row[{'node_site_live': 3, 'node_state_live': 4,
+             'node_wrong_type': 1, 'node_wrong_name': 2,
+             'node_low_confidence': 6, 'node_wrong_criticality': 5}[mutation]] = {
                  'node_site_live': 'PARIS', 'node_state_live': 'LIVE',
-                 'node_wrong_type': 'REAL_SAN_ARRAY', 'node_low_confidence': 0.3,
+                 'node_wrong_type': 'REAL_SAN_ARRAY',
+                 'node_wrong_name': 'LIVE array masquerading as ACME-TEST',
+                 'node_low_confidence': 0.3,
                  'node_wrong_criticality': 1}[mutation]
         graph.nodes[0] = tuple(row)
     elif mutation == 'edge_missing':
@@ -234,7 +237,7 @@ def test_digest_binds_criticality_confidence_and_redundancy(graph):
     # The prior weak digest omitted operational criticality and edge confidence.
     old = {
         'nodes': sorted((node_id, node_type, site, state)
-                        for node_id, node_type, site, state, _, _ in graph.nodes),
+                        for node_id, node_type, _, site, state, _, _ in graph.nodes),
         'edges': sorted((edge_id, source, target, relation)
                         for edge_id, source, target, relation, _, _ in graph.edges),
     }
