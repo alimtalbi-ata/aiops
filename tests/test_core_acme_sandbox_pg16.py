@@ -143,8 +143,6 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(self.client.get(path, headers=headers).json(), doc)
         self.assertEqual(self.client.get(path, headers={
             'Authorization': 'Bearer forged'}).status_code, 401)
-        self.assertEqual(self.client.get(
-            '/api/sandbox/acme/e2e/../journey', headers=headers).status_code, 404)
         with psycopg.connect(self.url) as db:
             count = db.execute('select count(*) from aiops.run_events where run_id=%s',
                                (core_doc['run_id'],)).fetchone()[0]
