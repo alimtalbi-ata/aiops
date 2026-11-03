@@ -95,7 +95,7 @@ def run(args) -> dict:
     hostname = platform.node()
     if args.assert_host and hostname.casefold().split(".")[0] != args.assert_host.casefold():
         raise ValueError("hostname does not match the requested Debian host")
-    folder = Path(args.output_dir).expanduser().resolve()
+    folder = Path(args.output_dir).expanduser().absolute()
     secure_dir(folder)
     receipt = {
         "schema": "aiops.portal-host-playwright-snapshots.v1",
