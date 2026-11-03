@@ -1,18 +1,20 @@
-import os,asyncio,datetime
+import os,asyncio
+import requests
 from fastapi import FastAPI,HTTPException,Header
-from temporalio import activity,workflow
-from temporalio.client import Client
+from temporalio import activity
+from temporalio.client import Client, WorkflowExecutionStatus
+from temporalio.common import WorkflowIDReusePolicy
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
-from temporalio.common import RetryPolicy
 from shared.http import post_json
 from shared.simulation_policy_contract import policy_command_for_mode
+from worker.hitl_reject_terminal_runtime import recover_terminal_once, validate_request, UnqualifiedTerminal
+from worker.temporal_workflows import IncidentWorkflow, TerminalRejectWorkflow, AcmeSimulatedHitlWorkflow
+from worker.acme_simulated_hitl import (SandboxDenied, capability, validate_intent, simulate_no_effect, receipt_digest_valid, validated_service_origin, read_bounded_authority_response)
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233')
-STAGES=['NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC','POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN']
-RETRY=RetryPolicy(initial_interval=datetime.timedelta(seconds=1),backoff_coefficient=2.0,max_interval=datetime.timedelta(seconds=10),maximum_attempts=3)
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
 @activity.defn
 async def start_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
@@ -68,15 +70,6 @@ async def execute_stage(a):
         finally: raise
 @activity.defn
 async def finish_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'RESOLVE-'+a['run_id'],'command':'RESOLVE'})
-@workflow.defn
-class IncidentWorkflow:
- @workflow.run
- async def run(self,args):
-  r=await workflow.execute_activity(start_run,args,start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY);v=r['version']
-  for stage in STAGES:
-   r=await workflow.execute_activity(execute_stage,{'stage':stage,'run_id':args['run_id'],'version':v,'mode':args['mode'],'scenario_id':args['scenario_id']},start_to_close_timeout=datetime.timedelta(seconds=60),retry_policy=RETRY);v=r['version']
-   if r.get('status')=='BLOCKED': return {'run_id':args['run_id'],'status':'BLOCKED','final_version':v}
-  f=await workflow.execute_activity(finish_run,{'run_id':args['run_id'],'version':v},start_to_close_timeout=datetime.timedelta(seconds=30),retry_policy=RETRY);return {'run_id':args['run_id'],'final_version':f['version'],'status':f['status']}
 @app.get('/health')
 def health():return {'status':'ok','component':'worker','executor':'temporal','task_queue':'aiops-runner'}
 @app.get('/metrics')
@@ -91,11 +84,167 @@ async def start(args:dict,authorization:str|None=Header(default=None)):
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
  except WorkflowAlreadyStartedError:
   return {'workflow_id':args['run_id'],'run_id':args['run_id'],'executor':'temporal','idempotent':True}
+
+# Terminal-only REJECT recovery. This is NOT the old claim/signal/ACK harness.
+# Core #344 owns the expired eighth lease, immutable DEAD and 014/015 receipt.
+# No raw lease token is accepted or placed in Temporal history.
+@activity.defn(name='reject_terminal_recover')
+async def reject_terminal_recover(args):
+    owner=os.getenv('AIOPS_REJECT_TERMINAL_OWNER')
+    if not owner:
+        raise UnqualifiedTerminal('terminal_service_owner_not_configured')
+    async def post(path, body):
+        return await asyncio.to_thread(post_json, CORE, path, body, timeout=15, token=ADMIN)
+    return await recover_terminal_once(args, owner=owner, post=post)
+
+@app.post('/api/execution/reject-terminal')
+async def start_reject_terminal(args:dict, authorization:str|None=Header(default=None)):
+    if (authorization or '').removeprefix('Bearer ')!=ADMIN:
+        raise HTTPException(401,'invalid internal token')
+    owner=os.getenv('AIOPS_REJECT_TERMINAL_OWNER')
+    if not owner:
+        raise HTTPException(503,'terminal service identity not configured')
+    try:
+        validate_request(args, owner)
+    except UnqualifiedTerminal:
+        raise HTTPException(422,'unqualified terminal request')
+    c=await Client.connect(TEMP)
+    workflow_id=f"reject-terminal-{args['tenant_id']}-{args['event_id']}"
+    try:
+        h=await c.start_workflow(TerminalRejectWorkflow.run,args,id=workflow_id,
+                                 task_queue='aiops-runner')
+        return {'workflow_id':h.id,'run_id':args['run_id'],
+                'status':'PENDING_CORE_TERMINAL','effect_allowed':False}
+    except WorkflowAlreadyStartedError:
+        return {'workflow_id':workflow_id,'run_id':args['run_id'],
+                'idempotent':True,'effect_allowed':False}
+
 async def worker_main():
  while True:
   try:
    c=await Client.connect(TEMP)
-   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow],activities=[execute_stage,start_run,finish_run]):await asyncio.Event().wait()
+   async with Worker(c,task_queue='aiops-runner',workflows=[IncidentWorkflow,TerminalRejectWorkflow,AcmeSimulatedHitlWorkflow],activities=[execute_stage,start_run,finish_run,reject_terminal_recover,acme_simulated_no_effect]):await asyncio.Event().wait()
   except Exception:await asyncio.sleep(5)
 @app.on_event('startup')
 async def startup():asyncio.create_task(worker_main())
+
+
+# The ACME simulator is NOT a human IdP/GLPI approval. This bounded route is
+# disabled by default and never writes to Core, Twin, Policy, GLPI or LIVE.
+# Only the simulator's nonsecret IDs enter Temporal history. The activity
+# obtains fresh authenticated readbacks itself, never trusts supplied proof.
+def _acme_sandbox_enabled():
+    return os.getenv("AIOPS_ACME_SANDBOX_ENABLED") == "true"
+
+
+def _acme_sandbox_guard():
+    if not _acme_sandbox_enabled():
+        raise HTTPException(503, "sandbox_capability_unavailable")
+
+
+def _acme_sandbox_auth(authorization):
+    if (type(authorization) is not str or not authorization.startswith("Bearer ")
+            or authorization[7:] != ADMIN):
+        raise HTTPException(401, "sandbox_service_denied")
+
+
+@activity.defn(name="acme_simulated_no_effect")
+async def acme_simulated_no_effect(intent):
+    if not _acme_sandbox_enabled():
+        raise SandboxDenied("sandbox_disabled")
+
+    async def read(component, path):
+        origin = validated_service_origin(
+            component, {"core": CORE, "twin": TWIN, "policy": POLICY}.get(component))
+
+        def fetch():
+            # The internal bearer must not traverse HTTP(S)/ALL_PROXY or .netrc.
+            # Fixed-origin validation alone does not disable requests' env proxies.
+            with requests.Session() as session:
+                session.trust_env = False
+                with session.get(
+                    origin.rstrip("/") + path,
+                    headers={"Authorization": "Bearer " + ADMIN, "Accept": "application/json"},
+                    timeout=8, allow_redirects=False, stream=True) as response:
+                    return read_bounded_authority_response(response)
+
+        return await asyncio.to_thread(fetch)
+
+    return await simulate_no_effect(intent, get=read)
+
+
+@app.get("/api/sandbox/acme/capabilities")
+def acme_sandbox_capabilities():
+    _acme_sandbox_guard()
+    return capability()
+
+
+@app.post("/api/sandbox/acme/e2e")
+async def start_acme_simulated(intent: dict, authorization: str | None = Header(default=None)):
+    _acme_sandbox_guard()
+    _acme_sandbox_auth(authorization)
+    try:
+        validate_intent(intent)
+    except SandboxDenied:
+        raise HTTPException(422, "sandbox_intent_unqualified") from None
+    client = await Client.connect(TEMP)
+    workflow_id = "acme-simulated-" + intent["tenant_id"] + "-" + intent["attempt_id"]
+    try:
+        handle = await client.start_workflow(
+            AcmeSimulatedHitlWorkflow.run, intent, id=workflow_id,
+            task_queue="aiops-runner",
+            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE)
+        return {"workflow_id": handle.id, "attempt_id": intent["attempt_id"],
+                "status": "PENDING_INDEPENDENT_READBACK", "effect_allowed": False}
+    except WorkflowAlreadyStartedError:
+        return {"workflow_id": workflow_id, "attempt_id": intent["attempt_id"],
+                "idempotent": True, "effect_allowed": False}
+
+
+@app.get("/api/sandbox/acme/e2e/{attempt_id}")
+async def read_acme_simulated(attempt_id: str, authorization: str | None = Header(default=None)):
+    _acme_sandbox_guard()
+    _acme_sandbox_auth(authorization)
+    # No arbitrary workflow ID, tenant or cross-sandbox lookup.
+    from worker.acme_simulated_hitl import _id
+    if not _id(attempt_id) or not attempt_id.startswith("ACME-SIM-"):
+        raise HTTPException(404, "sandbox_receipt_unknown")
+    client = await Client.connect(TEMP)
+    handle = client.get_workflow_handle("acme-simulated-ACME-TEST-" + attempt_id)
+    try:
+        state = await handle.describe()
+        if state.status != WorkflowExecutionStatus.COMPLETED:
+            raise HTTPException(503, "sandbox_receipt_unqualified")
+        result = await handle.result()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "sandbox_receipt_unqualified") from None
+    if (type(result) is not dict
+            or result.get("schema") != "aiops.worker-acme-simulated-no-effect.v1"
+            or result.get("attempt_id") != attempt_id
+            or result.get("tenant_id") != "ACME-TEST"
+            or result.get("approval_issuer") != "TWIN_ACME_SIMULATED"
+            or result.get("approval_kind") != "SIMULATED"
+            or result.get("action") != "SIMULATE"
+            or result.get("receipt_status") != "SIMULATED_NO_EFFECT"
+            or result.get("receipt_phase") != "PRE_RESOLUTION"
+            or result.get("core_status_at_validation") != "PREPARED"
+            or result.get("resolution_verified") is not False
+            or result.get("post_resolution_readback_required") is not True
+            or result.get("audit_transitions") != [
+                "CORE_PREPARED_INDEPENDENTLY_VERIFIED",
+                "TWIN_SIMULATED_APPROVAL_VALIDATED",
+                "POLICY_SIMULATE_INDEPENDENTLY_VERIFIED",
+                "WORKER_NO_EFFECT"]
+            or result.get("human_approved") is not False
+            or result.get("execution_allowed") is not False
+            or result.get("effect_allowed") is not False
+            or result.get("real_glpi_writes_allowed") is not False
+            or result.get("live_effects_allowed") is not False
+            or type(result.get("effect_receipts")) is not int
+            or result["effect_receipts"] != 0
+            or result.get("audit_authority") != "TEMPORAL_WORKFLOW_HISTORY_ONLY"
+            or not receipt_digest_valid(result)):
+        raise HTTPException(503, "sandbox_receipt_unqualified")
+    return result

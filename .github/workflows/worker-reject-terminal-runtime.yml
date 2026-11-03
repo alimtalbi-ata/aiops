@@ -1,0 +1,239 @@
+name: Worker registered REJECT terminal activity (source-only)
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/worker/main.py
+      - app/worker/temporal_workflows.py
+      - app/worker/hitl_reject_terminal_runtime.py
+      - app/worker/acme_simulated_hitl.py
+      - tests/test_worker_hitl_reject_terminal_runtime.py
+      - tests/test_worker_acme_simulated_hitl.py
+      - tests/test_worker_hitl_terminal_joined_pg16.py
+      - tests/test_worker_acme_temporal_persisted.py
+      - .github/workflows/worker-reject-terminal-runtime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  terminal-runtime-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exact source and 49/49 no-skip tests
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python -m compileall -q app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py app/worker/acme_simulated_hitl.py
+          python -m unittest discover -s tests -p 'test_worker_hitl_reject_terminal_runtime.py' -v 2>&1 | tee /tmp/worker-terminal-tests.log
+          grep -E '^Ran 10 tests in ' /tmp/worker-terminal-tests.log
+          grep -x 'OK' /tmp/worker-terminal-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-terminal-tests.log
+          python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v 2>&1 | tee /tmp/worker-acme-tests.log
+          grep -E '^Ran 40 tests in ' /tmp/worker-acme-tests.log
+          grep -x 'OK' /tmp/worker-acme-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-tests.log
+          python - <<'PY'
+          import hashlib,json,os,pathlib,re
+          logs=[pathlib.Path('/tmp/worker-terminal-tests.log'),
+                pathlib.Path('/tmp/worker-acme-tests.log')]
+          counts=[]
+          for log in logs:
+              matches=re.findall(r'^Ran ([0-9]+) tests in ',log.read_text(),re.MULTILINE)
+              assert len(matches)==1 and 'OK' in log.read_text().splitlines()
+              counts.append(int(matches[0]))
+          assert counts==[10,40]
+          r={"schema":"aiops.worker-terminal-runtime-source-ci.v1",
+             "source_sha":os.environ["EXPECTED_HEAD"],"unit_tests":sum(counts),
+             "unit_failures":0,"unit_skips":0,"runtime_activity_registered":True,
+             "runtime_workflow_registered":True,"simulated_no_effect_registered":True,
+             "simulated_approval_issuer":"TWIN_ACME_SIMULATED",
+             "human_approval_claimed":False,"simulated_effect_receipts":0,
+             "simulated_receipt_phase":"PRE_RESOLUTION",
+             "core_resolved_by_worker":False,
+             "post_resolution_core_readback_required":True,
+             "core_344_joined_pg16":False,
+             "two_os_worker_restart":False,"temporal_persisted_restart":False,
+             "human_glpi_allow":False,"live_effect":False,"host_deployed":False,
+             "release_stable":"NO_GO"}
+          p=pathlib.Path('/tmp/worker-terminal-runtime-receipt.json')
+          p.write_text(json.dumps(r,sort_keys=True,separators=(',',':'))+'\n')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          pathlib.Path('/tmp/worker-terminal-runtime-receipt.sha256').write_text(digest+'  '+p.name+'\n')
+          print('SOURCE_ONLY_SHA256='+digest)
+          PY
+          (cd /tmp && sha256sum --check worker-terminal-runtime-receipt.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worker-terminal-runtime-source-receipt
+          path: |
+            /tmp/worker-terminal-runtime-receipt.json
+            /tmp/worker-terminal-runtime-receipt.sha256
+          retention-days: 7
+
+  registered-core344-pg16-temporal-joined:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-worker-core344-disposable
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-worker-core344-disposable@127.0.0.1:5432/aiops
+      PGPASSWORD: ci-worker-core344-disposable
+      AIOPS_XREF_CI_DISPOSABLE: "1"
+      AIOPS_WORKER_CORE344_JOINED: "YES"
+      AIOPS_INTERNAL_TOKEN: ci-worker-core344-import-only
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      AIOPS_CORE344_HEAD_SHA: 567cdad18571ccea8f0f65e3ddf721d92f38de95
+      AIOPS_CORE344_ROOT: ${{ github.workspace }}/core344
+      AIOPS_WORKER_CORE344_RECEIPT_DIR: /tmp/worker-core344-joined-receipt
+      PYTHONPATH: ${{ github.workspace }}/core344/app:${{ github.workspace }}/app:${{ github.workspace }}/core344/tests:${{ github.workspace }}/tests
+    steps:
+      - name: Install git before SHA-pinned checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git ca-certificates
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 567cdad18571ccea8f0f65e3ddf721d92f38de95
+          path: core344
+          persist-credentials: false
+      - name: Exact two-source SHA and disposable PostgreSQL 16
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          test "$(git -C core344 -c safe.directory="$GITHUB_WORKSPACE/core344" rev-parse HEAD)" = "$AIOPS_CORE344_HEAD_SHA"
+          echo "AIOPS_CORE344_ROOT=$GITHUB_WORKSPACE/core344" >> "$GITHUB_ENV"
+          echo "PYTHONPATH=$GITHUB_WORKSPACE/core344/app:$GITHUB_WORKSPACE/app:$GITHUB_WORKSPACE/core344/tests:$GITHUB_WORKSPACE/tests" >> "$GITHUB_ENV"
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat openssl ca-certificates
+          python3 -m venv /tmp/worker-core344-venv
+          /tmp/worker-core344-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "requests==2.32.4" "fastapi==0.116.1" "httpx==0.28.1" "temporalio==1.16.0" "uvicorn==0.35.0"
+          /tmp/worker-core344-venv/bin/python -m py_compile tests/test_worker_hitl_terminal_joined_pg16.py app/worker/main.py app/worker/temporal_workflows.py app/worker/hitl_reject_terminal_runtime.py app/worker/acme_simulated_hitl.py tests/test_worker_acme_simulated_hitl.py
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/worker-core344-socat.log 2>&1 </dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          test "$(/usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | cut -c1-2)" = 16
+      - name: Registered Worker two OS pollers and persisted Temporal restart against Core 344 PG16
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-core344-venv/bin/python -m unittest discover -s tests -p 'test_worker_hitl_terminal_joined_pg16.py' -v 2>&1 | tee /tmp/worker-core344-joined.log
+          grep -E '^Ran 1 test in ' /tmp/worker-core344-joined.log
+          grep -x 'OK' /tmp/worker-core344-joined.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-core344-joined.log
+      - name: Positive registered ACME Temporal persisted restart and replay denial (synthetic HTTP only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-core344-venv/bin/python -m unittest discover -s tests -p 'test_worker_acme_temporal_persisted.py' -v 2>&1 | tee /tmp/worker-acme-temporal-persisted.log
+          grep -E '^Ran 1 test in ' /tmp/worker-acme-temporal-persisted.log
+          grep -x 'OK' /tmp/worker-acme-temporal-persisted.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/worker-acme-temporal-persisted.log
+      - name: Verify redacted positive Temporal persisted history receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-core344-venv/bin/python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path(os.environ["AIOPS_WORKER_CORE344_RECEIPT_DIR"])/"worker-acme-positive-temporal-restart.json"
+          data=json.loads(p.read_text())
+          digest=data.pop("payload_sha256")
+          assert digest==hashlib.sha256(json.dumps(data,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+          assert data["worker_head"]==os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["worker_os_processes"]==2 and data["distinct_pids"]
+          assert data["temporal_persisted_restarts"]==1
+          assert data["registered_activity"]=="acme_simulated_no_effect"
+          assert data["same_run_history_digest_stable"] and data["workflow_id_replay_rejected"]
+          assert data["policy_revoked_denied"] and data["expired_twin_denied"] and data["cross_tenant_denied"]
+          assert data["receipt_status"]=="SIMULATED_NO_EFFECT" and data["effect_receipts"]==0
+          assert data["direct_only_bearer_gets"]==12
+          assert not data["human_glpi_allow"] and not data["live_effect"] and not data["glpi_write"]
+          assert data["readbacks"]=="SYNTHETIC_AUTHENTICATED_LOOPBACK"
+          assert not data["core_pg16_positive_same_run_joined"] and not data["host_deployed"]
+          for secret in ("Bearer ", "ci-acme-temporal-synthetic-bearer", "postgresql://"):
+              assert secret not in p.read_text()
+          print("REGISTERED_ACME_POSITIVE_TEMPORAL_RESTART_PASS",digest)
+          PY
+          cd "$AIOPS_WORKER_CORE344_RECEIPT_DIR"
+          sha256sum worker-acme-positive-temporal-restart.json > worker-acme-positive-temporal-restart.sha256
+          sha256sum --check worker-acme-positive-temporal-restart.sha256
+      - name: Verify exact-head redacted Core/Worker joined receipt and SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/worker-core344-venv/bin/python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path(os.environ["AIOPS_WORKER_CORE344_RECEIPT_DIR"])/"worker-core344-joined.json"
+          data=json.loads(p.read_text())
+          digest=data.pop("payload_sha256")
+          assert digest==hashlib.sha256(json.dumps(data,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+          assert data["worker_head"]==os.environ["AIOPS_EXPECTED_HEAD_SHA"]
+          assert data["core_head"]==os.environ["AIOPS_CORE344_HEAD_SHA"]
+          assert data["worker_os_processes"]==2 and data["distinct_pids"]
+          assert data["temporal_persisted_restarts"]==1
+          assert data["production_registered_activity"]=="reject_terminal_recover"
+          assert data["core_http_recover"]=="200_DEAD"
+          assert data["core_http_readback"]=="200_DEAD_IDEMPOTENT"
+          assert data["canonical_incident_readback"] is True
+          assert data["post_dead_foreign_incident"]=="200_UNKNOWN"
+          assert data["core_pg16_014_rows"]==1 and data["core_pg16_015_migration"]
+          assert data["core_outbox_status"]=="DEAD" and data["core_outbox_attempts"]==8
+          assert data["core_replay_idempotent"]
+          assert data["post_dead_source_revoked"]=="UNKNOWN"
+          assert data["unauthorized_bearer"]==401 and data["wrong_tenant"]==403
+          assert data["temporal_signal_count"]==data["approve_count"]==data["effect_receipts"]==0
+          assert not data["human_glpi_allow"] and not data["live_effect"] and not data["glpi_write"]
+          assert not data["same_run_015_event_writer_joined"] and not data["debian_deployed"]
+          assert data["release_stable"]=="NO_GO"
+          for secret in ("Bearer ","postgresql://","lease_token","ci-worker-core344-disposable"):
+              assert secret not in p.read_text()
+          print("REGISTERED_WORKER_CORE344_JOINED_PASS",digest)
+          PY
+          cd "$AIOPS_WORKER_CORE344_RECEIPT_DIR"
+          sha256sum worker-core344-joined.json > worker-core344-joined.sha256
+          sha256sum --check worker-core344-joined.sha256
+      - name: Upload redacted joined evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-core344-registered-joined-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            /tmp/worker-core344-joined-receipt/worker-core344-joined.json
+            /tmp/worker-core344-joined-receipt/worker-core344-joined.sha256
+            /tmp/worker-core344-joined-receipt/worker-acme-positive-temporal-restart.json
+            /tmp/worker-core344-joined-receipt/worker-acme-positive-temporal-restart.sha256
+          retention-days: 7
+          if-no-files-found: warn
