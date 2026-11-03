@@ -14,6 +14,10 @@ import urllib.request
 STATE = Path('/home/aiops/.local/state/aiops-debian-agent')
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
+ ('modern_home','/','text/html',('operator-workspace.css','operator-workspace.js','id="overview-heading"','data-panel="runs"','href="/demo-center"','href="/noc"')),
+ ('modern_runs','/runs','text/html',('operator-workspace.css','operator-workspace.js','id="runs"','Liste d\'incidents réels non disponible')),
+ ('modern_css','/assets/operator-workspace.css','text/css',('color-scheme:dark','.app-layout','.sidebar','.metric-grid')),
+ ('modern_js','/assets/operator-workspace.js','javascript',('/api/demo/acme-impact','/api/portal/session','runtime_attested','source_sha256','credentials: "omit"')),
  ('demo_center','/demo-center','text/html',('SIMULATION_ONLY','CATALOG_ONLY','recording-consent','/demo/acme-impact','href="/demo-studio"','href="/demo-center/recorder"')),
  ('recorder_station','/demo-center/recorder','text/html',('Poste de capture locale','LOCAL_ONLY / NO LIVE EFFECT','recording-consent','id="record-start"','src="/assets/demo-center-recorder.js"','SIMULATION_ONLY')),
  ('historical_demo_studio','/demo-studio','text/html',('Demo Studio V2','SYNTHETIC_REFERENCE_ONLY','UNKNOWN','href="/demo-center"')),
@@ -62,6 +66,10 @@ def qualify_route(case, opener):
         elif kind not in headers.get('Content-Type','').lower(): reason='CONTENT_TYPE_MISMATCH'
         elif kind=='text/html' and ("default-src 'none'" not in headers.get('Content-Security-Policy','') or "frame-ancestors 'none'" not in headers.get('Content-Security-Policy','')): reason='HTML_CSP_MISSING'
         elif kind=='application/json' and not valid_synthetic_twin_model(raw): reason='TWIN_MODEL_CONTRACT_MISMATCH'
+        elif name in ('modern_home','modern_runs') and any(legacy in raw for legacy in
+                (b'id="portal-read-token"',b'id="noc-token"',b'id="demo-token"',
+                 b'id="portal-navigation-token"',b'type="password"')):
+            reason='LEGACY_BEARER_PROMPT_PRESENT'
         elif not all(m in raw.decode('utf-8') for m in markers): reason='ROUTE_MARKERS_MISSING'
         else:
             result.update(status='PASS',reason='READONLY_ROUTE_PRESENT_NOT_UX_ATTESTED')
