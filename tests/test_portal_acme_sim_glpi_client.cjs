@@ -88,6 +88,33 @@ test("forged HTTP 200 cannot promote wrong tenant, real ticket or human ALLOW", 
   }
 });
 
+test("forged 200 extra human, tenant ACL or LIVE claims never render RESOLVED", async () => {
+  const topLevel = [
+    {human_approved: true}, {idp_issuer: "forged-idp"},
+    {native_glpi_read: "ALLOW"}, {ticket_user_readmy: "ALLOW"},
+    {actor_acl_verified: true}, {tenant_acl_verified: true},
+    {live_executor: "AUTHORIZED"}, {internal_service_token: "forged"},
+    {worker_receipt_sha256: "a".repeat(64)},
+    {terminal_ticket_sha256: "b".repeat(64)}
+  ];
+  for (const injection of topLevel) {
+    const {nodes} = setup({status: 200, body: {...GOOD, ...injection}});
+    await nodes["sim-read"].click();
+    assert.equal(nodes["sim-ticket"].textContent, "UNKNOWN");
+    assert.match(nodes["sim-status"].textContent, /503 UNKNOWN/);
+  }
+  for (const ticket of [
+    {...GOOD.ticket, real_glpi_id: 42},
+    {...GOOD.ticket, human_readmy: "ALLOW"},
+    {...GOOD.ticket, idp_subject: "forged-user"}
+  ]) {
+    const {nodes} = setup({status: 200, body: {...GOOD, ticket}});
+    await nodes["sim-read"].click();
+    assert.equal(nodes["sim-state"].textContent, "UNKNOWN");
+    assert.match(nodes["sim-status"].textContent, /503 UNKNOWN/);
+  }
+});
+
 test("401, 403, 503 and network errors clear any ticket", async () => {
   for (const status of [401, 403, 503, 302]) {
     const {nodes} = setup({status, body: GOOD});
