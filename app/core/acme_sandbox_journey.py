@@ -36,6 +36,9 @@ def project_journey(snapshot, rows, attempt):
             or snapshot['source_event_count'] != 7
             or type(snapshot.get('source_event_ids')) is not list
             or len(snapshot['source_event_ids']) != 7
+            or snapshot['source_event_ids'] != [
+                core.ident('SYN-EVT-', attempt + ':' + str(i), 20)
+                for i in range(1, 8)]
             or any(type(snapshot.get(k)) is not str for k in
                    ('incident_id', 'run_id', 'ticket_id', 'proposal_id', 'request_sha256'))):
         raise HTTPException(503, 'sandbox_journey_core_unqualified')
@@ -44,6 +47,11 @@ def project_journey(snapshot, rows, attempt):
             or snapshot.get('worker_receipt_verified') is not resolved
             or snapshot.get('terminal_ticket_receipt_verified') is not resolved):
         raise HTTPException(503, 'sandbox_journey_event_count_unqualified')
+    # These are synthetic Core evidence references, not evidence bytes or
+    # independently observed SAN facts. Never promote them to Analyst/Critic.
+    expected_evidence = {
+        core.ident('EVID-SIM-', attempt + ':' + str(i)) for i in (1, 2)
+    }
     timeline = []
     last_time = None
     for index, row in enumerate(rows, 1):
@@ -66,9 +74,12 @@ def project_journey(snapshot, rows, attempt):
                     or payload.get('source_event_id') != event_key
                     or payload.get('run_id') != snapshot['run_id']
                     or payload.get('incident_id') != snapshot['incident_id']
+                    or type(payload.get('sequence')) is not int
                     or payload.get('sequence') != index
                     or payload.get('synthetic') is not True
-                    or len(evidence) != 1):
+                    or len(evidence) != 1
+                    or type(evidence[0]) is not str
+                    or evidence[0] not in expected_evidence):
                 raise HTTPException(503, 'sandbox_journey_source_unqualified')
         elif index == 8:
             if ((stage, kind, status) != ('RUN', 'SIMULATED_PREPARED', 'PREPARED')
@@ -101,7 +112,16 @@ def project_journey(snapshot, rows, attempt):
         timeline.append({'sequence': seq, 'stage': stage, 'event_type': kind,
                          'status': status, 'occurred_at_utc': utc.isoformat(),
                          'source_event_id': event_key if index <= 7 else None,
+                         'event_key': event_key,
+                         'evidence_ids': list(evidence),
                          'record_sha256': fingerprint})
+    # Stable comparison key for NOC/Studio/Twin consumers once an independent
+    # server-side actor/tenant/exact-Run ACL exists. SHA256 is NOT a signature.
+    journey_fingerprint = hashlib.sha256(json.dumps({
+        'tenant_id': core.TENANT, 'attempt_id': attempt,
+        'incident_id': snapshot['incident_id'], 'run_id': snapshot['run_id'],
+        'timeline': timeline,
+    }, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()).hexdigest()
     return {
         'schema': 'aiops.core-acme-sandbox-journey.v1',
         'tenant_id': core.TENANT, 'attempt_id': attempt,
@@ -110,6 +130,12 @@ def project_journey(snapshot, rows, attempt):
         'ticket_id': snapshot['ticket_id'], 'ticket_authority': 'SIMULATED_ONLY',
         'run_status': snapshot['run_status'], 'source_event_ids': list(snapshot['source_event_ids']),
         'source_event_count': 7, 'timeline': timeline,
+        'source_evidence_refs': sorted({eid for event in timeline[:7]
+                                        for eid in event['evidence_ids']}),
+        'source_evidence_authority': 'CORE_PG16_SYNTHETIC_FIXTURE_REFS_ONLY',
+        'source_evidence_independently_attested': False,
+        'journey_sha256': journey_fingerprint,
+        'journey_digest_kind': 'LOCAL_CORE_READBACK_SHA256_NOT_SIGNATURE',
         'readback_authority': 'CORE_PG16_INTERNAL_BEARER_ONLY',
         'event_digest_kind': 'LOCAL_DB_READBACK_SHA256_NOT_SIGNATURE',
         'analyst': 'SYNTHETIC_FIXTURE_NOT_INDEPENDENTLY_ATTESTED',
