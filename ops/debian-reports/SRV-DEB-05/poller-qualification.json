@@ -9,15 +9,15 @@
   "acme_sandbox_verdict": "NO_GO_NOT_RUNTIME_VERIFIED",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-CCFCDDA5655E4CFC",
-    "collected_at": "2026-11-03T17:44:23.259090+00:00",
+    "attempt_id": "ACME-SIM-4302F807E71A47BC",
+    "collected_at": "2026-11-03T17:54:14.359336+00:00",
     "human_approval_claimed": false,
     "ids": {
-      "approval_id": "SIM-APP-5B6E67C915A6B8D887218F7E",
-      "incident_id": "INC-SIM-5B6E67C915A6B8D887218F7E",
-      "proposal_id": "PROP-SIM-5B6E67C915A6B8D887218F7E",
-      "run_id": "RUN-SIM-5B6E67C915A6B8D887218F7E",
-      "ticket_id": "SIM-GLPI-5B6E67C915A6B8D887218F7E"
+      "approval_id": "SIM-APP-6662EDF4FEC3C02F47A178AB",
+      "incident_id": "INC-SIM-6662EDF4FEC3C02F47A178AB",
+      "proposal_id": "PROP-SIM-6662EDF4FEC3C02F47A178AB",
+      "run_id": "RUN-SIM-6662EDF4FEC3C02F47A178AB",
+      "ticket_id": "SIM-GLPI-6662EDF4FEC3C02F47A178AB"
     },
     "live_effects_allowed": false,
     "mode": "SIMULATION",
@@ -67,7 +67,7 @@
   },
   "canonical_compose_receipt": {
     "base_compose_verified": true,
-    "collected_at": "2026-11-03T17:44:03.971287+00:00",
+    "collected_at": "2026-11-03T17:54:04.108369+00:00",
     "compose_changed": false,
     "docker_mutations": 0,
     "image_id": "sha256:a4426ba2d90d1ed32af2ddaa807804b15c1cd24b912b4f060c5b38f846476b5d",
@@ -77,7 +77,7 @@
     "rollback_succeeded": null,
     "status": "PASS"
   },
-  "collected_at": "2026-11-03T17:44:23.610552+00:00",
+  "collected_at": "2026-11-03T17:54:14.686148+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8",
@@ -88,7 +88,7 @@
     "current_portal_image_id": "sha256:a4426ba2d90d1ed32af2ddaa807804b15c1cd24b912b4f060c5b38f846476b5d",
     "deployed_image_id": null,
     "deployment_executed": false,
-    "deployment_result_collected_at": "2026-11-03T17:44:03.375243+00:00",
+    "deployment_result_collected_at": "2026-11-03T17:54:03.512994+00:00",
     "docker_mutations": 0,
     "env_file_present": true,
     "portal_container_name_matches": true,
@@ -107,14 +107,14 @@
   "external_tls_sso_glpi_e2e": "NOT_VERIFIED",
   "host_playwright": {
     "blocked_requests_count": 0,
-    "collected_at": "2026-11-03T17:44:17.983828+00:00",
+    "collected_at": "2026-11-03T17:54:08.929832+00:00",
     "console_errors_count": 1,
-    "failed_requests_count": 0,
-    "failure_stage": "04-connections",
-    "failure_type": "TimeoutError",
+    "failed_requests_count": 1,
+    "failure_stage": "final-browser-diagnostics",
+    "failure_type": "AssertionError",
     "page_errors_count": 0,
     "portal_image_id": "sha256:a4426ba2d90d1ed32af2ddaa807804b15c1cd24b912b4f060c5b38f846476b5d",
-    "stable_checkout_sha": "1e8b5a51ce13f4be75421c8bebd90f838b8484d3",
+    "stable_checkout_sha": "ad9ad66e3838a91d6115e8b2089f9671b601e39c",
     "status": "FAIL"
   },
   "host_portal_7777": "PASS",
@@ -151,7 +151,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261103T174404Z",
+    "attempt_id": "ACME-READONLY-20261103T175404Z",
     "checks": [
       {
         "http_status": 200,
@@ -217,7 +217,7 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-03T17:44:04.419122+00:00",
+    "collected_at": "2026-11-03T17:54:04.550628+00:00",
     "glpi_ticket_id": null,
     "image_id": "sha256:a4426ba2d90d1ed32af2ddaa807804b15c1cd24b912b4f060c5b38f846476b5d",
     "incident_id": null,
@@ -238,23 +238,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 322,
-    "collected_at": "2026-11-03T17:39:01.360310+00:00",
+    "age_seconds": 613,
+    "collected_at": "2026-11-03T17:44:01.517496+00:00",
     "fresh": true
   },
   "reporter_pipeline": {
     "local_report": {
-      "age_seconds": 22,
-      "collected_at": "2026-11-03T17:44:01.517496+00:00",
+      "age_seconds": 13,
+      "collected_at": "2026-11-03T17:54:01.581441+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 110539,
+    "publish_log_age_seconds": 111130,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "1e8b5a51ce13f4be75421c8bebd90f838b8484d3",
+  "stable_checkout_sha": "ad9ad66e3838a91d6115e8b2089f9671b601e39c",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
