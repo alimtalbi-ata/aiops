@@ -3,43 +3,43 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-03T08:23:01.600282+00:00",
+  "collected_at": "2026-11-03T10:27:01.608953+00:00",
   "docker": {
     "available": true,
     "containers": [
       {
         "health": "healthy",
-        "image": "aiops2-acme-sandbox-worker:56d3c87bef88",
+        "image": "aiops2-acme-sandbox-worker:e9a21e3e13f9",
         "inspect_ok": true,
         "name": "aiops2-rebuild-worker",
         "state": "running"
       },
       {
         "health": "healthy",
-        "image": "aiops2-acme-sandbox-simulator:56d3c87bef88",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-simulator",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-acme-sandbox-core:56d3c87bef88",
+        "image": "aiops2-acme-sandbox-core:e9a21e3e13f9",
         "inspect_ok": true,
         "name": "aiops2-rebuild-core",
         "state": "running"
       },
       {
         "health": "healthy",
-        "image": "aiops2-acme-sandbox-policy:56d3c87bef88",
+        "image": "aiops2-acme-sandbox-twin:e9a21e3e13f9",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-policy",
+        "name": "aiops2-rebuild-twin",
         "state": "running"
       },
       {
         "health": "healthy",
-        "image": "aiops2-acme-sandbox-twin:56d3c87bef88",
+        "image": "aiops2-acme-sandbox-simulator:e9a21e3e13f9",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-twin",
+        "name": "aiops2-rebuild-simulator",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-acme-sandbox-policy:e9a21e3e13f9",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-policy",
         "state": "running"
       },
       {
@@ -445,13 +445,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 3 weeks, 5 days, 22 hours, 34 minutes"
+    "uptime": "up 3 weeks, 6 days, 38 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 144229441536,
+      "free_bytes": 144222814208,
       "total_bytes": 172898033664,
-      "used_bytes": 19811270656
+      "used_bytes": 19817897984
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -459,12 +459,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.98779296875,
-      1.1357421875,
-      1.10400390625
+      0.81787109375,
+      1.40283203125,
+      1.3720703125
     ],
     "memory_bytes": {
-      "MemAvailable": 19781718016,
+      "MemAvailable": 19791544320,
       "MemTotal": 25205911552,
       "SwapFree": 9993129984,
       "SwapTotal": 10838077440
