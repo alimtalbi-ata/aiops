@@ -278,8 +278,12 @@ def host_playwright_receipt(state, stable_sha, portal_image, now=None):
                 or local.get('n8n_login') != 'NOT_VERIFIED'
                 or local.get('oidc_https') != 'NOT_VERIFIED'
                 or any(type(local.get(k)) is not int or local[k] != 0 for k in
-                       ('page_errors_count','console_errors_count',
-                        'failed_requests_count','blocked_requests_count'))):
+                       ('page_errors_count','unexpected_console_errors_count',
+                        'failed_requests_count','blocked_requests_count'))
+                or type(local.get('expected_session_401_console_count')) is not int
+                or local['expected_session_401_console_count'] not in (0, 1)
+                or local.get('console_errors_count') !=
+                   local['expected_session_401_console_count']):
             return out
         checks, shots = local.get('checks'), local.get('screenshots')
         expected = {'01-overview.png','02-journey.png','03-runs.png',
@@ -307,7 +311,11 @@ def host_playwright_receipt(state, stable_sha, portal_image, now=None):
             'screenshots_sha256': [
                 {'name': x['name'], 'sha256': x['sha256']} for x in shots],
             'checks_passed': len(checks), 'checks_total': len(checks),
-            'page_errors_count': 0, 'console_errors_count': 0,
+            'page_errors_count': 0,
+            'console_errors_count': local['console_errors_count'],
+            'expected_session_401_console_count':
+                local['expected_session_401_console_count'],
+            'unexpected_console_errors_count': 0,
             'failed_requests_count': 0, 'blocked_requests_count': 0,
             'oidc_https': 'NOT_VERIFIED', 'real_screen_capture': 'NOT_VERIFIED',
             'human_glpi_acl': 'NOT_VERIFIED', 'n8n_login': 'NOT_VERIFIED',
