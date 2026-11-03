@@ -85,7 +85,7 @@ def provenance_snapshot():
         conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         nodes = conn.execute(
             "select node_id,type,site,state,criticality,confidence from aiops.twin_nodes "
-            "where node_id like 'ACME-TEST-%'").fetchall()
+            "where node_id like 'ACME-TEST-%' or site = 'ACME-TEST-SIMULATION'").fetchall()
         edges = conn.execute(
             "select edge_id,source_id,target_id,relation_type,redundancy,confidence "
             "from aiops.twin_edges where source_id like 'ACME-TEST-%' "
