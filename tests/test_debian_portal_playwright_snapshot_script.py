@@ -56,9 +56,9 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
     def test_capture_hashes_bytes_and_does_not_store_video(self):
         class DummyPage:
             viewport_size = {"width": 1280, "height": 720}
-            def screenshot(self, *, path, full_page, animations):
+            def screenshot(self, *, full_page, animations):
                 self.last = (full_page, animations)
-                Path(path).write_bytes(b"PNG_SYNTHETIC_TEST_ONLY")
+                return b"PNG_SYNTHETIC_TEST_ONLY"
         with tempfile.TemporaryDirectory() as d:
             folder = Path(d)
             record = {"screenshots": []}
@@ -71,6 +71,30 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
             self.assertEqual(page.last, (True, "disabled"))
             with self.assertRaises(ValueError):
                 module.capture(page, folder, "../private", record)
+            # A pre-existing symlink must be replaced, not followed. This
+            # protects files outside the private screenshot directory.
+            outside = Path(d) / "outside.txt"
+            outside.write_text("DO_NOT_OVERWRITE")
+            shot.unlink()
+            shot.symlink_to(outside)
+            module.capture(page, folder, "01-overview", record)
+            self.assertEqual(outside.read_text(), "DO_NOT_OVERWRITE")
+            self.assertFalse(shot.is_symlink())
+            self.assertEqual(shot.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(shot.read_bytes(), b"PNG_SYNTHETIC_TEST_ONLY")
+            self.assertEqual(list(folder.glob(".shot-*.png")), [])
+
+    def test_capture_failure_leaves_no_partial_screenshot(self):
+        class FailingPage:
+            viewport_size = {"width": 390, "height": 844}
+            def screenshot(self, *, full_page, animations):
+                raise RuntimeError("browser crashed")
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d)
+            with self.assertRaises(RuntimeError):
+                module.capture(FailingPage(), folder, "09-mobile-overview",
+                               {"screenshots": []})
+            self.assertEqual(list(folder.iterdir()), [])
 
 
 if __name__ == "__main__":
