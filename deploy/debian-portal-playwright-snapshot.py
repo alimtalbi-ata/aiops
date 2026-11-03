@@ -293,6 +293,10 @@ def main() -> int:
             "schema": "aiops.portal-host-playwright-snapshots.v1",
             "collected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "host": platform.node(), "mode": "ANONYMOUS_SYNTHETIC_UI_ONLY",
+            "host_asserted": bool(args.assert_host and
+                platform.node().casefold().split(".")[0] == args.assert_host.casefold()),
+            "origin": "http://127.0.0.1:7777" if args.base_url.rstrip("/") ==
+                "http://127.0.0.1:7777" else "UNVERIFIED",
             "status": "FAIL", "failure_type": type(exc).__name__,
             "real_screen_capture": "NOT_VERIFIED", "live_effects": 0,
             **observed_provenance(),
