@@ -122,9 +122,35 @@ def provenance_snapshot():
                         for edge_id, source, target, relation, redundancy, confidence in edges),
     }
     digest = hashlib.sha256(json.dumps(normalized, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    # Expose the *verified PG19 graph*, not the unrelated six-CI portal fixture.
+    # These are synthetic topology facts, NOT an observation or a Run join.
+    graph_nodes = [
+        {'node_id': node_id, 'type': node_type, 'name': name, 'site': site,
+         'state': state, 'criticality': criticality, 'confidence': confidence}
+        for node_id, node_type, name, site, state, criticality, confidence in normalized['nodes']
+    ]
+    graph_edges = [
+        {'edge_id': edge_id, 'source_id': source, 'target_id': target,
+         'relation_type': relation, 'redundancy': redundancy, 'confidence': confidence}
+        for edge_id, source, target, relation, redundancy, confidence in normalized['edges']
+    ]
+    graph_paths = {
+        'fabric_a_to_payments': [A, H, PAYMENTS],
+        'fabric_b_to_payments': [B, H, PAYMENTS],
+        'fabric_a_to_erp': [A, H, ERP],
+        'fabric_b_to_erp': [B, H, ERP],
+    }
+    actual_links = {(edge['source_id'], edge['target_id']) for edge in graph_edges}
+    if any(any(pair not in actual_links for pair in zip(path, path[1:]))
+           for path in graph_paths.values()):
+        raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
     return {'schema': 'aiops.acme-test-san-topology.v1', 'source_migration': '019',
             'tenant_id': TENANT, 'site': SITE, 'provenance': 'SYNTHETIC_FIXTURE_ONLY',
-            'nodes': 9, 'edges': 8, 'graph_sha256': digest}
+            'nodes': 9, 'edges': 8, 'graph_sha256': digest,
+            'graph': {'nodes': graph_nodes, 'edges': graph_edges, 'paths': graph_paths,
+                      'runtime_attested': False, 'bound_run_id': None,
+                      'observed_at_utc': None,
+                      'source_time': 'MIGRATION_019_NOT_AN_OBSERVATION'}}
 
 
 def _reachable(roots, reverse=False):
