@@ -613,5 +613,33 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                         activity_source.index("response = session.get("))
 
 
+
+    def test_33_independent_readback_rejects_typed_snapshot_drift(self):
+        # Both rounds are individually PASS/PREPARED/SIMULATED, yet the
+        # authority snapshot must not move between reads. Canonical JSON
+        # distinguishes 7 from 7.0 where Python dict equality does not.
+        for component, field, changed in (
+            ("core", "evidence_count", 3),
+            ("core", "source_event_count", 7.0),
+            ("twin", "impacted_cis", ["ACME-SVC-PAYMENTS", "ACME-SVC-ERP"]),
+            ("policy", "risk_level", "LOW"),
+        ):
+            docs = fixtures()
+            calls = 0
+
+            async def get(which, path):
+                nonlocal calls
+                calls += 1
+                result = deepcopy(docs[which])
+                if calls > 3 and which == component:
+                    result[field] = changed
+                return result
+
+            with self.subTest(component=component, field=field):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^sandbox_readback_snapshot_rotated$"):
+                    asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+                self.assertEqual(calls, 6)
+
 if __name__ == "__main__":
     unittest.main()
