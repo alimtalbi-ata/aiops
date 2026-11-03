@@ -98,5 +98,32 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
             self.assertEqual(list(folder.iterdir()), [])
 
 
+    def test_provenance_readback_exact_and_fail_closed(self):
+        import subprocess
+        def runner(argv, **kwargs):
+            if argv[0] == "git":
+                return subprocess.CompletedProcess(argv, 0, stdout="a" * 40 + "\n")
+            return subprocess.CompletedProcess(argv, 0,
+                                               stdout="sha256:" + "b" * 64 + "\n")
+        self.assertEqual(module.observed_provenance(runner), {
+            "stable_checkout_sha": "a" * 40,
+            "portal_image_id": "sha256:" + "b" * 64,
+        })
+        def bad(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, stdout="SYNTHETIC_SECRET\n")
+        self.assertEqual(module.observed_provenance(bad), {
+            "stable_checkout_sha": None, "portal_image_id": None,
+        })
+
+    def test_browser_source_records_console_and_network_failures(self):
+        src = FILE.read_text()
+        self.assertIn('page.on("console"', src)
+        self.assertIn('page.on("requestfailed"', src)
+        self.assertIn('mp.on("console"', src)
+        self.assertIn('mp.on("requestfailed"', src)
+        self.assertIn('console_errors_count', src)
+        self.assertIn('failed_requests_count', src)
+
+
 if __name__ == "__main__":
     unittest.main()
