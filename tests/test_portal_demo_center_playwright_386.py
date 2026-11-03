@@ -163,5 +163,27 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
 
 
+    def test_04_clear_cancels_pending_permission_prompt(self):
+        self.page.add_init_script("""(() => {
+          window.__resolveDisplay = null;
+          Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
+            configurable: true,
+            value: () => new Promise(resolve => { window.__resolveDisplay = resolve; })
+          });
+        })();""")
+        self.page.goto(self.base + "/demo-center")
+        self.page.locator("#recording-consent").check()
+        self.page.locator("#record-start").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("PERMISSION_PENDING")
+        self.page.locator("#record-clear").click()
+        self.page.evaluate("""() => {
+          const track = {stop() {}};
+          window.__resolveDisplay({getTracks: () => [track], getVideoTracks: () => [track]});
+        }""")
+        expect(self.page.locator("#recording-status")).to_contain_text("CLEARED")
+        expect(self.page.locator("#record-download")).to_be_hidden()
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+
 if __name__ == "__main__":
     unittest.main()
