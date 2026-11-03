@@ -31,6 +31,19 @@ def canonical(v):
 def digest(v):
     return hashlib.sha256(canonical(v).encode()).hexdigest()
 
+def terminal_ticket_readback_bound(worker_doc, canonical_ticket):
+    """Preserve immutable pre-RG-19 receipts, never relax NEW terminal admission.
+
+    Historical Worker v1 receipts omitted ticket_id; their Core terminal row
+    was already atomically committed and is append-only. All other persisted
+    Run, ticket, source, digest, nonce and audit checks still apply in read().
+    New Core resolve() always requires the explicit canonical ticket_id.
+    An explicitly foreign or null ticket_id is never compatible.
+    """
+    return (type(worker_doc) is dict and
+            ('ticket_id' not in worker_doc or
+             worker_doc['ticket_id'] == canonical_ticket))
+
 def ident(prefix, attempt, length=24):
     return prefix + hashlib.sha256((TENANT + ':' + attempt).encode()).hexdigest()[:length].upper()
 
@@ -196,7 +209,7 @@ def read(c, attempt):
                 or ticket_state != 'RESOLVED'
                 or type(worker_doc) is not dict
                 or worker_doc.get('receipt_sha256') != worker_sha.strip()
-                or worker_doc.get('ticket_id') != ticket
+                or not terminal_ticket_readback_bound(worker_doc, ticket)
                 or worker_doc.get('core_request_sha256') != request_hash.strip()
                 or worker_doc.get('core_source_event_ids') != source_ids
                 or worker_doc.get('approval_id') != approval_id
