@@ -220,7 +220,8 @@ async def simulate_no_effect(intent, *, get, now=None):
         "schema": SCHEMA, "attempt_id": intent["attempt_id"],
         "tenant_id": TENANT, "incident_id": intent["incident_id"],
         "run_id": intent["run_id"], "proposal_id": intent["proposal_id"],
-        "approval_id": intent["approval_id"],
+        # RG-ACME-19: canonical SIM-GLPI ticket is bound into Temporal receipt digest.
+        "ticket_id": intent["ticket_id"], "approval_id": intent["approval_id"],
         "action": "SIMULATE", "receipt_status": "SIMULATED_NO_EFFECT",
         "approval_issuer": ISSUER, "approval_kind": "SIMULATED",
         "human_approved": False, "execution_allowed": False,
