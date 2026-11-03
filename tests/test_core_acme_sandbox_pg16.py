@@ -754,5 +754,178 @@ class SandboxPG16(unittest.TestCase):
                 'select count(*) from aiops.acme_sandbox_terminal_tickets '
                 'where attempt_id=%s', (attempt,)).fetchone()[0], 0)
 
+
+    def test_22_rg_acme_28_concurrent_terminal_join_and_independent_reads(self):
+        """RG-ACME-28: concurrent terminal admission creates exactly one immutable ticket."""
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-TERMINAL-CONCURRENT-RG28'
+        prepared = self.post(attempt).json()
+        worker, twin, policy = self._qualified_no_effect(prepared)
+        documents = {'worker': worker, 'twin': twin, 'policy': policy}
+        calls = []
+
+        def independent(component, observed_attempt):
+            self.assertEqual(observed_attempt, attempt)
+            calls.append(component)
+            return documents[component]
+
+        def resolve_once(_):
+            return self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+
+        with patch.object(core, 'independent_readback', side_effect=independent):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                replies = list(pool.map(resolve_once, range(2)))
+        self.assertEqual([r.status_code for r in replies], [200, 200],
+                         [r.text for r in replies])
+        self.assertEqual(sorted(r.json()['idempotent'] for r in replies),
+                         [False, True])
+        for reply in replies:
+            self.assertEqual(reply.json()['ticket_status'], 'RESOLVED')
+            self.assertEqual(reply.json()['run_id'], prepared['run_id'])
+        first = self.get(attempt)
+        restarted = FastAPI()
+        restarted.include_router(core.router)
+        with TestClient(restarted) as new_client:
+            second = new_client.get('/api/sandbox/acme/e2e/' + attempt,
+                headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual((first.status_code, second.status_code), (200, 200))
+        for field in ('incident_id', 'run_id', 'ticket_id', 'worker_receipt_sha256',
+                      'terminal_ticket_sha256', 'ticket_status'):
+            self.assertEqual(first.json()[field], second.json()[field])
+        with psycopg.connect(self.url) as conn:
+            self.assertEqual(conn.execute(
+                'select count(*) from aiops.acme_sandbox_terminal_tickets '
+                'where tenant_id=%s and attempt_id=%s',
+                ('ACME-TEST', attempt)).fetchone()[0], 1)
+            self.assertEqual(conn.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (prepared['run_id'],)).fetchone()[0], 1)
+
+    def test_23_rg_acme_29_abstain_refuse_reopen_fail_closed(self):
+        """RG-ACME-29: abstain/refuse/revoke never create terminal authority."""
+        from unittest.mock import patch
+        cases = [
+            ('POLICY-ABSTAIN', 'policy', 'decision', 'ABSTAIN'),
+            ('POLICY-DENY', 'policy', 'decision', 'DENY'),
+            ('WORKER-REFUSED', 'worker', 'receipt_status', 'REFUSED'),
+            ('TWIN-REVOKED', 'twin', 'approval_status', 'REVOKED'),
+        ]
+        for suffix, component, field, value in cases:
+            with self.subTest(case=suffix):
+                attempt = 'ACME-SIM-RG29-' + suffix
+                prepared = self.post(attempt).json()
+                docs = self._qualified_no_effect(prepared)
+                selected = {'worker': 0, 'twin': 1, 'policy': 2}[component]
+                docs[selected][field] = value
+                if component == 'worker':
+                    docs[0]['receipt_sha256'] = core.digest({
+                        k: v for k, v in docs[0].items()
+                        if k != 'receipt_sha256'})
+                with patch.object(core, 'independent_readback', side_effect=docs):
+                    denied = self.client.post('/api/sandbox/acme/resolve',
+                        json=intent(attempt),
+                        headers={'Authorization': 'Bearer ' + TOKEN})
+                self.assertEqual(denied.status_code, 503, denied.text)
+                actual = self.get(attempt)
+                self.assertEqual(actual.status_code, 200, actual.text)
+                self.assertEqual(
+                    (actual.json()['incident_status'], actual.json()['run_status'],
+                     actual.json()['ticket_status']),
+                    ('PREPARED', 'PREPARED', 'PREPARED'))
+                with psycopg.connect(self.url) as conn:
+                    self.assertEqual(conn.execute(
+                        'select count(*) from aiops.acme_sandbox_terminal_tickets '
+                        'where attempt_id=%s', (attempt,)).fetchone()[0], 0)
+                    self.assertEqual(conn.execute(
+                        "select count(*) from aiops.run_events where run_id=%s "
+                        "and event_type='SIMULATED_RESOLVED'",
+                        (prepared['run_id'],)).fetchone()[0], 0)
+
+        # REOPENED is not an authorized Core sandbox transition in migration 017.
+        attempt = 'ACME-SIM-RG29-REOPEN'
+        prepared = self.post(attempt).json()
+        with psycopg.connect(self.url) as conn:
+            with self.assertRaises(psycopg.Error):
+                with conn.transaction():
+                    conn.execute("update aiops.incidents set state='REOPENED' "
+                                 "where incident_id=%s", (prepared['incident_id'],))
+            with self.assertRaises(psycopg.Error):
+                with conn.transaction():
+                    conn.execute("update aiops.runs set status='REOPENED' "
+                                 "where run_id=%s", (prepared['run_id'],))
+        self.assertEqual(self.get(attempt).json()['run_status'], 'PREPARED')
+
+
+
+    def test_24_rg_acme_30_real_pg16_lock_wait_rechecks_freshness(self):
+        """RG-ACME-30: real PG16 lock contention fences post-read terminal writes."""
+        import threading
+        from unittest.mock import patch
+        attempt = 'ACME-SIM-RG30-REAL-LOCK-WAIT'
+        prepared = self.post(attempt).json()
+        worker, twin, policy = self._qualified_no_effect(prepared)
+        documents = {'worker': worker, 'twin': twin, 'policy': policy}
+        at_policy = threading.Event()
+        allow_policy = threading.Event()
+        first_fresh = threading.Event()
+        second_fresh = threading.Event()
+        checks = []
+        original_fresh = core.approval_fresh
+
+        def independent(component, observed_attempt):
+            self.assertEqual(observed_attempt, attempt)
+            if component == 'policy':
+                at_policy.set()
+                if not allow_policy.wait(10):
+                    raise AssertionError('policy readback gate timed out')
+            return documents[component]
+
+        def fresh_under_lock(issued, expires):
+            checks.append(len(checks) + 1)
+            if len(checks) == 1:
+                original_fresh(issued, expires)
+                first_fresh.set()
+            else:
+                second_fresh.set()
+                raise HTTPException(503, 'sandbox_twin_approval_expired_after_lock')
+
+        def resolve_once():
+            return self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt), headers={'Authorization': 'Bearer ' + TOKEN})
+
+        with patch.object(core, 'independent_readback', side_effect=independent):
+            with patch.object(core, 'approval_fresh', side_effect=fresh_under_lock):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(resolve_once)
+                    try:
+                        self.assertTrue(at_policy.wait(10))
+                        with psycopg.connect(self.url) as blocker:
+                            with blocker.transaction():
+                                blocker.execute(
+                                    'select pg_advisory_xact_lock(hashtextextended(%s,0))',
+                                    ('core-acme-sandbox:ACME-TEST:' + attempt,))
+                                allow_policy.set()
+                                self.assertTrue(first_fresh.wait(10))
+                                # The second freshness check must not run
+                                # before the real PostgreSQL lock is released.
+                                self.assertFalse(second_fresh.wait(0.2))
+                        denied = future.result(timeout=10)
+                    finally:
+                        allow_policy.set()
+        self.assertEqual(denied.status_code, 503, denied.text)
+        self.assertEqual(checks, [1, 2])
+        self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
+        with psycopg.connect(self.url) as conn:
+            self.assertEqual(conn.execute(
+                'select count(*) from aiops.acme_sandbox_terminal_tickets '
+                'where tenant_id=%s and attempt_id=%s',
+                ('ACME-TEST', attempt)).fetchone()[0], 0)
+            self.assertEqual(conn.execute(
+                "select count(*) from aiops.run_events where run_id=%s "
+                "and event_type='SIMULATED_RESOLVED'",
+                (prepared['run_id'],)).fetchone()[0], 0)
+
 if __name__ == '__main__':
     unittest.main()
