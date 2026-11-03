@@ -36,13 +36,20 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Compile source and browser script
         run: |
-          python -m py_compile app/portal/main.py app/portal/demo_center.py tests/test_portal_demo_center_386.py tests/test_portal_demo_center_playwright_386.py
+          python -m py_compile app/portal/main.py app/portal/demo_center.py tests/test_portal_demo_center_386.py tests/test_portal_demo_center_playwright_386.py app/portal/demo_v2.py app/portal/ui_theme.py tests/test_demo_v2.py tests/test_portal_demo_studio_v2_386.py
           node --check app/portal/demo_center_recorder.js
       - name: DemoCenter source and no-effect gates
         env:
           PYTHONPATH: app
           AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
         run: python -m unittest discover -s tests -p test_portal_demo_center_386.py -v
+      - name: Historical Demo Studio V2 restored renderer and no-effect route
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: |
+          python -m unittest discover -s tests -p test_demo_v2.py -v
+          python -m unittest discover -s tests -p test_portal_demo_studio_v2_386.py -v
       - name: Real Chromium loopback navigation and mocked recorder UI
         env:
           PYTHONPATH: app
