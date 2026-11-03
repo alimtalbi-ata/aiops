@@ -251,6 +251,22 @@ async def simulate_no_effect(intent, *, get, now=None):
             or first["twin"]["issued_at"] != second["twin"]["issued_at"]
             or first["twin"]["expires_at"] != second["twin"]["expires_at"]):
         raise SandboxDenied("sandbox_approval_replay_or_rotation")
+    # Require the entire independently authenticated snapshot to remain
+    # byte-equivalent across both reads. Field-by-field comparisons miss
+    # changes to otherwise valid evidence, impact or Policy metadata; Python
+    # dict equality also conflates JSON booleans with numbers (True == 1).
+    try:
+        snapshot_stable = all(
+            json.dumps(first[component], sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=True, allow_nan=False)
+            == json.dumps(second[component], sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=True, allow_nan=False)
+            for component in ("core", "twin", "policy")
+        )
+    except (TypeError, ValueError, UnicodeError):
+        raise SandboxDenied("sandbox_readback_snapshot_unqualified") from None
+    if not snapshot_stable:
+        raise SandboxDenied("sandbox_readback_snapshot_rotated")
     receipt = {
         "schema": SCHEMA, "attempt_id": intent["attempt_id"],
         "tenant_id": TENANT, "incident_id": intent["incident_id"],
