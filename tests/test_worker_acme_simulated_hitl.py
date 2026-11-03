@@ -478,5 +478,33 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
         self.assertIn("or not receipt_digest_valid(result)", main)
 
 
+    def test_29_rg_acme_31_typed_source_count_denied_before_worker_receipt(self):
+        # 7.0 == 7 in Python; a float is not Core's integer SOURCE authority.
+        for malformed in (7.0, "7", True, None, 6, 8):
+            docs = fixtures()
+            docs["core"]["source_event_count"] = malformed
+            calls = []
+            async def get(component, path):
+                calls.append(component)
+                return deepcopy(docs[component])
+            with self.subTest(malformed=malformed):
+                with self.assertRaisesRegex(
+                        SandboxDenied, "^core_resolution_unqualified$"):
+                    asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+                # No second authority round, no Worker no-effect receipt.
+                self.assertEqual(calls, ["core", "twin", "policy"])
+
+    def test_30_rg_acme_31_integer_source_count_still_passes(self):
+        docs = fixtures()
+        calls = []
+        async def get(component, path):
+            calls.append(component)
+            return deepcopy(docs[component])
+        receipt = asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
+        self.assertEqual(calls, ["core", "twin", "policy"] * 2)
+        self.assertEqual(receipt["effect_receipts"], 0)
+        self.assertTrue(receipt_digest_valid(receipt))
+
+
 if __name__ == "__main__":
     unittest.main()

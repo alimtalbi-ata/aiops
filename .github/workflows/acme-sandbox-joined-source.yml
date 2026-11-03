@@ -45,7 +45,7 @@ jobs:
         run: |
           set -o pipefail
           PYTHONPATH=app:. python -m unittest discover -s tests -p 'test_worker_acme_simulated_hitl.py' -v 2>&1 | tee /tmp/acme-worker-tests.log
-          grep -E '^Ran 28 tests in ' /tmp/acme-worker-tests.log
+          grep -E '^Ran 30 tests in ' /tmp/acme-worker-tests.log
           grep -x 'OK' /tmp/acme-worker-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/acme-worker-tests.log
       - name: Policy sandbox security unit tests
