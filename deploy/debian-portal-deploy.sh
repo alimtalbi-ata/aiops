@@ -86,6 +86,7 @@ with urllib.request.urlopen('http://127.0.0.1:7777/health',timeout=5) as r:
     assert r.status==200 and v.get('status')=='ok'
     assert type(v.get('external_port')) is int and v['external_port']==7777
 PY
+  /usr/bin/python3 "$ROOT/deploy/debian-portal-ux-contracts.py" || exit 78
   success=1
   echo 'PORTAL_DEPLOY=NOOP_ALREADY_SAME_IMAGE'
   exit 0
@@ -129,5 +130,6 @@ PY
 done
 test "$ok" = 1
 test "$(docker inspect aiops2-rebuild-portal --format '{{.Image}}')" = "$NEW"
+/usr/bin/python3 "$ROOT/deploy/debian-portal-ux-contracts.py" || exit 78
 success=1
 echo "PORTAL_DEPLOY=PASS candidate_sha=$PIN old_image=$OLD new_image=$NEW"
