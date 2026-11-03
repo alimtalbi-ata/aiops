@@ -6,6 +6,10 @@ on:
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - app/portal/main.py
+      - app/portal/operator_workspace.py
+      - app/portal/operator_workspace.css
+      - app/portal/operator_workspace.js
+      - tests/test_portal_operator_workspace.py
       - app/portal/demo_center.py
       - app/portal/demo_center_recorder.js
       - tests/test_portal_demo_center_386.py
@@ -36,13 +40,21 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Compile source and browser script
         run: |
-          python -m py_compile app/portal/main.py app/portal/demo_center.py tests/test_portal_demo_center_386.py tests/test_portal_demo_center_playwright_386.py app/portal/demo_v2.py app/portal/ui_theme.py tests/test_demo_v2.py tests/test_portal_demo_studio_v2_386.py
+          python -m py_compile app/portal/main.py app/portal/operator_workspace.py tests/test_portal_operator_workspace.py app/portal/demo_center.py tests/test_portal_demo_center_386.py tests/test_portal_demo_center_playwright_386.py app/portal/demo_v2.py app/portal/ui_theme.py tests/test_demo_v2.py tests/test_portal_demo_studio_v2_386.py
           node --check app/portal/demo_center_recorder.js
+          node --check app/portal/operator_workspace.js
       - name: DemoCenter source and no-effect gates
         env:
           PYTHONPATH: app
           AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
         run: python -m unittest discover -s tests -p test_portal_demo_center_386.py -v
+      - name: Modern operator workspace no-token and source authority regression
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: |
+          python -m unittest discover -s tests -p test_portal_operator_workspace.py -v
+          python -m unittest discover -s tests -p test_portal_bootstrap_auth.py -v
       - name: Historical Demo Studio V2 restored renderer and no-effect route
         env:
           PYTHONPATH: app
