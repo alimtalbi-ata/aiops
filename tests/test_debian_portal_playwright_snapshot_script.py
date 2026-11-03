@@ -125,6 +125,8 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
         self.assertIn('failed_requests_count', src)
         self.assertIn('failure_stage', src)
         self.assertIn('final-browser-diagnostics', src)
+        self.assertIn('page.wait_for_load_state("networkidle", timeout=10000)', src)
+        self.assertIn('mp.wait_for_load_state("networkidle", timeout=10000)', src)
 
 
 if __name__ == "__main__":

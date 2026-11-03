@@ -215,6 +215,11 @@ def run(args) -> dict:
                 if page.url != base + path:
                     raise AssertionError(label + " unexpected origin or route")
                 expect(page.locator(selector)).to_contain_text(expected, timeout=10000)
+                # Full navigations trigger an async synthetic fixture GET. Wait
+                # for network idle before leaving a route; otherwise our own
+                # immediate next goto aborts the GET and creates a false
+                # requestfailed/console error in the host gate.
+                page.wait_for_load_state("networkidle", timeout=10000)
                 if label == "01-overview":
                     expect(page.locator("#fixture-status")).to_contain_text(
                         "Référence locale chargée", timeout=10000)
@@ -281,6 +286,7 @@ def run(args) -> dict:
                 if response is None or response.status != 200:
                     raise AssertionError("mobile home unavailable")
                 expect(mp.locator("#overview-heading")).to_be_visible()
+                mp.wait_for_load_state("networkidle", timeout=10000)
                 if mp.evaluate("document.documentElement.scrollWidth > window.innerWidth + 2"):
                     raise AssertionError("mobile horizontal overflow")
                 capture(mp, folder, "09-mobile-overview", receipt)
