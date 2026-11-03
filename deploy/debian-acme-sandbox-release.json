@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "577cbcaf8430aad7af46c2ccbb13c041b50df90e",
+  "candidate_sha": "7a2c843f98a0c28ddd4763565721f621ad66d502",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; portal 7777 untouched",
-  "reason": "RG-ACME-18/19 Core direct-only origin, post-lock Twin TTL and canonical SIM-GLPI ticket receipt bound to Worker Temporal SHA256; preserve immutable legacy RESOLVED readback. DEPENDENCY: merge #369 exact HEAD 577cbcaf8430aad7af46c2ccbb13c041b50df90e only after all required CI SUCCESS. Existing guarded five-service DEV poller with PG16 native backup/scratch restore, Compose/health/image rollback, portal :7777 untouched; separately observe new 17-stage ACME-TEST SAN E2E. No LIVE, human GLPI or IdP ALLOW.",
-  "source_pr": 369
+  "reason": "RG-ACME-31 typed Core SOURCE event-count fence in Worker: reviewed #374 exact source HEAD 7a2c843f98a0c28ddd4763565721f621ad66d502, squash-integrated stable 117cc80e5cc48cbcd291a8c9d9466b96d1248d90, 6/6 exact-head CI SUCCESS and Worker 30/30 unit PASS. Five-service DEV-only guarded poller upgrade from immutable PR HEAD; no portal 7777 mutation, no LIVE or human GLPI/IdP approval. Require PG16 backup/scratch restore, Compose/image/health/rollback and fresh 17/17 ACME-TEST SAN E2E host receipt. Do not infer deployment from this intent.",
+  "source_pr": 374
 }
