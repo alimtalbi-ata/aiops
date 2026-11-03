@@ -185,5 +185,76 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
 
 
+    def test_05_consent_withdrawal_discards_delayed_recorder_output(self):
+        # A delayed MediaRecorder.stop event must not resurrect a secret-containing blob.
+        self.page.add_init_script("""(() => {
+          window.__stoppedTracks = 0;
+          const track = {
+            stop() { window.__stoppedTracks += 1; },
+            addEventListener() {}
+          };
+          Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
+            configurable: true,
+            value: async () => ({getTracks: () => [track], getVideoTracks: () => [track]})
+          });
+          window.MediaRecorder = class {
+            constructor() { this.state = "inactive"; this.mimeType = "video/webm"; this.handlers = {}; }
+            static isTypeSupported(t) { return t === "video/webm"; }
+            addEventListener(name, callback) { this.handlers[name] = callback; }
+            start() { this.state = "recording"; }
+            stop() {
+              this.state = "inactive";
+              setTimeout(() => {
+                this.handlers.dataavailable({data: new Blob(["sensitive-demo"], {type: "video/webm"})});
+                this.handlers.stop();
+              }, 75);
+            }
+          };
+        })();""")
+        self.page.goto(self.base + "/demo-center")
+        self.page.locator("#recording-consent").check()
+        self.page.locator("#record-start").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+        self.page.locator("#recording-consent").uncheck()
+        expect(self.page.locator("#recording-status")).to_contain_text("CONSENT_WITHDRAWN")
+        expect(self.page.locator("#record-start")).to_be_disabled()
+        self.page.wait_for_timeout(200)  # wait for deliberately delayed stale stop event
+        expect(self.page.locator("#record-download")).to_be_hidden()
+        expect(self.page.locator("#recording-status")).to_contain_text("CONSENT_WITHDRAWN")
+        self.assertGreaterEqual(self.page.evaluate("window.__stoppedTracks"), 1)
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+    def test_06_clear_disallows_delayed_blob_resurrection(self):
+        self.page.add_init_script("""(() => {
+          const track = { stop() {}, addEventListener() {} };
+          Object.defineProperty(navigator.mediaDevices, "getDisplayMedia", {
+            configurable: true,
+            value: async () => ({getTracks: () => [track], getVideoTracks: () => [track]})
+          });
+          window.MediaRecorder = class {
+            constructor() { this.state = "inactive"; this.mimeType = "video/webm"; this.handlers = {}; }
+            static isTypeSupported(t) { return t === "video/webm"; }
+            addEventListener(name, callback) { this.handlers[name] = callback; }
+            start() { this.state = "recording"; }
+            stop() {
+              this.state = "inactive";
+              setTimeout(() => {
+                this.handlers.dataavailable({data: new Blob(["stale"], {type: "video/webm"})});
+                this.handlers.stop();
+              }, 75);
+            }
+          };
+        })();""")
+        self.page.goto(self.base + "/demo-center")
+        self.page.locator("#recording-consent").check()
+        self.page.locator("#record-start").click()
+        expect(self.page.locator("#recording-status")).to_contain_text("RECORDING_LOCAL")
+        self.page.locator("#record-clear").click()
+        self.page.wait_for_timeout(200)
+        expect(self.page.locator("#record-download")).to_be_hidden()
+        expect(self.page.locator("#recording-status")).to_contain_text("CLEARED")
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+
 if __name__ == "__main__":
     unittest.main()
