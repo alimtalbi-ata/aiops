@@ -350,6 +350,8 @@ class PreflightContract(unittest.TestCase):
                 'real_screen_capture': 'NOT_VERIFIED', 'human_glpi_acl': 'NOT_VERIFIED',
                 'n8n_login': 'NOT_VERIFIED', 'oidc_https': 'NOT_VERIFIED',
                 'page_errors_count': 0, 'console_errors_count': 0,
+                'expected_session_401_console_count': 0,
+                'unexpected_console_errors_count': 0,
                 'failed_requests_count': 0, 'blocked_requests_count': 0,
                 'checks': [{'name': 'check-%02d' % i, 'status': 'PASS'}
                            for i in range(11)],
@@ -362,6 +364,18 @@ class PreflightContract(unittest.TestCase):
             result = mod.host_playwright_receipt(p, sha, image, now=now)
             self.assertEqual(result['status'], 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY')
             self.assertEqual(len(result['screenshots_sha256']), 9)
+            payload['console_errors_count'] = 1
+            payload['expected_session_401_console_count'] = 1
+            path.write_text(json.dumps(payload))
+            result = mod.host_playwright_receipt(p, sha, image, now=now)
+            self.assertEqual(result['status'], 'PASS_ANONYMOUS_SYNTHETIC_BROWSER_ONLY')
+            self.assertEqual(result['expected_session_401_console_count'], 1)
+            self.assertEqual(result['unexpected_console_errors_count'], 0)
+            payload['expected_session_401_console_count'] = 0
+            path.write_text(json.dumps(payload))
+            self.assertEqual(mod.host_playwright_receipt(p, sha, image, now=now),
+                             {'status': 'NOT_VERIFIED'})
+            payload['console_errors_count'] = 0
             self.assertNotIn('SYNTHETIC_SECRET_NEVER_EXPORT', json.dumps(result))
             self.assertEqual(mod.host_playwright_receipt(p, 'd' * 40, image, now=now),
                              {'status': 'NOT_VERIFIED'})
