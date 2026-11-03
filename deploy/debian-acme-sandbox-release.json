@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "8115f28d0af6e719d9579d5af2f1c402ecb69d57",
+  "candidate_sha": "56d3c87bef8819011f0c037482a5cf6019065d5f",
   "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; canonical portal TCP 7777 untouched",
-  "reason": "RG-ACME-33 Worker fail-closed authenticated Core/Twin/Policy readback: strict duplicate-key/nonfinite/UTF8/size JSON parser and exact service origin plus requests Session(trust_env=False) bearer egress fence. Selectively reviewed source Draft #348 HEAD ae1b3446e05b7b12f6ee6d98686c7e26b2a792de; stable-based #378 exact HEAD 8115f28d0af6e719d9579d5af2f1c402ecb69d57, protected squash-integrated stable 92cc7a31a085e7bed16c3a19371e70a37b0361d9. Exact-head 5/5 workflows SUCCESS, source-join Worker 32/32 + Policy 9/9 + runner 9/9, Quality 6/6 jobs SUCCESS. DEV-only guarded five-service poller upgrade from immutable candidate SHA; canonical portal TCP 7777 untouched, no LIVE/human GLPI/IdP approval. Require local PG16 backup/scratch restore, Compose ownership/image/health/rollback, fresh 17/17 ACME-TEST same Incident/Run E2E and new poller receipt before host GO. Prior 05:24Z Debian report historical; no deployment inferred from intent.",
-  "source_pr": 378
+  "reason": "RG-ACME-34 Simulator Core PREPARED SOURCE readback strictly requires integer count 7 and exact ordered canonical seven ACME-TEST attempt-bound SYN-EVT IDs before Twin approval POST. Stable-based source PR #380 exact HEAD 56d3c87bef8819011f0c037482a5cf6019065d5f, protected squash-integrated c1c7485d6d12f0431102e3dbd8ffd00d81afc8d1. Exact-head 18/18 checks SUCCESS, sandbox-no-effect pytest 95/95 PASS; CI disposable only. DEV-only existing poller targeted five-service upgrade from immutable source SHA; canonical portal TCP 7777 untouched, no LIVE/human GLPI/IdP. Require local PG16 backup/scratch restore, Compose ownership/image/health/rollback, fresh 17/17 ACME-TEST same Incident/Run E2E and new poller receipt before host GO. Previous Debian receipt 2026-11-03T06:25:43Z stable fa537432d8ef392f231a2075f0d35fb8691e671f is historical and cannot qualify RG-34.",
+  "source_pr": 380
 }
