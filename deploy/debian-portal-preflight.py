@@ -351,16 +351,27 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
                           and deployed.get('docker_mutations', 0) >= 1
                           and deployed.get('new_image_id') == report.get('portal', {}).get('image_id')
                           and healthy)
+                # A previously pinned image is an idempotent NOOP, not a failed
+                # deploy and never a fresh Docker mutation.
+                noop = (deployed.get('status') == 'PASS'
+                        and deployed.get('deployment_executed') is False
+                        and deployed.get('docker_mutations') == 0
+                        and deployed.get('new_image_id') is None
+                        and deployed.get('previous_image_id') ==
+                            report.get('portal', {}).get('image_id')
+                        and healthy)
                 report['deployment_preflight'].update(
                     deployment_executed=bool(deployed.get('deployment_executed')),
                     docker_mutations=deployed.get('docker_mutations', 0),
                     rollback_attempted=bool(deployed.get('rollback_attempted')),
                     deployment_result_collected_at=deployed.get('collected_at'),
                     deployed_image_id=deployed.get('new_image_id'),
-                    verdict=('DEPLOYED_HEALTH_PASS_E2E_PENDING' if passed
-                             else 'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED'),
-                    reason=('E2E_SANDBOX_SIMULATION_NOT_ATTESTED' if passed
-                            else 'DEPLOYMENT_RECEIPT_OR_HOST_MISMATCH'))
+                    verdict=('DEPLOYED_HEALTH_PASS_E2E_PENDING' if passed else
+                             'ALREADY_PINNED_HEALTH_PASS_NO_MUTATION' if noop else
+                             'NO_GO_DEPLOY_FAILED_OR_NOT_OBSERVED'),
+                    reason=('E2E_SANDBOX_SIMULATION_NOT_ATTESTED' if passed else
+                            'NO_NEW_IMAGE_OR_CONTAINER_MUTATION' if noop else
+                            'DEPLOYMENT_RECEIPT_OR_HOST_MISMATCH'))
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         pass
     # Independent host-only receipts. Never turn a 503 fail-closed API response
