@@ -113,6 +113,28 @@ def decode_authority_json(body):
     return document
 
 
+
+def read_bounded_authority_response(response):
+    """Consume an authenticated HTTP readback with a hard streaming byte cap.
+
+    requests.Response.content buffers the *entire* response before a size
+    check. A compromised internal peer could exhaust Worker memory before
+    fail-closed validation. Require stream=True at the GET call site.
+    """
+    if response.status_code != 200:
+        raise SandboxDenied("sandbox_service_denied_or_unavailable")
+    chunks = []
+    total = 0
+    for chunk in response.iter_content(chunk_size=8192):
+        if type(chunk) is not bytes:
+            raise SandboxDenied("sandbox_readback_json_unqualified")
+        total += len(chunk)
+        if total > 32768:
+            raise SandboxDenied("sandbox_service_denied_or_unavailable")
+        chunks.append(chunk)
+    return decode_authority_json(b"".join(chunks))
+
+
 def _id(value):
     return type(value) is str and _ID.fullmatch(value) is not None
 
