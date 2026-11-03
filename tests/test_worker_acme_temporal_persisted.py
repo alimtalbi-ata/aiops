@@ -19,7 +19,8 @@ import tempfile
 import threading
 import unittest
 
-from temporalio.client import WorkflowAlreadyStartedError, WorkflowFailureError
+from temporalio.client import WorkflowFailureError
+from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.testing import WorkflowEnvironment
 
