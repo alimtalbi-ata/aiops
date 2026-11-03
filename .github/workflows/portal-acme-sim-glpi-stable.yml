@@ -1,0 +1,83 @@
+name: Portal ACME SIM-GLPI stable-based fail-closed readback
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/portal/acme_sim_glpi.py"
+      - "app/portal/acme_sim_glpi_client.js"
+      - "app/portal/main.py"
+      - "tests/test_portal_acme_sim_glpi.py"
+      - "tests/test_portal_acme_sim_glpi_client.cjs"
+      - ".github/workflows/portal-acme-sim-glpi-stable.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  simulated-glpi-negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact source HEAD
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install disposable Portal dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "psycopg[binary]==3.2.13"
+      - name: Compile Portal projection and test
+        run: python -m py_compile app/portal/acme_sim_glpi.py tests/test_portal_acme_sim_glpi.py
+      - name: SIM-GLPI Core sandbox positive shape and negative authority tests
+        run: |
+          set -o pipefail
+          PYTHONPATH=app python -m unittest discover -s tests -p "test_portal_acme_sim_glpi.py" -v 2>&1 | tee "$RUNNER_TEMP/sim-glpi-tests.log"
+      - name: Browser JavaScript syntax and fail-closed DOM tests
+        run: |
+          node --check app/portal/acme_sim_glpi_client.js
+          node --test tests/test_portal_acme_sim_glpi_client.cjs
+      - name: Generate redacted exact-head source receipt
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          counts = {}
+          for key, file in (("sandbox", "sim-glpi-tests.log"),):
+              text = (root / file).read_text()
+              matches = re.findall(r"Ran (\d+) tests?", text)
+              if len(matches) != 1 or "OK" not in text:
+                  raise SystemExit("unqualified test receipt")
+              counts[key] = {"passed": int(matches[0]), "total": int(matches[0])}
+          receipt = {
+              "schema": "aiops.portal.sim-glpi-ci-receipt.v1",
+              "source_head": os.environ["HEAD_SHA"],
+              "tests": counts,
+              "authority": "SIMULATED_ONLY",
+              "tenant_id": "ACME-TEST",
+              "ticket_prefix": "SIM-GLPI-",
+              "human_glpi_allow": False,
+              "real_glpi_writes": 0,
+              "live_effects": 0,
+              "host_e2e_attested": False,
+              "viewer_actor_acl_qualified": False,
+              "stable_based": True,
+              "ci_disposable_only": True,
+          }
+          (root / "sim-glpi-redacted.json").write_text(json.dumps(receipt, sort_keys=True) + "\n")
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portal-acme-sim-glpi-redacted-ci
+          path: ${{ runner.temp }}/sim-glpi-redacted.json
+          retention-days: 7
+          if-no-files-found: error
