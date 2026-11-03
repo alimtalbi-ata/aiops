@@ -636,8 +636,12 @@ class AcmeSimulatedHitlTests(unittest.TestCase):
                 return result
 
             with self.subTest(component=component, field=field):
-                with self.assertRaisesRegex(
-                        SandboxDenied, "^sandbox_readback_snapshot_rotated$"):
+                # An invalid SOURCE count is now rejected by Core authority
+                # validation before the cross-round snapshot comparison.
+                expected = ("^core_resolution_unqualified$"
+                            if component == "core" and field == "source_event_count"
+                            else "^sandbox_readback_snapshot_rotated$")
+                with self.assertRaisesRegex(SandboxDenied, expected):
                     asyncio.run(simulate_no_effect(INTENT, get=get, now=NOW))
                 self.assertEqual(calls, 6)
 
