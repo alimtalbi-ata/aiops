@@ -79,6 +79,10 @@ SCENARIOS = {
 def provenance_snapshot():
     """Verify exactly 9 synthetic nodes/8 edges, including *inbound* foreign links."""
     with db() as conn:
+        # Both SELECTs must observe one PG snapshot; READ COMMITTED could
+        # otherwise mix pre-change nodes with post-change edges.
+        # This transaction is read-only and never mutates the graph.
+        conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         nodes = conn.execute(
             "select node_id,type,site,state,criticality,confidence from aiops.twin_nodes "
             "where node_id like 'ACME-TEST-%'").fetchall()
