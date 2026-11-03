@@ -657,3 +657,18 @@ def test_simulator_origin_allows_exact_compose_service_only(
     monkeypatch.setattr(SIM.requests, 'request', request)
     assert SIM.remote(component, '/api/sandbox/acme/capabilities') == {
         'component': component}
+
+# Reuse the existing owned ACME workflow to collect 019 SAN scenario regressions.
+# No shared CI workflow or deployment configuration changes.
+from test_acme_san_scenarios import (
+    graph,
+    test_migration_019_has_exact_independent_9_node_8_edge_contract,
+    test_catalog_eight_hypotheses_abstain_without_analyst_critic,
+    test_forward_san_candidate_payments_and_erp_not_observed,
+    test_replication_lag_only_recovery_risk_not_payments_outage,
+    test_provenance_rejects_drift_mixed_live_and_foreign_edges,
+    test_digest_is_deterministic_independent_of_db_order,
+    test_no_token_or_disabled_sandbox_never_reads_graph,
+    test_unknown_scenario_denied_without_promotion,
+    test_endpoint_registered_only_as_read_only_get,
+)
