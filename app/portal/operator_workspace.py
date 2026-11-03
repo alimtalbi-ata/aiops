@@ -51,6 +51,7 @@ PAGE = """<!doctype html>
     <a href="/noc"><span aria-hidden="true">▤</span> Cockpit NOC</a>
     <a href="/demo-center"><span aria-hidden="true">▣</span> DemoCenter / Vidéo</a>
     <a href="/demo-studio"><span aria-hidden="true">◷</span> Demo Studio V2</a>
+    <a href="/demo/explore-story"><span aria-hidden="true">▷</span> Explore / Story</a>
     <a href="/demo/acme-impact"><span aria-hidden="true">⌁</span> Digital Twin</a>
     <a href="/itsm"><span aria-hidden="true">▥</span> GLPI / ITSM</a>
   </nav>
