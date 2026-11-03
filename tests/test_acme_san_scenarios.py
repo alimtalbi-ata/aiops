@@ -132,6 +132,35 @@ def test_catalog_eight_hypotheses_abstain_without_analyst_critic(graph):
     assert all(sql.strip().lower().startswith('select ') for sql in graph.sql[1:])
 
 
+
+def test_verified_pg19_graph_is_ui_ready_but_not_a_run_observation(graph):
+    topology = SAN.provenance_snapshot()
+    view = topology['graph']
+    assert len(view['nodes']) == 9 and len(view['edges']) == 8
+    assert {n['node_id'] for n in view['nodes']} == set(SAN.NODES)
+    assert {e['edge_id'] for e in view['edges']} == set(SAN.EDGES)
+    assert all(n['site'] == SAN.SITE and n['state'] == 'SIMULATED'
+               for n in view['nodes'])
+    assert view['paths'] == {
+        'fabric_a_to_payments': [SAN.A, SAN.H, SAN.PAYMENTS],
+        'fabric_b_to_payments': [SAN.B, SAN.H, SAN.PAYMENTS],
+        'fabric_a_to_erp': [SAN.A, SAN.H, SAN.ERP],
+        'fabric_b_to_erp': [SAN.B, SAN.H, SAN.ERP],
+    }
+    assert view['runtime_attested'] is False
+    assert view['bound_run_id'] is None
+    assert view['observed_at_utc'] is None
+    assert view['source_time'] == 'MIGRATION_019_NOT_AN_OBSERVATION'
+    nodes = sorted((n['node_id'], n['type'], n['name'], n['site'],
+                    n['state'], n['criticality'], n['confidence']) for n in view['nodes'])
+    edges = sorted((e['edge_id'], e['source_id'], e['target_id'],
+                    e['relation_type'], e['redundancy'], e['confidence']) for e in view['edges'])
+    assert hashlib.sha256(json.dumps(
+        {'nodes': nodes, 'edges': edges}, sort_keys=True,
+        separators=(',', ':')).encode()).hexdigest() == topology['graph_sha256']
+    assert json.loads(json.dumps(topology))['graph'] == view
+
+
 @pytest.mark.parametrize('scenario_id', [
     'FC_SFP_DEGRADATION', 'RHEL_MULTIPATH_FAILOVER',
     'DELL_PURE_CONTROLLER', 'NOISY_NEIGHBOR',
