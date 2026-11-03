@@ -670,12 +670,50 @@ def test_simulator_origin_allows_exact_compose_service_only(
         content = b'{}'
         def json(self):
             return {'component': component}
-    def request(method, url, **kwargs):
-        assert method == 'GET'
-        assert url == base + '/api/sandbox/acme/capabilities'
-        assert kwargs['allow_redirects'] is False
-        assert kwargs['headers']['Authorization'] == 'Bearer test-internal-token-not-real'
-        return Response()
-    monkeypatch.setattr(SIM.requests, 'request', request)
+    monkeypatch.setenv('HTTP_PROXY', 'http://proxy.evil.example:3128')
+    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.evil.example:3128')
+    monkeypatch.setenv('ALL_PROXY', 'http://proxy.evil.example:3128')
+    monkeypatch.delenv('NO_PROXY', raising=False)
+    class Session:
+        trust_env = True
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def request(self, method, url, **kwargs):
+            assert self.trust_env is False  # internal bearer must bypass env proxies
+            assert method == 'GET'
+            assert url == base + '/api/sandbox/acme/capabilities'
+            assert kwargs['allow_redirects'] is False
+            assert kwargs['headers']['Authorization'] == 'Bearer test-internal-token-not-real'
+            return Response()
+    monkeypatch.setattr(SIM.requests, 'Session', Session)
     assert SIM.remote(component, '/api/sandbox/acme/capabilities') == {
         'component': component}
+
+
+def test_twin_core_readback_never_uses_environment_proxy(monkeypatch):
+    monkeypatch.setenv('CORE_URL', 'http://aiops2-core:810')
+    monkeypatch.setenv('HTTP_PROXY', 'http://proxy.evil.example:3128')
+    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.evil.example:3128')
+    monkeypatch.setenv('ALL_PROXY', 'http://proxy.evil.example:3128')
+    monkeypatch.delenv('NO_PROXY', raising=False)
+    class Response:
+        status_code = 200
+        content = b'{}'
+        def json(self):
+            return prepared_core()
+    class Session:
+        trust_env = True
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def get(self, url, **kwargs):
+            assert self.trust_env is False
+            assert url == 'http://aiops2-core:810/api/sandbox/acme/e2e/ACME-SIM-UNIT001'
+            assert kwargs['allow_redirects'] is False
+            assert kwargs['headers']['Authorization'] == 'Bearer test-internal-token-not-real'
+            return Response()
+    monkeypatch.setattr(TWIN.requests, 'Session', Session)
+    assert TWIN.core_readback(TWIN.ApprovalIntent(**(intent() | ids()))) == prepared_core()
