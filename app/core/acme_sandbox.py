@@ -196,6 +196,7 @@ def read(c, attempt):
                 or ticket_state != 'RESOLVED'
                 or type(worker_doc) is not dict
                 or worker_doc.get('receipt_sha256') != worker_sha.strip()
+                or worker_doc.get('ticket_id') != ticket
                 or worker_doc.get('core_request_sha256') != request_hash.strip()
                 or worker_doc.get('core_source_event_ids') != source_ids
                 or worker_doc.get('approval_id') != approval_id
@@ -414,20 +415,27 @@ def readback(attempt_id: str, authorization: str | None = Header(default=None)):
         raise HTTPException(503, 'sandbox_readback_unavailable') from None
 
 def independent_readback(component, attempt):
-    """Only fixed internal sandbox service URLs; never a caller URL or LIVE."""
-    env, default = {
-        'worker': ('WORKER_URL', 'http://aiops2-worker:815'),
-        'twin': ('TWIN_URL', 'http://aiops2-twin:811'),
-        'policy': ('POLICY_URL', 'http://aiops2-policy:813'),
+    """RG-ACME-18: fixed origin and direct transport before internal bearer egress."""
+    env, host, port = {
+        'worker': ('WORKER_URL', 'aiops2-worker', 815),
+        'twin': ('TWIN_URL', 'aiops2-twin', 811),
+        'policy': ('POLICY_URL', 'aiops2-policy', 813),
     }[component]
-    base = os.getenv(env, default).rstrip('/')
-    parsed = urlsplit(base)
-    if (parsed.scheme not in ('http', 'https') or not parsed.hostname
-            or parsed.username or parsed.password or parsed.path
-            or parsed.query or parsed.fragment):
-        raise HTTPException(503, 'sandbox_service_url_invalid')
+    base = os.getenv(env, f'http://{host}:{port}').rstrip('/')
     try:
-        response = requests.get(
+        parsed = urlsplit(base)
+        actual_port = parsed.port
+    except ValueError:
+        raise HTTPException(503, 'sandbox_service_url_invalid') from None
+    if (parsed.scheme not in ('http', 'https')
+            or parsed.hostname not in (host, '127.0.0.1', 'localhost')
+            or actual_port != port or parsed.username or parsed.password
+            or parsed.path or parsed.query or parsed.fragment):
+        raise HTTPException(503, 'sandbox_service_url_invalid')
+    session = requests.Session()
+    session.trust_env = False  # Never allow HTTP_PROXY/ALL_PROXY or .netrc to replace bearer.
+    try:
+        response = session.get(
             base + '/api/sandbox/acme/e2e/' + attempt,
             headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
                      'Accept': 'application/json'},
@@ -440,6 +448,18 @@ def independent_readback(component, attempt):
         return value
     except (requests.RequestException, ValueError, KeyError):
         raise HTTPException(503, 'sandbox_' + component + '_readback_unavailable') from None
+    finally:
+        session.close()
+
+def approval_fresh(issued, expires):
+    """RG-ACME-19: validate once before I/O and again under PG16 terminal lock."""
+    now = datetime.now(timezone.utc)
+    if (issued.tzinfo is None or expires.tzinfo is None
+            or issued.utcoffset() != timedelta(0)
+            or expires.utcoffset() != timedelta(0)
+            or issued > now + timedelta(seconds=30) or expires <= now
+            or expires <= issued or expires - issued > timedelta(minutes=5)):
+        raise HTTPException(503, 'sandbox_twin_approval_stale_or_invalid')
 
 @router.post('/api/sandbox/acme/resolve')
 def resolve(x: Intent, authorization: str | None = Header(default=None)):
@@ -483,14 +503,9 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
         expires = datetime.fromisoformat(twin['expires_at'])
     except (KeyError, TypeError, ValueError):
         raise HTTPException(503, 'sandbox_twin_approval_time_unqualified') from None
-    now = datetime.now(timezone.utc)
-    if (type(nonce) is not str or ID.fullmatch(nonce) is None
-            or issued.tzinfo is None or expires.tzinfo is None
-            or issued.utcoffset() != timedelta(0)
-            or expires.utcoffset() != timedelta(0)
-            or issued > now + timedelta(seconds=30) or expires <= now
-            or expires <= issued or expires - issued > timedelta(minutes=5)):
+    if type(nonce) is not str or ID.fullmatch(nonce) is None:
         raise HTTPException(503, 'sandbox_twin_approval_stale_or_invalid')
+    approval_fresh(issued, expires)
     nonce_sha = hashlib.sha256(nonce.encode('ascii')).hexdigest()
     if worker.get('twin_approval_nonce_sha256') != nonce_sha:
         raise HTTPException(503, 'sandbox_twin_worker_nonce_mismatch')
@@ -543,7 +558,8 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
             if any(doc.get(k) != current[k] for k in
                    ('incident_id', 'run_id', 'proposal_id')):
                 raise HTTPException(503, 'sandbox_independent_identity_mismatch')
-        if (twin.get('ticket_id') != current['ticket_id']
+        if (worker.get('ticket_id') != current['ticket_id']
+                or twin.get('ticket_id') != current['ticket_id']
                 or policy.get('ticket_id') != current['ticket_id']):
             raise HTTPException(503, 'sandbox_simulated_ticket_mismatch')
         if (worker.get('core_request_sha256') != current['request_sha256']
@@ -559,6 +575,7 @@ def resolve(x: Intent, authorization: str | None = Header(default=None)):
                 or current['ticket_status'] != 'PREPARED'
                 or current['source_hashes_qualified'] is not True):
             raise HTTPException(503, 'sandbox_core_not_prepared')
+        approval_fresh(issued, expires)  # Under lock: no expiry during contention.
         incident, run = current['incident_id'], current['run_id']
         ticket_binding = {
             'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
