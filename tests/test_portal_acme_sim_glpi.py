@@ -32,7 +32,7 @@ GOOD = {
     "ticket_status": "RESOLVED", "incident_status": "RESOLVED",
     "run_status": "RESOLVED", "incident_id": "INC-ACME-SIM-1234",
     "run_id": "RUN-ACME-SIM-1234", "analysis_validated": True,
-    "critic_validated": True, "evidence_count": 2,
+    "critic_validated": True, "analysis_kind": "SYNTHETIC_FIXTURE", "evidence_count": 2,
     "approval_issuer": "TWIN_ACME_SIMULATED",
     "human_approved": False, "live_effects_allowed": False,
     "real_glpi_writes_allowed": False,
@@ -366,6 +366,30 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                 with patch.object(acme_sim_glpi, "_direct_get", side_effect=good_reads(core=payload)):
                     response = self.get()
                 self.assert_unknown(response)
+
+    def test_core_terminal_rejects_rehashed_or_extra_human_authority_claims(self):
+        # The real Core 018 producer has a closed readback schema. A valid
+        # terminal digest does not authorize any new IdP/GLPI/ACL claims.
+        for injected in (
+            {"human_allow": True},
+            {"native_glpi_readmy_attested": True},
+            {"idp_issuer": "forged-idp"},
+            {"actor_acl_verified": True},
+            {"tenant_acl_verified": True},
+            {"glpi_write": False},
+            {"ticket_user_readmy": "ALLOW"},
+            {"live_executor": "AUTHORIZED"},
+            {"analysis_kind": "HUMAN_VERIFIED"},
+        ):
+            with self.subTest(injected=injected):
+                core = {**GOOD, **injected}
+                with self.assertRaisesRegex(
+                        ValueError, "core_(terminal_schema|analysis_kind)_unqualified"):
+                    acme_sim_glpi._project(core, WORKER, ATTEMPT)
+                with patch.object(acme_sim_glpi, "_direct_get",
+                                  side_effect=good_reads(core=core)) as get:
+                    self.assert_unknown(self.get())
+                self.assertEqual(get.call_count, 4)
 
     def test_worker_receipt_forgery_replay_and_stale_approval_fail_closed(self):
         mutations = [
