@@ -285,5 +285,51 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
 
 
+    def test_08_home_noc_rejects_forged_200_without_independent_actor_tenant(self):
+        # Browser-level regression: a 200 + tenant flag is NOT actor ACL,
+        # runtime attestation or human/LIVE authority. Intercept on loopback.
+        correlation = (
+            '{"schema":"aiops.noc-canonical-correlation.v1",'
+            '"state":"MATCHED_UNATTESTED",'
+            '"source":"SIGNED_NOC_PAYLOAD_NOT_RUNTIME_ATTESTATION",'
+            '"data_classification":"SYNTHETIC_CANONICAL_RUN",'
+            '"tenant_acl_qualified":true,"actor_identity_server_derived":false,'
+            '"runtime_authenticated":false,"production_qualified":false,'
+            '"live_remediation_authorized":false,'
+            '"canonical_run_id":"FORGED-SECRET-RUN"}'
+        )
+        grafana = (
+            '{"schema":"aiops.noc-grafana-connectivity.v1",'
+            '"state":"GRAFANA_HTTP_READY_UNATTESTED",'
+            '"source":"REAL_GRAFANA_HTTP_HEALTH",'
+            '"grafana_http_checked":true,"grafana_observation":"NOT_TESTED",'
+            '"checkmk_thruk_observation":"NOT_TESTED",'
+            '"tenant_acl_qualified":true,"actor_identity_server_derived":true,'
+            '"runtime_authenticated":false,"production_qualified":false,'
+            '"live_remediation_authorized":true,"secret":"FORGED-GRAFANA-SECRET"}'
+        )
+        self.page.route(
+            "**/api/noc/correlation",
+            lambda route: route.fulfill(
+                status=200, content_type="application/json", body=correlation),
+        )
+        self.page.route(
+            "**/api/noc/grafana-health",
+            lambda route: route.fulfill(
+                status=200, content_type="application/json", body=grafana),
+        )
+        self.page.goto(self.base + "/")
+        self.page.locator("#noc-token").fill("disposable-viewer")
+        self.page.get_by_role("button", name="Lire la corrélation").click()
+        expect(self.page.locator("#noc-result")).to_contain_text("UNKNOWN")
+        self.assertNotIn("FORGED-SECRET-RUN", self.page.locator("#noc-result").inner_text())
+        self.page.locator("#noc-token").fill("disposable-viewer")
+        self.page.get_by_role("button", name="Tester Grafana réel (HTTP)").click()
+        expect(self.page.locator("#noc-grafana-result")).to_contain_text("UNKNOWN")
+        self.assertNotIn("FORGED-GRAFANA-SECRET",
+                         self.page.locator("#noc-grafana-result").inner_text())
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+
+
 if __name__ == "__main__":
     unittest.main()
