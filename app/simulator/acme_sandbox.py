@@ -54,12 +54,15 @@ def remote(component, path, method='GET', payload=None):
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise HTTPException(503, 'sandbox_service_url_invalid')
     try:
-        response = requests.request(
-            method, base + path,
-            headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
-                     'Accept': 'application/json'},
-            json=payload if method == 'POST' else None,
-            timeout=5, allow_redirects=False)
+        # Never route the internal bearer through inherited HTTP(S)/ALL_PROXY.
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.request(
+                method, base + path,
+                headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
+                         'Accept': 'application/json'},
+                json=payload if method == 'POST' else None,
+                timeout=5, allow_redirects=False)
         if response.status_code != 200 or len(response.content) > 32768:
             raise ValueError('unqualified')
         data = response.json()
