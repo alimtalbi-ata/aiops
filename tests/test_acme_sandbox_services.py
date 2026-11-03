@@ -668,6 +668,8 @@ from test_acme_san_scenarios import (
     test_replication_lag_only_recovery_risk_not_payments_outage,
     test_provenance_rejects_drift_mixed_live_and_foreign_edges,
     test_digest_is_deterministic_independent_of_db_order,
+    test_digest_binds_criticality_confidence_and_redundancy,
+    test_pg_numeric_decimal_confidence_has_stable_digest,
     test_no_token_or_disabled_sandbox_never_reads_graph,
     test_unknown_scenario_denied_without_promotion,
     test_endpoint_registered_only_as_read_only_get,
