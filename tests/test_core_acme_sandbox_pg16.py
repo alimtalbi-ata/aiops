@@ -563,7 +563,8 @@ class SandboxPG16(unittest.TestCase):
             def json(self):
                 return deepcopy(self._payload)
 
-        def fake_get(url, **kwargs):
+        def fake_get(session, url, **kwargs):
+            self.assertIs(session.trust_env, False)
             component = next((key for key, origin in (
                 ('core', worker_main.CORE), ('twin', worker_main.TWIN),
                 ('policy', worker_main.POLICY))
@@ -587,7 +588,7 @@ class SandboxPG16(unittest.TestCase):
                         id='acme-pg16-joined-' + attempt,
                         task_queue='acme-pg16-joined')
 
-        with patch.object(worker_main.requests, 'get', side_effect=fake_get):
+        with patch.object(worker_main.requests.Session, 'get', autospec=True, side_effect=fake_get):
             worker_receipt = asyncio.run(run_temporal())
         self.assertEqual(reads, ['core','twin','policy'] * 2)
         self.assertTrue(receipt_digest_valid(worker_receipt))
