@@ -49,7 +49,9 @@ def validated_service_origin(component, configured):
             and parsed.hostname in allowed and parsed.port == port
             and parsed.username is None and parsed.password is None
             and not parsed.path and not parsed.query and not parsed.fragment
-            and configured == configured.strip()
+            # urlsplit silently discards embedded TAB/CR/LF and empty ?/#;
+            # require the exact canonical origin before sending the bearer.
+            and configured == f"{parsed.scheme}://{parsed.hostname}:{port}"
         )
     except ValueError:
         valid = False
