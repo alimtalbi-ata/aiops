@@ -52,7 +52,11 @@ class ReadOnlyGraph:
 
     def execute(self, sql):
         self.sql.append(sql)
+        if sql == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY':
+            assert len(self.sql) == 1, 'snapshot isolation must precede both reads'
+            return None
         assert sql.strip().lower().startswith('select '), 'no writes allowed'
+        assert self.sql[0] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
         if 'twin_nodes' in sql:
             return Cursor(self.nodes)
         assert 'twin_edges' in sql
@@ -114,7 +118,9 @@ def test_catalog_eight_hypotheses_abstain_without_analyst_critic(graph):
         assert scenario['effect_allowed'] is False
         assert scenario['live_effects_allowed'] is False
         assert scenario['real_glpi_writes_allowed'] is False
-    assert len(graph.sql) == 2
+    assert len(graph.sql) == 3
+    assert graph.sql[0] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
+    assert all(sql.strip().lower().startswith('select ') for sql in graph.sql[1:])
 
 
 @pytest.mark.parametrize('scenario_id', [
@@ -180,6 +186,28 @@ def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
     assert err.value.status_code == 503
     assert err.value.detail == 'acme_san_topology_provenance_unqualified'
 
+
+
+def test_snapshot_isolation_precedes_node_and_edge_reads(graph):
+    receipt = SAN.provenance_snapshot()
+    assert receipt['nodes'] == 9 and receipt['edges'] == 8
+    assert len(graph.sql) == 3
+    assert graph.sql[0] == 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'
+    assert 'twin_nodes' in graph.sql[1]
+    assert 'twin_edges' in graph.sql[2]
+
+
+def test_snapshot_setup_failure_never_returns_provenance(graph, monkeypatch):
+    class RejectIsolation(ReadOnlyGraph):
+        def execute(self, sql):
+            if sql.startswith('SET TRANSACTION'):
+                raise RuntimeError('isolation unavailable')
+            return super().execute(sql)
+    broken = RejectIsolation()
+    monkeypatch.setattr(SAN, 'db', lambda: broken)
+    with pytest.raises(RuntimeError, match='isolation unavailable'):
+        SAN.provenance_snapshot()
+    assert broken.sql == []
 
 def test_digest_is_deterministic_independent_of_db_order(graph):
     first = SAN.provenance_snapshot()['graph_sha256']
