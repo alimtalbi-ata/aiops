@@ -7,11 +7,13 @@ on:
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - app/core/acme_sandbox.py
+      - app/core/acme_sandbox_journey.py
       - app/core/main.py
       - db/migrations/016_acme_sandbox_attempts.sql
       - db/migrations/017_acme_sandbox_prepared_transition.sql
       - db/migrations/018_acme_sandbox_terminal_ticket_receipt.sql
       - tests/test_core_acme_sandbox_pg16.py
+      - tests/test_core_acme_journey.py
       - .github/workflows/core-acme-sandbox-pg16.yml
   workflow_dispatch:
 permissions:
@@ -46,7 +48,7 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
           python3 -m venv /tmp/core-acme-venv
-          /tmp/core-acme-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0"
+          /tmp/core-acme-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4" "temporalio==1.16.0" "pytest==8.4.2"
       - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
@@ -64,14 +66,16 @@ jobs:
             sleep 1
           done
           /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
-      - name: Twenty-one PG16 regressions including terminal security and Temporal, no skip
+      - name: Twenty-two PG16 regressions and twenty same-Run source tests, no skip
         shell: bash
         run: |
           set -euo pipefail
-          /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
+          /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py app/core/acme_sandbox_journey.py tests/test_core_acme_sandbox_pg16.py tests/test_core_acme_journey.py
           /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
-          grep -E '^Ran 21 tests in ' /tmp/core-acme-tests.log
+          grep -E '^Ran 22 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
+          /tmp/core-acme-venv/bin/python -m pytest -q tests/test_core_acme_journey.py 2>&1 | tee /tmp/core-acme-journey-tests.log
+          grep -E '^20 passed in ' /tmp/core-acme-journey-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
       - name: Independently validate redacted SHA256 receipt
