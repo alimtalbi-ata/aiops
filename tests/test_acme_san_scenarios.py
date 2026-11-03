@@ -2,6 +2,7 @@
 import importlib.util
 import hashlib
 import json
+from decimal import Decimal
 import re
 import sys
 import types
@@ -206,6 +207,13 @@ def test_digest_binds_criticality_confidence_and_redundancy(graph):
     old_digest = hashlib.sha256(json.dumps(
         old, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     assert receipt['graph_sha256'] != old_digest
+
+
+def test_pg_numeric_decimal_confidence_has_stable_digest(graph):
+    baseline = SAN.provenance_snapshot()['graph_sha256']
+    graph.nodes = [(*row[:-1], Decimal('1.0')) for row in graph.nodes]
+    graph.edges = [(*row[:-1], Decimal('1.0')) for row in graph.edges]
+    assert SAN.provenance_snapshot()['graph_sha256'] == baseline
 
 
 def test_no_token_or_disabled_sandbox_never_reads_graph(graph, monkeypatch):
