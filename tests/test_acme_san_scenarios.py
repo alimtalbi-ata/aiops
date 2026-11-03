@@ -116,6 +116,8 @@ def test_catalog_eight_hypotheses_abstain_without_analyst_critic(graph):
     assert re.fullmatch('[0-9a-f]{64}', result['topology']['graph_sha256'])
     for scenario in result['scenarios']:
         assert scenario['tenant_id'] == 'ACME-TEST'
+        assert scenario['topology']['graph_sha256'] == result['topology']['graph_sha256']
+        assert 'graph' not in scenario['topology']  # single catalog graph, not eight copies
         assert scenario['mode'] == 'SIMULATION'
         assert scenario['evidence']['status'] == 'NOT_OBSERVED'
         assert scenario['evidence']['required_independent_fields']
