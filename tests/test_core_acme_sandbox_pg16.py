@@ -709,6 +709,29 @@ class SandboxPG16(unittest.TestCase):
         self.assertEqual(denied.status_code, 503)
         self.assertEqual(self.get(attempt).json()['ticket_status'], 'PREPARED')
 
+        # RG-ACME-19: new terminal writes cannot omit the canonical ticket.
+        attempt_missing = 'ACME-SIM-WORKER-TICKET-MISSING'
+        prepared_missing = self.post(attempt_missing).json()
+        missing = self._qualified_no_effect(prepared_missing)
+        missing[0].pop('ticket_id')
+        missing[0]['receipt_sha256'] = core.digest({
+            k: v for k, v in missing[0].items() if k != 'receipt_sha256'})
+        with patch.object(core, 'independent_readback', side_effect=missing):
+            denied_missing = self.client.post('/api/sandbox/acme/resolve',
+                json=intent(attempt_missing),
+                headers={'Authorization': 'Bearer ' + TOKEN})
+        self.assertEqual(denied_missing.status_code, 503)
+        self.assertEqual(self.get(attempt_missing).json()['run_status'], 'PREPARED')
+
+        # Existing append-only pre-RG-19 terminal rows had Worker v1 receipts
+        # without ticket_id; read-only historical replay must remain possible.
+        ticket = prepared['ticket_id']
+        self.assertTrue(core.terminal_ticket_readback_bound({}, ticket))
+        self.assertTrue(core.terminal_ticket_readback_bound({'ticket_id': ticket}, ticket))
+        self.assertFalse(core.terminal_ticket_readback_bound(
+            {'ticket_id': 'SIM-GLPI-FOREIGN-TICKET'}, ticket))
+        self.assertFalse(core.terminal_ticket_readback_bound({'ticket_id': None}, ticket))
+
         attempt = 'ACME-SIM-APPROVAL-LOCK-EXPIRED'
         prepared = self.post(attempt).json()
         original = core.approval_fresh
