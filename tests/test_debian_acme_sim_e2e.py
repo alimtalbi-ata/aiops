@@ -28,12 +28,40 @@ class TestSimulation(unittest.TestCase):
         ids={'incident_id':'INC-123','run_id':'RUN-123','ticket_id':'SIM-GLPI-123',
              'proposal_id':'PROP-123','approval_id':'SIM-APP-123'}
         resolved=False
+        source_ids=['SRC-%d' % i for i in range(7)]
+        request_sha='a'*64
+        worker_receipt=dict(
+            attempt_id='ACME-SIM-TEST0001',tenant_id='ACME-TEST',
+            incident_id=ids['incident_id'],run_id=ids['run_id'],
+            ticket_id=ids['ticket_id'],proposal_id=ids['proposal_id'],
+            approval_id=ids['approval_id'],action='SIMULATE',
+            receipt_status='SIMULATED_NO_EFFECT',receipt_phase='PRE_RESOLUTION',
+            core_status_at_validation='PREPARED',resolution_verified=False,
+            post_resolution_readback_required=True,effect_receipts=0,
+            human_approved=False,execution_allowed=False,effect_allowed=False,
+            live_effects_allowed=False,core_request_sha256=request_sha,
+            core_source_event_ids=source_ids)
+        worker_receipt['receipt_sha256']=m.hashlib.sha256(m.json.dumps(
+            worker_receipt,sort_keys=True,separators=(',', ':'),
+            ensure_ascii=True).encode('ascii')).hexdigest()
+        ticket_binding=dict(
+            schema='aiops.portal.sim-glpi-ticket-digest.v1',
+            tenant_id='ACME-TEST',attempt_id='ACME-SIM-TEST0001',
+            incident_id=ids['incident_id'],run_id=ids['run_id'],
+            ticket_id=ids['ticket_id'],ticket_status='RESOLVED',
+            core_request_sha256=request_sha,
+            worker_receipt_sha256=worker_receipt['receipt_sha256'])
+        ticket_sha=m.hashlib.sha256(m.json.dumps(
+            ticket_binding,sort_keys=True,separators=(',', ':'),
+            ensure_ascii=True).encode('ascii')).hexdigest()
         def p(component,path,method='GET',payload=None,auth=False):
             nonlocal resolved
             calls.append((component,path,method))
             if path.endswith('/capabilities'):return capability(component)
             x=dict(attempt_id='ACME-SIM-TEST0001',tenant_id='ACME-TEST',
-                   incident_id='INC-123',run_id='RUN-123')
+                   incident_id='INC-123',run_id='RUN-123',
+                   ticket_id=ids['ticket_id'],proposal_id=ids['proposal_id'],
+                   approval_id=ids['approval_id'])
             if component=='simulator' and method=='POST':
                 return dict(x,**ids,glpi_mode='SIMULATED_ONLY')
             if component=='core' and method=='POST':
@@ -49,6 +77,12 @@ class TestSimulation(unittest.TestCase):
                             source='SYNTHETIC_SIMULATOR',source_event_count=7,
                             source_hashes_qualified=True,analysis_validated=True,
                             critic_validated=True,evidence_count=2,
+                            source_event_ids=source_ids,request_sha256=request_sha,
+                            worker_receipt_sha256=worker_receipt['receipt_sha256'] if resolved else None,
+                            worker_receipt_verified=resolved,
+                            terminal_ticket_receipt_verified=resolved,
+                            terminal_ticket_sha256=ticket_sha if resolved else None,
+                            resolution_after_worker_receipt=resolved,
                             human_approved=False,execution_allowed=False,
                             effect_allowed=False,live_effects_allowed=False)
             if component=='twin':
@@ -64,13 +98,7 @@ class TestSimulation(unittest.TestCase):
                             approval_kind='SIMULATED',human_approved=False,
                             execution_allowed=False,effect_allowed=False,
                             live_effects_allowed=False)
-            return dict(x,approval_id='SIM-APP-123',action='SIMULATE',
-                        receipt_status='SIMULATED_NO_EFFECT',
-                        receipt_phase='PRE_RESOLUTION',
-                        core_status_at_validation='PREPARED',
-                        resolution_verified=False,post_resolution_readback_required=True,
-                        effect_receipts=0,human_approved=False,execution_allowed=False,
-                        effect_allowed=False,live_effects_allowed=False)
+            return dict(worker_receipt)
         result=m.execute(p,'ACME-SIM-TEST0001')
         self.assertEqual(result['status'],'PASS',result)
         self.assertEqual([x[0] for x in calls if x[2]=='POST'],['simulator','core'])
@@ -117,6 +145,57 @@ class TestSimulation(unittest.TestCase):
                'policy':dict(base,decision='SIMULATE',approval_kind='SIMULATED',human_approved=False,live_effects_allowed=False),
                'worker':dict(base,action='SIMULATE',receipt_status='SIMULATED_NO_EFFECT',effect_receipts=0,execution_allowed=False)}
         self.assertFalse(m.validate_final('A',ids,reads))
+
+
+    def test_rg_acme_29_worker_and_core_terminal_digest_fail_closed(self):
+        ids=dict(incident_id='INC-1',run_id='RUN-1',
+                 ticket_id='SIM-GLPI-1',proposal_id='PROP-1',
+                 approval_id='SIM-APP-1')
+        worker=dict(attempt_id='ACME-SIM-A',tenant_id='ACME-TEST',
+                    incident_id='INC-1',run_id='RUN-1',ticket_id='SIM-GLPI-1',
+                    proposal_id='PROP-1',approval_id='SIM-APP-1',
+                    core_request_sha256='a'*64,
+                    core_source_event_ids=['SRC-%d' % i for i in range(7)],
+                    effect_receipts=0,action='SIMULATE')
+        def sha(payload):
+            return m.hashlib.sha256(m.json.dumps(
+                payload,sort_keys=True,separators=(',', ':'),
+                ensure_ascii=True).encode('ascii')).hexdigest()
+        worker['receipt_sha256']=sha(worker)
+        core=dict(attempt_id='ACME-SIM-A',request_sha256='a'*64,
+                  source_event_ids=list(worker['core_source_event_ids']),
+                  worker_receipt_sha256=worker['receipt_sha256'],
+                  worker_receipt_verified=True,
+                  terminal_ticket_receipt_verified=True,
+                  resolution_after_worker_receipt=True,
+                  approval_id='SIM-APP-1')
+        core['terminal_ticket_sha256']=sha(dict(
+            schema='aiops.portal.sim-glpi-ticket-digest.v1',
+            tenant_id='ACME-TEST',attempt_id='ACME-SIM-A',
+            incident_id='INC-1',run_id='RUN-1',ticket_id='SIM-GLPI-1',
+            ticket_status='RESOLVED',core_request_sha256='a'*64,
+            worker_receipt_sha256=worker['receipt_sha256']))
+        self.assertTrue(m.validate_terminal_receipts(ids,core,worker))
+        for key,value in [('receipt_sha256','0'*64),
+                          ('ticket_id','SIM-GLPI-FOREIGN'),
+                          ('core_request_sha256','b'*64),
+                          ('effect_receipts',1)]:
+            with self.subTest(worker_tamper=key):
+                forged=dict(worker,key=value)
+                self.assertFalse(m.validate_terminal_receipts(ids,core,forged))
+        for key,value in [('worker_receipt_verified',1),
+                          ('terminal_ticket_receipt_verified',False),
+                          ('terminal_ticket_sha256','f'*64),
+                          ('approval_id','SIM-APP-FOREIGN')]:
+            with self.subTest(core_tamper=key):
+                self.assertFalse(m.validate_terminal_receipts(
+                    ids,dict(core,**{key:value}),worker))
+        # A rehashed foreign Worker ticket still cannot match Core's
+        # persisted terminal digest or the incident's canonical IDs.
+        forged=dict(worker,ticket_id='SIM-GLPI-FOREIGN')
+        forged.pop('receipt_sha256')
+        forged['receipt_sha256']=sha(forged)
+        self.assertFalse(m.validate_terminal_receipts(ids,core,forged))
 
     def test_receipt_private_and_redacted(self):
         with tempfile.TemporaryDirectory() as td:
