@@ -1,7 +1,7 @@
 {
   "schema": "aiops.debian-portal-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "f8921bf2c46534022fc3ac0aa0be02bf4d1880cb",
+  "candidate_sha": "9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8",
   "scope": "aiops2-rebuild-portal on host TCP 7777",
-  "reason": "P0 #396 T1/#385/#386: source PR #397 merged #234 at immutable f8921bf2, reuse historical two-tab recorder station for Twin to NOC navigation; targeted canonical portal 7777, strict 8-route host provenance and 17/17 sandbox requalification; NO LIVE, real browser capture/n8n login/GLPI human ACL remain NO_GO until independently verified"
+  "reason": "P0 #396 modern token-free operator UX: source #401 merged into #234 SHA 9a827041ec8b0b35ee7cfe5c9f1ac01e9b7a8ab8; 12-route host gate including new homepage, /runs and CSS/JS; exact-head Quality + Portal/Chromium snapshot passed. Existing recorder station, Twin and NOC preserved. NO LIVE, real SSO/GLPI/recorder permission still NOT_VERIFIED."
 }
