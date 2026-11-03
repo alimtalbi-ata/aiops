@@ -331,5 +331,25 @@ class DemoCenter386Chromium(unittest.TestCase):
         self.assertTrue(all(method == "GET" for method, _ in self.requests))
 
 
+    def test_08_historical_demo_studio_renderer_navigation(self):
+        # Real Chromium on disposable loopback, not a Debian browser claim.
+        self.page.goto(self.base + "/demo-center")
+        self.page.get_by_role("link", name="Demo Studio V2 historique").click()
+        expect(self.page).to_have_url(self.base + "/demo-studio")
+        expect(self.page.locator("body")).to_contain_text("Mission Control V2")
+        expect(self.page.locator("body")).to_contain_text("SYNTHETIC_REFERENCE_ONLY")
+        expect(self.page.locator("body")).to_contain_text("INCONNU")
+        expect(self.page.locator("body")).not_to_contain_text("EVD-1")
+        self.page.get_by_role("navigation", name="Parcours Demo Studio").get_by_role(
+            "link", name="DemoCenter").click()
+        expect(self.page).to_have_url(self.base + "/demo-center")
+        self.assertTrue(all(method == "GET" for method, _ in self.requests))
+        target = Path(os.environ.get("AIOPS_E2E_ARTIFACT_DIR", self.tmp.name))
+        target.mkdir(parents=True, exist_ok=True)
+        self.page.goto(self.base + "/demo-studio")
+        self.page.screenshot(path=str(target / "demo-studio-v2-historical-ci-synthetic.png"),
+                             full_page=True)
+
+
 if __name__ == "__main__":
     unittest.main()
