@@ -125,8 +125,28 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
         self.assertIn('failed_requests_count', src)
         self.assertIn('failure_stage', src)
         self.assertIn('final-browser-diagnostics', src)
-        self.assertIn('page.wait_for_load_state("networkidle", timeout=10000)', src)
-        self.assertIn('mp.wait_for_load_state("networkidle", timeout=10000)', src)
+        self.assertNotIn('wait_for_load_state("networkidle"', src)
+        self.assertIn('"01-overview", "02-journey", "03-runs", "04-connections"', src)
+        self.assertIn('expect(mp.locator("#fixture-status"))', src)
+
+
+    def test_console_error_classification_never_exports_raw_url_or_message(self):
+        class Msg:
+            type = "error"
+            def __init__(self, url, text):
+                self.location = {"url": url}
+                self.text = text
+        self.assertEqual(module.classify_console_error(Msg(
+            "http://127.0.0.1:7777/favicon.ico?token=SYNTHETIC_SECRET",
+            "Failed to load resource 404")), "FAVICON")
+        self.assertEqual(module.classify_console_error(Msg(
+            "http://127.0.0.1:7777/api/portal/session?token=SYNTHETIC_SECRET",
+            "Failed to load resource 401")), "PORTAL_SESSION")
+        self.assertEqual(module.classify_console_error(Msg(
+            "", "Failed to load resource: 404")), "HTTP_404")
+        self.assertEqual(module.classify_console_error(Msg(
+            "http://127.0.0.1:7777/unknown?token=SYNTHETIC_SECRET",
+            "SYNTHETIC_SECRET")), "OTHER")
 
 
 if __name__ == "__main__":
