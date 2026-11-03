@@ -373,7 +373,9 @@ class DemoCenter386Chromium(unittest.TestCase):
             lambda route: route.fulfill(
                 status=200, content_type="application/json", body=grafana),
         )
-        self.page.goto(self.base + "/")
+        # RG-UX legacy script negative matrix remains runnable on /legacy.
+        # The modern / landing page no longer exposes manual bearer inputs.
+        self.page.goto(self.base + "/legacy")
         self.page.locator("#noc-token").fill("disposable-viewer")
         self.page.get_by_role("button", name="Lire la corrélation").click()
         expect(self.page.locator("#noc-result")).to_contain_text("UNKNOWN")
