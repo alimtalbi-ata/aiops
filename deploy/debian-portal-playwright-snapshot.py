@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import urlsplit
 
 MARKERS = {
@@ -170,6 +171,15 @@ def await_synthetic_workspace_ready(page, expect) -> None:
         "data-state", "ready", timeout=10000)
 
 
+def await_session_request_finished(page, pending, timeout_ms=5000):
+    """Do not navigate away while the known fail-closed session GET is active."""
+    deadline = time.monotonic() + timeout_ms / 1000
+    while pending and time.monotonic() < deadline:
+        page.wait_for_timeout(50)
+    if pending:
+        raise AssertionError("session request did not finish before navigation")
+
+
 def run(args) -> dict:
     BROWSER_PROGRESS.update(stage="VERIFY_HOST", page_errors_count=0,
                             console_errors_count=0, failed_requests_count=0,
@@ -220,6 +230,20 @@ def run(args) -> dict:
             console_errors = []
             failed_requests = []
             blocked = []
+            pending_session = set()
+            denied_session_responses = []
+
+            def record_request(request):
+                if urlsplit(request.url).path == "/api/portal/session":
+                    pending_session.add(request)
+
+            def record_request_finished(request):
+                pending_session.discard(request)
+
+            def record_response(response):
+                if (urlsplit(response.url).path == "/api/portal/session"
+                        and response.status == 401):
+                    denied_session_responses.append("EXPECTED_SESSION_401")
 
             def fence(route):
                 request = route.request
@@ -243,6 +267,7 @@ def run(args) -> dict:
                 BROWSER_PROGRESS["console_error_stage"] = BROWSER_PROGRESS["stage"]
 
             def record_request_failure(request):
+                pending_session.discard(request)
                 failed_requests.append("REQUEST_FAILED")
                 note_failure("failed_requests_count")
                 BROWSER_PROGRESS["failed_request_class"] = classify_failed_request(request)
@@ -252,6 +277,9 @@ def run(args) -> dict:
                                              note_failure("page_errors_count")))
             page.on("console", record_console)
             page.on("requestfailed", record_request_failure)
+            page.on("request", record_request)
+            page.on("requestfinished", record_request_finished)
+            page.on("response", record_response)
 
             def visit(label, path, selector, expected):
                 BROWSER_PROGRESS["stage"] = label
@@ -276,6 +304,7 @@ def run(args) -> dict:
                 if label == "04-connections":
                     expect(page.locator("#session-status")).to_contain_text(
                         "Aucune session d\u0027entreprise valide", timeout=10000)
+                    await_session_request_finished(page, pending_session)
                 receipt["checks"].append({"name": label, "status": "PASS"})
                 capture(page, folder, label, receipt)
 
@@ -348,7 +377,17 @@ def run(args) -> dict:
             receipt["console_errors_count"] = len(console_errors)
             receipt["failed_requests_count"] = len(failed_requests)
             receipt["blocked_requests_count"] = len(blocked)
-            if errors or console_errors or failed_requests:
+            # A 401 from the exact anonymous session endpoint is a required
+            # fail-closed response, not a JavaScript exception or granted ACL.
+            # Never waive an unrelated console error or any failed request.
+            expected_401 = int(
+                len(console_errors) == 1
+                and BROWSER_PROGRESS["console_error_class"] == "http_401_resource"
+                and len(denied_session_responses) == 1
+            )
+            receipt["expected_session_401_console_count"] = expected_401
+            receipt["unexpected_console_errors_count"] = len(console_errors) - expected_401
+            if errors or receipt["unexpected_console_errors_count"] or failed_requests:
                 raise AssertionError("browser JavaScript/console/network failure observed")
             if blocked:
                 raise AssertionError("non-GET or off-origin request attempted")
