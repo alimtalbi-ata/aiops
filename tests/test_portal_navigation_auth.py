@@ -114,9 +114,10 @@ class PortalNavigationAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(GRAFANA, response.text)
         self.assertNotIn(TOKEN, response.text)
-        self.assertIn("portal-navigation-token", response.text)
-        self.assertIn("/assets/portal-navigation.js", response.text)
-        self.assertIn("UNKNOWN", response.text)
+        self.assertIn("/assets/operator-workspace.js", response.text)
+        self.assertIn("Parcours SAN → Payments", response.text)
+        self.assertNotIn("portal-navigation-token", response.text)
+        self.assertNotIn('type="password"', response.text)
 
     def test_invalid_config_is_not_reflected_to_authorized_caller(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": TOKEN,
