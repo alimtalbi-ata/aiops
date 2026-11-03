@@ -1,0 +1,206 @@
+"""ACME-TEST 019 topology / eight SAN hypotheses; no DB, network or LIVE writes."""
+import importlib.util
+import re
+import sys
+import types
+from pathlib import Path
+
+import pytest
+from fastapi import HTTPException
+
+ROOT = Path(__file__).resolve().parents[1]
+BASE = ROOT / 'app'
+shared = types.ModuleType('shared')
+shared.__path__ = []
+db_module = types.ModuleType('shared.db')
+db_module.db = lambda: None
+sys.modules.setdefault('shared', shared)
+sys.modules.setdefault('shared.db', db_module)
+twin = types.ModuleType('twin')
+twin.__path__ = [str(BASE / 'twin')]
+sys.modules.setdefault('twin', twin)
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+load('twin.acme_sandbox', BASE / 'twin' / 'acme_sandbox.py')
+SAN = load('twin.acme_san_scenarios', BASE / 'twin' / 'acme_san_scenarios.py')
+TOKEN = 'test-internal-token-not-real'
+
+
+class ReadOnlyGraph:
+    def __init__(self):
+        self.nodes = [(k, v, SAN.SITE, 'SIMULATED', 1.0)
+                      for k, v in SAN.NODES.items()]
+        self.edges = [(k, *v, 1, 1.0) for k, v in SAN.EDGES.items()]
+        self.sql = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def execute(self, sql):
+        self.sql.append(sql)
+        assert sql.strip().lower().startswith('select '), 'no writes allowed'
+        if 'twin_nodes' in sql:
+            return Cursor(self.nodes)
+        assert 'twin_edges' in sql
+        return Cursor(self.edges)
+
+
+class Cursor:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def fetchall(self):
+        return self.rows
+
+
+@pytest.fixture
+def graph(monkeypatch):
+    g = ReadOnlyGraph()
+    monkeypatch.setattr(SAN, 'db', lambda: g)
+    monkeypatch.setenv('AIOPS_ACME_SANDBOX_ENABLED', 'true')
+    monkeypatch.setenv('AIOPS_INTERNAL_TOKEN', TOKEN)
+    monkeypatch.setenv('AIOPS_ACME_TWIN_APPROVAL_KEY', 'sandbox-test-key-longer-than-32-bytes')
+    return g
+
+
+def test_migration_019_has_exact_independent_9_node_8_edge_contract():
+    sql = (ROOT / 'db/migrations/019_acme_sandbox_twin_topology.sql').read_text()
+    assert len(SAN.NODES) == 9 and len(SAN.EDGES) == 8
+    for node, node_type in SAN.NODES.items():
+        assert f"('{node}','{node_type}'," in sql
+    for edge, (src, dst, relation) in SAN.EDGES.items():
+        assert f"('{edge}','{src}','{dst}','{relation}',1,1.0,now())" in sql
+    assert 'acme_sandbox_twin_node_provenance_conflict' in sql
+    assert 'acme_sandbox_twin_edge_provenance_conflict' in sql
+    assert set(SAN.SCENARIOS) == {
+        'FC_SFP_DEGRADATION', 'RHEL_MULTIPATH_FAILOVER',
+        'DELL_PURE_CONTROLLER', 'NOISY_NEIGHBOR', 'REPLICATION_LAG',
+        'CAPACITY_PRESSURE', 'SAN_CHANGE_WINDOW', 'FALSE_POSITIVE_STORM'}
+
+
+def test_catalog_eight_hypotheses_abstain_without_analyst_critic(graph):
+    result = SAN.catalog(authorization='Bearer ' + TOKEN)
+    assert result['schema'] == 'aiops.acme-san-scenario-catalog.v1'
+    assert len(result['scenarios']) == 8
+    assert result['topology']['nodes'] == 9
+    assert result['topology']['edges'] == 8
+    assert re.fullmatch('[0-9a-f]{64}', result['topology']['graph_sha256'])
+    for scenario in result['scenarios']:
+        assert scenario['tenant_id'] == 'ACME-TEST'
+        assert scenario['mode'] == 'SIMULATION'
+        assert scenario['evidence']['status'] == 'NOT_OBSERVED'
+        assert scenario['evidence']['required_independent_fields']
+        assert scenario['analyst']['status'] == 'NOT_ATTESTED'
+        assert scenario['critic']['status'] == 'NOT_ATTESTED'
+        assert scenario['decision'] == 'ABSTAIN'
+        assert scenario['observed_impacted_services'] == []
+        assert scenario['human_approved'] is False
+        assert scenario['effect_allowed'] is False
+        assert scenario['live_effects_allowed'] is False
+        assert scenario['real_glpi_writes_allowed'] is False
+    assert len(graph.sql) == 2
+
+
+@pytest.mark.parametrize('scenario_id', [
+    'FC_SFP_DEGRADATION', 'RHEL_MULTIPATH_FAILOVER',
+    'DELL_PURE_CONTROLLER', 'NOISY_NEIGHBOR',
+    'CAPACITY_PRESSURE', 'SAN_CHANGE_WINDOW', 'FALSE_POSITIVE_STORM'])
+def test_forward_san_candidate_payments_and_erp_not_observed(graph, scenario_id):
+    result = SAN.get_scenario(scenario_id, authorization='Bearer ' + TOKEN)
+    assert result['candidate_impacted_services'] == sorted(SAN.SERVICES)
+    assert result['observed_impacted_services'] == []
+    assert result['decision'] == 'ABSTAIN'
+
+
+def test_replication_lag_only_recovery_risk_not_payments_outage(graph):
+    result = SAN.get_scenario('REPLICATION_LAG', authorization='Bearer ' + TOKEN)
+    assert result['candidate_impacted_services'] == []
+    assert result['recovery_exposure_services'] == sorted(SAN.SERVICES)
+    assert result['decision'] == 'ABSTAIN'
+
+
+@pytest.mark.parametrize('mutation', [
+    'node_missing', 'node_extra', 'node_site_live', 'node_state_live',
+    'node_wrong_type', 'node_low_confidence', 'edge_missing',
+    'edge_extra', 'edge_foreign_inbound', 'edge_wrong_relation',
+    'edge_swapped_fabrics', 'edge_low_confidence', 'edge_bad_redundancy',
+    'edge_duplicate',
+])
+def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
+    if mutation == 'node_missing':
+        graph.nodes.pop()
+    elif mutation == 'node_extra':
+        graph.nodes.append(('ACME-TEST-FOREIGN', 'SIMULATED_SAN_ARRAY', SAN.SITE, 'SIMULATED', 1.0))
+    elif mutation.startswith('node_'):
+        row = list(graph.nodes[0])
+        row[{'node_site_live': 2, 'node_state_live': 3,
+             'node_wrong_type': 1, 'node_low_confidence': 4}[mutation]] = {
+                 'node_site_live': 'PARIS', 'node_state_live': 'LIVE',
+                 'node_wrong_type': 'REAL_SAN_ARRAY', 'node_low_confidence': 0.3}[mutation]
+        graph.nodes[0] = tuple(row)
+    elif mutation == 'edge_missing':
+        graph.edges.pop()
+    elif mutation == 'edge_extra':
+        graph.edges.append(('ACME-TEST-SIM-EDGE-009', SAN.A, SAN.PAYMENTS, 'SIMULATED_DEPENDS_ON', 1, 1.0))
+    elif mutation == 'edge_foreign_inbound':
+        graph.edges.append(('FOREIGN-EDGE', 'LIVE-ARRAY', SAN.A, 'REAL_DEPENDS_ON', 1, 1.0))
+    elif mutation == 'edge_duplicate':
+        graph.edges.append(graph.edges[0])
+    else:
+        row = list(graph.edges[0])
+        if mutation == 'edge_wrong_relation':
+            row[3] = 'REAL_FC_PATH'
+        elif mutation == 'edge_swapped_fabrics':
+            row[2] = SAN.B
+        elif mutation == 'edge_low_confidence':
+            row[5] = 0.2
+        else:
+            row[4] = 0
+        graph.edges[0] = tuple(row)
+    with pytest.raises(HTTPException) as err:
+        SAN.provenance_snapshot()
+    assert err.value.status_code == 503
+    assert err.value.detail == 'acme_san_topology_provenance_unqualified'
+
+
+def test_digest_is_deterministic_independent_of_db_order(graph):
+    first = SAN.provenance_snapshot()['graph_sha256']
+    graph.nodes.reverse()
+    graph.edges.reverse()
+    assert SAN.provenance_snapshot()['graph_sha256'] == first
+
+
+def test_no_token_or_disabled_sandbox_never_reads_graph(graph, monkeypatch):
+    with pytest.raises(HTTPException) as err:
+        SAN.catalog(authorization='Bearer forged')
+    assert err.value.status_code == 401
+    assert graph.sql == []
+    monkeypatch.setenv('AIOPS_ACME_SANDBOX_ENABLED', 'false')
+    with pytest.raises(HTTPException) as err:
+        SAN.catalog(authorization='Bearer ' + TOKEN)
+    assert err.value.status_code == 503
+    assert graph.sql == []
+
+
+def test_unknown_scenario_denied_without_promotion(graph):
+    with pytest.raises(HTTPException) as err:
+        SAN.get_scenario('LIVE_EXECUTE', authorization='Bearer ' + TOKEN)
+    assert err.value.status_code == 404
+
+
+def test_endpoint_registered_only_as_read_only_get():
+    methods = {tuple(sorted(route.methods)) for route in SAN.router.routes}
+    assert methods == {('GET',)}
+    main = (BASE / 'twin/main.py').read_text()
+    assert 'app.include_router(acme_san_scenarios_router)' in main
