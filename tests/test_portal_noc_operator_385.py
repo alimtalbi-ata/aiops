@@ -30,6 +30,43 @@ class NocOperatorUXTests(unittest.TestCase):
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
 
+    def test_rg_ux_10_source_backed_reference_is_separate_from_incident_queue(self):
+        # Reuse the exact existing six-CI fixture, not a fabricated PG16 9/8
+        # topology or an authorized NOC incident.
+        module = importlib.import_module("portal.noc_operator_page")
+        impact = importlib.import_module("portal.acme_impact_read_model")
+        model = impact.build_acme_impact_read_model()
+        with patch("shared.http.get_json", side_effect=AssertionError("no upstream read")), \
+             patch("shared.http.post_json", side_effect=AssertionError("no upstream write")):
+            page = module.noc_operator_page()
+        body = page.body.decode("utf-8")
+        for marker in ("SYNTHETIC_REFERENCE_ONLY", "LOCAL_SYNTHETIC_FIXTURE",
+                       model["source_sha256"], "SAN-FABRIC-A", "APP-PAY-01",
+                       "9 nœuds / 8 arêtes", 'href="/demo/acme-impact"'):
+            self.assertIn(marker, body)
+        self.assertIn("UNKNOWN — aucun incident autorisé", body)
+        self.assertIn("Analyst/Critic : NOT_ATTESTED", body)
+        self.assertNotIn("runtime_attested=true", body)
+        self.assertEqual(page.headers["cache-control"], "no-store")
+
+    def test_rg_ux_11_invalid_fixture_fails_closed_without_leaking_source(self):
+        module = importlib.import_module("portal.noc_operator_page")
+        for outcome in (ValueError("private_fixture_path"),
+                        {"schema": "aiops.synthetic-impact-read-model.v1",
+                         "provenance": "SIMULATED_TARGET",
+                         "runtime_attested": True,
+                         "source_sha256": "PRIVATE_FORGED_SHA"}):
+            with self.subTest(outcome=type(outcome).__name__):
+                kwargs = ({"side_effect": outcome} if isinstance(outcome, Exception)
+                          else {"return_value": outcome})
+                with patch.object(module, "build_acme_impact_read_model", **kwargs):
+                    body = module.noc_operator_page().body.decode("utf-8")
+                self.assertIn("UNKNOWN — fixture locale absente ou invalide", body)
+                self.assertIn("UNKNOWN — aucun incident autorisé", body)
+                self.assertNotIn("PRIVATE_FORGED_SHA", body)
+                self.assertNotIn("private_fixture_path", body)
+                self.assertNotIn("SYNTHETIC_REFERENCE_ONLY", body)
+
     def test_rg_ux_03_client_requires_actor_and_tenant(self):
         js = (ROOT / "app/portal/noc_operator_client.js").read_text()
         for fence in ("tenant_acl_qualified !== true", "actor_identity_server_derived !== true",
