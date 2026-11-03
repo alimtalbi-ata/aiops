@@ -667,6 +667,7 @@ from test_acme_san_scenarios import (
     test_forward_san_candidate_payments_and_erp_not_observed,
     test_replication_lag_only_recovery_risk_not_payments_outage,
     test_provenance_rejects_drift_mixed_live_and_foreign_edges,
+    test_unrelated_foreign_edge_does_not_poison_sandbox_provenance,
     test_snapshot_isolation_precedes_node_and_edge_reads,
     test_snapshot_setup_failure_never_returns_provenance,
     test_digest_is_deterministic_independent_of_db_order,
