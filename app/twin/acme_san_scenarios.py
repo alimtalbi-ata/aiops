@@ -99,7 +99,7 @@ def provenance_snapshot():
             "where node_id like 'ACME-TEST-%' or site = 'ACME-TEST-SIMULATION'").fetchall()
         edges = conn.execute(
             "select edge_id,source_id,target_id,relation_type,redundancy,confidence "
-            "from aiops.twin_edges where source_id like 'ACME-TEST-%' "
+            "from aiops.twin_edges where edge_id like 'ACME-TEST-%' or source_id like 'ACME-TEST-%' "
             "or target_id like 'ACME-TEST-%'").fetchall()
     if (len(nodes) != 9 or len(edges) != 8
             or len({row[0] for row in nodes}) != 9

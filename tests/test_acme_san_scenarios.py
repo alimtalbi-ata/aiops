@@ -63,7 +63,12 @@ class ReadOnlyGraph:
             return Cursor([row for row in self.nodes if row[0].startswith('ACME-TEST-')
                            or ("site = 'ACME-TEST-SIMULATION'" in sql and row[3] == SAN.SITE)])
         assert 'twin_edges' in sql
-        return Cursor(self.edges)
+        # Emulate the edge-ID and both endpoint predicates, including foreign
+        # endpoints hidden behind an ACME-TEST edge identifier.
+        return Cursor([row for row in self.edges
+                       if (("edge_id like 'ACME-TEST-%'" in sql and row[0].startswith('ACME-TEST-'))
+                           or row[1].startswith('ACME-TEST-')
+                           or row[2].startswith('ACME-TEST-'))])
 
 
 class Cursor:
@@ -148,7 +153,7 @@ def test_replication_lag_only_recovery_risk_not_payments_outage(graph):
 @pytest.mark.parametrize('mutation', [
     'node_missing', 'node_extra', 'node_foreign_same_site', 'node_site_live', 'node_state_live',
     'node_wrong_type', 'node_wrong_name', 'node_low_confidence', 'node_wrong_criticality', 'edge_missing',
-    'edge_extra', 'edge_foreign_inbound', 'edge_wrong_relation',
+    'edge_extra', 'edge_foreign_inbound', 'edge_acme_id_foreign_endpoints', 'edge_wrong_relation',
     'edge_swapped_fabrics', 'edge_low_confidence', 'edge_bad_redundancy',
     'edge_duplicate',
 ])
@@ -176,6 +181,9 @@ def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
         graph.edges.append(('ACME-TEST-SIM-EDGE-009', SAN.A, SAN.PAYMENTS, 'SIMULATED_DEPENDS_ON', 1, 1.0))
     elif mutation == 'edge_foreign_inbound':
         graph.edges.append(('FOREIGN-EDGE', 'LIVE-ARRAY', SAN.A, 'REAL_DEPENDS_ON', 1, 1.0))
+    elif mutation == 'edge_acme_id_foreign_endpoints':
+        graph.edges.append(('ACME-TEST-SIM-EDGE-009', 'LIVE-ARRAY-A', 'LIVE-ARRAY-B',
+                            'REAL_DEPENDS_ON', 1, 1.0))
     elif mutation == 'edge_duplicate':
         graph.edges.append(graph.edges[0])
     else:
@@ -196,6 +204,12 @@ def test_provenance_rejects_drift_mixed_live_and_foreign_edges(graph, mutation):
 
 
 
+def test_unrelated_foreign_edge_does_not_poison_sandbox_provenance(graph):
+    graph.edges.append(('FOREIGN-EDGE', 'LIVE-ARRAY-A', 'LIVE-ARRAY-B',
+                        'REAL_DEPENDS_ON', 1, 1.0))
+    assert SAN.provenance_snapshot()['edges'] == 8
+
+
 def test_snapshot_isolation_precedes_node_and_edge_reads(graph):
     receipt = SAN.provenance_snapshot()
     assert receipt['nodes'] == 9 and receipt['edges'] == 8
@@ -204,6 +218,7 @@ def test_snapshot_isolation_precedes_node_and_edge_reads(graph):
     assert 'twin_nodes' in graph.sql[1]
     assert "site = 'ACME-TEST-SIMULATION'" in graph.sql[1]
     assert 'twin_edges' in graph.sql[2]
+    assert "edge_id like 'ACME-TEST-%'" in graph.sql[2]
 
 
 def test_snapshot_setup_failure_never_returns_provenance(graph, monkeypatch):
