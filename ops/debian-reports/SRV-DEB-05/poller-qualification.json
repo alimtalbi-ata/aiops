@@ -112,15 +112,15 @@
   "acme_sandbox_verdict": "GO_SIMULATED_SANDBOX_ONLY",
   "acme_sim_e2e": {
     "approval_issuer": "TWIN_ACME_SIMULATED",
-    "attempt_id": "ACME-SIM-EA54BE126FE14C5A",
-    "collected_at": "2026-11-03T03:21:08.518088+00:00",
+    "attempt_id": "ACME-SIM-2D60256F201243A7",
+    "collected_at": "2026-11-03T04:24:08.288591+00:00",
     "human_approval_claimed": false,
     "ids": {
-      "approval_id": "SIM-APP-57DE753C169177931BA00795",
-      "incident_id": "INC-SIM-57DE753C169177931BA00795",
-      "proposal_id": "PROP-SIM-57DE753C169177931BA00795",
-      "run_id": "RUN-SIM-57DE753C169177931BA00795",
-      "ticket_id": "SIM-GLPI-57DE753C169177931BA00795"
+      "approval_id": "SIM-APP-C8C25A9D61BA69203E8E3320",
+      "incident_id": "INC-SIM-C8C25A9D61BA69203E8E3320",
+      "proposal_id": "PROP-SIM-C8C25A9D61BA69203E8E3320",
+      "run_id": "RUN-SIM-C8C25A9D61BA69203E8E3320",
+      "ticket_id": "SIM-GLPI-C8C25A9D61BA69203E8E3320"
     },
     "live_effects_allowed": false,
     "mode": "SIMULATION",
@@ -171,7 +171,7 @@
   "canonical_compose_receipt": {
     "status": "NOT_VERIFIED"
   },
-  "collected_at": "2026-11-03T03:21:08.846083+00:00",
+  "collected_at": "2026-11-03T04:24:08.618058+00:00",
   "deployment_preflight": {
     "backup_restoration_tested": false,
     "candidate_sha_pinned": "1fd6391f8a8e7129246ec1b9e4a0d6d4c4eed688",
@@ -230,7 +230,7 @@
   },
   "portal_nine_readonly_contracts": {
     "acme_e2e": "NOT_RUN_SANDBOX_SIMULATION_PENDING",
-    "attempt_id": "ACME-READONLY-20261103T032102Z",
+    "attempt_id": "ACME-READONLY-20261103T042402Z",
     "checks": [
       {
         "http_status": 200,
@@ -296,7 +296,7 @@
         "status": "PASS"
       }
     ],
-    "collected_at": "2026-11-03T03:21:03.018400+00:00",
+    "collected_at": "2026-11-03T04:24:02.700013+00:00",
     "glpi_ticket_id": null,
     "image_id": "sha256:16fe60c3e3945f4fd76cf961fc49f84df9cf57f42f3c4fd984a7fe1a9752b9f1",
     "incident_id": null,
@@ -317,23 +317,23 @@
   },
   "release_stable": "NO_GO",
   "reporter_freshness": {
-    "age_seconds": 3247,
-    "collected_at": "2026-11-03T02:27:01.738716+00:00",
+    "age_seconds": 3787,
+    "collected_at": "2026-11-03T03:21:01.773971+00:00",
     "fresh": false
   },
   "reporter_pipeline": {
     "local_report": {
       "age_seconds": 7,
-      "collected_at": "2026-11-03T03:21:01.773971+00:00",
+      "collected_at": "2026-11-03T04:24:01.458064+00:00",
       "fresh": true
     },
     "publish_last_class": "PUBLISHED",
-    "publish_log_age_seconds": 58744,
+    "publish_log_age_seconds": 62524,
     "publish_log_recent": false
   },
   "schema": "aiops.debian-poller-qualification.v1",
   "single_public_portal": "NOT_VERIFIED",
-  "stable_checkout_sha": "f8de54dc96f8269c03b1773188eca022c50ec66a",
+  "stable_checkout_sha": "117cc80e5cc48cbcd291a8c9d9466b96d1248d90",
   "tcp_loopback": {
     "17777": false,
     "17778": false,
