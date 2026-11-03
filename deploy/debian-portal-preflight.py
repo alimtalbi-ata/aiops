@@ -248,7 +248,23 @@ def host_playwright_receipt(state, stable_sha, portal_image, now=None):
             counts = {k: local.get(k) for k in (
                 'page_errors_count', 'console_errors_count',
                 'failed_requests_count', 'blocked_requests_count')}
+            # Never export raw console text, request URLs or browser errors.
+            allowed = {
+                'console_error_class': {'none', 'http_401_resource',
+                                        'http_404_resource', 'csp_rejected',
+                                        'other_console_error'},
+                'failed_request_class': {'none', 'aborted', 'connection',
+                                         'other_request_failure'},
+            }
+            safe = {k: local.get(k) if type(local.get(k)) is str
+                    and local.get(k) in choices else 'UNKNOWN'
+                    for k, choices in allowed.items()}
+            for k in ('console_error_stage', 'failed_request_stage'):
+                value = local.get(k)
+                safe[k] = value if type(value) is str and re.fullmatch(
+                    r'[A-Za-z0-9_-]{3,50}', value) else 'UNKNOWN'
             return {'status': 'FAIL', 'collected_at': local['collected_at'],
+                    **safe,
                     'failure_type': failure if isinstance(failure, str)
                     and re.fullmatch(r'[A-Za-z]{3,50}', failure) else 'UNKNOWN',
                     'failure_stage': stage if isinstance(stage, str)
