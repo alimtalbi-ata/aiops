@@ -125,10 +125,20 @@ class HostPlaywrightSnapshotContracts(unittest.TestCase):
         self.assertNotIn("SECRET", module.classify_console_error(Message()))
         self.assertNotIn("SECRET", module.classify_failed_request(Request()))
 
+    def test_session_wait_refuses_unfinished_request(self):
+        module.await_session_request_finished(None, set(), timeout_ms=0)
+        with self.assertRaises(AssertionError):
+            module.await_session_request_finished(None, {"pending"}, timeout_ms=0)
+
     def test_browser_source_records_console_and_network_failures(self):
         src = FILE.read_text()
         self.assertIn('page.on("console", record_console)', src)
         self.assertIn('page.on("requestfailed", record_request_failure)', src)
+        self.assertIn('page.on("requestfinished", record_request_finished)', src)
+        self.assertIn('page.on("response", record_response)', src)
+        self.assertIn('await_session_request_finished(page, pending_session)', src)
+        self.assertIn('expected_session_401_console_count', src)
+        self.assertIn('unexpected_console_errors_count', src)
         self.assertIn('mp.on("console", record_console)', src)
         self.assertIn('mp.on("requestfailed", record_request_failure)', src)
         self.assertIn('console_errors_count', src)
