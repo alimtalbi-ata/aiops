@@ -46,18 +46,24 @@ def remote(component, path, method='GET', payload=None):
         raise HTTPException(503, 'sandbox_target_denied')
     env, default = SERVICES[component]
     base = os.getenv(env, default).rstrip('/')
-    parsed = urlsplit(base)
+    try:
+        parsed = urlsplit(base)
+    except ValueError:
+        raise HTTPException(503, 'sandbox_service_url_invalid') from None
     if (parsed.scheme not in ('http', 'https')
             or parsed.netloc not in ALLOWED_ORIGINS[component]
             or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise HTTPException(503, 'sandbox_service_url_invalid')
     try:
-        response = requests.request(
-            method, base + path,
-            headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
-                     'Accept': 'application/json'},
-            json=payload if method == 'POST' else None,
-            timeout=5, allow_redirects=False)
+        # Keep the internal bearer off HTTP(S)/ALL_PROXY inherited from the host.
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.request(
+                method, base + path,
+                headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN'],
+                         'Accept': 'application/json'},
+                json=payload if method == 'POST' else None,
+                timeout=5, allow_redirects=False)
         if response.status_code != 200 or len(response.content) > 32768:
             raise ValueError('unqualified')
         data = response.json()
