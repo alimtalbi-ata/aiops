@@ -145,8 +145,13 @@ def run(args) -> dict:
 
             def visit(label, path, selector, expected):
                 response = page.goto(base + path, wait_until="domcontentloaded", timeout=15000)
-                if response is None or response.status != 200:
+                # Playwright returns None for a same-document fragment navigation.
+                if response is None and not path.startswith("/#"):
+                    raise AssertionError(label + " HTTP response missing")
+                if response is not None and response.status != 200:
                     raise AssertionError(label + " HTTP response failed")
+                if page.url != base + path:
+                    raise AssertionError(label + " unexpected origin or route")
                 expect(page.locator(selector)).to_contain_text(expected, timeout=10000)
                 if label == "01-overview":
                     expect(page.locator("#fixture-status")).to_contain_text(
