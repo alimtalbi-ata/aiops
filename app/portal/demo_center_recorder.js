@@ -12,7 +12,6 @@
   const scenarioStatus = document.getElementById("scenario-status");
   let stream = null;
   let recorder = null;
-  let chunks = [];
   let objectUrl = null;
   let requestEpoch = 0; // cancel a pending browser permission prompt on Clear/pagehide
 
@@ -40,7 +39,6 @@
     download.hidden = true;
     download.removeAttribute("href");
     download.removeAttribute("download");
-    chunks = [];
   }
   function selectMime() {
     for (const candidate of ["video/webm;codecs=vp9", "video/webm", "video/mp4"]) {
@@ -53,7 +51,24 @@
       "CATALOG_ONLY — " + scenario.options[scenario.selectedIndex].text +
       " : non exécuté. Analyst/Critic NOT_ATTESTED ; impact Payments/ERP UNKNOWN.";
   });
-  consent.addEventListener("change", refresh);
+  function cancelCapture(message) {
+    ++requestEpoch; // invalidate pending permission prompts and delayed recorder events
+    const active = recorder;
+    if (active && active.state === "recording") {
+      try { active.stop(); } catch (_) { /* stream cleanup below still applies */ }
+    }
+    releaseStream();
+    discardVideo();
+    setStatus(message);
+    refresh();
+  }
+  consent.addEventListener("change", () => {
+    if (!consent.checked) {
+      cancelCapture("CONSENT_WITHDRAWN — capture arrêtée et vidéo effacée.");
+    } else {
+      refresh();
+    }
+  });
   start.addEventListener("click", async () => {
     if (!supported() || !consent.checked || recorder) {
       setStatus("BLOCKED — consentement, HTTPS/localhost et API navigateur requis.");
@@ -75,23 +90,29 @@
       const mimeType = selectMime();
       recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       const active = recorder;
-      chunks = [];
+      const recordedChunks = []; // per-session: never leak canceled chunks to a new capture
       active.addEventListener("dataavailable", (event) => {
-        if (event.data && event.data.size > 0) { chunks.push(event.data); }
+        if (event.data && event.data.size > 0) { recordedChunks.push(event.data); }
       });
       active.addEventListener("error", () => {
-        setStatus("ERROR — capture interrompue, aucune preuve attestée.");
-        releaseStream();
+        if (recorder === active) {
+          cancelCapture("ERROR — capture interrompue, vidéo effacée.");
+        }
       });
       active.addEventListener("stop", () => {
-        releaseStream();
-        recorder = null;
-        if (chunks.length === 0) {
+        if (stream === selectedStream) {
+          releaseStream();
+        } else {
+          for (const track of selectedStream.getTracks()) { track.stop(); }
+        }
+        if (recorder === active) { recorder = null; }
+        if (epoch !== requestEpoch) { refresh(); return; }
+        if (recordedChunks.length === 0) {
           setStatus("EMPTY — aucune vidéo capturée.");
           refresh();
           return;
         }
-        const blob = new Blob(chunks, { type: active.mimeType || "video/webm" });
+        const blob = new Blob(recordedChunks, { type: active.mimeType || "video/webm" });
         objectUrl = URL.createObjectURL(blob);
         preview.src = objectUrl;
         download.href = objectUrl;
@@ -113,7 +134,6 @@
       if (epoch !== requestEpoch) { return; }
       releaseStream();
       recorder = null;
-      chunks = [];
       setStatus("DENIED_OR_UNAVAILABLE — partage refusé, annulé ou non supporté. Aucune vidéo.");
       refresh();
     }
@@ -126,25 +146,10 @@
     }
   });
   clear.addEventListener("click", () => {
-    ++requestEpoch;
-    if (recorder && recorder.state === "recording") { recorder.stop(); }
-    // A pending stop event must not re-expose the recording after an explicit clear.
-    const pending = recorder;
-    if (pending) {
-      pending.addEventListener("stop", () => {
-        discardVideo();
-        setStatus("CLEARED — aucune vidéo conservée.");
-      }, { once: true });
-    }
-    releaseStream();
-    discardVideo();
-    setStatus("CLEARED — aucune vidéo conservée.");
-    refresh();
+    cancelCapture("CLEARED — aucune vidéo conservée.");
   });
   window.addEventListener("pagehide", () => {
-    ++requestEpoch;
-    releaseStream();
-    if (objectUrl) { URL.revokeObjectURL(objectUrl); }
+    cancelCapture("PAGEHIDE — capture arrêtée et vidéo effacée.");
   }, { once: true });
   if (!window.isSecureContext) {
     setStatus("BLOCKED_INSECURE_ORIGIN — HTTPS ou localhost requis pour enregistrer.");
