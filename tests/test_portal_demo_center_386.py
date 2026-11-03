@@ -64,6 +64,25 @@ class DemoCenter386Tests(unittest.TestCase):
         self.assertNotIn("://", model["entrypoint"])
         self.assertIn('href="/demo/acme-impact"', self.client.get("/demo-center").text)
 
+    def test_rg_ux_09_twin_noc_demo_navigation_is_read_only_and_same_origin(self):
+        # The Twin page previously had no way back to DemoCenter or onward to NOC.
+        # These are existing same-origin GET routes, not an authority or action.
+        with patch("shared.http.get_json", side_effect=AssertionError("upstream read")), \
+             patch("shared.http.post_json", side_effect=AssertionError("upstream write")):
+            twin = self.client.get("/demo/acme-impact")
+            noc = self.client.get("/noc")
+        self.assertEqual(twin.status_code, 200)
+        self.assertEqual(noc.status_code, 200)
+        for target in ('href="/demo-center"', 'href="/noc"',
+                       'href="/demo/explore-story"', 'href="/itsm"'):
+            self.assertIn(target, twin.text)
+        self.assertIn('aria-label="Parcours de démonstration"', twin.text)
+        self.assertIn("focus-visible", twin.text)
+        self.assertIn('href="/demo-center"', noc.text)
+        self.assertNotIn(":17777", twin.text)
+        self.assertIn("SIMULATION LOCALE UNIQUEMENT", twin.text)
+        self.assertEqual(self.client.post("/demo/acme-impact").status_code, 405)
+
     def test_rg_ux_06_recorder_is_local_consent_and_secure_context_only(self):
         response = self.client.get("/assets/demo-center-recorder.js")
         self.assertEqual(response.status_code, 200)
