@@ -6,6 +6,7 @@ capability is BLOCKED and never substituted with a fake human approval.
 Secrets remain inside the simulator container, never in host argv/receipts.
 """
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -130,6 +131,55 @@ def validate_pre(attempt_id, ids, reads):
                     and x.get('live_effects_allowed') is False
                     for x in reads.values()))
 
+
+def validate_terminal_receipts(ids, core, worker):
+    """RG-ACME-29: independently bind the Temporal receipt to Core's durable
+    terminal SIM-GLPI ticket. SHA256 is integrity, never human authority.
+    """
+    if type(core) is not dict or type(worker) is not dict:
+        return False
+    worker_sha = worker.get('receipt_sha256')
+    request_sha = core.get('request_sha256')
+    source_ids = core.get('source_event_ids')
+    if (type(worker_sha) is not str or not re.fullmatch(r'[0-9a-f]{64}', worker_sha)
+            or type(request_sha) is not str or not re.fullmatch(r'[0-9a-f]{64}', request_sha)
+            or type(source_ids) is not list or len(source_ids) != 7
+            or any(type(item) is not str or not item for item in source_ids)
+            or worker.get('core_request_sha256') != request_sha
+            or worker.get('core_source_event_ids') != source_ids
+            or core.get('worker_receipt_sha256') != worker_sha
+            or core.get('worker_receipt_verified') is not True
+            or core.get('terminal_ticket_receipt_verified') is not True
+            or core.get('resolution_after_worker_receipt') is not True):
+        return False
+    # The Worker GET is the persisted Temporal result, not a caller-provided
+    # digest. Rehash its entire canonical body, excluding only its digest.
+    unsigned = {k: v for k, v in worker.items() if k != 'receipt_sha256'}
+    try:
+        actual_worker_sha = hashlib.sha256(json.dumps(
+            unsigned, sort_keys=True, separators=(',', ':'),
+            ensure_ascii=True, allow_nan=False).encode('ascii')).hexdigest()
+    except (ValueError, TypeError, UnicodeError):
+        return False
+    if actual_worker_sha != worker_sha:
+        return False
+    ticket_binding = {
+        'schema': 'aiops.portal.sim-glpi-ticket-digest.v1',
+        'tenant_id': TENANT, 'attempt_id': core.get('attempt_id'),
+        'incident_id': ids.get('incident_id'), 'run_id': ids.get('run_id'),
+        'ticket_id': ids.get('ticket_id'), 'ticket_status': 'RESOLVED',
+        'core_request_sha256': request_sha,
+        'worker_receipt_sha256': worker_sha,
+    }
+    expected_ticket_sha = hashlib.sha256(json.dumps(
+        ticket_binding, sort_keys=True, separators=(',', ':'),
+        ensure_ascii=True).encode('ascii')).hexdigest()
+    return (core.get('terminal_ticket_sha256') == expected_ticket_sha
+            and core.get('approval_id') == ids.get('approval_id')
+            and worker.get('approval_id') == ids.get('approval_id')
+            and worker.get('ticket_id') == ids.get('ticket_id')
+            and worker.get('proposal_id') == ids.get('proposal_id'))
+
 def validate_final(attempt_id, ids, reads):
     if not all(isinstance(x, dict) for x in reads.values()):
         return False
@@ -139,6 +189,12 @@ def validate_final(attempt_id, ids, reads):
             return False
         if x.get('incident_id') != ids['incident_id'] or x.get('run_id') != ids['run_id']:
             return False
+    if (any(doc.get('ticket_id') != ids.get('ticket_id')
+            or doc.get('proposal_id') != ids.get('proposal_id')
+            or doc.get('approval_id') != ids.get('approval_id')
+            for doc in reads.values())
+            or not validate_terminal_receipts(ids, core, worker)):
+        return False
     return (core.get('incident_status') == 'RESOLVED' and core.get('run_status') == 'RESOLVED'
             and core.get('ticket_id') == ids['ticket_id']
             and core.get('ticket_authority') == 'SIMULATED_ONLY'
