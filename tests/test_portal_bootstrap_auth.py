@@ -90,9 +90,11 @@ class PortalBootstrapAuthTests(unittest.TestCase):
         with patch.object(main, "get_json", side_effect=AssertionError("no anonymous Core read")) as get:
             response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("portal-read-token", response.text)
-        self.assertIn("UNKNOWN", response.text)
-        self.assertIn('/assets/portal-bootstrap.js', response.text)
+        self.assertIn("operator-workspace.js", response.text)
+        self.assertIn("SAN → Payments", response.text)
+        self.assertNotIn('id="portal-read-token"', response.text)
+        self.assertNotIn('id="noc-token"', response.text)
+        self.assertNotIn('id="demo-token"', response.text)
         self.assertNotIn(TOKEN, response.text)
         get.assert_not_called()
 

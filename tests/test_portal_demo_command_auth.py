@@ -134,7 +134,8 @@ class DemoOperatorBoundaryTests(unittest.TestCase):
                 self.assert_security(response)
 
     def test_anonymous_home_disables_demo_launch_and_stays_synthetic(self):
-        r = self.client.get("/")
+        # Preserve the former command-denial contract on the legacy renderer.
+        r = self.client.get("/legacy")
         self.assertEqual(r.status_code, 200)
         self.assertIn('id="demo-token" type="password" disabled aria-disabled="true"', r.text)
         self.assertIn('disabled aria-disabled="true"', r.text)

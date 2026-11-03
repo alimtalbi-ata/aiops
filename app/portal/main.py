@@ -17,6 +17,7 @@ from portal.acme_explore_story import router as acme_explore_story_router
 from portal.acme_run_detail import router as acme_run_detail_router
 from portal.glpi_operator_view import router as glpi_operator_view_router
 from portal.oidc_session import router as oidc_session_router
+from portal.operator_workspace import router as operator_workspace_router
 app=FastAPI(title='ACME AioOps Command Center',version='2.0.0')
 @app.middleware('http')
 async def portal_security_headers(request: Request, call_next):
@@ -34,6 +35,7 @@ async def portal_security_headers(request: Request, call_next):
     for key, value in defaults.items():
         response.headers.setdefault(key, value)
     return response
+app.include_router(operator_workspace_router)
 app.include_router(noc_runtime_router)
 app.include_router(noc_correlation_router)
 app.include_router(noc_demo_rag_router)
@@ -146,6 +148,7 @@ def demo(authorization: str | None = Header(default=None)):
         'source_freshness': 'UNKNOWN',
         'live_remediation_authorized': False,
     }, status_code=503)
+@app.get('/legacy',response_class=HTMLResponse)
 @app.get('/',response_class=HTMLResponse)
 def home(response: Response = None):
     # Keep direct callers of the existing home() renderer compatible.

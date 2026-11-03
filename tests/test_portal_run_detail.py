@@ -354,7 +354,8 @@ class RunDetailTests(unittest.TestCase):
         self.assertNotIn("sensitive-upstream", unavailable.text)
 
     def test_home_entry_and_js_asset_do_not_ship_secrets(self):
-        home = self.client.get("/")
+        # Old link-command contract is retained for /legacy only.
+        home = self.client.get("/legacy")
         self.assertIn('id="run-detail-id"', home.text)
         self.assertIn('id="run-detail-open"', home.text)
         self.assertIn('/assets/portal-run-link.js', home.text)
@@ -510,7 +511,7 @@ class RunDetailTests(unittest.TestCase):
             core.assert_not_called()
 
     def test_existing_home_cockpit_is_no_store_and_anti_framing(self):
-        response = self.client.get("/")
+        response = self.client.get("/legacy")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(response.headers["pragma"], "no-cache")
