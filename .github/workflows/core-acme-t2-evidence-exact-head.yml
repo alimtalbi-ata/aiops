@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - feat/acme-396-core-same-run-journey-20261103
+      - feat/acme-396-t2-core-journey-evidence-20261103
     paths:
       - app/core/acme_sandbox_journey.py
       - tests/test_core_acme_journey_evidence.py
