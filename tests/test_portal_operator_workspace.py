@@ -69,6 +69,9 @@ class ModernWorkspaceTests(unittest.TestCase):
         self.assertIn('/api/demo/acme-impact', js.text)
         self.assertIn('/api/portal/session', js.text)
         self.assertIn('credentials: "same-origin"', js.text)
+        self.assertIn('await finishSessionResponse(response)', js.text)
+        self.assertIn('response.body.getReader()', js.text)
+        self.assertIn('bytes > 8192', js.text)
         self.assertIn('credentials: "omit"', js.text)
         for bad in ("Authorization", "localStorage", "sessionStorage",
                     "innerHTML", "eval(", "getDisplayMedia"):
