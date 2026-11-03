@@ -377,7 +377,14 @@ def simulated_glpi_readback(attempt_id: str, authorization: str | None = Header(
         core_first = _sandbox_read("core", attempt_id)
         worker_second = _sandbox_read("worker", attempt_id)
         core_second = _sandbox_read("core", attempt_id)
-        if worker_first != worker_second or core_first != core_second:
+        # Python dict equality treats True == 1 and False == 0.  A first
+        # forged read with a numeric authority flag could otherwise compare
+        # equal to the second legitimate read and be silently accepted.
+        # Canonical JSON preserves boolean versus number types across rounds.
+        if (json.dumps(worker_first, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+                != json.dumps(worker_second, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+                or json.dumps(core_first, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+                != json.dumps(core_second, sort_keys=True, separators=(",", ":"), ensure_ascii=True)):
             raise ValueError("sandbox_final_readback_rotated")
         return JSONResponse(_project(core_second, worker_second, attempt_id),
                             headers=HEADERS)
