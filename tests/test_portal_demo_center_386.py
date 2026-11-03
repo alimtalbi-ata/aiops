@@ -48,6 +48,41 @@ class DemoCenter386Tests(unittest.TestCase):
         self.assertIn("display-capture=(self)", response.headers["permissions-policy"])
         self.assertEqual(self.client.post("/demo-center").status_code, 405)
 
+    def test_rg_ux_08_twin_entrypoint_is_same_origin_demonstration_route(self):
+        # The previous 10.79.x.x:17777 candidate address was not the
+        # canonical :7777 portal and could misdirect the demo operator.
+        # The fixture remains synthetic; this is navigation, not authority.
+        with patch("shared.http.get_json", side_effect=AssertionError("upstream read")), \
+             patch("shared.http.post_json", side_effect=AssertionError("upstream write")):
+            response = self.client.get("/api/demo/acme-impact")
+        self.assertEqual(response.status_code, 200)
+        model = response.json()
+        self.assertEqual(model["entrypoint"], "/demo-center")
+        self.assertEqual(model["provenance"], "SIMULATED_TARGET")
+        self.assertFalse(model["runtime_attested"])
+        self.assertFalse(model["live_remediation_authorized"])
+        self.assertNotIn("://", model["entrypoint"])
+        self.assertIn('href="/demo/acme-impact"', self.client.get("/demo-center").text)
+
+    def test_rg_ux_09_twin_noc_demo_navigation_is_read_only_and_same_origin(self):
+        # The Twin page previously had no way back to DemoCenter or onward to NOC.
+        # These are existing same-origin GET routes, not an authority or action.
+        with patch("shared.http.get_json", side_effect=AssertionError("upstream read")), \
+             patch("shared.http.post_json", side_effect=AssertionError("upstream write")):
+            twin = self.client.get("/demo/acme-impact")
+            noc = self.client.get("/noc")
+        self.assertEqual(twin.status_code, 200)
+        self.assertEqual(noc.status_code, 200)
+        for target in ('href="/demo-center"', 'href="/noc"',
+                       'href="/demo/explore-story"', 'href="/itsm"'):
+            self.assertIn(target, twin.text)
+        self.assertIn('aria-label="Parcours de démonstration"', twin.text)
+        self.assertIn("focus-visible", twin.text)
+        self.assertIn('href="/demo-center"', noc.text)
+        self.assertNotIn(":17777", twin.text)
+        self.assertIn("SIMULATION LOCALE UNIQUEMENT", twin.text)
+        self.assertEqual(self.client.post("/demo/acme-impact").status_code, 405)
+
     def test_rg_ux_06_recorder_is_local_consent_and_secure_context_only(self):
         response = self.client.get("/assets/demo-center-recorder.js")
         self.assertEqual(response.status_code, 200)

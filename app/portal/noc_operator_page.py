@@ -30,7 +30,7 @@ table{border-collapse:collapse;width:100%}td,th{padding:10px;border-bottom:1px s
 .status{color:#f9d87b;font-weight:700}.muted{color:#bed1dd}.table-wrap{overflow-x:auto}
 @media(max-width:640px){main{padding:14px}td,th{padding:7px}}
 </style></head><body><main>
-<nav aria-label="Navigation opérateur"><a href="/">Cockpit</a><a href="/itsm">GLPI réel / droits humains</a>
+<nav aria-label="Navigation opérateur"><a href="/">Cockpit</a><a href="/demo-center">DemoCenter</a><a href="/itsm">GLPI réel / droits humains</a>
 <a href="/demo/explore-story">ACME Story (simulation)</a><a href="/demo/acme-impact">Impact Twin (simulation)</a></nav>
 <h1>NOC opérateur — incidents SAN / Payments / ERP</h1>
 <p class="muted">Lecture seule. Aucun incident, impact, ticket, diagnostic Analyst/Critic ni droit humain n'est déduit d'un HTTP 200.
