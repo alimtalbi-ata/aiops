@@ -1,8 +1,8 @@
 {
   "schema": "aiops.debian-acme-sandbox-release-intent.v1",
   "enabled": true,
-  "candidate_sha": "7a2c843f98a0c28ddd4763565721f621ad66d502",
-  "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; portal 7777 untouched",
-  "reason": "RG-ACME-31 typed Core SOURCE event-count fence in Worker: reviewed #374 exact source HEAD 7a2c843f98a0c28ddd4763565721f621ad66d502, squash-integrated stable 117cc80e5cc48cbcd291a8c9d9466b96d1248d90, 6/6 exact-head CI SUCCESS and Worker 30/30 unit PASS. Five-service DEV-only guarded poller upgrade from immutable PR HEAD; no portal 7777 mutation, no LIVE or human GLPI/IdP approval. Require PG16 backup/scratch restore, Compose/image/health/rollback and fresh 17/17 ACME-TEST SAN E2E host receipt. Do not infer deployment from this intent.",
-  "source_pr": 374
+  "candidate_sha": "9cf5f086789892355e924f35e9f1997b57b69d6e",
+  "scope": "existing aiops2-rebuild core/twin/policy/worker/simulator only; canonical portal TCP 7777 untouched",
+  "reason": "RG-ACME-32 typed Core SOURCE count fence before Twin TWIN_ACME_SIMULATED approval: reviewed #356 source fcbb38a1b11e1698fc489c64c48244ef7b5b3c45, selective stable-based #376 exact HEAD 9cf5f086789892355e924f35e9f1997b57b69d6e, squash-integrated stable b9510460fa7c5f665e8ec64fb7df5488ced82d5f. Exact-head CI 6/6 workflows SUCCESS, 6/6 Quality jobs SUCCESS, Twin 86/86 pytest PASS (four negative SOURCE types). Five-service DEV-only guarded poller upgrade from immutable PR HEAD; no portal 7777 mutation, no LIVE or human GLPI/IdP approval. Require local PG16 backup/scratch restore, Compose ownership/image/health/rollback, and NEW 17/17 ACME-TEST SAN E2E host receipt. Prior Debian telemetry 04:28Z stale at release; do not infer deployment from this intent.",
+  "source_pr": 376
 }
