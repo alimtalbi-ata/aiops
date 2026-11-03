@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - feat/acme-396-core-same-run-journey-20261103
+      - feat/acme-396-t2-core-journey-evidence-20261103
     paths:
       - app/core/acme_sandbox_journey.py
       - tests/test_core_acme_journey_evidence.py
@@ -28,13 +29,13 @@ jobs:
           python-version: '3.13'
       - name: Install isolated source-test dependencies
         run: python -m pip install --disable-pip-version-check 'fastapi==0.116.1' 'pytest==8.4.2'
-      - name: Compile and run 27 source contracts with no skip
+      - name: Compile and run 28 source contracts with no skip
         env:
           PYTHONPATH: app
         run: |
           set -euo pipefail
           python -m compileall -q app/core/acme_sandbox_journey.py tests/test_core_acme_journey.py tests/test_core_acme_journey_evidence.py
           python -m pytest -q tests/test_core_acme_journey.py tests/test_core_acme_journey_evidence.py 2>&1 | tee /tmp/core-t2-evidence.log
-          grep -E '^27 passed in ' /tmp/core-t2-evidence.log
+          grep -E '^28 passed in ' /tmp/core-t2-evidence.log
           ! grep -E 'skipped|xfailed|xpassed' /tmp/core-t2-evidence.log
           echo 'SOURCE_ONLY=true SAME_RUN_CORE_PG16_INTERNAL_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN EFFECT_ALLOWED=false'

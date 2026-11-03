@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - deploy/aiops2-stable
+      - feat/acme-396-t2-core-journey-evidence-20261103
       - integration/enterprise-slice-main-20261031-2230
     paths:
       - app/core/acme_sandbox.py

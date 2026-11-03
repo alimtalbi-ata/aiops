@@ -79,7 +79,11 @@ def project_journey(snapshot, rows, attempt):
                     or payload.get('synthetic') is not True
                     or len(evidence) != 1
                     or type(evidence[0]) is not str
-                    or evidence[0] not in expected_evidence):
+                    or evidence[0] not in expected_evidence
+                    # The Core producer alternates EVID-SIM-1/2 by sequence;
+                    # set membership alone would accept swapped provenance.
+                    or evidence[0] != core.ident(
+                        'EVID-SIM-', attempt + ':' + str(1 + ((index - 1) % 2)))):
                 raise HTTPException(503, 'sandbox_journey_source_unqualified')
         elif index == 8:
             if ((stage, kind, status) != ('RUN', 'SIMULATED_PREPARED', 'PREPARED')
