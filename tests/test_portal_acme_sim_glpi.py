@@ -56,7 +56,8 @@ WORKER = {
     "schema": "aiops.worker-acme-simulated-no-effect.v1",
     "attempt_id": ATTEMPT, "tenant_id": "ACME-TEST",
     "incident_id": GOOD["incident_id"], "run_id": GOOD["run_id"],
-    "proposal_id": GOOD["proposal_id"], "approval_id": GOOD["approval_id"],
+    "proposal_id": GOOD["proposal_id"], "ticket_id": GOOD["ticket_id"],
+    "approval_id": GOOD["approval_id"],
     "approval_issuer": "TWIN_ACME_SIMULATED", "approval_kind": "SIMULATED",
     "action": "SIMULATE", "receipt_status": "SIMULATED_NO_EFFECT",
     "receipt_phase": "PRE_RESOLUTION", "core_status_at_validation": "PREPARED",
@@ -438,6 +439,40 @@ class PortalSimulatedGlpiTests(unittest.TestCase):
                 with patch.object(acme_sim_glpi, "_direct_get",
                                   side_effect=good_reads(core=core)) as get:
                     self.assert_unknown(self.get())
+                self.assertEqual(get.call_count, 4)
+
+    def test_rg19_worker_ticket_binding_rejects_missing_or_foreign_rehashed_ticket(self):
+        # Stable Worker RG-ACME-19 includes ticket_id in the no-effect receipt.
+        # A legacy receipt without it or a forged foreign ticket is not a
+        # qualified terminal readback, even with both SHA256s recomputed.
+        self.assertEqual(WORKER["ticket_id"], GOOD["ticket_id"])
+        for foreign in (None, "SIM-GLPI-FOREIGN123456", 42):
+            with self.subTest(foreign=foreign):
+                worker = dict(WORKER)
+                if foreign is None:
+                    worker.pop("ticket_id")
+                else:
+                    worker["ticket_id"] = foreign
+                worker["receipt_sha256"] = hashlib.sha256(json.dumps(
+                    {k: v for k, v in worker.items() if k != "receipt_sha256"},
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                ).encode("ascii")).hexdigest()
+                core = {**GOOD, "worker_receipt_sha256": worker["receipt_sha256"]}
+                core["terminal_ticket_sha256"] = hashlib.sha256(json.dumps({
+                    "schema": "aiops.portal.sim-glpi-ticket-digest.v1",
+                    "tenant_id": core["tenant_id"], "attempt_id": ATTEMPT,
+                    "incident_id": core["incident_id"], "run_id": core["run_id"],
+                    "ticket_id": core["ticket_id"], "ticket_status": "RESOLVED",
+                    "core_request_sha256": core["request_sha256"],
+                    "worker_receipt_sha256": worker["receipt_sha256"],
+                }, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+                ).encode("ascii")).hexdigest()
+                with patch.object(acme_sim_glpi, "_direct_get",
+                                  side_effect=good_reads(core=core, worker=worker)) as get:
+                    response = self.get()
+                self.assert_unknown(response)
+                self.assertEqual(response.json()["reason"],
+                                 "CORE_SIMULATED_TICKET_NOT_ATTESTED")
                 self.assertEqual(get.call_count, 4)
 
     def test_worker_receipt_forgery_replay_and_stale_approval_fail_closed(self):
