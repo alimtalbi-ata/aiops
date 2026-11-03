@@ -111,7 +111,9 @@ def validate_readbacks(intent, *, core, twin, policy, now=None):
             or core.get("ticket_authority") != "SIMULATED_ONLY"
             or core.get("ticket_status") != "PREPARED"
             or core.get("source") != "SYNTHETIC_SIMULATOR"
-            or core.get("source_event_count") != 7
+            # RG-ACME-31: reject bool/float/string source authority before receipt.
+            or type(core.get("source_event_count")) is not int
+            or core["source_event_count"] != 7
             or core.get("source_hashes_qualified") is not True
             or core.get("human_approved") is not False
             or core.get("execution_allowed") is not False
