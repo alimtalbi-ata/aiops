@@ -28,6 +28,17 @@ NODES = {
     'ACME-TEST-SAN-REPLICATION-01': 'SIMULATED_REPLICATION',
     'ACME-TEST-SAN-BACKUP-01': 'SIMULATED_BACKUP',
 }
+NODE_CRITICALITY = {
+    'ACME-TEST-SAN-ARRAY-DELL-01': 5,
+    'ACME-TEST-SAN-ARRAY-PURE-01': 5,
+    'ACME-TEST-SAN-FABRIC-A': 5,
+    'ACME-TEST-SAN-FABRIC-B': 5,
+    'ACME-TEST-HOST-RHEL-MPATH-01': 5,
+    PAYMENTS: 5,
+    ERP: 4,
+    'ACME-TEST-SAN-REPLICATION-01': 3,
+    'ACME-TEST-SAN-BACKUP-01': 3,
+}
 EDGES = {
     'ACME-TEST-SIM-EDGE-001': ('ACME-TEST-SAN-ARRAY-DELL-01', 'ACME-TEST-SAN-FABRIC-A', 'SIMULATED_FC_PATH'),
     'ACME-TEST-SIM-EDGE-002': ('ACME-TEST-SAN-ARRAY-PURE-01', 'ACME-TEST-SAN-FABRIC-B', 'SIMULATED_FC_PATH'),
@@ -69,7 +80,7 @@ def provenance_snapshot():
     """Verify exactly 9 synthetic nodes/8 edges, including *inbound* foreign links."""
     with db() as conn:
         nodes = conn.execute(
-            "select node_id,type,site,state,confidence from aiops.twin_nodes "
+            "select node_id,type,site,state,criticality,confidence from aiops.twin_nodes "
             "where node_id like 'ACME-TEST-%'").fetchall()
         edges = conn.execute(
             "select edge_id,source_id,target_id,relation_type,redundancy,confidence "
@@ -79,17 +90,20 @@ def provenance_snapshot():
             or len({row[0] for row in nodes}) != 9
             or len({row[0] for row in edges}) != 8):
         raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
-    for node_id, node_type, site, state, confidence in nodes:
+    for node_id, node_type, site, state, criticality, confidence in nodes:
         if (NODES.get(node_id) != node_type or site != SITE
-                or state != 'SIMULATED' or confidence != 1):
+                or state != 'SIMULATED' or NODE_CRITICALITY.get(node_id) != criticality
+                or confidence != 1):
             raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
     for edge_id, source, target, relation, redundancy, confidence in edges:
         if (EDGES.get(edge_id) != (source, target, relation)
                 or redundancy != 1 or confidence != 1):
             raise HTTPException(503, 'acme_san_topology_provenance_unqualified')
     normalized = {
-        'nodes': sorted((node_id, node_type, site, state) for node_id, node_type, site, state, _ in nodes),
-        'edges': sorted((edge_id, source, target, relation) for edge_id, source, target, relation, _, _ in edges),
+        'nodes': sorted((node_id, node_type, site, state, criticality, confidence)
+                        for node_id, node_type, site, state, criticality, confidence in nodes),
+        'edges': sorted((edge_id, source, target, relation, redundancy, confidence)
+                        for edge_id, source, target, relation, redundancy, confidence in edges),
     }
     digest = hashlib.sha256(json.dumps(normalized, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return {'schema': 'aiops.acme-test-san-topology.v1', 'source_migration': '019',
