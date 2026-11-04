@@ -63,6 +63,29 @@ def classify_console_error(msg):
     return "other_console_error"
 
 
+
+def is_expected_session_401_console(msg, session_401_observed, origin):
+    """Only the exact anonymous session resource may explain a 401 console error.
+
+    Missing/ambiguous console location fails closed. Never persist the URL.
+    """
+    if not session_401_observed or classify_console_error(msg) != "http_401_resource":
+        return False
+    location = getattr(msg, "location", None)
+    if not isinstance(location, dict):
+        return False
+    source = location.get("url")
+    if not isinstance(source, str):
+        return False
+    try:
+        target, root = urlsplit(source), urlsplit(origin)
+        return (target.scheme, target.hostname, target.port, target.path) == (
+            root.scheme, root.hostname, root.port, "/api/portal/session"
+        ) and not target.username and not target.password and not target.query and not target.fragment
+    except ValueError:
+        return False
+
+
 def classify_failed_request(request):
     value = str(getattr(request, "failure", "") or "")
     if "ERR_ABORTED" in value:
@@ -282,7 +305,7 @@ def run(args) -> dict:
             def record_console(msg):
                 if msg.type != "error":
                     return
-                console_errors.append("CONSOLE_ERROR")
+                console_errors.append(msg)
                 note_failure("console_errors_count")
                 BROWSER_PROGRESS["console_error_class"] = classify_console_error(msg)
                 BROWSER_PROGRESS["console_error_stage"] = BROWSER_PROGRESS["stage"]
@@ -407,8 +430,9 @@ def run(args) -> dict:
             # Never waive an unrelated console error or any failed request.
             expected_401 = int(
                 len(console_errors) == 1
-                and BROWSER_PROGRESS["console_error_class"] == "http_401_resource"
                 and len(denied_session_responses) == 1
+                and is_expected_session_401_console(
+                    console_errors[0], True, base)
             )
             receipt["expected_session_401_console_count"] = expected_401
             receipt["unexpected_console_errors_count"] = len(console_errors) - expected_401
