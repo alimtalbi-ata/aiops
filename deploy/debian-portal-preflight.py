@@ -98,6 +98,27 @@ def reporter_freshness(path, now=None):
 
 
 
+def classify_publisher_freshness(status):
+    """A historical PUBLISHED line is not a current delivery acknowledgement."""
+    state = dict(status)
+    last = state.get('publish_last_class')
+    if not state.get('local_report', {}).get('fresh'):
+        delivery = 'LOCAL_REPORT_STALE'
+    elif not state.get('publish_log_recent'):
+        delivery = 'PUBLISH_LOG_STALE'
+    elif last in ('DIRTY_CHECKOUT', 'MISSING_LOCAL_REPORT', 'PUSH_REJECTED',
+                  'SSH_DENIED', 'SSH_DNS_FAILURE', 'GIT_FATAL'):
+        delivery = 'PUBLISH_FAILURE'
+    elif last in ('PUBLISHED', 'UNCHANGED'):
+        delivery = 'RECENT_LOCAL_PUBLISH_ACTIVITY_ONLY'
+    else:
+        delivery = 'PUBLISH_UNVERIFIED'
+    state['delivery_state'] = delivery
+    # A local log cannot independently attest GitHub branch publication.
+    state['remote_receipt_verified'] = False
+    return state
+
+
 def local_reporter_pipeline(state, now=None):
     """Classify local collection vs SSH publisher without exposing log contents."""
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -109,7 +130,7 @@ def local_reporter_pipeline(state, now=None):
         stat = log.stat()
         age = int((now - dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc)).total_seconds())
         if age < 0 or age > 365 * 86400:
-            return status
+            return classify_publisher_freshness(status)
         status['publish_log_age_seconds'] = age
         status['publish_log_recent'] = age <= 900
         with log.open('rb') as handle:
@@ -129,10 +150,10 @@ def local_reporter_pipeline(state, now=None):
             for needle, label in classes:
                 if needle in line:
                     status['publish_last_class'] = label
-                    return status
+                    return classify_publisher_freshness(status)
     except (OSError, ValueError, TypeError):
         pass
-    return status
+    return classify_publisher_freshness(status)
 
 
 
