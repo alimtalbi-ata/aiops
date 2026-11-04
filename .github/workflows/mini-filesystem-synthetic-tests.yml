@@ -1,0 +1,28 @@
+name: Mini-filesystem synthetic remediation tests
+on:
+  pull_request:
+    paths:
+      - 'deploy/fs_demo.py'
+      - 'deploy/aiops2-mini-filesystem-demo.sh'
+      - 'deploy/cleanup-logs.sh'
+      - 'deploy/expand-fs.sh'
+      - 'deploy/rollback.sh'
+      - 'tests/test_fs_demo.py'
+      - '.github/workflows/mini-filesystem-synthetic-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-remediation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check syntax without executing host hooks
+        run: |
+          python3 -m py_compile deploy/fs_demo.py tests/test_fs_demo.py
+          bash -n deploy/aiops2-mini-filesystem-demo.sh deploy/cleanup-logs.sh deploy/expand-fs.sh deploy/rollback.sh
+      - name: Run six isolated synthetic tests
+        run: python3 -m unittest discover -s tests -p test_fs_demo.py -v
