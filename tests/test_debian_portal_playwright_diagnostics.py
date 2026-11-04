@@ -41,3 +41,23 @@ def test_arbitrary_url_and_type_never_persisted():
     assert data["failure_class"] == "other_request_failure"
     assert "secret" not in str(data).lower()
     assert "TOPSECRET" not in str(data)
+
+
+def test_only_exact_session_console_resource_is_expected():
+    origin = "http://127.0.0.1:7777"
+    def console(url):
+        return SimpleNamespace(
+            text="Failed to load resource: the server responded with a status of 401",
+            location={"url": url})
+    assert module.is_expected_session_401_console(
+        console(origin + "/api/portal/session"), True, origin)
+    assert not module.is_expected_session_401_console(
+        console(origin + "/api/private"), True, origin)
+    assert not module.is_expected_session_401_console(
+        console(origin + "/api/portal/session"), False, origin)
+    assert not module.is_expected_session_401_console(
+        console(origin + "/api/portal/session?token=SECRET"), True, origin)
+    assert not module.is_expected_session_401_console(
+        console("https://other.invalid/api/portal/session"), True, origin)
+    assert not module.is_expected_session_401_console(
+        SimpleNamespace(text=console(origin).text, location={}), True, origin)
