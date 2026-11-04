@@ -48,7 +48,7 @@ BROWSER_PROGRESS = {"stage": "NOT_STARTED", "page_errors_count": 0,
                     "console_errors_count": 0, "failed_requests_count": 0,
                     "blocked_requests_count": 0, "console_error_class": "none",
                     "failed_request_class": "none", "console_error_stage": "none",
-                    "failed_request_stage": "none"}
+                    "failed_request_stage": "none", "failed_request_diagnostics": []}
 
 
 def classify_console_error(msg):
@@ -70,6 +70,27 @@ def classify_failed_request(request):
     if "ERR_CONNECTION" in value or "ERR_NETWORK" in value:
         return "connection"
     return "other_request_failure"
+
+
+def request_diagnostic(request, stage):
+    """Bounded request category only: never persist URLs, queries or credentials."""
+    path = urlsplit(str(getattr(request, "url", ""))).path
+    if path == "/api/portal/session":
+        endpoint = "anonymous_session"
+    elif path in ("/", "/workspace", "/runs"):
+        endpoint = "portal_document"
+    elif path.startswith("/api/"):
+        endpoint = "other_api"
+    elif path.startswith("/static/"):
+        endpoint = "static_asset"
+    else:
+        endpoint = "other_resource"
+    kind = str(getattr(request, "resource_type", "unknown"))
+    if kind not in ("document", "script", "stylesheet", "image", "font",
+                    "fetch", "xhr", "other"):
+        kind = "other"
+    return {"stage": stage, "endpoint_class": endpoint,
+            "resource_type": kind, "failure_class": classify_failed_request(request)}
 
 
 def note_failure(kind):
@@ -185,7 +206,7 @@ def run(args) -> dict:
                             console_errors_count=0, failed_requests_count=0,
                             blocked_requests_count=0, console_error_class="none",
                             failed_request_class="none", console_error_stage="none",
-                            failed_request_stage="none")
+                            failed_request_stage="none", failed_request_diagnostics=[])
     base = verify_base_url(args.base_url)
     hostname = platform.node()
     if args.assert_host and hostname.casefold().split(".")[0] != args.assert_host.casefold():
@@ -272,6 +293,9 @@ def run(args) -> dict:
                 note_failure("failed_requests_count")
                 BROWSER_PROGRESS["failed_request_class"] = classify_failed_request(request)
                 BROWSER_PROGRESS["failed_request_stage"] = BROWSER_PROGRESS["stage"]
+                if len(BROWSER_PROGRESS["failed_request_diagnostics"]) < 8:
+                    BROWSER_PROGRESS["failed_request_diagnostics"].append(
+                        request_diagnostic(request, BROWSER_PROGRESS["stage"]))
 
             page.on("pageerror", lambda _: (errors.append("PAGE_ERROR"),
                                              note_failure("page_errors_count")))
@@ -377,6 +401,7 @@ def run(args) -> dict:
             receipt["console_errors_count"] = len(console_errors)
             receipt["failed_requests_count"] = len(failed_requests)
             receipt["blocked_requests_count"] = len(blocked)
+            receipt["failed_request_diagnostics"] = list(BROWSER_PROGRESS["failed_request_diagnostics"])
             # A 401 from the exact anonymous session endpoint is a required
             # fail-closed response, not a JavaScript exception or granted ACL.
             # Never waive an unrelated console error or any failed request.
@@ -422,7 +447,8 @@ def main() -> int:
                 "page_errors_count", "console_errors_count",
                 "failed_requests_count", "blocked_requests_count",
                 "console_error_class", "failed_request_class",
-                "console_error_stage", "failed_request_stage")},
+                "console_error_stage", "failed_request_stage",
+                "failed_request_diagnostics")},
             "real_screen_capture": "NOT_VERIFIED", "live_effects": 0,
             **observed_provenance(),
         }

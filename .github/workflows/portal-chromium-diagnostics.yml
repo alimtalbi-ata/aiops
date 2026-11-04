@@ -1,0 +1,28 @@
+name: Portal Chromium diagnostic regression tests
+
+on:
+  pull_request:
+    paths:
+      - "deploy/debian-portal-playwright-snapshot.py"
+      - "tests/test_debian_portal_playwright_diagnostics.py"
+      - ".github/workflows/portal-chromium-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile runner and regression tests
+        run: python -m py_compile deploy/debian-portal-playwright-snapshot.py tests/test_debian_portal_playwright_diagnostics.py
+      - name: Install pytest
+        run: python -m pip install --disable-pip-version-check pytest
+      - name: Run bounded diagnostic regression tests
+        run: python -m pytest -q tests/test_debian_portal_playwright_diagnostics.py
