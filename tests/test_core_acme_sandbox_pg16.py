@@ -15,6 +15,7 @@ from psycopg import sql
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from core import acme_sandbox as core
+from core import acme_sandbox_journey as journey
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKEN = 'ci-core-acme-sandbox-internal-only-not-human'
@@ -54,6 +55,7 @@ class SandboxPG16(unittest.TestCase):
                     db.execute((ROOT / 'db/migrations' / migration).read_text())
             app = FastAPI()
             app.include_router(core.router)
+            app.include_router(journey.router)
             cls.client = TestClient(app)
         except Exception:
             cls.tearDownClass()
@@ -118,6 +120,33 @@ class SandboxPG16(unittest.TestCase):
             for table in ('effect_receipts', 'approval_records',
                           'itsm_xref_events', 'hitl_reject_terminal_receipts'):
                 self.assertEqual(db.execute('select count(*) from aiops.' + table).fetchone()[0], 0)
+
+    def test_02b_same_run_journey_pg16_readback(self):
+        attempt = 'ACME-SIM-JOURNEY-PG16'
+        created = self.post(attempt)
+        self.assertEqual(created.status_code, 200, created.text)
+        core_doc = created.json()
+        path = '/api/sandbox/acme/e2e/' + attempt + '/journey'
+        headers = {'Authorization': 'Bearer ' + TOKEN}
+        first = self.client.get(path, headers=headers)
+        self.assertEqual(first.status_code, 200, first.text)
+        doc = first.json()
+        self.assertEqual(doc['tenant_id'], 'ACME-TEST')
+        self.assertEqual(doc['run_id'], core_doc['run_id'])
+        self.assertEqual(doc['incident_id'], core_doc['incident_id'])
+        self.assertEqual(doc['ticket_id'], core_doc['ticket_id'])
+        self.assertEqual(doc['source_event_ids'], core_doc['source_event_ids'])
+        self.assertEqual(len(doc['timeline']), 8)
+        self.assertEqual([e['sequence'] for e in doc['timeline']], list(range(1, 9)))
+        self.assertEqual(doc['twin_graph_019'], 'NOT_BOUND_TO_THIS_RUN')
+        self.assertFalse(doc['human_approved'] or doc['effect_allowed'])
+        self.assertEqual(self.client.get(path, headers=headers).json(), doc)
+        self.assertEqual(self.client.get(path, headers={
+            'Authorization': 'Bearer forged'}).status_code, 401)
+        with psycopg.connect(self.url) as db:
+            count = db.execute('select count(*) from aiops.run_events where run_id=%s',
+                               (core_doc['run_id'],)).fetchone()[0]
+            self.assertEqual(count, 8)
 
     def test_03_idempotent_replay_restart_and_concurrency(self):
         attempt = 'ACME-SIM-RESTART'
@@ -534,7 +563,8 @@ class SandboxPG16(unittest.TestCase):
             def json(self):
                 return deepcopy(self._payload)
 
-        def fake_get(url, **kwargs):
+        def fake_get(session, url, **kwargs):
+            self.assertIs(session.trust_env, False)
             component = next((key for key, origin in (
                 ('core', worker_main.CORE), ('twin', worker_main.TWIN),
                 ('policy', worker_main.POLICY))
@@ -558,7 +588,7 @@ class SandboxPG16(unittest.TestCase):
                         id='acme-pg16-joined-' + attempt,
                         task_queue='acme-pg16-joined')
 
-        with patch.object(worker_main.requests, 'get', side_effect=fake_get):
+        with patch.object(worker_main.requests.Session, 'get', autospec=True, side_effect=fake_get):
             worker_receipt = asyncio.run(run_temporal())
         self.assertEqual(reads, ['core','twin','policy'] * 2)
         self.assertTrue(receipt_digest_valid(worker_receipt))
