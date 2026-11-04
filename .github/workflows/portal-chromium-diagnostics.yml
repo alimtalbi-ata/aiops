@@ -23,6 +23,8 @@ jobs:
       - name: Compile runner and regression tests
         run: python -m py_compile deploy/debian-portal-playwright-snapshot.py tests/test_debian_portal_playwright_diagnostics.py
       - name: Install pytest
-        run: python -m pip install --disable-pip-version-check pytest
+        run: |
+          python -m pip install --disable-pip-version-check pytest playwright==1.55.0
+          python -m playwright install --with-deps chromium
       - name: Run bounded diagnostic regression tests
         run: python -m pytest -q tests/test_debian_portal_playwright_diagnostics.py
