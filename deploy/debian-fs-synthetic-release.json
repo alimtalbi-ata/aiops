@@ -4,6 +4,6 @@
   "mode": "SYNTHETIC_NO_LIVE_EFFECTS",
   "host": "srv-deb-05",
   "run_id": "FS-20261105-P0-001",
-  "source_commit": "a54eb88b7c56b84c4fd1a76a61620ce383b6451a",
+  "source_commit": "76e3fe4cd0372f31d2c2323ed582850c7051994f",
   "approval": "SYNTHETIC_APPROVED"
 }

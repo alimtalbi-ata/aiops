@@ -128,13 +128,17 @@ elif [ "$fs_args" != DISABLED ]; then
        ! /usr/bin/git -C "$delivery" show "$fs_source:deploy/fs_demo.py" |
           /usr/bin/cmp -s - "$delivery/deploy/fs_demo.py" ||
        ! /usr/bin/git -C "$delivery" show "$fs_source:deploy/debian-fs-synthetic-cycle.sh" |
-          /usr/bin/cmp -s - "$delivery/deploy/debian-fs-synthetic-cycle.sh"; then
+          /usr/bin/cmp -s - "$delivery/deploy/debian-fs-synthetic-cycle.sh" ||
+       ! /usr/bin/git -C "$delivery" show "$fs_source:deploy/aiops2-mini-filesystem-demo.sh" |
+          /usr/bin/cmp -s - "$delivery/deploy/aiops2-mini-filesystem-demo.sh" ||
+       ! /usr/bin/git -C "$delivery" show "$fs_source:deploy/debian-fs-synthetic-e2e.sh" |
+          /usr/bin/cmp -s - "$delivery/deploy/debian-fs-synthetic-e2e.sh"; then
     echo "FS_SYNTHETIC=FAIL_CLOSED_SOURCE_DRIFT"
     status=78
   elif [ -n "${AIOPS_FS_DEMO_TEST_ROOT:-}" ] || [ -n "${AIOPS_FS_DEMO_TEST_MODE:-}" ]; then
     echo "FS_SYNTHETIC=FAIL_CLOSED_TEST_ENV"
     status=78
-  elif /usr/bin/timeout 45 /bin/bash "$delivery/deploy/debian-fs-synthetic-cycle.sh" "$fs_run"; then
+  elif /usr/bin/timeout 90 /bin/bash "$delivery/deploy/debian-fs-synthetic-e2e.sh" "$fs_run"; then
     echo "FS_SYNTHETIC=PASS_LOCAL_RECEIPT_PENDING_PUBLICATION"
   else
     echo "FS_SYNTHETIC=FAIL_CLOSED_EXECUTION"
