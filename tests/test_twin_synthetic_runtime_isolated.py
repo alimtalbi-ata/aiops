@@ -155,7 +155,7 @@ class SyntheticRuntimeContract(unittest.TestCase):
                 with self.subTest(action=action, field=field):
                     self.db.calls.clear()
                     event = self.event(action=action)
-                    setattr(event, field, "  \\t  ")
+                    setattr(event, field, "   ")
                     with self.assertRaises(Rejected) as ctx:
                         self.invoke(event, "Bearer isolated-test-token")
                     self.assertEqual(ctx.exception.status_code, 422)
