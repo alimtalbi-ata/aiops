@@ -135,5 +135,27 @@ class TwinSyntheticSourceContract(unittest.TestCase):
         self.assertNotIn("live", values)
 
 
+    def test_synthetic_action_branches_are_disjoint(self):
+        """Prevent OBSERVE from mutating node state or SET_STATE from writing observations."""
+        fn = self.functions["synthetic_event"]
+        with_stmt = next(n for n in fn.body if isinstance(n, ast.With))
+        branch = next(n for n in with_stmt.body if isinstance(n, ast.If))
+        self.assertIn("x.action == 'SET_STATE'", ast.unparse(branch.test))
+        self.assertIsInstance(branch.orelse[0], ast.If)
+        self.assertIn("x.action == 'OBSERVE'", ast.unparse(branch.orelse[0].test))
+        set_sql = [n.args[0].value.lower() for n in ast.walk(ast.Module(body=branch.body, type_ignores=[]))
+                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                   and n.func.attr == "execute" and n.args and isinstance(n.args[0], ast.Constant)]
+        observe_sql = [n.args[0].value.lower() for n in ast.walk(ast.Module(body=branch.orelse, type_ignores=[]))
+                       if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                       and n.func.attr == "execute" and n.args and isinstance(n.args[0], ast.Constant)]
+        self.assertEqual(len(set_sql), 2)
+        self.assertTrue(any(s.startswith("update aiops.twin_nodes ") for s in set_sql))
+        self.assertTrue(any(s.startswith("insert into aiops.twin_facts(") for s in set_sql))
+        self.assertEqual(len(observe_sql), 1)
+        self.assertTrue(observe_sql[0].startswith("insert into aiops.observations("))
+        self.assertFalse(any("twin_nodes" in s or "twin_facts" in s for s in observe_sql))
+
+
 if __name__ == "__main__":
     unittest.main()
