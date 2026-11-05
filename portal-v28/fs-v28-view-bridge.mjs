@@ -34,3 +34,9 @@ export async function refreshFsV28(root, options={}) {
   if (refreshEpoch.get(root) !== epoch) return unavailable("SUPERSEDED_REFRESH");
   return renderFsV28(root, v);
 }
+
+// Invalidate pending refreshes on logout/navigation, even when fetch ignores abort.
+export function invalidateFsV28(root, reason="VIEW_DISPOSED") {
+  refreshEpoch.set(root, (refreshEpoch.get(root) || 0) + 1);
+  return renderFsV28(root, unavailable(reason));
+}
