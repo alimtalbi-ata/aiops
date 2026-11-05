@@ -4,6 +4,7 @@
 This does not deploy, execute, approve, or publish anything.
 """
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import pathlib
@@ -37,8 +38,17 @@ def verify(directory, expected_run, expected_source_sha):
         raise ValueError("not synthetic")
     if receipt.get("host") != "SRV-DEB-05":
         raise ValueError("wrong host")
-    if not isinstance(receipt.get("collected_at"), str) or not receipt["collected_at"]:
+    timestamp = receipt.get("collected_at")
+    if not isinstance(timestamp, str):
         raise ValueError("missing timestamp")
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError as exc:
+        raise ValueError("invalid timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("timestamp must include timezone")
+    if parsed > datetime.now(timezone.utc):
+        raise ValueError("future timestamp")
     return {"status": "VERIFIED_SYNTHETIC_RECEIPT_ONLY", "run_id": expected_run,
             "source_sha": expected_source_sha, "state_sha256": receipt["state_sha256"]}
 
