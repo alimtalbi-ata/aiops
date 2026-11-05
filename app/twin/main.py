@@ -55,9 +55,9 @@ class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
     if (authorization or '').removeprefix('Bearer ')!=SIM_TOKEN: raise HTTPException(401,'invalid token')
-    if not x.run_id: raise HTTPException(422,'run_id required')
+    if not isinstance(x.run_id,str) or not x.run_id.strip(): raise HTTPException(422,'run_id required')
     if x.action not in ('SET_STATE', 'OBSERVE'): raise HTTPException(422,'unsupported synthetic action')
-    if not x.target_node_id: raise HTTPException(422,'target_node_id required')
+    if not isinstance(x.target_node_id,str) or not x.target_node_id.strip(): raise HTTPException(422,'target_node_id required')
     with db() as c:
         if x.action=='SET_STATE' and x.target_node_id:
             p=x.payload; updated=c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
