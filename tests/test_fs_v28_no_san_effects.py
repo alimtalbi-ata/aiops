@@ -42,7 +42,7 @@ class FsV28NoSanEffects(unittest.TestCase):
                         and isinstance(n.func, ast.Name)
                         and n.func.id == "post_json"]
         self.assertGreaterEqual(len(legacy_calls), 2)
-        self.assertIn("ACME-SAN-FABRIC-A", ast.unparse(legacy.body))
+        self.assertIn("ACME-SAN-FABRIC-A", " ".join(ast.unparse(stmt) for stmt in legacy.body))
 
 
 if __name__ == "__main__":
