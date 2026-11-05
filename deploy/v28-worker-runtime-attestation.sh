@@ -8,6 +8,13 @@ fi
 command -v docker >/dev/null || { echo "BLOCKED: docker unavailable" >&2; exit 69; }
 command -v sha256sum >/dev/null || { echo "BLOCKED: sha256sum unavailable" >&2; exit 69; }
 printf 'container=%s\n' "$container"
+# Necessary preflight only; this is not an isolation proof.
+image_ref="$(docker inspect --format '{{.Config.Image}}' "$container")"
+state="$(docker inspect --format '{{.State.Status}}' "$container")"
+if [[ "$image_ref" != "aiops2-worker:fs-demo-candidate-20261105" || "$state" != "running" ]]; then
+  printf 'NO_GO: unexpected Worker image/state: %s / %s\n' "$image_ref" "$state" >&2
+  exit 65
+fi
 docker inspect --format 'image_id={{.Image}} image_ref={{.Config.Image}} state={{.State.Status}} pid={{.State.Pid}}' "$container"
 docker inspect --format '{{range .Mounts}}mount={{.Type}}:{{.Source}}:{{.Destination}}:{{.RW}}{{println}}{{end}}' "$container"
 # Hash the actual Python module imported by the running image, not a host-side candidate.
