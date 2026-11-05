@@ -46,7 +46,7 @@ def decide_fs_stage(
     if stage == "POLICY":
         if not isinstance(policy, Mapping):
             return StageDecision("BLOCKED", None, reason="policy_unavailable")
-        if policy.get("state") != "PASS" or policy.get("decision") != "SIMULATE":
-            return StageDecision("BLOCKED", None, reason="policy_refused_or_non_synthetic")
+        if policy.get("state") != "PASS" or policy.get("decision") not in ("ALLOW", "SIMULATE"):
+            return StageDecision("BLOCKED", None, reason="policy_refused")
         return StageDecision("NO_EFFECT", None, reason="policy_pass_no_remediation")
     return StageDecision("CONTINUE", FS_STAGES[FS_STAGES.index(stage) + 1])
