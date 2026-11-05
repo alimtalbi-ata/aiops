@@ -4,6 +4,7 @@ on:
     paths:
       - app/worker/main.py
       - tests/test_fs_v28_twin_isolation.py
+      - tests/test_fs_v28_no_san_effects.py
       - .github/workflows/fs-v28-twin-isolation.yml
   workflow_dispatch:
 jobs:
@@ -21,4 +22,4 @@ jobs:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - name: Execute isolated regression
-        run: python3 -m unittest discover -s tests -p 'test_fs_v28_twin_isolation.py' -v
+        run: python3 -m unittest discover -s tests -p 'test_fs_v28_*.py' -v
