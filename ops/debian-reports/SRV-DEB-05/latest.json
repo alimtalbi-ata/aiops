@@ -3,37 +3,72 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-03T19:21:01.956937+00:00",
+  "collected_at": "2026-11-05T10:41:01.852186+00:00",
   "docker": {
     "available": true,
     "containers": [
       {
         "health": "healthy",
-        "image": "aiops2-portal:pinned-9a827041ec8b",
-        "inspect_ok": true,
-        "name": "aiops2-rebuild-portal",
-        "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "aiops2-acme-sandbox-worker:e9a21e3e13f9",
+        "image": "aiops2-worker:prometheus-fix-20261104",
         "inspect_ok": true,
         "name": "aiops2-rebuild-worker",
         "state": "running"
       },
       {
         "health": "healthy",
-        "image": "aiops2-acme-sandbox-core:e9a21e3e13f9",
+        "image": "aiops2-core:prometheus-fix-20261104",
         "inspect_ok": true,
         "name": "aiops2-rebuild-core",
         "state": "running"
       },
       {
         "health": "healthy",
-        "image": "aiops2-acme-sandbox-twin:e9a21e3e13f9",
+        "image": "aiops2-twin:prometheus-fix-20261104",
         "inspect_ok": true,
         "name": "aiops2-rebuild-twin",
         "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-evidence:prometheus-fix-20261104",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-evidence",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-policy:prometheus-fix-20261104",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-policy",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "aiops2-portal:pinned-e6dc55536a1e",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-portal",
+        "state": "running"
+      },
+      {
+        "health": "unhealthy",
+        "image": "aiops2-acme-sandbox-worker:e9a21e3e13f9",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-worker-before-metrics",
+        "state": "exited"
+      },
+      {
+        "health": "unhealthy",
+        "image": "aiops2-acme-sandbox-core:e9a21e3e13f9",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-core-before-metrics",
+        "state": "exited"
+      },
+      {
+        "health": "unhealthy",
+        "image": "aiops2-acme-sandbox-twin:e9a21e3e13f9",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-twin-before-metrics",
+        "state": "exited"
       },
       {
         "health": "healthy",
@@ -43,11 +78,11 @@
         "state": "running"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "aiops2-acme-sandbox-policy:e9a21e3e13f9",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-policy",
-        "state": "running"
+        "name": "aiops2-rebuild-policy-before-metrics",
+        "state": "exited"
       },
       {
         "health": "healthy",
@@ -183,11 +218,11 @@
         "state": "exited"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "aiops2-rebuild-aiops2-evidence",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-evidence",
-        "state": "running"
+        "name": "aiops2-rebuild-evidence-before-metrics",
+        "state": "exited"
       },
       {
         "health": "healthy",
@@ -445,13 +480,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 3 weeks, 6 days, 9 hours, 32 minutes"
+    "uptime": "up 4 weeks, 1 day, 52 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 143692705792,
+      "free_bytes": 142432681984,
       "total_bytes": 172898033664,
-      "used_bytes": 20348006400
+      "used_bytes": 21608030208
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -459,14 +494,14 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.51025390625,
-      0.87158203125,
-      1.0595703125
+      1.2080078125,
+      1.29931640625,
+      1.408203125
     ],
     "memory_bytes": {
-      "MemAvailable": 19679858688,
+      "MemAvailable": 19774119936,
       "MemTotal": 25205911552,
-      "SwapFree": 9993129984,
+      "SwapFree": 10019201024,
       "SwapTotal": 10838077440
     }
   },
