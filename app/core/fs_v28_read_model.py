@@ -6,6 +6,7 @@ RUN = "RUN-4FABD1786F107E51"
 SCENARIO = "FS-DEBIAN-SYNTHETIC"
 EVIDENCE = "EVD-D2069BA816126499"
 TERMINAL = frozenset({"BLOCKED", "BLOCKED_NO_EFFECT", "FAILED", "CANCELLED", "RESOLVED"})
+ACTIVE = frozenset({"OBSERVE", "ANALYST", "CRITIC", "POLICY"})
 
 
 def project(run: dict, evidence: dict, policy: dict | None = None) -> dict:
@@ -22,14 +23,19 @@ def project(run: dict, evidence: dict, policy: dict | None = None) -> dict:
             or evidence.get("incident_id") != INCIDENT):
         return base
     status = run.get("status")
+    if type(status) is not str:
+        return {**base, "reason": "INVALID_RUN_STATUS"}
     if status == "CREATED":
         return {**base, "status": "CREATED", "reason": "AWAITING_EXPLICIT_AUTHORIZED_START"}
     if status in ("BLOCKED", "BLOCKED_NO_EFFECT"):
         if not isinstance(policy, dict) or policy.get("state") not in ("BLOCK", "DENY", "BLOCKED"):
             return {**base, "reason": "POLICY_REFUSAL_NOT_ATTESTED"}
-        if policy.get("run_id") != RUN or policy.get("incident_id") != INCIDENT:
+        if (policy.get("run_id") != RUN or policy.get("incident_id") != INCIDENT
+                or policy.get("live_effects") is not False):
             return base
         return {**base, "status": "BLOCKED_NO_EFFECT", "reason": "POLICY_REFUSED"}
     if status in TERMINAL:
         return {**base, "reason": "TERMINAL_NOT_PROOF_OF_RESOLUTION"}
-    return {**base, "status": "IN_PROGRESS", "reason": "NO_AUTHORITY_TO_ADVANCE"}
+    if status in ACTIVE:
+        return {**base, "status": "IN_PROGRESS", "reason": "NO_AUTHORITY_TO_ADVANCE"}
+    return {**base, "reason": "UNKNOWN_RUN_STATUS"}
