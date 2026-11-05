@@ -29,6 +29,7 @@ class ReceiptGateTests(unittest.TestCase):
         self.receipt = dict(run_id=RUN, source_sha=SHA,
             state_sha256=hashlib.sha256(raw).hexdigest(),
             mode="SYNTHETIC_NO_EFFECT", host="SRV-DEB-05",
+            synthetic_only=True, live_effects=False,
             collected_at="2026-11-05T02:00:00+00:00")
         self.save()
 
@@ -58,6 +59,18 @@ class ReceiptGateTests(unittest.TestCase):
         self.receipt["source_sha"] = "b" * 40
         self.save()
         with self.assertRaisesRegex(ValueError, "source mismatch"):
+            gate.verify(self.path, RUN, SHA)
+
+    def test_live_effects_true_refused(self):
+        self.receipt["live_effects"] = True
+        self.save()
+        with self.assertRaisesRegex(ValueError, "synthetic safety flags"):
+            gate.verify(self.path, RUN, SHA)
+
+    def test_missing_synthetic_flag_refused(self):
+        self.receipt.pop("synthetic_only")
+        self.save()
+        with self.assertRaisesRegex(ValueError, "synthetic safety flags"):
             gate.verify(self.path, RUN, SHA)
 
     def test_host_tamper_refused(self):
