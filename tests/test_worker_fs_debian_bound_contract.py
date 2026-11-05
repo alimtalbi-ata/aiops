@@ -43,6 +43,21 @@ class BoundContractTests(unittest.TestCase):
         self.assertEqual(self.decide(policy={**POLICY, "decision": "REJECT"}).status, "BLOCKED")
         self.assertEqual(self.decide(stop_auto=True).status, "BLOCKED")
 
+    def test_policy_allow_is_not_synthetic_authorization(self):
+        for decision in ("ALLOW", "REMEDIATE", "VERIFY", None):
+            with self.subTest(decision=decision):
+                result = self.decide(policy={**POLICY, "decision": decision})
+                self.assertEqual(result.status, "BLOCKED")
+                self.assertIsNone(result.next_stage)
+                self.assertFalse(result.effect_allowed)
+                self.assertFalse(result.resolve_allowed)
+
+    def test_only_explicit_simulate_finishes_without_effect(self):
+        result = self.decide(policy={**POLICY, "decision": "SIMULATE"})
+        self.assertEqual((result.status, result.next_stage), ("NO_EFFECT", None))
+        self.assertFalse(result.effect_allowed)
+        self.assertFalse(result.resolve_allowed)
+
     def test_other_demo_untouched(self):
         self.assertEqual(self.decide(scenario="SAN-DEMO").status, "NOT_APPLICABLE")
 
