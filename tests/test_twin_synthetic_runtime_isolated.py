@@ -72,5 +72,32 @@ class SyntheticRuntimeContract(unittest.TestCase):
         self.assertIn('"synthetic": true', self.db.calls[1][1][-1])
 
 
+    def test_distinct_runs_are_not_conflated_in_observation_payload(self):
+        """Isolated contract only: does not prove Evidence joins or PG16 replay."""
+        import json
+        for run in ("RUN-ONE", "RUN-TWO"):
+            result = self.invoke(self.event(run=run), "Bearer isolated-test-token")
+            self.assertEqual(result["run_id"], run)
+        self.assertEqual(len(self.db.calls), 2)
+        payloads = [json.loads(params[-1]) for _, params in self.db.calls]
+        self.assertEqual([p["run_id"] for p in payloads], ["RUN-ONE", "RUN-TWO"])
+        self.assertTrue(all(p["synthetic"] is True for p in payloads))
+
+    def test_database_error_never_returns_synthetic_pass(self):
+        """A failed write must propagate; never manufacture PASS or approval."""
+        class WriteFailure(RuntimeError):
+            pass
+        for action in ("OBSERVE", "SET_STATE"):
+            with self.subTest(action=action):
+                self.db.calls.clear()
+                original_execute = self.db.execute
+                def fail(sql, params):
+                    original_execute(sql, params)
+                    raise WriteFailure("isolated write failure")
+                self.db.execute = fail
+                with self.assertRaises(WriteFailure):
+                    self.invoke(self.event(action=action), "Bearer isolated-test-token")
+                self.db.execute = original_execute
+
 if __name__ == "__main__":
     unittest.main()
