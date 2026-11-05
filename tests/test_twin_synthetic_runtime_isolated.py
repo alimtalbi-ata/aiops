@@ -188,5 +188,28 @@ class SyntheticRuntimeContract(unittest.TestCase):
                     self.invoke(self.event(action=action), "Bearer isolated-test-token")
                 self.db.execute = original_execute
 
+    def test_hostile_identifiers_remain_bound_parameters_not_sql(self):
+        """Executable SQL-binding fence; not a PG16 or SSRF qualification."""
+        import json
+        hostile_node = "SAN-01'; DROP TABLE aiops.twin_nodes; --"
+        hostile_run = "RUN-01' OR '1'='1"
+        for action in ("OBSERVE", "SET_STATE"):
+            with self.subTest(action=action):
+                self.db.calls.clear()
+                result = self.invoke(self.event(action=action, node=hostile_node,
+                                                run=hostile_run),
+                                     "Bearer isolated-test-token")
+                self.assertEqual(result["run_id"], hostile_run)
+                self.assertEqual(result["target_node_id"], hostile_node)
+                self.assertIs(result["synthetic"], True)
+                self.assertEqual(len(self.db.calls), 1 if action == "OBSERVE" else 2)
+                for sql, params in self.db.calls:
+                    self.assertNotIn(hostile_node, sql)
+                    self.assertNotIn(hostile_run, sql)
+                    self.assertIn(hostile_node, params)
+                provenance = json.loads(self.db.calls[-1][1][-1])
+                self.assertEqual(provenance["run_id"], hostile_run)
+                self.assertIs(provenance["synthetic"], True)
+
 if __name__ == "__main__":
     unittest.main()
