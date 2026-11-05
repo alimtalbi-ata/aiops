@@ -4,6 +4,7 @@ on:
     paths:
       - 'app/twin/main.py'
       - 'tests/test_twin_synthetic_source_contract.py'
+      - 'tests/test_twin_synthetic_runtime_isolated.py'
       - '.github/workflows/twin-synthetic-source-contract.yml'
   workflow_dispatch:
 jobs:
@@ -21,5 +22,7 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-      - name: Run isolated Twin source contract tests
-        run: python3 -m unittest discover -s tests -p 'test_twin_synthetic_source_contract.py' -v
+      - name: Run isolated Twin source and executable contract tests
+        run: |
+          python3 -m unittest discover -s tests -p 'test_twin_synthetic_source_contract.py' -v
+          python3 -m unittest discover -s tests -p 'test_twin_synthetic_runtime_isolated.py' -v
