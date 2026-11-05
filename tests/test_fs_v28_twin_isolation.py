@@ -35,6 +35,9 @@ class FsV28Isolation(unittest.TestCase):
             lambda e: e["provenance"].update(run_id="RUN-OTHER"),
             lambda e: e.update(evidence_id="EVD-OTHER"),
             lambda e: e.update(source="twin-simulator"),
+            lambda e: e.update(source=""),
+            lambda e: e.update(source=None),
+            lambda e: e.update(source=[]),
             lambda e: e["payload"].update(node_id="ACME-SAN-FABRIC-A"),
             lambda e: e.update(payload_hash=""),
         ]
