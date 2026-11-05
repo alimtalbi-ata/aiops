@@ -196,6 +196,24 @@ def recover_committed_critic_block(rid):
     }
 
 
+FS_V28_SCENARIO='FS-DEBIAN-SYNTHETIC'
+FS_V28_EVIDENCE_ID='EVD-D2069BA816126499'
+
+def validate_fs_v28_observation(evidence, run_id):
+    """Accept only an existing run-bound filesystem detection; never fabricate a Twin HITL."""
+    if evidence.get('evidence_id') != FS_V28_EVIDENCE_ID:
+        raise RuntimeError('fs_v28_evidence_identity_mismatch')
+    provenance=evidence.get('provenance') or {}
+    payload=evidence.get('payload') or {}
+    if provenance.get('run_id') != run_id:
+        raise RuntimeError('fs_v28_evidence_run_mismatch')
+    if (not isinstance(provenance,dict) or not isinstance(payload,dict)
+            or not evidence.get('claim') or not evidence.get('payload_hash')
+            or evidence.get('source') in ('twin-simulator','acme-enriched-simulator')
+            or payload.get('node_id') == 'ACME-SAN-FABRIC-A'):
+        raise RuntimeError('fs_v28_evidence_not_independent')
+    return True
+
 def _execute_stage_blocking(a,attempt):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
     if stage=='DGX_CRITIC':
@@ -229,7 +247,12 @@ def _execute_stage_blocking(a,attempt):
             })
             return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':state['version'],'sequence':blocked['sequence']}
         synthetic=True
-        if synthetic and stage=='OBSERVE':
+        if synthetic and stage=='OBSERVE' and scenario==FS_V28_SCENARIO:
+            # Filesystem V28 has its own real detection in Evidence. Never touch SAN Twin.
+            # Missing or mismatched detection is a hard failure, not a synthetic success.
+            fs_evidence=get_json(EVID,f'/api/evidence/{FS_V28_EVIDENCE_ID}',token=ADMIN)
+            validate_fs_v28_observation(fs_evidence,rid)
+        elif synthetic and stage=='OBSERVE':
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'SET_STATE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'state':'DEGRADED','health':0.42}},token=ADMIN)
             post_json(TWIN,'/api/twin/synthetic-event',{'action':'OBSERVE','target_node_id':'ACME-SAN-FABRIC-A','run_id':rid,'payload':{'metric':'fc_errors','value':184,'unit':'errors/min','status':'CRITICAL'}},token=ADMIN)
             # STAGE_STARTED is an immutable, idempotent event. Reuse its actual
