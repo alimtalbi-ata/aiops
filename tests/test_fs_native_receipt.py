@@ -20,7 +20,8 @@ class NativeReceiptTests(unittest.TestCase):
         self.path = self.root / "remediation" / self.run
         self.path.mkdir(parents=True)
         self.state = dict(run_id=self.run, incident="OPEN_SIMULATED", proposed=None,
-                          action=None, phase="OPEN", used_mib=11, capacity_mib=12)
+                          action=None, phase="OPEN", used_mib=11, capacity_mib=12,
+                          logs_mib=5, rollback_closed=True)
         self.write()
 
     def write(self):
