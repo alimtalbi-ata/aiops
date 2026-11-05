@@ -211,5 +211,20 @@ class SyntheticRuntimeContract(unittest.TestCase):
                 self.assertEqual(provenance["run_id"], hostile_run)
                 self.assertIs(provenance["synthetic"], True)
 
+    def test_fact_insert_failure_never_acknowledges_state_transition(self):
+        """Second-write failure must escape; fake DB cannot attest PG rollback."""
+        class FactWriteFailure(RuntimeError):
+            pass
+        original_execute = self.db.execute
+        def fail_fact(sql, params):
+            if "insert into aiops.twin_facts" in sql.lower():
+                raise FactWriteFailure("synthetic fact write failed")
+            return original_execute(sql, params)
+        self.db.execute = fail_fact
+        with self.assertRaises(FactWriteFailure):
+            self.invoke(self.event(action="SET_STATE"), "Bearer isolated-test-token")
+        self.assertEqual(len(self.db.calls), 1)
+        self.assertIn("update aiops.twin_nodes", self.db.calls[0][0].lower())
+
 if __name__ == "__main__":
     unittest.main()
