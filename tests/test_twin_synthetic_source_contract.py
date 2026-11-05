@@ -105,5 +105,35 @@ class TwinSyntheticSourceContract(unittest.TestCase):
                 self.assertNotIn(forbidden, body)
 
 
+    def test_synthetic_sql_uses_bound_parameters_not_interpolation(self):
+        """Source fence: user-controlled action, node and payload must not form SQL text."""
+        fn = self.functions["synthetic_event"]
+        calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Attribute) and n.func.attr == "execute"]
+        self.assertEqual(len(calls), 3)
+        for call in calls:
+            with self.subTest(sql=ast.unparse(call.args[0])[:90]):
+                self.assertIsInstance(call.args[0], ast.Constant)
+                self.assertIsInstance(call.args[0].value, str)
+                self.assertGreaterEqual(len(call.args), 2)
+                self.assertIsInstance(call.args[1], ast.Tuple)
+                self.assertNotIn("{", call.args[0].value)
+                self.assertNotIn("}", call.args[0].value)
+
+    def test_synthetic_response_has_explicit_simulation_marker(self):
+        fn = self.functions["synthetic_event"]
+        returns = [n for n in fn.body if isinstance(n, ast.Return)]
+        self.assertEqual(len(returns), 1)
+        response = returns[0].value
+        self.assertIsInstance(response, ast.Dict)
+        values = {k.value: v for k, v in zip(response.keys, response.values)
+                  if isinstance(k, ast.Constant)}
+        self.assertIn("synthetic", values)
+        self.assertIsInstance(values["synthetic"], ast.Constant)
+        self.assertIs(values["synthetic"].value, True)
+        self.assertNotIn("approved", values)
+        self.assertNotIn("live", values)
+
+
 if __name__ == "__main__":
     unittest.main()
