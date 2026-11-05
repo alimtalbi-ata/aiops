@@ -39,7 +39,7 @@ def verify_and_consume(claims, signature, core_key, expected, oidc_verified,
     Returns verified claims only after the durable transaction commits.
     Any exception from consume_once is an UNKNOWN denial, never ALLOW.
     """
-    if not oidc_verified or not glpi_readmy_verified:
+    if oidc_verified is not True or glpi_readmy_verified is not True:
         raise OwnershipDenied("independent authority missing")
     if not callable(consume_once):
         raise OwnershipDenied("durable ledger missing")
@@ -56,16 +56,20 @@ def verify_and_consume(claims, signature, core_key, expected, oidc_verified,
     if any(len(claims[k]) != 64 or any(c not in "0123456789abcdef" for c in claims[k])
            for k in ("oidc_proof_sha256", "glpi_readmy_proof_sha256")):
         raise OwnershipDenied("provenance digest")
-    if not isinstance(claims["iat"], int) or not isinstance(claims["exp"], int):
+    if type(claims["iat"]) is not int or type(claims["exp"]) is not int:
         raise OwnershipDenied("time schema")
-    t = int(time.time() if now is None else now)
+    if now is not None and type(now) is not int:
+        raise OwnershipDenied("clock schema")
+    t = int(time.time()) if now is None else now
     if claims["iat"] > t + 30 or claims["exp"] <= t or claims["exp"] - claims["iat"] > 300:
         raise OwnershipDenied("expired or excessive validity")
     required = ("issuer", "subject", "tenant_id", "actor_id", "incident_id",
                 "run_id", "glpi_ticket_id", "glpi_entity_id")
     if not isinstance(expected, dict) or set(expected) != set(required):
         raise OwnershipDenied("expected binding unavailable")
-    if any(not hmac.compare_digest(str(claims[k]), str(expected[k])) for k in required):
+    if any(type(expected[k]) is not str or not expected[k].strip() for k in required):
+        raise OwnershipDenied("expected binding schema")
+    if any(not hmac.compare_digest(claims[k], expected[k]) for k in required):
         raise OwnershipDenied("binding mismatch")
     try:
         consumed = consume_once(claims["issuer"], claims["jti"], claims["exp"])
