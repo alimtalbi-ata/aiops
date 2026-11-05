@@ -1,0 +1,24 @@
+name: Mini-filesystem native receipt verification (offline)
+on:
+  pull_request:
+    paths:
+      - 'deploy/verify-fs-native-remediation.py'
+      - 'tests/test_fs_native_receipt.py'
+      - 'tests/test_fs_native_state_invariants.py'
+      - '.github/workflows/fs-native-receipt-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-receipt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile verifier and tests
+        run: python -m py_compile deploy/verify-fs-native-remediation.py tests/test_fs_native_receipt.py tests/test_fs_native_state_invariants.py
+      - name: Run offline tests (no host or LIVE access)
+        run: python -m unittest discover -s tests -p 'test_fs_native*.py' -v

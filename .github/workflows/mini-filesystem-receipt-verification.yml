@@ -1,0 +1,23 @@
+name: Mini-filesystem receipt verification (offline)
+on:
+  pull_request:
+    paths:
+      - 'deploy/verify-fs-host-receipt.py'
+      - 'tests/test_verify_fs_host_receipt.py'
+      - '.github/workflows/mini-filesystem-receipt-verification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline receipt verifier tests (no host access)
+        run: |
+          python -m py_compile deploy/verify-fs-host-receipt.py tests/test_verify_fs_host_receipt.py
+          python -m unittest discover -s tests -p test_verify_fs_host_receipt.py -v
