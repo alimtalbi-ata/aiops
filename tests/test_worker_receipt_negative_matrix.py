@@ -51,6 +51,25 @@ class ReceiptNegativeMatrix(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertFalse(receipt_digest_valid(receipt))
 
+    def test_parallel_synthetic_receipts_remain_no_effect(self):
+        async def batch():
+            async def one():
+                docs = fixtures()
+                async def get(component, path):
+                    await asyncio.sleep(0)
+                    return deepcopy(docs[component])
+                return await simulate_no_effect(INTENT, get=get, now=NOW)
+            return await asyncio.gather(*(one() for _ in range(8)))
+
+        receipts = asyncio.run(batch())
+        self.assertEqual(len(receipts), 8)
+        for receipt in receipts:
+            self.assertTrue(receipt_digest_valid(receipt))
+            self.assertEqual(receipt["receipt_status"], "SIMULATED_NO_EFFECT")
+            self.assertEqual(receipt["receipt_phase"], "PRE_RESOLUTION")
+            self.assertFalse(receipt["glpi_write"])
+            self.assertFalse(receipt["resolution_verified"])
+
     def test_missing_extra_or_invalid_digest_fails_closed(self):
         baseline = self.receipt()
         for mutation in ("missing", "extra", "digest"):
