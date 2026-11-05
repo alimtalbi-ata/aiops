@@ -32,7 +32,8 @@ class SyntheticRuntimeContract(unittest.TestCase):
         module = ast.fix_missing_locations(ast.Module(body=[fn], type_ignores=[]))
         self.db = Database()
         scope = {"SIM_TOKEN": "isolated-test-token", "HTTPException": Rejected,
-                 "db": lambda: self.db, "new": lambda kind: kind + "-test"}
+                 "db": lambda: self.db, "new": lambda kind: kind + "-test",
+                 "SyntheticEvent": object}
         exec(compile(module, str(SOURCE), "exec"), scope)
         self.invoke = scope["synthetic_event"]
 
