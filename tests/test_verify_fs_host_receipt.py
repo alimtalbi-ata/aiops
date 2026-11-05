@@ -39,6 +39,16 @@ class ReceiptGateTests(unittest.TestCase):
         self.assertEqual(gate.verify(self.path, RUN, SHA)["status"],
                          "VERIFIED_SYNTHETIC_RECEIPT_ONLY")
 
+    def test_run_id_longer_than_controller_limit_refused(self):
+        # fs_demo.py permits at most 64 characters, including the first.
+        long_run = "R" * 65
+        with self.assertRaisesRegex(ValueError, "invalid expected run id"):
+            gate.verify(self.path, long_run, SHA)
+
+    def test_maximum_length_run_id_matches_controller(self):
+        self.assertIsNotNone(gate.RUN.fullmatch("R" * 64))
+        self.assertIsNone(gate.RUN.fullmatch("R" * 65))
+
     def test_hash_tamper_refused(self):
         (self.path / "state.json").write_text(json.dumps({"run_id": RUN, "tampered": True}))
         with self.assertRaisesRegex(ValueError, "state hash mismatch"):
