@@ -113,6 +113,20 @@ class SyntheticRuntimeContract(unittest.TestCase):
         self.assertEqual([p["run_id"] for p in payloads], ["RUN-ONE", "RUN-TWO"])
         self.assertTrue(all(p["synthetic"] is True for p in payloads))
 
+    def test_distinct_state_runs_preserve_provenance_without_cross_run_leakage(self):
+        """Two synthetic state transitions retain separate run IDs in their fact payloads."""
+        import json
+        for run in ("RUN-ONE", "RUN-TWO"):
+            result = self.invoke(self.event(action="SET_STATE", run=run),
+                                 "Bearer isolated-test-token")
+            self.assertEqual(result["run_id"], run)
+            self.assertTrue(result["synthetic"])
+        self.assertEqual(len(self.db.calls), 4)
+        facts = [json.loads(params[-1]) for sql, params in self.db.calls
+                 if "insert into aiops.twin_facts" in sql.lower()]
+        self.assertEqual([fact["run_id"] for fact in facts], ["RUN-ONE", "RUN-TWO"])
+        self.assertTrue(all(fact["synthetic"] is True for fact in facts))
+
     def test_database_error_never_returns_synthetic_pass(self):
         """A failed write must propagate; never manufacture PASS or approval."""
         class WriteFailure(RuntimeError):
