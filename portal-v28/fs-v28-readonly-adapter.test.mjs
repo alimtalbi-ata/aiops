@@ -1,0 +1,13 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {IDS,project,load} from "./fs-v28-readonly-adapter.mjs";
+const good={incident_id:IDS.incident,run_id:IDS.run,evidence_id:IDS.evidence,source:"CORE_EVIDENCE_READONLY",synthetic:true,no_live_effects:true,incident_state:"OPEN",core_state:"INVESTIGATING",temporal_state:"UNKNOWN",policy_state:"BLOCKED",evidence_state:"OPEN"};
+test("identity and no fake resolution",()=>{const v=project({...good,incident_state:"RESOLVED"});assert.equal(v.resolved,false);assert.equal(v.approved,false);assert.equal(v.ids.run,IDS.run)});
+test("identity mismatch",()=>assert.equal(project({...good,run_id:"WRONG"}).source,"UNAVAILABLE"));
+test("safety mismatch",()=>assert.equal(project({...good,no_live_effects:false}).source,"UNAVAILABLE"));
+test("unverified source",()=>assert.equal(project({...good,source:"SIM-GLPI"}).source,"UNAVAILABLE"));
+test("unverified approval",()=>assert.equal(project({...good,policy_state:"APPROVED"}).source,"UNAVAILABLE"));
+test("401 fail closed",async()=>assert.equal((await load({fetchImpl:async()=>({ok:false,status:401})})).reason,"AUTH_REQUIRED"));
+test("503 fail closed",async()=>assert.equal((await load({fetchImpl:async()=>({ok:false,status:503})})).source,"UNAVAILABLE"));
+test("network fail closed",async()=>assert.equal((await load({fetchImpl:async()=>{throw Error("offline")}})).source,"UNAVAILABLE"));
+test("same origin GET only",async()=>{let args;await load({fetchImpl:async(...a)=>{args=a;return {ok:true,headers:{get:()=>"application/json"},json:async()=>good}}});assert.equal(args[0],"/api/portal/demo/fs-v28");assert.equal(args[1].method,"GET");assert.equal(args[1].credentials,"same-origin");assert.equal(args[1].cache,"no-store")});
