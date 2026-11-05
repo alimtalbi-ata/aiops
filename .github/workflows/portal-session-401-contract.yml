@@ -15,12 +15,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Assert exact checked-out SHA
-        shell: bash
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - name: Test fail-closed 401 classification
         run: python3 -m unittest discover -s tests -p 'test_portal_session_401_contract.py' -v
