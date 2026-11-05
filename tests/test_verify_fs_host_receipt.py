@@ -40,7 +40,7 @@ class ReceiptGateTests(unittest.TestCase):
                          "VERIFIED_SYNTHETIC_RECEIPT_ONLY")
 
     def test_hash_tamper_refused(self):
-        (self.path / "state.json").write_text("{}")
+        (self.path / "state.json").write_text(json.dumps({"run_id": RUN, "tampered": True}))
         with self.assertRaisesRegex(ValueError, "state hash mismatch"):
             gate.verify(self.path, RUN, SHA)
 
