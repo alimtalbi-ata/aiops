@@ -86,5 +86,58 @@ fi
 if [ "$status" -eq 0 ]; then
   /usr/bin/python3 "$delivery/deploy/debian-acme-sim-e2e.py" || status=78
 fi
+# Optional filesystem-only synthetic cycle. OFF by default; never touch Compose/GLPI.
+# Existing stable poller/flock provides serialization. This hook does not add cron.
+fs_manifest="$delivery/deploy/debian-fs-synthetic-release.json"
+fs_args="$(/usr/bin/python3 - "$fs_manifest" <<'PY'
+import json,re,sys
+try:
+ with open(sys.argv[1],encoding='utf-8') as f:
+  data=json.load(f)
+ assert data.get('schema')=='aiops.fs-synthetic-release.v1'
+ if data.get('enabled') is False:
+  print('DISABLED')
+ elif (data.get('enabled') is True and
+       data.get('mode')=='SYNTHETIC_NO_LIVE_EFFECTS' and
+       data.get('host')=='srv-deb-05' and
+       data.get('approval')=='SYNTHETIC_APPROVED' and
+       re.fullmatch(r'[a-f0-9]{40}',data.get('source_commit','')) and
+       re.fullmatch(r'FS-[A-Za-z0-9_-]{1,60}',data.get('run_id',''))):
+  print(data['source_commit']+' '+data['run_id'])
+ else:
+  print('INVALID')
+except (OSError,ValueError,TypeError,AssertionError):
+ print('INVALID')
+PY
+)"
+if [ "$fs_args" = INVALID ]; then
+  echo "FS_SYNTHETIC=FAIL_CLOSED_MANIFEST"
+  status=78
+elif [ "$fs_args" != DISABLED ]; then
+  read -r fs_source fs_run <<< "$fs_args"
+  fs_host="$(/bin/hostname -s | /usr/bin/tr '[:upper:]' '[:lower:]')"
+  fs_root=/home/aiops/.local/state/aiops2-demo-filesystem
+  fs_marker="$fs_root/remediation/$fs_run/receipt.json"
+  if [ "$fs_host" != srv-deb-05 ] || [ "$(id -un)" != aiops ]; then
+    echo "FS_SYNTHETIC=FAIL_CLOSED_HOST"
+    status=78
+  elif [ -e "$fs_marker" ] || [ -L "$fs_marker" ]; then
+    # An already-used run ID is never replayed or misreported as fresh.
+    echo "FS_SYNTHETIC=ALREADY_ATTEMPTED"
+  elif ! /usr/bin/git -C "$delivery" cat-file -e "$fs_source^{commit}" 2>/dev/null ||
+       ! /usr/bin/git -C "$delivery" show "$fs_source:deploy/fs_demo.py" |
+          /usr/bin/cmp -s - "$delivery/deploy/fs_demo.py" ||
+       ! /usr/bin/git -C "$delivery" show "$fs_source:deploy/debian-fs-synthetic-cycle.sh" |
+          /usr/bin/cmp -s - "$delivery/deploy/debian-fs-synthetic-cycle.sh"; then
+    echo "FS_SYNTHETIC=FAIL_CLOSED_SOURCE_DRIFT"
+    status=78
+  elif /usr/bin/timeout 45 /bin/bash "$delivery/deploy/debian-fs-synthetic-cycle.sh" "$fs_run"; then
+    echo "FS_SYNTHETIC=PASS_LOCAL_RECEIPT_PENDING_PUBLICATION"
+  else
+    echo "FS_SYNTHETIC=FAIL_CLOSED_EXECUTION"
+    status=78
+  fi
+fi
+
 /usr/bin/python3 "$delivery/deploy/debian-portal-preflight.py" || status=78
 exit "$status"
