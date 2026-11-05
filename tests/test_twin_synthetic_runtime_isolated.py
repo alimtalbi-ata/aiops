@@ -73,6 +73,17 @@ class SyntheticRuntimeContract(unittest.TestCase):
         self.assertIn('"synthetic": true', self.db.calls[1][1][-1])
 
 
+    def test_default_state_is_consistent_between_node_and_fact(self):
+        """Missing state must not record NULL provenance for an UNKNOWN node state."""
+        import json
+        self.invoke(self.event(action="SET_STATE"), "Bearer isolated-test-token")
+        update_sql, update_params = self.db.calls[0]
+        fact_sql, fact_params = self.db.calls[1]
+        self.assertIn("update aiops.twin_nodes", update_sql.lower())
+        self.assertEqual(update_params[0], "UNKNOWN")
+        self.assertIn("insert into aiops.twin_facts", fact_sql.lower())
+        self.assertEqual(json.loads(fact_params[-1])["state"], "UNKNOWN")
+
     def test_missing_state_target_cannot_return_false_pass(self):
         """A zero-row UPDATE must not create a fact or claim success."""
         original_execute = self.db.execute
