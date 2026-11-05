@@ -61,7 +61,8 @@ def verify_and_consume(claims, signature, core_key, expected, oidc_verified,
     if now is not None and type(now) is not int:
         raise OwnershipDenied("clock schema")
     t = int(time.time()) if now is None else now
-    if claims["iat"] > t + 30 or claims["exp"] <= t or claims["exp"] - claims["iat"] > 300:
+    if (claims["iat"] > t + 30 or claims["exp"] <= t or
+            claims["exp"] <= claims["iat"] or claims["exp"] - claims["iat"] > 300):
         raise OwnershipDenied("expired or excessive validity")
     required = ("issuer", "subject", "tenant_id", "actor_id", "incident_id",
                 "run_id", "glpi_ticket_id", "glpi_entity_id")
