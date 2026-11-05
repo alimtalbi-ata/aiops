@@ -1,0 +1,16 @@
+{
+  "detection": "PASS",
+  "glpi_write": false,
+  "host": "SRV-DEB-05",
+  "live_effects": false,
+  "mitigation": "PASS",
+  "poller_integration": "NOT_VERIFIED",
+  "published_at": "2026-11-05T10:51:23.270249+00:00",
+  "rollback": "PASS",
+  "run_id": "FS-20261105T104931Z-1624436",
+  "schema": "aiops.fs-synthetic-host-receipt.v1",
+  "sha256_verification": "PASS",
+  "state_sha256": "19f55f2608c6673e865e096cb509bd0a8adfd45b6277785f7bc032e1e07c1d8b",
+  "status": "PASS_SYNTHETIC_LOCAL_ONLY",
+  "synthetic_only": true
+}
