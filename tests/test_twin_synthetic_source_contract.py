@@ -75,5 +75,35 @@ class TwinSyntheticSourceContract(unittest.TestCase):
         self.assertIn("'synthetic': True", ast.unparse(fn))
 
 
+    def test_both_synthetic_write_paths_preserve_run_id_in_payload(self):
+        """Source fence only: persistence/cross-service correlation needs PG16 and host tests."""
+        fn = self.functions["synthetic_event"]
+        inserts = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                   and isinstance(n.func, ast.Attribute) and n.func.attr == "execute"
+                   and n.args and isinstance(n.args[0], ast.Constant)
+                   and isinstance(n.args[0].value, str)
+                   and "insert into aiops." in n.args[0].value.lower()]
+        by_table = {}
+        for call in inserts:
+            sql = call.args[0].value.lower()
+            for table in ("twin_facts", "observations"):
+                if "insert into aiops." + table in sql:
+                    by_table[table] = call
+        self.assertEqual(set(by_table), {"twin_facts", "observations"})
+        for table, call in by_table.items():
+            payload = ast.unparse(call.args[1:])
+            with self.subTest(table=table):
+                self.assertIn("'run_id': x.run_id", payload)
+                self.assertIn("'synthetic': True", payload)
+
+    def test_synthetic_handler_does_not_start_temporal_or_claim_live_effect(self):
+        fn = self.functions["synthetic_event"]
+        body = ast.unparse(fn)
+        for forbidden in ("start_workflow(", "execute_workflow(", "SIMULATED_NO_EFFECT = False",
+                          "'human_approved': True", "'live': True"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, body)
+
+
 if __name__ == "__main__":
     unittest.main()
