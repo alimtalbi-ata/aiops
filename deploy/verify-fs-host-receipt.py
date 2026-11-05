@@ -36,6 +36,8 @@ def verify(directory, expected_run, expected_source_sha):
         raise ValueError("state hash mismatch")
     if receipt.get("mode") != "SYNTHETIC_NO_EFFECT":
         raise ValueError("not synthetic")
+    if receipt.get("live_effects") is not False or receipt.get("synthetic_only") is not True:
+        raise ValueError("synthetic safety flags missing or unsafe")
     if receipt.get("host") != "SRV-DEB-05":
         raise ValueError("wrong host")
     timestamp = receipt.get("collected_at")
