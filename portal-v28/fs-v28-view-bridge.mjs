@@ -1,6 +1,7 @@
 // Browser-only view bridge for the V28 filesystem panel. Never mutates services.
 import {IDS, load, unavailable} from "./fs-v28-readonly-adapter.mjs";
 const FIELDS = ["incident","core","temporal","policy","evidence"];
+const refreshEpoch = new WeakMap();
 export function renderFsV28(root, value) {
   if (!root || typeof root.querySelector !== "function") throw new TypeError("root required");
   const v = value && value.synthetic === true && value.noLiveEffects === true && value.ids?.incident === IDS.incident && value.ids?.run === IDS.run && value.ids?.evidence === IDS.evidence
@@ -24,7 +25,12 @@ export function renderFsV28(root, value) {
 }
 // Call only from the existing authorized DEMO view; no OIDC bypass or API fallback.
 export async function refreshFsV28(root, options={}) {
+  if (!root || (typeof root !== "object" && typeof root !== "function")) throw new TypeError("root required");
+  const epoch = (refreshEpoch.get(root) || 0) + 1;
+  refreshEpoch.set(root, epoch);
   renderFsV28(root, unavailable("LOADING"));
   const v = await load(options);
+  // A delayed response must not overwrite a newer authorization or service result.
+  if (refreshEpoch.get(root) !== epoch) return unavailable("SUPERSEDED_REFRESH");
   return renderFsV28(root, v);
 }
