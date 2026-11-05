@@ -40,6 +40,30 @@ class TwinSyntheticSourceContract(unittest.TestCase):
         self.assertLess(fn.body.index(guards[0]), first_db)
         self.assertLess(fn.body.index(guards[1]), first_db)
 
+    def test_invalid_actions_and_missing_target_fail_before_db(self):
+        fn = self.functions["synthetic_event"]
+        guards = [n for n in fn.body if isinstance(n, ast.If)]
+        self.assertGreaterEqual(len(guards), 4)
+        self.assertIn("SET_STATE", ast.unparse(guards[2].test))
+        self.assertIn("OBSERVE", ast.unparse(guards[2].test))
+        self.assertIn("422", ast.unparse(guards[2]))
+        self.assertIn("target_node_id", ast.unparse(guards[3].test))
+        self.assertIn("422", ast.unparse(guards[3]))
+        first_db = next(i for i, n in enumerate(fn.body)
+                        if isinstance(n, ast.With))
+        self.assertLess(fn.body.index(guards[2]), first_db)
+        self.assertLess(fn.body.index(guards[3]), first_db)
+
+    def test_response_echoes_run_id_for_cross_view_correlation(self):
+        fn = self.functions["synthetic_event"]
+        returns = [n for n in fn.body if isinstance(n, ast.Return)]
+        self.assertEqual(len(returns), 1)
+        response = returns[0].value
+        self.assertIsInstance(response, ast.Dict)
+        keys = [k.value if isinstance(k, ast.Constant) else None for k in response.keys]
+        self.assertIn("run_id", keys)
+        self.assertEqual(ast.unparse(response.values[keys.index("run_id")]), "x.run_id")
+
     def test_no_human_approval_claim_in_synthetic_response(self):
         fn = self.functions["synthetic_event"]
         returns = [n for n in ast.walk(fn) if isinstance(n, ast.Return)]
