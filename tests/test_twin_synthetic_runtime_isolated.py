@@ -148,6 +148,19 @@ class SyntheticRuntimeContract(unittest.TestCase):
                 self.assertNotIn("approved", provenance)
                 self.assertNotIn("effect", provenance)
 
+    def test_blank_identifiers_fail_closed_without_database_access(self):
+        """Whitespace-only IDs must never create synthetic rows or return PASS."""
+        for action in ("OBSERVE", "SET_STATE"):
+            for field in ("run_id", "target_node_id"):
+                with self.subTest(action=action, field=field):
+                    self.db.calls.clear()
+                    event = self.event(action=action)
+                    setattr(event, field, "  \\t  ")
+                    with self.assertRaises(Rejected) as ctx:
+                        self.invoke(event, "Bearer isolated-test-token")
+                    self.assertEqual(ctx.exception.status_code, 422)
+                    self.assertEqual(self.db.calls, [])
+
     def test_database_error_never_returns_synthetic_pass(self):
         """A failed write must propagate; never manufacture PASS or approval."""
         class WriteFailure(RuntimeError):
