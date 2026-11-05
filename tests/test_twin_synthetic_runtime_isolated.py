@@ -127,6 +127,27 @@ class SyntheticRuntimeContract(unittest.TestCase):
         self.assertEqual([fact["run_id"] for fact in facts], ["RUN-ONE", "RUN-TWO"])
         self.assertTrue(all(fact["synthetic"] is True for fact in facts))
 
+    def test_payload_cannot_spoof_canonical_run_or_synthetic_marker(self):
+        """Caller payload must not override server-generated provenance fields."""
+        import json
+        for action in ("OBSERVE", "SET_STATE"):
+            with self.subTest(action=action):
+                self.db.calls.clear()
+                event = self.event(action=action, run="RUN-CANONICAL")
+                event.payload = {"metric": "latency", "value": 2,
+                                 "run_id": "RUN-FORGED", "synthetic": False,
+                                 "approved": True, "effect": "LIVE"}
+                result = self.invoke(event, "Bearer isolated-test-token")
+                self.assertEqual(result["run_id"], "RUN-CANONICAL")
+                self.assertIs(result["synthetic"], True)
+                sql, params = self.db.calls[-1]
+                self.assertIn("insert into aiops.", sql.lower())
+                provenance = json.loads(params[-1])
+                self.assertEqual(provenance["run_id"], "RUN-CANONICAL")
+                self.assertIs(provenance["synthetic"], True)
+                self.assertNotIn("approved", provenance)
+                self.assertNotIn("effect", provenance)
+
     def test_database_error_never_returns_synthetic_pass(self):
         """A failed write must propagate; never manufacture PASS or approval."""
         class WriteFailure(RuntimeError):
