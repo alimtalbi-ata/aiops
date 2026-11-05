@@ -614,6 +614,57 @@ def make_receipt(poller, manifest_path=MANIFEST, run=subprocess.run, dev=DEV, en
     report['host_playwright'] = host_playwright_receipt(
         state_dir, report.get('stable_checkout_sha'),
         report.get('portal', {}).get('image_id'))
+    # Sanitized, independent synthetic filesystem receipt, published by existing
+    # poller.publish(report); never export local paths, secrets or raw JSON.
+    report['filesystem_synthetic'] = {'status': 'NOT_VERIFIED'}
+    try:
+        fs_manifest = json.loads((ROOT / 'deploy/debian-fs-synthetic-release.json').read_text())
+        fs_run = fs_manifest.get('run_id')
+        fs_root = Path('/home/aiops/.local/state/aiops2-demo-filesystem/remediation')
+        if (fs_manifest.get('enabled') is True
+                and fs_manifest.get('schema') == 'aiops.fs-synthetic-release.v1'
+                and fs_manifest.get('mode') == 'SYNTHETIC_NO_LIVE_EFFECTS'
+                and fs_manifest.get('host') == 'srv-deb-05'
+                and isinstance(fs_run, str)
+                and re.fullmatch(r'FS-[A-Za-z0-9_-]{1,60}', fs_run)):
+            fs_dir = fs_root / fs_run
+            fs_state = fs_dir / 'state.json'
+            fs_receipt = fs_dir / 'receipt.json'
+            if (not any(p.is_symlink() for p in (fs_root, fs_dir, fs_state, fs_receipt))
+                    and fs_state.stat().st_size <= 8192
+                    and fs_receipt.stat().st_size <= 8192):
+                fs_age = (dt.datetime.now(dt.timezone.utc) -
+                          dt.datetime.fromtimestamp(fs_receipt.stat().st_mtime,
+                                                    dt.timezone.utc)).total_seconds()
+                fs_raw = fs_state.read_bytes()
+                fs_s = json.loads(fs_raw)
+                fs_r = json.loads(fs_receipt.read_bytes())
+                fs_ok = (0 <= fs_age <= 900
+                         and fs_s.get('run_id') == fs_r.get('run_id') == fs_run
+                         and fs_s.get('phase') == 'OPEN'
+                         and fs_s.get('incident') == 'OPEN_SIMULATED'
+                         and fs_s.get('used_mib') == 11
+                         and fs_s.get('capacity_mib') == 12
+                         and fs_s.get('logs_mib') == 5
+                         and fs_s.get('rollback_closed') is True
+                         and fs_s.get('action') is None
+                         and fs_r.get('command') == 'rollback'
+                         and fs_r.get('synthetic_only') is True
+                         and fs_r.get('live_effects') is False
+                         and fs_r.get('state_sha256') ==
+                         hashlib.sha256(fs_raw).hexdigest())
+                if fs_ok:
+                    report['filesystem_synthetic'] = {
+                        'status': 'PASS_SYNTHETIC_ROLLBACK_ONLY',
+                        'run_id': fs_run,
+                        'source_commit': fs_manifest.get('source_commit'),
+                        'state_sha256': fs_r['state_sha256'],
+                        'age_seconds': int(fs_age),
+                        'live_effects': False,
+                        'human_e2e': 'NOT_VERIFIED',
+                    }
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
     report['release_stable'] = 'NO_GO'
     report['execution'] = ('POLLER_DEPLOY_RECEIPT_AND_READONLY_VERIFICATION'
                            if report['deployment_preflight']['deployment_executed']
