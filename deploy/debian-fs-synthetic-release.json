@@ -1,0 +1,9 @@
+{
+  "schema": "aiops.fs-synthetic-release.v1",
+  "enabled": false,
+  "mode": "SYNTHETIC_NO_LIVE_EFFECTS",
+  "host": "srv-deb-05",
+  "run_id": "FS-20261105-P0-001",
+  "source_commit": "76e3fe4cd0372f31d2c2323ed582850c7051994f",
+  "approval": "SYNTHETIC_APPROVED"
+}
