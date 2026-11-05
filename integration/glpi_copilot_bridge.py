@@ -7,6 +7,7 @@ TAG = "AIOPS2-GLPI-COPILOT-V1"
 CURSOR = "/tmp/aiops2-glpi-copilot-state.json"
 URL = os.getenv("AIOPS_COPILOT_URL", "http://aiops2-copilot:814").rstrip("/")
 LIMIT = int(os.getenv("AIOPS_COPILOT_TICKET_LIMIT", "100"))
+MIN_TICKET = int(os.getenv("AIOPS_COPILOT_MIN_TICKET_ID", "147"))
 TIMEOUT = 9
 
 def log(*args):
@@ -104,7 +105,7 @@ def main():
     count=0
     for item in sorted(items,key=lambda x:int(x.get("id",0)),reverse=True):
         tid=item.get("id")
-        if not tid: continue
+        if not tid or int(tid)<MIN_TICKET: continue
         try:
             ticket=client.get_ticket(str(tid))
             process_ticket(client,ticket)
