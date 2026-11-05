@@ -11,7 +11,7 @@ import pathlib
 import re
 import sys
 
-RUN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
+RUN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 ROOT = pathlib.Path("/home/aiops/.local/state/aiops2-demo-filesystem")
 
 def verify(directory, expected_run, expected_source_sha):
