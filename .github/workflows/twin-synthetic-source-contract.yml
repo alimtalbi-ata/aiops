@@ -1,0 +1,25 @@
+name: Twin synthetic source contract (isolated)
+on:
+  pull_request:
+    paths:
+      - 'app/twin/main.py'
+      - 'tests/test_twin_synthetic_source_contract.py'
+      - '.github/workflows/twin-synthetic-source-contract.yml'
+  workflow_dispatch:
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact checked-out SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Run isolated Twin source contract tests
+        run: python3 -m unittest discover -s tests -p 'test_twin_synthetic_source_contract.py' -v
