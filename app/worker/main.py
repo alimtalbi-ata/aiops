@@ -201,10 +201,10 @@ FS_V28_EVIDENCE_ID='EVD-D2069BA816126499'
 
 def validate_fs_v28_observation(evidence, run_id):
     """Accept only an existing run-bound filesystem detection; never fabricate a Twin HITL."""
-    if evidence.get('evidence_id') != FS_V28_EVIDENCE_ID:
-        raise RuntimeError('fs_v28_evidence_identity_mismatch')
     if not isinstance(evidence, dict):
         raise RuntimeError('fs_v28_evidence_invalid_record')
+    if evidence.get('evidence_id') != FS_V28_EVIDENCE_ID:
+        raise RuntimeError('fs_v28_evidence_identity_mismatch')
     provenance=evidence.get('provenance')
     payload=evidence.get('payload')
     if not isinstance(provenance, dict) or not isinstance(payload, dict):
