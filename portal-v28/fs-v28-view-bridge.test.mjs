@@ -10,3 +10,27 @@ test("unavailable overwrites stale connected state",()=>{const r=makeRoot();rend
 test("never inject HTML into view",()=>{const r=makeRoot();renderFsV28(r,{...project(good),core:"<img src=x onerror=alert(1)>"});assert.equal(get(r,"core"),"<img src=x onerror=alert(1)>");assert.equal(r.nodes.get("core").innerHTML,undefined)});
 test("401 never shows connected",async()=>{const r=makeRoot();await refreshFsV28(r,{fetchImpl:async()=>({ok:false,status:401})});assert.equal(get(r,"availability"),"UNAVAILABLE");assert.equal(get(r,"reason"),"AUTH_REQUIRED")});
 test("refresh uses same-origin read-only endpoint",async()=>{const r=makeRoot();let request;await refreshFsV28(r,{fetchImpl:async(...args)=>{request=args;return {ok:true,headers:{get:()=>"application/json"},json:async()=>good}}});assert.equal(request[0],"/api/portal/demo/fs-v28");assert.equal(request[1].method,"GET");assert.equal(get(r,"core"),"INVESTIGATING")});
+
+test("older success cannot overwrite newer 401 denial",async()=>{
+  const r=makeRoot();
+  let finish;
+  const old=refreshFsV28(r,{fetchImpl:()=>new Promise(resolve=>{finish=resolve})});
+  const newer=await refreshFsV28(r,{fetchImpl:async()=>({ok:false,status:401})});
+  assert.equal(newer.reason,"AUTH_REQUIRED");
+  finish({ok:true,headers:{get:()=>"application/json"},json:async()=>good});
+  const stale=await old;
+  assert.equal(stale.reason,"SUPERSEDED_REFRESH");
+  assert.equal(get(r,"availability"),"UNAVAILABLE");
+  assert.equal(get(r,"reason"),"AUTH_REQUIRED");
+  assert.equal(get(r,"core"),"UNKNOWN");
+});
+test("older 401 cannot overwrite newer connected result",async()=>{
+  const r=makeRoot();
+  let finish;
+  const old=refreshFsV28(r,{fetchImpl:()=>new Promise(resolve=>{finish=resolve})});
+  await refreshFsV28(r,{fetchImpl:async()=>({ok:true,headers:{get:()=>"application/json"},json:async()=>good})});
+  finish({ok:false,status:401});
+  assert.equal((await old).reason,"SUPERSEDED_REFRESH");
+  assert.equal(get(r,"availability"),"READONLY_CONNECTED");
+  assert.equal(get(r,"core"),"INVESTIGATING");
+});
