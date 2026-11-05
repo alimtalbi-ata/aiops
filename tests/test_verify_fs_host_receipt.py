@@ -65,6 +65,24 @@ class ReceiptGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "symlink input"):
             gate.verify(self.path, RUN, SHA)
 
+    def test_invalid_timestamp_refused(self):
+        self.receipt["collected_at"] = "not-a-date"
+        self.save()
+        with self.assertRaisesRegex(ValueError, "invalid timestamp"):
+            gate.verify(self.path, RUN, SHA)
+
+    def test_naive_timestamp_refused(self):
+        self.receipt["collected_at"] = "2026-11-05T02:00:00"
+        self.save()
+        with self.assertRaisesRegex(ValueError, "timezone"):
+            gate.verify(self.path, RUN, SHA)
+
+    def test_future_timestamp_refused(self):
+        self.receipt["collected_at"] = "2099-01-01T00:00:00+00:00"
+        self.save()
+        with self.assertRaisesRegex(ValueError, "future timestamp"):
+            gate.verify(self.path, RUN, SHA)
+
     def test_remediation_schema_not_mistaken_for_host_attestation(self):
         # fs_demo.py actually emits remediation/<run>, not runs/<run>.
         remediation = self.root / "remediation" / RUN
