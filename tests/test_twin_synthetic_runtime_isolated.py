@@ -21,6 +21,7 @@ class Database:
         return False
     def execute(self, sql, params):
         self.calls.append((sql, params))
+        return type('Result', (), {'rowcount': 1})()
 
 
 class SyntheticRuntimeContract(unittest.TestCase):
@@ -71,6 +72,20 @@ class SyntheticRuntimeContract(unittest.TestCase):
         self.assertIn('"run_id": "RUN-TEST"', self.db.calls[1][1][-1])
         self.assertIn('"synthetic": true', self.db.calls[1][1][-1])
 
+
+    def test_missing_state_target_cannot_return_false_pass(self):
+        """A zero-row UPDATE must not create a fact or claim success."""
+        original_execute = self.db.execute
+        def zero_update(sql, params):
+            result = original_execute(sql, params)
+            if sql.lower().startswith("update aiops.twin_nodes"):
+                return type("Result", (), {"rowcount": 0})()
+            return result
+        self.db.execute = zero_update
+        with self.assertRaises(Rejected) as ctx:
+            self.invoke(self.event(action="SET_STATE"), "Bearer isolated-test-token")
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertEqual(len(self.db.calls), 1)
 
     def test_distinct_runs_are_not_conflated_in_observation_payload(self):
         """Isolated contract only: does not prove Evidence joins or PG16 replay."""
