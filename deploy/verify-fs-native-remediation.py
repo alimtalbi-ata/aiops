@@ -44,6 +44,23 @@ def verify(run_id, root=ROOT):
         raise ValueError("invalid capacity")
     if not 0 <= state["used_mib"] <= state["capacity_mib"]:
         raise ValueError("invalid usage")
+    if type(state.get("logs_mib")) is not int or type(state.get("rollback_closed")) is not bool:
+        raise ValueError("invalid rollback or logs")
+    if state["logs_mib"] < 0:
+        raise ValueError("invalid logs")
+    phase = state["phase"]
+    if phase == "OPEN":
+        if (state["incident"] != "OPEN_SIMULATED" or state["action"] is not None
+                or state["rollback_closed"] is not True
+                or (state["used_mib"], state["capacity_mib"], state["logs_mib"]) != (11, 12, 5)):
+            raise ValueError("inconsistent open state")
+    else:
+        if (state["incident"] != "MITIGATED_SIMULATED" or state["rollback_closed"] is not False
+                or state["proposed"] != "cleanup-logs"):
+            raise ValueError("inconsistent mitigated state")
+        expected = {"cleanup-logs": (6, 12, 0), "expand-fs": (11, 16, 5)}
+        if state["action"] not in expected or (state["used_mib"], state["capacity_mib"], state["logs_mib"]) != expected[state["action"]]:
+            raise ValueError("inconsistent synthetic action")
     return {"status": "NATIVE_SYNTHETIC_RECEIPT_VALID_ONLY",
             "run_id": run_id, "state_sha256": receipt["state_sha256"],
             "host_provenance": "NOT_ATTESTED", "source_sha": "NOT_ATTESTED"}
