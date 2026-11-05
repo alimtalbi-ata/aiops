@@ -87,6 +87,21 @@ class SyntheticRuntimeContract(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(len(self.db.calls), 1)
 
+    def test_ambiguous_state_update_rejects_without_fact_insert(self):
+        """More than one updated node is not a valid single-target transition."""
+        original_execute = self.db.execute
+        def multi_update(sql, params):
+            result = original_execute(sql, params)
+            if sql.lower().startswith("update aiops.twin_nodes"):
+                return type("Result", (), {"rowcount": 2})()
+            return result
+        self.db.execute = multi_update
+        with self.assertRaises(Rejected) as ctx:
+            self.invoke(self.event(action="SET_STATE"), "Bearer isolated-test-token")
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertEqual(len(self.db.calls), 1)
+        self.assertNotIn("insert into aiops.twin_facts", self.db.calls[0][0].lower())
+
     def test_distinct_runs_are_not_conflated_in_observation_payload(self):
         """Isolated contract only: does not prove Evidence joins or PG16 replay."""
         import json
