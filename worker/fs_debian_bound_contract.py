@@ -28,7 +28,15 @@ def decide_bound_fs_stage(
         evidence.get(k) != expected[k] for k in IDENTITY_KEYS
     ):
         return StageDecision("BLOCKED", None, reason="evidence_identity_mismatch")
-    # An explicitly selected Evidence record cannot be substituted by another\n    # record from the same tenant/incident/run.\n    if "evidence_id" in expected and (\n        not isinstance(expected["evidence_id"], str)\n        or not expected["evidence_id"]\n        or evidence.get("evidence_id") != expected["evidence_id"]\n    ):\n        return StageDecision("BLOCKED", None, reason="evidence_record_mismatch")\n    if stage == "POLICY" and (
+    # An explicitly selected Evidence record cannot be substituted by another
+    # record from the same tenant/incident/run.
+    if "evidence_id" in expected and (
+        not isinstance(expected["evidence_id"], str)
+        or not expected["evidence_id"]
+        or evidence.get("evidence_id") != expected["evidence_id"]
+    ):
+        return StageDecision("BLOCKED", None, reason="evidence_record_mismatch")
+    if stage == "POLICY" and (
         not isinstance(policy, Mapping)
         or any(policy.get(k) != expected[k] for k in IDENTITY_KEYS)
     ):
