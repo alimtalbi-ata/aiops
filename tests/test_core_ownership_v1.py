@@ -43,6 +43,31 @@ class OwnershipContractTests(unittest.TestCase):
                     verify_and_consume(claims, sign(claims, KEY), KEY, expected,
                                        oidc, glpi, ledger, now=now)
 
+    def test_strict_authority_and_binding_types(self):
+        c, e = fixture()
+        for oidc, glpi in [(1, True), (True, "verified"), ([], True), (True, 1)]:
+            with self.subTest(oidc=oidc, glpi=glpi):
+                with self.assertRaises(OwnershipDenied):
+                    verify_and_consume(c, sign(c, KEY), KEY, e, oidc, glpi,
+                                       lambda *_: True, now=T)
+        for field in ("iat", "exp"):
+            bad = dict(c, **{field: True})
+            with self.subTest(field=field):
+                with self.assertRaises(OwnershipDenied):
+                    verify_and_consume(bad, sign(bad, KEY), KEY, e, True, True,
+                                       lambda *_: True, now=T)
+        for value in (True, "1800000000", 1800000000):
+            with self.subTest(now=value):
+                with self.assertRaises(OwnershipDenied):
+                    verify_and_consume(c, sign(c, KEY), KEY, e, True, True,
+                                       lambda *_: True, now=value)
+        for value in (1, None, "", ["tenant-a"]):
+            bad_expected = dict(e, tenant_id=value)
+            with self.subTest(expected=value):
+                with self.assertRaises(OwnershipDenied):
+                    verify_and_consume(c, sign(c, KEY), KEY, bad_expected,
+                                       True, True, lambda *_: True, now=T)
+
     def test_forged_signature_and_ledger_failure(self):
         c, e = fixture()
         with self.assertRaises(OwnershipDenied):
