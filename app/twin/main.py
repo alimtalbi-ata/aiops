@@ -53,3 +53,7 @@ def metrics():
     with db() as c:
         n,d,f=c.execute("select count(*),count(*) filter(where state='DEGRADED'),count(*) filter(where state='FAILED') from aiops.twin_nodes").fetchone()
     return f'aiops_twin_nodes {n}\naiops_twin_degraded {d}\naiops_twin_failed {f}\n'
+
+# Register the versioned filesystem exporter routes in clean-source builds.
+from twin.fs_observations import router as fs_observations_router
+app.include_router(fs_observations_router)
