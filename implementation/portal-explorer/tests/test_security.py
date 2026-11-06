@@ -2,6 +2,7 @@
 import os
 import unittest
 from unittest.mock import patch
+from io import BytesIO
 from types import SimpleNamespace
 from fastapi import HTTPException
 from portal import explorer_api as e
@@ -62,6 +63,32 @@ class SecurityTests(unittest.TestCase):
         with patch.dict(os.environ, {"EXPLORER_PROMETHEUS_URL": "http://user:password@prometheus:9090"}):
             with self.assertRaises(HTTPException):
                 e._upstream("prometheus")
+
+    def test_temporal_html_health_response(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "text/html"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, size): return b"<html>Temporal UI</html>"
+        with patch.dict(os.environ, {"EXPLORER_TEMPORAL_UI_URL": "http://temporal-ui:8080"}):
+            with patch.object(e, "urlopen", return_value=Response()):
+                result = e._read("temporal", "/")
+        self.assertTrue(result["reachable"])
+        self.assertEqual(result["http_status"], 200)
+        self.assertIsNone(result["details"])
+
+    def test_n8n_json_health_response(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "application/json"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, size): return b'{"status":"ok"}'
+        with patch.dict(os.environ, {"EXPLORER_N8N_URL": "http://n8n:5678"}):
+            with patch.object(e, "urlopen", return_value=Response()):
+                result = e._read("n8n", "/healthz")
+        self.assertEqual(result["details"], {"status": "ok"})
 
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
