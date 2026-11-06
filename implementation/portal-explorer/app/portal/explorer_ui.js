@@ -46,7 +46,12 @@ async function databases(){
  const limit=select([[25,'25 lignes'],[100,'100 lignes'],[200,'200 lignes']]);
  const run=button('Exécuter SELECT',()=>show(async()=>{const data=await api('/databases/'+source.value+'/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sql:sql.value,limit:Number(limit.value)})});table(data.columns,data.rows);}));
  const browse=button('Lister les tables',()=>show(async()=>{const d=await api('/databases/'+source.value+'/tables');table(d.columns,d.rows)}));
- controls.append(el('label','Base : '),source,el('p','Requête SQL :'),sql,limit,run,browse);
+ const schema=field('text','Schéma','public'),name=field('text','Table'),offset=field('number','Décalage','0');
+ const inspect=button('Colonnes',()=>show(async()=>{const d=await api('/databases/'+source.value+'/columns?'+new URLSearchParams({schema:schema.value,table:name.value}));table(d.columns,d.rows)}));
+ const preview=button('Afficher les lignes',()=>show(async()=>{const d=await api('/databases/'+source.value+'/preview?'+new URLSearchParams({schema:schema.value,table:name.value,limit:limit.value,offset:offset.value}));table(d.columns,d.rows)}));
+ source.addEventListener('change',()=>{schema.value=source.value==='glpi'?'glpi':'public'});
+ controls.append(el('label','Base : '),source,el('p','Requête SQL :'),sql,limit,run,browse,
+ el('p','Exploration de table :'),schema,name,offset,inspect,preview);
  raw({connections:catalog.databases,notice:'Les connexions SQL doivent être configurées avec des rôles SELECT-only.'});
 }
 async function prometheus(){
