@@ -1,0 +1,3 @@
+FROM aiops2-portal:fs1092-history-fixed-candidate
+COPY scripts/fs/fs1097_patch.py /tmp/fs1097_patch.py
+RUN python /tmp/fs1097_patch.py && python -m py_compile /app/portal/fs1051_visual.py /app/portal/main.py && rm /tmp/fs1097_patch.py
