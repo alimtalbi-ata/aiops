@@ -8,7 +8,7 @@ from typing import Callable, Mapping
 import hashlib
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ def _valid_observation_time(value):
 
 def execute(request: FS147Request, *, stop_auto: bool,
             observe: Callable, analyst: Callable, critic: Callable,
-            policy: Callable, claim_once: Callable):
+            policy: Callable, claim_once: Callable, now: Callable = lambda: datetime.now(timezone.utc)):
     """Run only after authenticated Core has allocated a durable run.
 
     claim_once must be atomic and durable, scoped to tenant/incident/run/ticket.
@@ -84,6 +84,14 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or observation.get("filesystem") != "/fs-lab"
                 or not observation.get("read_only") is True):
             return _blocked("INSUFFICIENT_OBSERVATION", steps)
+        # A historical lab measurement is not proof of a fresh bridge observation.
+        # Clock injection is only for deterministic tests, never a substitute for
+        # an authenticated bridge response.
+        observed_at = datetime.fromisoformat(
+            observation["collected_at"].replace("Z", "+00:00"))
+        age = now() - observed_at
+        if not timedelta(seconds=-30) <= age <= timedelta(minutes=5):
+            return _blocked("STALE_OBSERVATION", steps)
         steps.append("OBSERVE")
         analysis = analyst(request, observation)
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
