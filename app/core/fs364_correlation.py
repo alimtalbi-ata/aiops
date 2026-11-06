@@ -79,7 +79,7 @@ def bind(conn: sqlite3.Connection, link: Link, *, verified_ticket: bool,
 def launch_allowed(*, mode: str, authenticated: bool, acl_ok: bool,
                    stop_auto: bool, policy_decision: str, human_approval: bool) -> bool:
     """Conservative gate; no launch implementation and no synthetic approval."""
-    return (mode in ("DEMO", "LIVE") and authenticated and acl_ok
+    return (mode == "DEMO" and authenticated and acl_ok
             and not stop_auto and policy_decision == "ALLOW"
             and human_approval)
 
