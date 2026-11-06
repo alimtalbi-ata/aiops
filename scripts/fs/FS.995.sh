@@ -31,7 +31,8 @@ for g in detail.get('gates',[]):
  print('GATE='+json.dumps({k:g.get(k) for k in ('stage','state','decision','reason')},default=str,sort_keys=True))
 print('REMEDIATE_EVENT_COUNT='+str(sum(e.get('stage')=='REMEDIATE' for e in events)))
 print('VERIFY_EVENT_COUNT='+str(sum(e.get('stage')=='VERIFY' for e in events)))
-assert events, 'NO_RUN_EVENTS_RETURNED'\nprint('FORENSIC_READ_ONLY=PASS')
+assert events, 'NO_RUN_EVENTS_RETURNED'
+print('FORENSIC_READ_ONLY=PASS')
 PY
 echo 'HTTP_WRITES=0'
 echo 'NEW_WORKFLOWS_STARTED=0'
