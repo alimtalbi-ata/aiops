@@ -27,8 +27,9 @@ node=guards[0]
 code=compile(ast.Module(body=[node],type_ignores=[]),'/app/worker/main.py','exec')
 def check(stage,mode,run_mode,run_scenario,gates):
  seen=[]
- def get_json(url,token=None):
-  seen.append(url)
+ def get_json(base,path,token=None):
+  assert base=='http://mock-core:810' and path=='/api/runs/RUN-FS998-TEST'
+  seen.append(path)
   return {'run':{'mode':run_mode,'scenario_id':run_scenario},'gates':gates}
  env={'stage':stage,'mode':mode,'scenario':'SCN-GOLDEN-PAYMENT-P1',
       'rid':'RUN-FS998-TEST','CORE':'http://mock-core:810',
