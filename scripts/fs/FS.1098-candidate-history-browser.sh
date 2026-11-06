@@ -11,6 +11,7 @@ trap cleanup EXIT
 echo "FS1098_MODE=TEMPORARY_CANDIDATE_REAL_CHROMIUM_HISTORY_MATRIX"
 docker image inspect "$IMAGE" >/dev/null
 docker network inspect aiops2-rebuild-control >/dev/null
+docker network inspect aiops2-rebuild-integration >/dev/null
 test -x "$PLAYWRIGHT_PY"
 if docker container inspect "$NAME" >/dev/null 2>&1; then
   echo "FS1098_ERROR=TEMP_NAME_ALREADY_EXISTS"; exit 1
@@ -27,6 +28,7 @@ docker run -d --name "$NAME" --restart no --network aiops2-rebuild-control \
   -e AIOPS_INTERNAL_TOKEN=fs1098-ephemeral-test-only \
   -e EXPLORER_ENABLED=1 -e "EXPLORER_ALLOWED_CIDRS=$SUBNET" \
   "$IMAGE" >/dev/null
+docker network connect aiops2-rebuild-integration "$NAME"
 READY=NO
 for i in $(seq 1 40); do
   if curl -fsS --max-time 2 "http://127.0.0.1:${PORT}/explorer/visual" -o /dev/null; then READY=YES; break; fi
