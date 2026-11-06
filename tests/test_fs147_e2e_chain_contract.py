@@ -21,7 +21,7 @@ def contains_san_reference(value):
     if isinstance(value, dict):
         return any(contains_san_reference(k) or contains_san_reference(v)
                    for k, v in value.items())
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return any(contains_san_reference(item) for item in value)
     return False
 
@@ -214,6 +214,15 @@ class FS147ChainContract(unittest.TestCase):
         # Tuple-based metadata must receive the same recursive SAN check.
         self.run["collectors"] = ("filesystem-detector", {"origin": "SAN-bridge"})
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run.pop("collectors")
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_alias_in_set_metadata_rejected(self):
+        # Some internal collectors emit set-like metadata before JSON encoding.
+        for container in (set, frozenset):
+            with self.subTest(container=container.__name__):
+                self.run["collectors"] = container(("filesystem-detector", "SAN-bridge"))
+                self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
         self.run.pop("collectors")
         self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
 
