@@ -6,7 +6,7 @@ Référence : [FS.364](FS364-ARCHITECTURE-REPRISE-2026-11-06.md). Incident GLPI 
 
 `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v`
 
-Le contrat rejette la contamination SAN/Twin, la réutilisation d'une Evidence d'un autre RUN, les identifiants V28 historiques, une mesure absente/invalide, les incohérences ticket/RUN/Evidence et une empreinte d'alerte contradictoire. **Nouvelle régression :** une approbation historique GLPI 146 / TicketValidation 3 est rejetée même lorsqu'une mesure filesystem 147 valide est présente ; elle ne peut pas être blanchie par une Evidence récente. Une approbation 147 dans une fixture ne constitue **jamais** une autorisation d'exécuter une action.
+Le contrat rejette la contamination SAN/Twin, la réutilisation d'une Evidence d'un autre RUN, les identifiants V28 historiques, une mesure absente/invalide, les incohérences ticket/RUN/Evidence et une empreinte d'alerte contradictoire. **Nouvelle régression :** une approbation historique GLPI 146 / TicketValidation 3 est rejetée même lorsqu'une mesure filesystem 147 valide est présente ; elle ne peut pas être blanchie par une Evidence récente. Le contrôle vérifie également que tout `incident_id` présent soit renseigné et identique dans ticket, RUN et provenance Evidence ; une liaison partielle ou inter-incident est rejetée. En l'absence de cet identifiant dans les trois objets, les fixtures historiques restent acceptées, sans constituer une preuve E2E. Une approbation 147 dans une fixture ne constitue **jamais** une autorisation d'exécuter une action.
 
 ## États de qualification
 
