@@ -22,3 +22,15 @@ test('same-origin GET, no-store and credentials',async()=>{
 for(const status of [401,403,503])
  test('fail closed HTTP '+status,async()=>assert.rejects(fetchProjection('lab147',async()=>({ok:false,status})),/UNAVAILABLE/));
 test('reject HTML auth redirect',async()=>assert.rejects(fetchProjection('lab147',async()=>({ok:true,headers:{get:()=> 'text/html'}})),/NON_JSON/));
+
+for (const change of [{approved:'true'},{approved:1},{resolved:'false'},
+ {resolved:{status:'RESOLVED'}},{questions:'Quelle rétention ?'},
+ {questions:[{text:'Autoriser ?'}]},{questions:['x'.repeat(501)]},
+ {questions:Array(13).fill('question')}])
+ test('reject ambiguous approval/resolution or malformed questions '+JSON.stringify(change).slice(0,80),
+  ()=>assert.throws(()=>validateProjection({...base,...change},'lab147')));
+test('explicit false approval and resolution are not proof of acceptance',()=>{
+ const p=validateProjection({...base,approved:false,resolved:false},'lab147');
+ assert.equal(p.policy,'BLOCKED');
+ assert.equal(Object.hasOwn(p,'approved'),false);
+});
