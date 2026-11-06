@@ -1,0 +1,4 @@
+FROM aiops2-portal:fs621-explorers-candidate
+COPY app/portal/sql_readonly_guard.py /app/portal/sql_readonly_guard.py
+COPY scripts/fs/fs1040_patch_explorer.py /tmp/fs1040_patch_explorer.py
+RUN python /tmp/fs1040_patch_explorer.py && rm /tmp/fs1040_patch_explorer.py
