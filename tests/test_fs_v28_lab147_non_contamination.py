@@ -32,10 +32,16 @@ class FS147IsolationContract(unittest.TestCase):
         calls = [n for stmt in self.fs.body for n in ast.walk(stmt)
                  if isinstance(n, ast.Call)]
         names = [n.func.id for n in calls if isinstance(n.func, ast.Name)]
+        attribute_names = [n.func.attr for n in calls if isinstance(n.func, ast.Attribute)]
         self.assertEqual(names.count("get_json"), 1)
         self.assertEqual(names.count("validate_fs_v28_observation"), 1)
-        self.assertFalse({"post_json", "put_json", "delete_json"} & set(names))
-        self.assertNotIn(SAN_NODE, " ".join(ast.unparse(n) for n in self.fs.body))
+        forbidden = {"post_json", "put_json", "patch_json", "delete_json", "post", "put", "patch", "delete"}
+        self.assertFalse(forbidden & (set(names) | set(attribute_names)),
+                         "Filesystem OBSERVE must be read-only, including method calls")
+        fs_source = " ".join(ast.unparse(n) for n in self.fs.body)
+        self.assertNotIn(SAN_NODE, fs_source)
+        self.assertNotIn("twin", fs_source.lower(),
+                         "Filesystem OBSERVE must not depend on Twin")
         self.assertEqual(len(self.fs.orelse), 1)
         self.assertIsInstance(self.fs.orelse[0], ast.If)
 
