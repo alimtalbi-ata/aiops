@@ -28,15 +28,16 @@ printf '%s\n' "$CURRENT" > "$BACKUP/previous-image.txt"
 # No environment or secrets are dumped. The original compose stack is retained.
 python3 - "$BACKUP/overlay.json" <<'PY'
 import json,os,sys
-env={"EXPLORER_ENABLED":"1","EXPLORER_ALLOWED_CIDRS":os.environ["EXPLORER_ALLOWED_CIDRS"]}
+env={"EXPLORER_ENABLED":"1","EXPLORER_ALLOWED_CIDRS":os.environ["EXPLORER_ALLOWED_CIDRS"],"EXPLORER_PROMETHEUS_URL":"http://aiops2-prometheus:9090","EXPLORER_LOKI_URL":"http://aiops2-demo-observability-demo-loki-1:3100","EXPLORER_TEMPO_URL":"http://aiops2-demo-observability-demo-tempo-1:3200"}
 for key in ("EXPLORER_PROMETHEUS_URL","EXPLORER_LOKI_URL","EXPLORER_TEMPO_URL",
             "EXPLORER_CMDB_URL","EXPLORER_TEMPORAL_UI_URL","EXPLORER_N8N_URL",
             "EXPLORER_CORE_PG_DSN","EXPLORER_TEMPORAL_PG_DSN","EXPLORER_GLPI_MYSQL_DSN"):
     if os.environ.get(key):
         env[key]=os.environ[key]
 with open(sys.argv[1],"w") as f:
-    json.dump({"services":{"aiops2-portal":{"image":os.environ.get("CANDIDATE_IMAGE","aiops2-portal:fs621-explorers-candidate"),"environment":env}}},f)
+    json.dump({"services":{"aiops2-portal":{"image":os.environ.get("CANDIDATE_IMAGE","aiops2-portal:fs621-explorers-candidate"),"environment":env,"networks":{"aiops2-rebuild-observability":{}}}},"networks":{"aiops2-rebuild-observability":{"external":True,"name":"aiops2-rebuild-observability"}}},f)
 PY
+docker network inspect aiops2-rebuild-observability --format '{{.Internal}}' | grep -qx true || { echo "Observability network is not internal"; exit 2; }
 docker compose -p "$PROJECT" "${ARGS[@]}" -f "$BACKUP/overlay.json" config -q
 echo "Previous image recorded; deploying portal service only."
 docker compose -p "$PROJECT" "${ARGS[@]}" -f "$BACKUP/overlay.json" up -d --no-deps --no-build "$SERVICE"
