@@ -42,7 +42,7 @@ print("FS1040_SQL_GUARD="+("PASS" if not failed else "FAIL"))
 raise SystemExit(bool(failed))
 '
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
-  --env PYTHONDONTWRITEBYTECODE=1 --entrypoint python "$IMAGE" -c '
+  --env PYTHONDONTWRITEBYTECODE=1 --env AIOPS_INTERNAL_TOKEN=fs1040-offline-dummy-token --entrypoint python "$IMAGE" -c '
 import json
 from portal.main import app
 routes={getattr(r,"path","") for r in app.routes}
