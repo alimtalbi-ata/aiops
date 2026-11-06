@@ -189,6 +189,21 @@ def temporal_workflows(namespace: str, request: Request, pagesize: int = 25):
     return {"executions": executions[:pagesize], "returned": min(len(executions), pagesize),
             "upstream_returned": len(executions), "truncated": len(executions) > pagesize}
 
+@api.get("/tempo/search")
+def tempo_search(request: Request, minutes: int = 60, limit: int = 20):
+    _check(request)
+    if minutes not in (15, 60, 360, 1440) or not 1 <= limit <= 100:
+        raise HTTPException(400, "invalid_search_window")
+    end = int(time.time())
+    payload = _read("tempo", "/api/search",
+                    {"start": end - minutes * 60, "end": end, "limit": limit})
+    if not isinstance(payload, dict) or not isinstance(payload.get("traces"), list):
+        raise HTTPException(502, "tempo_unexpected_response")
+    traces = payload["traces"]
+    return {"traces": traces[:limit], "returned": min(len(traces), limit),
+            "upstream_returned": len(traces), "truncated": len(traces) > limit,
+            "metrics": payload.get("metrics", {})}
+
 @api.get("/observability/tempo/trace/{trace_id}")
 def trace(trace_id: str, request: Request):
     _check(request)
