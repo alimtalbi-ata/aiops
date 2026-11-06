@@ -60,7 +60,9 @@ export async function buildFsRealProjection({mode, ticketId, principal, authoriz
         result[key] = core[key];
     }
   }
-  if (mode === 'insufficient' && Array.isArray(questions) &&
+  // Human questions must not be exposed when the Core ticket binding is untrusted.
+  // A mis-scoped questions reader must not leak ticket 146 or another tenant's context.
+  if (mode === 'insufficient' && trustedCore && Array.isArray(questions) &&
       questions.length <= 12 && questions.every(q => typeof q === 'string' && q.length <= 500))
     result.questions = questions;
   return result;
