@@ -74,11 +74,13 @@ try:
    report["checks"]["http_errors"]=failed_http
    assert len([x for x in api if x[1]==200])>=2
    assert not [x for x in failed_http if x["path"]!="/favicon.ico"],"non-favicon HTTP errors: "+repr(failed_http)
-   meaningful=[e for e in errors if "Failed to load resource: the server responded with a status of 404" not in e]
-   assert not meaningful,"browser errors: "+repr(meaningful)
-   if errors and not any(x["path"]=="/favicon.ico" and x["status"]==404 for x in failed_http):
-    raise AssertionError("unattributed browser console errors: "+repr(console_details))
-   print("FS1082_BROWSER_ERRORS=NONE_EXCEPT_OPTIONAL_FAVICON_404",flush=True)
+   favicon_console=[x for x in console_details if x["text"]=="Failed to load resource: the server responded with a status of 404 (Not Found)" and x["location"].get("url")==base+"/favicon.ico"]
+   other_console=[x for x in console_details if x not in favicon_console]
+   assert not other_console,"non-favicon console errors: "+repr(other_console)
+   assert not failed_requests,"network failures: "+repr(failed_requests)
+   print("FS1084_FAVICON_404_CONSOLE="+str(len(favicon_console)),flush=True)
+   print("FS1084_NONFAVICON_CONSOLE_ERRORS="+str(len(other_console)),flush=True)
+   print("FS1084_BROWSER_ERRORS=NONE_EXCEPT_CONFIRMED_FAVICON_404",flush=True)
    report["checks"]["browser_errors"]="NONE"
    report["status"]="PASS"
   finally:browser.close()
