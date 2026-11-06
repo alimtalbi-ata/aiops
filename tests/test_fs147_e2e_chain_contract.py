@@ -57,6 +57,12 @@ def check_fs147_chain(ticket, run, evidence):
         if (not isinstance(run_alert, str) or not run_alert.strip()
                 or run_alert != evidence_alert):
             return False
+    # A historical GLPI approval is never a receipt for ticket 147.
+    # This fixture gate does not authorize actions even for matching approvals.
+    approval = payload.get("approval")
+    if isinstance(approval, dict) and "ticket_id" in approval:
+        if str(approval["ticket_id"]) != "147":
+            return False
     if payload.get("filesystem") != "/fs-lab":
         return False
     if (not isinstance(evidence.get("source"), str)
@@ -257,6 +263,16 @@ class FS147ChainContract(unittest.TestCase):
             "ticket_id": 146, "validation_id": 3, "status": "ACCEPTED"
         }
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_legacy_146_approval_rejected_even_with_valid_measurement(self):
+        # Valid df evidence cannot launder TicketValidation/3 from GLPI 146.
+        self.evidence["payload"]["approval"] = {
+            "ticket_id": 146, "validation_id": 3, "status": "ACCEPTED"
+        }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"]["approval"]["ticket_id"] = 147
+        # Passing the read-only correlation gate is not HITL authorization.
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_alert_fingerprint_cross_run_replay_rejected(self):
         # Optional alert identity cannot be silently dropped or substituted.
