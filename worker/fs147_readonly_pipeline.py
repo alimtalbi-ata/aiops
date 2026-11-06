@@ -31,7 +31,8 @@ def _matching(value, request):
             and value.get("tenant_id") == request.tenant_id
             and value.get("incident_id") == request.incident_id
             and value.get("run_id") == request.run_id
-            and value.get("ticket_id") == request.ticket_id)
+            and value.get("ticket_id") == request.ticket_id
+            and ("actor_id" not in value or value["actor_id"] == request.actor_id))
 
 
 def _valid_observation_time(value):
