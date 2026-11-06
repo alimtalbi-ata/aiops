@@ -60,7 +60,8 @@ class CrossConnectionClaimTests(unittest.TestCase):
 
     def test_same_request_replay_across_connections(self):
         self.assertTrue(self.claim("same-request"))
-        self.assertTrue(self.claim("same-request"))
+        # Even an identical retry must never be treated as a new dispatch grant.
+        self.assertFalse(self.claim("same-request"))
         self.assertFalse(self.claim("different-request"))
         self.assertEqual(self.count(), 1)
 
