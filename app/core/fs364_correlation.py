@@ -46,7 +46,7 @@ def bind(conn: sqlite3.Connection, link: Link, *, verified_ticket: bool,
     not from caller-provided ticket_id alone. Fail closed on any ambiguity.
     """
     validate(link)
-    if not authenticated or not verified_ticket or not stop_auto:
+    if authenticated is not True or verified_ticket is not True or stop_auto is not True:
         raise ContractRefused("authentication, ticket verification or STOP_AUTO missing")
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -79,15 +79,16 @@ def bind(conn: sqlite3.Connection, link: Link, *, verified_ticket: bool,
 def launch_allowed(*, mode: str, authenticated: bool, acl_ok: bool,
                    stop_auto: bool, policy_decision: str, human_approval: bool) -> bool:
     """Conservative gate; no launch implementation and no synthetic approval."""
-    return (mode == "DEMO" and authenticated and acl_ok
-            and not stop_auto and policy_decision == "ALLOW"
-            and human_approval)
+    return (mode == "DEMO" and authenticated is True and acl_ok is True
+            and stop_auto is False and policy_decision == "ALLOW"
+            and human_approval is True)
 
 def temporal_resume_allowed(*, mode: str, same_run: bool, mode_match: bool,
                             authenticated: bool, acl_ok: bool, stop_auto: bool,
                             policy_decision: str, human_answer_verified: bool,
                             approval_specific: bool) -> bool:
     """A Policy refusal is terminal; a real human response alone is insufficient."""
-    return (mode == "DEMO" and same_run and mode_match and authenticated and acl_ok and not stop_auto
-            and policy_decision == "ALLOW" and human_answer_verified
-            and approval_specific)
+    return (mode == "DEMO" and same_run is True and mode_match is True
+            and authenticated is True and acl_ok is True and stop_auto is False
+            and policy_decision == "ALLOW" and human_answer_verified is True
+            and approval_specific is True)
