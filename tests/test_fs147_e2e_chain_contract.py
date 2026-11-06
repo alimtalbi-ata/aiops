@@ -41,7 +41,12 @@ def check_fs147_chain(ticket, run, evidence):
         return False
     if provenance.get("run_id") != rid or str(provenance.get("glpi_ticket_id")) != "147":
         return False
-    # If the Evidence API exposes redundant linkage fields, they must not\n    # contradict the authoritative provenance/run/ticket correlation.\n    if ("run_id" in evidence and evidence["run_id"] != rid) or (\n            "glpi_ticket_id" in evidence and str(evidence["glpi_ticket_id"]) != "147"):\n        return False\n    if payload.get("filesystem") != "/fs-lab":
+    # If the Evidence API exposes redundant linkage fields, they must not
+    # contradict the authoritative provenance/run/ticket correlation.
+    if ("run_id" in evidence and evidence["run_id"] != rid) or (
+            "glpi_ticket_id" in evidence and str(evidence["glpi_ticket_id"]) != "147"):
+        return False
+    if payload.get("filesystem") != "/fs-lab":
         return False
     if (not isinstance(evidence.get("source"), str)
             or not evidence["source"].strip()
@@ -112,7 +117,25 @@ class FS147ChainContract(unittest.TestCase):
         self.ticket["context"] = {"origin": "Twin-Simulator"}
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
-    def test_conflicting_evidence_top_level_links_rejected(self):\n        self.evidence["run_id"] = "RUN-OTHER"\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.evidence["run_id"] = self.run["run_id"]\n        self.evidence["glpi_ticket_id"] = 146\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.evidence["glpi_ticket_id"] = 147\n        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))\n\n    def test_blank_run_and_evidence_ids_rejected(self):\n        self.run["run_id"] = "   "\n        self.evidence["provenance"]["run_id"] = "   "\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.run["run_id"] = "RUN-TEST-147"\n        self.evidence["provenance"]["run_id"] = "RUN-TEST-147"\n        self.evidence["evidence_id"] = "   "\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n\n    def test_no_receipt_or_timestamp_is_not_proof(self):
+    def test_conflicting_evidence_top_level_links_rejected(self):
+        self.evidence["run_id"] = "RUN-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["run_id"] = self.run["run_id"]
+        self.evidence["glpi_ticket_id"] = 146
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["glpi_ticket_id"] = 147
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_blank_run_and_evidence_ids_rejected(self):
+        self.run["run_id"] = "   "
+        self.evidence["provenance"]["run_id"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["run_id"] = "RUN-TEST-147"
+        self.evidence["provenance"]["run_id"] = "RUN-TEST-147"
+        self.evidence["evidence_id"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_no_receipt_or_timestamp_is_not_proof(self):
         self.evidence.pop("observed_at")
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
