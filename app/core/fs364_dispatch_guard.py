@@ -35,7 +35,7 @@ def dispatch_still_admissible(admitted: DispatchState, current: DispatchState) -
     try:
         if not isinstance(admitted, DispatchState) or not isinstance(current, DispatchState):
             return False
-        if any(type(getattr(current, name)) is not bool for name in (
+        if any(type(getattr(snapshot, name)) is not bool for snapshot in (admitted, current) for name in (
             "stop_auto", "human_answer_verified", "approval_specific",
             "approval_valid", "glpi_verified", "authenticated", "acl_ok"
         )):
@@ -50,18 +50,17 @@ def dispatch_still_admissible(admitted: DispatchState, current: DispatchState) -
             return False
         if admitted.ticket_id != 147 or current.ticket_id != 147:
             return False
-        return (
-            admitted.state == "WAITING_HUMAN"
-            and current.state == "WAITING_HUMAN"
-            and admitted.policy_decision == "ALLOW"
-            and current.policy_decision == "ALLOW"
-            and not current.stop_auto
-            and current.human_answer_verified
-            and current.approval_specific
-            and current.approval_valid
-            and current.glpi_verified
-            and current.authenticated
-            and current.acl_ok
+        return all(
+            snapshot.state == "WAITING_HUMAN"
+            and snapshot.policy_decision == "ALLOW"
+            and not snapshot.stop_auto
+            and snapshot.human_answer_verified
+            and snapshot.approval_specific
+            and snapshot.approval_valid
+            and snapshot.glpi_verified
+            and snapshot.authenticated
+            and snapshot.acl_ok
+            for snapshot in (admitted, current)
         )
     except (AttributeError, TypeError, ValueError):
         return False
