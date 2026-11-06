@@ -40,3 +40,9 @@ Le test fixture-only refuse désormais aussi les tokens `SAN` et `Twin` délimit
 Le contrat E2E teste explicitement le rejet de métriques non finies (`NaN`, `+Infinity`, `-Infinity`) et d'un alias SAN enfoui dans une métadonnée `tuple` du RUN. Le contrôle accepte toujours une fixture filesystem cohérente après retrait de cette contamination. Ces assertions sont **des tests négatifs source-only**, pas des observations de l'hôte. Elles ne créent ni RUN ni Evidence et ne changent pas le comportement de production.
 
 CI : six workflows GitHub ont conclu `success` pour le SHA précédent `122b5e701f9898d423b9efec031b5326b4dc2daa`, dont « FS V28 Twin isolation (source-only) ». Cela ne qualifie **pas** les nouveaux tests avant exécution au SHA du dernier commit. HÔTE Debian : non vérifié. EXÉCUTÉ E2E 147 : non démontré. Aucune fusion ni mise en production.
+
+## Régression conteneurs set/frozenset — 2026-11-06
+
+Le scanner de non-contamination des métadonnées internes parcourt maintenant également les ensembles Python `set` et `frozenset` (en plus des dictionnaires, listes et tuples). Une référence `SAN-bridge` dissimulée dans `run.collectors` est refusée ; après retrait, la fixture filesystem cohérente est acceptée. Cette extension ne change aucun adaptateur ni le chemin de production ; les objets JSON réels n'emploient pas de sets. Twin SAN reste **non requis** pour GLPI 147 et `/fs-lab`.
+
+Gate : CODE publié dans la PR #431 ; CI à qualifier au HEAD exact ; HÔTE SRV-DEB-05 non contrôlé ; EXÉCUTÉ E2E non prouvé sans RUN réel, Evidence nouvelle et transitions observées. Aucun déploiement, aucune mutation, aucune approbation simulée.
