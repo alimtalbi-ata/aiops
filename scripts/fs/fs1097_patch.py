@@ -20,6 +20,7 @@ css_add = """
 .history-legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0;color:#c8d8ea;font-size:13px}
 .history-legend span{display:inline-flex;gap:6px;align-items:center}
 .history-legend i{display:inline-block;width:12px;height:4px;border-radius:4px}
+.history-swatch-0{background:#62c6ff}.history-swatch-1{background:#64ddb0}.history-swatch-2{background:#ffbd69}.history-swatch-3{background:#d7a5ff}.history-swatch-4{background:#ff929c}.history-swatch-5{background:#9bd3ae}
 .history-status{min-height:1.5em;color:#a7b9d0}
 .history-axis{fill:#9fb3cd;font-size:11px}
 .history-grid{stroke:#344a63;stroke-width:1;opacity:.7}
@@ -79,7 +80,7 @@ async function loadHistory(){
    const color=historyColors[index%historyColors.length],d=valid.map((p,i)=>(i?"L":"M")+x(p[0]).toFixed(2)+" "+y(p[1]).toFixed(2)).join(" ");
    chart.append(historyElement("path",{d,fill:"none",stroke:color,"stroke-width":2.2,"stroke-linejoin":"round","stroke-linecap":"round"}));
    const name=[s.job,s.instance].filter(Boolean).join(" · ")||("Série "+(index+1));
-   const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.style.backgroundColor=color;label.textContent=name;item.append(swatch,label);legend.append(item);
+   const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.className="history-swatch history-swatch-"+(index%historyColors.length);label.textContent=name;item.append(swatch,label);legend.append(item);
   });
   status.textContent=series.length+" séries · "+points.length+" points · pas "+data.step_seconds+" s · "+windowSize;
  }catch(error){chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));status.textContent="Erreur de chargement : "+error.message}
