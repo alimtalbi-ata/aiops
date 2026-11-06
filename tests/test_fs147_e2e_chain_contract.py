@@ -1,0 +1,88 @@
+"""FS147 E2E read-only correlation gate; fixture-only, no host or API calls.
+
+This is deliberately NOT an adapter: it rejects unrelated runs/evidence and
+cannot approve remediation. Feed only real snapshots once host access exists.
+"""
+import unittest
+
+LEGACY_RUN = "RUN-4FABD1786F107E51"
+LEGACY_EVIDENCE = "EVD-D2069BA816126499"
+SAN = "ACME-SAN-FABRIC-A"
+
+
+def check_fs147_chain(ticket, run, evidence):
+    """Fail closed unless ticket 147, run and filesystem evidence agree."""
+    if not all(isinstance(x, dict) for x in (ticket, run, evidence)):
+        return False
+    rid = run.get("run_id")
+    eid = evidence.get("evidence_id")
+    provenance = evidence.get("provenance")
+    payload = evidence.get("payload")
+    if (str(ticket.get("id")) != "147" or not isinstance(rid, str)
+            or not rid or rid == LEGACY_RUN or not isinstance(eid, str)
+            or not eid or eid == LEGACY_EVIDENCE
+            or not isinstance(provenance, dict)
+            or not isinstance(payload, dict)):
+        return False
+    if str(run.get("glpi_ticket_id")) != "147":
+        return False
+    if provenance.get("run_id") != rid or str(provenance.get("glpi_ticket_id")) != "147":
+        return False
+    if payload.get("filesystem") != "/fs-lab":
+        return False
+    if (not isinstance(evidence.get("source"), str)
+            or not evidence["source"].strip()
+            or "twin" in evidence["source"].lower()
+            or "san" in evidence["source"].lower()
+            or payload.get("node_id") == SAN):
+        return False
+    if not evidence.get("payload_hash") or not evidence.get("observed_at"):
+        return False
+    return True
+
+
+class FS147ChainContract(unittest.TestCase):
+    def setUp(self):
+        # Invented identifiers ONLY as negative/positive test fixtures.
+        self.ticket = {"id": 147}
+        self.run = {"run_id": "RUN-TEST-147", "glpi_ticket_id": 147}
+        self.evidence = {
+            "evidence_id": "EVD-TEST-147", "source": "filesystem-detector",
+            "payload_hash": "sha256:fixture", "observed_at": "2026-11-06T00:00:00Z",
+            "provenance": {"run_id": "RUN-TEST-147", "glpi_ticket_id": 147},
+            "payload": {"filesystem": "/fs-lab", "used_percent": 92},
+        }
+
+    def test_fixture_consistent(self):
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_legacy_v28_run_and_evidence_rejected(self):
+        self.run["run_id"] = LEGACY_RUN
+        self.evidence["evidence_id"] = LEGACY_EVIDENCE
+        self.evidence["provenance"]["run_id"] = LEGACY_RUN
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_wrong_ticket_and_run_rejected(self):
+        self.ticket["id"] = 146
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.ticket["id"] = 147
+        self.evidence["provenance"]["run_id"] = "RUN-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_and_missing_measurement_rejected(self):
+        self.evidence["source"] = "twin-simulator"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "filesystem-detector"
+        self.evidence["payload"]["node_id"] = SAN
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"].pop("node_id")
+        self.evidence["payload"]["filesystem"] = "/"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_no_receipt_or_timestamp_is_not_proof(self):
+        self.evidence.pop("observed_at")
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+
+if __name__ == "__main__":
+    unittest.main()
