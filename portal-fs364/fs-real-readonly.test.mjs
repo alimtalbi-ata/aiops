@@ -47,3 +47,16 @@ test('reject mismatched response URL even when redirected flag is missing',async
    headers:{get:()=> 'application/json'},json:async()=>base
  })),/UNAVAILABLE_REDIRECT/);
 });
+
+test('reject URL containing expected endpoint as a substring', async () => {
+  await assert.rejects(fetchProjection('lab147', async () => ({
+    ok:true, url:'https://portal.invalid/evil/api/portal/fs-real/projection?mode=lab147&ticket_id=147',
+    headers:{get:()=> 'application/json'},json:async()=>base
+  })), /UNAVAILABLE_REDIRECT/);
+});
+test('reject mismatched query parameters', async () => {
+  await assert.rejects(fetchProjection('lab147', async () => ({
+    ok:true, url:'https://portal.invalid/api/portal/fs-real/projection?mode=insufficient&ticket_id=147',
+    headers:{get:()=> 'application/json'},json:async()=>base
+  })), /UNAVAILABLE_REDIRECT/);
+});
