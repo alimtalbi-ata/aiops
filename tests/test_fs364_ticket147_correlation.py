@@ -77,5 +77,27 @@ class FS364ContractTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertFalse(temporal_resume_allowed(**{**args,key:bad}))
 
+    def test_truthy_strings_never_count_as_verified_authorization(self):
+        for field in ("verified_ticket", "authenticated", "stop_auto"):
+            args = dict(verified_ticket=True, authenticated=True, stop_auto=True)
+            args[field] = "true"
+            with self.subTest(bind_field=field), self.assertRaises(ContractRefused):
+                bind(self.db, BASE, **args)
+        launch = dict(mode="DEMO", authenticated=True, acl_ok=True,
+                      stop_auto=False, policy_decision="ALLOW", human_approval=True)
+        for field in ("authenticated", "acl_ok", "human_approval"):
+            with self.subTest(launch_field=field):
+                self.assertFalse(launch_allowed(**{**launch, field: "true"}))
+        self.assertFalse(launch_allowed(**{**launch, "stop_auto": ""}))
+        resume = dict(mode="DEMO", same_run=True, mode_match=True,
+                      authenticated=True, acl_ok=True, stop_auto=False,
+                      policy_decision="ALLOW", human_answer_verified=True,
+                      approval_specific=True)
+        for field in ("same_run", "mode_match", "authenticated", "acl_ok",
+                      "human_answer_verified", "approval_specific"):
+            with self.subTest(resume_field=field):
+                self.assertFalse(temporal_resume_allowed(**{**resume, field: "true"}))
+        self.assertFalse(temporal_resume_allowed(**{**resume, "stop_auto": ""}))
+
 if __name__ == "__main__":
     unittest.main()
