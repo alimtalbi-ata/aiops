@@ -3,11 +3,14 @@
 set -Eeuo pipefail
 [[ "${DEPLOY_FS621:-}" == "YES" ]] || { echo "Refusing: explicit DEPLOY_FS621=YES required"; exit 2; }
 [[ "${FS621_ACCEPTANCE_COMPLETE:-}" == "YES" ]] || { echo "Refusing: FS621 acceptance not complete"; exit 2; }
+[[ "${FS621_NETWORK_PERIMETER_VERIFIED:-}" == "YES" ]] || { echo "Refusing: network perimeter unverified"; exit 2; }
+[[ "${FS621_SQL_ROLES_VERIFIED:-}" == "YES" ]] || { echo "Refusing: SQL roles unverified"; exit 2; }
 [[ "${FS621_SECRETS_READY:-}" == "YES" ]] || { echo "Refusing: operational Compose secrets have not been verified"; exit 2; }
 for key in AIOPS_ADMIN_TOKEN AIOPS_INTERNAL_TOKEN CORE_URL GLPI_API_URL GLPI_APP_TOKEN GLPI_USER_TOKEN; do
   [[ -n "${!key:-}" ]] || { echo "Refusing: required Compose variable $key not set"; exit 2; }
 done
 : "${EXPLORER_ALLOWED_CIDRS:?Trusted network CIDRs required}"
+[[ "$EXPLORER_ALLOWED_CIDRS" == "10.79.94.0/24" ]] || { echo "Refusing: unexpected CIDR"; exit 2; }
 : "${COMPOSE_FILES:?Three original compose files required, colon separated, in original order}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE="${CANDIDATE_IMAGE:-aiops2-portal:fs621-explorers-candidate}"
@@ -52,6 +55,16 @@ if not required.issubset(actual):
     raise SystemExit("Refusing: portal network preservation check failed")
 print("PORTAL_NETWORKS_PRESERVED=YES")
 PY_NETWORKS
+python3 - "$BACKUP/merged.json" <<'PY_ENV'
+import json,os,sys
+with open(sys.argv[1]) as f: c=json.load(f)
+actual=c["services"]["aiops2-portal"].get("environment",{})
+for key in ("AIOPS_ADMIN_TOKEN","AIOPS_INTERNAL_TOKEN","CORE_URL","GLPI_API_URL","GLPI_APP_TOKEN","GLPI_USER_TOKEN"):
+    if str(actual.get(key,"")) != os.environ[key]:
+        raise SystemExit("Refusing: Compose variable mismatch for "+key)
+print("COMPOSE_ENVIRONMENT_MATCH=YES")
+PY_ENV
+rm -f "$BACKUP/merged.json"
 echo "Previous image recorded; deploying portal service only."
 docker compose -p "$PROJECT" "${ARGS[@]}" -f "$BACKUP/overlay.json" up -d --no-deps --no-build "$SERVICE"
 echo "CUTOVER_COMPLETE — verify /health and /explorer/prometheus from trusted administration network"
