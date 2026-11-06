@@ -9,7 +9,7 @@ class Ticket147BackendFailureTests(unittest.TestCase):
     def setUp(self):
         self.link = Link("fp", "INC-DEMO-FS-001", "RUN-4FABD1786F107E51",
                          "EVD-D2069BA816126499", 147, "DEMO")
-        self.ticket = {"id": 147, "type": 1, "name": "AIOPS2-REAL-FS-20261106"}
+        self.ticket = {"id": 147, "type": 1, "name": "AIOPS2-REAL-FS-20261106", "is_deleted": 0}
 
     def verify(self, get, owner, acl):
         return verify_ticket147_readonly(
