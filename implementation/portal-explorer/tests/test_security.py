@@ -146,6 +146,34 @@ class SecurityTests(unittest.TestCase):
                     e._read("n8n", "/api/v1/executions")
         self.assertNotIn("secret-check-123", str(raised.exception.detail))
 
+    def test_temporal_namespace_route_is_read_only(self):
+        routes = {(r.path, method) for r in e.api.routes for method in (r.methods or [])}
+        self.assertIn(("/api/explorer/temporal/namespaces/{namespace}/workflows", "GET"), routes)
+        self.assertEqual(e.PATHS["temporal"]["namespaces"], "/api/v1/namespaces")
+        self.assertNotIn("start", e.PATHS["temporal"])
+
+    def test_temporal_namespace_rejects_path_injection(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with self.assertRaises(HTTPException) as raised:
+                e.temporal_workflows("../default", Mock())
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_temporal_workflow_pagesize_limited(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with self.assertRaises(HTTPException) as raised:
+                e.temporal_workflows("default", Mock(), 1000)
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_temporal_workflow_uses_confirmed_path(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value={"executions": []}) as reader:
+                result = e.temporal_workflows("default", Mock(), 25)
+        self.assertEqual(result, {"executions": []})
+        reader.assert_called_once_with("temporal", "/api/v1/namespaces/default/workflows", {"pagesize": 25})
+
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
         self.assertNotIn("/api/explorer/execute", paths)
