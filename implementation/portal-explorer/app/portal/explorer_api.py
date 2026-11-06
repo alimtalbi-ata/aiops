@@ -45,7 +45,7 @@ PATHS = {
     "loki": {"labels": "/loki/api/v1/labels", "query_range": "/loki/api/v1/query_range"},
     "tempo": {"trace": "/api/traces/{trace_id}"},
     "cmdb": {"health": "/health"},
-    "temporal": {"health": "/"},
+    "temporal": {"health": "/", "namespaces": "/api/v1/namespaces"},
     "n8n": {"health": "/healthz", "workflows": "/api/v1/workflows", "executions": "/api/v1/executions"},
 }
 ALLOWED_PARAMS = {
@@ -57,6 +57,7 @@ ALLOWED_PARAMS = {
     "labels": {"start", "end"},
     "trace": {},
     "health": {},
+    "namespaces": {},
     "workflows": {"limit", "cursor", "active"},
     "executions": {"limit", "cursor", "status", "workflowId"},
 }
@@ -172,6 +173,16 @@ def observe(service: str, operation: str, request: Request):
         except (KeyError, ValueError, OverflowError):
             raise HTTPException(400, "invalid_time_range")
     return _read(service, PATHS[service][operation], params)
+
+@api.get("/temporal/namespaces/{namespace}/workflows")
+def temporal_workflows(namespace: str, request: Request, pagesize: int = 25):
+    _check(request)
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,62}", namespace):
+        raise HTTPException(400, "invalid_namespace")
+    if not 1 <= pagesize <= 100:
+        raise HTTPException(400, "invalid_pagesize")
+    return _read("temporal", "/api/v1/namespaces/" + namespace + "/workflows",
+                 {"pagesize": pagesize})
 
 @api.get("/observability/tempo/trace/{trace_id}")
 def trace(trace_id: str, request: Request):
