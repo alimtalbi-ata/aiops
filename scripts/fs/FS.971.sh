@@ -7,7 +7,7 @@ docker image inspect aiops2-worker:fs-demo-candidate-20261105 --format '{{json .
 echo '===== 2. CANDIDATE BUILD FILES ====='
 for d in /home/aiops/aiops2-v2-delivery /home/aiops/aiops2-fs-demo-source /home/aiops/aiops2-patches/fs-portal-v30/build; do
  echo "SOURCE_ROOT=$d"
- find "$d" -maxdepth 4 -type f \( -name 'Dockerfile*' -o -name '*compose*.yml' -o -name '*compose*.yaml' \) -print 2>/dev/null | head -35
+ find "$d" -maxdepth 4 -type f \( -name 'Dockerfile*' -o -name '*compose*.yml' -o -name '*compose*.yaml' \) -print 2>/dev/null | head -35 || true
 done
 echo '===== 3. WORKER FUNCTION SIGNATURES ====='
 python3 - <<'PY'
