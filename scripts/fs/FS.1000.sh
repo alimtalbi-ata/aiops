@@ -9,7 +9,9 @@ echo '===== LOCAL SOURCE TREE (CAPPED) ====='
 for dir in /home/aiops/aiops2-v2-delivery /home/aiops/aiops2-fs-demo-source; do
  if [[ -d "$dir" ]]; then
   echo "SOURCE_ROOT=$dir"
-  find "$dir" -maxdepth 5 -type f \( -iname '*portal*' -o -iname '*cmdb*' -o -iname '*prometheus*' -o -iname '*grafana*' -o -iname '*dashboard*' -o -iname '*metrics*' -o -iname '*schema*' -o -name 'docker-compose*.yml' -o -name 'compose*.yaml' \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' | sort | head -100
+  # Best-effort inventory: inaccessible directories must not abort API discovery.
+  ( find "$dir" -maxdepth 5 -type f \( -iname '*portal*' -o -iname '*cmdb*' -o -iname '*prometheus*' -o -iname '*grafana*' -o -iname '*dashboard*' -o -iname '*metrics*' -o -iname '*schema*' -o -name 'docker-compose*.yml' -o -name 'compose*.yaml' \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' 2>/dev/null | sort | sed -n '1,100p' ) || true
+  echo 'SOURCE_SCAN=BEST_EFFORT (inaccessible paths skipped)'
  fi
 done
 echo '===== E2E API CAPABILITIES (READ ONLY) ====='
