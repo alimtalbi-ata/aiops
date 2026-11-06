@@ -67,6 +67,12 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
  sleep 2
 done
 echo "FS1044_HEALTH=FAIL"
-echo "FS1044_ROLLBACK_REQUIRED=YES"
+echo "FS1044_ROLLBACK=START"
+printf 'services:\\n  %s:\\n    image: %s\\n' "$SERVICE" "$OLD_IMAGE" > "$OVERRIDE"
+if docker compose -p "$PROJECT" "${ARGS[@]}" -f "$OVERRIDE" up -d --no-deps --no-build "$SERVICE"; then
+ echo "FS1044_ROLLBACK=COMMAND_COMPLETED"
+else
+ echo "FS1044_ROLLBACK=FAILED_MANUAL_INTERVENTION_REQUIRED"
+fi
 echo "FS1044_BACKUP_DIR=$BACKUP_DIR"
 exit 4
