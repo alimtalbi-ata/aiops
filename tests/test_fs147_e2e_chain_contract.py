@@ -49,7 +49,9 @@ def check_fs147_chain(ticket, run, evidence):
             or "san" in evidence["source"].lower()
             or payload.get("node_id") == SAN):
         return False
-    if contains_san_reference(provenance) or contains_san_reference(payload):
+    if (contains_san_reference(ticket) or contains_san_reference(run)
+            or contains_san_reference(provenance) or contains_san_reference(payload)
+            or contains_san_reference(evidence.get("source"))):
         return False
     if not evidence.get("payload_hash") or not evidence.get("observed_at"):
         return False
@@ -101,6 +103,13 @@ class FS147ChainContract(unittest.TestCase):
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
         self.evidence["payload"].pop("details")
         self.evidence["provenance"]["collector"] = ["Twin-Simulator"]
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_in_run_or_ticket_metadata_rejected(self):
+        self.run["context"] = {"asset": ["ACME-SAN-FABRIC-A"]}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run.pop("context")
+        self.ticket["context"] = {"origin": "Twin-Simulator"}
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
