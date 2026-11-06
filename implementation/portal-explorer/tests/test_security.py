@@ -90,6 +90,26 @@ class SecurityTests(unittest.TestCase):
                 result = e._read("n8n", "/healthz")
         self.assertEqual(result["details"], {"status": "ok"})
 
+    def test_n8n_listing_requires_server_key(self):
+        with patch.dict(os.environ, {"EXPLORER_N8N_URL": "http://n8n:5678"}, clear=True):
+            with self.assertRaises(HTTPException) as raised:
+                e._read("n8n", "/api/v1/executions")
+            self.assertEqual(raised.exception.status_code, 503)
+
+    def test_n8n_listing_sends_server_key(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "application/json"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, size): return b'{"data":[]}'
+        with patch.dict(os.environ, {"EXPLORER_N8N_URL": "http://n8n:5678",
+                                     "EXPLORER_N8N_API_KEY": "isolated-test-key"}):
+            with patch.object(e, "urlopen", return_value=Response()) as opener:
+                result = e._read("n8n", "/api/v1/executions", {"limit": "50"})
+        self.assertEqual(result["data"], [])
+        self.assertEqual(opener.call_args.args[0].get_header("X-n8n-api-key"), "isolated-test-key")
+
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
         self.assertNotIn("/api/explorer/execute", paths)
