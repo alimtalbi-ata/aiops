@@ -171,8 +171,26 @@ class SecurityTests(unittest.TestCase):
         with patch.object(e, "_check"):
             with patch.object(e, "_read", return_value={"executions": []}) as reader:
                 result = e.temporal_workflows("default", Mock(), 25)
-        self.assertEqual(result, {"executions": []})
+        self.assertEqual(result, {"executions": [], "returned": 0, "upstream_returned": 0, "truncated": False})
         reader.assert_called_once_with("temporal", "/api/v1/namespaces/default/workflows", {"pagesize": 25})
+
+    def test_temporal_caps_upstream_workflows(self):
+        from unittest.mock import Mock
+        payload = {"executions": [{"execution": {"workflowId": str(i)}} for i in range(22)]}
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value=payload):
+                result = e.temporal_workflows("default", Mock(), 1)
+        self.assertEqual(len(result["executions"]), 1)
+        self.assertEqual(result["upstream_returned"], 22)
+        self.assertTrue(result["truncated"])
+
+    def test_temporal_rejects_unexpected_workflow_payload(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value={"unexpected": []}):
+                with self.assertRaises(HTTPException) as raised:
+                    e.temporal_workflows("default", Mock(), 25)
+        self.assertEqual(raised.exception.status_code, 502)
 
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
