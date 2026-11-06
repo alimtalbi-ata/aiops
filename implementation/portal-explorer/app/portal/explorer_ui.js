@@ -108,6 +108,15 @@ async function orchestration(){
  for(const service of services){try{const x=await api('/observability/'+service+'/health');results.push({service,state:'accessible',response:x})}
  catch(e){results.push({service,state:'indisponible',reason:e.message})}}
  raw(results)})));
- raw({notice:'Les historiques d’exécution nécessitent des API et permissions de lecture vérifiées.'});
+ controls.append(button('Lister les workflows n8n',()=>show(async()=>{
+ const data=await api('/observability/n8n/workflows?limit=50');
+ const rows=(data.data||[]).map(w=>({id:w.id,name:w.name,active:w.active,updatedAt:w.updatedAt}));
+ table(['id','name','active','updatedAt'],rows);
+ })),button('Historique des exécutions n8n',()=>show(async()=>{
+ const data=await api('/observability/n8n/executions?limit=50');
+ const rows=(data.data||[]).map(x=>({id:x.id,workflowId:x.workflowId,status:x.status,startedAt:x.startedAt,stoppedAt:x.stoppedAt}));
+ table(['id','workflowId','status','startedAt','stoppedAt'],rows);
+ })));
+ raw({notice:'Listes n8n disponibles uniquement avec EXPLORER_N8N_API_KEY côté serveur. Temporal : disponibilité seulement, en attendant une API de lecture confirmée.'});
 }
 ({databases,prometheus,alerts,logs,traces,cmdb,orchestration}[page]||(()=>Promise.resolve()))().catch(e=>status(e.message,true));
