@@ -64,7 +64,7 @@ def execute(request: FS147Request, *, stop_auto: bool,
         [request.tenant_id, request.incident_id, request.run_id,
          request.ticket_id], separators=(",", ":")).encode()).hexdigest()
     try:
-        if not claim_once(key):
+        if claim_once(key) is not True:
             return _blocked("DUPLICATE_RUN")
     except Exception:
         return _blocked("IDEMPOTENCY_UNAVAILABLE")
