@@ -4,8 +4,10 @@ echo '===== FS.1005 | TWIN FILESYSTEM METRICS FUNCTION FORENSICS ====='
 echo 'MODE=READ_ONLY'
 echo '===== RUNTIME CALLABLE SOURCE AND EXCEPTION ====='
 docker exec -i aiops2-rebuild-twin python - <<'PY'
-import inspect,traceback
-import worker.main as m
+import inspect,traceback,os,sys
+os.chdir('/app/twin')
+sys.path[:0]=['/app/twin','/app']
+import main as m
 fn=getattr(m,'fs_lab_metrics',None)
 print('CALLABLE_PRESENT='+str(fn is not None))
 if fn is not None:
@@ -29,7 +31,10 @@ if fn is not None:
 PY
 echo '===== RUNTIME MODULE PATHS ====='
 docker exec -i aiops2-rebuild-twin python - <<'PY'
-import worker.main as m,inspect
+import os,sys,inspect
+os.chdir('/app/twin')
+sys.path[:0]=['/app/twin','/app']
+import main as m
 print('MAIN_FILE='+str(inspect.getsourcefile(m)))
 fn=getattr(m,'fs_lab_metrics',None)
 if fn:
