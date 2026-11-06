@@ -53,16 +53,28 @@ try:
                     assert isinstance(series,list) and len(series)==5,(metric,window,len(series) if isinstance(series,list) else type(series).__name__)
                     total_points=sum(len(s.get("points",[])) for s in series)
                     assert total_points>0,(metric,window,total_points)
-                    page.wait_for_function("""([w]) => {
+                    # Wait for this render cycle to finish, not for a particular label or
+                    # hard-coded series count. Then assert the actual DOM and retain diagnostics.
+                    page.wait_for_function("""() => {
+                      const button=document.querySelector('#history-refresh');
                       const s=document.querySelector('#history-status')?.textContent || '';
-                      return s.includes(w) && s.includes('points') &&
-                        document.querySelectorAll('#history-chart path').length === 5 &&
-                        document.querySelectorAll('#history-legend > span').length === 5;
-                    }""",arg=[window],timeout=20000)
+                      return button && !button.disabled &&
+                        !s.includes('Chargement des séries historiques…') &&
+                        (s.includes('points') || s.includes('Erreur de chargement') ||
+                         s.includes('Aucune série'));
+                    }""",timeout=30000)
                     status=page.locator("#history-status").inner_text()
+                    rendered_series=sum(1 for item in series if item.get("points"))
+                    svg_paths=page.locator("#history-chart path").count()
+                    legend_items=page.locator("#history-legend > span").count()
+                    assert "points" in status,(metric,window,"history UI did not render successfully",status)
+                    assert svg_paths==rendered_series,(metric,window,"svg_paths",svg_paths,"expected",rendered_series,"status",status)
+                    assert legend_items==rendered_series,(metric,window,"legend_items",legend_items,"expected",rendered_series,"status",status)
                     report["matrix"].append({"metric":metric,"window":window,"status":api_response.status,
-                                              "series":len(series),"points":total_points,"ui_status":status})
-                    print(f"FS1098_MATRIX metric={metric} window={window} STATUS=200 SERIES={len(series)} POINTS={total_points} SVG_PATHS=5",flush=True)
+                                              "series":len(series),"rendered_series":rendered_series,
+                                              "svg_paths":svg_paths,"legend_items":legend_items,
+                                              "points":total_points,"ui_status":status})
+                    print(f"FS1098_MATRIX metric={metric} window={window} STATUS=200 SERIES={len(series)} RENDERED={rendered_series} POINTS={total_points} SVG_PATHS={svg_paths}",flush=True)
 
             page.locator("#history-refresh").click()
             page.wait_for_function("() => !document.querySelector('#history-refresh')?.disabled",timeout=10000)
