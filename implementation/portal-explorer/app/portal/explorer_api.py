@@ -117,7 +117,11 @@ def _read(service, path, params=None):
                         "content_type": response.headers.get("Content-Type", ""),
                         "details": payload if isinstance(payload, dict) else None}
             return json.loads(raw)
-    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+    except HTTPError as exc:
+        if service == "n8n" and exc.code in (401, 403):
+            raise HTTPException(503, "n8n_read_api_credentials_rejected") from None
+        raise HTTPException(502, service + "_unavailable") from None
+    except (URLError, TimeoutError, ValueError):
         raise HTTPException(502, service + "_unavailable") from None
 
 @router.get("/{page}")
