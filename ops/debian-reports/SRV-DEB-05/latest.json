@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-06T22:33:01.756279+00:00",
+  "collected_at": "2026-11-06T22:34:01.630607+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "aiops2-portal:fs1073-csp-candidate",
+        "inspect_ok": true,
+        "name": "aiops2-fs1080-csp-browser-temp",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "aiops2-portal:fs1051-visual-candidate",
@@ -536,13 +543,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 2 days, 12 hours, 44 minutes"
+    "uptime": "up 4 weeks, 2 days, 12 hours, 45 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 142106218496,
+      "free_bytes": 142104973312,
       "total_bytes": 172898033664,
-      "used_bytes": 21934493696
+      "used_bytes": 21935738880
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -550,12 +557,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.6494140625,
-      1.35498046875,
-      1.25
+      1.3955078125,
+      1.3701171875,
+      1.2626953125
     ],
     "memory_bytes": {
-      "MemAvailable": 19219124224,
+      "MemAvailable": 18737147904,
       "MemTotal": 25205911552,
       "SwapFree": 10022092800,
       "SwapTotal": 10838077440
