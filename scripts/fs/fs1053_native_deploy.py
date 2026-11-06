@@ -54,6 +54,7 @@ def rollback():
         if renamed:
             docker("rename",OLD,NAME)
             if old_was_running:
+                docker("update","--restart=unless-stopped",NAME)
                 docker("start",NAME)
             print("FS1053_ROLLBACK=RESTORED",flush=True)
         else:
@@ -111,7 +112,8 @@ try:
     for key,value in (cfg.get("Labels") or {}).items():
         args+=["--label",key+"="+value]
     for mount in mounts:
-        spec="type="+mount["Type"]+",src="+mount["Source"]+",dst="+mount["Destination"]
+        src=mount["Name"] if mount["Type"]=="volume" else mount["Source"]
+        spec="type="+mount["Type"]+",src="+src+",dst="+mount["Destination"]
         args+=["--mount",spec]
     for port,bindings in ports.items():
         for bind in bindings:
