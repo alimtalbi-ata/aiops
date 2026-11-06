@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS fs364_resume_claims (
 """
 
 def claim_resume(conn, snapshot, ticket, *, expected_tenant_id, state_version, request_id):
-    """Return True for first claim or identical replay; False on any unsafe input.
+    """Return True only for a newly inserted claim; all replays return False.
 
     Never calls Temporal, GLPI, Worker or a filesystem mutator.
     The caller must verify that the supplied state_version is authoritative.
@@ -41,7 +41,9 @@ def claim_resume(conn, snapshot, ticket, *, expected_tenant_id, state_version, r
         ).fetchone()
         if row:
             conn.rollback()
-            return tuple(row) == (state_version, request_id)
+            # An identical replay is not a new dispatch permit.
+            # Returning True here could cause a second Temporal signal.
+            return False
         conn.execute(
             "INSERT INTO fs364_resume_claims(run_id,state_version,request_id) VALUES (?,?,?)",
             (snapshot.link.run_id, state_version, request_id),
