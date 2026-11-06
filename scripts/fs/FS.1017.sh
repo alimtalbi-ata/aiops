@@ -31,7 +31,7 @@ PY
 echo '===== BUILD ISOLATED CANDIDATE (NO PRODUCTION CONTAINER CHANGES) ====='
 docker build --pull=false -f "$TMP/context/app/core/Dockerfile" -t "$IMAGE" "$TMP/context/app"
 echo '===== TEST CANDIDATE ASGI RESPONSE, NO DATABASE CONNECTION ====='
-docker run --rm --network none --entrypoint python "$IMAGE" -B - <<'PY'
+docker run --rm -i --network none --entrypoint python "$IMAGE" -B - <<'PY'
 import asyncio
 from contextlib import contextmanager
 import core.main as m
