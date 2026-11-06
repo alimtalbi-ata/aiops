@@ -8,6 +8,7 @@ from typing import Callable, Mapping
 import hashlib
 import json
 import math
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,16 @@ def _matching(value, request):
             and value.get("incident_id") == request.incident_id
             and value.get("run_id") == request.run_id
             and value.get("ticket_id") == request.ticket_id)
+
+
+def _valid_observation_time(value):
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.tzinfo is not None and parsed.utcoffset() is not None
+    except (ValueError, TypeError, OverflowError):
+        return False
 
 
 def execute(request: FS147Request, *, stop_auto: bool,
@@ -65,7 +76,7 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or observation.get("commands") != ["df", "du", "ls"]
                 or not isinstance(observation.get("evidence_id"), str)
                 or not observation["evidence_id"].strip()
-                or not observation.get("collected_at")
+                or not _valid_observation_time(observation.get("collected_at"))
                 or type(observation.get("used_percent")) not in (int, float)
                 or not math.isfinite(observation["used_percent"])
                 or not 0 <= observation["used_percent"] <= 100
