@@ -50,25 +50,6 @@ else
   echo 'CANDIDATE_IMAGE_FOUND=NO'
 fi
 
-echo '===== CURRENT LIVE ROUTE RESPONSE (GET ONLY) ====='
-for c in "$TWIN" "$CORE"; do
-  echo "CONTAINER=$c"
-  if ! docker inspect "$c" >/dev/null 2>&1; then continue; fi
-  # Execute existing application code without binding ports, writes or imports of optional clients.
-  docker exec -i "$c" python -B - <<'PY' || echo 'LIVE_ROUTE_PROBE=UNAVAILABLE'
-import asyncio
-try:
-    from fastapi import FastAPI
-    from importlib import import_module
-    import os
-    module = import_module("twin.main" if "twin" in os.environ.get("HOSTNAME","") else "core.main")
-except Exception as exc:
-    print("LIVE_ROUTE_IMPORT="+type(exc).__name__)
-    raise SystemExit(0)
-print("ROUTE_PATHS="+",".join(sorted({getattr(r,"path","") for r in module.app.routes if "metrics" in getattr(r,"path","")})))
-PY
-done
-
 echo '===== PROMETHEUS TARGET HEALTH SNAPSHOT (GET ONLY) ====='
 if docker inspect "$PROM" >/dev/null 2>&1; then
   if docker exec "$PROM" wget -qO- http://127.0.0.1:9090/api/v1/targets | python3 -c '
