@@ -98,6 +98,15 @@ def _read(service, path, params=None):
             raw = response.read(2_000_001)
             if len(raw) > 2_000_000:
                 raise HTTPException(502, "upstream_response_too_large")
+            if service in ("temporal", "n8n") and path in ("/", "/healthz"):
+                try:
+                    payload = json.loads(raw)
+                except (ValueError, UnicodeDecodeError):
+                    payload = None
+                return {"service": service, "reachable": True,
+                        "http_status": response.status,
+                        "content_type": response.headers.get("Content-Type", ""),
+                        "details": payload if isinstance(payload, dict) else None}
             return json.loads(raw)
     except (HTTPError, URLError, TimeoutError, ValueError) as exc:
         raise HTTPException(502, service + "_unavailable") from None
