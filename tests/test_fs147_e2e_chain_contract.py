@@ -3,6 +3,7 @@
 This is deliberately NOT an adapter: it rejects unrelated runs/evidence and
 cannot approve remediation. Feed only real snapshots once host access exists.
 """
+import re
 import unittest
 
 LEGACY_RUN = "RUN-4FABD1786F107E51"
@@ -14,7 +15,8 @@ def contains_san_reference(value):
     """Reject SAN identifiers even when nested in filesystem evidence."""
     if isinstance(value, str):
         normalized = value.casefold().strip()
-        return SAN.casefold() in normalized or "twin-simulator" in normalized
+        return (SAN.casefold() in normalized or "twin-simulator" in normalized
+                or re.search(r"(?<![a-z0-9])(?:san|twin)(?![a-z0-9])", normalized) is not None)
     if isinstance(value, dict):
         return any(contains_san_reference(k) or contains_san_reference(v)
                    for k, v in value.items())
@@ -189,6 +191,16 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["source"] = "filesystem-detector"
         self.run["glpi_ticket_id"] = 146
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_generic_san_twin_aliases_in_nested_metadata_rejected(self):
+        # Generic aliases must not bypass the recursive SAN isolation gate.
+        for alias in ("SAN-bridge", "twin_adapter", "collector/SAN", "TWIN"):
+            self.evidence["payload"]["details"] = {"collector": [alias]}
+            self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"].pop("details")
+        # Ordinary words containing these letters are not SAN identifiers.
+        self.evidence["payload"]["description"] = "sanity check on filesystem"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
         self.evidence.pop("observed_at")
