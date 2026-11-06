@@ -7,7 +7,7 @@ docker inspect aiops2-rebuild-portal >/dev/null
 if [[ "$(docker inspect aiops2-rebuild-portal --format '{{.Config.Image}}')" != "aiops2-portal:fs1073-csp-candidate" ]];then
  echo "FS1093_ERROR=UNEXPECTED_PRODUCTION_IMAGE";exit 2
 fi
-docker run --rm --network aiops2-rebuild-integration \
+docker run --rm -i --network aiops2-rebuild-integration \
  -e AIOPS_INTERNAL_TOKEN=fs1093-isolated-asgi-test-only \
  --entrypoint python "$IMAGE" - <<'PY'
 import asyncio,json,sys
