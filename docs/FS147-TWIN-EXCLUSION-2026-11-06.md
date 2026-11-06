@@ -18,3 +18,5 @@ Aucune fusion ni déploiement impliqués par cette note. CODE/CI/HÔTE/EXÉCUTÉ
 ## Gate E2E de corrélation (fixtures, non exécuté sur hôte)
 
 Le test `tests/test_fs147_e2e_chain_contract.py` exige ticket GLPI 147, nouveau RUN non historique, Evidence distincte du reçu V28, provenance portant le même RUN et ticket 147, mesure `/fs-lab`, horodatage et hash présents. Il rejette le ticket 146, un RUN divergent, une source Twin/SAN et une mesure d'un autre filesystem. Les identifiants `RUN-TEST-147` et `EVD-TEST-147` sont **uniquement des fixtures**, jamais des RUN/Evidence créés. Exécution locale proposée : `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v`. Ce gate ne fait aucun appel réseau, ne prouve aucune acquisition réelle et ne remplace pas la vérification backend/Temporal/Portal ni l'autorisation Policy/HITL.
+
+Le gate vérifie aussi l'absence de références SAN/Twin dans les métadonnées imbriquées du ticket et du RUN, pas uniquement dans `payload` et `provenance`. Une corrélation valide ne doit pas être acceptée si ces métadonnées sont contaminées. Cette vérification est structurelle et n'atteste pas l'authenticité des mesures.
