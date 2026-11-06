@@ -28,8 +28,16 @@ class GLPIReadBoundaryTests(unittest.TestCase):
 
     def test_read_only_positive_contract(self):
         self.assertTrue(self.check())
-        self.assertEqual(self.calls, [("GET", 147), ("OWNER", 147),
-                                      ("ACL", "actor-A", "tenant-A", 147)])
+        self.assertEqual(self.calls, [("ACL", "actor-A", "tenant-A", 147),
+                                      ("GET", 147), ("OWNER", 147)])
+
+    def test_acl_denial_never_reads_glpi_or_ownership(self):
+        for denied in (False, None, 1, "true"):
+            with self.subTest(denied=denied):
+                self.calls.clear()
+                self.assertFalse(self.check(acl=denied))
+                self.assertEqual(
+                    self.calls, [("ACL", "actor-A", "tenant-A", 147)])
 
     def test_wrong_ticket_and_historical_146(self):
         for value in (146, "147", True, 148):
