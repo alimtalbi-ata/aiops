@@ -83,11 +83,11 @@ def launch_allowed(*, mode: str, authenticated: bool, acl_ok: bool,
             and not stop_auto and policy_decision == "ALLOW"
             and human_approval)
 
-def temporal_resume_allowed(*, same_run: bool, mode_match: bool,
+def temporal_resume_allowed(*, mode: str, same_run: bool, mode_match: bool,
                             authenticated: bool, acl_ok: bool, stop_auto: bool,
                             policy_decision: str, human_answer_verified: bool,
                             approval_specific: bool) -> bool:
     """A Policy refusal is terminal; a real human response alone is insufficient."""
-    return (same_run and mode_match and authenticated and acl_ok and not stop_auto
+    return (mode == "DEMO" and same_run and mode_match and authenticated and acl_ok and not stop_auto
             and policy_decision == "ALLOW" and human_answer_verified
             and approval_specific)
