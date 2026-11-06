@@ -44,6 +44,16 @@ class GLPIReadBoundaryTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertFalse(self.check(ticket={**self.ticket, "id": value}))
 
+    def test_wrong_identity_never_reads_ownership(self):
+        for field, value in (("id", 146), ("id", "147"), ("id", True),
+                             ("type", 2), ("type", True),
+                             ("name", "unrelated"), ("name", None)):
+            with self.subTest(field=field, value=value):
+                self.calls.clear()
+                self.assertFalse(self.check(ticket={**self.ticket, field: value}))
+                self.assertEqual(self.calls, [
+                    ("ACL", "actor-A", "tenant-A", 147), ("GET", 147)])
+
     def test_deleted_or_unknown_deletion_state_never_reads_owner(self):
         for value in (1, True, "0", None):
             with self.subTest(value=value):
