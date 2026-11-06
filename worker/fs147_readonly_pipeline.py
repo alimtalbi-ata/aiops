@@ -88,7 +88,10 @@ def execute(request: FS147Request, *, stop_auto: bool,
         analysis = analyst(request, observation)
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
             return _blocked("ANALYST_SCOPE", steps)
-        if not analysis.get("findings"):
+        if (not isinstance(analysis.get("findings"), list)
+                or not analysis["findings"]
+                or any(not isinstance(item, str) or not item.strip()
+                       for item in analysis["findings"])):
             return _blocked("INSUFFICIENT_ANALYSIS", steps)
         steps.append("ANALYST")
         critique = critic(request, observation, analysis)
