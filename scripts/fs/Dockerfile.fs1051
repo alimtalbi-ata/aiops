@@ -1,0 +1,5 @@
+FROM aiops2-portal:fs1040-sql-guard-candidate
+COPY app/portal/fs1051_visual.py /app/portal/fs1051_visual.py
+COPY app/portal/fs1051_visual.html /app/portal/fs1051_visual.html
+COPY scripts/fs/fs1051_register.py /tmp/fs1051_register.py
+RUN python /tmp/fs1051_register.py && rm /tmp/fs1051_register.py
