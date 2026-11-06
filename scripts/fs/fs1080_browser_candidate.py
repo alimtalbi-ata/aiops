@@ -14,9 +14,11 @@ try:
    page=browser.new_page(viewport={"width":1440,"height":900})
    errors=[]
    api=[]
+   failed_http=[]
    page.on("pageerror",lambda e:errors.append(str(e)[:200]))
    page.on("console",lambda m:errors.append(m.text[:200]) if m.type=="error" else None)
    page.on("response",lambda r:api.append((r.url.split("?")[0].replace(base,""),r.status)) if r.url.startswith(base+"/api/fs1051/") else None)
+   page.on("response",lambda r:failed_http.append({"path":r.url.split("?")[0].replace(base,""),"status":r.status}) if r.status>=400 else None)
    response=page.goto(base+"/explorer/visual",wait_until="domcontentloaded",timeout=20000)
    print("FS1080_HTTP="+str(response.status if response else "NONE"),flush=True)
    assert response and response.status==200
@@ -60,9 +62,16 @@ try:
    page.set_viewport_size({"width":390,"height":844})
    page.screenshot(path=str(out/"portal-visual-mobile.png"),full_page=True)
    print("FS1080_MOBILE_SNAPSHOT=PASS",flush=True)
+   print("FS1082_HTTP_ERRORS="+json.dumps(failed_http),flush=True)
    print("FS1080_API_RESPONSES="+json.dumps(api),flush=True)
+   report["checks"]["http_errors"]=failed_http
    assert len([x for x in api if x[1]==200])>=2
-   assert not errors,"browser errors: "+repr(errors)
+   assert not [x for x in failed_http if x["path"]!="/favicon.ico"],"non-favicon HTTP errors: "+repr(failed_http)
+   meaningful=[e for e in errors if "Failed to load resource: the server responded with a status of 404" not in e]
+   assert not meaningful,"browser errors: "+repr(meaningful)
+   if errors and not any(x["path"]=="/favicon.ico" and x["status"]==404 for x in failed_http):
+    raise AssertionError("unattributed browser console errors: "+repr(errors))
+   print("FS1082_BROWSER_ERRORS=NONE_EXCEPT_OPTIONAL_FAVICON_404",flush=True)
    report["checks"]["browser_errors"]="NONE"
    report["status"]="PASS"
   finally:browser.close()
