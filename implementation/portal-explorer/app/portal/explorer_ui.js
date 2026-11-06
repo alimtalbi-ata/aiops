@@ -92,9 +92,17 @@ async function logs(){
  raw({status:'Prêt à interroger Loki si EXPLORER_LOKI_URL est configuré.'});
 }
 async function traces(){
- $('intro').textContent='Consultation de traces Tempo par identifiant (16 ou 32 caractères hexadécimaux).';
- const id=field('text','Trace ID');controls.append(id,button('Rechercher',()=>show(async()=>raw(await api('/observability/tempo/trace/'+encodeURIComponent(id.value))))));
- raw({status:'Prêt à interroger Tempo si EXPLORER_TEMPO_URL est configuré.'});
+ $('intro').textContent='Recherche temporelle et consultation par identifiant de traces Tempo, en lecture seule.';
+ const minutes=select([[15,'15 minutes'],[60,'1 heure'],[360,'6 heures'],[1440,'24 heures']]);
+ const id=field('text','Trace ID (16 ou 32 caractères hexadécimaux)');
+ controls.append(el('p','Rechercher des traces :'),minutes,button('Rechercher dans Tempo',()=>show(async()=>{
+ const data=await api('/tempo/search?'+new URLSearchParams({minutes:minutes.value,limit:20}));
+ const rows=(data.traces||[]).map(t=>({traceID:t.traceID||t.traceId||'',rootServiceName:t.rootServiceName||'',rootTraceName:t.rootTraceName||'',startTimeUnixNano:t.startTimeUnixNano||'',durationMs:t.durationMs??''}));
+ table(['traceID','rootServiceName','rootTraceName','startTimeUnixNano','durationMs'],rows);
+ if(!rows.length)status('Aucune trace trouvée sur cette période.');
+ })),el('p','Consulter une trace par identifiant :'),id,
+ button('Afficher la trace',()=>show(async()=>raw(await api('/observability/tempo/trace/'+encodeURIComponent(id.value))))));
+ raw({notice:'La recherche peut retourner zéro trace ; aucune trace n’est créée par cet explorateur.'});
 }
 async function cmdb(){
  $('intro').textContent='État de la connexion CMDB ; aucun endpoint d’inventaire non vérifié n’est supposé.';
