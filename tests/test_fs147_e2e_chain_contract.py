@@ -56,7 +56,7 @@ def check_fs147_chain(ticket, run, evidence):
         return False
     if (contains_san_reference(ticket) or contains_san_reference(run)
             or contains_san_reference(provenance) or contains_san_reference(payload)
-            or contains_san_reference(evidence.get("source"))):
+            or contains_san_reference(evidence)):
         return False
     # Presence of a receipt alone is not an observed filesystem measurement.
     used = payload.get("used_percent")
@@ -121,6 +121,18 @@ class FS147ChainContract(unittest.TestCase):
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
         self.run.pop("context")
         self.ticket["context"] = {"origin": "Twin-Simulator"}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_in_other_evidence_metadata_rejected(self):
+        # The API may add envelope fields outside payload/provenance.
+        self.evidence["context"] = {"upstream": ["ACME-SAN-FABRIC-A"]}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence.pop("context")
+        self.evidence["collector_details"] = {"name": "Twin-Simulator"}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_in_evidence_metadata_key_rejected(self):
+        self.evidence["ACME-SAN-FABRIC-A"] = "untrusted"
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_conflicting_evidence_top_level_links_rejected(self):
