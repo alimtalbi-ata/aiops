@@ -10,7 +10,7 @@ class GLPIReadBoundaryTests(unittest.TestCase):
         self.link = Link("fp", "INC-DEMO-FS-001", "RUN-4FABD1786F107E51",
                          "EVD-D2069BA816126499", 147, "DEMO")
         self.calls = []
-        self.ticket = {"id": 147, "type": 1, "name": "AIOPS2-REAL-FS-20261106"}
+        self.ticket = {"id": 147, "type": 1, "name": "AIOPS2-REAL-FS-20261106", "is_deleted": 0}
 
     def check(self, ticket=None, owner=None, acl=True, actor="actor-A"):
         def get(number):
@@ -43,6 +43,19 @@ class GLPIReadBoundaryTests(unittest.TestCase):
         for value in (146, "147", True, 148):
             with self.subTest(value=value):
                 self.assertFalse(self.check(ticket={**self.ticket, "id": value}))
+
+    def test_deleted_or_unknown_deletion_state_never_reads_owner(self):
+        for value in (1, True, "0", None):
+            with self.subTest(value=value):
+                self.calls.clear()
+                self.assertFalse(self.check(ticket={**self.ticket, "is_deleted": value}))
+                self.assertEqual(self.calls, [
+                    ("ACL", "actor-A", "tenant-A", 147), ("GET", 147)])
+        self.calls.clear()
+        missing = {k: v for k, v in self.ticket.items() if k != "is_deleted"}
+        self.assertFalse(self.check(ticket=missing))
+        self.assertEqual(self.calls, [
+            ("ACL", "actor-A", "tenant-A", 147), ("GET", 147)])
 
     def test_untrusted_owner_rejected(self):
         for owner in (("tenant-B", self.link.incident_id),
