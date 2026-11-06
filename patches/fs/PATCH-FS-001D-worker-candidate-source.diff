@@ -1,6 +1,6 @@
 --- a/integration/worker-fs-candidate/main.py
 +++ b/integration/worker-fs-candidate/main.py
-@@ -411,6 +411,23 @@
+@@ -411,5 +411,22 @@
  async def start(args:dict,authorization:str|None=Header(default=None)):
   if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
 + import asyncio
