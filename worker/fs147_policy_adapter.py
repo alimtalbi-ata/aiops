@@ -26,7 +26,7 @@ def check_fs147_policy(request, observation, analysis, critique, *, post_check):
     result = post_check(payload)
     if not isinstance(result, Mapping) or result.get("state") not in ("PASS", "BLOCKED", "UNKNOWN"):
         raise ValueError("invalid policy response")
-    # Existing Policy response has no correlation fields; never infer approval.
+    # Reject any explicit contradiction, even if legacy Policy omits correlation.\n    expected = {\n        "tenant_id": request.tenant_id, "actor_id": request.actor_id,\n        "incident_id": request.incident_id, "run_id": request.run_id,\n        "ticket_id": request.ticket_id, "evidence_id": observation["evidence_id"],\n    }\n    for field, value in expected.items():\n        if field in result and (type(result[field]) is not type(value) or result[field] != value):\n            raise ValueError("policy response correlation mismatch: " + field)\n    # Missing correlation is not proof; authentication remains transport-owned.
     return {
         "tenant_id": request.tenant_id, "actor_id": request.actor_id,
         "incident_id": request.incident_id, "run_id": request.run_id,
