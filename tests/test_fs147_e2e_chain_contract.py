@@ -49,6 +49,14 @@ def check_fs147_chain(ticket, run, evidence):
     if ("run_id" in evidence and evidence["run_id"] != rid) or (
             "glpi_ticket_id" in evidence and str(evidence["glpi_ticket_id"]) != "147"):
         return False
+    # Optional alert fingerprint must be present on both records and agree.
+    # An alert from a different incident must not be replayed into RUN 147.
+    run_alert = run.get("alert_fingerprint")
+    evidence_alert = provenance.get("alert_fingerprint")
+    if run_alert is not None or evidence_alert is not None:
+        if (not isinstance(run_alert, str) or not run_alert.strip()
+                or run_alert != evidence_alert):
+            return False
     if payload.get("filesystem") != "/fs-lab":
         return False
     if (not isinstance(evidence.get("source"), str)
@@ -248,6 +256,17 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["payload"]["approval"] = {
             "ticket_id": 146, "validation_id": 3, "status": "ACCEPTED"
         }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_alert_fingerprint_cross_run_replay_rejected(self):
+        # Optional alert identity cannot be silently dropped or substituted.
+        self.run["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = " "
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
