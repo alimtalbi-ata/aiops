@@ -39,3 +39,13 @@ def test_live_never_calls_bridge():
         pytest.fail("bridge called")
     with pytest.raises(ValueError):
         observe_fs147(live, fetch_observation=forbidden)
+
+@pytest.mark.parametrize("field,value", [
+    ("ticket_id", True),
+    ("ticket_id", 147.0),
+    ("ticket_id", "147"),
+    ("run_id", None),
+])
+def test_bridge_rejects_coerced_identity_without_downstream_trust(field, value):
+    with pytest.raises(ValueError, match="bridge identity mismatch"):
+        observe_fs147(REQ, fetch_observation=lambda p: {**valid(p), field: value})
