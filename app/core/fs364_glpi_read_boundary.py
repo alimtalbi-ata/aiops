@@ -22,13 +22,16 @@ def verify_ticket147_readonly(link, *, tenant_id, actor_id, glpi_get,
             or actor_id != actor_id.strip()):
         return False
     try:
+        # Deny before reading ticket or ownership data. Only literal True grants access.
+        acl = authorize_actor(actor_id, tenant_id, 147)
+        if acl is not True:
+            return False
         # No client supplied ticket id; never create a duplicate ticket.
         ticket = glpi_get(147)
         owner = authoritative_owner(147)
-        acl = authorize_actor(actor_id, tenant_id, 147)
         if not isinstance(ticket, Mapping) or not isinstance(owner, tuple) or len(owner) != 2:
             return False
-        if acl is not True or owner != (tenant_id, link.incident_id):
+        if owner != (tenant_id, link.incident_id):
             return False
         # GLPI's entities_id is NOT a tenant ownership proof; owner is external.
         snapshot = Ticket147Snapshot(
