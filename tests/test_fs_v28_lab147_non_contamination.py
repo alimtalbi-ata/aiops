@@ -55,6 +55,20 @@ class FS147IsolationContract(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "fs_v28_evidence_run_mismatch"):
             self.validate(old_receipt, "RUN-LAB147-NEW")
 
+    def test_disguised_san_source_is_rejected(self):
+        # Negative E2E contract fixture: no SAN-origin receipt may unlock OBSERVE.
+        # The evidence ID is historical V28; it is NOT a ticket-147 run proof.
+        for source in ("Twin-Simulator", " twin-simulator ", "ACME-ENRICHED-SIMULATOR"):
+            with self.subTest(source=source):
+                receipt = {
+                    "evidence_id": OLD_EVIDENCE, "source": source,
+                    "claim": "Filesystem usage high", "payload_hash": "sha256-test",
+                    "provenance": {"run_id": OLD_RUN},
+                    "payload": {"filesystem": "/fs-lab", "used_percent": 92},
+                }
+                with self.assertRaisesRegex(RuntimeError, "fs_v28_evidence_not_independent"):
+                    self.validate(receipt, OLD_RUN)
+
     def test_san_receipt_cannot_be_reused_for_filesystem(self):
         receipt = {
             "evidence_id": OLD_EVIDENCE, "source": "twin-simulator",
