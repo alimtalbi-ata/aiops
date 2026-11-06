@@ -11,7 +11,7 @@ for name in ("app/portal/fs1051_visual.py","scripts/fs/fs1051_register.py"):
 print("FS1051_AST=PASS")
 PY
 docker build -f scripts/fs/Dockerfile.fs1051 -t aiops2-portal:fs1051-visual-candidate .
-docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
  -e PYTHONDONTWRITEBYTECODE=1 -e AIOPS_INTERNAL_TOKEN=fs1051-dummy \
  -e EXPLORER_ENABLED=1 -e EXPLORER_ALLOWED_CIDRS=127.0.0.1/32 \
  --entrypoint python aiops2-portal:fs1051-visual-candidate - <<'PY'
