@@ -49,19 +49,26 @@ html = html.replace('<button id="refresh">Actualiser</button></main>', '<button 
 assert 'id="history-chart"' in html
 js_add = r"""
 // FS1097: bounded same-origin historical series chart; no third-party assets.
+// Cancel stale requests so rapid metric/window changes cannot append duplicate legends.
+let historyRequestId=0,historyAbortController=null;
 const historyColors=["#62c6ff","#64ddb0","#ffbd69","#d7a5ff","#ff929c","#9bd3ae"];
 function historyElement(tag,attrs,text){const e=document.createElementNS("http://www.w3.org/2000/svg",tag);Object.entries(attrs||{}).forEach(([k,v])=>e.setAttribute(k,String(v)));if(text!==undefined)e.textContent=text;return e}
 function historyTime(ts){return new Date(ts*1000).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
 async function loadHistory(){
+ const requestId=++historyRequestId;
+ if(historyAbortController)historyAbortController.abort();
+ const controller=new AbortController();historyAbortController=controller;
  const metric=$("history-metric").value,windowSize=$("history-window").value;
  const status=$("history-status"),chart=$("history-chart"),legend=$("history-legend"),button=$("history-refresh");
  button.disabled=true;status.textContent="Chargement des séries historiques…";legend.replaceChildren();
  chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Chargement…"));
  try{
   const url="/api/fs1089/prometheus/history?"+new URLSearchParams({metric,window:windowSize});
-  const response=await fetch(url,{credentials:"same-origin",headers:{Accept:"application/json"}});
+  const response=await fetch(url,{credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal});
+  if(requestId!==historyRequestId)return;
   if(!response.ok)throw new Error("HTTP "+response.status);
   const data=await response.json();
+  if(requestId!==historyRequestId)return;
   if(data.metric!==metric||data.window!==windowSize||!Array.isArray(data.series))throw new Error("Contrat de données invalide");
   const series=data.series.filter(s=>Array.isArray(s.points)&&s.points.length>0).slice(0,30);
   const points=series.flatMap(s=>s.points).filter(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])));
@@ -83,8 +90,8 @@ async function loadHistory(){
    const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.className="history-swatch history-swatch-"+(index%historyColors.length);label.textContent=name;item.append(swatch,label);legend.append(item);
   });
   status.textContent=series.length+" séries · "+points.length+" points · pas "+data.step_seconds+" s · "+windowSize;
- }catch(error){chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));status.textContent="Erreur de chargement : "+error.message}
- finally{button.disabled=false}
+ }catch(error){if(requestId!==historyRequestId||error.name==="AbortError")return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));status.textContent="Erreur de chargement : "+error.message}
+ finally{if(requestId===historyRequestId){button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
 }
 $("history-refresh").addEventListener("click",loadHistory);
 $("history-metric").addEventListener("change",loadHistory);
