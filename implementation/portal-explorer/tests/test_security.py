@@ -192,6 +192,31 @@ class SecurityTests(unittest.TestCase):
                     e.temporal_workflows("default", Mock(), 25)
         self.assertEqual(raised.exception.status_code, 502)
 
+    def test_cmdb_rejects_unknown_type_without_glpi_call(self):
+        with patch.object(e, "urlopen") as opener:
+            with self.assertRaises(HTTPException) as raised:
+                e._glpi_inventory("Ticket")
+        self.assertEqual(raised.exception.status_code, 404)
+        opener.assert_not_called()
+
+    def test_cmdb_rejects_invalid_pagination(self):
+        for offset, limit in ((-1, 25), (0, 101), (100001, 1)):
+            with self.subTest(offset=offset, limit=limit):
+                with self.assertRaises(HTTPException):
+                    e._glpi_inventory("Computer", offset=offset, limit=limit)
+
+    def test_cmdb_requires_credentials(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(HTTPException) as raised:
+                e._glpi_inventory("Computer")
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_cmdb_routes_are_get_only(self):
+        routes = {r.path: r.methods for r in e.api.routes}
+        for path in ("/api/explorer/cmdb/inventory/{kind}",
+                     "/api/explorer/cmdb/inventory/{kind}/{item_id}"):
+            self.assertEqual(routes[path], {"GET"})
+
     def test_core_collections_are_read_only(self):
         from unittest.mock import Mock
         self.assertEqual(set(e.PATHS["core"]), {"dashboard", "incidents", "runs", "scenarios"})
