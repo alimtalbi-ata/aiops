@@ -192,6 +192,32 @@ class SecurityTests(unittest.TestCase):
                     e.temporal_workflows("default", Mock(), 25)
         self.assertEqual(raised.exception.status_code, 502)
 
+    def test_core_collections_are_read_only(self):
+        from unittest.mock import Mock
+        self.assertEqual(set(e.PATHS["core"]), {"dashboard", "incidents", "runs", "scenarios"})
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value={"items": [{"id": i} for i in range(8)]}):
+                result = e.core_collection("incidents", Mock(), 3)
+        self.assertEqual(result["returned"], 3)
+        self.assertEqual(result["upstream_returned"], 8)
+        self.assertTrue(result["truncated"])
+
+    def test_core_collection_rejects_unknown_or_invalid_limit(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            for name, limit in (("execute", 10), ("runs", 201)):
+                with self.subTest(name=name, limit=limit):
+                    with self.assertRaises(HTTPException):
+                        e.core_collection(name, Mock(), limit)
+
+    def test_core_rejects_unexpected_response(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value={"other": []}):
+                with self.assertRaises(HTTPException) as raised:
+                    e.core_collection("runs", Mock())
+        self.assertEqual(raised.exception.status_code, 502)
+
     def test_tempo_search_empty_results(self):
         from unittest.mock import Mock
         with patch.object(e, "_check"):
