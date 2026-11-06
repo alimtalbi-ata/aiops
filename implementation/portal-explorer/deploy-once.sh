@@ -35,7 +35,7 @@ for key in ("EXPLORER_PROMETHEUS_URL","EXPLORER_LOKI_URL","EXPLORER_TEMPO_URL",
     if os.environ.get(key):
         env[key]=os.environ[key]
 with open(sys.argv[1],"w") as f:
-    json.dump({"services":{"aiops2-portal":{"image":os.environ.get("CANDIDATE_IMAGE","aiops2-portal:fs621-explorers-candidate"),"environment":env,"networks":{n:{} for n in ("aiops2-rebuild-control","aiops2-rebuild-integration","aiops2-rebuild-public","aiops2-rebuild-observability")}}},"networks":{"aiops2-rebuild-observability":{"external":True,"name":"aiops2-rebuild-observability"}}},f)
+    json.dump({"services":{"aiops2-portal":{"image":os.environ.get("CANDIDATE_IMAGE","aiops2-portal:fs621-explorers-candidate"),"environment":env,"networks":{n:{} for n in ("aiops2-rebuild-control","aiops2-rebuild-integration","aiops2-rebuild-public","aiops2-rebuild-observability")}}},"networks":{n:{"external":True,"name":n} for n in ("aiops2-rebuild-control","aiops2-rebuild-integration","aiops2-rebuild-public","aiops2-rebuild-observability")}},f)
 PY
 docker network inspect aiops2-rebuild-observability --format '{{.Internal}}' | grep -qx true || { echo "Observability network is not internal"; exit 2; }
 docker compose -p "$PROJECT" "${ARGS[@]}" -f "$BACKUP/overlay.json" config --format json > "$BACKUP/merged.json"
