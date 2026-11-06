@@ -232,6 +232,8 @@ def columns(source: str, request: Request, schema: str, table: str):
     if not IDENTIFIER.fullmatch(schema) or not IDENTIFIER.fullmatch(table):
         raise HTTPException(400, "invalid_identifier")
     engine, _ = _source(source)
+    if engine == "mariadb" and schema != urlsplit(_source(source)[1]).path.lstrip("/"):
+        raise HTTPException(400, "schema_not_allowed")
     if engine == "postgres":
         sql = ("SELECT column_name, data_type, is_nullable FROM information_schema.columns "
                "WHERE table_schema='" + schema + "' AND table_name='" + table + "' ORDER BY ordinal_position")
@@ -248,9 +250,13 @@ def preview(source: str, request: Request, schema: str, table: str, limit: int =
     if not isinstance(offset, int) or offset < 0 or offset > 100000:
         raise HTTPException(400, "invalid_offset")
     engine, _ = _source(source)
+    if engine == "mariadb":
+        configured_schema = urlsplit(_source(source)[1]).path.lstrip("/")
+        if schema != configured_schema:
+            raise HTTPException(400, "schema_not_allowed")
     quote = '"' if engine == "postgres" else '`'
     qualified = quote + schema + quote + "." + quote + table + quote
-    return _run(source, "SELECT * FROM " + qualified + " LIMIT " + str(MAX_ROWS) +
+    return _run(source, "SELECT * FROM " + qualified + " LIMIT " + str(limit) +
                 " OFFSET " + str(offset), limit)
 
 @api.post("/databases/{source}/query")
