@@ -50,7 +50,7 @@ walk(d)
 '
 # Test upstream Prometheus and Twin reachability FROM the portal network.
 # HTTP GET only. Never print payloads or auth tokens.
-docker exec "$NAME" python - <<'PY'
+docker exec -i "$NAME" python - <<'PY'
 import urllib.request
 checks={
  "PROMETHEUS_READY":"http://aiops2-rebuild-prometheus:9090/-/ready",
@@ -67,5 +67,5 @@ for name,url in checks.items():
   print("FS1048_UPSTREAM="+name+" ERROR="+type(exc).__name__)
 PY
 echo "FS1048_DATABASE_POLICY=NO_DB_CONNECTIONS_NO_SQL"
-echo "FS1048_CMDb_POLICY=NO_GLPI_SESSION_OR_MUTATION"
+echo "FS1048_CMDB_POLICY=NO_GLPI_SESSION_OR_MUTATION"
 echo "FS1048_AUDIT=COMPLETE"
