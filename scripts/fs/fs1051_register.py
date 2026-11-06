@@ -20,7 +20,12 @@ if not found:
 addition = (
     "\n# FS.1051 — additive read-only dashboard routes\n"
     "from portal.fs1051_visual import router as fs1051_visual_router\n"
+    "fs1051_existing_routes = list(app.router.routes)\n"
     "app.include_router(fs1051_visual_router)\n"
+    "fs1051_added_routes = app.router.routes[len(fs1051_existing_routes):]\n"
+    "assert len(fs1051_added_routes) == 3, 'FS1051_ROUTE_REGISTRATION_MISMATCH'\n"
+    "# Place exact FS1051 routes before legacy mounted/catch-all explorer dispatchers.\n"
+    "app.router.routes[:] = fs1051_added_routes + fs1051_existing_routes\n"
 )
 ast.parse(s + addition)
 p.write_text(s + addition, encoding="utf-8")
