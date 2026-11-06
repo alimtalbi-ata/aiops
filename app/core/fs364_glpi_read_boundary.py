@@ -33,6 +33,11 @@ def verify_ticket147_readonly(link, *, tenant_id, actor_id, glpi_get,
                 or type(ticket.get("is_deleted")) is not int
                 or ticket["is_deleted"] != 0):
             return False
+        # Reject a wrong or malformed GLPI identity before consulting ownership.
+        if (type(ticket.get("id")) is not int or ticket["id"] != 147
+                or type(ticket.get("type")) is not int or ticket["type"] != 1
+                or ticket.get("name") != "AIOPS2-REAL-FS-20261106"):
+            return False
         owner = authoritative_owner(147)
         if not isinstance(ticket, Mapping) or not isinstance(owner, tuple) or len(owner) != 2:
             return False
