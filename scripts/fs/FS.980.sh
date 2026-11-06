@@ -5,7 +5,7 @@ IMAGE=aiops2-worker:fs001d-guard-validated-20261106
 SOURCE_SHA=7bca86f061b371fc1b03f1a8f7c693364a6155355be4de8eaa928561e2a4fc3b
 docker image inspect "$IMAGE" >/dev/null
 echo '===== ASGI TESTS: NO NETWORK, NO STARTUP, MOCKED CORE AND TEMPORAL ====='
-docker run --rm --network none --entrypoint python -i "$IMAGE" - <<'PY'
+docker run --rm --network none --env AIOPS_INTERNAL_TOKEN=fs980-isolated-token --entrypoint python -i "$IMAGE" - <<'PY'
 import asyncio,hashlib,json,pathlib
 from unittest.mock import patch,AsyncMock
 from requests.exceptions import HTTPError
