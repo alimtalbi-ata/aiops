@@ -43,9 +43,9 @@ p=pathlib.Path(sys.argv[1])
 PY
 chmod 600 "$DIR"/*
 # Image command and workdir must be identical to original. Abort on drift.
-python3 - "$DIR" < <(docker image inspect "$CAND") <<'PY'
-import json,sys
-d=json.load(sys.stdin)[0]["Config"]
+python3 - "$DIR" "$CAND" <<'PY'
+import json,sys,subprocess
+d=json.loads(subprocess.check_output(["docker","image","inspect",sys.argv[2]]))[0]["Config"]
 e=json.load(open(sys.argv[1]+"/expected.json"))
 assert d.get("Cmd")==e["cmd"], "candidate image CMD differs"
 assert d.get("WorkingDir")==e["workdir"], "candidate image workdir differs"
@@ -63,11 +63,14 @@ rollback() {
  if (( success )); then return; fi
  if (( switched )); then
   echo "FS1047_ROLLBACK=START"
-  docker stop -t 15 "$OLD" >/dev/null 2>&1 || true
-  docker rm -f "$OLD" >/dev/null 2>&1 || true
   if docker inspect "$KEEP" >/dev/null 2>&1; then
+   docker stop -t 15 "$OLD" >/dev/null 2>&1 || true
+   docker rm -f "$OLD" >/dev/null 2>&1 || true
    docker rename "$KEEP" "$OLD" || true
    docker start "$OLD" || true
+  else
+   echo "FS1047_ROLLBACK=ORIGINAL_NOT_RENAMED"
+   docker start "$OLD" >/dev/null 2>&1 || true
   fi
   echo "FS1047_ROLLBACK=ATTEMPTED"
  else
