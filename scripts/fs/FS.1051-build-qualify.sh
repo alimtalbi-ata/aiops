@@ -44,6 +44,15 @@ async def check():
   print("FS1051_ASGI="+path+" STATUS="+str(status))
   assert status==200, (path,status)
 asyncio.run(check())
+# Isolated container has no upstream network; ensure new API paths are dispatched,
+# not swallowed by legacy routes. A 403/502 is acceptable here, a 404 is not.
+async def check_api():
+ for path in ("/api/fs1051/prometheus","/api/fs1051/twin"):
+  status=await probe(path)
+  print("FS1051_API_DISPATCH="+path+" STATUS="+str(status))
+  assert status in (200,403,502,503), (path,status)
+asyncio.run(check_api())
+print("FS1051_API_DISPATCH=PASS")
 print("FS1051_LEGACY_AND_NEW_ASGI=PASS")
 PY
 echo "FS1051_CANDIDATE=PASS"
