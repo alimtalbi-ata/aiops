@@ -46,7 +46,7 @@ PATHS = {
     "tempo": {"trace": "/api/traces/{trace_id}"},
     "cmdb": {"health": "/health"},
     "temporal": {"health": "/"},
-    "n8n": {"health": "/healthz"},
+    "n8n": {"health": "/healthz", "workflows": "/api/v1/workflows", "executions": "/api/v1/executions"},
 }
 ALLOWED_PARAMS = {
     "query": {"query", "time", "limit"},
@@ -57,9 +57,12 @@ ALLOWED_PARAMS = {
     "labels": {"start", "end"},
     "trace": {},
     "health": {},
+    "workflows": {"limit", "cursor", "active"},
+    "executions": {"limit", "cursor", "status", "workflowId"},
 }
 LIMITED_FIELDS = {"query": 2048, "time": 40, "start": 40, "end": 40, "step": 20,
-                  "state": 20, "type": 20, "limit": 5}
+                  "state": 20, "type": 20, "limit": 5, "cursor": 512, "active": 5,
+                  "status": 24, "workflowId": 64}
 
 def _deny_untrusted(request: Request):
     raw = os.getenv("EXPLORER_ALLOWED_CIDRS", "")
@@ -93,8 +96,14 @@ def _read(service, path, params=None):
     url = _upstream(service) + path
     if params:
         url += "?" + urlencode(params)
+    headers = {"Accept": "application/json"}
+    if service == "n8n" and path.startswith("/api/v1/"):
+        api_key = os.getenv("EXPLORER_N8N_API_KEY", "")
+        if not api_key:
+            raise HTTPException(503, "n8n_read_api_not_configured")
+        headers["X-N8N-API-KEY"] = api_key
     try:
-        with urlopen(URLRequest(url, headers={"Accept": "application/json"}), timeout=MAX_SECONDS) as response:
+        with urlopen(URLRequest(url, headers=headers), timeout=MAX_SECONDS) as response:
             raw = response.read(2_000_001)
             if len(raw) > 2_000_000:
                 raise HTTPException(502, "upstream_response_too_large")
@@ -143,6 +152,12 @@ def observe(service: str, operation: str, request: Request):
     params = dict(request.query_params)
     if any(k not in allowed or len(v) > LIMITED_FIELDS.get(k, 40) for k, v in params.items()):
         raise HTTPException(400, "invalid_parameters")
+    if service == "n8n" and operation in {"workflows", "executions"}:
+        try:
+            if "limit" in params and not 1 <= int(params["limit"]) <= 100:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(400, "invalid_limit")
     if operation in {"query", "query_range"} and not params.get("query"):
         raise HTTPException(400, "query_required")
     if operation == "query_range":
