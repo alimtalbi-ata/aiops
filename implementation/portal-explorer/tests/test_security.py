@@ -192,6 +192,31 @@ class SecurityTests(unittest.TestCase):
                     e.temporal_workflows("default", Mock(), 25)
         self.assertEqual(raised.exception.status_code, 502)
 
+    def test_tempo_search_empty_results(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value={"traces": [], "metrics": {"completedJobs": 1}}) as reader:
+                result = e.tempo_search(Mock(), 60, 20)
+        self.assertEqual(result["traces"], [])
+        self.assertEqual(result["returned"], 0)
+        self.assertFalse(result["truncated"])
+        self.assertEqual(reader.call_args.args[:2], ("tempo", "/api/search"))
+
+    def test_tempo_search_rejects_invalid_window(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with self.assertRaises(HTTPException) as raised:
+                e.tempo_search(Mock(), 10080, 20)
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_tempo_search_caps_results(self):
+        from unittest.mock import Mock
+        with patch.object(e, "_check"):
+            with patch.object(e, "_read", return_value={"traces": [{}] * 22}):
+                result = e.tempo_search(Mock(), 60, 5)
+        self.assertEqual(result["returned"], 5)
+        self.assertTrue(result["truncated"])
+
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
         self.assertNotIn("/api/explorer/execute", paths)
