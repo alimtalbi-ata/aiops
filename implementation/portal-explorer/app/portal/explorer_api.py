@@ -23,6 +23,7 @@ MAX_RANGE_POINTS = 1000
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z_0-9]{0,62}$")
 SQL_FORBIDDEN = re.compile(r"(;|--|/\*|\*/|\x00)")
 SQL_START = re.compile(r"^\s*SELECT\s", re.IGNORECASE)
+SQL_DANGEROUS = re.compile(r"\b(?:INTO\s+(?:OUTFILE|DUMPFILE)|LOAD_FILE\s*\(|PG_SLEEP\s*\(|SLEEP\s*\(|PG_ADVISORY_[A-Z_]+\s*\(|DBLINK\s*\(|LO_EXPORT\s*\() ", re.IGNORECASE | re.VERBOSE)
 DATA_SOURCES = {
     "core": ("postgres", "EXPLORER_CORE_PG_DSN"),
     "temporal": ("postgres", "EXPLORER_TEMPORAL_PG_DSN"),
@@ -188,7 +189,7 @@ def _connection(source):
     return conn, engine
 
 def _safe_query(sql):
-    if not isinstance(sql, str) or not 1 <= len(sql) <= 4000 or SQL_FORBIDDEN.search(sql) or not SQL_START.match(sql):
+    if not isinstance(sql, str) or not 1 <= len(sql) <= 4000 or SQL_FORBIDDEN.search(sql) or not SQL_START.match(sql) or SQL_DANGEROUS.search(sql):
         raise HTTPException(400, "only_single_select_allowed")
     # Role privileges and read-only transaction are mandatory enforcement.
     return sql.strip()
