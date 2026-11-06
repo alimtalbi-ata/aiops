@@ -233,6 +233,23 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["source"] = "Twin-Simulator"
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
+    def test_nested_metadata_keys_and_casefolded_san_aliases_rejected(self):
+        # JSON object keys are untrusted too; check every envelope boundary.
+        for target in (self.ticket, self.run, self.evidence):
+            with self.subTest(target=id(target)):
+                target["extensions"] = {"collector/TwIn": {"safe": "filesystem"}}
+                self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+                target.pop("extensions")
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_legacy_146_validation_is_not_a_147_receipt(self):
+        # A historical approval is not a filesystem measurement or 147 proof.
+        self.evidence["payload"].pop("used_percent")
+        self.evidence["payload"]["approval"] = {
+            "ticket_id": 146, "validation_id": 3, "status": "ACCEPTED"
+        }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
     def test_no_receipt_or_timestamp_is_not_proof(self):
         self.evidence.pop("observed_at")
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
