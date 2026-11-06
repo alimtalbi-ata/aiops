@@ -110,6 +110,22 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(result["data"], [])
         self.assertEqual(opener.call_args.args[0].get_header("X-n8n-api-key"), "isolated-test-key")
 
+    def test_database_browser_routes_registered(self):
+        routes = {(r.path, method) for r in e.api.routes for method in (r.methods or [])}
+        for path, method in (
+            ("/api/explorer/databases/{source}/tables", "GET"),
+            ("/api/explorer/databases/{source}/columns", "GET"),
+            ("/api/explorer/databases/{source}/preview", "GET"),
+            ("/api/explorer/databases/{source}/query", "POST"),
+        ):
+            with self.subTest(path=path):
+                self.assertIn((path, method), routes)
+
+    def test_n8n_read_routes_only(self):
+        self.assertEqual(e.PATHS["n8n"]["workflows"], "/api/v1/workflows")
+        self.assertEqual(e.PATHS["n8n"]["executions"], "/api/v1/executions")
+        self.assertFalse(any("execute" in key or "activate" in key for key in e.PATHS["n8n"]))
+
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
         self.assertNotIn("/api/explorer/execute", paths)
