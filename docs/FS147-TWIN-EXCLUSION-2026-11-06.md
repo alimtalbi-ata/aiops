@@ -58,3 +58,9 @@ Deux tests fixture-only ajoutés au contrat FS147 : (1) rejet d'un alias Twin en
 **Exclusion :** le Twin SAN `ACME-SAN-FABRIC-A` n'est pas une source de mesure pour le filesystem `/fs-lab`. L'Evidence doit être liée au RUN réel et au ticket 147, avec une mesure filesystem valide. La validation historique TicketValidation/3 du ticket 146 ne vaut pas approbation pour 147.
 
 **Qualification requise au HEAD exact :** `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v`, puis CI, puis contrôle en lecture seule sur SRV-DEB-05 des liens alerte→RUN→Evidence→GLPI 147 et des transitions Worker/Temporal/Portal. Ne pas confondre tests sur fixtures et E2E exécuté. Aucun déploiement, merge, suppression ou approbation implicite.
+
+## Régression de corrélation alerte → RUN → Evidence (2026-11-06)
+
+Le contrat fixture-only refuse une empreinte d’alerte partielle ou divergente entre `run.alert_fingerprint` et `evidence.provenance.alert_fingerprint`. Si l’un des champs est présent, les deux doivent être des chaînes non vides identiques. Les deux champs absents restent acceptés pour les fixtures historiques : **ce test ne prouve pas la corrélation durable en production**. L'empreinte de test ALERT-FS147-A est fictive. Aucun appel SAN, framework ou déploiement.
+
+Qualification : `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v`. Pour l’E2E réel, relever en lecture seule alerte, incident, RUN, Evidence, horodatages, transitions Worker/Temporal/Portal et ticket GLPI 147. Refuser les preuves historiques du ticket 146 et du Twin ACME-SAN-FABRIC-A. Sans ces données, EXÉCUTÉ reste NO-GO, même si la CI réussit.
