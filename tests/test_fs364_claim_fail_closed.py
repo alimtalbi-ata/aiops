@@ -47,7 +47,7 @@ class ClaimFailClosedTests(unittest.TestCase):
 
     def test_replay_cannot_override_terminal_state(self):
         self.assertTrue(self.claim())
-        blocked = dataclasses.replace(self.snapshot, run_state="BLOCKED_NO_EFFECT")
+        blocked = dataclasses.replace(self.snapshot, persisted_run_state="BLOCKED_NO_EFFECT")
         self.assertFalse(self.claim(blocked))
 
     def test_replay_cannot_override_unverified_ticket(self):
