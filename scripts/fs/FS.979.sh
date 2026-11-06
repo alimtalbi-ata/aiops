@@ -32,7 +32,7 @@ done
 echo '===== 3. CONTAINER INVENTORY ====='
 docker ps --format 'NAME={{.Names}} IMAGE={{.Image}} STATUS={{.Status}}'
 echo '===== 4. IMAGE RUNTIME METADATA ====='
-docker image inspect aiops2-worker:fs001d-guard-validated-20261106 --format 'IMAGE_ID={{.Id}} CMD={{json .Config.Cmd}} ENTRYPOINT={{json .Config.Entrypoint}} EXPOSED={{json .Config.ExposedPorts}}'
+docker image inspect aiops2-worker:fs001d-guard-validated-20261106 --format 'IMAGE_ID={{.Id}} CMD={{json .Config.Cmd}} ENTRYPOINT={{json (index .Config "Entrypoint")}} EXPOSED={{json (index .Config "ExposedPorts")}}'
 echo '===== SAFETY ====='
 echo 'WORKFLOWS_STARTED=0'
 echo 'CONTAINERS_STARTED=0'
