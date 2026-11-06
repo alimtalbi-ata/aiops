@@ -118,9 +118,20 @@ async function core(){
  raw({notice:'Aucune commande d’exécution ou modification n’est exposée par cette page.'});
 }
 async function cmdb(){
- $('intro').textContent='État de la connexion CMDB ; aucun endpoint d’inventaire non vérifié n’est supposé.';
- controls.append(button('Vérifier la connexion',()=>show(async()=>raw(await api('/observability/cmdb/health')))));
- raw({notice:'L’inventaire détaillé exige un contrat API CMDB confirmé et une route de lecture autorisée.'});
+ $('intro').textContent='Inventaire GLPI en lecture seule via une session Technician dédiée. Aucune modification des équipements ou tickets.';
+ const kind=select([['Computer','Ordinateurs'],['NetworkEquipment','Équipements réseau'],['Monitor','Moniteurs'],['Printer','Imprimantes'],['Software','Logiciels']]);
+ const offset=field('number','Décalage','0'),id=field('number','ID équipement');
+ controls.append(kind,offset,button('Lister les équipements',()=>show(async()=>{
+ const d=await api('/cmdb/inventory/'+kind.value+'?'+new URLSearchParams({offset:offset.value,limit:25}));
+ const rows=d.items||[];
+ table(['id','name','serial','otherserial','entities_id','states_id'],rows.map(x=>({id:x.id,name:x.name,serial:x.serial,otherserial:x.otherserial,entities_id:x.entities_id,states_id:x.states_id})));
+ if(d.truncated_possible)status('Page de 25 éléments : renseigner le décalage pour continuer.');
+ })),id,button('Fiche équipement',()=>show(async()=>{
+ if(!/^\d+$/.test(id.value)||Number(id.value)<1)throw Error('Identifiant équipement invalide');
+ const d=await api('/cmdb/inventory/'+kind.value+'/'+id.value);
+ table(['champ','valeur'],Object.entries(d).map(([champ,valeur])=>({champ,valeur})));
+ })));
+ raw({notice:'Les droits Technician sont sélectionnés uniquement dans la session GLPI de consultation. Les tickets et permissions restent inchangés.'});
 }
 async function orchestration(){
  $('intro').textContent='Consultation des disponibilités Temporal et n8n. Aucun déclenchement de workflow.';
