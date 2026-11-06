@@ -6,20 +6,34 @@ CAND="aiops2-portal:fs1040-sql-guard-candidate"
 echo "FS1041_MODE=ISOLATED_ASGI_NO_NETWORK"
 # Use ephemeral containers to inspect routes without writing files or exporting secrets.
 probe='
-import asyncio, json, os
+import asyncio, json
 from portal.main import app
-import httpx
 routes=sorted(set((tuple(sorted(getattr(r,"methods",[]) or [])),getattr(r,"path","")) for r in app.routes))
 print("FS1041_ROUTE_SIGNATURE="+json.dumps(routes,separators=(",",":")))
+async def check(path):
+ status=[None]
+ sent=[False]
+ async def receive():
+  if not sent[0]:
+   sent[0]=True
+   return {"type":"http.request","body":b"","more_body":False}
+  await asyncio.sleep(3600)
+ async def send(message):
+  if message["type"]=="http.response.start":
+   status[0]=message["status"]
+ scope={"type":"http","asgi":{"version":"3.0","spec_version":"2.3"},
+  "http_version":"1.1","method":"GET","scheme":"http","path":path,
+  "raw_path":path.encode(),"query_string":b"","root_path":"",
+  "headers":[(b"host",b"localhost"),(b"accept",b"text/html,application/json")],
+  "client":("127.0.0.1",12345),"server":("localhost",80)}
+ try:
+  await asyncio.wait_for(app(scope,receive,send),timeout=4)
+  print("FS1041_HTTP=%s STATUS=%s"%(path,status[0]))
+ except Exception as exc:
+  print("FS1041_HTTP=%s ERROR=%s"%(path,type(exc).__name__))
 async def main():
- transport=httpx.ASGITransport(app=app,raise_app_exceptions=False)
- async with httpx.AsyncClient(transport=transport,base_url="http://localhost",timeout=4.0,follow_redirects=False) as client:
-  for path in ("/health","/explorer/databases","/explorer/prometheus","/explorer/cmdb","/api/explorer/catalog"):
-   try:
-    r=await client.get(path,headers={"accept":"text/html,application/json"})
-    print("FS1041_HTTP=%s STATUS=%s"%(path,r.status_code))
-   except Exception as exc:
-    print("FS1041_HTTP=%s ERROR=%s"%(path,type(exc).__name__))
+ for path in ("/health","/explorer/databases","/explorer/prometheus","/explorer/cmdb","/api/explorer/catalog"):
+  await check(path)
 asyncio.run(main())
 '
 # Host captures only route signature and HTTP status, not response bodies.
