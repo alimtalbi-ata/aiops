@@ -90,3 +90,12 @@ test('untrusted Core never supplies a displayed state or correlation IDs', async
    assert.equal(p.resolved,false);
  }
 });
+
+test('ACL must return literal true, not a truthy denial or error object',async()=>{
+ for (const decision of [{allowed:false},{authorized:false},'true',1,[],{}]) {
+   let reads=0;
+   await assert.rejects(build({...base,authorize:async()=>decision,
+     readCore:async()=>{reads++;return observed;}}),/FORBIDDEN/);
+   assert.equal(reads,0,'no service read after ambiguous ACL decision');
+ }
+});
