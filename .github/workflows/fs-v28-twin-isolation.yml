@@ -6,6 +6,7 @@ on:
       - tests/test_fs_v28_twin_isolation.py
       - tests/test_fs_v28_no_san_effects.py
       - tests/test_fs_v28_malformed_evidence.py
+      - tests/test_fs_v28_lab147_non_contamination.py
       - .github/workflows/fs-v28-twin-isolation.yml
   workflow_dispatch:
 jobs:
