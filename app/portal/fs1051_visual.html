@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIOps — Observabilité & Twin</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#0b1220;color:#e5edf9}
+*{box-sizing:border-box}body{margin:0}header{padding:24px 32px;border-bottom:1px solid #26364b;background:#111e30}
+header h1{margin:4px 0 8px;font-size:26px}header p{margin:0;color:#9fb3cd}
+nav a{color:#8cc9ff;margin-right:18px;text-decoration:none}main{max-width:1500px;margin:auto;padding:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{border:1px solid #2b3d55;border-radius:14px;background:#132238;padding:20px;margin-bottom:16px}
+.metric{font-size:34px;font-weight:750}small,.muted{color:#a7b9d0}
+.good{color:#64ddb0}.bad{color:#ff929c}table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px;border-bottom:1px solid #2b3d55;font-size:14px}
+input{background:#0b1628;border:1px solid #41546e;border-radius:8px;padding:11px;color:#fff;width:100%;margin:12px 0}
+.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:16px}
+svg{width:100%;height:520px;background:#0b1729;border-radius:10px}
+.node{cursor:pointer}.node circle{fill:#2f91d2;stroke:#c6eaff;stroke-width:1.3}
+.node text{fill:#dceaff;font-size:10px;pointer-events:none}.edge{stroke:#4d6c88;stroke-width:1.1;opacity:.7}
+button{background:#285c90;color:#fff;border:0;border-radius:8px;padding:9px 12px;cursor:pointer}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}section{margin-top:22px}
+@media(max-width:850px){.layout{grid-template-columns:1fr}main{padding:12px}header{padding:16px}}
+</style></head><body>
+<header><nav><a href="/explorer/prometheus">Explorateur Prometheus</a><a href="/explorer/cmdb">Explorateur CMDB</a><a href="/explorer/databases">Databases</a></nav>
+<h1>Observabilité & graphe Twin</h1><p>Données réelles · accès en lecture seule · aucune action sur les équipements</p></header>
+<main><div class="grid"><article class="card"><small>Cibles Prometheus UP</small><div id="up" class="metric">—</div></article>
+<article class="card"><small>Cibles DOWN</small><div id="down" class="metric">—</div></article>
+<article class="card"><small>Nœuds Twin</small><div id="nodes" class="metric">—</div></article>
+<article class="card"><small>Relations Twin</small><div id="edges" class="metric">—</div></article></div>
+<section class="card"><h2>Prometheus — cibles actives</h2><p id="prom-status" class="muted">Chargement…</p>
+<table><thead><tr><th>Job</th><th>Instance</th><th>État</th></tr></thead><tbody id="targets"></tbody></table></section>
+<section class="card"><h2>Topologie Twin</h2><p class="muted">Sélectionner un nœud pour afficher ses détails. Les positions sont calculées localement.</p>
+<input id="search" placeholder="Rechercher un nœud par nom, ID ou type" aria-label="Rechercher un nœud">
+<p id="twin-status" class="muted">Chargement…</p><div class="layout"><svg id="graph" viewBox="0 0 900 520" role="img" aria-label="Graphe Twin interactif"></svg>
+<aside class="card"><h3>Détails du nœud</h3><pre id="detail">Sélectionnez un nœud</pre></aside></div></section>
+<button id="refresh">Actualiser</button></main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);let twin=null;
+function label(n,i){return String(n.name??n.label??n.id??n.key??("Nœud "+i))}
+function id(n,i){return String(n.id??n.key??n.name??i)}
+function renderGraph(){
+ if(!twin)return;
+ const svg=$("graph");svg.replaceChildren();
+ const q=$("search").value.toLowerCase();
+ const all=twin.nodes, visible=all.map((n,i)=>({n,i})).filter(x=>JSON.stringify(x.n).toLowerCase().includes(q)).slice(0,150);
+ const pos=new Map();const cx=450,cy=260,r=Math.min(220,Math.max(80,visible.length*4));
+ visible.forEach(({n,i},j)=>{let a=2*Math.PI*j/Math.max(1,visible.length);pos.set(id(n,i),[cx+r*Math.cos(a),cy+r*Math.sin(a)])});
+ const ns="http://www.w3.org/2000/svg";
+ const el=(tag,attrs)=>{let e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));return e};
+ const keys=o=>[o.source,o.target,o.from,o.to].map(v=>typeof v==="object"?(v?.id??v?.key):v);
+ twin.edges.slice(0,2000).forEach(e=>{const [s,t,f,to]=keys(e);const p=pos.get(String(s??f)),v=pos.get(String(t??to));if(p&&v)svg.append(el("line",{x1:p[0],y1:p[1],x2:v[0],y2:v[1],class:"edge"}))});
+ visible.forEach(({n,i})=>{const p=pos.get(id(n,i));let g=el("g",{class:"node",tabindex:"0",role:"button","aria-label":label(n,i)});
+ g.append(el("circle",{cx:p[0],cy:p[1],r:9}));let text=el("text",{x:p[0]+13,y:p[1]+4});text.textContent=label(n,i).slice(0,24);g.append(text);
+ const select=()=>{$("detail").textContent=JSON.stringify(n,null,2)};
+ g.addEventListener("click",select);g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select()}});svg.append(g)});
+ $("twin-status").textContent=visible.length+" nœuds affichés sur "+all.length+" (max. 150 pour la lisibilité)";
+}
+async function load(){
+ const [p,t]=await Promise.allSettled([
+ fetch("/api/fs1051/prometheus",{credentials:"same-origin"}).then(r=>{if(!r.ok)throw Error("HTTP "+r.status);return r.json()}),
+ fetch("/api/fs1051/twin",{credentials:"same-origin"}).then(r=>{if(!r.ok)throw Error("HTTP "+r.status);return r.json()})
+ ]);
+ if(p.status==="fulfilled"){let d=p.value;$("up").textContent=d.up;$("down").textContent=d.down;$("prom-status").textContent=d.total+" séries UP/DOWN";
+ $("targets").replaceChildren();d.targets.forEach(t=>{let tr=document.createElement("tr");[t.job,t.instance,t.health].forEach(v=>{let td=document.createElement("td");td.textContent=v;tr.append(td)});$("targets").append(tr)})}
+ else $("prom-status").textContent="Prometheus indisponible : "+p.reason.message;
+ if(t.status==="fulfilled"){twin=t.value;$("nodes").textContent=twin.total_nodes;$("edges").textContent=twin.total_edges;renderGraph()}
+ else $("twin-status").textContent="Twin indisponible : "+t.reason.message;
+}
+$("search").addEventListener("input",renderGraph);$("refresh").addEventListener("click",load);load();
+</script></body></html>
