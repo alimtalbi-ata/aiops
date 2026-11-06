@@ -16,7 +16,12 @@ function state(value) {
  */
 export async function buildFsRealProjection({mode, ticketId, principal, authorize, readCore, readTemporal, readPolicy, readQuestions}) {
   if (!MODES.has(mode) || ticketId !== 147) throw new Error('INVALID_REQUEST');
-  if (!principal || typeof authorize !== 'function' ||
+  // A truthy placeholder is not an authenticated tenant-scoped identity.
+  // The host still owns authentication; this only rejects malformed principals.
+  if (!principal || typeof principal !== 'object' || Array.isArray(principal) ||
+      typeof principal.actor !== 'string' || !principal.actor.trim() ||
+      typeof principal.tenant !== 'string' || !principal.tenant.trim() ||
+      typeof authorize !== 'function' ||
       (await authorize(principal, {ticketId:147, scope:'fs-real:read', mode})) !== true)
     throw new Error('FORBIDDEN');
   const result = unavailable(mode);
