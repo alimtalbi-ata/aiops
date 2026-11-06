@@ -91,8 +91,8 @@ PY
 chmod 600 "$TMP/container.env"
 docker inspect "$OLD_NAME" >/dev/null 2>&1 && { echo 'NO_GO=ROLLBACK_NAME_ALREADY_EXISTS'; exit 1; }
 echo '===== STOP AND PRESERVE ORIGINAL CONTAINER ====='
-docker stop --time 15 "$NAME" >/dev/null
 CHANGED=1
+docker stop --time 15 "$NAME" >/dev/null
 docker rename "$NAME" "$OLD_NAME"
 echo '===== CREATE CANDIDATE WITH ORIGINAL CONFIG ====='
 docker run -d --name "$NAME" \
