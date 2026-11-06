@@ -29,9 +29,8 @@ export async function buildFsRealProjection({mode, ticketId, principal, authoriz
     if (typeof fn !== 'function') return null;
     try { return await fn({principal,ticketId:147,mode}); } catch { return null; }
   };
-  const [core,temporal,policy,questions] = await Promise.all([
-    safe(readCore),safe(readTemporal),safe(readPolicy),
-    mode === 'insufficient' ? safe(readQuestions) : Promise.resolve(null)
+  const [core,temporal,policy] = await Promise.all([
+    safe(readCore),safe(readTemporal),safe(readPolicy)
   ]);
   // Trust a cross-service correlation only after Core itself is tenant-scoped,
   // synthetic, non-live and bound to ticket 147. A matching untrusted run_id
@@ -62,6 +61,9 @@ export async function buildFsRealProjection({mode, ticketId, principal, authoriz
   }
   // Human questions must not be exposed when the Core ticket binding is untrusted.
   // A mis-scoped questions reader must not leak ticket 146 or another tenant's context.
+  // Do not even invoke the GLPI/Copilot reader before Core proves ticket binding.
+  // This prevents unnecessary cross-tenant reads on missing or mismatched Core data.
+  const questions = mode === 'insufficient' && trustedCore ? await safe(readQuestions) : null;
   if (mode === 'insufficient' && trustedCore && Array.isArray(questions) &&
       questions.length <= 12 && questions.every(q => typeof q === 'string' && q.length <= 500))
     result.questions = questions;
