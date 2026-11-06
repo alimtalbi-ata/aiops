@@ -5,7 +5,7 @@ python3 - <<'PY'
 import http.client,json,os,socket,subprocess,tempfile,time,urllib.error,urllib.request
 NAME="aiops2-fs1057-http-test"
 IMAGE="aiops2-portal:fs1051-visual-candidate"
-PORT=17777
+PORT=None
 def docker(*args,check=True):
  p=subprocess.run(["docker",*args],capture_output=True,text=True)
  if check and p.returncode: raise RuntimeError("docker "+args[0]+" failed: "+p.stderr[-200:])
@@ -14,7 +14,9 @@ assert docker("inspect",NAME,check=False).returncode!=0,"FS1057_TEST_NAME_OCCUPI
 prod=json.loads(docker("inspect","aiops2-rebuild-portal").stdout)[0]
 assert prod["State"]["Running"] and prod["Config"]["Image"]=="aiops2-portal:fs1040-sql-guard-candidate"
 with socket.socket() as sock:
- sock.bind(("127.0.0.1",PORT))
+ sock.bind(("127.0.0.1",0))
+ PORT=sock.getsockname()[1]
+print("FS1057_SELECTED_LOCAL_PORT="+str(PORT),flush=True)
 docker("image","inspect",IMAGE)
 for network in ("aiops2-rebuild-integration","aiops2-rebuild-control"): docker("network","inspect",network)
 fd,path=tempfile.mkstemp(prefix="fs1057-env-",dir="/tmp",text=True)
