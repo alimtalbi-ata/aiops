@@ -181,8 +181,13 @@ def temporal_workflows(namespace: str, request: Request, pagesize: int = 25):
         raise HTTPException(400, "invalid_namespace")
     if not 1 <= pagesize <= 100:
         raise HTTPException(400, "invalid_pagesize")
-    return _read("temporal", "/api/v1/namespaces/" + namespace + "/workflows",
-                 {"pagesize": pagesize})
+    payload = _read("temporal", "/api/v1/namespaces/" + namespace + "/workflows",
+                    {"pagesize": pagesize})
+    if not isinstance(payload, dict) or not isinstance(payload.get("executions"), list):
+        raise HTTPException(502, "temporal_unexpected_response")
+    executions = payload["executions"]
+    return {"executions": executions[:pagesize], "returned": min(len(executions), pagesize),
+            "upstream_returned": len(executions), "truncated": len(executions) > pagesize}
 
 @api.get("/observability/tempo/trace/{trace_id}")
 def trace(trace_id: str, request: Request):
