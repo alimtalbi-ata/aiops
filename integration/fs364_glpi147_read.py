@@ -32,8 +32,11 @@ def verify_ticket147(*, get_ticket, authorize, tenant_id, actor_id, incident_ref
         raise VerificationDenied("GLPI unavailable") from exc
     if not isinstance(ticket, Mapping):
         raise VerificationDenied("invalid GLPI response")
-    if type(ticket.get("id")) not in (int, str) or str(ticket["id"]) != "147":
+    if type(ticket.get("id")) is not int or ticket["id"] != 147:
         raise VerificationDenied("wrong ticket")
+    if (type(ticket.get("type")) is not int or ticket["type"] != 1
+            or ticket.get("name") != "AIOPS2-REAL-FS-20261106"):
+        raise VerificationDenied("wrong incident ticket identity")
     if ticket.get("tenant_id") != tenant_id or ticket.get("incident_ref") != incident_ref:
         raise VerificationDenied("ticket ownership mismatch")
     if type(ticket.get("is_deleted")) is not int or ticket["is_deleted"] != 0:
