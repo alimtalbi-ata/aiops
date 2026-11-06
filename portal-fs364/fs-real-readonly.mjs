@@ -25,7 +25,7 @@ export async function fetchProjection(mode, fetchImpl = fetch, signal) {
   const r = await fetchImpl('/api/portal/fs-real/projection?mode='+mode+'&ticket_id=147',
     {method:'GET',credentials:'same-origin',cache:'no-store',
      headers:{Accept:'application/json'},signal});
-  if (!r.ok) throw new Error('UNAVAILABLE_HTTP_'+r.status);
+  if (r.redirected === true || (typeof r.url === 'string' && r.url && !r.url.includes('/api/portal/fs-real/projection?')))\n    throw new Error('UNAVAILABLE_REDIRECT');\n  if (!r.ok) throw new Error('UNAVAILABLE_HTTP_'+r.status);
   if (!(r.headers.get('content-type')||'').toLowerCase().includes('application/json'))
     throw new Error('UNAVAILABLE_NON_JSON');
   return validateProjection(await r.json(),mode);
