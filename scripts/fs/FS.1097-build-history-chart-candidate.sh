@@ -5,7 +5,7 @@ IMAGE=aiops2-portal:fs1097-history-chart-candidate
 echo "FS1097_MODE=NONPRODUCTION_HISTORY_CHART_BUILD_AND_ASGI_TEST"
 docker image inspect aiops2-portal:fs1092-history-fixed-candidate >/dev/null
 docker build -f "$ROOT/scripts/fs/Dockerfile.fs1097" -t "$IMAGE" "$ROOT"
-docker run --rm -e AIOPS_INTERNAL_TOKEN=fs1097-import-only-test --entrypoint python "$IMAGE" - <<'PY'
+docker run --rm -i -e AIOPS_INTERNAL_TOKEN=fs1097-import-only-test --entrypoint python "$IMAGE" - <<'PY'
 import ast,base64,hashlib,pathlib,re,sys
 sys.path.insert(0,"/app")
 from portal.main import app
