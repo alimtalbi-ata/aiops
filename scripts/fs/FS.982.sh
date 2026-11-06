@@ -24,18 +24,23 @@ print('NETWORK_ISOLATION=PASS')
 print('E2E_TEMPORAL_RUNNING='+str(t['State']['Running']).lower())
 PY
 echo '===== TEMPORAL SDK WORKFLOW, UNIQUE TASK QUEUE, NO BUSINESS ACTIVITY ====='
-docker run --rm -i --network "$NET" --env AIOPS_INTERNAL_TOKEN=fs982-isolated-token --entrypoint python "$IMAGE" - <<'PY'
-import asyncio,uuid
-from datetime import timedelta
+TMPDIR_FS982="$(mktemp -d /tmp/fs982-temporal.XXXXXXXX)"
+trap 'rm -rf "$TMPDIR_FS982"' EXIT
+cat > "$TMPDIR_FS982/fs982_workflow.py" <<'PYWORKFLOW'
 from temporalio import workflow
-from temporalio.client import Client
-from temporalio.worker import Worker
-from temporalio.exceptions import WorkflowAlreadyStartedError
 @workflow.defn
 class Fs982NoEffect:
  @workflow.run
  async def run(self,marker:str)->str:
   return 'FS982-OK:'+marker
+PYWORKFLOW
+cat > "$TMPDIR_FS982/fs982_runner.py" <<'PYRUNNER'
+import asyncio,uuid
+from datetime import timedelta
+from temporalio.client import Client
+from temporalio.worker import Worker
+from temporalio.exceptions import WorkflowAlreadyStartedError
+from fs982_workflow import Fs982NoEffect
 async def main():
  marker='FS982-'+uuid.uuid4().hex
  queue='fs982-isolated-'+uuid.uuid4().hex
@@ -49,8 +54,10 @@ async def main():
   print('UNIQUE_TASK_QUEUE=PASS')
   print('NO_BUSINESS_ACTIVITIES=PASS')
 asyncio.run(main())
-PY
-echo '===== PRODUCTION INTEGRITY ====='
+PYRUNNER
+chmod 755 "$TMPDIR_FS982"
+chmod 644 "$TMPDIR_FS982/fs982_workflow.py" "$TMPDIR_FS982/fs982_runner.py"
+docker run --rm --network "$NET" --env AIOPS_INTERNAL_TOKEN=fs982-isolated-token --env PYTHONDONTWRITEBYTECODE=1 --mount "type=bind,source=$TMPDIR_FS982,target=/fs982,readonly" --entrypoint python "$IMAGE" /fs982/fs982_runner.pyecho '===== PRODUCTION INTEGRITY ====='
 docker inspect "$PROD_WORKER" --format 'PRODUCTION_RUNNING={{.State.Running}} PRODUCTION_IMAGE={{.Config.Image}}'
 echo 'PRODUCTION_RESTARTED=NO'
 echo 'PRODUCTION_WORKFLOWS_STARTED=0'
