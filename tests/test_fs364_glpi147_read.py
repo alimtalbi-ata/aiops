@@ -4,7 +4,7 @@ from integration.fs364_glpi147_read import verify_ticket147, VerificationDenied
 
 class TestGLPI147Boundary(unittest.TestCase):
     def setUp(self):
-        self.ticket = {"id":147,"tenant_id":"tenant-a","incident_ref":"INC-LAB","is_deleted":0}
+        self.ticket = {"id":147,"type":1,"name":"AIOPS2-REAL-FS-20261106","tenant_id":"tenant-a","incident_ref":"INC-LAB","is_deleted":0}
         self.kw = dict(tenant_id="tenant-a",actor_id="actor-a",incident_ref="INC-LAB")
 
     def verify(self, ticket=None, acl=True, **overrides):
@@ -18,6 +18,14 @@ class TestGLPI147Boundary(unittest.TestCase):
     def test_wrong_ticket(self):
         with self.assertRaises(VerificationDenied):
             self.verify(ticket=dict(self.ticket,id=146))
+
+    def test_rejects_ambiguous_native_identity(self):
+        for changes in ({"id":"147"}, {"id":True}, {"type":2},
+                        {"type":True}, {"name":"AIOPS2-REAL-FS-OTHER"},
+                        {"name":None}):
+            with self.subTest(changes=changes):
+                with self.assertRaises(VerificationDenied):
+                    self.verify(ticket=dict(self.ticket, **changes))
 
     def test_wrong_tenant(self):
         with self.assertRaises(VerificationDenied):
