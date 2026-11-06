@@ -46,7 +46,7 @@ docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-
 import json
 from portal.main import app
 routes={getattr(r,"path","") for r in app.routes}
-required={"/health","/explorer/databases","/explorer/prometheus","/explorer/cmdb"}
+required={"/health","/explorer/{page}","/api/explorer/catalog"}
 missing=sorted(required-routes)
 print("FS1040_ROUTE_COUNT="+str(len(routes)))
 print("FS1040_MISSING_ROUTES="+json.dumps(missing))
