@@ -213,7 +213,7 @@ def validate_fs_v28_observation(evidence, run_id):
         raise RuntimeError('fs_v28_evidence_run_mismatch')
     if (not isinstance(evidence.get('source'), str) or not evidence['source'].strip()
             or not evidence.get('claim') or not evidence.get('payload_hash')
-            or evidence.get('source') in ('twin-simulator','acme-enriched-simulator')
+            or evidence['source'].strip().lower() in ('twin-simulator','acme-enriched-simulator')
             or payload.get('node_id') == 'ACME-SAN-FABRIC-A'):
         raise RuntimeError('fs_v28_evidence_not_independent')
     return True
