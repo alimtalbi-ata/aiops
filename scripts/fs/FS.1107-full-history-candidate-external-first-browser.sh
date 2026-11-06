@@ -100,11 +100,15 @@ def get(path):
     with urllib.request.urlopen(base+path,timeout=10) as response:
         return response.status,dict(response.headers),response.read()
 status,headers,body=get("/explorer/visual")
-assert status==200
-csp=headers.get("Content-Security-Policy","")
-assert csp.count("sha256-")>=2 and "script-src" in csp and "style-src" in csp
-assert "unsafe-inline" not in csp
-assert b'id="history-chart"' in body and b'id="history-window"' in body
+assert status==200,("visual_status",status)
+# HTTP header field names are case-insensitive; normalize before validation.
+headers={str(k).lower():str(v) for k,v in headers.items()}
+csp=headers.get("content-security-policy","")
+print("FS1107_CSP_HEADER="+csp,flush=True)
+assert csp.count("sha256-")>=2 and "script-src" in csp and "style-src" in csp,("csp_missing_or_incomplete",csp)
+assert "unsafe-inline" not in csp,("csp_unsafe_inline",csp)
+for marker in (b'id="history-chart"',b'id="history-window"',b'id="history-metric"',b'id="history-refresh"'):
+    assert marker in body,("history_markup_missing",marker.decode())
 print("FS1107_VISUAL=200 CSP_HASHES=PASS HISTORY_MARKUP=PASS",flush=True)
 for metric in ("availability","scrape_duration"):
     status,_,body=get("/api/fs1089/prometheus/history?metric="+metric+"&window=1h")
