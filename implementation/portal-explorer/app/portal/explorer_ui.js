@@ -117,8 +117,18 @@ async function orchestration(){
  const data=await api('/temporal/namespaces/'+encodeURIComponent(namespace.value)+'/workflows?pagesize=25');
  const items=data.executions||data.workflowExecutions||data.workflows||[];
  if(!Array.isArray(items)){raw(data);return;}
- const rows=items.map(x=>({workflowId:x.execution?.workflowId||x.workflowId||'',runId:x.execution?.runId||x.runId||'',status:x.status||'',startTime:x.startTime||x.start_time||''}));
- table(['workflowId','runId','status','startTime'],rows);
+ const rows=items.map(x=>({
+ workflowId:x.execution?.workflowId||x.workflowId||'',
+ runId:x.execution?.runId||x.runId||'',
+ status:x.status||'',
+ workflowType:x.type?.name||x.type||'',
+ taskQueue:x.taskQueue||'',
+ startTime:x.startTime||'',
+ closeTime:x.closeTime||'',
+ duration:x.executionDuration||'',
+ historyLength:x.historyLength??''
+ }));
+ table(['workflowId','runId','status','workflowType','taskQueue','startTime','closeTime','duration','historyLength'],rows);
  })));
  controls.append(button('Lister les workflows n8n',()=>show(async()=>{
  const data=await api('/observability/n8n/workflows?limit=50');
