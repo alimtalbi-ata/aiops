@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-06T07:29:01.583394+00:00",
+  "collected_at": "2026-11-06T07:30:01.972341+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "python:3.12-alpine",
+        "inspect_ok": true,
+        "name": "aiops2-fs385-ingest",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "aiops2-portal:fs291-glpi-short-report-candidate-20261105",
@@ -501,13 +508,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 1 day, 21 hours, 40 minutes"
+    "uptime": "up 4 weeks, 1 day, 21 hours, 41 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 142464856064,
+      "free_bytes": 142462357504,
       "total_bytes": 172898033664,
-      "used_bytes": 21575856128
+      "used_bytes": 21578354688
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -515,12 +522,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.25048828125,
-      1.3642578125,
-      1.26123046875
+      1.85302734375,
+      1.583984375,
+      1.34716796875
     ],
     "memory_bytes": {
-      "MemAvailable": 19570409472,
+      "MemAvailable": 19541864448,
       "MemTotal": 25205911552,
       "SwapFree": 10019733504,
       "SwapTotal": 10838077440
