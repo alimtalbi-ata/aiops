@@ -226,6 +226,33 @@ def tables(source: str, request: Request):
         sql = "SELECT table_schema AS schema_name, table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema=DATABASE() ORDER BY 1,2"
     return _run(source, sql, MAX_ROWS)
 
+@api.get("/databases/{source}/columns")
+def columns(source: str, request: Request, schema: str, table: str):
+    _check(request)
+    if not IDENTIFIER.fullmatch(schema) or not IDENTIFIER.fullmatch(table):
+        raise HTTPException(400, "invalid_identifier")
+    engine, _ = _source(source)
+    if engine == "postgres":
+        sql = ("SELECT column_name, data_type, is_nullable FROM information_schema.columns "
+               "WHERE table_schema='" + schema + "' AND table_name='" + table + "' ORDER BY ordinal_position")
+    else:
+        sql = ("SELECT column_name, data_type, is_nullable FROM information_schema.columns "
+               "WHERE table_schema=DATABASE() AND table_name='" + table + "' ORDER BY ordinal_position")
+    return _run(source, sql, MAX_ROWS)
+
+@api.get("/databases/{source}/preview")
+def preview(source: str, request: Request, schema: str, table: str, limit: int = 25, offset: int = 0):
+    _check(request)
+    if not IDENTIFIER.fullmatch(schema) or not IDENTIFIER.fullmatch(table):
+        raise HTTPException(400, "invalid_identifier")
+    if not isinstance(offset, int) or offset < 0 or offset > 100000:
+        raise HTTPException(400, "invalid_offset")
+    engine, _ = _source(source)
+    quote = '"' if engine == "postgres" else '`'
+    qualified = quote + schema + quote + "." + quote + table + quote
+    return _run(source, "SELECT * FROM " + qualified + " LIMIT " + str(MAX_ROWS) +
+                " OFFSET " + str(offset), limit)
+
 @api.post("/databases/{source}/query")
 async def query(source: str, request: Request):
     _check(request)
