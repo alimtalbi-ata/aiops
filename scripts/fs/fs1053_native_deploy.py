@@ -146,5 +146,14 @@ try:
         # Avoid keeping plaintext secrets in a second location.
         envfile.unlink(missing_ok=True)
 except Exception as exc:
+    if not renamed and old_was_running:
+        try:
+            state=inspect(NAME)
+            if not state["State"]["Running"]:
+                docker("update","--restart=unless-stopped",NAME)
+                docker("start",NAME)
+                print("FS1053_ORIGINAL_CONTAINER=RESTORED",flush=True)
+        except Exception as recovery_error:
+            print("FS1053_ORIGINAL_CONTAINER=RECOVERY_FAILED "+str(recovery_error),flush=True)
     print("FS1053_DEPLOY=FAIL "+str(exc),flush=True)
     sys.exit(1)
