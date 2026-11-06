@@ -7,7 +7,7 @@ TEMP_CONTAINER=aiops2-e2e-v1-aiops2-temporal-1
 PROD_WORKER=aiops2-rebuild-worker
 docker image inspect "$IMAGE" >/dev/null
 docker network inspect "$NET" >/dev/null
-docker inspect "$TEMP_CONTAINER" --format '{{if not .State.Running}}{{fail "E2E Temporal stopped"}}{{end}}' >/dev/null
+[[ "$(docker inspect "$TEMP_CONTAINER" --format '{{.State.Running}}')" == true ]] || { echo 'E2E_TEMPORAL_NOT_RUNNING'; exit 1; }
 python3 - "$NET" "$TEMP_CONTAINER" <<'PY'
 import json,subprocess,sys
 net,target=sys.argv[1:]
