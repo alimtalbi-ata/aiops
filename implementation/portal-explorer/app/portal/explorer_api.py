@@ -181,6 +181,85 @@ def observe(service: str, operation: str, request: Request):
             raise HTTPException(400, "invalid_time_range")
     return _read(service, PATHS[service][operation], params)
 
+GLPI_TYPES = frozenset(("Computer", "NetworkEquipment", "Monitor", "Printer", "Software"))
+
+def _glpi_inventory(kind, item_id=None, offset=0, limit=25):
+    if kind not in GLPI_TYPES:
+        raise HTTPException(404, "unknown_inventory_type")
+    if item_id is not None and item_id < 1:
+        raise HTTPException(400, "invalid_inventory_id")
+    if not 0 <= offset <= 100000 or not 1 <= limit <= 100:
+        raise HTTPException(400, "invalid_inventory_page")
+    base = os.getenv("GLPI_API_URL", "").rstrip("/")
+    app_token = os.getenv("GLPI_APP_TOKEN", "")
+    user_token = os.getenv("GLPI_USER_TOKEN", "")
+    parsed = urlsplit(base)
+    if not all((base, app_token, user_token)) or parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise HTTPException(503, "glpi_inventory_not_configured")
+    def call(path, session=None, payload=None):
+        headers = {"App-Token": app_token, "Accept": "application/json"}
+        if session:
+            headers["Session-Token"] = session
+        else:
+            headers["Authorization"] = "user_token " + user_token
+        body = None
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+            body = json.dumps(payload).encode()
+        req = URLRequest(base + "/" + path, data=body, headers=headers,
+                         method="POST" if payload is not None else "GET")
+        with urlopen(req, timeout=MAX_SECONDS) as response:
+            raw = response.read(2_000_001)
+            if len(raw) > 2_000_000:
+                raise HTTPException(502, "glpi_inventory_response_too_large")
+            return json.loads(raw) if raw else None
+    session = None
+    try:
+        initial = call("initSession")
+        session = initial.get("session_token") if isinstance(initial, dict) else None
+        if not session:
+            raise HTTPException(502, "glpi_session_unavailable")
+        call("changeActiveProfile", session, {"profiles_id": 6})
+        active = call("getActiveProfile", session)
+        profile = active.get("active_profile", {}) if isinstance(active, dict) else {}
+        if profile.get("id") != 6:
+            raise HTTPException(403, "glpi_technician_profile_unavailable")
+        path = kind + ("/" + str(item_id) if item_id is not None else
+                       "/?range=" + str(offset) + "-" + str(offset + limit - 1))
+        result = call(path, session)
+        if item_id is not None:
+            if not isinstance(result, dict):
+                raise HTTPException(502, "glpi_inventory_unexpected_response")
+            return result
+        if not isinstance(result, list):
+            raise HTTPException(502, "glpi_inventory_unexpected_response")
+        return {"items": result[:limit], "returned": min(len(result), limit),
+                "offset": offset, "limit": limit, "truncated_possible": len(result) >= limit}
+    except HTTPException:
+        raise
+    except HTTPError as exc:
+        if exc.code in (401, 403):
+            raise HTTPException(403, "glpi_inventory_access_denied") from None
+        raise HTTPException(502, "glpi_inventory_unavailable") from None
+    except (URLError, TimeoutError, ValueError, KeyError, AttributeError):
+        raise HTTPException(502, "glpi_inventory_unavailable") from None
+    finally:
+        if session:
+            try:
+                call("killSession", session)
+            except Exception:
+                pass
+
+@api.get("/cmdb/inventory/{kind}")
+def inventory_list(kind: str, request: Request, offset: int = 0, limit: int = 25):
+    _check(request)
+    return _glpi_inventory(kind, offset=offset, limit=limit)
+
+@api.get("/cmdb/inventory/{kind}/{item_id}")
+def inventory_detail(kind: str, item_id: int, request: Request):
+    _check(request)
+    return _glpi_inventory(kind, item_id=item_id)
+
 @api.get("/core/{collection}")
 def core_collection(collection: str, request: Request, limit: int = 100):
     _check(request)
