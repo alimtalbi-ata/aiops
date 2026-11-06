@@ -27,6 +27,10 @@ def claim_resume(conn, snapshot, ticket, *, expected_tenant_id, state_version, r
             or not isinstance(request_id, str) or not request_id.strip()
             or request_id != request_id.strip()):
         return False
+    # Never roll back a transaction owned by the caller. A nested BEGIN would
+    # fail, and the generic exception handler must not destroy caller writes.
+    if conn.in_transaction:
+        return False
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(CLAIM_SCHEMA)
