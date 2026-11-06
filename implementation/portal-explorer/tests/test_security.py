@@ -3,6 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 from io import BytesIO
+from urllib.error import HTTPError
 from types import SimpleNamespace
 from fastapi import HTTPException
 from portal import explorer_api as e
@@ -125,6 +126,25 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(e.PATHS["n8n"]["workflows"], "/api/v1/workflows")
         self.assertEqual(e.PATHS["n8n"]["executions"], "/api/v1/executions")
         self.assertFalse(any("execute" in key or "activate" in key for key in e.PATHS["n8n"]))
+
+    def test_n8n_rejected_key_is_not_service_outage(self):
+        with patch.dict(os.environ, {"EXPLORER_N8N_URL": "http://n8n:5678",
+                                     "EXPLORER_N8N_API_KEY": "invalid-test-key"}):
+            with patch.object(e, "urlopen", side_effect=HTTPError(
+                    "http://n8n:5678/api/v1/workflows", 401, "Unauthorized", {}, None)):
+                with self.assertRaises(HTTPException) as raised:
+                    e._read("n8n", "/api/v1/workflows")
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(raised.exception.detail, "n8n_read_api_credentials_rejected")
+
+    def test_n8n_api_key_is_never_in_error(self):
+        with patch.dict(os.environ, {"EXPLORER_N8N_URL": "http://n8n:5678",
+                                     "EXPLORER_N8N_API_KEY": "secret-check-123"}):
+            with patch.object(e, "urlopen", side_effect=HTTPError(
+                    "http://n8n:5678/api/v1/executions", 403, "Forbidden", {}, None)):
+                with self.assertRaises(HTTPException) as raised:
+                    e._read("n8n", "/api/v1/executions")
+        self.assertNotIn("secret-check-123", str(raised.exception.detail))
 
     def test_read_only_router(self):
         paths=[r.path for r in e.api.routes]
