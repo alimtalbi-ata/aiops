@@ -53,8 +53,6 @@ def check_fs147_chain(ticket, run, evidence):
         return False
     if (not isinstance(evidence.get("source"), str)
             or not evidence["source"].strip()
-            or "twin" in evidence["source"].lower()
-            or "san" in evidence["source"].lower()
             or payload.get("node_id") == SAN):
         return False
     if (contains_san_reference(ticket) or contains_san_reference(run)
@@ -225,6 +223,15 @@ class FS147ChainContract(unittest.TestCase):
                 self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
         self.run.pop("collectors")
         self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_source_sanity_is_not_a_san_reference(self):
+        # A substring match on 'san' would reject ordinary filesystem sources.
+        self.evidence["source"] = "filesystem-sanity-check"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "filesystem-SAN-bridge"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "Twin-Simulator"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
         self.evidence.pop("observed_at")
