@@ -14,6 +14,26 @@ class SecurityTests(unittest.TestCase):
                 with self.assertRaises(HTTPException):
                     e._safe_query(sql)
 
+    def test_rejects_common_side_effect_selects(self):
+        for sql in ("SELECT SLEEP(30)", "SELECT pg_sleep(30)",
+                    "SELECT pg_advisory_lock(1)", "SELECT load_file('/etc/passwd')",
+                    "SELECT name INTO OUTFILE '/tmp/x' FROM t",
+                    "SELECT dblink('dbname=x','SELECT 1')",
+                    "SELECT lo_export(123,'/tmp/x')"):
+            with self.subTest(sql=sql):
+                with self.assertRaises(HTTPException):
+                    e._safe_query(sql)
+
+    def test_network_denies_unparseable_peer(self):
+        with patch.dict(os.environ, {"EXPLORER_ALLOWED_CIDRS": "10.79.94.0/24"}):
+            with self.assertRaises(HTTPException):
+                e._deny_untrusted(SimpleNamespace(client=SimpleNamespace(host="unknown")))
+
+    def test_rejects_invalid_network_configuration(self):
+        with patch.dict(os.environ, {"EXPLORER_ALLOWED_CIDRS": "10.79.94.xxx"}):
+            with self.assertRaises(HTTPException):
+                e._deny_untrusted(SimpleNamespace(client=SimpleNamespace(host="10.79.94.20")))
+
     def test_accepts_select(self):
         self.assertEqual(e._safe_query("SELECT 1"), "SELECT 1")
 
