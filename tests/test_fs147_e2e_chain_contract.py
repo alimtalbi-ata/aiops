@@ -58,7 +58,13 @@ def check_fs147_chain(ticket, run, evidence):
             or contains_san_reference(provenance) or contains_san_reference(payload)
             or contains_san_reference(evidence.get("source"))):
         return False
-    if not evidence.get("payload_hash") or not evidence.get("observed_at"):
+    # Presence of a receipt alone is not an observed filesystem measurement.
+    used = payload.get("used_percent")
+    if (isinstance(used, bool) or not isinstance(used, (int, float))
+            or not 0 <= used <= 100):
+        return False
+    if any(not isinstance(evidence.get(k), str) or not evidence[k].strip()
+           for k in ("payload_hash", "observed_at")):
         return False
     return True
 
@@ -133,6 +139,20 @@ class FS147ChainContract(unittest.TestCase):
         self.run["run_id"] = "RUN-TEST-147"
         self.evidence["provenance"]["run_id"] = "RUN-TEST-147"
         self.evidence["evidence_id"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_missing_or_invalid_measurement_rejected(self):
+        self.evidence["payload"].pop("used_percent")
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        for invalid in ("92", True, -1, 101, None):
+            self.evidence["payload"]["used_percent"] = invalid
+            self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_blank_receipt_metadata_rejected(self):
+        self.evidence["payload_hash"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload_hash"] = "sha256:fixture"
+        self.evidence["observed_at"] = "   "
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
