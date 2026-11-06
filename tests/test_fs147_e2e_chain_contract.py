@@ -10,6 +10,19 @@ LEGACY_EVIDENCE = "EVD-D2069BA816126499"
 SAN = "ACME-SAN-FABRIC-A"
 
 
+def contains_san_reference(value):
+    """Reject SAN identifiers even when nested in filesystem evidence."""
+    if isinstance(value, str):
+        normalized = value.casefold().strip()
+        return SAN.casefold() in normalized or "twin-simulator" in normalized
+    if isinstance(value, dict):
+        return any(contains_san_reference(k) or contains_san_reference(v)
+                   for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(contains_san_reference(item) for item in value)
+    return False
+
+
 def check_fs147_chain(ticket, run, evidence):
     """Fail closed unless ticket 147, run and filesystem evidence agree."""
     if not all(isinstance(x, dict) for x in (ticket, run, evidence)):
@@ -35,6 +48,8 @@ def check_fs147_chain(ticket, run, evidence):
             or "twin" in evidence["source"].lower()
             or "san" in evidence["source"].lower()
             or payload.get("node_id") == SAN):
+        return False
+    if contains_san_reference(provenance) or contains_san_reference(payload):
         return False
     if not evidence.get("payload_hash") or not evidence.get("observed_at"):
         return False
@@ -77,6 +92,15 @@ class FS147ChainContract(unittest.TestCase):
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
         self.evidence["payload"].pop("node_id")
         self.evidence["payload"]["filesystem"] = "/"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_nested_san_contamination_rejected(self):
+        self.evidence["payload"]["details"] = {
+            "observations": [{"asset": " ACME-SAN-FABRIC-A "}]
+        }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"].pop("details")
+        self.evidence["provenance"]["collector"] = ["Twin-Simulator"]
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
