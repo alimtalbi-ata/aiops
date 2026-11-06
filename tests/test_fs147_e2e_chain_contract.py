@@ -1,0 +1,338 @@
+"""FS147 E2E read-only correlation gate; fixture-only, no host or API calls.
+
+This is deliberately NOT an adapter: it rejects unrelated runs/evidence and
+cannot approve remediation. Feed only real snapshots once host access exists.
+"""
+import math
+import re
+import unittest
+
+LEGACY_RUN = "RUN-4FABD1786F107E51"
+LEGACY_EVIDENCE = "EVD-D2069BA816126499"
+SAN = "ACME-SAN-FABRIC-A"
+
+
+def contains_san_reference(value):
+    """Reject SAN identifiers even when nested in filesystem evidence."""
+    if isinstance(value, str):
+        normalized = value.casefold().strip()
+        return (SAN.casefold() in normalized or "twin-simulator" in normalized
+                or re.search(r"(?<![a-z0-9])(?:san|twin)(?![a-z0-9])", normalized) is not None)
+    if isinstance(value, dict):
+        return any(contains_san_reference(k) or contains_san_reference(v)
+                   for k, v in value.items())
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return any(contains_san_reference(item) for item in value)
+    return False
+
+
+def check_fs147_chain(ticket, run, evidence):
+    """Fail closed unless ticket 147, run and filesystem evidence agree."""
+    if not all(isinstance(x, dict) for x in (ticket, run, evidence)):
+        return False
+    rid = run.get("run_id")
+    eid = evidence.get("evidence_id")
+    provenance = evidence.get("provenance")
+    payload = evidence.get("payload")
+    if (str(ticket.get("id")) != "147" or not isinstance(rid, str)
+            or not rid.strip() or rid == LEGACY_RUN or not isinstance(eid, str)
+            or not eid.strip() or eid == LEGACY_EVIDENCE
+            or not isinstance(provenance, dict)
+            or not isinstance(payload, dict)):
+        return False
+    if str(run.get("glpi_ticket_id")) != "147":
+        return False
+    if provenance.get("run_id") != rid or str(provenance.get("glpi_ticket_id")) != "147":
+        return False
+    # If the Evidence API exposes redundant linkage fields, they must not
+    # contradict the authoritative provenance/run/ticket correlation.
+    if ("run_id" in evidence and evidence["run_id"] != rid) or (
+            "glpi_ticket_id" in evidence and str(evidence["glpi_ticket_id"]) != "147"):
+        return False
+    # Optional alert fingerprint must be present on both records and agree.
+    # An alert from a different incident must not be replayed into RUN 147.
+    run_alert = run.get("alert_fingerprint")
+    evidence_alert = provenance.get("alert_fingerprint")
+    if run_alert is not None or evidence_alert is not None:
+        if (not isinstance(run_alert, str) or not run_alert.strip()
+                or run_alert != evidence_alert):
+            return False
+    # A ticket-level alert identity, when supplied, must agree with RUN and
+    # Evidence; do not accept an alert from another incident at the GLPI edge.
+    ticket_alert = ticket.get("alert_fingerprint")
+    if ticket_alert is not None:
+        if (not isinstance(ticket_alert, str) or not ticket_alert.strip()
+                or ticket_alert != run_alert or ticket_alert != evidence_alert):
+            return False
+    # If an incident identifier is supplied anywhere, require a complete
+    # consistent link across ticket, RUN and Evidence provenance. Never
+    # silently accept an incident from another alert or ticket.
+    incident_values = [ticket.get("incident_id"), run.get("incident_id"),
+                       provenance.get("incident_id")]
+    if any(v is not None for v in incident_values):
+        if (not all(isinstance(v, str) and v.strip() for v in incident_values)
+                or len(set(incident_values)) != 1):
+            return False
+    # A historical GLPI approval is never a receipt for ticket 147.
+    # This fixture gate does not authorize actions even for matching approvals.
+    approval = payload.get("approval")
+    if isinstance(approval, dict) and "ticket_id" in approval:
+        if str(approval["ticket_id"]) != "147":
+            return False
+    if payload.get("filesystem") != "/fs-lab":
+        return False
+    if (not isinstance(evidence.get("source"), str)
+            or not evidence["source"].strip()
+            or payload.get("node_id") == SAN):
+        return False
+    if (contains_san_reference(ticket) or contains_san_reference(run)
+            or contains_san_reference(provenance) or contains_san_reference(payload)
+            or contains_san_reference(evidence)):
+        return False
+    # Presence of a receipt alone is not an observed filesystem measurement.
+    used = payload.get("used_percent")
+    if (isinstance(used, bool) or not isinstance(used, (int, float))
+            or not 0 <= used <= 100):
+        return False
+    if any(not isinstance(evidence.get(k), str) or not evidence[k].strip()
+           for k in ("payload_hash", "observed_at")):
+        return False
+    return True
+
+
+class FS147ChainContract(unittest.TestCase):
+    def setUp(self):
+        # Invented identifiers ONLY as negative/positive test fixtures.
+        self.ticket = {"id": 147}
+        self.run = {"run_id": "RUN-TEST-147", "glpi_ticket_id": 147}
+        self.evidence = {
+            "evidence_id": "EVD-TEST-147", "source": "filesystem-detector",
+            "payload_hash": "sha256:fixture", "observed_at": "2026-11-06T00:00:00Z",
+            "provenance": {"run_id": "RUN-TEST-147", "glpi_ticket_id": 147},
+            "payload": {"filesystem": "/fs-lab", "used_percent": 92},
+        }
+
+    def test_fixture_consistent(self):
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_legacy_v28_run_and_evidence_rejected(self):
+        self.run["run_id"] = LEGACY_RUN
+        self.evidence["evidence_id"] = LEGACY_EVIDENCE
+        self.evidence["provenance"]["run_id"] = LEGACY_RUN
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_wrong_ticket_and_run_rejected(self):
+        self.ticket["id"] = 146
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.ticket["id"] = 147
+        self.evidence["provenance"]["run_id"] = "RUN-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_and_missing_measurement_rejected(self):
+        self.evidence["source"] = "twin-simulator"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "filesystem-detector"
+        self.evidence["payload"]["node_id"] = SAN
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"].pop("node_id")
+        self.evidence["payload"]["filesystem"] = "/"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_nested_san_contamination_rejected(self):
+        self.evidence["payload"]["details"] = {
+            "observations": [{"asset": " ACME-SAN-FABRIC-A "}]
+        }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"].pop("details")
+        self.evidence["provenance"]["collector"] = ["Twin-Simulator"]
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_in_run_or_ticket_metadata_rejected(self):
+        self.run["context"] = {"asset": ["ACME-SAN-FABRIC-A"]}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run.pop("context")
+        self.ticket["context"] = {"origin": "Twin-Simulator"}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_in_other_evidence_metadata_rejected(self):
+        # The API may add envelope fields outside payload/provenance.
+        self.evidence["context"] = {"upstream": ["ACME-SAN-FABRIC-A"]}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence.pop("context")
+        self.evidence["collector_details"] = {"name": "Twin-Simulator"}
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_in_evidence_metadata_key_rejected(self):
+        self.evidence["ACME-SAN-FABRIC-A"] = "untrusted"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_conflicting_evidence_top_level_links_rejected(self):
+        self.evidence["run_id"] = "RUN-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["run_id"] = self.run["run_id"]
+        self.evidence["glpi_ticket_id"] = 146
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["glpi_ticket_id"] = 147
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_blank_run_and_evidence_ids_rejected(self):
+        self.run["run_id"] = "   "
+        self.evidence["provenance"]["run_id"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["run_id"] = "RUN-TEST-147"
+        self.evidence["provenance"]["run_id"] = "RUN-TEST-147"
+        self.evidence["evidence_id"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_missing_or_invalid_measurement_rejected(self):
+        self.evidence["payload"].pop("used_percent")
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        for invalid in ("92", True, -1, 101, None):
+            self.evidence["payload"]["used_percent"] = invalid
+            self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_blank_receipt_metadata_rejected(self):
+        self.evidence["payload_hash"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload_hash"] = "sha256:fixture"
+        self.evidence["observed_at"] = "   "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_cross_run_evidence_replay_rejected(self):
+        # A filesystem receipt from run A must not validate run B,
+        # even when both runs target ticket 147 and contain valid metrics.
+        other_run = {"run_id": "RUN-TEST-147-B", "glpi_ticket_id": 147}
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.assertFalse(check_fs147_chain(self.ticket, other_run, self.evidence))
+        other_evidence = {
+            **self.evidence,
+            "evidence_id": "EVD-TEST-147-B",
+            "provenance": {"run_id": "RUN-TEST-147-B", "glpi_ticket_id": 147},
+        }
+        self.assertTrue(check_fs147_chain(self.ticket, other_run, other_evidence))
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, other_evidence))
+
+    def test_san_source_spoofing_and_ticket146_rejected(self):
+        for source in (" Twin-Simulator ", "filesystem-SAN-bridge",
+                       "FILESYSTEM-TWIN-collector"):
+            self.evidence["source"] = source
+            self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "filesystem-detector"
+        self.run["glpi_ticket_id"] = 146
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_generic_san_twin_aliases_in_nested_metadata_rejected(self):
+        # Generic aliases must not bypass the recursive SAN isolation gate.
+        for alias in ("SAN-bridge", "twin_adapter", "collector/SAN", "TWIN"):
+            self.evidence["payload"]["details"] = {"collector": [alias]}
+            self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"].pop("details")
+        # Ordinary words containing these letters are not SAN identifiers.
+        self.evidence["payload"]["description"] = "sanity check on filesystem"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_non_finite_filesystem_measurement_rejected(self):
+        # NaN and infinities must never qualify an observed /fs-lab metric.
+        for invalid in (math.nan, math.inf, -math.inf):
+            with self.subTest(used_percent=repr(invalid)):
+                self.evidence["payload"]["used_percent"] = invalid
+                self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_alias_in_tuple_metadata_rejected(self):
+        # Tuple-based metadata must receive the same recursive SAN check.
+        self.run["collectors"] = ("filesystem-detector", {"origin": "SAN-bridge"})
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run.pop("collectors")
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_alias_in_set_metadata_rejected(self):
+        # Some internal collectors emit set-like metadata before JSON encoding.
+        for container in (set, frozenset):
+            with self.subTest(container=container.__name__):
+                self.run["collectors"] = container(("filesystem-detector", "SAN-bridge"))
+                self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run.pop("collectors")
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_source_sanity_is_not_a_san_reference(self):
+        # A substring match on 'san' would reject ordinary filesystem sources.
+        self.evidence["source"] = "filesystem-sanity-check"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "filesystem-SAN-bridge"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "Twin-Simulator"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_nested_metadata_keys_and_casefolded_san_aliases_rejected(self):
+        # JSON object keys are untrusted too; check every envelope boundary.
+        for target in (self.ticket, self.run, self.evidence):
+            with self.subTest(target=id(target)):
+                target["extensions"] = {"collector/TwIn": {"safe": "filesystem"}}
+                self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+                target.pop("extensions")
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_legacy_146_validation_is_not_a_147_receipt(self):
+        # A historical approval is not a filesystem measurement or 147 proof.
+        self.evidence["payload"].pop("used_percent")
+        self.evidence["payload"]["approval"] = {
+            "ticket_id": 146, "validation_id": 3, "status": "ACCEPTED"
+        }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_legacy_146_approval_rejected_even_with_valid_measurement(self):
+        # Valid df evidence cannot launder TicketValidation/3 from GLPI 146.
+        self.evidence["payload"]["approval"] = {
+            "ticket_id": 146, "validation_id": 3, "status": "ACCEPTED"
+        }
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["payload"]["approval"]["ticket_id"] = 147
+        # Passing the read-only correlation gate is not HITL authorization.
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_alert_fingerprint_cross_run_replay_rejected(self):
+        # Optional alert identity cannot be silently dropped or substituted.
+        self.run["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = " "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_ticket_alert_fingerprint_cross_incident_replay_rejected(self):
+        # An optional ticket alert must not disagree with the RUN/Evidence.
+        self.ticket["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["alert_fingerprint"] = "ALERT-FS147-A"
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.ticket["alert_fingerprint"] = "ALERT-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.ticket["alert_fingerprint"] = "  "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_incident_id_mismatch_and_partial_link_rejected(self):
+        # No fabricated incident is required for historical fixtures, but
+        # any supplied correlation must be complete and consistent.
+        self.ticket["incident_id"] = "INC-TEST-147"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["incident_id"] = "INC-TEST-147"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["incident_id"] = "INC-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["incident_id"] = "INC-TEST-147"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["incident_id"] = " "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_no_receipt_or_timestamp_is_not_proof(self):
+        self.evidence.pop("observed_at")
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+
+if __name__ == "__main__":
+    unittest.main()

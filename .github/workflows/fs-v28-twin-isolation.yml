@@ -1,0 +1,30 @@
+name: FS V28 Twin isolation (source-only)
+on:
+  pull_request:
+    paths:
+      - app/worker/main.py
+      - tests/test_fs_v28_twin_isolation.py
+      - tests/test_fs_v28_no_san_effects.py
+      - tests/test_fs_v28_malformed_evidence.py
+      - tests/test_fs_v28_lab147_non_contamination.py
+      - tests/test_fs147_e2e_chain_contract.py
+      - .github/workflows/fs-v28-twin-isolation.yml
+  workflow_dispatch:
+jobs:
+  isolated:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Execute isolated regression
+        run: |
+          python3 -m unittest discover -s tests -p 'test_fs_v28_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v
