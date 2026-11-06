@@ -43,7 +43,7 @@ export function mountFsReal(root, fetchImpl = fetch) {
   let generation=0, controller;
   const status=document.createElement('pre');
   status.setAttribute('role','status');
-  const unavailable=()=>{status.textContent='UNAVAILABLE — Core/Temporal/Policy UNKNOWN — SYNTHETIC — NO_LIVE_EFFECTS — approbation/résolution non attestées';};
+  const unavailable=()=>{status.textContent='UNAVAILABLE — Core/Temporal/Policy UNKNOWN — SYNTHETIC — NO_LIVE_EFFECTS — fraîcheur/approbation/résolution non attestées';};
   unavailable();
   const buttons=[['lab147','Incident lab 147'],['insufficient','Données insuffisantes']].map(([mode,label])=>{
     const button=document.createElement('button');button.type='button';button.textContent=label;
@@ -55,7 +55,7 @@ export function mountFsReal(root, fetchImpl = fetch) {
         status.textContent='SYNTHETIC — NO_LIVE_EFFECTS — GLPI 147\nIncident: '+p.incident+
           '\nRun: '+p.run+'\nEvidence: '+p.evidence+'\nCore: '+p.core+
           '\nTemporal: '+p.temporal+'\nPolicy: '+p.policy+
-          '\nApproval: NOT_ATTESTED\nResolution: NOT_ATTESTED'+
+          '\nFreshness: NOT_ATTESTED\nApproval: NOT_ATTESTED\nResolution: NOT_ATTESTED'+
           (p.questions.length?'\nQuestions humaines GLPI/Copilot:\n'+p.questions.join('\n'):'');
       } catch {if(current===generation)unavailable();}
     });return button;
