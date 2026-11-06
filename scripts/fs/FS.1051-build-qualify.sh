@@ -17,13 +17,33 @@ docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-n
  --entrypoint python aiops2-portal:fs1051-visual-candidate - <<'PY'
 from portal.main import app
 routes={getattr(r,"path","") for r in app.routes}
-required={"/health","/explorer/databases","/explorer/prometheus","/explorer/cmdb","/api/explorer/catalog","/explorer/visual","/api/fs1051/prometheus","/api/fs1051/twin"}
-missing=sorted(required-routes)
+new={"/explorer/visual","/api/fs1051/prometheus","/api/fs1051/twin"}
+missing=sorted(new-routes)
 print("FS1051_ROUTE_COUNT="+str(len(routes)))
-print("FS1051_MISSING_ROUTES="+str(missing))
-assert not missing
+print("FS1051_NEW_ROUTES_MISSING="+str(missing))
+assert not missing, "new FS1051 routes missing"
 from portal.fs1051_visual import router
 assert len(router.routes)==3
-print("FS1051_ROUTES=PASS")
+print("FS1051_NEW_ROUTES=PASS")
+# Legacy explorer routes may be registered by a catch-all dispatcher rather than
+# as individual FastAPI paths. Test their ASGI behavior rather than raw path strings.
+import asyncio
+async def probe(path):
+ sent=[]
+ async def receive():return {"type":"http.request","body":b"","more_body":False}
+ async def send(msg):sent.append(msg)
+ scope={"type":"http","asgi":{"version":"3.0"},"http_version":"1.1",
+        "method":"GET","scheme":"http","path":path,"raw_path":path.encode(),
+        "root_path":"","query_string":b"","headers":[(b"host",b"localhost")],
+        "client":("127.0.0.1",12345),"server":("localhost",80)}
+ await app(scope,receive,send)
+ return next((m["status"] for m in sent if m["type"]=="http.response.start"),None)
+async def check():
+ for path in ("/health","/explorer/databases","/explorer/prometheus","/explorer/cmdb","/api/explorer/catalog","/explorer/visual"):
+  status=await probe(path)
+  print("FS1051_ASGI="+path+" STATUS="+str(status))
+  assert status==200, (path,status)
+asyncio.run(check())
+print("FS1051_LEGACY_AND_NEW_ASGI=PASS")
 PY
 echo "FS1051_CANDIDATE=PASS"
