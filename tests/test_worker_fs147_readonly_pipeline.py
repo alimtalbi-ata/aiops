@@ -65,6 +65,23 @@ class FS147Tests(unittest.TestCase):
             source="fs-lab-bridge-readonly", commands=["df", "du", "ls"],
             read_only=True, collected_at="now"))["reason"], "INSUFFICIENT_OBSERVATION")
 
+    def test_nonfinite_or_boolean_measurements_rejected(self):
+        for value in (float("nan"), float("inf"), float("-inf"), True, False):
+            with self.subTest(value=value):
+                self.assertEqual(self.run_pipeline(
+                    observe=lambda _, v=value: dict(observation(R), used_percent=v)
+                )["reason"], "INSUFFICIENT_OBSERVATION")
+
+    def test_wrong_filesystem_rejected(self):
+        self.assertEqual(self.run_pipeline(
+            observe=lambda _: dict(observation(R), filesystem="/")
+        )["reason"], "INSUFFICIENT_OBSERVATION")
+
+    def test_blank_evidence_id_rejected(self):
+        self.assertEqual(self.run_pipeline(
+            observe=lambda _: dict(observation(R), evidence_id="   ")
+        )["reason"], "INSUFFICIENT_OBSERVATION")
+
     def test_policy_refusal(self):
         self.assertEqual(self.run_pipeline(policy=lambda *args: scoped(
             state="PASS", decision="DENY"))["reason"], "POLICY_REFUSED")
