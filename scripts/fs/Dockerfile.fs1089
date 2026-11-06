@@ -1,4 +1,4 @@
 FROM aiops2-portal:fs1073-csp-candidate
-COPY scripts/fs/fs1089_history_api.py /tmp/fs1089_history_api.py
+COPY app/portal/fs1089_history_api.py /tmp/fs1089_history_api.py
 COPY scripts/fs/fs1089_patch.py /tmp/fs1089_patch.py
 RUN python /tmp/fs1089_patch.py && python -m py_compile /app/portal/fs1051_visual.py && rm /tmp/fs1089_history_api.py /tmp/fs1089_patch.py
