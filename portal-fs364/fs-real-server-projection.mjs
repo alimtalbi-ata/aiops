@@ -28,18 +28,23 @@ export async function buildFsRealProjection({mode, ticketId, principal, authoriz
     safe(readCore),safe(readTemporal),safe(readPolicy),
     mode === 'insufficient' ? safe(readQuestions) : Promise.resolve(null)
   ]);
+  // Trust a cross-service correlation only after Core itself is tenant-scoped,
+  // synthetic, non-live and bound to ticket 147. A matching untrusted run_id
+  // alone must never authenticate a Temporal/Policy observation.
+  const trustedCore = core?.glpi_ticket_id === 147 && core?.synthetic === true &&
+    core?.no_live_effects === true;
+  const trustedRun = trustedCore && typeof core.run_id === 'string' &&
+    /^RUN-[A-Z0-9-]{1,80}$/.test(core.run_id) ? core.run_id : null;
   // No historic ticket 146 approval or state may be projected onto ticket 147.
   for (const [key,source] of [['core',core],['temporal',temporal],['policy',policy]]) {
     // A ticket match alone does not prove that services describe the same run.
     // If a service supplies a run correlation, require the Core run to match.
-    const coreRun = core?.run_id;
     const correlated = key === 'core' ||
-      (typeof coreRun === 'string' && typeof source?.run_id === 'string' &&
-       source.run_id === coreRun);
+      (trustedRun !== null && source?.run_id === trustedRun);
     if (correlated && source?.glpi_ticket_id === 147 && source?.synthetic === true &&
         source?.no_live_effects === true) result[key] = {state:state(source.state)};
   }
-  if (core?.glpi_ticket_id === 147 && core.synthetic === true && core.no_live_effects === true) {
+  if (trustedCore) {
     for (const [key,prefix] of [['incident_id','INC'],['run_id','RUN'],['evidence_id','EVD']]) {
       if (typeof core[key] === 'string' && new RegExp('^'+prefix+'-[A-Z0-9-]{1,80}$').test(core[key]))
         result[key] = core[key];

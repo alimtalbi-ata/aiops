@@ -56,3 +56,18 @@ test('unlinked service states remain UNKNOWN even when ticket and synthetic matc
  assert.equal(p.temporal.state,'UNKNOWN');
  assert.equal(p.policy.state,'UNKNOWN');
 });
+
+test('rejects matching run on untrusted Core ticket or mode markers',async()=>{
+ for (const badCore of [
+   {...observed,glpi_ticket_id:146},
+   {...observed,synthetic:false},
+   {...observed,no_live_effects:false},
+   {...observed,run_id:'not-a-run'}
+ ]) {
+   const p=await build({...base,readCore:async()=>badCore,
+     readTemporal:async()=>({...observed,run_id:badCore.run_id,state:'RUNNING'}),
+     readPolicy:async()=>({...observed,run_id:badCore.run_id,state:'BLOCKED'})});
+   assert.equal(p.temporal.state,'UNKNOWN');
+   assert.equal(p.policy.state,'UNKNOWN');
+ }
+});
