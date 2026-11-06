@@ -1,0 +1,3 @@
+FROM aiops2-portal:fs1051-visual-candidate
+COPY scripts/fs/fs1073_patch_csp.py /tmp/fs1073_patch_csp.py
+RUN python /tmp/fs1073_patch_csp.py && rm /tmp/fs1073_patch_csp.py
