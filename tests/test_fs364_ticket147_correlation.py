@@ -66,11 +66,11 @@ class FS364ContractTests(unittest.TestCase):
         ))
 
     def test_temporal_resume_requires_all_independent_gates(self):
-        args = dict(same_run=True, mode_match=True, authenticated=True, acl_ok=True,
+        args = dict(mode="DEMO", same_run=True, mode_match=True, authenticated=True, acl_ok=True,
                     stop_auto=False, policy_decision="ALLOW",
                     human_answer_verified=True, approval_specific=True)
         self.assertTrue(temporal_resume_allowed(**args))
-        for key, bad in (("same_run",False),("mode_match",False),
+        for key, bad in (("mode","LIVE"),("same_run",False),("mode_match",False),
                          ("authenticated",False),("acl_ok",False),
                          ("stop_auto",True),("policy_decision","BLOCKED"),
                          ("human_answer_verified",False),("approval_specific",False)):
