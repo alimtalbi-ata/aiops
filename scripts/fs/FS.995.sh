@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 echo '===== FS.995 | FS994 DEMO RUN READ-ONLY FORENSICS ====='
-docker exec aiops2-e2e-v1-aiops2-core-1 python - <<'PY'
+docker exec -i aiops2-e2e-v1-aiops2-core-1 python - <<'PY'
 import json,os,urllib.request
 rid='RUN-171493F5FE80D45E'
 token=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
@@ -31,7 +31,7 @@ for g in detail.get('gates',[]):
  print('GATE='+json.dumps({k:g.get(k) for k in ('stage','state','decision','reason')},default=str,sort_keys=True))
 print('REMEDIATE_EVENT_COUNT='+str(sum(e.get('stage')=='REMEDIATE' for e in events)))
 print('VERIFY_EVENT_COUNT='+str(sum(e.get('stage')=='VERIFY' for e in events)))
-print('FORENSIC_READ_ONLY=PASS')
+assert events, 'NO_RUN_EVENTS_RETURNED'\nprint('FORENSIC_READ_ONLY=PASS')
 PY
 echo 'HTTP_WRITES=0'
 echo 'NEW_WORKFLOWS_STARTED=0'
