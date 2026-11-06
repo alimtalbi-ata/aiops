@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """FS1087: read-only Prometheus time-series capability discovery."""
 import datetime,json,os,pathlib,subprocess,sys,urllib.parse,urllib.request
-NAME="aiops2-rebuild-prometheus"
+NAME="aiops2-rebuild-portal"
 queries={
  "availability":"up",
  "scrape_duration":"scrape_duration_seconds",
@@ -19,7 +19,7 @@ def docker(*args):
  if p.returncode:raise RuntimeError("docker "+args[0]+" failed: "+p.stderr[-180:])
  return p.stdout.strip()
 def fetch(path,params=None):
- url="http://127.0.0.1:9090"+path
+ url="http://aiops2-rebuild-prometheus:9090"+path
  if params:url+="?"+urllib.parse.urlencode(params)
  raw=docker("exec",NAME,"python3","-c", "import urllib.request,sys;print(urllib.request.urlopen(sys.argv[1],timeout=7).read(2000000).decode())",url)
  obj=json.loads(raw)
@@ -27,7 +27,7 @@ def fetch(path,params=None):
  return obj["data"]
 def main():
  info=json.loads(docker("inspect",NAME))[0]
- assert info["State"]["Running"],"Prometheus not running"
+ assert info["State"]["Running"],"Portal not running"
  stamp=datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
  out=pathlib.Path.home()/".local/state/aiops-debian-agent/prometheus"/("fs1087-"+stamp)
  out.mkdir(parents=True,mode=0o700,exist_ok=False)
