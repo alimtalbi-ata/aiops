@@ -30,7 +30,13 @@ export async function buildFsRealProjection({mode, ticketId, principal, authoriz
   ]);
   // No historic ticket 146 approval or state may be projected onto ticket 147.
   for (const [key,source] of [['core',core],['temporal',temporal],['policy',policy]]) {
-    if (source?.glpi_ticket_id === 147 && source?.synthetic === true &&
+    // A ticket match alone does not prove that services describe the same run.
+    // If a service supplies a run correlation, require the Core run to match.
+    const coreRun = core?.run_id;
+    const correlated = key === 'core' ||
+      (typeof coreRun === 'string' && typeof source?.run_id === 'string' &&
+       source.run_id === coreRun);
+    if (correlated && source?.glpi_ticket_id === 147 && source?.synthetic === true &&
         source?.no_live_effects === true) result[key] = {state:state(source.state)};
   }
   if (core?.glpi_ticket_id === 147 && core.synthetic === true && core.no_live_effects === true) {
