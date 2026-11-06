@@ -37,6 +37,30 @@ class Ticket147BackendFailureTests(unittest.TestCase):
                     lambda _: ("tenant-A", self.link.incident_id),
                     lambda *_: True), False)
 
+    def test_acl_denial_prevents_glpi_and_ownership_reads(self):
+        for decision in (False, None, 1, "true", {}, []):
+            with self.subTest(decision=decision):
+                reads = []
+                def get_ticket(*args):
+                    reads.append(("glpi", args))
+                    return self.ticket
+                def get_owner(*args):
+                    reads.append(("owner", args))
+                    return ("tenant-A", self.link.incident_id)
+                self.assertIs(self.verify(get_ticket, get_owner,
+                                          lambda *_: decision), False)
+                self.assertEqual(reads, [], "ACL denial must not expose ticket or owner")
+
+    def test_acl_error_prevents_glpi_and_ownership_reads(self):
+        reads = []
+        def forbidden_read(*_):
+            reads.append("read")
+            raise AssertionError("read after ACL error")
+        def failed_acl(*_):
+            raise PermissionError("denied")
+        self.assertIs(self.verify(forbidden_read, forbidden_read, failed_acl), False)
+        self.assertEqual(reads, [])
+
     def test_invalid_tenant_prevents_all_backend_reads(self):
         calls = []
         def observed(*args):
