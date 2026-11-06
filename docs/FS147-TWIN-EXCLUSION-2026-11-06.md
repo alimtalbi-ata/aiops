@@ -34,3 +34,9 @@ Gates au moment de cette modification : CODE publié sur PR #431 ; CI du nouveau
 ## Régression aliases SAN/Twin génériques — 2026-11-06
 
 Le test fixture-only refuse désormais aussi les tokens `SAN` et `Twin` délimités dans les métadonnées imbriquées (`SAN-bridge`, `twin_adapter`, `collector/SAN`, `TWIN`), sans rejeter un mot ordinaire tel que `sanity`. Cela comble le contournement par alias sans imposer un adaptateur SAN. Le test ne prouve ni l'authenticité de l'Evidence ni l'existence d'un RUN 147 réel. Exécuter `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v` au SHA exact ; conserver CI, HÔTE et EXÉCUTÉ séparés. Aucun déploiement, aucune mutation du lab et aucune approbation HITL.
+
+## Qualification complémentaire des fixtures — 2026-11-06
+
+Le contrat E2E teste explicitement le rejet de métriques non finies (`NaN`, `+Infinity`, `-Infinity`) et d'un alias SAN enfoui dans une métadonnée `tuple` du RUN. Le contrôle accepte toujours une fixture filesystem cohérente après retrait de cette contamination. Ces assertions sont **des tests négatifs source-only**, pas des observations de l'hôte. Elles ne créent ni RUN ni Evidence et ne changent pas le comportement de production.
+
+CI : six workflows GitHub ont conclu `success` pour le SHA précédent `122b5e701f9898d423b9efec031b5326b4dc2daa`, dont « FS V28 Twin isolation (source-only) ». Cela ne qualifie **pas** les nouveaux tests avant exécution au SHA du dernier commit. HÔTE Debian : non vérifié. EXÉCUTÉ E2E 147 : non démontré. Aucune fusion ni mise en production.
