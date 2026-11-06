@@ -3,6 +3,10 @@
 set -Eeuo pipefail
 [[ "${DEPLOY_FS621:-}" == "YES" ]] || { echo "Refusing: explicit DEPLOY_FS621=YES required"; exit 2; }
 [[ "${FS621_ACCEPTANCE_COMPLETE:-}" == "YES" ]] || { echo "Refusing: FS621 acceptance not complete"; exit 2; }
+[[ "${FS621_SECRETS_READY:-}" == "YES" ]] || { echo "Refusing: operational Compose secrets have not been verified"; exit 2; }
+for key in AIOPS_ADMIN_TOKEN AIOPS_INTERNAL_TOKEN CORE_URL GLPI_API_URL GLPI_APP_TOKEN GLPI_USER_TOKEN; do
+  [[ -n "${!key:-}" ]] || { echo "Refusing: required Compose variable $key not set"; exit 2; }
+done
 : "${EXPLORER_ALLOWED_CIDRS:?Trusted network CIDRs required}"
 : "${COMPOSE_FILES:?Three original compose files required, colon separated, in original order}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
