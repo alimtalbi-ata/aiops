@@ -57,7 +57,14 @@ def check_fs147_chain(ticket, run, evidence):
         if (not isinstance(run_alert, str) or not run_alert.strip()
                 or run_alert != evidence_alert):
             return False
-    # A ticket-level alert identity, when supplied, must agree with RUN and\n    # Evidence; do not accept an alert from another incident at the GLPI edge.\n    ticket_alert = ticket.get("alert_fingerprint")\n    if ticket_alert is not None:\n        if (not isinstance(ticket_alert, str) or not ticket_alert.strip()\n                or ticket_alert != run_alert or ticket_alert != evidence_alert):\n            return False\n    # If an incident identifier is supplied anywhere, require a complete
+    # A ticket-level alert identity, when supplied, must agree with RUN and
+    # Evidence; do not accept an alert from another incident at the GLPI edge.
+    ticket_alert = ticket.get("alert_fingerprint")
+    if ticket_alert is not None:
+        if (not isinstance(ticket_alert, str) or not ticket_alert.strip()
+                or ticket_alert != run_alert or ticket_alert != evidence_alert):
+            return False
+    # If an incident identifier is supplied anywhere, require a complete
     # consistent link across ticket, RUN and Evidence provenance. Never
     # silently accept an incident from another alert or ticket.
     incident_values = [ticket.get("incident_id"), run.get("incident_id"),
@@ -294,7 +301,21 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["provenance"]["alert_fingerprint"] = " "
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
-    def test_ticket_alert_fingerprint_cross_incident_replay_rejected(self):\n        # An optional ticket alert must not disagree with the RUN/Evidence.\n        self.ticket["alert_fingerprint"] = "ALERT-FS147-A"\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.run["alert_fingerprint"] = "ALERT-FS147-A"\n        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-OTHER"\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-FS147-A"\n        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.ticket["alert_fingerprint"] = "ALERT-OTHER"\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n        self.ticket["alert_fingerprint"] = "  "\n        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))\n\n    def test_incident_id_mismatch_and_partial_link_rejected(self):
+    def test_ticket_alert_fingerprint_cross_incident_replay_rejected(self):
+        # An optional ticket alert must not disagree with the RUN/Evidence.
+        self.ticket["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["alert_fingerprint"] = "ALERT-FS147-A"
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["alert_fingerprint"] = "ALERT-FS147-A"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.ticket["alert_fingerprint"] = "ALERT-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.ticket["alert_fingerprint"] = "  "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_incident_id_mismatch_and_partial_link_rejected(self):
         # No fabricated incident is required for historical fixtures, but
         # any supplied correlation must be complete and consistent.
         self.ticket["incident_id"] = "INC-TEST-147"
