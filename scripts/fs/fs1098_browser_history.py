@@ -32,7 +32,7 @@ try:
             }""",timeout=30000)
             assert page.locator("#history-chart").count()==1
             assert page.locator("#history-legend").count()==1
-            assert page.locator("#history-legend span").count()==5
+            assert page.locator("#history-legend > span").count()==5
             assert page.locator("#history-chart path").count()==5
             assert "script-src 'sha256-" in (response.headers.get("content-security-policy") or "")
             assert "style-src 'sha256-" in (response.headers.get("content-security-policy") or "")
@@ -57,7 +57,7 @@ try:
                       const s=document.querySelector('#history-status')?.textContent || '';
                       return s.includes(w) && s.includes('points') &&
                         document.querySelectorAll('#history-chart path').length === 5 &&
-                        document.querySelectorAll('#history-legend span').length === 5;
+                        document.querySelectorAll('#history-legend > span').length === 5;
                     }""",[window],timeout=20000)
                     status=page.locator("#history-status").inner_text()
                     report["matrix"].append({"metric":metric,"window":window,"status":api_response.status,
