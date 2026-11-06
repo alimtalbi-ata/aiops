@@ -4,8 +4,12 @@ const STATES = new Set(['UNKNOWN','PENDING','RUNNING','BLOCKED','FAILED','WAITIN
 export function validateProjection(p, mode) {
   if (!['lab147','insufficient'].includes(mode) || !p || Array.isArray(p) ||
       p.mode !== mode || p.glpi_ticket_id !== 147 || p.synthetic !== true ||
-      p.no_live_effects !== true || p.approved === true || p.resolved === true)
+      p.no_live_effects !== true || (p.approved != null && p.approved !== false) ||
+      (p.resolved != null && p.resolved !== false))
     throw new Error('UNTRUSTED_PROJECTION');
+  if (p.questions != null && (!Array.isArray(p.questions) || p.questions.length > 12 ||
+      p.questions.some(q => typeof q !== 'string' || q.length > 500)))
+    throw new Error('INVALID_HUMAN_QUESTIONS');
   for (const service of ['core','temporal','policy'])
     if (!STATES.has(p[service]?.state)) throw new Error('INVALID_SERVICE_STATE');
   for (const [key,prefix] of [['incident_id','INC'],['run_id','RUN'],['evidence_id','EVD']])
