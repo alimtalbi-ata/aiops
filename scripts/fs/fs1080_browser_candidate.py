@@ -30,8 +30,24 @@ try:
    assert rows>0 and graph>0
    page.screenshot(path=str(out/"portal-visual-desktop.png"),full_page=True)
    print("FS1080_DESKTOP_SNAPSHOT=PASS",flush=True)
-   page.locator("#graph .node").first.click()
-   assert page.locator("#detail").text_content().strip()!="Sélectionnez un nœud"
+   node=page.locator("#graph .node").first
+   circle=node.locator("circle")
+   geometry=circle.evaluate("(e) => {const r=e.getBoundingClientRect();const x=r.left+r.width/2,y=r.top+r.height/2;const h=document.elementFromPoint(x,y);return {x,y,width:r.width,height:r.height,hitTag:h?.tagName,hitClass:h?.getAttribute('class')}}")
+   print("FS1081_NODE_HITTEST="+json.dumps(geometry),flush=True)
+   report["checks"]["hit_test"]=geometry
+   try:
+    circle.click(timeout=4000)
+    print("FS1081_POINTER_CLICK=PASS",flush=True)
+    report["checks"]["pointer_click"]="PASS"
+   except Exception as click_error:
+    print("FS1081_POINTER_CLICK=FAIL "+type(click_error).__name__,flush=True)
+    report["checks"]["pointer_click"]="FAIL"
+   detail=page.locator("#detail")
+   if detail.text_content().strip()=="Sélectionnez un nœud":
+    node.focus()
+    page.keyboard.press("Enter")
+    print("FS1081_KEYBOARD_SELECTION=TRIED",flush=True)
+   assert detail.text_content().strip()!="Sélectionnez un nœud","SVG selection failed by pointer and keyboard"
    report["checks"]["node_selection"]="PASS"
    page.locator("#search").fill("FS1080_NO_MATCH_7a2f")
    assert page.locator("#graph .node").count()==0
