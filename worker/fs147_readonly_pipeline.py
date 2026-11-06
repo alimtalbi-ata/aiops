@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Mapping
 import hashlib
 import json
+import math
 
 
 @dataclass(frozen=True)
@@ -62,11 +63,13 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("OBSERVATION_SCOPE", steps)
         if (observation.get("source") != "fs-lab-bridge-readonly"
                 or observation.get("commands") != ["df", "du", "ls"]
-                or not observation.get("evidence_id")
+                or not isinstance(observation.get("evidence_id"), str)
+                or not observation["evidence_id"].strip()
                 or not observation.get("collected_at")
-                or not isinstance(observation.get("used_percent"), (int, float))
+                or type(observation.get("used_percent")) not in (int, float)
+                or not math.isfinite(observation["used_percent"])
                 or not 0 <= observation["used_percent"] <= 100
-                or not observation.get("filesystem")
+                or observation.get("filesystem") != "/fs-lab"
                 or not observation.get("read_only") is True):
             return _blocked("INSUFFICIENT_OBSERVATION", steps)
         steps.append("OBSERVE")
