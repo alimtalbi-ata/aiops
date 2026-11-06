@@ -35,7 +35,7 @@ function draw(series){
  ctx.fillStyle=colors[i];ctx.fillText(JSON.stringify(s.metric||{}).slice(0,95),60,20+i*19);
  });
 }
-const titles={databases:'SQL Explorer',prometheus:'Prometheus Explorer',alerts:'Alertes et règles',cmdb:'Inventaire CMDB',logs:'Logs Loki',traces:'Traces Tempo',orchestration:'Temporal et n8n'};
+const titles={databases:'SQL Explorer',prometheus:'Prometheus Explorer',alerts:'Alertes et règles',cmdb:'Inventaire CMDB',logs:'Logs Loki',traces:'Traces Tempo',orchestration:'Temporal et n8n',core:'Core AIOps'};
 $('heading').textContent=titles[page]||'Explorateur';
 document.querySelectorAll('nav a').forEach(a=>{if(a.dataset.page===page)a.setAttribute('aria-current','page')});
 const controls=$('controls');
@@ -104,6 +104,19 @@ async function traces(){
  button('Afficher la trace',()=>show(async()=>raw(await api('/observability/tempo/trace/'+encodeURIComponent(id.value))))));
  raw({notice:'La recherche peut retourner zéro trace ; aucune trace n’est créée par cet explorateur.'});
 }
+async function core(){
+ $('intro').textContent='Core AIOps : tableau de bord, incidents, exécutions et scénarios existants. Consultation uniquement.';
+ const collection=select([['dashboard','Tableau de bord'],['incidents','Incidents'],['runs','Exécutions'],['scenarios','Scénarios']]);
+ controls.append(collection,button('Consulter le Core',()=>show(async()=>{
+ const data=await api('/core/'+collection.value+'?limit=100');
+ if(collection.value==='dashboard'){table(['indicateur','valeur'],Object.entries(data).map(([indicateur,valeur])=>({indicateur,valeur})));return;}
+ const rows=data.items||[];
+ if(!rows.length){table(['résultat'],[]);status('Aucun résultat Core pour cette collection.');return;}
+ const columns=Object.keys(rows[0]);table(columns,rows);
+ if(data.truncated)status('Résultats limités à 100 lignes ; '+data.upstream_returned+' disponibles.');
+ })));
+ raw({notice:'Aucune commande d’exécution ou modification n’est exposée par cette page.'});
+}
 async function cmdb(){
  $('intro').textContent='État de la connexion CMDB ; aucun endpoint d’inventaire non vérifié n’est supposé.';
  controls.append(button('Vérifier la connexion',()=>show(async()=>raw(await api('/observability/cmdb/health')))));
@@ -149,4 +162,4 @@ async function orchestration(){
  })));
  raw({notice:'Listes n8n disponibles uniquement avec EXPLORER_N8N_API_KEY côté serveur. Temporal : namespaces et workflows en lecture seule via Temporal UI.'});
 }
-({databases,prometheus,alerts,logs,traces,cmdb,orchestration}[page]||(()=>Promise.resolve()))().catch(e=>status(e.message,true));
+({databases,prometheus,alerts,logs,traces,cmdb,orchestration,core}[page]||(()=>Promise.resolve()))().catch(e=>status(e.message,true));
