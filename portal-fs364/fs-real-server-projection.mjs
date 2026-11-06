@@ -45,7 +45,12 @@ export async function buildFsRealProjection({mode, ticketId, principal, authoriz
     // A ticket match alone does not prove that services describe the same run.
     // If a service supplies a run correlation, require the Core run to match.
     const correlated = key === 'core' ? trustedCore :
-      (trustedRun !== null && source?.run_id === trustedRun);
+      (trustedRun !== null && source?.run_id === trustedRun &&
+       // Optional correlation identifiers must never contradict Core.
+       (source?.incident_id == null ||
+        (typeof core?.incident_id === 'string' && source.incident_id === core.incident_id)) &&
+       (source?.evidence_id == null ||
+        (typeof core?.evidence_id === 'string' && source.evidence_id === core.evidence_id)));
     if (correlated && source?.glpi_ticket_id === 147 && source?.synthetic === true &&
         source?.no_live_effects === true) result[key] = {state:state(source.state)};
   }
