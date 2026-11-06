@@ -31,6 +31,7 @@ CURRENT="$(docker inspect "$CONTAINER" --format '{{.Config.Image}}')"
 BACKUP="$HOME/aiops2-backups/FS624-$(date -u +%Y%m%d-%H%M%S)"
 umask 077
 mkdir -p "$BACKUP"
+trap 'rm -f "$BACKUP/overlay.json" "$BACKUP/merged.json"' EXIT
 printf '%s\n' "$CURRENT" > "$BACKUP/previous-image.txt"
 # No environment or secrets are dumped. The original compose stack is retained.
 python3 - "$BACKUP/overlay.json" <<'PY'
@@ -69,5 +70,6 @@ echo "Previous image recorded; deploying portal service only."
 docker compose -p "$PROJECT" "${ARGS[@]}" -f "$BACKUP/overlay.json" up -d --no-deps --no-build "$SERVICE"
 echo "CUTOVER_COMPLETE — verify /health and /explorer/prometheus from trusted administration network"
 echo "BACKUP_DIR=$BACKUP"
+echo "Sensitive Compose overlays removed on exit; rollback requires approved regeneration."
 echo "ROLLBACK_IMAGE=$CURRENT"
 echo "No run execution, GLPI ticket update or HITL action requested."
