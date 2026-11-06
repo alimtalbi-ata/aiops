@@ -6,8 +6,6 @@ EXPECTED=dfa580bb4caeea2e4815f8c3ab560e3b0d54b44fb5dc3abc38b4a3f56cbc8327
 ACTUAL="$(docker run --rm --network none --entrypoint python "$IMAGE" -c 'import hashlib;print(hashlib.sha256(open("/app/worker/main.py","rb").read()).hexdigest())')"
 [[ "$ACTUAL" == "$EXPECTED" ]] || { echo "IMAGE_INTEGRITY=FAIL SHA=$ACTUAL"; exit 1; }
 echo 'IMAGE_INTEGRITY=PASS'
-docker run --rm --network none --entrypoint python "$IMAGE" - <<'PY'
-PY
 # Pass the test program as a Python -c argument so Docker does not need stdin.
 TEST="$(cat <<'PY'
 import ast,pathlib
