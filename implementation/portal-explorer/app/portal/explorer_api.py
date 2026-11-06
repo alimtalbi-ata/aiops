@@ -135,7 +135,7 @@ def _read(service, path, params=None):
 @router.get("/{page}")
 def page(page: str, request: Request):
     _check(request)
-    if page not in {"databases", "prometheus", "alerts", "cmdb", "logs", "traces", "orchestration"}:
+    if page not in {"databases", "prometheus", "alerts", "cmdb", "logs", "traces", "orchestration", "core"}:
         raise HTTPException(404)
     response = FileResponse(os.path.join(ROOT, "explorer_ui.html"), media_type="text/html")
     response.headers["Content-Security-Policy"] = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
