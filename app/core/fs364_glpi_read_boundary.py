@@ -28,6 +28,11 @@ def verify_ticket147_readonly(link, *, tenant_id, actor_id, glpi_get,
             return False
         # No client supplied ticket id; never create a duplicate ticket.
         ticket = glpi_get(147)
+        # GLPI deletion state must be explicit and false; absent/ambiguous is not safe.
+        if (not isinstance(ticket, Mapping)
+                or type(ticket.get("is_deleted")) is not int
+                or ticket["is_deleted"] != 0):
+            return False
         owner = authoritative_owner(147)
         if not isinstance(ticket, Mapping) or not isinstance(owner, tuple) or len(owner) != 2:
             return False
