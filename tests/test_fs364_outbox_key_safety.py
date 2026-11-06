@@ -26,7 +26,7 @@ class CorrelationKeySafetyTests(unittest.TestCase):
         self.assertTrue(envelope_still_admissible(envelope, envelope, state, state))
         for field in ("alert_fingerprint", "incident_id", "run_id", "evidence_id",
                       "tenant_id", "idempotency_key", "state_version", "policy_version"):
-            for bad in ("x y", "x\\ty", "x\\ny", "x\\x00y", "x\\u200by"):
+            for bad in ("x y", "x\ty", "x\ny", "x\x00y", "x\u200by"):
                 with self.subTest(field=field, bad=repr(bad)):
                     malformed = replace(envelope, **{field: bad})
                     self.assertFalse(envelope_still_admissible(malformed, envelope, state, state))
