@@ -34,3 +34,16 @@ test('explicit false approval and resolution are not proof of acceptance',()=>{
  assert.equal(p.policy,'BLOCKED');
  assert.equal(Object.hasOwn(p,'approved'),false);
 });
+
+test('reject redirected JSON even with valid-looking projection',async()=> {
+ await assert.rejects(fetchProjection('lab147',async()=>({
+   ok:true,redirected:true,url:'https://login.invalid/session',
+   headers:{get:()=> 'application/json'},json:async()=>base
+ })),/UNAVAILABLE_REDIRECT/);
+});
+test('reject mismatched response URL even when redirected flag is missing',async()=> {
+ await assert.rejects(fetchProjection('lab147',async()=>({
+   ok:true,url:'https://portal.invalid/auth/callback',
+   headers:{get:()=> 'application/json'},json:async()=>base
+ })),/UNAVAILABLE_REDIRECT/);
+});
