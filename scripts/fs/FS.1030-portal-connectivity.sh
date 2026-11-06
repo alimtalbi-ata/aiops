@@ -10,11 +10,7 @@ for name in aiops2-rebuild-portal aiops2-rebuild-prometheus aiops2-rebuild-twin 
   fi
 done
 echo "===== PORTAL IMAGE ROUTES (NO EXEC) ====="
-docker exec aiops2-rebuild-portal python - <<'PY' 2>/dev/null || true
-from portal.main import app
-for r in app.routes:
-    if hasattr(r,'path'): print('ROUTE='+r.path)
-PY
+docker exec aiops2-rebuild-portal python -c 'from portal.main import app; print("\\n".join("ROUTE="+r.path for r in app.routes if hasattr(r,"path")))' 2>/dev/null || echo 'PORTAL_ROUTE_INSPECTION=UNKNOWN'
 echo "===== PORTAL NETWORK API CHECK ====="
 docker exec aiops2-rebuild-portal python -c '
 import urllib.request
