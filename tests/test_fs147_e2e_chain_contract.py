@@ -167,6 +167,29 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["observed_at"] = "   "
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
+    def test_cross_run_evidence_replay_rejected(self):
+        # A filesystem receipt from run A must not validate run B,
+        # even when both runs target ticket 147 and contain valid metrics.
+        other_run = {"run_id": "RUN-TEST-147-B", "glpi_ticket_id": 147}
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.assertFalse(check_fs147_chain(self.ticket, other_run, self.evidence))
+        other_evidence = {
+            **self.evidence,
+            "evidence_id": "EVD-TEST-147-B",
+            "provenance": {"run_id": "RUN-TEST-147-B", "glpi_ticket_id": 147},
+        }
+        self.assertTrue(check_fs147_chain(self.ticket, other_run, other_evidence))
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, other_evidence))
+
+    def test_san_source_spoofing_and_ticket146_rejected(self):
+        for source in (" Twin-Simulator ", "filesystem-SAN-bridge",
+                       "FILESYSTEM-TWIN-collector"):
+            self.evidence["source"] = source
+            self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["source"] = "filesystem-detector"
+        self.run["glpi_ticket_id"] = 146
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
     def test_no_receipt_or_timestamp_is_not_proof(self):
         self.evidence.pop("observed_at")
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
