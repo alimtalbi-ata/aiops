@@ -1,6 +1,7 @@
 """Contract tests with explicit fake adapters; never claimed as host E2E."""
 import unittest
 from dataclasses import replace
+from datetime import datetime, timezone
 from worker.fs147_readonly_pipeline import FS147Request, execute
 
 R = FS147Request("tenant", "actor", "incident", "run")
@@ -14,7 +15,7 @@ def scoped(**kwargs):
 def observation(_):
     return scoped(source="fs-lab-bridge-readonly", commands=["df", "du", "ls"],
                   read_only=True, used_percent=92, filesystem="/fs-lab",
-                  collected_at="2026-11-06T00:00:00Z")
+                  collected_at=datetime.now(timezone.utc).isoformat())
 
 
 def analyst(_, obs):
