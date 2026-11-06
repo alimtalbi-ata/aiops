@@ -1,6 +1,6 @@
 --- a/app/worker/main.py
 +++ b/app/worker/main.py
-@@ -827,6 +827,10 @@
+@@ -825,6 +825,10 @@
    detail = await asyncio.to_thread(get_json, CORE, f'/api/runs/{rid}', token=ADMIN)
   except Exception as exc:
 +  from requests.exceptions import HTTPError
