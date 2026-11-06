@@ -99,3 +99,15 @@ test('ACL must return literal true, not a truthy denial or error object',async()
    assert.equal(reads,0,'no service read after ambiguous ACL decision');
  }
 });
+
+test('malformed principals fail closed before ACL and service reads',async()=>{
+ for (const bad of [true,'reader',[],{}, {actor:'reader'}, {tenant:'lab'},
+   {actor:' ',tenant:'lab'}, {actor:'reader',tenant:' '}]) {
+   let authCalls=0, reads=0;
+   await assert.rejects(build({...base,principal:bad,
+     authorize:async()=>{authCalls++;return true;},
+     readCore:async()=>{reads++;return observed;}}),/FORBIDDEN/);
+   assert.equal(authCalls,0);
+   assert.equal(reads,0);
+ }
+});
