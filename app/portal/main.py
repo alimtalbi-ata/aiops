@@ -478,3 +478,7 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+# Read-only observability / inventory routes.
+from portal.observability_views import register_views
+register_views(app, lambda path: _get(path), lambda path: _get(path, TWIN))
