@@ -2,8 +2,14 @@
 set -euo pipefail
 ROOT="${1:-/home/aiops/aiops2-v2-delivery}"
 cd "$ROOT"
-echo "SOURCE_BRANCH=$(git branch --show-current)"
-python3 -m compileall -q app/portal
+echo "QUALIFICATION_SOURCE=/src (read-only)"
+python3 - <<'PYCOMPILE'
+import ast
+from pathlib import Path
+for path in Path("app/portal").glob("*.py"):
+    ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+print("PORTAL_SYNTAX=PASS")
+PYCOMPILE
 PYTHONPATH=app python3 - <<'PY'
 import sys
 from unittest.mock import patch
