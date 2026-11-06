@@ -3,6 +3,7 @@
 This is deliberately NOT an adapter: it rejects unrelated runs/evidence and
 cannot approve remediation. Feed only real snapshots once host access exists.
 """
+import math
 import re
 import unittest
 
@@ -200,6 +201,20 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["payload"].pop("details")
         # Ordinary words containing these letters are not SAN identifiers.
         self.evidence["payload"]["description"] = "sanity check on filesystem"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_non_finite_filesystem_measurement_rejected(self):
+        # NaN and infinities must never qualify an observed /fs-lab metric.
+        for invalid in (math.nan, math.inf, -math.inf):
+            with self.subTest(used_percent=repr(invalid)):
+                self.evidence["payload"]["used_percent"] = invalid
+                self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_san_alias_in_tuple_metadata_rejected(self):
+        # Tuple-based metadata must receive the same recursive SAN check.
+        self.run["collectors"] = ("filesystem-detector", {"origin": "SAN-bridge"})
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run.pop("collectors")
         self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
