@@ -71,3 +71,22 @@ test('rejects matching run on untrusted Core ticket or mode markers',async()=>{
    assert.equal(p.policy.state,'UNKNOWN');
  }
 });
+
+
+test('untrusted Core never supplies a displayed state or correlation IDs', async()=>{
+ for (const bad of [
+   {...observed,glpi_ticket_id:146,state:'RUNNING'},
+   {...observed,synthetic:false,state:'RUNNING'},
+   {...observed,no_live_effects:false,state:'RUNNING'}
+ ]) {
+   const p=await build({...base,readCore:async()=>bad,
+     readTemporal:async()=>({...observed,state:'RUNNING'}),
+     readPolicy:async()=>({...observed,state:'BLOCKED'})});
+   assert.equal(p.core.state,'UNKNOWN');
+   assert.equal(p.temporal.state,'UNKNOWN');
+   assert.equal(p.policy.state,'UNKNOWN');
+   assert.equal(p.run_id,undefined);
+   assert.equal(p.approved,false);
+   assert.equal(p.resolved,false);
+ }
+});
