@@ -57,6 +57,15 @@ def check_fs147_chain(ticket, run, evidence):
         if (not isinstance(run_alert, str) or not run_alert.strip()
                 or run_alert != evidence_alert):
             return False
+    # If an incident identifier is supplied anywhere, require a complete
+    # consistent link across ticket, RUN and Evidence provenance. Never
+    # silently accept an incident from another alert or ticket.
+    incident_values = [ticket.get("incident_id"), run.get("incident_id"),
+                       provenance.get("incident_id")]
+    if any(v is not None for v in incident_values):
+        if (not all(isinstance(v, str) and v.strip() for v in incident_values)
+                or len(set(incident_values)) != 1):
+            return False
     # A historical GLPI approval is never a receipt for ticket 147.
     # This fixture gate does not authorize actions even for matching approvals.
     approval = payload.get("approval")
@@ -283,6 +292,20 @@ class FS147ChainContract(unittest.TestCase):
         self.evidence["provenance"]["alert_fingerprint"] = "ALERT-FS147-A"
         self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
         self.evidence["provenance"]["alert_fingerprint"] = " "
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+
+    def test_incident_id_mismatch_and_partial_link_rejected(self):
+        # No fabricated incident is required for historical fixtures, but
+        # any supplied correlation must be complete and consistent.
+        self.ticket["incident_id"] = "INC-TEST-147"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["incident_id"] = "INC-TEST-147"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["incident_id"] = "INC-OTHER"
+        self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.evidence["provenance"]["incident_id"] = "INC-TEST-147"
+        self.assertTrue(check_fs147_chain(self.ticket, self.run, self.evidence))
+        self.run["incident_id"] = " "
         self.assertFalse(check_fs147_chain(self.ticket, self.run, self.evidence))
 
     def test_no_receipt_or_timestamp_is_not_proof(self):
