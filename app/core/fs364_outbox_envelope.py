@@ -38,7 +38,7 @@ def envelope_still_admissible(
                 "tenant_id", "idempotency_key", "state_version", "policy_version",
             ):
                 value = getattr(envelope, name)
-                if not isinstance(value, str) or not value or value != value.strip():
+                if (not isinstance(value, str) or not value or value != value.strip()\n                        or not value.isprintable() or any(ch.isspace() for ch in value)):
                     return False
             if envelope.mode != "DEMO" or type(envelope.ticket_id) is not int or envelope.ticket_id != 147:
                 return False
