@@ -36,8 +36,10 @@ test('two buttons render real backend projection and human questions',async()=>{
     const dispose=mountFsReal(root,async url=>response(new URL(url,'https://portal.invalid').searchParams.get('mode')));
     assert.equal(root.children.length,3);
     assert.match(root.children[2].textContent,/UNAVAILABLE/);
+    assert.match(root.children[2].textContent,/fraîcheur\/approbation\/résolution non attestées/);
     await root.children[0].handlers.click();
     assert.match(root.children[2].textContent,/Core: BLOCKED/);
+    assert.match(root.children[2].textContent,/Freshness: NOT_ATTESTED/);
     assert.match(root.children[2].textContent,/Resolution: NOT_ATTESTED/);
     await root.children[1].handlers.click();
     assert.match(root.children[2].textContent,/politique de rétention/);
