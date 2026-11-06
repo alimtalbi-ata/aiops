@@ -1,0 +1,11 @@
+--- a/app/worker/main.py
++++ b/app/worker/main.py
+@@ -826,4 +826,8 @@
+   detail = await asyncio.to_thread(get_json, CORE, f'/api/runs/{rid}', token=ADMIN)
+  except Exception as exc:
++  from requests.exceptions import HTTPError
++  if isinstance(exc, HTTPError) and getattr(exc.response, 'status_code', None) == 404:
++   # A missing run is not a Core outage; never reach Temporal.
++   raise HTTPException(404, 'run not found') from exc
+   raise HTTPException(503, 'run state verification unavailable') from exc
+  run = detail.get('run') if isinstance(detail, dict) else None

@@ -375,6 +375,21 @@ def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
 async def start(args:dict,authorization:str|None=Header(default=None)):
  if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
+ # Fail closed: enforce Core eligibility before starting a Temporal workflow.
+ rid=args.get('run_id')
+ if not isinstance(rid,str) or not rid:
+  raise HTTPException(422,'run_id required')
+ try:
+  detail=await asyncio.to_thread(get_json,CORE,f'/api/runs/{rid}',token=ADMIN)
+ except Exception as exc:
+  from requests.exceptions import HTTPError
+  if isinstance(exc,HTTPError) and getattr(exc.response,'status_code',None)==404:
+   raise HTTPException(404,'run not found') from exc
+  raise HTTPException(503,'run state verification unavailable') from exc
+ run=detail.get('run') if isinstance(detail,dict) else None
+ status=run.get('status') if isinstance(run,dict) else None
+ if status not in ('CREATED','WAITING'):
+  raise HTTPException(409,f'run not executable from {status or "UNKNOWN"}')
  c=await Client.connect(TEMP)
  try:
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}
