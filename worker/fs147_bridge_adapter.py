@@ -11,7 +11,8 @@ def observe_fs147(request, *, fetch_observation):
     if not isinstance(response, Mapping):
         raise ValueError("missing bridge observation")
     for field in ("tenant_id", "actor_id", "incident_id", "run_id", "ticket_id"):
-        if response.get(field) != payload[field]:
+        if (type(response.get(field)) is not type(payload[field])
+                or response.get(field) != payload[field]):
             raise ValueError("bridge identity mismatch: " + field)
     if (response.get("source") != "fs-lab-bridge-readonly"
             or response.get("filesystem") != "/fs-lab"
