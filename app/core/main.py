@@ -1,5 +1,6 @@
 import os,json,requests,datetime,hmac,re
 from fastapi import FastAPI,HTTPException,Header
+from fastapi.responses import PlainTextResponse
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel,Field
 from shared.db import db
@@ -36,7 +37,7 @@ def set_stage(c,rid,stage,state,attempt=None,error=None):
 def health():
     with db() as c:c.execute('select 1')
     return {'status':'ok','component':'core','authority':'canonical-run-engine'}
-@app.get('/metrics')
+@app.get('/metrics', response_class=PlainTextResponse)
 def metrics():
     with db() as c:t,r,b,res=c.execute("select count(*),count(*) filter(where status='RUNNING'),count(*) filter(where status='BLOCKED'),count(*) filter(where status='RESOLVED') from aiops.runs").fetchone()
     return f'aiops_runs_total {t}\naiops_runs_running {r}\naiops_runs_blocked {b}\naiops_runs_resolved {res}\n'
