@@ -57,7 +57,8 @@ asyncio.run(main())
 PYRUNNER
 chmod 755 "$TMPDIR_FS982"
 chmod 644 "$TMPDIR_FS982/fs982_workflow.py" "$TMPDIR_FS982/fs982_runner.py"
-docker run --rm --network "$NET" --env AIOPS_INTERNAL_TOKEN=fs982-isolated-token --env PYTHONDONTWRITEBYTECODE=1 --mount "type=bind,source=$TMPDIR_FS982,target=/fs982,readonly" --entrypoint python "$IMAGE" /fs982/fs982_runner.pyecho '===== PRODUCTION INTEGRITY ====='
+docker run --rm --network "$NET" --env AIOPS_INTERNAL_TOKEN=fs982-isolated-token --env PYTHONDONTWRITEBYTECODE=1 --mount "type=bind,source=$TMPDIR_FS982,target=/fs982,readonly" --entrypoint python "$IMAGE" /fs982/fs982_runner.py
+echo '===== PRODUCTION INTEGRITY ====='
 docker inspect "$PROD_WORKER" --format 'PRODUCTION_RUNNING={{.State.Running}} PRODUCTION_IMAGE={{.Config.Image}}'
 echo 'PRODUCTION_RESTARTED=NO'
 echo 'PRODUCTION_WORKFLOWS_STARTED=0'
