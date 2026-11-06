@@ -22,7 +22,11 @@ def h(s):return "'sha256-"+base64.b64encode(hashlib.sha256(s.encode()).digest())
 assert "script-src "+h(script)+"; style-src "+h(style) in api
 for token in ('history-chart','history-metric','history-window','history-refresh','/api/fs1089/prometheus/history'):
  assert token in html
+# Rapid control changes must cancel stale fetches before they can append duplicate legends.
+for token in ('AbortController','historyRequestId','historyAbortController.abort()','signal:controller.signal','requestId!==historyRequestId'):
+ assert token in html,("stale_history_request_guard_missing",token)
 print("FS1097_IMPORT=PASS")
+print("FS1097_STALE_REQUEST_GUARD=PASS")
 print("FS1097_ROUTE_INVARIANTS=PASS")
 print("FS1097_CSP_HASHES=PASS")
 print("FS1097_HISTORY_UI=PASS")
