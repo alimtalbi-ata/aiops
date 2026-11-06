@@ -17,7 +17,7 @@ function state(value) {
 export async function buildFsRealProjection({mode, ticketId, principal, authorize, readCore, readTemporal, readPolicy, readQuestions}) {
   if (!MODES.has(mode) || ticketId !== 147) throw new Error('INVALID_REQUEST');
   if (!principal || typeof authorize !== 'function' ||
-      !(await authorize(principal, {ticketId:147, scope:'fs-real:read', mode})))
+      (await authorize(principal, {ticketId:147, scope:'fs-real:read', mode})) !== true)
     throw new Error('FORBIDDEN');
   const result = unavailable(mode);
   const safe = async (fn) => {
