@@ -50,3 +50,11 @@ Gate : CODE publié dans la PR #431 ; CI à qualifier au HEAD exact ; HÔTE SRV-
 ## Régression source « sanity » — 2026-11-06
 
 Le contrôle de `evidence.source` utilisait un rejet par sous-chaîne `san`, qui pouvait exclure à tort un collecteur filesystem légitime nommé `filesystem-sanity-check`. Le contrat de non-contamination parcourt déjà l'enveloppe complète via `contains_san_reference`, avec des bornes de token SAN/Twin. Le test `test_source_sanity_is_not_a_san_reference` impose l'acceptation de cette source bénigne tout en refusant `filesystem-SAN-bridge` et `Twin-Simulator`. Il s'agit uniquement d'une correction du gate fixture-only ; pas de changement du collecteur, de Twin ou de l'hôte. La corrélation réelle du ticket 147, du RUN et de l'Evidence reste à démontrer. CODE publié ; CI du SHA exact, HÔTE et EXÉCUTÉ à qualifier séparément.
+
+## Qualification supplémentaire — 2026-11-06, commit 1e618dc
+
+Deux tests fixture-only ajoutés au contrat FS147 : (1) rejet d'un alias Twin en clé imbriquée dans les extensions du ticket, du RUN ou de l'Evidence, y compris casse mixte ; (2) rejet d'une ancienne validation GLPI 146 présentée à la place de la mesure `used_percent` pour 147. Ces tests n'autorisent aucune mutation et ne prouvent pas un RUN réel.
+
+**Exclusion :** le Twin SAN `ACME-SAN-FABRIC-A` n'est pas une source de mesure pour le filesystem `/fs-lab`. L'Evidence doit être liée au RUN réel et au ticket 147, avec une mesure filesystem valide. La validation historique TicketValidation/3 du ticket 146 ne vaut pas approbation pour 147.
+
+**Qualification requise au HEAD exact :** `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v`, puis CI, puis contrôle en lecture seule sur SRV-DEB-05 des liens alerte→RUN→Evidence→GLPI 147 et des transitions Worker/Temporal/Portal. Ne pas confondre tests sur fixtures et E2E exécuté. Aucun déploiement, merge, suppression ou approbation implicite.
