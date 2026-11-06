@@ -58,7 +58,7 @@ try:
                       return s.includes(w) && s.includes('points') &&
                         document.querySelectorAll('#history-chart path').length === 5 &&
                         document.querySelectorAll('#history-legend > span').length === 5;
-                    }""",[window],timeout=20000)
+                    }""",arg=[window],timeout=20000)
                     status=page.locator("#history-status").inner_text()
                     report["matrix"].append({"metric":metric,"window":window,"status":api_response.status,
                                               "series":len(series),"points":total_points,"ui_status":status})
