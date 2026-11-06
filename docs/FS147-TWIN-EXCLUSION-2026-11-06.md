@@ -14,3 +14,7 @@ La PR #431 isole déjà `FS-DEBIAN-SYNTHETIC` des écritures SAN, mais sa valida
 Avant d'activer le parcours lab147 : obtenir l'identifiant RUN effectivement créé pour le ticket 147; produire une Evidence de mesure `/fs-lab` (lecture seule, origine et horodatage vérifiables) corrélée à ce RUN et au ticket; vérifier le lien durable alerte→incident→run→evidence→GLPI 147; vérifier Worker/Temporal/Portal en mode DEMO avec Policy/STOP_AUTO, sans passer DGX_CRITIC par fabrication de HITL. Tester les refus mauvais run/ticket, preuve SAN, preuve absente, doublon, et validation historique du ticket 146. Ne jamais supprimer/tronquer le fichier du lab sans approbation native spécifique et vérifiée.
 
 Aucune fusion ni déploiement impliqués par cette note. CODE/CI/HÔTE/EXÉCUTÉ sont des gates indépendants.
+
+## Gate E2E de corrélation (fixtures, non exécuté sur hôte)
+
+Le test `tests/test_fs147_e2e_chain_contract.py` exige ticket GLPI 147, nouveau RUN non historique, Evidence distincte du reçu V28, provenance portant le même RUN et ticket 147, mesure `/fs-lab`, horodatage et hash présents. Il rejette le ticket 146, un RUN divergent, une source Twin/SAN et une mesure d'un autre filesystem. Les identifiants `RUN-TEST-147` et `EVD-TEST-147` sont **uniquement des fixtures**, jamais des RUN/Evidence créés. Exécution locale proposée : `python3 -m unittest discover -s tests -p 'test_fs147_e2e_chain_contract.py' -v`. Ce gate ne fait aucun appel réseau, ne prouve aucune acquisition réelle et ne remplace pas la vérification backend/Temporal/Portal ni l'autorisation Policy/HITL.
