@@ -9,6 +9,7 @@ fi
 docker run --rm -i --network aiops2-rebuild-integration \
  -e AIOPS_INTERNAL_TOKEN=fs1093-isolated-asgi-test-only \
  -e EXPLORER_ALLOWED_CIDRS=127.0.0.1/32 \
+ -e EXPLORER_ENABLED=1 \
  --entrypoint python "$IMAGE" - <<'PY'
 import asyncio,json,sys,urllib.parse
 sys.path.insert(0,"/app")
