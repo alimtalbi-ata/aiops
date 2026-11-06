@@ -37,3 +37,22 @@ test('never calls questions reader for lab mode',async()=>{
  const p=await build({...base,readQuestions:()=>{throw Error('unexpected')}});
  assert.deepEqual(p.questions,[]);
 });
+
+test('never combines Temporal/Policy states from another run on ticket 147',async()=>{
+ const p=await build({...base,
+   readCore:async()=>observed,
+   readTemporal:async()=>({...observed,run_id:'RUN-OTHER',state:'RUNNING'}),
+   readPolicy:async()=>({...observed,run_id:'RUN-OTHER',state:'BLOCKED'})});
+ assert.equal(p.core.state,'BLOCKED');
+ assert.equal(p.temporal.state,'UNKNOWN');
+ assert.equal(p.policy.state,'UNKNOWN');
+ assert.equal(p.run_id,observed.run_id);
+});
+test('unlinked service states remain UNKNOWN even when ticket and synthetic match',async()=>{
+ const p=await build({...base,
+   readCore:async()=>({...observed,run_id:undefined}),
+   readTemporal:async()=>({...observed,state:'RUNNING'}),
+   readPolicy:async()=>({...observed,state:'BLOCKED'})});
+ assert.equal(p.temporal.state,'UNKNOWN');
+ assert.equal(p.policy.state,'UNKNOWN');
+});
