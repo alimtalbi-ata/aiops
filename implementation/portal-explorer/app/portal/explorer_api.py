@@ -36,6 +36,7 @@ UPSTREAMS = {
     "temporal": ("EXPLORER_TEMPORAL_UI_URL", ""),
     "n8n": ("EXPLORER_N8N_URL", ""),
     "cmdb": ("EXPLORER_CMDB_URL", ""),
+    "core": ("EXPLORER_CORE_URL", "http://aiops2-rebuild-core:810"),
 }
 # Only explicitly supported read-only API paths, never arbitrary URLs.
 PATHS = {
@@ -45,6 +46,8 @@ PATHS = {
     "loki": {"labels": "/loki/api/v1/labels", "query_range": "/loki/api/v1/query_range"},
     "tempo": {"trace": "/api/traces/{trace_id}"},
     "cmdb": {"health": "/health"},
+    "core": {"dashboard": "/api/dashboard", "incidents": "/api/incidents",
+             "runs": "/api/runs", "scenarios": "/api/scenarios"},
     "temporal": {"health": "/", "namespaces": "/api/v1/namespaces"},
     "n8n": {"health": "/healthz", "workflows": "/api/v1/workflows", "executions": "/api/v1/executions"},
 }
@@ -58,6 +61,10 @@ ALLOWED_PARAMS = {
     "trace": {},
     "health": {},
     "namespaces": {},
+    "dashboard": {},
+    "incidents": {},
+    "runs": {},
+    "scenarios": {},
     "workflows": {"limit", "cursor", "active"},
     "executions": {"limit", "cursor", "status", "workflowId"},
 }
@@ -173,6 +180,24 @@ def observe(service: str, operation: str, request: Request):
         except (KeyError, ValueError, OverflowError):
             raise HTTPException(400, "invalid_time_range")
     return _read(service, PATHS[service][operation], params)
+
+@api.get("/core/{collection}")
+def core_collection(collection: str, request: Request, limit: int = 100):
+    _check(request)
+    if collection not in {"dashboard", "incidents", "runs", "scenarios"}:
+        raise HTTPException(404, "unknown_core_collection")
+    if not 1 <= limit <= MAX_ROWS:
+        raise HTTPException(400, "invalid_limit")
+    payload = _read("core", PATHS["core"][collection])
+    if not isinstance(payload, dict):
+        raise HTTPException(502, "core_unexpected_response")
+    if collection == "dashboard":
+        return payload
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise HTTPException(502, "core_unexpected_response")
+    return {"items": items[:limit], "returned": min(len(items), limit),
+            "upstream_returned": len(items), "truncated": len(items) > limit}
 
 @api.get("/temporal/namespaces/{namespace}/workflows")
 def temporal_workflows(namespace: str, request: Request, pagesize: int = 25):
