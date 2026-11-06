@@ -59,6 +59,12 @@ class FS364ContractTests(unittest.TestCase):
         args["human_approval"] = False
         self.assertFalse(launch_allowed(**args))
 
+    def test_live_launch_rejected_even_if_all_other_gates_true(self):
+        self.assertFalse(launch_allowed(
+            mode="LIVE", authenticated=True, acl_ok=True,
+            stop_auto=False, policy_decision="ALLOW", human_approval=True
+        ))
+
     def test_temporal_resume_requires_all_independent_gates(self):
         args = dict(same_run=True, mode_match=True, authenticated=True, acl_ok=True,
                     stop_auto=False, policy_decision="ALLOW",
