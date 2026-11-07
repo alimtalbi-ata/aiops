@@ -87,3 +87,9 @@ Ne pas modifier la production Portal sur 7777 sans autorisation distincte. Ne pa
 `scripts/fs/FS.1136-isolated-glpi-and-readonly-baseline.sh` : test isolé mock + état Core en lecture seule.
 
 Ces scripts ne remplacent ni la qualification réelle de l'API ni la vérification des règles effectives.
+
+## 8. FS1140 — inspection des règles réelles et des tickets préexistants
+
+Script : `scripts/fs/FS.1140-glpi-client-rules-and-existing-tickets-readonly.sh` (`CODE`, pas encore `OBSERVÉ`). Lit uniquement les colonnes non secrètes de `glpi_apiclients` (identifiant, nom, état, plages IPv4/IPv6), le nombre de tickets mentionnant `FS1130`, le nombre de tickets dont le titre commence par `[DEMO]`, et les réseaux des conteneurs Core et GLPI. **Aucune modification**, aucun jeton ni contenu de ticket affiché. Les nombres de tickets constituent des indices de rapprochement, pas des preuves d'unicité ou de corrélation exacte.
+
+Si une règle bloque la boucle locale, ne pas l'élargir automatiquement : vérifier le client associé au jeton, le chemin d'accès futur depuis Core et les droits de création avant une correction ciblée. Les résultats du script doivent être ajoutés ici une fois exécutés.
