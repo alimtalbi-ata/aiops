@@ -57,9 +57,10 @@ def execute(request: FS147Request, *, stop_auto: bool,
     """
     if stop_auto:
         return _blocked("STOP_AUTO")
-    if (request.mode != "DEMO" or request.ticket_id != 147
-            or not all((request.tenant_id, request.actor_id,
-                        request.incident_id, request.run_id))):
+    if (request.mode != "DEMO" or type(request.ticket_id) is not int or request.ticket_id != 147
+            or any(type(identifier) is not str or not identifier.strip()
+                   for identifier in (request.tenant_id, request.actor_id,
+                                      request.incident_id, request.run_id))):
         return _blocked("INVALID_SCOPE")
     key = hashlib.sha256(json.dumps(
         [request.tenant_id, request.incident_id, request.run_id,
