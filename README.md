@@ -4,6 +4,17 @@
 
 This kit is a clean rebuild of the AioOps runtime. It is designed to deploy the largest coherent functional baseline in one operation rather than accumulate another historical version.
 
+## Référentiel technique durable (AIOps2 / exploitation)
+
+Pour reprendre le travail sans dépendre de l'historique des conversations, commencer par :
+
+- [Architecture et contrats de la stack](docs/STACK-KNOWLEDGE-BASE.md) — services, API, responsabilités, sources de vérité et statut de déploiement.
+- [GLPI : API, jetons, filtrage IP et tickets DEMO](docs/GLPI-API-OPERATIONS.md) — diagnostic FS1137–FS1139, intégration FS1136, limites et procédure sûre.
+- [Exploitation et qualification FS1128–FS1139](docs/STACK-OPERATIONS-AND-QUALIFICATION.md) — environnements, KPI, preuves, anomalies et décisions.
+- [Runbook d'installation isolée](docs/DEPLOYMENT-ISOLATED-REBUILD-RUNBOOK.md) et [sécurité](docs/SECURITY.md).
+
+**Important :** la présence de code sur la branche ne prouve pas son déploiement. Ne pas modifier le Portal de production sur le port 7777 sans autorisation distincte. Les tests simulés ne prouvent pas la création de tickets GLPI réels.
+
 ## Recommended first deployment (non-destructive)
 
 ```bash
