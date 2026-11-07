@@ -118,5 +118,9 @@ def execute(request: FS147Request, *, stop_auto: bool,
         return {"status": "NO_EFFECT", "effect": "NO_EFFECT", "resolved": False,
                 "steps": steps, "run_id": request.run_id,
                 "ticket_id": request.ticket_id, "evidence_id": observation["evidence_id"]}
+    except TimeoutError:
+        # A timeout is an indeterminate remote outcome, not proof of failure.
+        # The durable Core claim remains consumed: never replay with a new claim.
+        return _blocked("UNKNOWN_TIMEOUT", steps)
     except Exception:
         return _blocked("SERVICE_UNAVAILABLE", steps)
