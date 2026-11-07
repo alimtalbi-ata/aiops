@@ -96,8 +96,21 @@ try:
             assert page.locator("#history-chart path").count()==5, "stale SVG duplication"
             print("FS1113_RAPID_WINDOW_RACE=PASS",flush=True)
 
-            page.locator("#history-refresh").click()
-            page.wait_for_function("() => !document.querySelector('#history-refresh')?.disabled",timeout=10000)
+            # Wait for the refresh response and the corresponding completed render.
+            # Checking button.enabled alone can pass before a new request starts.
+            with page.expect_response(
+                lambda r: "/api/fs1089/prometheus/history" in r.url
+                and "metric=scrape_duration" in r.url and "window=24h" in r.url,
+                timeout=25000,
+            ) as refresh_response:
+                page.locator("#history-refresh").click()
+            assert refresh_response.value.status==200
+            page.wait_for_function("""() => {
+              const button=document.querySelector('#history-refresh');
+              const status=document.querySelector('#history-status')?.textContent || '';
+              return button && !button.disabled && status.includes('points')
+                && status.endsWith(' · 24h');
+            }""",timeout=30000)
             assert page.locator("#history-chart path").count()==5
             assert page.locator("#history-legend > span").count()==5
             print("FS1098_REFRESH=PASS",flush=True)
