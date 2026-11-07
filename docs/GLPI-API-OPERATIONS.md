@@ -123,3 +123,11 @@ Réseaux observés : Core uniquement `aiops2-rebuild-control` et `aiops2-rebuild
 **OBSERVÉ** : `GLPI_API_URL=http://172.21.0.6/apirest.php` dans l'environnement du Portal ; jetons application et utilisateur présents, non divulgués. `172.21.0.6` est l'adresse GLPI sur le réseau `aiops2-rebuild-public`. L'arrêt FS1143 venait de son allowlist de noms DNS et **non** d'une erreur de jeton ou d'API.
 
 **FS1145 (CODE, exécution à confirmer)** : `scripts/fs/FS.1145-glpi-auth-existing-portal-ip-readonly.sh` accepte uniquement l'URL historique exacte, utilise les jetons déjà injectés dans Portal pour `GET initSession`, `GET getMyProfiles`, `GET Ticket?range=0-0`, `GET killSession` et n'affiche ni secrets, ni profils, ni tickets. Aucune création de ticket ni modification de Portal. Ce test prouve l'authentification seulement si `session_established=true` est effectivement observé.
+
+## 14. FS1145 — authentification réelle validée ; FS1146 — ticket DEMO unique
+
+**FS1145 OBSERVÉ** : `GET initSession` HTTP 200 avec `session_established=true`, `GET getMyProfiles` HTTP 200, `GET Ticket?range=0-0` HTTP 206 (réponse partielle paginée), `GET killSession` HTTP 200. Les jetons historiques Portal sont valides ; aucun ticket créé ni fichier Portal modifié.
+
+**FS1146 CODE, NON ENCORE EXÉCUTÉ** : `scripts/fs/FS.1146-one-real-glpi-demo-ticket.sh` utilise ces jetons depuis un processus éphémère dans le conteneur Portal, cherche le marqueur fixe `AIOPS-FS1146-GLPI-DEMO-SMOKE-V1` via `search/Ticket`, et ne crée qu'un seul ticket si aucun résultat n'est trouvé. Après `POST /Ticket`, il vérifie `GET /Ticket/{id}` et la corrélation dans le titre. Il ne redémarre ni ne modifie les fichiers Portal, mais **crée volontairement un objet métier réel GLPI** ; exécution autorisée par la demande explicite de tickets DEMO réels. En cas d'incertitude POST, ne pas relancer avant vérification manuelle GLPI. Une recherche par titre ne constitue pas une garantie d'unicité atomique en présence d'exécutions concurrentes : lancer le test une seule fois à la fois.
+
+La réussite de FS1146 n'implique pas encore la réussite du flux **Core → GLPI** : le chemin réseau Core est toujours absent et le code FS1136 n'est pas déployé.
