@@ -57,7 +57,7 @@ def classify_signal_key(identity):
     if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
         return KeyStatus.UNKNOWN, None
     values += [str(identity.fence_token), str(identity.ticket_id), identity.mode]
-    framed = b"FS147-SIGNAL-V1\\x00" + b"".join(
+    framed = b"FS147-SIGNAL-V1\x00" + b"".join(
         len(value.encode("utf-8")).to_bytes(4, "big") + value.encode("utf-8")
         for value in values
     )
