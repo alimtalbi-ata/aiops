@@ -1,0 +1,31 @@
+# FS147 — exclusion Twin SAN et contrat de non-contamination (2026-11-07)
+
+Référence : [FS.364](FS364-ARCHITECTURE-REPRISE-2026-11-06.md). Qualification **source-only**, sans preuve d'exécution sur Debian.
+
+## Décision et frontière
+
+L'incident GLPI **147** (`AIOPS2-REAL-FS-20261106`) concerne le montage tmpfs `/fs-lab` du conteneur `aiops2-fs-lab`. FS.364 rapporte une mesure ponctuelle de **92 %** le 2026-11-06 et précise que Core ne monte pas ce chemin. Aucune dépendance de ce diagnostic filesystem vers la fabric `ACME-SAN-FABRIC-A` n'est établie. **Twin SAN non requis** pour l'inspection en lecture seule; son invocation ne doit pas être déduite d'un simple mot « SAN » dans une source légitime telle que `filesystem-sanity-check`.
+
+La séparation exigée porte sur : graphe (`filesystem-lab` vs `twin-san`), namespace (`fs-lab` vs `acme-san`), incident, RUN, Evidence, observations (`/fs-lab` et `aiops2_fs_lab_used_percent` vs fabric SAN) et arêtes de dépendance. Aucune arête inter-graphe, aucun alias Twin imbriqué, aucune Evidence SAN réutilisée comme preuve FS147. Les identifiants RUN/Evidence dans le test sont **explicitement fictifs**; ne pas les confondre avec un RUN réellement lié à GLPI 147.
+
+## Contrat E2E négatif livré
+
+`tests/test_fs147_twin_san_isolation_contract.py` vérifie en mémoire un cas isolé positif et les rejets suivants : arête vers Evidence SAN, clé imbriquée Twin, remplacement d'ID ou de namespace, référence filesystem dans une observation SAN, absence de mesure. Il autorise `filesystem-sanity-check`. Ce test ne prouve **ni l'absence de fuite dans le système vivant, ni un RUN 147 existant** : il fixe un invariant à réutiliser lors du branchement de snapshots read-only réels, avec provenance et horodatage.
+
+Commande sans dépendances supplémentaires : `python3 -m unittest discover -s tests -p 'test_fs147_twin_san_isolation_contract.py' -v`.
+
+Pour l'E2E réel : obtenir depuis les API autorisées un même `alert_fingerprint -> incident_id -> run_id -> evidence_id -> glpi_ticket_id=147`, les événements Worker/Temporal/Portal, les observations read-only `df/du/ls` prises dans le lab, et les relations de dépendance. Appliquer les mêmes invariants aux deux graphes. Refuser les données DEMO comme preuve LIVE, les RUN historiques BLOCKED, les validations de GLPI 146 et toute corrélation partielle. Préserver STOP_AUTO, Policy, HITL.
+
+## Qualification et partage inter-rôles
+
+- **Twin** : propriétaire de l'invariant d'absence de contamination et de l'exclusion documentée.
+- **Core** : fournir IDs, provenance, idempotence et liaison native à 147, sans ticket doublon.
+- **Worker** : fournir mesures lab et Evidence horodatées, sans prétendre que Core monte `/fs-lab`.
+- **Portal** : afficher statut BLOCKED/UNKNOWN et preuve de RUN, sans convertir une fixture en succès.
+- **Intégration** : assembler la chaîne E2E et les gates CODE / CI / HÔTE / EXÉCUTÉ.
+
+Docker rootless FS1106/FS1107 : **si** un futur test nécessite un conteneur publié, le créer sur `aiops2-rebuild-public` avec `--publish` explicite, puis seulement connecter `aiops2-rebuild-control`, `aiops2-rebuild-integration`, `aiops2-rebuild-observability`, en revérifiant HTTP et PortBinding à chaque étape. Ce test Python ne crée aucun conteneur et ne modifie aucun réseau.
+
+FS1113 / candidat fs1097 : hors périmètre de ce test ; ne pas reconstruire, démarrer ni déployer le Portal production `aiops2-portal:fs1073-csp-candidate`. Les gates Chromium/CSP/history restent indépendants et doivent être qualifiés avant toute promotion.
+
+**Gates à l'ouverture de PR** : CODE = commit publié ; CI = non attestée au SHA ; HÔTE = non vérifié ; EXÉCUTÉ = fixture non exécutée ici / E2E réel non démontré. Pas de merge, déploiement, suppression, truncate, approbation simulée ou remédiation.
