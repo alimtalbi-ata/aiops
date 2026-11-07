@@ -7,7 +7,7 @@ echo "FS1149_MUTATION=NONE"
 echo "FS1149_PORTAL_7777_MUTATION=NONE"
 docker inspect -f '{{.Name}} {{range $k,$v := .NetworkSettings.Networks}}network={{$k}} ip={{$v.IPAddress}} {{end}}' aiops2-rebuild-core aiops2-rebuild-glpi aiops2-rebuild-portal
 echo "FS1149_GLPI_DB_API_CLIENT_COLUMNS"
-docker exec -i aiops2-rebuild-glpi-db sh -lc 'exec mariadb -N -u glpi -p"$MYSQL_PASSWORD" glpi' <<'SQL'
+docker exec -i aiops2-rebuild-glpi-db sh -lc 'exec mariadb -N -u glpi -p"$MARIADB_PASSWORD" glpi' <<'SQL'
 select column_name,column_type,is_nullable,column_default
 from information_schema.columns
 where table_schema='glpi' and table_name='glpi_apiclients'
@@ -18,7 +18,7 @@ select 'api_client_rule',id,name,is_active,
 from glpi_apiclients order by id;
 SQL
 echo "FS1149_GLPI_API_CLIENT_INDEXES"
-docker exec -i aiops2-rebuild-glpi-db sh -lc 'exec mariadb -N -u glpi -p"$MYSQL_PASSWORD" glpi' <<'SQL'
+docker exec -i aiops2-rebuild-glpi-db sh -lc 'exec mariadb -N -u glpi -p"$MARIADB_PASSWORD" glpi' <<'SQL'
 select index_name,non_unique,group_concat(column_name order by seq_in_index)
 from information_schema.statistics
 where table_schema='glpi' and table_name='glpi_apiclients'
