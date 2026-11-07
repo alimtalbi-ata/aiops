@@ -1,0 +1,30 @@
+name: FS621 explorer kit checks
+on:
+  pull_request:
+    paths:
+      - 'implementation/portal-explorer/**'
+      - '.github/workflows/fs621-explorer.yml'
+  push:
+    branches:
+      - 'feature/portal-unified-explorers-fs621'
+jobs:
+  static-and-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile backend and check JavaScript syntax
+        run: |
+          python -m py_compile implementation/portal-explorer/app/portal/explorer_api.py
+          node --check implementation/portal-explorer/app/portal/explorer_ui.js
+      - name: Install only test dependencies
+        run: python -m pip install 'fastapi==0.116.1' 'psycopg[binary]==3.2.10' 'PyMySQL==1.1.1'
+      - name: Negative authorization and SQL tests
+        env:
+          PYTHONPATH: implementation/portal-explorer/app
+        run: python -m unittest discover -s implementation/portal-explorer/tests -v

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIOps2 | Explorateurs</title>
+<style>
+:root{color-scheme:dark;--bg:#09131f;--panel:#112235;--border:#29445b;--fg:#e6f2ff;--muted:#a6bacd;--accent:#5dc6ed;--bad:#ff8c8c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif}
+header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:20px;align-items:center}
+a{color:var(--accent);text-decoration:none}nav{display:flex;gap:8px;flex-wrap:wrap;padding:14px 24px}
+nav a{padding:10px 13px;border:1px solid var(--border);border-radius:8px}nav a[aria-current=page]{background:#214663}
+main{padding:10px 24px 40px;max-width:1500px;margin:auto}.panel{border:1px solid var(--border);background:var(--panel);padding:18px;border-radius:12px;margin:12px 0}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+input,select,textarea,button{background:#0b1929;color:var(--fg);border:1px solid #43617a;padding:10px;border-radius:7px;font:inherit}
+textarea{width:100%;min-height:110px;font:13px ui-monospace,monospace}input[type=text]{min-width:280px;flex:1}
+button{background:#20506a;cursor:pointer}button:hover{background:#2c698b}button:disabled{opacity:.5;cursor:wait}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid #2b4559;padding:9px;max-width:460px;overflow-wrap:anywhere}
+.scroll{overflow:auto;max-height:60vh}.muted{color:var(--muted)}.error{color:var(--bad);white-space:pre-wrap}.status{min-height:24px}
+canvas{display:block;width:100%;height:310px;border:1px solid var(--border);border-radius:8px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.stat{padding:14px;border:1px solid var(--border);border-radius:8px}
+.stat strong{display:block;font-size:24px;margin-top:5px}
+@media(max-width:700px){header{display:block}main{padding:8px 12px}nav{padding:12px}input[type=text]{min-width:100%}}
+</style></head><body>
+<header><div><strong>AIOps2 — Data &amp; Observability</strong><div class="muted">Exploration en lecture seule · Aucun déclenchement d'exécution</div></div><a href="/">← Portail principal</a></header>
+<nav aria-label="Explorateurs">
+<a href="/explorer/databases" data-page="databases">Bases de données</a>
+<a href="/explorer/prometheus" data-page="prometheus">Prometheus</a>
+<a href="/explorer/alerts" data-page="alerts">Alertes</a>
+<a href="/explorer/core" data-page="core">Core AIOps</a>
+<a href="/explorer/cmdb" data-page="cmdb">CMDB</a>
+<a href="/explorer/logs" data-page="logs">Logs</a>
+<a href="/explorer/traces" data-page="traces">Traces</a>
+<a href="/explorer/orchestration" data-page="orchestration">Orchestration</a>
+</nav>
+<main><h1 id="heading">Explorateur</h1><p id="intro" class="muted"></p>
+<div id="controls" class="panel"></div><div id="status" class="status" role="status"></div>
+<div id="chart-panel" class="panel" hidden><h2>Évolution</h2><canvas id="chart" width="1200" height="320" aria-label="Graphique temporel"></canvas></div>
+<div id="results" class="panel"><p class="muted">Chargement…</p></div>
+</main><script src="/explorer/assets/explorer.js" defer></script>
+</body></html>
