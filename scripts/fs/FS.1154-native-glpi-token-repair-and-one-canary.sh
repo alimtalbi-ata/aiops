@@ -18,7 +18,13 @@ require "/var/www/glpi/inc/includes.php";
 require_once "/var/www/glpi/src/GLPIKey.php";
 $v=trim(stream_get_contents(STDIN));
 if (!preg_match("/^[0-9a-f]{64}$/D",$v)) {fwrite(STDERR,"FS1154_INVALID_APP_TOKEN\n");exit(2);}
-$key=new GLPIKey();
+$dirs=["/var/www/glpi/config","/etc/glpi"];
+$matches=[];
+foreach ($dirs as $dir) {
+ if (is_file($dir."/glpicrypt.key")) {$matches[]=$dir;}
+}
+if (count($matches)!==1) {fwrite(STDERR,"FS1154_GLPI_KEY_LOCATION_UNRESOLVED\n");exit(4);}
+$key=new GLPIKey($matches[0]);
 $cipher=$key->encrypt($v);
 if ($key->decrypt($cipher)!==$v) {fwrite(STDERR,"FS1154_GLPIKEY_ROUNDTRIP_FAILED\n");exit(3);}
 echo $cipher;
