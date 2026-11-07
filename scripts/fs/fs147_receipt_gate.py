@@ -52,13 +52,15 @@ def validate(r):
             errors.append("run mismatch " + stage)
     hitl = stages.get("hitl_native", {})
     if isinstance(hitl, dict):
-        for key in ("ticket_id", "run_id", "action", "path", "expires_at", "validator_id", "approval_id"):
+        for key in ("ticket_id", "run_id", "alert_fingerprint", "action", "path", "expires_at", "validator_id", "approval_id"):
             if not hitl.get(key):
                 errors.append("HITL missing " + key)
         if hitl.get("ticket_id") != 147:
             errors.append("HITL ticket mismatch")
         if hitl.get("run_id") != r["run_id"]:
             errors.append("HITL run mismatch")
+        if hitl.get("alert_fingerprint") != r["alert_fingerprint"]:
+            errors.append("HITL alert fingerprint mismatch")
     if r.get("production_deployment") is True:
         errors.append("production deployment cannot be certified by lab gate")
     if r.get("result") == "RESOLVED" and not r.get("post_action_measurement_proof_url"):
