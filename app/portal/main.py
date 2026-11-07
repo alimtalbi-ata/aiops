@@ -482,3 +482,7 @@ def policy_story():
 # Read-only observability / inventory routes.
 from portal.observability_views import register_views
 register_views(app, lambda path: _get(path), lambda path: _get(path, TWIN))
+
+# Dedicated read-only KPI dashboard; no changes to production runtime until deployment approval.
+from portal.kpi_views import register_kpi_views
+register_kpi_views(app, lambda path: _get(path))
