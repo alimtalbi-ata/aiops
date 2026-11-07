@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 echo "FS1131_MODE=ISOLATED_READ_ONLY_KPI_PAGE_TEST"
 echo "FS1131_PRODUCTION_MUTATION=NONE"
 docker run --rm -i -v "$ROOT:/src:ro" -w /src python:3.12-slim sh -c '
-python -m pip install -q "fastapi>=0.110" "pydantic>=2" "requests>=2" &&
+python -m pip install -q "fastapi>=0.110" "pydantic>=2" "requests>=2" "httpx2" &&
 PYTHONPATH=/src/app python -' <<'PY'
 import sys,types,datetime
 from fastapi import FastAPI
