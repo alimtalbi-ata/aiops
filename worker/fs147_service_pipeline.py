@@ -7,22 +7,25 @@ from functools import partial
 from worker.fs147_readonly_pipeline import execute
 from worker.fs147_bridge_adapter import observe_fs147
 from worker.fs147_policy_adapter import check_fs147_policy
+from worker.fs147_strict_policy_transport import strict_policy_step
 
 
 def run_fs147(request, *, stop_auto, claim_once, bridge_fetch,
-              analyst_call, critic_call, policy_post, now=None):
+              analyst_call, critic_call, policy_post, now=None, strict_policy=False):
     """Injected functions must be backed by real authorized services.
 
     Analyst and Critic must return scoped evidence-bound responses.
     No SAN, ticket mutation, remediation or synthetic observation is used.
     """
+    policy_step = (partial(strict_policy_step, post_check=policy_post)
+                   if strict_policy else partial(check_fs147_policy, post_check=policy_post))
     options = dict(
         stop_auto=stop_auto,
         claim_once=claim_once,
         observe=partial(observe_fs147, fetch_observation=bridge_fetch),
         analyst=analyst_call,
         critic=critic_call,
-        policy=partial(check_fs147_policy, post_check=policy_post),
+        policy=policy_step,
     )
     if now is not None:
         options["now"] = now
