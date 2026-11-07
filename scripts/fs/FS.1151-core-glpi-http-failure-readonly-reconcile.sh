@@ -28,7 +28,7 @@ PY
 # user token read-only from Portal. Never print either secret.
 TOKEN_FILE="$HOME/.config/aiops2/glpi-core/fs1150-app-token"
 test -s "$TOKEN_FILE" || { echo "FS1151_ERROR=APP_TOKEN_FILE_MISSING";exit 2; }
-{ cat "$TOKEN_FILE"; printf '\n'; docker exec aiops2-rebuild-portal python -c 'import os,sys;sys.stdout.write(os.getenv("GLPI_USER_TOKEN","")+"\\n")'; printf '\n'; } |
+{ cat "$TOKEN_FILE"; printf '\n'; docker exec aiops2-rebuild-portal python -c 'import os,sys;sys.stdout.write(os.getenv("GLPI_USER_TOKEN","")+"\n")'; printf '\n'; } |
 docker exec -i aiops2-rebuild-core python -c '
 import os,sys,json,urllib.request,urllib.error
 app=sys.stdin.readline().strip();user=sys.stdin.readline().strip()
