@@ -15,9 +15,13 @@ CORE_IP=$(docker inspect -f '{{with index .NetworkSettings.Networks "aiops2-rebu
 # Encrypt using the GLPI installation itself. The plaintext is stdin only.
 docker exec -i aiops2-rebuild-glpi php -r '
 require "/var/www/glpi/inc/includes.php";
+require_once "/var/www/glpi/src/GLPIKey.php";
 $v=trim(stream_get_contents(STDIN));
 if (!preg_match("/^[0-9a-f]{64}$/D",$v)) {fwrite(STDERR,"FS1154_INVALID_APP_TOKEN\n");exit(2);}
-echo (new GLPIKey())->encrypt($v);
+$key=new GLPIKey();
+$cipher=$key->encrypt($v);
+if ($key->decrypt($cipher)!==$v) {fwrite(STDERR,"FS1154_GLPIKEY_ROUNDTRIP_FAILED\n");exit(3);}
+echo $cipher;
 ' < "$TOKEN_FILE" > "$WORK/cipher"
 # GLPIKey ciphertext must be a safe SQL literal; never print it.
 python3 - "$WORK/cipher" <<'PY'
