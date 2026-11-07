@@ -113,6 +113,21 @@ def register_kpi_views(app, get_core):
                 ("Durée médiane étape Critic (s)",fmt(data["critic_median_seconds"])),
                 ("Échantillons de durée run / Analyst / Critic",f'{data["duration_samples"]} / {data["analyst_samples"]} / {data["critic_samples"]}'),
             ]))
+        glpi=get_core("/api/kpi/glpi")
+        if isinstance(glpi,dict) and glpi.get("configured") is True:
+            glpi_rows=[
+                ("Incidents FS1130 Core",fmt(glpi.get("fs1130_incidents"))),
+                ("Tickets FS1130 confirmés GLPI",fmt(glpi.get("fs1130_tickets_confirmed"))),
+                ("Synchronisations FS1130 incertaines",fmt(glpi.get("fs1130_tickets_unknown"))),
+                ("Taux de synchronisation FS1130 (%)",fmt(glpi.get("sync_rate_pct"))),
+                ("Tickets GLPI confirmés (tous incidents)",fmt(glpi.get("tickets_confirmed"))),
+                ("En attente / revendiqués / erreurs",str(glpi.get("tickets_pending"))+" / "+str(glpi.get("tickets_claimed"))+" / "+str(glpi.get("tickets_error"))),
+                ("Latence médiane création ticket (s)",fmt(glpi.get("latency_median_seconds"))),
+            ]
+            body+=panel("GLPI — tickets réels et corrélation AIOps2",table(["Mesure","Valeur"],glpi_rows)+
+                "<p>Seuls les tickets dont GLPI a retourné un identifiant sont confirmés. DEMO inclus. Les réponses incertaines ne sont pas des réussites.</p>")
+        else:
+            body+=panel("GLPI — synchronisation", "<p>NON MESURÉ — endpoint Core GLPI non déployé ou registre de corrélation absent. Aucun ticket présumé créé.</p>")
         body+=panel("Résultats par état",table(["État","Nombre"],status_rows))
         body+=panel("Télémétrie LLM — mesures réelles",table(["Mesure","Valeur"],[
             ("Analyst durée médiane appel (ms)",fmt(data["llm_median_ms"]["analyst"])),
