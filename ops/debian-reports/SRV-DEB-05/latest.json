@@ -3,15 +3,15 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-07T19:00:01.139640+00:00",
+  "collected_at": "2026-11-07T19:01:01.688881+00:00",
   "docker": {
     "available": true,
     "containers": [
       {
         "health": "no-healthcheck",
-        "image": "aiops2-core:fs1320-fs1315-qualified",
+        "image": "sha256:b28db1f671f832acfa01404edbe2db4111c76f80881e9781a07edd2f3bed70cc",
         "inspect_ok": true,
-        "name": "fs1320-core-smoke-b",
+        "name": "fs1325-old-af6af9f2843e",
         "state": "running"
       },
       {
@@ -571,13 +571,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 3 days, 9 hours, 11 minutes"
+    "uptime": "up 4 weeks, 3 days, 9 hours, 12 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 141002289152,
+      "free_bytes": 141002911744,
       "total_bytes": 172898033664,
-      "used_bytes": 23038423040
+      "used_bytes": 23037800448
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -585,12 +585,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.85546875,
-      1.1572265625,
-      1.2119140625
+      0.78955078125,
+      1.06982421875,
+      1.17626953125
     ],
     "memory_bytes": {
-      "MemAvailable": 18899329024,
+      "MemAvailable": 18934771712,
       "MemTotal": 25205911552,
       "SwapFree": 10029170688,
       "SwapTotal": 10838077440
