@@ -5,6 +5,8 @@ A True result is necessary, never sufficient, for a side effect.
 """
 from dataclasses import dataclass
 from .fs364_dispatch_boundary import dispatch_boundary_ok
+from .fs364_outbox_transition import OutboxRecord
+from .fs364_outbox_envelope import ResumeEnvelope
 
 
 @dataclass(frozen=True)
@@ -35,10 +37,13 @@ class Fencing:
 
 def native_resume_gate(record, admitted, current, admitted_state, current_state,
                        approval, fencing, *, action_id, path,
-                       content_fingerprint, now_epoch, expected_revision,
+                       content_fingerprint, now_epoch, expected_revision, expected_owner_id=None,
                        authoritative_read=False):
     """Fail closed on UNKNOWN, stale lease, wrong action, revocation or LIVE."""
-    if not isinstance(approval, NativeApproval) or not isinstance(fencing, Fencing):
+    if (not isinstance(record, OutboxRecord)
+            or not isinstance(current, ResumeEnvelope)
+            or not isinstance(approval, NativeApproval)
+            or not isinstance(fencing, Fencing)):
         return False
     if type(now_epoch) is not int or now_epoch < 0:
         return False
@@ -48,7 +53,7 @@ def native_resume_gate(record, admitted, current, admitted_state, current_state,
         return False
     if any(type(x) is not str or not x or x != x.strip() or
            not x.isprintable() or any(c.isspace() for c in x)
-           for x in (action_id, path, content_fingerprint,
+           for x in (action_id, path, content_fingerprint, expected_owner_id,
                      approval.tenant_id, approval.run_id, approval.action_id,
                      approval.path, approval.content_fingerprint,
                      approval.validation_id, approval.validator_id,
@@ -61,6 +66,7 @@ def native_resume_gate(record, admitted, current, admitted_state, current_state,
             or fencing.lease_expires_epoch <= now_epoch
             or fencing.token <= 0 or fencing.token != fencing.current_token
             or fencing.event_id != record.event_id
+            or fencing.owner_id != expected_owner_id
             or approval.tenant_id != current.tenant_id
             or approval.run_id != current.run_id
             or approval.action_id != action_id or approval.path != path
