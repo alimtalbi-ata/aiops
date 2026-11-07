@@ -11,11 +11,32 @@ to a real, independently reviewable artifact. No fake HITL/RESOLVED.
 import argparse
 import json
 import sys
+from urllib.parse import urlsplit
 
 STAGES = ("prometheus", "core_run", "core_evidence", "worker_analyst",
           "worker_critic", "policy", "glpi_147", "hitl_native", "safe_resume")
 REQUIRED = ("alert_fingerprint", "incident_id", "run_id", "evidence_id",
             "glpi_ticket_id", "scenario", "mode", "stages")
+
+
+def proof_url_is_reviewable(value):
+    """Reject obvious placeholders and local/credential-bearing links; no network verification."""
+    if not isinstance(value, str) or any(ch.isspace() for ch in value):
+        return False
+    try:
+        url = urlsplit(value)
+        host = (url.hostname or "").lower().rstrip(".")
+        if (url.scheme != "https" or not host or url.username or url.password
+                or url.fragment or url.port not in (None, 443)):
+            return False
+    except ValueError:
+        return False
+    if (host in {"localhost", "example.com", "example.org", "example.net",
+                 "example.invalid", "test", "invalid"}
+            or host.endswith((".localhost", ".local", ".invalid", ".test", ".example"))
+            or host.startswith("127.") or host in {"0.0.0.0", "::1"}):
+        return False
+    return "." in host
 
 
 def validate(r):
@@ -46,7 +67,7 @@ def validate(r):
             continue
         if entry.get("status") != "VERIFIED":
             errors.append("unverified stage " + stage)
-        if not isinstance(entry.get("proof_url"), str) or not entry["proof_url"].startswith(("https://", "http://")):
+        if not proof_url_is_reviewable(entry.get("proof_url")):
             errors.append("missing proof URL " + stage)
         if entry.get("run_id") != r["run_id"]:
             errors.append("run mismatch " + stage)
