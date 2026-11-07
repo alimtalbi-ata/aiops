@@ -114,6 +114,11 @@ def execute(request: FS147Request, *, stop_auto: bool,
         if critique.get("state") != "PASS":
             return _blocked("CRITIC_REFUSED", steps)
         steps.append("CRITIC")
+        # The observation can expire while Analyst/Critic are running. Never
+        # authorize even a simulation from evidence that is stale at Policy time.
+        age_at_policy = now() - observed_at
+        if not timedelta(seconds=-30) <= age_at_policy <= timedelta(minutes=5):
+            return _blocked("STALE_OBSERVATION", steps)
         decision = policy(request, observation, analysis, critique)
         if not _matching(decision, request) or decision.get("evidence_id") != observation["evidence_id"]:
             return _blocked("POLICY_SCOPE", steps)
