@@ -61,6 +61,7 @@ def classify_evidence_binding(expected, observed):
         if any(type(getattr(item, field)) is not str or
                not getattr(item, field) or
                getattr(item, field).strip() != getattr(item, field) or
+               any(ord(ch) < 32 or ord(ch) == 127 for ch in getattr(item, field)) or
                len(getattr(item, field)) > 512
                for field in fields):
             return EvidenceStatus.UNKNOWN
