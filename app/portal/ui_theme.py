@@ -44,6 +44,7 @@ footer{border-top:1px solid var(--line);color:var(--muted);padding:22px;text-ali
 NAV = [
     ("/", "Cockpit"),
     ("/runs", "Incidents & Runs"),
+    ("/kpi", "KPI"),
     ("/timeline", "Timeline"),
     ("/twin", "Digital Twin"),
     ("/databases", "Databases"),
