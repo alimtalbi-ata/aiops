@@ -45,7 +45,7 @@ def test_valid_is_not_execution_permission():
     ({"temporal_state": "DISPATCHING"}, LaunchDecision.UNKNOWN),
     ({"temporal_state": "UNKNOWN"}, LaunchDecision.UNKNOWN),
     ({"run_id": ""}, LaunchDecision.UNKNOWN),
-    ({"alert_fingerprint": "bad\\nkey"}, LaunchDecision.UNKNOWN),
+    ({"alert_fingerprint": "bad\nkey"}, LaunchDecision.UNKNOWN),
     ({"ticket_id": None}, LaunchDecision.UNKNOWN),
 ])
 def test_fail_closed(changes, decision):
