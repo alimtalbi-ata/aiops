@@ -3,17 +3,10 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-07T12:21:01.903712+00:00",
+  "collected_at": "2026-11-07T12:22:01.410034+00:00",
   "docker": {
     "available": true,
     "containers": [
-      {
-        "health": "no-healthcheck",
-        "image": "python:3.12-slim",
-        "inspect_ok": true,
-        "name": "hungry_hopper",
-        "state": "running"
-      },
       {
         "health": "no-healthcheck",
         "image": "dbeaver/cloudbeaver:latest",
@@ -557,13 +550,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 3 days, 2 hours, 32 minutes"
+    "uptime": "up 4 weeks, 3 days, 2 hours, 33 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 141033918464,
+      "free_bytes": 141057007616,
       "total_bytes": 172898033664,
-      "used_bytes": 23006793728
+      "used_bytes": 22983704576
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -571,12 +564,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.82470703125,
-      1.11669921875,
-      1.2958984375
+      1.2861328125,
+      1.15087890625,
+      1.29345703125
     ],
     "memory_bytes": {
-      "MemAvailable": 18783596544,
+      "MemAvailable": 18925461504,
       "MemTotal": 25205911552,
       "SwapFree": 10022354944,
       "SwapTotal": 10838077440
