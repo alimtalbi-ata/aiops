@@ -1,0 +1,78 @@
+"""FS147 receipt schema regressions: synthetic fixtures, never host/HITL proof."""
+import importlib.util
+import pathlib
+import unittest
+
+SOURCE = pathlib.Path(__file__).resolve().parents[1] / "scripts/fs/fs147_receipt_gate.py"
+spec = importlib.util.spec_from_file_location("fs147_receipt_gate", SOURCE)
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+
+
+def synthetic_receipt():
+    # Synthetic contract-only fixture; no URLs are independently verified.
+    run = "SYNTHETIC-RUN-DO-NOT-DEPLOY"
+    stages = {
+        name: {"status": "VERIFIED", "proof_url": "https://example.invalid/not-proof",
+               "run_id": run}
+        for name in gate.STAGES
+    }
+    stages["hitl_native"].update(
+        ticket_id=147, action="SYNTHETIC-ACTION", path="/fs-lab",
+        expires_at="2099-01-01T00:00:00Z", validator_id="SYNTHETIC-VALIDATOR",
+        approval_id="SYNTHETIC-APPROVAL"
+    )
+    return dict(alert_fingerprint="SYNTHETIC-FP", incident_id="SYNTHETIC-INC",
+                run_id=run, evidence_id="SYNTHETIC-EVD", glpi_ticket_id=147,
+                scenario="AIOPS2-REAL-FS-20261106", mode="DEMO", stages=stages)
+
+
+class ReceiptFailClosedTests(unittest.TestCase):
+    def test_missing_stage(self):
+        r = synthetic_receipt()
+        del r["stages"]["worker_critic"]
+        self.assertIn("missing stage worker_critic", gate.validate(r))
+
+    def test_mixed_run(self):
+        r = synthetic_receipt()
+        r["stages"]["policy"]["run_id"] = "OTHER-RUN"
+        self.assertIn("run mismatch policy", gate.validate(r))
+
+    def test_wrong_glpi_ticket(self):
+        r = synthetic_receipt()
+        r["glpi_ticket_id"] = 146
+        self.assertIn("ticket must be integer 147", gate.validate(r))
+
+    def test_wrong_hitl_ticket(self):
+        r = synthetic_receipt()
+        r["stages"]["hitl_native"]["ticket_id"] = 146
+        self.assertIn("HITL ticket mismatch", gate.validate(r))
+
+    def test_missing_native_action(self):
+        r = synthetic_receipt()
+        r["stages"]["hitl_native"]["action"] = ""
+        self.assertIn("HITL missing action", gate.validate(r))
+
+    def test_unverified_stage(self):
+        r = synthetic_receipt()
+        r["stages"]["prometheus"]["status"] = "UNKNOWN"
+        self.assertIn("unverified stage prometheus", gate.validate(r))
+
+    def test_live_mode_refused(self):
+        r = synthetic_receipt()
+        r["mode"] = "LIVE"
+        self.assertIn("only DEMO lab evidence allowed", gate.validate(r))
+
+    def test_production_claim_refused(self):
+        r = synthetic_receipt()
+        r["production_deployment"] = True
+        self.assertIn("production deployment cannot be certified by lab gate", gate.validate(r))
+
+    def test_resolved_without_post_measurement(self):
+        r = synthetic_receipt()
+        r["result"] = "RESOLVED"
+        self.assertIn("RESOLVED without post-action proof", gate.validate(r))
+
+
+if __name__ == "__main__":
+    unittest.main()
