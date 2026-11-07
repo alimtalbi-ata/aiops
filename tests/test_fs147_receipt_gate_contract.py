@@ -46,6 +46,23 @@ class ReceiptFailClosedTests(unittest.TestCase):
                 r["stages"]["prometheus"]["proof_url"] = url
                 self.assertIn("missing proof URL prometheus", gate.validate(r))
 
+    def test_ip_literal_proof_hosts_rejected(self):
+        # No network calls: reject internal/metadata and public IP literals.
+        for url in (
+            "https://169.254.169.254/latest/meta-data/",
+            "https://10.0.0.5/run",
+            "https://172.16.1.2/run",
+            "https://192.168.1.1/run",
+            "https://8.8.8.8/run",
+            "https://[::1]/run",
+            "https://[fd00::1]/run",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(gate.proof_url_is_reviewable(url))
+                r = synthetic_receipt()
+                r["stages"]["prometheus"]["proof_url"] = url
+                self.assertIn("missing proof URL prometheus", gate.validate(r))
+
     def test_https_reviewable_url_still_requires_independent_review(self):
         self.assertTrue(gate.proof_url_is_reviewable(
             "https://github.com/alimtalbi-ata/aiops/actions/runs/12345"
