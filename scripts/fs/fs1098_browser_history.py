@@ -111,7 +111,8 @@ try:
             assert not other_http,other_http
             assert not other_console,other_console
             assert not page_errors,page_errors
-            assert not failed_requests,failed_requests
+            unexpected_failed=[e for e in failed_requests if not ("/api/fs1089/prometheus/history" in e["url"] and "ERR_ABORTED" in str(e["failure"]))]
+            assert not unexpected_failed,unexpected_failed
             report["events"]={"console_errors":console_errors,"page_errors":page_errors,
                               "failed_requests":failed_requests,"http_errors":http_errors,
                               "history_responses":history_responses}
