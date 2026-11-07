@@ -9,6 +9,7 @@ Receipt is an *evidence index*, not proof by itself: every proof URL must point
 to a real, independently reviewable artifact. No fake HITL/RESOLVED.
 """
 import argparse
+import ipaddress
 import json
 import sys
 from urllib.parse import urlsplit
@@ -35,6 +36,14 @@ def proof_url_is_reviewable(value):
                  "example.invalid", "test", "invalid"}
             or host.endswith((".localhost", ".local", ".invalid", ".test", ".example"))
             or host.startswith("127.") or host in {"0.0.0.0", "::1"}):
+        return False
+    # IP literals (including private, metadata and public addresses) are not
+    # acceptable independently reviewable evidence hosts.
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
         return False
     return "." in host
 
