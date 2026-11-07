@@ -42,9 +42,14 @@ try:
 
             for metric in ("availability","scrape_duration"):
                 for window in ("1h","6h","24h"):
-                    page.locator("#history-metric").select_option(metric)
+                    # Set both selectors without firing intermediate change events:
+                    # the explicit refresh below is the only request for this matrix cell.
+                    # Rapid selector changes are tested separately as a race scenario.
+                    page.evaluate("""([metric, windowSize]) => {
+                      document.querySelector('#history-metric').value = metric;
+                      document.querySelector('#history-window').value = windowSize;
+                    }""", [metric, window])
                     with page.expect_response(lambda r: "/api/fs1089/prometheus/history" in r.url and ("metric="+metric) in r.url and ("window="+window) in r.url,timeout=25000) as response_info:
-                        page.locator("#history-window").select_option(window)
                         page.locator("#history-refresh").click()
                     api_response=response_info.value
                     assert api_response.status==200,(metric,window,api_response.status)
@@ -69,6 +74,7 @@ try:
                     svg_paths=page.locator("#history-chart path").count()
                     legend_items=page.locator("#history-legend > span").count()
                     assert "points" in status,(metric,window,"history UI did not render successfully",status)
+                    assert status.endswith(" · "+window),(metric,window,"stale window render",status)
                     assert svg_paths==rendered_series,(metric,window,"svg_paths",svg_paths,"expected",rendered_series,"status",status)
                     assert legend_items==rendered_series,(metric,window,"legend_items",legend_items,"expected",rendered_series,"status",status)
                     report["matrix"].append({"metric":metric,"window":window,"status":api_response.status,
