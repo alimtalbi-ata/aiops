@@ -41,3 +41,23 @@ test("reader failures never imply success",async()=>{
  const r=await projectFsReal(adapters({readTemporal:async()=>{throw Error("offline")},readQuestions:async()=>{throw Error("offline")}}),ctx,"insufficient");
  assert.equal(r.body.temporal,"UNKNOWN");assert.deepEqual(r.body.questions,[]);
 });
+
+test("authorization backend outage fails closed without any data reads",async()=>{
+ let reads=0;
+ const r=await projectFsReal(adapters({
+  authz:async()=>{throw Error("auth backend unavailable")},
+  readCore:async()=>{reads++;return core},
+  readTemporal:async()=>{reads++;return downstream},
+  readPolicy:async()=>{reads++;return downstream},
+  readQuestions:async()=>{reads++;return questions}
+ }),ctx,"insufficient");
+ assert.equal(r.httpStatus,403);
+ assert.deepEqual(r.body,{error:"FORBIDDEN"});
+ assert.equal(reads,0);
+});
+test("authorization must return explicit true, not a truthy value",async()=>{
+ let reads=0;
+ const r=await projectFsReal(adapters({authz:async()=>({allowed:false}),readCore:async()=>{reads++;return core}}),ctx,"incident");
+ assert.equal(r.httpStatus,403);
+ assert.equal(reads,0);
+});
