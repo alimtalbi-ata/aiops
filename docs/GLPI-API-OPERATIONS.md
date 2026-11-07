@@ -187,3 +187,9 @@ Script : `scripts/fs/FS.1150-accelerated-core-glpi-one-ticket-canary.sh`. **MUTA
 ## 24. FS1151 — diagnostic initial et correction du séparateur
 
 **OBSERVÉ** : `aiops.glpi_ticket_links` n'existe pas après FS1150 ; FS1151 a ensuite échoué localement sur `AssertionError` avant toute requête GLPI. **Cause du défaut FS1151** : `fs1150-app-token` est déjà terminé par une nouvelle ligne (`openssl rand -hex`) ; un `printf '\\n'` supplémentaire introduisait une ligne vide, lue à la place du user token. Le script a été corrigé pour supprimer cette ligne vide et retourner un diagnostic explicite si un jeton manque. Aucun échec d'authentification GLPI n'est établi par FS1151 initial. Ne pas relancer FS1150 avant une réponse HTTP de FS1151 corrigé.
+
+## 25. FS1151 — refus du nouveau App-Token, FS1152 lecture seule
+
+**OBSERVÉ** : FS1151 corrigé a atteint GLPI depuis Core et reçu HTTP 400, `ERROR_WRONG_APP_TOKEN_PARAMETER` lors de `initSession`. La table `aiops.glpi_ticket_links` est toujours absente. Le chemin réseau Core→GLPI fonctionne ; le jeton applicatif du nouveau client #2 n'est pas accepté. **Hypothèse non encore prouvée** : GLPI 11 stocke les app tokens dans un format transformé (hash), et l'insertion SQL en clair FS1150 est incompatible. Le client API #1 du Portal ne doit pas être modifié.
+
+**FS1152 CODE, EXÉCUTION ATTENDUE** : `scripts/fs/FS.1152-glpi-app-token-format-readonly.sh` compare seulement les **longueurs et classes de format** des champs `app_token` des clients GLPI #1 et #2 et du jeton local Core. Aucun jeton ni hash n'est imprimé, aucune écriture GLPI/PostgreSQL, aucun POST Ticket. Le résultat orientera une correction limitée au client #2, puis un nouveau test de session avant toute création de ticket.
