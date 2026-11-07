@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-07T21:10:01.843125+00:00",
+  "collected_at": "2026-11-07T21:11:01.377044+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:39ad578d506bcd4857f1a936127cdbb5c7ee7fdfab91a9f3f14bc7cf81819fff",
+        "inspect_ok": true,
+        "name": "fs1334-twin-recovery-drill",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "aiops2-core:fs1212-integrated-candidate",
@@ -564,13 +571,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 3 days, 11 hours, 21 minutes"
+    "uptime": "up 4 weeks, 3 days, 11 hours, 22 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 140994670592,
+      "free_bytes": 140994502656,
       "total_bytes": 172898033664,
-      "used_bytes": 23046041600
+      "used_bytes": 23046209536
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -578,12 +585,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.72802734375,
-      1.0654296875,
-      1.1806640625
+      1.33349609375,
+      1.173828125,
+      1.208984375
     ],
     "memory_bytes": {
-      "MemAvailable": 18914906112,
+      "MemAvailable": 18868809728,
       "MemTotal": 25205911552,
       "SwapFree": 10029170688,
       "SwapTotal": 10838077440
