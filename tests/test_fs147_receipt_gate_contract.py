@@ -29,6 +29,28 @@ def synthetic_receipt():
 
 
 class ReceiptFailClosedTests(unittest.TestCase):
+    def test_placeholder_and_local_proof_urls_rejected(self):
+        for url in (
+            "https://example.invalid/not-proof",
+            "https://example.com/placeholder",
+            "http://evidence.example.org/run",
+            "https://localhost/run",
+            "https://127.0.0.1/run",
+            "https://user:password@evidence.example.org/run",
+            "https://evidence.example.org/run#unverified",
+            "https://evidence.example.org:8443/run",
+        ):
+            with self.subTest(url=url):
+                r = synthetic_receipt()
+                r["stages"]["prometheus"]["proof_url"] = url
+                self.assertIn("missing proof URL prometheus", gate.validate(r))
+
+    def test_https_reviewable_url_still_requires_independent_review(self):
+        self.assertTrue(gate.proof_url_is_reviewable(
+            "https://github.com/alimtalbi-ata/aiops/actions/runs/12345"
+        ))
+        # Syntax acceptance is never an assertion that this URL exists or proves FS147.
+
     def test_missing_stage(self):
         r = synthetic_receipt()
         del r["stages"]["worker_critic"]
