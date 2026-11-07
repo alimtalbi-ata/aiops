@@ -45,6 +45,7 @@ try:
                     page.locator("#history-metric").select_option(metric)
                     with page.expect_response(lambda r: "/api/fs1089/prometheus/history" in r.url and ("metric="+metric) in r.url and ("window="+window) in r.url,timeout=25000) as response_info:
                         page.locator("#history-window").select_option(window)
+                        page.locator("#history-refresh").click()
                     api_response=response_info.value
                     assert api_response.status==200,(metric,window,api_response.status)
                     payload=api_response.json()
@@ -76,9 +77,23 @@ try:
                                               "points":total_points,"ui_status":status})
                     print(f"FS1098_MATRIX metric={metric} window={window} STATUS=200 SERIES={len(series)} RENDERED={rendered_series} POINTS={total_points} SVG_PATHS={svg_paths}",flush=True)
 
+            # Rapid window switching: only the latest response may populate the legend.
+            page.locator("#history-window").select_option("1h")
+            page.locator("#history-window").select_option("6h")
+            page.locator("#history-window").select_option("24h")
+            page.wait_for_function("""() => {
+              const s=document.querySelector('#history-status')?.textContent || '';
+              return s.includes('24h') && s.includes('points') &&
+                !document.querySelector('#history-refresh').disabled;
+            }""",timeout=30000)
+            assert page.locator("#history-legend > span").count()==5, "stale legend duplication"
+            assert page.locator("#history-chart path").count()==5, "stale SVG duplication"
+            print("FS1113_RAPID_WINDOW_RACE=PASS",flush=True)
+
             page.locator("#history-refresh").click()
             page.wait_for_function("() => !document.querySelector('#history-refresh')?.disabled",timeout=10000)
             assert page.locator("#history-chart path").count()==5
+            assert page.locator("#history-legend > span").count()==5
             print("FS1098_REFRESH=PASS",flush=True)
 
             page.set_viewport_size({"width":390,"height":844})
