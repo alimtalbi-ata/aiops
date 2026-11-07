@@ -159,3 +159,9 @@ La réussite de FS1146 n'implique pas encore la réussite du flux **Core → GLP
 ## 19. FS1148 — résultat exécuté sur PostgreSQL Core
 
 **OBSERVÉ PASS_ROLLED_BACK** sur SRV-DEB-05 : `fs1130_incident_found=true`, `real_postgres=true`, `duplicate_prevented=true`, `claim_once=true`, `confirmed_not_reclaimed=true`, `unknown_not_retried=true`, `persisted_changes=false`, `glpi_tickets_created=0`. Les assertions portaient sur une table **temporaire**, pas sur le synchroniseur FS1136 ni sur `aiops.glpi_ticket_links`. Le ticket GLPI #155 n'est pas lié à un incident Core. Le prochain jalon reste un vrai flux Core → GLPI avec accès réseau dédié, client GLPI autorisé, secret sécurisé et vérification de l'outbox/KPI.
+
+## 20. FS1149 — préflight de raccordement Core → GLPI dédié
+
+**FS1148 OBSERVÉ PASS_ROLLED_BACK** : assertions PostgreSQL réelles réussies dans une table temporaire, sans écritures persistantes ni tickets GLPI créés.
+
+**FS1149 CODE, EXÉCUTION ATTENDUE** : `scripts/fs/FS.1149-core-glpi-dedicated-integration-preflight.sh` vérifie les réseaux Docker de Core, GLPI et Portal ; la structure complète et les index de `glpi_apiclients` sans valeurs de secrets ; les clients actifs et leurs seules plages IPv4 ; la présence des variables GLPI dans Core, sans valeurs. Le script ne modifie ni réseau, ni base, ni conteneur. Cette vérification est nécessaire pour ne pas inventer les colonnes obligatoires d'un client API GLPI 11 ni écraser la règle existante `172.21.0.2` (Portal). Elle précède un plan de déploiement réversible avec nouveau client API et chemin réseau Core, sans modification du Portal 7777. **Pas encore de Core→GLPI E2E**.
