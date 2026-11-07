@@ -93,3 +93,11 @@ Ces scripts ne remplacent ni la qualification réelle de l'API ni la vérificati
 Script : `scripts/fs/FS.1140-glpi-client-rules-and-existing-tickets-readonly.sh` (`CODE`, pas encore `OBSERVÉ`). Lit uniquement les colonnes non secrètes de `glpi_apiclients` (identifiant, nom, état, plages IPv4/IPv6), le nombre de tickets mentionnant `FS1130`, le nombre de tickets dont le titre commence par `[DEMO]`, et les réseaux des conteneurs Core et GLPI. **Aucune modification**, aucun jeton ni contenu de ticket affiché. Les nombres de tickets constituent des indices de rapprochement, pas des preuves d'unicité ou de corrélation exacte.
 
 Si une règle bloque la boucle locale, ne pas l'élargir automatiquement : vérifier le client associé au jeton, le chemin d'accès futur depuis Core et les droits de création avant une correction ciblée. Les résultats du script doivent être ajoutés ici une fois exécutés.
+
+## 9. FS1140 — résultats observés sur SRV-DEB-05
+
+**Statut : OBSERVÉ, lecture seule, aucune mutation.** Une seule ligne `glpi_apiclients` : `id=1`, nom `full access from api`, `is_active=1`, `ipv4_range_start=2887057410`, `ipv4_range_end=2887057410`, `ipv6=::1`. Les bornes IPv4 correspondent à **172.21.0.2/32** (adresse unique, pas plage étendue). La sonde FS1138 depuis `127.0.0.1` est donc hors de cette autorisation IPv4. Il reste à identifier le détenteur de 172.21.0.2 et le chemin d'accès attendu, sans modifier globalement les ACL.
+
+Résultat FS1140 : `glpi_tickets` contient **0** ticket dont `name` ou `content` mentionne `FS1130` ; **0** ticket dont `name` commence par `[DEMO]`. Ces filtres ne prouvent pas l'absence de tout ticket GLPI préexistant associé par une autre convention.
+
+Réseaux observés : Core uniquement `aiops2-rebuild-control` et `aiops2-rebuild-data` ; GLPI uniquement `aiops2-rebuild-integration` et `aiops2-rebuild-public`. Pas de réseau partagé. Ne pas connecter des conteneurs à un réseau ni changer une ACL sans sauvegarde, validation du chemin et plan de retour arrière. Prochaine étape : identification en lecture seule de l'adresse 172.21.0.2, vérification de l'architecture de proxy/API et test d'authentification depuis la source autorisée (sans exposer les jetons).
