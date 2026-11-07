@@ -5,6 +5,7 @@ from pydantic import BaseModel,Field
 from shared.db import db
 from core.denial_routes import register_denial_routes
 from core.glpi_kpi import register_glpi_kpi
+from core.glpi_ingest import ensure_ticket
 from core.critic_denial_block import block_with_denial
 from core.critic_denial_resume import resume_critic_denial
 from shared.ids import new
@@ -91,7 +92,11 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
     iid='INC-'+x.external_id
     with db() as c:
         c.execute('insert into aiops.incidents(incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic,payload) values(%s,%s,%s,%s,\'OPEN\',%s,now(),%s,%s,%s) on conflict(external_id) do update set title=excluded.title,severity=excluded.severity,service_id=excluded.service_id,payload=excluded.payload',(iid,x.external_id,x.title,x.severity,x.service_id,x.source,x.synthetic,json.dumps(x.payload)))
-    return {'incident_id':iid,'severity':x.severity,'state':'OPEN','synthetic':x.synthetic}
+    response={'incident_id':iid,'severity':x.severity,'state':'OPEN','synthetic':x.synthetic}
+    if os.getenv('AIOPS_GLPI_TICKETS_REQUIRED','false').lower()=='true':
+        response['glpi']=ensure_ticket({'incident_id':iid,'external_id':x.external_id,
+            'title':x.title,'severity':x.severity,'source':x.source,'synthetic':x.synthetic})
+    return response
 @app.post('/api/runs')
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
