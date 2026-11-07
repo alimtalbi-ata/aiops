@@ -149,3 +149,9 @@ La réussite de FS1146 n'implique pas encore la réussite du flux **Core → GLP
 ## 17. FS1147 — résultat exécuté sur SRV-DEB-05
 
 **TEST ISOLÉ OBSERVÉ PASS** : `FS1147_FINAL_STATUS=PASS_ISOLATED` ; `numeric_string_ticket_id_accepted=true`, `historical_apirest_url_accepted=true`, `synthetic_ticket_label=true`, `incident_correlation=true`, `requests=3`, `real_glpi_mutation=false`. Le test a exécuté le module `app/core/glpi_client.py` réel contre un mock local. Il n'a pas créé de ticket GLPI réel et n'a pas prouvé le fonctionnement de l'outbox, du réseau Core, ni de l'ingestion obligatoire. FS1146 reste la preuve distincte de création réelle du ticket #155 depuis Portal.
+
+## 18. FS1148 — test des invariants outbox sur le vrai PostgreSQL Core
+
+**FS1147 OBSERVÉ PASS_ISOLATED** sur SRV-DEB-05 : client GLPI Core chargé contre mock, 3 requêtes, URL historique, ID numérique en chaîne, étiquette DEMO et corrélation validés ; aucune mutation GLPI réelle.
+
+**FS1148 CODE, EXÉCUTION ATTENDUE** : `scripts/fs/FS.1148-real-core-postgres-outbox-rollback-test.sh` exécute Python/psycopg dans le conteneur Core existant. Il lit un incident FS1130 réel, crée une **table PostgreSQL temporaire** avec les contraintes de l'outbox, vérifie insertion idempotente, claim unique, confirmation, absence de reprise d'une ligne CONFIRMED et absence de reprise d'une ligne UNKNOWN. Toutes les opérations ont lieu dans une transaction explicitement annulée ; **aucune écriture persistante** dans `aiops.glpi_ticket_links`, aucun ticket GLPI créé, aucun changement Portal. L'ID 155 est utilisé comme valeur de test dans la table temporaire et **ne constitue pas une liaison réelle** avec un incident FS1130. Ce test qualifie les invariants SQL sur le serveur réel, mais **ne teste pas encore le code de synchronisation FS1136 ni le chemin réseau Core → GLPI**.
