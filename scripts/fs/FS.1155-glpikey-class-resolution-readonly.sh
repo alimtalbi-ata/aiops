@@ -13,7 +13,6 @@ docker exec -i aiops2-rebuild-glpi sh -lc '
   for f in "$ROOT/inc/includes.php" "$ROOT/src/Glpi/Encryption/GLPIKey.php" "$ROOT/src/GLPIKey.php"; do
     if [ -f "$f" ]; then echo "FS1155_FILE=$f"; grep -nE "namespace|class GLPIKey|class_alias|autoload" "$f" | head -18 || true; fi
   done
-  echo "FS1155_RUNTIME_CLASS_EXISTS"
-  php -r '\''require "/var/www/glpi/inc/includes.php"; echo "global=".(class_exists("GLPIKey")?"yes":"no")." namespaced=".(class_exists("Glpi\\\\Security\\\\GLPIKey")?"yes":"no")."\\n";'\''
+
 '
 echo "FS1155_FINAL_STATUS=READ_ONLY_COMPLETE"
