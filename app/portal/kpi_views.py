@@ -73,6 +73,7 @@ def register_kpi_views(app, get_core):
                 except Exception:
                     pass
         data=metrics(campaign,details)
+        missing_details=sum(1 for r in campaign if not details.get(str(r.get("run_id"))))
         status_rows=[(status,data["statuses"].get(status,0)) for status in ("RESOLVED","BLOCKED","FAILED","CANCELLED","RUNNING","CREATED","WAITING")]
         body=panel("Campagne FS1130 — traitements synthétiques",
             "<p>Source : Core /api/runs et /api/runs/{id}. Vue actualisée à chaque chargement. "
@@ -81,6 +82,10 @@ def register_kpi_views(app, get_core):
             table(["Mesure","Valeur"],[
                 ("Runs FS1130 visibles",data["total"]),
                 ("États terminaux",data["terminal"]),
+                ("Résolus",data["statuses"].get("RESOLVED",0)),
+                ("Bloqués Policy / workflow",data["statuses"].get("BLOCKED",0)),
+                ("Échecs techniques (FAILED)",data["statuses"].get("FAILED",0)),
+                ("Détails de run indisponibles",missing_details),
                 ("Durée médiane run (s)",fmt(data["median_seconds"])),
                 ("Durée P95 run (s)",fmt(data["p95_seconds"])),
                 ("Durée médiane étape Analyst (s)",fmt(data["analyst_median_seconds"])),
