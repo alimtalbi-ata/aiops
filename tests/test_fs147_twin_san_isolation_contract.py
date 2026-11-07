@@ -57,6 +57,8 @@ def assert_isolated(lab, san):
     # Inspect nested metadata too: a top-level-only check permits evidence laundering.
     if any(token == "aiops2_fs_lab_used_percent" for token in strings(san["observations"])):
         raise ValueError("filesystem metric in SAN")
+    if any(not isinstance(obs, dict) or obs.get("source") != "filesystem-sanity-check" or obs.get("mount") != "/fs-lab" or obs.get("metric") != "aiops2_fs_lab_used_percent" for obs in lab["observations"]):
+        raise ValueError("unqualified filesystem observation")
     if any("fabric" in obs for obs in lab["observations"]):
         raise ValueError("SAN observation in lab")
     if any("mount" in obs for obs in san["observations"]):
@@ -118,6 +120,12 @@ class TwinSanIsolationContract(unittest.TestCase):
         san["observations"][0]["metadata"] = {"metric": "aiops2_fs_lab_used_percent"}
         with self.assertRaises(ValueError):
             assert_isolated(LAB, san)
+
+    def test_reject_extra_unqualified_lab_observation(self):
+        lab = copy.deepcopy(LAB)
+        lab["observations"].append({"source": "unknown", "mount": "/fs-lab", "metric": "san_latency"})
+        with self.assertRaises(ValueError):
+            assert_isolated(lab, SAN)
 
     def test_allow_filesystem_sanity_source(self):
         assert_isolated(LAB, SAN)
