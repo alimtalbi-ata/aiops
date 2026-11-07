@@ -4,6 +4,34 @@ set -euo pipefail
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 PROD=aiops2-rebuild-portal
 EXPECTED_PROD=aiops2-portal:fs1073-csp-candidate
+PROD_BEFORE=""
+
+# Inspect only: this gate must never deploy or modify the production container.
+check_production_on_exit() {
+  local gate_status=$?
+  trap - EXIT
+  if [[ -n "$PROD_BEFORE" ]]; then
+    local prod_after
+    if ! prod_after="$(docker inspect "$PROD" --format '{{.Config.Image}}')"; then
+      echo "FS1113_ERROR=PRODUCTION_POSTCHECK_UNAVAILABLE"
+      exit 4
+    fi
+    echo "FS1113_PRODUCTION_IMAGE_AFTER=$prod_after"
+    if [[ "$prod_after" != "$PROD_BEFORE" ]]; then
+      echo "FS1113_ERROR=PRODUCTION_IMAGE_CHANGED"
+      exit 3
+    fi
+  fi
+  echo "FS1113_PRODUCTION_DEPLOY=NOT_PERFORMED"
+  echo "FS1113_PRODUCTION_MUTATION=NONE_BY_THIS_SCRIPT"
+  if (( gate_status == 0 )); then
+    echo "FS1113_RESULT=PASS"
+  else
+    echo "FS1113_RESULT=FAIL"
+  fi
+  exit "$gate_status"
+}
+trap check_production_on_exit EXIT
 
 echo "FS1113_MODE=NONPRODUCTION_HISTORY_RACE_FIX_BUILD_AND_FULL_BROWSER_GATE"
 PROD_BEFORE="$(docker inspect "$PROD" --format '{{.Config.Image}}')"
@@ -13,18 +41,8 @@ echo "FS1113_PRODUCTION_IMAGE_BEFORE=$PROD_BEFORE"
   exit 2
 }
 
-# Always rebuild from the current branch patch; never trust a cached candidate tag.
+# Always rebuild from current checkout; never trust a cached candidate tag.
 bash "$ROOT/scripts/fs/FS.1097-build-history-chart-candidate.sh"
 
-# Reuse the validated publish-first network lifecycle and full Chromium matrix.
+# Reuse publish-first rootless network lifecycle and full Chromium matrix.
 bash "$ROOT/scripts/fs/FS.1107-full-history-candidate-external-first-browser.sh"
-
-PROD_AFTER="$(docker inspect "$PROD" --format '{{.Config.Image}}')"
-echo "FS1113_PRODUCTION_IMAGE_AFTER=$PROD_AFTER"
-[[ "$PROD_AFTER" == "$PROD_BEFORE" ]] || {
-  echo "FS1113_ERROR=PRODUCTION_IMAGE_CHANGED"
-  exit 3
-}
-echo "FS1113_RESULT=PASS"
-echo "FS1113_PRODUCTION_DEPLOY=NOT_PERFORMED"
-echo "FS1113_PRODUCTION_MUTATION=NONE"
