@@ -48,7 +48,7 @@ FROM glpi_apiclients WHERE name='$CLIENT_NAME';
 COMMIT;
 SQL
 cat "$WORK/sql-result"
-grep -q 'token_match' "$WORK/sql-result" || { echo "FS1150_ERROR=DEDICATED_CLIENT_TOKEN_MISMATCH";exit 4; }
+grep -Fq "dedicated_client" "$WORK/sql-result" && grep -Fq "${CORE_IP}" "$WORK/sql-result" && grep -Fq 'token_match' "$WORK/sql-result" || { echo "FS1150_ERROR=DEDICATED_CLIENT_TOKEN_OR_IP_MISMATCH";exit 4; }
 # Deliver test code only into Core /tmp, not production application source.
 docker cp app/core/glpi_client.py "$CORE:/tmp/fs1150_glpi_client.py"
 docker cp scripts/fs/fs1136_glpi_outbox.py "$CORE:/tmp/fs1150_outbox.py"
