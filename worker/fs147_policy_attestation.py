@@ -29,6 +29,12 @@ def require_policy_attestation(reply, request, evidence_id):
             raise ValueError("POLICY_UNKNOWN: missing or mismatched " + name)
     if reply.get("state") not in ("PASS", "BLOCKED", "UNKNOWN"):
         raise ValueError("POLICY_UNKNOWN: invalid state")
+    # A negative state must never carry a contradictory executable decision.
+    # In particular BLOCKED/EXECUTE is not a trustworthy refusal.
+    if reply.get("decision") not in (None, "SIMULATE", "BLOCK", "REJECT"):
+        raise ValueError("POLICY_UNKNOWN: unsafe decision")
     if reply["state"] == "PASS" and reply.get("decision") != "SIMULATE":
         raise ValueError("POLICY_UNKNOWN: unsafe decision")
+    if reply["state"] != "PASS" and reply.get("decision") == "SIMULATE":
+        raise ValueError("POLICY_UNKNOWN: contradictory negative decision")
     return dict(reply)
