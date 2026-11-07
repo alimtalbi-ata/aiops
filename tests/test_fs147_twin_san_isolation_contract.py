@@ -63,6 +63,9 @@ def assert_isolated(lab, san):
         raise ValueError("SAN observation in lab")
     if any("mount" in obs for obs in san["observations"]):
         raise ValueError("filesystem observation in SAN")
+    # A filesystem producer can be laundered through SAN metadata without a mount or metric.
+    if any(token.lower() == "filesystem-sanity-check" for token in strings(san["observations"])):
+        raise ValueError("filesystem source in SAN")
 
 
 class TwinSanIsolationContract(unittest.TestCase):
@@ -126,6 +129,12 @@ class TwinSanIsolationContract(unittest.TestCase):
         lab["observations"].append({"source": "unknown", "mount": "/fs-lab", "metric": "san_latency"})
         with self.assertRaises(ValueError):
             assert_isolated(lab, SAN)
+
+    def test_reject_nested_filesystem_source_in_san(self):
+        san = copy.deepcopy(SAN)
+        san["observations"][0]["metadata"] = {"producer": "filesystem-sanity-check"}
+        with self.assertRaises(ValueError):
+            assert_isolated(LAB, san)
 
     def test_allow_filesystem_sanity_source(self):
         assert_isolated(LAB, SAN)
