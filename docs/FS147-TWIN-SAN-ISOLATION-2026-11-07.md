@@ -35,3 +35,7 @@ FS1113 / candidat fs1097 : hors périmètre de ce test ; ne pas reconstruire, d�
 Le commit `e1e75c9` renforce le contrôle de provenance des observations : un montage `/fs-lab` seul ne suffit plus si `source` ou `metric` ont été substitués, et le SAN ne peut pas réutiliser `aiops2_fs_lab_used_percent`. Deux régressions négatives supplémentaires sont ajoutées. Ce contrat reste fondé sur fixtures : il ne prétend pas qualifier des données réelles ni une signature cryptographique de provenance.
 
 Au SHA précédent `6570300d35e73ecc80511b530b9fbba52975236f`, GitHub Actions retourne trois workflows réussis (Offline Integrity, Historical Trace, Core isolated) et `AIOps quality gates` en échec. Ne pas reporter ces résultats comme CI du nouveau HEAD. La suite dédiée et les snapshots hôte/E2E restent à qualifier au SHA exact ; PR Draft et NO-GO maintenus.
+
+## Contrôle supplémentaire — métrique filesystem imbriquée dans SAN
+
+Commit `836bdaf` : `test_reject_nested_filesystem_metric_in_san` couvre le rejeu de `aiops2_fs_lab_used_percent` dans `observations[].metadata.metric` du graphe SAN. Le validateur inspecte désormais récursivement les clés et valeurs des observations SAN, et non seulement `observations[].metric` au premier niveau. Ce cas évite qu'une métrique filesystem soit blanchie par un emballage de métadonnées. Le contrôle reste **fixture-only** ; il ne prouve pas la non-contamination d'un RUN réel. Qualification au SHA exact requise avant merge.
