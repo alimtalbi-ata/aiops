@@ -1,4 +1,6 @@
 import json, os, hmac, logging
+from time import perf_counter
+from intelligence import llm_telemetry
 import requests
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -178,7 +180,13 @@ def call_model(system, payload, schema):
         headers['Authorization'] = 'Bearer ' + KEY
     body = {'model': MODEL, 'temperature': 0, 'messages': [{'role':'system','content':system + '\nOutput JSON Schema:\n' + json.dumps(schema.model_json_schema(), ensure_ascii=False)}, {'role':'user','content':json.dumps(payload, ensure_ascii=False)}], 'response_format': {'type':'json_object'}}
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
+        started=perf_counter()
+        try:
+            r = requests.post(url, headers=headers, json=body, timeout=(3, TIMEOUT))
+            llm_telemetry.record(started,r,status='http_'+str(r.status_code))
+        except requests.RequestException:
+            llm_telemetry.record(started,status='transport_error')
+            raise
         r.raise_for_status()
         raw = r.json()['choices'][0]['message']['content']
         decoded = decode_model_json(raw)
@@ -209,9 +217,15 @@ def call_model(system, payload, schema):
                         'schema_errors': errors,
                     }, ensure_ascii=False)},
                 ]
-                repaired_response = requests.post(
-                    url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
-                )
+                started=perf_counter()
+                try:
+                    repaired_response = requests.post(
+                        url, headers=headers, json=repair_body, timeout=(3, TIMEOUT)
+                    )
+                    llm_telemetry.record(started,repaired_response,status='http_'+str(repaired_response.status_code))
+                except requests.RequestException:
+                    llm_telemetry.record(started,status='transport_error')
+                    raise
                 repaired_response.raise_for_status()
                 repaired = decode_model_json(repaired_response.json()['choices'][0]['message']['content'])
                 if schema is Critique:
@@ -293,6 +307,7 @@ def analyze(x: Request, authorization: str | None = Header(default=None)):
     annotated_evidence,freshness=annotate_evidence_freshness(x.evidence)
     payload['evidence']=annotated_evidence
     payload['context']={**payload.get('context',{}),'evidence_freshness':freshness}
+    llm_telemetry.reset()
     result = call_model(system, payload, Analyst)
     unknown = bad_refs(result, x.evidence)
     if unknown:
@@ -300,7 +315,7 @@ def analyze(x: Request, authorization: str | None = Header(default=None)):
     quality_errors=analysis_quality_errors(result.model_dump(mode='json'), x.evidence)
     if quality_errors:
         raise HTTPException(502, detail={'code':'ungrounded_or_inconsistent_analysis','reasons':quality_errors})
-    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'analyst-v2.2','evidence_freshness':freshness,'execution_allowed':False}
+    return {'analysis':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'analyst-v2.2','llm_telemetry':llm_telemetry.snapshot(),'evidence_freshness':freshness,'execution_allowed':False}
 
 @app.post('/api/intelligence/critic')
 def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
@@ -317,6 +332,7 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
     annotated_evidence,freshness=annotate_evidence_freshness(x.evidence)
     payload['evidence']=annotated_evidence
     payload['context']={**payload.get('context',{}),'evidence_freshness':freshness}
+    llm_telemetry.reset()
     result = call_model(system, payload, Critique)
     unsupported = [check for check in result.claim_checks if not check.supported]
     if unsupported:
@@ -351,5 +367,5 @@ def critic(x: CriticRequest, authorization: str | None = Header(default=None)):
             result.issues.append(Issue(code=('CONTRADICTION' if reason=='divergent_snapshots_not_challenged' else 'SCHEMA_OR_COVERAGE'),
                                        description='Deterministic evidence guard: '+reason, evidence_ids=[]))
         result.final_recommendation='HUMAN_APPROVAL'
-    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.4','evidence_freshness':freshness,'execution_allowed':False}
+    return {'critique':result.model_dump(mode='json'),'mode':x.mode,'provider':'openai-compatible','model':MODEL,'prompt_version':'critic-v2.4','llm_telemetry':llm_telemetry.snapshot(),'evidence_freshness':freshness,'execution_allowed':False}
 
