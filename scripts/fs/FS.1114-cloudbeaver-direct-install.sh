@@ -4,15 +4,15 @@
 set -euo pipefail
 
 NAME=aiops2-rebuild-cloudbeaver
-IMAGE="${CLOUDBEAVER_IMAGE:-dbeaver/cloudbeaver:26.2.4}"
+IMAGE="${CLOUDBEAVER_IMAGE:-dbeaver/cloudbeaver:latest}"
 NETWORK=aiops2-rebuild-public
 SECONDARY_NETWORK=aiops2-rebuild-integration
-PORT="${CLOUDBEAVER_HOST_PORT:-18978}"
+PORT="${CLOUDBEAVER_HOST_PORT:-8978}"
 WORKSPACE_VOLUME=aiops2-cloudbeaver-workspace
 
 echo "FS1114_MODE=DIRECT_CLOUDBEAVER_INSTALL"
 echo "FS1114_IMAGE=$IMAGE"
-echo "FS1114_BIND=127.0.0.1:$PORT"
+echo "FS1114_BIND=0.0.0.0:$PORT"
 echo "FS1114_PRODUCTION_PORTAL_MUTATION=NONE"
 
 if [[ "${AIOPS_AUTHORIZE_PRODUCTION_CLOUDBEAVER:-}" != "YES" ]]; then
@@ -35,14 +35,14 @@ if ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q .; then
   echo "FS1114_STOP=PORT_IN_USE"; exit 2
 fi
 
-# Pin a release, not the mutable :latest tag.
+# Standard official Community image; override CLOUDBEAVER_IMAGE to pin a release.
 docker pull "$IMAGE"
 docker volume create "$WORKSPACE_VOLUME" >/dev/null
 docker run -d \
   --name "$NAME" \
   --restart unless-stopped \
   --network "$NETWORK" \
-  --publish "127.0.0.1:$PORT:8978/tcp" \
+  --publish "0.0.0.0:$PORT:8978/tcp" \
   --mount "type=volume,source=$WORKSPACE_VOLUME,target=/opt/cloudbeaver/workspace" \
   --security-opt no-new-privileges \
   "$IMAGE" >/dev/null
@@ -68,7 +68,7 @@ if [[ "$READY" != YES ]]; then
   exit 1
 fi
 echo "FS1114_RESULT=SERVICE_RUNNING"
-echo "FS1114_NEXT=COMPLETE_ADMIN_SETUP_VIA_SSH_TUNNEL_THEN_CONFIGURE_READ_ONLY_CONNECTIONS"
-echo "FS1114_SSH_TUNNEL=ssh -L $PORT:127.0.0.1:$PORT aiops@SRV-DEB-05"
-echo "FS1114_URL=http://127.0.0.1:$PORT/"
+echo "FS1114_NEXT=COMPLETE_ADMIN_SETUP_AND_CONFIGURE_DATABASE_CONNECTIONS_WITH_APPROPRIATE_SQL_ROLES"
+echo "FS1114_WARNING=PUBLIC_HTTP_PORT_REQUIRES_FIREWALL_AND_HTTPS_PROXY_FOR_UNTRUSTED_NETWORKS"
+echo "FS1114_URL=http://SRV-DEB-05:$PORT/"
 echo "FS1114_PORTAL_INTEGRATION=NOT_YET_DEPLOYED"
