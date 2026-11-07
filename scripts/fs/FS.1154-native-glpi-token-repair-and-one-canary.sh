@@ -14,8 +14,14 @@ CORE_IP=$(docker inspect -f '{{with index .NetworkSettings.Networks "aiops2-rebu
 [[ "$CORE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
 # Encrypt using the GLPI installation itself. The plaintext is stdin only.
 docker exec -i aiops2-rebuild-glpi php -r '
-require "/var/www/glpi/inc/includes.php";
+$autoload="/var/www/glpi/vendor/autoload.php";
+if (!is_file($autoload)) {fwrite(STDERR,"FS1154_COMPOSER_AUTOLOAD_NOT_FOUND\n");exit(6);}
+require_once $autoload;
+require_once "/var/www/glpi/inc/includes.php";
 require_once "/var/www/glpi/src/GLPIKey.php";
+if (!function_exists("Safe\\\\sodium_crypto_aead_xchacha20poly1305_ietf_encrypt")) {
+ fwrite(STDERR,"FS1154_SAFE_SODIUM_FUNCTION_NOT_LOADED\n");exit(7);
+}
 $v=trim(stream_get_contents(STDIN));
 if (!preg_match("/^[0-9a-f]{64}$/D",$v)) {fwrite(STDERR,"FS1154_INVALID_APP_TOKEN\n");exit(2);}
 $dir="/var/glpi/config";
