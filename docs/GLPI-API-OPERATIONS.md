@@ -117,3 +117,9 @@ Réseaux observés : Core uniquement `aiops2-rebuild-control` et `aiops2-rebuild
 ## 12. FS1143 — échec de prévalidation d'URL, pas d'authentification
 
 **OBSERVÉ** : les trois variables Portal `GLPI_API_URL`, `GLPI_APP_TOKEN`, `GLPI_USER_TOKEN` sont présentes. FS1143 s'est arrêté avant `initSession` avec `UNEXPECTED_GLPI_URL_HOST_OR_SCHEME` car le script n'autorisait que `http://aiops2-glpi` et `http://aiops2-rebuild-glpi`. Ce résultat **ne prouve pas** un défaut de jeton ni une panne GLPI. FS1144 (`scripts/fs/FS.1144-glpi-portal-url-shape-readonly.sh`) décrit uniquement le schéma, hôte, port, chemin et résolution DNS de l'URL configurée, sans envoyer de jetons ; vérifier le résultat avant d'autoriser la cible de la prochaine sonde authentifiée.
+
+## 13. FS1144 — URL historique validée et FS1145
+
+**OBSERVÉ** : `GLPI_API_URL=http://172.21.0.6/apirest.php` dans l'environnement du Portal ; jetons application et utilisateur présents, non divulgués. `172.21.0.6` est l'adresse GLPI sur le réseau `aiops2-rebuild-public`. L'arrêt FS1143 venait de son allowlist de noms DNS et **non** d'une erreur de jeton ou d'API.
+
+**FS1145 (CODE, exécution à confirmer)** : `scripts/fs/FS.1145-glpi-auth-existing-portal-ip-readonly.sh` accepte uniquement l'URL historique exacte, utilise les jetons déjà injectés dans Portal pour `GET initSession`, `GET getMyProfiles`, `GET Ticket?range=0-0`, `GET killSession` et n'affiche ni secrets, ni profils, ni tickets. Aucune création de ticket ni modification de Portal. Ce test prouve l'authentification seulement si `session_established=true` est effectivement observé.
