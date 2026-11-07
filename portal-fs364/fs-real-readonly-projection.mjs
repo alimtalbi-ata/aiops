@@ -23,8 +23,13 @@ function safeStatus(source, core) {
  * No reader may mutate Core, GLPI, Temporal or Policy.
  */
 export async function projectFsReal({authz, readCore, readTemporal, readPolicy, readQuestions}, context, route) {
-  if (typeof authz !== "function" || !(await authz(context, "fs-real:read", "147")))
-    return {httpStatus: 403, body: {error: "FORBIDDEN"}};
+  // Authorization failures, including backend outages, must fail closed before any reader.
+  let authorized = false;
+  try {
+    authorized = typeof authz === "function" &&
+      (await authz(context, "fs-real:read", "147")) === true;
+  } catch { /* fail closed */ }
+  if (!authorized) return {httpStatus: 403, body: {error: "FORBIDDEN"}};
   if (!["incident", "insufficient"].includes(route))
     return {httpStatus: 400, body: {error: "INVALID_ROUTE"}};
   let core = null;
