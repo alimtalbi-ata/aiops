@@ -3,6 +3,7 @@
 Secrets are only read from environment. Never include credentials in errors/logs.
 """
 import os
+from urllib.parse import urlsplit
 import requests
 
 class GlpiError(RuntimeError): pass
@@ -10,10 +11,13 @@ class GlpiError(RuntimeError): pass
 class Glpi:
     def __init__(self):
         self.base=os.getenv("AIOPS_GLPI_URL","").rstrip("/")
+        if self.base.endswith("/apirest.php"):
+            self.base=self.base[:-len("/apirest.php")]
         self.app_token=os.getenv("AIOPS_GLPI_APP_TOKEN","")
         self.user_token=os.getenv("AIOPS_GLPI_USER_TOKEN","")
         self.timeout=int(os.getenv("AIOPS_GLPI_TIMEOUT_SECONDS","15"))
-        if not self.base.startswith(("http://","https://")) or not self.app_token or not self.user_token:
+        parsed=urlsplit(self.base)
+        if parsed.scheme not in ("http","https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or not self.app_token or not self.user_token:
             raise GlpiError("GLPI_API_NOT_CONFIGURED")
         self.session=None
     def _request(self,method,path,**kwargs):
@@ -50,6 +54,8 @@ class Glpi:
             "name":name,"content":content,"type":1,"status":1,
             "priority":priority,"urgency":priority,"impact":priority}})
         ticket_id=data.get("id")
+        if isinstance(ticket_id,str) and ticket_id.isdecimal():
+            ticket_id=int(ticket_id)
         if type(ticket_id) is not int or ticket_id<=0:
             raise GlpiError("GLPI_TICKET_ID_MISSING")
         return ticket_id
