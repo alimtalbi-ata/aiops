@@ -27,9 +27,21 @@ import pytest
 def test_transport_failure_consumes_claim_without_replay(
         failed_stage, exception, expected, calls):
     # Use a wrapper at the injected transport boundary; never call a host.
+    from worker.fs147_readonly_pipeline import FS147Request
     from worker.fs147_verified_entrypoint import run_fs147_strict
-    from tests.test_fs147_strict_freshness_replay_20261107 import (
-        NOW, REQ, SCOPE, evidence)
+    from datetime import datetime, timezone
+    NOW = datetime(2026, 11, 7, 11, 0, tzinfo=timezone.utc)
+    REQ = FS147Request("tenant", "actor", "incident", "RUN-147")
+    SCOPE = dict(tenant_id="tenant", actor_id="actor", incident_id="incident",
+                 run_id="RUN-147", ticket_id=147)
+    def evidence():
+        return dict(SCOPE, evidence_id="E-147", source="fs-lab-bridge-readonly",
+                    filesystem="/fs-lab", read_only=True, commands=["df", "du", "ls"],
+                    collected_at=NOW.isoformat(), used_percent=92,
+                    command_results={
+                        "df": dict(exit_code=0, stdout="tmpfs 12M 11M 1M 92% /fs-lab", stderr=""),
+                        "du": dict(exit_code=0, stdout="11264 /fs-lab", stderr=""),
+                        "ls": dict(exit_code=0, stdout="aiops2-demo-fill.bin", stderr="")})
     claimed = set()
     observed = []
 
