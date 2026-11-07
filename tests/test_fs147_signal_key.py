@@ -37,7 +37,7 @@ def test_denials_and_unknown():
     assert classify_signal_key(replace(source, ticket_id=146)) == (KeyStatus.DENIED, None)
     for change in (
         {"mode": "UNKNOWN"}, {"ticket_id": True}, {"fence_token": True},
-        {"fence_token": 0}, {"run_id": ""}, {"approval_id": "bad\\nvalue"},
+        {"fence_token": 0}, {"run_id": ""}, {"approval_id": "bad\nvalue"},
         {"evidence_sha256": "A" * 64}, {"idempotency_key": " "},
     ):
         assert classify_signal_key(replace(source, **change)) == (KeyStatus.UNKNOWN, None)
