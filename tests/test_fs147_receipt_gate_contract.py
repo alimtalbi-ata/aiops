@@ -115,7 +115,17 @@ class ReceiptFailClosedTests(unittest.TestCase):
     def test_resolved_without_post_measurement(self):
         r = synthetic_receipt()
         r["result"] = "RESOLVED"
-        self.assertIn("RESOLVED without post-action proof", gate.validate(r))
+        self.assertIn("RESOLVED without reviewable post-action proof URL", gate.validate(r))
+
+
+    def test_resolved_with_placeholder_post_measurement_rejected(self):
+        for url in ("https://example.invalid/fake", "http://evidence.invalid/post",
+                    "https://localhost/post", "https://user:secret@evidence.example.org/post"):
+            with self.subTest(url=url):
+                r = synthetic_receipt()
+                r["result"] = "RESOLVED"
+                r["post_action_measurement_proof_url"] = url
+                self.assertIn("RESOLVED without reviewable post-action proof URL", gate.validate(r))
 
 
 if __name__ == "__main__":
