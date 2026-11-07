@@ -23,6 +23,7 @@ def synthetic_receipt():
         expires_at="2099-01-01T00:00:00Z", validator_id="SYNTHETIC-VALIDATOR",
         approval_id="SYNTHETIC-APPROVAL"
     )
+    stages["safe_resume"]["approval_id"] = "SYNTHETIC-APPROVAL"
     return dict(alert_fingerprint="SYNTHETIC-FP", incident_id="SYNTHETIC-INC",
                 run_id=run, evidence_id="SYNTHETIC-EVD", glpi_ticket_id=147,
                 scenario="AIOPS2-REAL-FS-20261106", mode="DEMO", stages=stages)
@@ -80,6 +81,16 @@ class ReceiptFailClosedTests(unittest.TestCase):
         r = synthetic_receipt()
         del r["stages"]["hitl_native"]["alert_fingerprint"]
         self.assertIn("HITL missing alert_fingerprint", gate.validate(r))
+
+    def test_safe_resume_without_approval_binding_rejected(self):
+        r = synthetic_receipt()
+        del r["stages"]["safe_resume"]["approval_id"]
+        self.assertIn("safe resume missing approval_id", gate.validate(r))
+
+    def test_safe_resume_approval_from_other_run_rejected(self):
+        r = synthetic_receipt()
+        r["stages"]["safe_resume"]["approval_id"] = "OTHER-APPROVAL"
+        self.assertIn("safe resume approval mismatch", gate.validate(r))
 
     def test_missing_native_action(self):
         r = synthetic_receipt()
