@@ -107,6 +107,49 @@ try:
             assert page.locator("#history-chart path").count()==5, "stale SVG duplication"
             print("FS1113_RAPID_WINDOW_RACE=PASS",flush=True)
 
+            # Exercise the same cancellation contract for availability as well.
+            # An old scrape_duration response must not overwrite the new metric.
+            page.locator("#history-metric").select_option("scrape_duration")
+            page.locator("#history-window").select_option("1h")
+            page.locator("#history-window").select_option("6h")
+            with page.expect_response(
+                lambda r: "/api/fs1089/prometheus/history" in r.url
+                and "metric=availability" in r.url and "window=24h" in r.url,
+                timeout=25000,
+            ) as metric_race_response:
+                page.locator("#history-window").select_option("24h")
+                page.locator("#history-metric").select_option("availability")
+            assert metric_race_response.value.status==200
+            metric_race_payload=metric_race_response.value.json()
+            assert metric_race_payload.get("metric")=="availability"
+            assert metric_race_payload.get("window")=="24h"
+            assert len(metric_race_payload.get("series", []))==5
+            page.wait_for_function("""() => {
+              const s=document.querySelector('#history-status')?.textContent || '';
+              return s.endsWith(' · 24h') && s.includes('points') &&
+                !document.querySelector('#history-refresh').disabled;
+            }""",timeout=30000)
+            assert page.locator("#history-metric").input_value()=="availability"
+            assert page.locator("#history-legend > span").count()==5, "metric race legend duplication"
+            assert page.locator("#history-chart path").count()==5, "metric race SVG duplication"
+            print("FS1113_RAPID_METRIC_RACE=PASS",flush=True)
+
+            # Restore scrape_duration for the existing refresh/mobile assertions.
+            with page.expect_response(
+                lambda r: "/api/fs1089/prometheus/history" in r.url
+                and "metric=scrape_duration" in r.url and "window=24h" in r.url,
+                timeout=25000,
+            ) as restore_response:
+                page.locator("#history-metric").select_option("scrape_duration")
+            assert restore_response.value.status==200
+            page.wait_for_function("""() => {
+              const s=document.querySelector('#history-status')?.textContent || '';
+              return s.endsWith(' · 24h') && s.includes('points') &&
+                !document.querySelector('#history-refresh').disabled;
+            }""",timeout=30000)
+            assert page.locator("#history-legend > span").count()==5
+            assert page.locator("#history-chart path").count()==5
+
             # Wait for the refresh response and the corresponding completed render.
             # Checking button.enabled alone can pass before a new request starts.
             with page.expect_response(
