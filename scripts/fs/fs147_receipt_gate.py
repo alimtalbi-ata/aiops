@@ -82,6 +82,14 @@ def validate(r):
             errors.append("HITL run mismatch")
         if hitl.get("alert_fingerprint") != r["alert_fingerprint"]:
             errors.append("HITL alert fingerprint mismatch")
+    # A resumed workflow must reference the very approval bound to this RUN.
+    # A stage-level VERIFIED flag alone is not an admission or execution receipt.
+    resume = stages.get("safe_resume")
+    if isinstance(resume, dict) and isinstance(hitl, dict):
+        if not resume.get("approval_id"):
+            errors.append("safe resume missing approval_id")
+        elif resume["approval_id"] != hitl.get("approval_id"):
+            errors.append("safe resume approval mismatch")
     if r.get("production_deployment") is True:
         errors.append("production deployment cannot be certified by lab gate")
     if r.get("result") == "RESOLVED" and not r.get("post_action_measurement_proof_url"):
