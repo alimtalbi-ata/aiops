@@ -101,3 +101,9 @@ Si une règle bloque la boucle locale, ne pas l'élargir automatiquement : véri
 Résultat FS1140 : `glpi_tickets` contient **0** ticket dont `name` ou `content` mentionne `FS1130` ; **0** ticket dont `name` commence par `[DEMO]`. Ces filtres ne prouvent pas l'absence de tout ticket GLPI préexistant associé par une autre convention.
 
 Réseaux observés : Core uniquement `aiops2-rebuild-control` et `aiops2-rebuild-data` ; GLPI uniquement `aiops2-rebuild-integration` et `aiops2-rebuild-public`. Pas de réseau partagé. Ne pas connecter des conteneurs à un réseau ni changer une ACL sans sauvegarde, validation du chemin et plan de retour arrière. Prochaine étape : identification en lecture seule de l'adresse 172.21.0.2, vérification de l'architecture de proxy/API et test d'authentification depuis la source autorisée (sans exposer les jetons).
+
+## 10. FS1141 — propriétaire de l'adresse autorisée confirmé
+
+**OBSERVÉ** : `172.21.0.2` sur `aiops2-rebuild-public` appartient au conteneur **`aiops2-rebuild-portal`**, portail de production publié sur le port 7777. GLPI est `172.21.0.6` sur ce réseau ; client API GLPI unique `id=1`, actif, `172.21.0.2`–`172.21.0.2`, IPv6 `::1`. Cela explique le refus IPv4 depuis `127.0.0.1` et montre que Core n'est pas actuellement dans la liste d'adresses autorisées. L'intention historique de faire passer les appels par Portal reste une **hypothèse**, non une preuve de flux applicatif. Aucun ticket FS1130 ni titre `[DEMO]` trouvé par les filtres FS1140.
+
+**Prochaine validation** : sonder sans authentification le chemin HTTP depuis Portal vers GLPI pour distinguer connectivité, filtrage IP et authentification ; inspecter uniquement les noms des variables GLPI présentes dans Portal, sans secrets. `docker exec` pour une requête HTTP en lecture seule n'implique pas un redéploiement de Portal. Ne pas déplacer le jeton GLPI dans Portal, ne pas modifier les ACL, ne pas connecter Core au réseau public sans architecture approuvée.
