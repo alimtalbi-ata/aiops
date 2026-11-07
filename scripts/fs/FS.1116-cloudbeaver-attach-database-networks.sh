@@ -38,16 +38,10 @@ for db in aiops2-rebuild-postgres aiops2-rebuild-temporal-postgres aiops2-rebuil
   port="${DB_PORT[$db]}"
   ip="$(docker inspect "$db" --format "{{with index .NetworkSettings.Networks \"$net\"}}{{.IPAddress}}{{end}}")"
   [[ -n "$ip" ]] || { echo "FS1116_ERROR=DB_IP_MISSING name=$db network=$net";exit 2; }
-  if docker exec "$CB" sh -c 'timeout 4 sh -c "echo > /dev/tcp/$1/$2" 2>/dev/null' sh "$ip" "$port"; then
+  if docker exec "$CB" bash -c 'timeout 4 bash -c "echo > /dev/tcp/$1/$2" 2>/dev/null' bash "$ip" "$port" >/dev/null 2>&1; then
     echo "FS1116_DB=$db HOST=$db PORT=$port TCP=PASS"
   else
-    # The CloudBeaver image may not have bash or /dev/tcp. Check connectivity
-    # with Python in a short-lived Docker container on the target network.
-    if docker run --rm --network "$net" --entrypoint python postgres:16-alpine -c 'import socket;socket.create_connection((__import__("sys").argv[1],int(__import__("sys").argv[2])),4).close()' "$db" "$port" >/dev/null 2>&1; then
-      echo "FS1116_DB=$db HOST=$db PORT=$port TCP=NETWORK_PROBE_PASS_CLOUDBEAVER_UNVERIFIED"
-    else
-      echo "FS1116_DB=$db HOST=$db PORT=$port TCP=UNVERIFIED"
-    fi
+    echo "FS1116_DB=$db HOST=$db PORT=$port TCP=UNVERIFIED_CHECK_CLOUDBEAVER_DRIVER"
   fi
 done
 after="$(docker inspect "$PORTAL" --format '{{.Config.Image}}')"
