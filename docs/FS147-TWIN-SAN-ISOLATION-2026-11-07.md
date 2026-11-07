@@ -39,3 +39,9 @@ Au SHA précédent `6570300d35e73ecc80511b530b9fbba52975236f`, GitHub Actions re
 ## Contrôle supplémentaire — métrique filesystem imbriquée dans SAN
 
 Commit `836bdaf` : `test_reject_nested_filesystem_metric_in_san` couvre le rejeu de `aiops2_fs_lab_used_percent` dans `observations[].metadata.metric` du graphe SAN. Le validateur inspecte désormais récursivement les clés et valeurs des observations SAN, et non seulement `observations[].metric` au premier niveau. Ce cas évite qu'une métrique filesystem soit blanchie par un emballage de métadonnées. Le contrôle reste **fixture-only** ; il ne prouve pas la non-contamination d'un RUN réel. Qualification au SHA exact requise avant merge.
+
+## Renforcement — observations additionnelles (2026-11-07)
+
+Le test `test_reject_extra_unqualified_lab_observation` interdit de joindre à une observation `/fs-lab` légitime une seconde observation de source ou métrique non qualifiée. Le validateur exige désormais `filesystem-sanity-check`, `/fs-lab` et `aiops2_fs_lab_used_percent` **pour chaque observation lab**, et pas seulement pour au moins une. Il s'agit d'une règle stricte de fixture, à confronter au schéma des snapshots réels avant toute réutilisation E2E. Une observation inconnue ne doit pas être acceptée silencieusement.
+
+**Limite documentaire** : le chemin de référence `docs/FS364-ARCHITECTURE-REPRISE-2026-11-06.md` n'a pas été retrouvé sur la branche de base lors de la consultation GitHub (404). La décision Twin non requis est donc *provisoire*, fondée sur les éléments rapportés ci-dessus, en attente d'une référence FS.364 vérifiable par SHA. Le RUN réel, ses Evidence et ses dépendances ne sont pas qualifiés. CI, HÔTE et EXÉCUTÉ doivent rester distincts.
