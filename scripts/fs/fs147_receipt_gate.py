@@ -92,8 +92,8 @@ def validate(r):
             errors.append("safe resume approval mismatch")
     if r.get("production_deployment") is True:
         errors.append("production deployment cannot be certified by lab gate")
-    if r.get("result") == "RESOLVED" and not r.get("post_action_measurement_proof_url"):
-        errors.append("RESOLVED without post-action proof")
+    if r.get("result") == "RESOLVED" and not proof_url_is_reviewable(r.get("post_action_measurement_proof_url")):
+        errors.append("RESOLVED without reviewable post-action proof URL")
     return errors
 
 
