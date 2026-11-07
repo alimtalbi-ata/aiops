@@ -26,12 +26,17 @@ for k in ("core.glpi_client","core.glpi_ingest","core.glpi_kpi"):
  except (ImportError,ModuleNotFoundError):
   print("FS1160_MODULE_"+k+"=false")
 '
+echo "FS1160_COMPOSE_FILES_EXISTENCE"
+docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$CORE" |
+tr ',' '\n' | while IFS= read -r path; do
+ if test -f "$path"; then echo "FS1160_COMPOSE_FILE_PRESENT=$path"; else echo "FS1160_COMPOSE_FILE_MISSING=$path"; fi
+done
 echo "FS1160_CORE_API_ROUTE_PROBE"
 docker exec "$CORE" python -c '
 import urllib.request,json
 for path in ("/openapi.json","/api/kpi/glpi"):
  try:
-  with urllib.request.urlopen("http://127.0.0.1:812"+path,timeout=3) as r:
+  with urllib.request.urlopen("http://127.0.0.1:810"+path,timeout=3) as r:
    data=json.load(r)
    if path=="/openapi.json":print("FS1160_ROUTE_KPI_PRESENT="+str("/api/kpi/glpi" in data.get("paths",{})).lower())
    else:print("FS1160_KPI_RESPONSE_SOURCE="+str(data.get("source","unknown")))
