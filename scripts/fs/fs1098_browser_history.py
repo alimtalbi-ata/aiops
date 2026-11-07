@@ -83,13 +83,24 @@ try:
                                               "points":total_points,"ui_status":status})
                     print(f"FS1098_MATRIX metric={metric} window={window} STATUS=200 SERIES={len(series)} RENDERED={rendered_series} POINTS={total_points} SVG_PATHS={svg_paths}",flush=True)
 
-            # Rapid window switching: only the latest response may populate the legend.
+            # Rapid window switching: require a fresh 24h API response, not
+            # merely the 24h DOM left over from the preceding matrix cell.
             page.locator("#history-window").select_option("1h")
             page.locator("#history-window").select_option("6h")
-            page.locator("#history-window").select_option("24h")
+            with page.expect_response(
+                lambda r: "/api/fs1089/prometheus/history" in r.url
+                and "metric=scrape_duration" in r.url and "window=24h" in r.url,
+                timeout=25000,
+            ) as race_response:
+                page.locator("#history-window").select_option("24h")
+            assert race_response.value.status==200
+            race_payload=race_response.value.json()
+            assert race_payload.get("metric")=="scrape_duration"
+            assert race_payload.get("window")=="24h"
+            assert len(race_payload.get("series", []))==5
             page.wait_for_function("""() => {
               const s=document.querySelector('#history-status')?.textContent || '';
-              return s.includes('24h') && s.includes('points') &&
+              return s.endsWith(' · 24h') && s.includes('points') &&
                 !document.querySelector('#history-refresh').disabled;
             }""",timeout=30000)
             assert page.locator("#history-legend > span").count()==5, "stale legend duplication"
