@@ -227,3 +227,9 @@ Script : `scripts/fs/FS.1150-accelerated-core-glpi-one-ticket-canary.sh`. **MUTA
 **OBSERVÉ** : `FS1154_GLPI_KEY_LOCATION_UNRESOLVED`. Les chemins supposés `/var/www/glpi/config/glpicrypt.key` et `/etc/glpi/glpicrypt.key` n'ont pas donné exactement un résultat. Arrêt PHP avant production de chiffré, UPDATE SQL, authentification et POST ticket. Ne pas générer de nouvelle clé ni réessayer FS1154 tant que le chemin réel n'est pas identifié.
 
 **FS1157 CODE, À EXÉCUTER** : `scripts/fs/FS.1157-glpi-crypt-key-path-readonly.sh` liste uniquement les **chemins** des fichiers `glpicrypt.key` sous `/var/www`, `/etc`, `/run`, `/opt`, les références de configuration et destinations de mounts Docker ; aucun contenu de clé ni jeton. Aucune mutation du conteneur GLPI, de la base ou du Portal 7777. Après observation, paramétrer le chemin réel dans FS1154 et garder le roundtrip natif obligatoire avant SQL.
+
+## 32. FS1157 observé ; FS1158 inspection du montage GLPI
+
+**OBSERVÉ FS1157** : aucun `glpicrypt.key` trouvé sous `/var/www`, `/etc`, `/run`, `/opt` ; le conteneur GLPI a un montage persistant de destination `/var/glpi`, non inclus dans les recherches précédentes. Il serait prématuré de conclure que la clé n'existe pas. 
+
+**FS1158 CODE, NON ENCORE EXÉCUTÉ** : `scripts/fs/FS.1158-mounted-glpi-key-discovery-readonly.sh` liste uniquement les chemins des fichiers `glpicrypt.key` ou `glpi.key` sous `/var/glpi`, les répertoires de premier niveau et les références à `GLPI_CONFIG_DIR` dans la configuration de l'application. Aucun contenu de clé ni jeton ; aucune mutation. Selon le résultat, le correctif FS1154 devra utiliser le chemin réellement constaté, vérifier encrypt/decrypt avant SQL, puis autoriser au plus un ticket DEMO. Ne pas relancer FS1154 avant cette validation.
