@@ -97,7 +97,8 @@ jobs:
         run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
-    runs-on: ubuntu-latest
+    # Ubuntu 26.04 runner currently ships only PostgreSQL 18; PG16 client required.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
