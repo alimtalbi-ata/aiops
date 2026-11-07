@@ -116,10 +116,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL 16 client matching disposable server
+      - name: Select PostgreSQL 16 client matching disposable server
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
+          set -euo pipefail
+          # GitHub-hosted Ubuntu runners provide versioned PostgreSQL binaries.
+          # Do not depend on an apt repository exposing postgresql-client-16.
+          for tool in psql pg_dump pg_restore; do
+            test -x "/usr/lib/postgresql/16/bin/$tool" || {
+              echo "FAIL|postgres16_client_missing|$tool"
+              ls -la /usr/lib/postgresql/ || true
+              exit 1
+            }
+          done
           echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
       - name: Assert dump and restore client/server major compatibility
         env:
