@@ -19,7 +19,7 @@ if (!is_file($autoload)) {fwrite(STDERR,"FS1154_COMPOSER_AUTOLOAD_NOT_FOUND\n");
 require_once $autoload;
 require_once "/var/www/glpi/inc/includes.php";
 require_once "/var/www/glpi/src/GLPIKey.php";
-if (!function_exists("Safe\\\\sodium_crypto_aead_xchacha20poly1305_ietf_encrypt")) {
+if (!function_exists("Safe\\sodium_crypto_aead_xchacha20poly1305_ietf_encrypt")) {
  fwrite(STDERR,"FS1154_SAFE_SODIUM_FUNCTION_NOT_LOADED\n");exit(7);
 }
 $v=trim(stream_get_contents(STDIN));
