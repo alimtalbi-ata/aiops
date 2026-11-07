@@ -26,24 +26,45 @@ def metrics(runs, details):
     statuses=Counter(str(r.get("status","UNKNOWN")) for r in runs)
     durations=[]
     analyst=[];critic=[]
+    llm_durations={"analyst":[],"critic":[]}
+    llm_usage={"analyst":[],"critic":[]}
+    missing={"analyst":0,"critic":0}
     for run in runs:
         duration=seconds(run.get("started_at") or run.get("created_at"),run.get("completed_at"))
         if duration is not None:durations.append(duration)
         detail=details.get(str(run.get("run_id")),{})
         stages=detail.get("stages",[]) if isinstance(detail,dict) else []
+        for event in detail.get("events",[]) if isinstance(detail,dict) else []:
+            if not isinstance(event,dict):continue
+            kind={"ANALYST_COMPLETED":"analyst","CRITIC_COMPLETED":"critic"}.get(event.get("event_type"))
+            if kind is None:continue
+            telemetry=(event.get("payload") or {}).get("llm_telemetry")
+            if not isinstance(telemetry,dict):
+                missing[kind]+=1
+                continue
+            if isinstance(telemetry.get("duration_ms"),(int,float)):
+                llm_durations[kind].append(telemetry["duration_ms"])
+            if type(telemetry.get("total_tokens")) is int:
+                llm_usage[kind].append(telemetry["total_tokens"])
+            else:missing[kind]+=1
         for stage in stages if isinstance(stages,list) else []:
             if not isinstance(stage,dict):continue
             name=str(stage.get("stage","")).upper()
             value=seconds(stage.get("started_at"),stage.get("completed_at"))
             if value is None:continue
-            if name in ("ANALYZE","ANALYST"):analyst.append(value)
-            if name in ("CRITIQUE","CRITIC"):critic.append(value)
+            if name in ("ANALYZE","ANALYST","DGX_ANALYST"):analyst.append(value)
+            if name in ("CRITIQUE","CRITIC","DGX_CRITIC"):critic.append(value)
     return {"total":len(runs),"statuses":statuses,"terminal":sum(statuses.get(s,0) for s in TERMINAL),
             "median_seconds":round(median(durations),2) if durations else None,
             "p95_seconds":percentile(durations,.95),
             "analyst_median_seconds":round(median(analyst),2) if analyst else None,
             "critic_median_seconds":round(median(critic),2) if critic else None,
-            "duration_samples":len(durations),"analyst_samples":len(analyst),"critic_samples":len(critic)}
+            "duration_samples":len(durations),"analyst_samples":len(analyst),"critic_samples":len(critic),
+            "llm_p95_ms":{k:percentile(v,.95) for k,v in llm_durations.items()},
+            "llm_median_ms":{k:round(median(v),2) if v else None for k,v in llm_durations.items()},
+            "llm_tokens":{k:sum(v) if v and not missing[k] else None for k,v in llm_usage.items()},
+            "llm_token_samples":{k:len(v) for k,v in llm_usage.items()},
+            "llm_missing":missing}
 
 def fmt(value):
     return "NON MESURÉ" if value is None else str(value)
@@ -93,10 +114,16 @@ def register_kpi_views(app, get_core):
                 ("Échantillons de durée run / Analyst / Critic",f'{data["duration_samples"]} / {data["analyst_samples"]} / {data["critic_samples"]}'),
             ]))
         body+=panel("Résultats par état",table(["État","Nombre"],status_rows))
-        body+=panel("Tokens et coût IA",
-            "<p><strong>NON MESURÉ</strong> — les réponses du fournisseur LLM ne conservent actuellement "
-            "pas les champs de consommation <code>usage</code> dans le registre Core. "
-            "Aucun total de tokens ni coût n'est estimé à partir des caractères.</p>")
+        body+=panel("Télémétrie LLM — mesures réelles",table(["Mesure","Valeur"],[
+            ("Analyst durée médiane appel (ms)",fmt(data["llm_median_ms"]["analyst"])),
+            ("Analyst P95 appel (ms)",fmt(data["llm_p95_ms"]["analyst"])),
+            ("Critic durée médiane appel (ms)",fmt(data["llm_median_ms"]["critic"])),
+            ("Critic P95 appel (ms)",fmt(data["llm_p95_ms"]["critic"])),
+            ("Tokens Analyst (total complet)",fmt(data["llm_tokens"]["analyst"])),
+            ("Tokens Critic (total complet)",fmt(data["llm_tokens"]["critic"])),
+            ("Échantillons tokens Analyst / Critic",str(data["llm_token_samples"]["analyst"])+" / "+str(data["llm_token_samples"]["critic"])),
+            ("Usages manquants Analyst / Critic",str(data["llm_missing"]["analyst"])+" / "+str(data["llm_missing"]["critic"])),
+        ])+"<p>Anciennes campagnes sans télémétrie : NON MESURÉ. Coût monétaire : NON MESURÉ. Aucune estimation de tokens.</p>")
         body+=panel("Traçabilité et limites",
             "<p>Les durées Analyst/Critic ci-dessus sont les durées des étapes du workflow, "
             "pas nécessairement le temps réseau exact des appels au modèle. "
