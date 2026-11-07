@@ -24,7 +24,7 @@ def fixtures():
 def gate(record, envelope, state, approval, fence, **kwargs):
     options = dict(action_id="inspect-fs", path="/fs-lab/file",
                    content_fingerprint="sha256-a", now_epoch=100,
-                   expected_revision=3, authoritative_read=True)
+                   expected_revision=3, expected_owner_id="worker-a", authoritative_read=True)
     options.update(kwargs)
     return native_resume_gate(record, envelope, envelope, state, state,
                               approval, fence, **options)
@@ -70,3 +70,14 @@ def test_policy_live_and_revision_refused():
     assert not gate(record, env, replace(state, stop_auto=True), approval, fence)
     assert not gate(record, replace(env, mode="LIVE"), state, approval, fence)
     assert not gate(record, env, state, approval, fence, expected_revision=2)
+
+
+def test_explicit_owner_binding_and_unknown_snapshots():
+    record, env, state, approval, fence = fixtures()
+    assert gate(record, env, state, approval, fence)
+    assert not gate(record, env, state, approval, fence, expected_owner_id=None)
+    assert not gate(record, env, state, approval, fence, expected_owner_id="worker-other")
+    assert not gate(record, env, state, approval, replace(fence, owner_id="worker-other"))
+    assert not gate(None, env, state, approval, fence)
+    assert not gate(record, None, state, approval, fence)
+    assert not gate(record, env, state, approval, fence, expected_owner_id=True)
