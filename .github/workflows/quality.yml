@@ -116,8 +116,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 16 client matching disposable server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
+      - name: Assert dump and restore client/server major compatibility
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          set -euo pipefail
+          pg_dump --version
+          pg_restore --version
+          psql --version
+          server_major="$(psql -h 127.0.0.1 -U aiops -d aiops -At -v ON_ERROR_STOP=1 -c 'SHOW server_version_num' | awk '{print int($1 / 10000)}')"
+          test "$server_major" = 16
+          for tool in pg_dump pg_restore psql; do
+            test "$("$tool" --version | grep -oE '[0-9]+' | head -1)" = "$server_major" || { echo "FAIL|postgres_client_server_major_mismatch|$tool"; exit 1; }
+          done
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
