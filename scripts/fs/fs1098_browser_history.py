@@ -116,6 +116,11 @@ try:
             ) as refresh_response:
                 page.locator("#history-refresh").click()
             assert refresh_response.value.status==200
+            refresh_payload=refresh_response.value.json()
+            assert refresh_payload.get("metric")=="scrape_duration", refresh_payload
+            assert refresh_payload.get("window")=="24h", refresh_payload
+            refresh_series=refresh_payload.get("series")
+            assert isinstance(refresh_series,list) and len(refresh_series)==5, refresh_series
             page.wait_for_function("""() => {
               const button=document.querySelector('#history-refresh');
               const status=document.querySelector('#history-status')?.textContent || '';
@@ -130,6 +135,9 @@ try:
             page.wait_for_timeout(500)
             box=page.locator("#history-chart").bounding_box()
             assert box and box["width"]<=390 and box["width"]>250,("mobile chart width",box)
+            assert page.locator("#history-chart path").count()==5, "mobile SVG series mismatch"
+            assert page.locator("#history-legend > span").count()==5, "mobile legend duplication"
+            assert page.locator("#history-status").inner_text().endswith(" · 24h"), "mobile stale window"
             page.screenshot(path=str(out/"history-mobile.png"),full_page=True)
             report["screenshots"].append("history-mobile.png")
             print("FS1098_MOBILE=PASS WIDTH="+str(round(box["width"],1)),flush=True)
