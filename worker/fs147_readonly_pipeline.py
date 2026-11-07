@@ -66,8 +66,12 @@ def execute(request: FS147Request, *, stop_auto: bool,
         [request.tenant_id, request.incident_id, request.run_id,
          request.ticket_id], separators=(",", ":")).encode()).hexdigest()
     try:
-        if claim_once(key) is not True:
+        claim_result = claim_once(key)
+        if claim_result is False:
             return _blocked("DUPLICATE_RUN")
+        if claim_result is not True:
+            # Missing/ambiguous Core acknowledgement is not a proven duplicate.
+            return _blocked("IDEMPOTENCY_UNAVAILABLE")
     except Exception:
         return _blocked("IDEMPOTENCY_UNAVAILABLE")
     steps = []
