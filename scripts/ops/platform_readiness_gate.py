@@ -67,10 +67,12 @@ def main():
         failures=[]
         for name,(container,_,_) in SERVICES.items():
             if report["runtime"][container]["state"]!="running": failures.append(name+":NOT_RUNNING")
+            if report["runtime"][container]["health"]=="unhealthy": failures.append(name+":UNHEALTHY")
             probe=report["probes"].get(name,{})
             if probe.get("http")!=200: failures.append(name+":HEALTH_NOT_200")
         for name,container in INFRA.items():
             if report["runtime"][container]["state"]!="running": failures.append(name+":NOT_RUNNING")
+            if report["runtime"][container]["health"]=="unhealthy": failures.append(name+":UNHEALTHY")
         for name in ("dashboard","runs","incidents","twin_summary"):
             if report["probes"].get(name,{}).get("http")!=200: failures.append(name+":API_NOT_200")
         report["failures"]=failures
