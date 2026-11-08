@@ -35,3 +35,13 @@
 
 ## Session handoff
 ChatGPT owns architecture/evidence review; Codex owns code investigation/patch/test; GitHub is shared durable continuity; Debian is runtime truth. Read docs/PROJECT-CONTINUITY.md, docs/COMPONENT-CATALOG-AND-REUSE.md and this file at session start. Do not treat this preliminary index as complete.
+
+## Discovery pass 2 — 2026-11-08 (verified files in other branches)
+
+- GitHub branch listing returned **483 branch names** across five pages (100+100+100+100+83), including `main`, `deploy/aiops2-stable`, and numerous historical integration, Core, Worker and Portal branches. This is branch-name enumeration, **not** full file/PR review. Never equate the 297-file audit tree with the complete project.
+- **Actual GLPI REST client found:** `feat/glpi-ai-ticket-enrichment-e2e:app/portal/glpi_client.py`, blob SHA `8cd3cd2381356e23d777dd6c0087ac03bd9b7375`, 149 lines. Implements authenticated server-side GLPI REST client with `GLPI_API_URL`, `GLPI_APP_TOKEN`, `GLPI_USER_TOKEN`. This resolves the earlier mistaken apparent absence of `portal.glpi_client` in the audit branch. **Do not expose credentials; do not assume branch is deployed.**
+- **Existing Core ITSM xref code found:** `fix/core-xref-glpi-readback-gate-20261101:app/core/itsm_xref.py`, blob SHA `c59c2a281be351ce61064269dbc65bc4b689d9aa`, 345 lines; read-only tenant-scoped xref with GLPI source readback fences. Associated PR #242; no evidence of live deployment.
+- **FS1250 classifier source found:** `core/fs147-fs1250-reconcile-20261108:app/core/itsm_reconcile_contract.py`, blob SHA `49dacf4b11813df1aeab72cc92361ed7e8aed739`, 73 lines; distinguishes MATCHED, EXISTING_UNLINKED, AMBIGUOUS, MISSING, NOT_ELIGIBLE, UNKNOWN, CONFLICT. PR #454 remains Draft and non-mutating.
+- Other potentially relevant branches include `fix/fs1250-itsm-identity-audit`, `feat/p1-glpi-real-http-ci-20261028`, `feat/portal-signed-core-glpi-native-contract-20261101-1110`, `feat/portal-sim-glpi-stable-readback-20261102-2105`, `integration/core-xref-migration-012-20261031`, `release/acme-core-worker-ticket-20261103`. Not yet inspected; names alone prove no functionality.
+
+**Updated decision:** GLPI client and xref read contracts are **ALREADY DEVELOPED in other GitHub branches**. Before writing any new code, compare their exact dependencies and historical branches with `deploy/aiops2-stable` and the running Debian images. No new GLPI API implementation is justified by the audit-branch absence.
