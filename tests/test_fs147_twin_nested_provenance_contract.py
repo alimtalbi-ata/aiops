@@ -52,6 +52,8 @@ def reject_foreign_provenance(envelope, foreign):
             seen.add(obj_id)
             if isinstance(value, dict):
                 for key, item in value.items():
+                    if isinstance(key, str):
+                        check_string(key, path + ("<key>",))
                     walk(item, path + (str(key),))
             else:
                 for index, item in enumerate(value):
@@ -126,6 +128,18 @@ class TwinIngressNestedIsolation(unittest.TestCase):
         event = copy.deepcopy(LAB)
         event["metadata"] = {"note": "prefix-" + SAN["run_id"] + "-suffix", "uri": "https://example.invalid/trace?run=unrelated"}
         reject_foreign_provenance(event, SAN)
+
+    def test_foreign_identity_in_nested_mapping_key_rejected(self):
+        # JSON object keys are provenance carriers too, including URI-encoded keys.
+        from urllib.parse import quote
+        for own, foreign in ((LAB, SAN), (SAN, LAB)):
+            for key in (foreign["run_id"],
+                        "https://example.invalid/ref/" + quote(foreign["evidence_ref"], safe="")):
+                with self.subTest(graph=own["graph"], key=key):
+                    event = copy.deepcopy(own)
+                    event["metadata"] = {"lookup": {key: "present"}}
+                    with self.assertRaisesRegex(ValueError, "foreign SAN/FS provenance"):
+                        reject_foreign_provenance(event, foreign)
 
     def test_cycle_fails_closed(self):
         event = copy.deepcopy(LAB)
