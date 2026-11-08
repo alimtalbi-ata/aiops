@@ -1,0 +1,34 @@
+test_analysis_from_other_actor_stops_critic (test_worker_fs147_actor_binding.ActorBindingTests.test_analysis_from_other_actor_stops_critic) ... ok
+test_critic_from_other_actor_stops_policy (test_worker_fs147_actor_binding.ActorBindingTests.test_critic_from_other_actor_stops_policy) ... ok
+test_observation_from_other_actor_stops_agents (test_worker_fs147_actor_binding.ActorBindingTests.test_observation_from_other_actor_stops_agents) ... ok
+test_policy_from_other_actor_cannot_authorize (test_worker_fs147_actor_binding.ActorBindingTests.test_policy_from_other_actor_cannot_authorize) ... ok
+test_same_actor_simulation_is_no_effect (test_worker_fs147_actor_binding.ActorBindingTests.test_same_actor_simulation_is_no_effect) ... ok
+test_malformed_findings_short_circuit (test_worker_fs147_analyst_findings.AnalystInsufficiencyTests.test_malformed_findings_short_circuit) ... ok
+test_valid_findings_reach_real_policy_adapter (test_worker_fs147_analyst_findings.AnalystInsufficiencyTests.test_valid_findings_reach_real_policy_adapter) ... ok
+test_explicit_utc_offset_is_accepted (test_worker_fs147_observation_time.ObservationTimeTests.test_explicit_utc_offset_is_accepted) ... ok
+test_malformed_or_naive_timestamp_short_circuits (test_worker_fs147_observation_time.ObservationTimeTests.test_malformed_or_naive_timestamp_short_circuits) ... ok
+test_blank_evidence_id_rejected (test_worker_fs147_readonly_pipeline.FS147Tests.test_blank_evidence_id_rejected) ... ok
+test_bridge_unavailable (test_worker_fs147_readonly_pipeline.FS147Tests.test_bridge_unavailable) ... ok
+test_critic_refusal (test_worker_fs147_readonly_pipeline.FS147Tests.test_critic_refusal) ... ok
+test_cross_run_evidence (test_worker_fs147_readonly_pipeline.FS147Tests.test_cross_run_evidence) ... ok
+test_diagnostic_no_effect (test_worker_fs147_readonly_pipeline.FS147Tests.test_diagnostic_no_effect) ... ok
+test_duplicate_durable_claim (test_worker_fs147_readonly_pipeline.FS147Tests.test_duplicate_durable_claim) ... ok
+test_missing_measurement (test_worker_fs147_readonly_pipeline.FS147Tests.test_missing_measurement) ... ok
+test_no_san_dependency (test_worker_fs147_readonly_pipeline.FS147Tests.test_no_san_dependency) ... ok
+test_nonfinite_or_boolean_measurements_rejected (test_worker_fs147_readonly_pipeline.FS147Tests.test_nonfinite_or_boolean_measurements_rejected) ... ok
+test_policy_refusal (test_worker_fs147_readonly_pipeline.FS147Tests.test_policy_refusal) ... ok
+test_stop_auto (test_worker_fs147_readonly_pipeline.FS147Tests.test_stop_auto) ... ok
+test_wrong_filesystem_rejected (test_worker_fs147_readonly_pipeline.FS147Tests.test_wrong_filesystem_rejected) ... ok
+test_wrong_ticket (test_worker_fs147_readonly_pipeline.FS147Tests.test_wrong_ticket) ... ok
+test_critic_refusal_prevents_policy (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_critic_refusal_prevents_policy) ... ok
+test_duplicate_prevents_observation_and_agents (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_duplicate_prevents_observation_and_agents) ... ok
+test_insufficient_analysis_prevents_critic_and_policy (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_insufficient_analysis_prevents_critic_and_policy) ... ok
+test_insufficient_observation_prevents_agents (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_insufficient_observation_prevents_agents) ... ok
+test_policy_refusal_does_not_resolve (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_policy_refusal_does_not_resolve) ... ok
+test_stop_auto_prevents_every_adapter (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_stop_auto_prevents_every_adapter) ... ok
+test_success_remains_no_effect (test_worker_fs147_workflow_short_circuit.ShortCircuitTests.test_success_remains_no_effect) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 0.003s
+
+OK

@@ -1,0 +1,19 @@
+test_demo_is_simulation_only (test_policy_safety.PolicySafetyTests.test_demo_is_simulation_only) ... ok
+test_http_invalid_mode_and_command_are_rejected (test_policy_safety.PolicySafetyTests.test_http_invalid_mode_and_command_are_rejected) ... ok
+test_http_live_mutation_denies_forged_boolean (test_policy_safety.PolicySafetyTests.test_http_live_mutation_denies_forged_boolean) ... ok
+test_http_synthetic_modes_never_claim_live_allow (test_policy_safety.PolicySafetyTests.test_http_synthetic_modes_never_claim_live_allow) ... ok
+test_live_cancel_without_human_approval_is_blocked (test_policy_safety.PolicySafetyTests.test_live_cancel_without_human_approval_is_blocked) ... ok
+test_live_effect_with_boolean_approval_cannot_pass (test_policy_safety.PolicySafetyTests.test_live_effect_with_boolean_approval_cannot_pass) ... ok
+test_live_effect_without_human_approval_is_blocked (test_policy_safety.PolicySafetyTests.test_live_effect_without_human_approval_is_blocked) ... ok
+test_live_enrich_with_all_required_proofs_can_pass_policy (test_policy_safety.PolicySafetyTests.test_live_enrich_with_all_required_proofs_can_pass_policy) ... ok
+test_live_missing_fencing_is_blocked (test_policy_safety.PolicySafetyTests.test_live_missing_fencing_is_blocked) ... ok
+test_live_p2_observe_with_all_required_proofs_can_pass_policy (test_policy_safety.PolicySafetyTests.test_live_p2_observe_with_all_required_proofs_can_pass_policy) ... ok
+test_missing_evidence_is_unknown_for_non_p1 (test_policy_safety.PolicySafetyTests.test_missing_evidence_is_unknown_for_non_p1) ... ok
+test_other_synthetic_modes_never_allow_live_effect (test_policy_safety.PolicySafetyTests.test_other_synthetic_modes_never_allow_live_effect) ... ok
+test_p1_is_always_escalated_even_with_all_proofs (test_policy_safety.PolicySafetyTests.test_p1_is_always_escalated_even_with_all_proofs) ... ok
+test_p1_without_evidence_still_escalates (test_policy_safety.PolicySafetyTests.test_p1_without_evidence_still_escalates) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.032s
+
+OK

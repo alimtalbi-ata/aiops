@@ -1,0 +1,17 @@
+{
+  "note": "Path overlaps are review conflicts, not proof of textual merge failure. Diffs use each PR frozen base/head, including inherited changes. No merges performed.",
+  "paths": {
+    ".github/workflows/quality.yml": [
+      212,
+      449
+    ],
+    "docs/FS147-TWIN-SAN-ISOLATION-2026-11-07.md": [
+      451,
+      453
+    ],
+    "tests/test_fs147_twin_san_isolation_contract.py": [
+      451,
+      453
+    ]
+  }
+}

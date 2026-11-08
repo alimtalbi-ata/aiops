@@ -1,0 +1,35 @@
+{
+  "test_time": "2026-11-08T16:58:58.857942+00:00",
+  "source_base": "adcceb74bfd6289c161e344382e19be7952e3859",
+  "producer": "scripts/ops/live_usecase_qualification.py:summarize",
+  "producer_top_keys": [
+    "schema",
+    "utc",
+    "run_id",
+    "read_only",
+    "verdict",
+    "checks",
+    "blocking",
+    "probe_execution",
+    "interpretation"
+  ],
+  "producer_check_keys": [
+    "name",
+    "status",
+    "evidence",
+    "next_action"
+  ],
+  "core_result": "HOLD",
+  "portal_result": {
+    "status": "UNVERIFIED",
+    "reason": "timestamp_missing",
+    "holds": []
+  },
+  "portal_after_timestamp_rename_only": {
+    "status": "UNVERIFIED",
+    "reason": "no_actionable_portal_hold",
+    "hold": null
+  },
+  "finding": "Producer emits utc/name/evidence/next_action; Portal expects collected_at/id/reason and explicit owner/component. Renaming time alone leaves Portal HOLD unattributed; producer owner mapping must be agreed, not guessed.",
+  "kind": "OFFLINE_REAL_MODULE_COMPOSITION; no HTTP/production IO"
+}

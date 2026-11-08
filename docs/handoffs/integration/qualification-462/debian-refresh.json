@@ -1,0 +1,14 @@
+{
+  "commit": "ba0806e07f6d3750c8c2a4daf15ce0b19b615f5c",
+  "path": "ops/debian-reports/SRV-DEB-05/latest.json",
+  "blob": "bfc9985dd5deb5d586f12fe6ac5a0d06bdb02d90",
+  "collected_at": "2026-11-08T16:53:01.379176+00:00",
+  "assessed_at": "2026-11-08T16:59:29.946263+00:00",
+  "age_seconds": 388.567087,
+  "freshness": "STALE_OR_FUTURE",
+  "threshold_seconds": 180,
+  "source_to_image": "UNKNOWN",
+  "independent_signature": "NOT_VERIFIED",
+  "sha256": "c8583bf9d69df5497145193a332e14bd996e841982e92f5c8f2f8bc53e4e7057",
+  "limitation": "Freshness applies only at assessment; does not authenticate candidate deployment or E2E."
+}

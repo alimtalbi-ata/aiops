@@ -1,0 +1,15 @@
+test_first_portal_hold_not_other_domains (test_portal_live_hold_selection.LiveHoldSelectionTests.test_first_portal_hold_not_other_domains) ... ok
+test_missing_receipt_is_unverified (test_portal_live_hold_selection.LiveHoldSelectionTests.test_missing_receipt_is_unverified) ... ok
+test_pass_does_not_imply_live_success (test_portal_live_hold_selection.LiveHoldSelectionTests.test_pass_does_not_imply_live_success) ... ok
+test_policy_denial_is_not_portal_defect (test_portal_live_hold_selection.LiveHoldSelectionTests.test_policy_denial_is_not_portal_defect) ... ok
+test_stale_receipt_is_not_a_failure (test_portal_live_hold_selection.LiveHoldSelectionTests.test_stale_receipt_is_not_a_failure) ... ok
+test_absent_is_unverified (test_portal_live_receipt.ReceiptTests.test_absent_is_unverified) ... ok
+test_empty_checks_cannot_pass (test_portal_live_receipt.ReceiptTests.test_empty_checks_cannot_pass) ... ok
+test_future_is_unverified (test_portal_live_receipt.ReceiptTests.test_future_is_unverified) ... ok
+test_hold_is_preserved (test_portal_live_receipt.ReceiptTests.test_hold_is_preserved) ... ok
+test_stale_is_not_functional_failure (test_portal_live_receipt.ReceiptTests.test_stale_is_not_functional_failure) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

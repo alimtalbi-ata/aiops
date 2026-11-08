@@ -1,0 +1,50 @@
+[
+  {
+    "number": 457,
+    "title": "Orchestration AIOps2 — dispatcher Codex et gates d'intégration",
+    "state": "OPEN",
+    "updatedAt": "2026-11-08T16:40:43Z",
+    "body": "Parent tracking issue for PR #456.\n\n- [ ] Review and integrate orchestration contract and AGENTS.md without clobbering concurrent audit commits.\n- [ ] Configure **explicit Codex executor/dispatcher** if supported; until then do not claim ChatGPT schedules trigger Codex sessions.\n- [ ] Register five role-specific GitHub issues and isolated writable branches/worktrees, with non-overlapping paths.\n- [ ] Enforce exact-SHA CI, read-only Debian provenance, E2E gate and release approval; no auto-merge or production changes.\n- [ ] Audit existing 5 schedules and their handoffs; Integration consolidates hourly report.\n\nStop conditions: no GLPI/PG writes, no Debian deployment, no new cron, no duplicate tickets, no HITL/Policy bypass. Ownership contract: docs/architecture/AIOPS2-MULTIAGENT-ORCHESTRATION.md on ops/aiops2-multiagent-orchestration-20261108.",
+    "url": "https://github.com/alimtalbi-ata/aiops/issues/457"
+  },
+  {
+    "number": 458,
+    "title": "[Codex Cloud][Core] AIOps2 — mission isolée et réutilisation de l'existant",
+    "state": "OPEN",
+    "updatedAt": "2026-11-08T16:43:43Z",
+    "body": "Parent: #457. Candidate contract: PR #456, branch ops/aiops2-multiagent-orchestration-20261108. PREPARATION ONLY: initial Codex qualification is still running; do not interrupt or preempt it.\n\nRole: Core\nScope: Run/Incident, ITSM xref tenant-scoped, GLPI readback, Policy/outbox\nOwned paths: app/core/**\nReuse candidates: fix/core-xref-glpi-readback-gate-20261101; core/fs147-fs1250-reconcile-20261108; PR #454; PR #455. Search all existing branches and PRs; never rebuild from audit branch alone.\nAcceptance: Tests FS1250/FS147, tenant/instance mismatch, denial and idempotency.\n\nAfter qualification and ownership arbitration, launch one independent Codex Cloud task/worktree on branch agent/core/<issue-number>-<slug>. Read AGENTS.md and orchestration contract on PR #456's branch (not merged). Inventory code first; stop on overlapping ownership. Implement additive tested change or report BLOCKED. Open DRAFT PR to approved integration base; never merge. Handoff comment must state UTC, exact SHA, paths, tests, CI exact-SHA URLs, Debian receipt freshness or UNKNOWN, E2E status or NOT_VERIFIED, dependencies and next action.\n\nNo production GLPI/PG writes, duplicate tickets, Debian deploy, cron/Compose changes, Policy/Critic/HITL bypass, auto-merge. FS1250 stays HOLD until independently verified. Offline CI is not authenticated GLPI readback or real E2E.",
+    "url": "https://github.com/alimtalbi-ata/aiops/issues/458"
+  },
+  {
+    "number": 459,
+    "title": "[Codex Cloud][Worker] AIOps2 — mission isolée et réutilisation de l'existant",
+    "state": "OPEN",
+    "updatedAt": "2026-11-08T16:43:49Z",
+    "body": "Parent: #457. Candidate contract: PR #456, branch ops/aiops2-multiagent-orchestration-20261108. PREPARATION ONLY: initial Codex qualification is still running; do not interrupt or preempt it.\n\nRole: Worker\nScope: Temporal, Analyst/Critic/Policy, Evidence handoff, replay\nOwned paths: app/worker/**\nReuse candidates: Existing FS147 Worker pipeline and FS1250 denial/outbox tests. Search all existing branches and PRs; never rebuild from audit branch alone.\nAcceptance: Replay, duplicate delivery and denied-action tests.\n\nAfter qualification and ownership arbitration, launch one independent Codex Cloud task/worktree on branch agent/worker/<issue-number>-<slug>. Read AGENTS.md and orchestration contract on PR #456's branch (not merged). Inventory code first; stop on overlapping ownership. Implement additive tested change or report BLOCKED. Open DRAFT PR to approved integration base; never merge. Handoff comment must state UTC, exact SHA, paths, tests, CI exact-SHA URLs, Debian receipt freshness or UNKNOWN, E2E status or NOT_VERIFIED, dependencies and next action.\n\nNo production GLPI/PG writes, duplicate tickets, Debian deploy, cron/Compose changes, Policy/Critic/HITL bypass, auto-merge. FS1250 stays HOLD until independently verified. Offline CI is not authenticated GLPI readback or real E2E.",
+    "url": "https://github.com/alimtalbi-ata/aiops/issues/459"
+  },
+  {
+    "number": 460,
+    "title": "[Codex Cloud][Twin] AIOps2 — mission isolée et réutilisation de l'existant",
+    "state": "OPEN",
+    "updatedAt": "2026-11-08T16:43:53Z",
+    "body": "Parent: #457. Candidate contract: PR #456, branch ops/aiops2-multiagent-orchestration-20261108. PREPARATION ONLY: initial Codex qualification is still running; do not interrupt or preempt it.\n\nRole: Twin\nScope: Isolated Digital Twin SAN/FS scenarios and E2E fixtures\nOwned paths: Twin simulation and fixture paths (discover first)\nReuse candidates: Existing FS147/FS1250 isolation branches. Search all existing branches and PRs; never rebuild from audit branch alone.\nAcceptance: Deterministic isolated scenarios and fail-closed negative tests.\n\nAfter qualification and ownership arbitration, launch one independent Codex Cloud task/worktree on branch agent/twin/<issue-number>-<slug>. Read AGENTS.md and orchestration contract on PR #456's branch (not merged). Inventory code first; stop on overlapping ownership. Implement additive tested change or report BLOCKED. Open DRAFT PR to approved integration base; never merge. Handoff comment must state UTC, exact SHA, paths, tests, CI exact-SHA URLs, Debian receipt freshness or UNKNOWN, E2E status or NOT_VERIFIED, dependencies and next action.\n\nNo production GLPI/PG writes, duplicate tickets, Debian deploy, cron/Compose changes, Policy/Critic/HITL bypass, auto-merge. FS1250 stays HOLD until independently verified. Offline CI is not authenticated GLPI readback or real E2E.",
+    "url": "https://github.com/alimtalbi-ata/aiops/issues/460"
+  },
+  {
+    "number": 461,
+    "title": "[Codex Cloud][Portal] AIOps2 — mission isolée et réutilisation de l'existant",
+    "state": "OPEN",
+    "updatedAt": "2026-11-08T16:43:57Z",
+    "body": "Parent: #457. Candidate contract: PR #456, branch ops/aiops2-multiagent-orchestration-20261108. PREPARATION ONLY: initial Codex qualification is still running; do not interrupt or preempt it.\n\nRole: Portal\nScope: Read-only NOC traces, GLPI readback and truthful HITL status\nOwned paths: app/portal/**\nReuse candidates: feat/glpi-ai-ticket-enrichment-e2e; feat/portal-signed-core-glpi-native-contract-20261101-1110; feat/portal-sim-glpi-stable-readback-20261102-2105. Search all existing branches and PRs; never rebuild from audit branch alone.\nAcceptance: UI tests for HOLD/UNKNOWN/denied, no implicit GLPI write.\n\nAfter qualification and ownership arbitration, launch one independent Codex Cloud task/worktree on branch agent/portal/<issue-number>-<slug>. Read AGENTS.md and orchestration contract on PR #456's branch (not merged). Inventory code first; stop on overlapping ownership. Implement additive tested change or report BLOCKED. Open DRAFT PR to approved integration base; never merge. Handoff comment must state UTC, exact SHA, paths, tests, CI exact-SHA URLs, Debian receipt freshness or UNKNOWN, E2E status or NOT_VERIFIED, dependencies and next action.\n\nNo production GLPI/PG writes, duplicate tickets, Debian deploy, cron/Compose changes, Policy/Critic/HITL bypass, auto-merge. FS1250 stays HOLD until independently verified. Offline CI is not authenticated GLPI readback or real E2E.",
+    "url": "https://github.com/alimtalbi-ata/aiops/issues/461"
+  },
+  {
+    "number": 462,
+    "title": "[Codex Cloud][Intégration] AIOps2 — mission isolée et réutilisation de l'existant",
+    "state": "OPEN",
+    "updatedAt": "2026-11-08T16:44:01Z",
+    "body": "Parent: #457. Candidate contract: PR #456, branch ops/aiops2-multiagent-orchestration-20261108. PREPARATION ONLY: initial Codex qualification is still running; do not interrupt or preempt it.\n\nRole: Intégration\nScope: Dependency DAG, exact-SHA CI, Debian provenance, integration gates\nOwned paths: docs/handoffs/integration/**; read-only ops tooling\nReuse candidates: PR #456; PR #455; existing GitHub reuse inventory; ops/debian-runtime-reports. Search all existing branches and PRs; never rebuild from audit branch alone.\nAcceptance: CODE/CI/DEBIAN/E2E matrix and stale-receipt detection.\n\nAfter qualification and ownership arbitration, launch one independent Codex Cloud task/worktree on branch agent/integration/<issue-number>-<slug>. Read AGENTS.md and orchestration contract on PR #456's branch (not merged). Inventory code first; stop on overlapping ownership. Implement additive tested change or report BLOCKED. Open DRAFT PR to approved integration base; never merge. Handoff comment must state UTC, exact SHA, paths, tests, CI exact-SHA URLs, Debian receipt freshness or UNKNOWN, E2E status or NOT_VERIFIED, dependencies and next action.\n\nNo production GLPI/PG writes, duplicate tickets, Debian deploy, cron/Compose changes, Policy/Critic/HITL bypass, auto-merge. FS1250 stays HOLD until independently verified. Offline CI is not authenticated GLPI readback or real E2E.",
+    "url": "https://github.com/alimtalbi-ata/aiops/issues/462"
+  }
+]

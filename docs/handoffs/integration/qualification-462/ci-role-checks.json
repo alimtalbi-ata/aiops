@@ -1,0 +1,32 @@
+[
+  {
+    "issue": 459,
+    "branch": "agent/worker/459-pipeline",
+    "sha": "fe4963577fd52173388d487bf0b2bf4a7a35becd",
+    "url": "https://github.com/alimtalbi-ata/aiops/commit/fe4963577fd52173388d487bf0b2bf4a7a35becd/checks",
+    "observed_at": "2026-11-08T17:02:50.623331+00:00",
+    "status": "UNKNOWN",
+    "jobs": [],
+    "html_sha256": "51f0d7aba076b481b4793d877dfcb332c1701ccea8814437b29b86b45d32656e"
+  },
+  {
+    "issue": 460,
+    "branch": "agent/twin/460-scenarios",
+    "sha": "4d7586c3b1ec0298684fc4ca42fe07d889520c6a",
+    "url": "https://github.com/alimtalbi-ata/aiops/commit/4d7586c3b1ec0298684fc4ca42fe07d889520c6a/checks",
+    "observed_at": "2026-11-08T17:02:51.182722+00:00",
+    "status": "UNKNOWN",
+    "jobs": [],
+    "html_sha256": "a95947ddd36693ea308eb8bf01f825ac56bcaba8e3f879eadb63ddc58df8cb76"
+  },
+  {
+    "issue": 461,
+    "branch": "agent/portal/461-live-hold-selection",
+    "sha": "de58b7ac7ff43d46df4db37caceaf3712f1882fa",
+    "url": "https://github.com/alimtalbi-ata/aiops/commit/de58b7ac7ff43d46df4db37caceaf3712f1882fa/checks",
+    "observed_at": "2026-11-08T17:02:51.471219+00:00",
+    "status": "UNKNOWN",
+    "jobs": [],
+    "html_sha256": "e9a50f25514d5eb08b5039e264f3391e3ee0ed154a8e0f6c1fda0f80beec87a7"
+  }
+]
