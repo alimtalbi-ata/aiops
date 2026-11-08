@@ -12,6 +12,8 @@ spec.loader.exec_module(m)
 def receipt():
     return {"schema": "aiops2-fs147-functional-e2e-v1", "mode": "SIMULATED",
             "run_id": "fs147-run-1", "real_effects_executed": False,
+            "glpi_ticket": {"ticket_id": "ticket-845", "correlation_id": "fs147-run-1",
+                            "operation": "create", "evidence_ref": "glpi/receipt-845"},
             "stages": {name: {"run_id": "fs147-run-1", "source": "reviewed-artifact",
                               "result": "PASS", "evidence_ref": "receipt/" + name}
                        for name in m.STAGES}}
@@ -30,8 +32,8 @@ class FunctionalTests(unittest.TestCase):
 
     def test_cross_run_ticket_blocks(self):
         x = receipt()
-        x["stages"]["glpi_ticket_147"]["run_id"] = "other-run"
-        self.assertIn("glpi_ticket_147:run_id_mismatch", m.evaluate(x)["failures"])
+        x["stages"]["glpi_ticket"]["run_id"] = "other-run"
+        self.assertIn("glpi_ticket:run_id_mismatch", m.evaluate(x)["failures"])
 
     def test_missing_policy_evidence_blocks(self):
         x = receipt()
@@ -53,6 +55,21 @@ class FunctionalTests(unittest.TestCase):
         x["mode"] = "LIVE"
         with self.assertRaisesRegex(ValueError, "SIMULATED"):
             m.evaluate(x)
+
+    def test_any_ticket_identity_is_accepted(self):
+        x = receipt()
+        x["glpi_ticket"]["ticket_id"] = "ticket-90001"
+        self.assertEqual(m.evaluate(x)["result"], "PASS")
+
+    def test_ticket_run_correlation_blocks(self):
+        x = receipt()
+        x["glpi_ticket"]["correlation_id"] = "unrelated-run"
+        self.assertIn("glpi_ticket:correlation_mismatch", m.evaluate(x)["failures"])
+
+    def test_missing_ticket_identity_blocks(self):
+        x = receipt()
+        x["glpi_ticket"]["ticket_id"] = ""
+        self.assertIn("glpi_ticket:missing_ticket_id", m.evaluate(x)["failures"])
 
 
 if __name__ == "__main__":
