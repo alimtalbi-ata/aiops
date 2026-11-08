@@ -48,7 +48,7 @@ def classify_launch(value):
         return LaunchDecision.UNKNOWN
     if value.mode == "LIVE" or (type(value.ticket_id) is int and value.ticket_id != 147):
         return LaunchDecision.DENIED
-    if value.policy == "DENY" or value.native_hitl == "REJECTED":
+    if value.policy in {"DENY", "STOP_AUTO"} or value.native_hitl == "REJECTED":
         return LaunchDecision.DENIED
     if value.mode != "DEMO" or type(value.ticket_id) is not int:
         return LaunchDecision.UNKNOWN
@@ -63,7 +63,7 @@ def classify_launch(value):
            any(ord(ch) < 32 or ord(ch) == 127 for ch in getattr(value, key))
            for key in fields):
         return LaunchDecision.UNKNOWN
-    if value.policy not in {"ALLOW", "DENY", "UNKNOWN"}:
+    if value.policy not in {"ALLOW", "DENY", "STOP_AUTO", "UNKNOWN"}:
         return LaunchDecision.UNKNOWN
     if value.native_hitl not in {"ACCEPTED", "REJECTED", "PENDING", "UNKNOWN"}:
         return LaunchDecision.UNKNOWN
