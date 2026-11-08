@@ -26,6 +26,13 @@ def digest(intent):
 def guard(intent, approval, *, now, critic_pass, policy_pass, evidence_fresh,
           claim_result, temporal_run_id):
     """Decision only; UNKNOWN and BLOCKED are never action authorization."""
+    # Reject malformed or empty action bindings before considering an approval.
+    bound = (intent.tenant_id, intent.run_id, intent.action_id, intent.target,
+             intent.parameters_digest, intent.policy_revision, temporal_run_id)
+    if any(not isinstance(v, str) or not v.strip() for v in bound):
+        return 'UNKNOWN'
+    if type(intent.ticket_id) is not int or intent.ticket_id <= 0:
+        return 'UNKNOWN'
     if claim_result is not True:
         return 'UNKNOWN' if claim_result is None or claim_result is not False else 'DUPLICATE_RUN'
     if not (critic_pass is True and policy_pass is True and evidence_fresh is True):
@@ -101,6 +108,17 @@ class ActionBindingTests(unittest.TestCase):
                            ('approver_id', ' requester ')]:
             with self.subTest(key=key, value=value):
                 self.assertEqual(self.check(approval=self.approval | {key: value}), 'BLOCKED')
+
+    def test_malformed_action_binding_fails_closed(self):
+        for key, value in [('tenant_id', ''), ('tenant_id', '  '),
+                           ('run_id', None), ('action_id', 0),
+                           ('target', ''), ('parameters_digest', []),
+                           ('policy_revision', ' '), ('ticket_id', True),
+                           ('ticket_id', 0)]:
+            with self.subTest(key=key, value=value):
+                altered = Intent(**(self.intent.__dict__ | {key: value}))
+                self.assertEqual(self.check(intent=altered), 'UNKNOWN')
+        self.assertEqual(self.check(temporal_run_id=''), 'UNKNOWN')
 
     def test_expiration_and_temporal_mismatch(self):
         self.assertEqual(self.check(now=self.intent.expires_at), 'BLOCKED')
