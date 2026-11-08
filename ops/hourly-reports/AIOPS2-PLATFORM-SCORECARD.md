@@ -55,3 +55,11 @@ Horodatage; livraisons et SHAs depuis le rapport précédent; CI run; reçu Debi
 - Cette preuve confirme **au moins une publication du reporter existant** Debian→GitHub; elle ne démontre pas une publication chaque minute sans comparer des horodatages successifs, ni un déploiement GitHub→Debian.
 - `ops/debian-reports/SRV-DEB-05/latest-platform.json` absent de cette branche lors du contrôle. Le raccordement du gate transversal au canal existant reste `NOT_VERIFIED`.
 - Prochaine étape vérifiable: relever deux SHA/timestamps successifs du latest.json, puis examiner `poll.sh` via un reçu non sensible pour qualifier le sens GitHub→Debian.
+
+## Contrôle effectif 2026-11-08T14:55Z (15:55 Europe/Paris)
+- GitHub `ops/debian-runtime-reports:ops/debian-reports/SRV-DEB-05/latest.json` lu avec succès, blob SHA `2fe9ad0831b4e87a042c9689f2c22db94d954dbb`.
+- `collected_at=2026-11-08T14:55:01.400701+00:00`: remontée Debian→GitHub active et preuve récente.
+- Derniers passages des cinq automations vérifiés: Core 14:08:48Z, Worker 14:28:33Z, Twin 14:39:01Z, Portal 14:46:59Z, Intégration 14:56:19Z. Ce sont des exécutions, pas des preuves de déploiement.
+- `latest-platform.json` toujours absent de la branche de rapports; gate transversal GitHub = `NOT_VERIFIED`.
+- Aucun reçu récent de promotion GitHub→Debian ou E2E complet observé pendant ce contrôle. Verdict `AT_RISK`.
+- **Défaut de suivi détecté**: scorecard n'avait pas été actualisée automatiquement malgré les exécutions. Correction manuelle factuelle apportée; les rôles doivent publier leurs propres résultats vérifiables.
