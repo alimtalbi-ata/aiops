@@ -279,3 +279,33 @@ The active runtime is not one clean homogeneous stack: separate `aiops2-rebuild`
 Core, Portal, Worker, Temporal, Twin, Evidence, Policy, Intelligence, GLPI/MariaDB, n8n, Prometheus, Grafana, Alertmanager, OpenTelemetry, Loki, Tempo, CloudBeaver and FS qualification/ingestion surfaces are represented in the observed container inventory. The precise runtime-to-source-to-feature mapping remains to be established against Compose definitions, source commits, image digests, contracts and tests. Intended responsibilities remain governed by the existing [component catalog](COMPONENT-CATALOG-AND-REUSE.md) and [architecture boundaries](ARCHITECTURE-AND-BOUNDARIES.md).
 
 **Next maintenance actions:** refresh the snapshot after material deployment changes; reconcile each runtime container with exact Compose file hashes and image digests; update the existing component catalog and reuse decisions; attach exact-head CI and runtime evidence; explicitly record unresolved drift. No production/LIVE qualification or retirement approval is implied by this inventory.
+
+
+## 2026-11-08 — Existing Debian cron reuse decision (no new scheduler)
+
+**User direction:** reuse the cron jobs already present on Debian to inspect the installed infrastructure, maintain the installation/function documentation, and publish sanitized evidence to the canonical GitHub repository. Do not create a duplicate cron or a parallel documentation registry.
+
+**What GitHub currently proves:**
+
+- Main `.github/workflows/quality.yml` has a GitHub-hosted daily schedule at `02:23 UTC` and `workflow_dispatch`. It validates source/CI; it does **not** connect to SRV-DEB-05 or inventory its Docker runtime.
+- PR #188 ("Add scheduled AIOps2 qualification and Debian runtime smoke") remains **open/Draft**. Its review explicitly blocks the self-hosted runner because the proposed smoke uses `docker exec` and unrestricted Docker access. Do not merge/install this runner as written.
+- PR #189's six-hour schedule is redundant and was explicitly excluded in the scheduling decision. Do not reactivate or duplicate it.
+- The automation heartbeat gate already treats Debian cron state as `UNATTESTED` until it has a timestamped success receipt and next-run evidence. The existing test `test_debian_unattested_is_not_healthy` ensures that missing proof is WARN, not PASS.
+- The earlier continuity record explicitly states Debian cron/runtime/report publication were NOT_ATTESTED and `latest.json` was absent at that checkpoint.
+
+**Operational status:** Debian cron entries, their owner, schedule, target scripts, last execution, exit status and GitHub publication credentials have not been inspected in this session. Therefore reuse of a specific host cron is **NOT_VERIFIED**; no claim is made that a working inventory cron currently exists.
+
+**Required next step (read-only discovery on SRV-DEB-05):** inspect existing user and system crontabs, cron spool and timer definitions; map each existing job to its script, owner, cadence, last log/receipt, permissions and destination. Do not print environment values, command-line secrets or token contents. Identify one existing, appropriate inventory/reporting job and extend that job in place only after review. If no suitable job exists, stop and request approval rather than silently installing a new schedule.
+
+**Target behavior for the existing job, subject to review:**
+
+1. Collect read-only Docker metadata (projects, container state/health, image tag and digest, Compose labels/files, networks, mounts/volumes) and safe OS/service metadata.
+2. Map each observed service to the existing component catalog and architecture boundaries; record feature/source/PR mapping only when exact evidence exists.
+3. Compare with the previous snapshot and report additions, removals, version drift, missing Compose files, health changes and unknown ownership.
+4. Never run `docker exec`, `docker compose up/down`, restart/stop/remove, image/volume prune, database queries or application mutations as part of inventory collection.
+5. Redact credentials and secret-bearing environment/configuration values before any artifact leaves the host. Never upload `.env`, raw environment dumps, database contents, private keys, tokens, or customer payloads.
+6. Publish a timestamped sanitized report and checksum to the existing GitHub repository using the already-approved publication mechanism, least privilege and a narrowly scoped token/deploy key. Do not introduce a new secret or broad Docker-enabled self-hosted runner.
+7. Update the canonical continuity, component catalog and architecture records only when meaningful changes are verified; retain timestamped historical evidence. Do not overwrite a more authoritative source/decision with accidental runtime drift.
+8. Emit a signed/hashed execution receipt with start/end time, exit code, inventory timestamp, Git commit and upload result. Feed that receipt into the existing heartbeat gate; absence, stale data or failed upload must remain WARN/FAIL, never PASS.
+
+**No infrastructure action authorized by this documentation update:** no Debian cron change, runner installation, Docker access, restart, container/volume cleanup, database access or deployment.
