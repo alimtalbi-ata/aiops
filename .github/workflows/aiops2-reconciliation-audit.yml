@@ -1,0 +1,42 @@
+name: AIOps2 reconciliation audit CI
+on:
+  push:
+    branches:
+      - audit/preserve-debian-48h-20261108
+    paths:
+      - 'scripts/ops/run_linkage_gate.py'
+      - 'scripts/ops/live_correlation_gate.py'
+      - 'tests/ops/test_run_linkage_gate.py'
+      - 'docs/architecture/**'
+      - '.github/workflows/aiops2-reconciliation-audit.yml'
+  pull_request:
+    paths:
+      - 'scripts/ops/run_linkage_gate.py'
+      - 'scripts/ops/live_correlation_gate.py'
+      - 'tests/ops/test_run_linkage_gate.py'
+      - 'docs/architecture/**'
+      - '.github/workflows/aiops2-reconciliation-audit.yml'
+permissions:
+  contents: read
+concurrency:
+  group: aiops2-reconciliation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  offline-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax
+        run: python -m py_compile scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py
+      - name: Read-only gate contract tests
+        run: python -m unittest discover -s tests/ops -p 'test_run_linkage_gate.py' -v
+      - name: Assert no production deployment
+        run: |
+          test "${{ github.ref_name }}" != "deploy/aiops2-stable"
+          echo "Offline CI only; Debian execution must be separately attested"
