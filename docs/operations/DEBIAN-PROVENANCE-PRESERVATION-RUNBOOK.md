@@ -62,3 +62,16 @@ Priority GitHub candidates for comparison: Twin Decimal metrics PR #448 (operato
 ## 5. Stop conditions
 
 Do not merge, deploy, restart, migrate, prune, delete, alter crontab, publish unreviewed metadata, approve HITL, or write to GLPI/Temporal. Do not assume an SSH session or a Debian backup exists. The operator must explicitly approve any runtime integration and any backup procedure after reviewing its storage and impact.
+
+
+## 6. Compare two independently captured snapshots — offline, no Docker access
+
+The branch also contains `scripts/ops/compare_debian_provenance.py`, with seven offline regression cases in `tests/test_compare_debian_provenance.py`. Once two reviewed, private snapshots exist, compare them locally:
+
+```sh
+python3 scripts/ops/compare_debian_provenance.py /private/before.json /private/after.json
+```
+
+The comparator reads two local JSON files and prints a JSON diff to stdout; it never calls Docker, GitHub, a network or a deployment tool. It detects added/missing container names, changes to immutable image IDs and Compose project/service/config hash, and differences in Compose YAML SHA-256. It deliberately emits `release_decision: HOLD`, `feature_parity: UNKNOWN`, `deployment_chronology: UNKNOWN` and `backup_restoration: NOT_ATTESTED`, even when the two snapshots are identical. A container name change is not necessarily a removal or new deployment; a missing container can reflect incomplete access. The comparison is evidence for operator review, **not a feature score, backup or automatic release gate**.
+
+The existing `quality.yml` workflow now executes both collector and comparator tests. Generic CI successes are not proof of Debian host behavior.
