@@ -74,3 +74,12 @@ The existing GitHub-hosted daily `quality.yml` schedule at 02:23 UTC validates r
 A Debian job is not considered active/healthy until a recent timestamped execution receipt and successful GitHub publication are independently observed. The existing heartbeat gate must continue to report UNATTESTED/missing evidence as WARN or FAIL, never PASS.
 
 For current findings and the no-new-cron decision, see [Project Continuity — 2026-11-08](PROJECT-CONTINUITY.md).
+
+
+## Comparative qualification across development stacks
+
+Use the existing `aiops-debian-reporter` and `aiops-publish-report` schedule as the single inventory/reporting pipeline; do not add a cron. Extend only after review and preserve its lock behavior. Keep the deployment poller and FS watcher separate.
+
+The component comparison must use immutable image digests and exact source commits, Compose project/service ownership, contracts/dependency compatibility, implemented feature evidence and passing CI/contract/integration/E2E tests. Prefer the most advanced **usable and integrated** candidate, not the numerically newest tag. Unknown evidence is NOT_QUALIFIED. Retain all development stacks while comparing; no automated promotion, deletion, volume cleanup or database migration. Any later consolidation requires a separate reviewed change, backup and tested rollback.
+
+Publish sanitized simulated-development inventory and feature/test evidence to GitHub with timestamped history. Do not publish credentials or authentication material, even if the environment contains only simulated data.
