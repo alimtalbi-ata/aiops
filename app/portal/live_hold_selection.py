@@ -9,7 +9,9 @@ SAFE_POLICY_REASONS = frozenset(("policy_denied", "hitl_pending", "approval_requ
 NON_PORTAL_COMPONENTS = frozenset(("policy", "hitl", "approval", "policy-engine",
                                     "core", "worker", "temporal", "evidence",
                                     "intelligence", "critic", "twin", "itsm", "glpi"))
-SAFE_POLICY_STATES = frozenset(("denied", "rejected", "pending", "approval_required", "hitl_pending"))
+SAFE_POLICY_STATES = frozenset(("denied", "rejected", "pending", "approval_required", "hitl_pending",
+                                "awaiting_approval", "awaiting_human_approval", "blocked_by_policy",
+                                "policy_blocked", "approval_pending"))
 
 
 def _safe_policy_reason(reason):
