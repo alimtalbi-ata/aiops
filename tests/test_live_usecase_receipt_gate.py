@@ -70,6 +70,27 @@ class ReceiptTests(unittest.TestCase):
         r["verdict"] = "HOLD"
         self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
 
+    def test_missing_evidence_is_not_functional_hold(self):
+        r = receipt()
+        r["checks"][0]["status"] = "UNVERIFIED"
+        r["verdict"] = "HOLD"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
+    def test_mixed_hold_and_missing_evidence_stays_unverified(self):
+        r = receipt()
+        r["checks"][0]["status"] = "UNVERIFIED"
+        r["checks"][1]["status"] = "HOLD"
+        r["blocking"] = [r["checks"][1]["name"]]
+        r["verdict"] = "HOLD"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
+    def test_actual_hold_remains_hold(self):
+        r = receipt()
+        r["checks"][0]["status"] = "HOLD"
+        r["blocking"] = [r["checks"][0]["name"]]
+        r["verdict"] = "HOLD"
+        self.assertEqual(classify(r, NOW), Qualification.HOLD)
+
     def test_live_mutation_receipt(self):
         r = receipt()
         r["read_only"] = False
