@@ -7,6 +7,8 @@ on:
       - 'scripts/ops/run_linkage_gate.py'
       - 'scripts/ops/live_correlation_gate.py'
       - 'tests/ops/test_run_linkage_gate.py'
+      - 'tests/ops/test_publish_platform_evidence.py'
+      - 'scripts/ops/publish_platform_evidence.py'
       - 'docs/architecture/**'
       - '.github/workflows/aiops2-reconciliation-audit.yml'
   pull_request:
@@ -35,7 +37,9 @@ jobs:
       - name: Python syntax
         run: python -m py_compile scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py
       - name: Read-only gate contract tests
-        run: python -m unittest discover -s tests/ops -p 'test_run_linkage_gate.py' -v
+        run: |
+          python -m unittest discover -s tests/ops -p 'test_run_linkage_gate.py' -v
+          python -m unittest discover -s tests/ops -p 'test_publish_platform_evidence.py' -v
       - name: Assert no production deployment
         run: |
           test "${{ github.ref_name }}" != "deploy/aiops2-stable"
