@@ -30,6 +30,9 @@ def guard(intent, approval, *, now, critic_pass, policy_pass, evidence_fresh,
         return 'UNKNOWN' if claim_result is None or claim_result is not False else 'DUPLICATE_RUN'
     if not (critic_pass is True and policy_pass is True and evidence_fresh is True):
         return 'BLOCKED'
+    if any(not isinstance(t, datetime) or t.tzinfo is None or t.utcoffset() is None
+           for t in (now, intent.expires_at)):
+        return 'UNKNOWN'
     if now >= intent.expires_at or temporal_run_id != intent.run_id:
         return 'BLOCKED'
     if not isinstance(approval, dict):
@@ -41,7 +44,10 @@ def guard(intent, approval, *, now, critic_pass, policy_pass, evidence_fresh,
         return 'BLOCKED'
     if approval.get('decision') != 'APPROVED' or approval.get('approver_id') in (None, '', approval.get('requester_id')):
         return 'BLOCKED'
-    if not isinstance(approval.get('valid_until'), datetime) or now >= approval['valid_until']:
+    deadline = approval.get('valid_until')
+    if not isinstance(deadline, datetime) or deadline.tzinfo is None or deadline.utcoffset() is None:
+        return 'UNKNOWN'
+    if now >= deadline:
         return 'BLOCKED'
     return 'SIMULATE' if intent.dry_run is True else 'BLOCKED'
 
@@ -100,6 +106,14 @@ class ActionBindingTests(unittest.TestCase):
             with self.subTest(ambiguous=ambiguous):
                 self.assertEqual(self.check(claim_result=ambiguous), 'UNKNOWN')
         self.assertEqual(self.check(claim_result=False), 'DUPLICATE_RUN')
+
+    def test_untrusted_clock_and_expiry_fail_closed(self):
+        naive = self.now.replace(tzinfo=None)
+        self.assertEqual(self.check(now=naive), 'UNKNOWN')
+        self.assertEqual(self.check(approval=self.approval | {'valid_until': naive}), 'UNKNOWN')
+        self.assertEqual(self.check(approval=self.approval | {'valid_until': '2026-11-08T00:02:00Z'}), 'UNKNOWN')
+        altered = Intent(**(self.intent.__dict__ | {'expires_at': naive}))
+        self.assertEqual(self.check(intent=altered), 'UNKNOWN')
 
     def test_digest_changes_with_bound_fields(self):
         for key, value in [('ticket_id', 146), ('run_id', 'other'),
