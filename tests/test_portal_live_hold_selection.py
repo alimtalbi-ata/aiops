@@ -87,5 +87,23 @@ class LiveHoldSelectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "UNVERIFIED")
         self.assertIsNone(result["hold"])
 
+    def test_conflicting_policy_fields_fail_closed(self):
+        result = first_portal_hold(receipt([
+            {"id": "conflict", "status": "HOLD", "owner": "portal",
+             "component": "browser", "reason": "auth_401",
+             "policy_status": "APPROVED", "policy_state": "DENIED"},
+            {"id": "real", "status": "HOLD", "owner": "browser",
+             "component": "browser", "reason": "legend_duplicate"}]), NOW)
+        self.assertEqual(result["status"], "HOLD")
+        self.assertEqual(result["hold"]["id"], "real")
+
+    def test_hitl_pending_field_prevents_false_portal_failure(self):
+        result = first_portal_hold(receipt([
+            {"id": "hitl", "status": "HOLD", "owner": "portal",
+             "component": "ui", "reason": "auth_401",
+             "hitl_status": "HITL_PENDING"}]), NOW)
+        self.assertEqual(result["status"], "UNVERIFIED")
+        self.assertIsNone(result["hold"])
+
 if __name__ == "__main__":
     unittest.main()
