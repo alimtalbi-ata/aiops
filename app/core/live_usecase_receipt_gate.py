@@ -58,7 +58,11 @@ def classify(receipt, now=None, max_age_seconds=180):
     # to the same receipt, rather than an unrelated successful safety test.
     if any(by_name[name]["status"] == "NOT_APPLICABLE" for name in optional):
         denial = by_name["policy_denial_safety"].get("evidence")
-        if (not isinstance(denial, dict) or denial.get("run_status") != "BLOCKED"
+        # An unrelated blocked run must never exempt this run from HITL/Temporal checks.
+        run_id = receipt.get("run_id")
+        if (not isinstance(run_id, str) or not run_id.strip()
+                or not isinstance(denial, dict) or denial.get("run_id") != run_id
+                or denial.get("run_status") != "BLOCKED"
                 or denial.get("critic_policy_outbox") != "PASS"):
             return Qualification.UNVERIFIED
     execution = receipt.get("probe_execution")
