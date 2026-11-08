@@ -413,3 +413,33 @@ The preferred implementation is the one that maximizes verified usable features 
 The supplied audits show current running containers and identify existing cron reporter/publisher scripts, but do not yet establish a complete timestamped per-component deployment history for the last 48 hours. The existing reporter omits image digests, Compose labels, source commits, mounts and feature/test evidence. Therefore the recent-deployment preservation inventory is **NOT YET COMPLETE**. Do not claim that any specific version is the best until this gap is closed.
 
 **Execution constraint:** use the existing Debian reporter → publisher chain as the inventory path after reviewing and extending it safely. No new cron, no deployment poller reuse, no automatic cleanup, no service restart, and no destructive consolidation.
+
+
+## 2026-11-08 — Initial GitHub-side preservation review (last 48 hours)
+
+**Scope:** GitHub history, PR metadata and check-run results only. This is not a Debian host inspection and does not prove which candidate is installed on SRV-DEB-05.
+
+### Main branch baseline
+
+Within the inspected 48-hour window, the latest non-documentation commit visible on `main` is `fbe692c20e50` (2026-11-06 23:13:30 UTC), titled `fix(fs1111): validate rendered nonempty history series without brittle five-path wait`. The subsequent 2026-11-08 commits in this window are documentation-only inventory/continuity updates. Therefore the GitHub default branch does not, by itself, contain a full record of the recent Debian runtime changes.
+
+### Candidate work and evidence
+
+| PR | Component / scope | GitHub state | Observed checks / limitations | Preservation decision |
+|---|---|---|---|---|
+| [#448](https://github.com/alimtalbi-ata/aiops/pull/448) | Twin Decimal metrics FS1009–FS1027 | Merged 2026-11-06 into `fix/fs-1002-prometheus-metrics-content-type`, not evidence of merge to main | PR records operator-reported host qualifications FS1015/1019/1020/1021/1024 and a source hash; verify exact host/image mapping before using as deployed baseline | Preserve source, exporter hash, overlay, scripts and branch history; candidate evidence is useful but target branch matters |
+| [#443](https://github.com/alimtalbi-ata/aiops/pull/443) | Worker FS147 read-only Policy transport | Open / Draft; head `4693d0fdec` | Check runs `grafana-real-integration`, `core-postgres-noc-real-integration`, `policy-and-static` completed success; PR states exact-head pytest and real bridge/Analyst/Critic/Policy/Core/GLPI E2E are not verified | Preserve; not yet usable end-to-end / not qualified for deployment |
+| [#450](https://github.com/alimtalbi-ata/aiops/pull/450) | Core FS147 native action-bound HITL and outbox fencing | Open / Draft; head `947c32198a` | Three named check runs completed success; PR states tests are synthetic predicates and authenticated GLPI/PG16/Temporal integration, concurrent revocation, host image SHA and exact-head CI remain blockers | Preserve; useful contract candidate, not operational HITL approval |
+| [#449](https://github.com/alimtalbi-ata/aiops/pull/449) | FS147 receipt/release gate | Open / Draft; head `a1f6d18e0e` | `runtime-e2e` and `quality-build-package` failed; contract/static/integrity and other listed checks succeeded | Preserve failure evidence and fix blockers; NO_GO |
+| [#451](https://github.com/alimtalbi-ata/aiops/pull/451) | Twin SAN isolation for FS147 | Open / Draft; head `2a3fa9f866` | `database-migrations` failed; other listed checks succeeded; fixtures synthetic and no real host FS147 E2E claimed | Preserve; fix migration check and retain isolation tests |
+| [#431](https://github.com/alimtalbi-ata/aiops/pull/431) | Worker FS V28 detection isolation from SAN Twin writes | Open / Draft against `deploy/aiops2-stable`; head `fd347ec92a` | Listed isolated, static/unit, build, runtime-E2E and migration checks succeeded; PR explicitly says no claim that evidence exists on host or full Worker/Temporal/Evidence/Portal E2E passes | Strong candidate for isolated qualification; do not merge/deploy from status alone |
+
+### Current conclusion
+
+- Do not select one universal "best version" yet. Component candidates have different scopes and different levels of evidence.
+- Preserve the last-48-hour Debian deployment as the first baseline; the exact host image digest, source commit, Compose overlay and volume/data mapping are still unavailable from the GitHub-only view.
+- The most useful immediate code comparison is component-scoped: Twin metrics (#448 source lineage), Worker FS-V28 isolation (#431), and FS147 Core/Worker/Twin slices (#443/#450/#451), while the overall FS147 receipt gate (#449) remains NO_GO due failed checks.
+- Green check runs are not proof of host deployment or full service integration. Draft PRs remain unmerged; do not promote automatically.
+- Next evidence required from Debian: image IDs/digests, Compose labels and effective file hashes, dirty worktree commits, mount/volume mapping, deployment receipts and a verified backup manifest for the last 48 hours.
+
+This review is a preservation/qualification decision only. No PR was merged, no code deployed, and no Debian runtime was changed.
