@@ -69,7 +69,8 @@ def classify(receipt, now=None, max_age_seconds=180):
         if (not isinstance(run_id, str) or not run_id.strip()
                 or not isinstance(denial, dict) or denial.get("run_id") != run_id
                 or denial.get("run_status") != "BLOCKED"
-                or denial.get("critic_policy_outbox") != "PASS"):
+                or denial.get("critic_policy_outbox") != "PASS"
+                or by_name["critic_policy_outbox"]["status"] != "PASS"):
             return Qualification.UNVERIFIED
     execution = receipt.get("probe_execution")
     if not isinstance(execution, dict) or any(
