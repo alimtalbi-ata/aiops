@@ -36,5 +36,16 @@ class TestHandoff(unittest.TestCase):
     def test_noncanonical(self):
         self.analyst["bad"]=float("nan")
         self.assertEqual(self.call()["reason"],"NONCANONICAL_HANDOFF")
+    def test_forged_nonhex_fingerprint_refused(self):
+        for value in ("z"*64, "A"*64, " "*64, "a"*63, "a"*65):
+            with self.subTest(value=value):
+                self.obs["fingerprint"] = value
+                receipt = self.call()
+                self.assertEqual(receipt["reason"], "OBSERVATION_UNVERIFIED")
+                self.assertIsNone(receipt["digest"])
+                self.assertFalse(receipt["dispatch_allowed"])
+    def test_mismatched_fingerprint_stage_refused(self):
+        self.critic["observation_fingerprint"] = "b"*64
+        self.assertEqual(self.call()["reason"], "CRITIC_IDENTITY_MISMATCH")
 if __name__ == "__main__":
     unittest.main()
