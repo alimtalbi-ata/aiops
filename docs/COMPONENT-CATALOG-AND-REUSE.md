@@ -241,3 +241,8 @@ Do not compare these PRs as a single version ladder: they implement different fe
 ## 2026-11-08 — FS1250 — dépendances absentes
 
 Réutiliser le probe natif GLPI ; adapter les contrôles d’identité. Writer FS1250, consommateur xref et GLPIClient importé par le bridge : absents de cette branche ; réutilisation et provenance Debian UNKNOWN. Aucun remplacement de composant. Rapport : [qualification FS1250](architecture/FS1250-ITSM-RECONCILIATION-QUALIFICATION-20261108.md).
+
+
+## 2026-11-08 — Revue de la PR #455
+
+Correction de périmètre #455 : GLPIClient trouvé et lu dans feat/glpi-ai-ticket-enrichment-e2e@5b3b9f3 ; Core itsm_xref trouvé et lu dans fix/core-xref-glpi-readback-gate-20261101@00dd044 ; classificateur existant dans #454@87f0c57. Réemploi candidat confirmé, déploiement Debian non établi. Ces fichiers sont absents uniquement de l’arbre audit, pas du projet entier. Inventaire transversal conservé depuis audit@2205c74. Voir [rapport révisé](architecture/FS1250-ITSM-RECONCILIATION-QUALIFICATION-20261108.md).

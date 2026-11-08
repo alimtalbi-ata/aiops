@@ -473,3 +473,8 @@ This review is a preservation/qualification decision only. No PR was merged, no 
 ## 2026-11-08 — FS1250 — correctif du diagnostic, réconciliation durable HOLD
 
 Base audit 8fb36639 : writer/consumer ITSM et migrations GLPI déployés absents. Probe natif et diagnostic durcis sur le triplet Ticket/Run/Incident ; aucune nouvelle API ni écriture métier. 68 tests locaux OK (47 ops, 15 Policy, 6 Worker mapping), pas E2E. Prochaine étape : retrouver le build/source réel puis porter le correctif transactionnel dans le consommateur existant. Les 44 liens et le refus sécurisé restent intacts car aucun accès Debian. Rapport : [qualification FS1250](architecture/FS1250-ITSM-RECONCILIATION-QUALIFICATION-20261108.md).
+
+
+## 2026-11-08 — Revue de la PR #455
+
+Revue #455 : le diagnostic hors ligne v2 reste toujours HOLD ; les booléens DB/JSON ne prouvent pas une lecture GLPI authentifiée. Les xrefs multiples et les identités Run/ticket/tenant/instance contradictoires sont refusés. Le client GLPI et le read path Core xref existent dans d’autres branches, lus et référencés dans le rapport ; leur absence était locale à l’audit. Inventaire transversal de audit@2205c74 conservé intégralement. 83 tests locaux de revue OK ; SHA final et réexécution dans la PR. Aucune écriture métier ou opération Debian. Voir [rapport révisé](architecture/FS1250-ITSM-RECONCILIATION-QUALIFICATION-20261108.md).

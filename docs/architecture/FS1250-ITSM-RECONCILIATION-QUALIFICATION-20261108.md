@@ -28,7 +28,7 @@ Les réinventer ici produirait un second chemin d'écriture non qualifié.
 | `app/core/main.py` | Incident : `INC-` + external_id ; Run : ID généré ; `RUN_CREATED`, `STATE_TRANSITION`, endpoint events → `aiops.run_events` | Ni création de ticket, ni route de consommation xref, ni tables GLPI. |
 | `app/worker/main.py` | Temporal `IncidentWorkflow`, workflow_id=run_id ; activités POST events/gates/checkpoint/evidence | STAGE_STARTED/COMPLETED/FAILED, GATE_BLOCKED et LIVE_ADAPTER_UNAVAILABLE ; étape RECONCILE générique synthétique, pas une liaison GLPI. LIVE bloqué. |
 | `db/migrations/000–008` | Tables canoniques et unicité `(run_id,event_key)` dans 008 | Ni `glpi_ticket_links`, ni `itsm_xref_events`, ni `critic_denial_outbox` ; l'unicité des run_events ne prouve pas celle des xrefs. |
-| `integration/glpi_copilot_bridge.py` | GET tickets/suivis et POST ITILFollowup ; marqueurs de réponse Copilot | Dépend de `portal.glpi_client.GLPIClient`, module absent du dépôt. Pas de création Ticket ni publication xref. Le suivi ne vaut pas réconciliation. |
+| `integration/glpi_copilot_bridge.py` | GET tickets/suivis et POST ITILFollowup ; marqueurs de réponse Copilot | Dépend de `portal.glpi_client.GLPIClient`, module absent de cet arbre d’audit mais présent dans une autre branche (voir revue ci-dessous). Pas de création Ticket ni publication xref. Le suivi ne vaut pas réconciliation. |
 | `app/portal/glpi_operator_view.py` | Handoff en lecture seule ; UNKNOWN / NOT_INSTALLED | Aucun appel GLPI/Core pour la liaison ; pas un client GLPI natif. |
 | `scripts/ops/glpi_readback_probe.py` | GET natif `/apirest.php/Ticket/{id}` → reçu JSON local | Ni écriture GLPI, ni écriture Core ; jetons par environnement. |
 | `scripts/ops/run_linkage_gate.py` | SELECT PostgreSQL READ ONLY + GET Core → rapport local | Dépend du schéma Debian absent ; ses checks GLPI séparés ne suffisent pas à prouver une jointure d'identité. |
@@ -55,7 +55,7 @@ Les digests, commits de build, overlays effectifs et sources sales restent UNKNO
 Cinq projets Compose sont documentés ; le nom d'un conteneur ne suffit pas à
 identifier son projet. Aucune image n'est qualifiée par cette analyse de source.
 
-## Correctif minimal effectivement livré
+## Correctif initial livré au commit 2305759 (révisé ci-dessous)
 
 1. Le probe exige l'ID numérique retourné égal au ticket demandé, un ticket non
    supprimé et les deux marqueurs exacts Run + Incident. Les préfixes/suffixes
@@ -99,7 +99,7 @@ images/sources/configuration/données et rollback avant toute promotion.
   attendu par le contrat existant. **Ces tests durables ne sont pas exécutables
   sur cette branche sans les composants absents ; ils ne sont pas déclarés PASS.**
 
-## Qualification exécutée et limites
+## Qualification initiale au commit 2305759 et limites
 
 Environnement Cloud local, Python 3.12 ; aucun service Debian/GLPI/PostgreSQL appelé.
 
@@ -125,3 +125,83 @@ Ne pas restaurer un ancien verdict PASS sans vérifier les identités.
 La promotion et toute réparation persistante restent HOLD, sous approbation
 opérationnelle distincte après les preuves manquantes. Aucun ticket, déploiement,
 cron, redémarrage, merge ou commande de remédiation exécuté.
+
+
+## Revue PR #455 — identités, preuves et inventaire transversal
+
+Cette section remplace les conclusions initiales qui pouvaient assimiler les
+booléens DB à une preuve indépendante ou l'absence dans l'audit à une absence
+globale du projet. Pas de nouvelle PR, pas de merge, pas d'écriture GLPI/PG.
+
+### Comparaison de branches et préservation
+
+Base initiale : `8fb36639dd5794f8bd468f458d047572a2118579`.
+Audit comparé : `2205c74` (après `6765ba0`). Les deux commits ajoutent uniquement
+`docs/architecture/AIOPS2-GITHUB-REUSE-INVENTORY-2026-11-08.md`.
+Ce document a été repris intégralement, sans rebase ni merge de branches, sur la
+branche existante de #455. Blob de référence et copie :
+`e65af74cb3873276fb5aa0137e8631d6c2695c72` ; diff du fichier contre l'audit : vide.
+Les ajouts d'inventaire ne sont ni supprimés ni réécrits.
+
+### Implémentations réellement retrouvées et lues
+
+| Source exacte inspectée | Code / dépendances / limites |
+|---|---|
+| `feat/glpi-ai-ticket-enrichment-e2e@5b3b9f327f517e8f5999766389abf69c8a035cf8` | `app/portal/glpi_client.py` (blob `8cd3cd2381356e23d777dd6c0087ac03bd9b7375`) : sessions natives, GET/search, create/update, lookup par Run. Dépend de requests et de credentials serveur. `glpi_run_context.py` possède déjà `/api/internal/glpi/runs/{run_id}/sync` : lookup → update ou création → readback de rapport. C'est un writer candidat existant ; aucun appel ni portage de ce chemin mutateur ici. Son lookup utilise une sous-chaîne de titre, pas une liaison structurée tenant/instance/Incident/Run. Ni son déploiement ni son rôle dans FS1250 ne sont établis. |
+| `fix/core-xref-glpi-readback-gate-20261101@00dd0443d4d36d7aeb36bb77490777ac6ef5785d` | `app/core/itsm_xref.py` (blob `c59c2a281be351ce61064269dbc65bc4b689d9aa`) : router intégré à Core, ACL serveur tenant/instance/ticket, historique signé/supersession, ownership indépendamment attesté, relecture native HTTPS Ticket/Entity/CI, Run→Incident DB. Dépend de `shared.db`, FastAPI, requests, clés/config serveur et schéma migration `012_itsm_xref_read.sql`. Migration append-only, source_event_id unique, unicité tenant/instance/ticket/version ; aucun `glpi_ticket_links` créé par cette migration. Ne pas appliquer sur le schéma Debian inconnu. Le module ne confond pas HMAC/verified=true et preuve GLPI : `_glpi_readback` est obligatoire. Réemploi à qualifier, pas une nouvelle API à développer. |
+| PR [#454](https://github.com/alimtalbi-ata/aiops/pull/454), `core/fs147-fs1250-reconcile-20261108@87f0c5746a9d78f1e3696ecfe73bbeea8278eefb` | Draft, non fusionnée à l'inspection. `app/core/itsm_reconcile_contract.py` distingue MATCHED/EXISTING_UNLINKED/AMBIGUOUS/UNKNOWN/CONFLICT ; gates de lineage, admission et reçus également présents. Classificateurs purs, basés sur des claims et booléens fournis : ils ne réalisent pas eux-mêmes un readback authentifié ni une réparation durable. Ne pas les présenter comme preuve source/API. |
+
+L'absence est donc **locale à l'arbre d'audit** pour ces composants. Leur présence
+dans d'autres branches est confirmée par lecture du source. La correspondance
+avec les images Debian, le writer FS1250 réellement exécuté et la chaîne
+persistante déployée restent UNKNOWN. Les tests de ces branches tierces n'ont
+pas été exécutés par cette revue ; aucune qualification croisée n'est revendiquée.
+
+### Comportement corrigé du diagnostic
+
+- Contrat `aiops2-itsm-link-diagnosis-v2`, toujours `HOLD`. Aucun chemin
+  `LINK_VERIFIED`/`PASS` : un outil hors ligne ne peut authentifier les fichiers
+  fournis. Un JSON cohérent devient au mieux `LINK_CONSISTENT_UNATTESTED`, même
+  avec `authenticated=true`, `signature_verified=true` ou verified=true en DB.
+  Une signature déclarée n'est pas une signature vérifiée.
+- Jointure explicite Run/Incident/ticket ; comparaison des claims tenant et
+  instance GLPI dans le rapport, Run DB, liens, xrefs et enveloppe du readback.
+  Les claims contradictoires dans le ticket lui-même sont aussi refusés.
+  Scope ou run_id xref manquant : identité non vérifiée. Le collecteur existant
+  omet ces champs : ses anciens reçus restent donc HOLD, sans inventer le DDL.
+- Plus d'un xref : `AMBIGUOUS_XREFS`, même si les lignes sont identiques ou une
+  ligne est vérifiée. Ni sélection arbitraire, ni effacement de doublons, ni
+  interprétation locale d'un historique avec révocation/supersession. Le Core
+  existant possède un contrat d'historique à qualifier pour cela.
+- Rapports malformés, ticket booléen/flottant/null/zéro, scopes étrangers,
+  readback erroné/401, liens concurrents : HOLD. Les contrôles n'écrivent que le
+  diagnostic local demandé ; aucune mutation des entrées ni donnée métier.
+
+L'outil ne dispose actuellement d'aucun vérificateur indépendant de transport,
+signature, fraîcheur, ACL ou ownership pour ces fichiers ; ajouter des champs
+JSON ne le transforme pas en vérificateur. Pour une future qualification positive,
+réutiliser la lecture Core xref existante après contrôle de provenance/configuration
+et tests d'intégration. Ne pas créer un second client/endpoint d'attestation.
+
+### Tests de revue et qualification finale
+
+Commandes de validation, à réexécuter après le commit final sans retoucher son arbre :
+
+| Commande | Résultat local de la revue |
+|---|---|
+| `python -m unittest discover -s tests/ops -v` | 62 tests OK, dont 26 tests du diagnostic (plusieurs matrices négatives par sous-cas) |
+| `python -m unittest discover -s tests -p test_policy_safety.py -v` | 15 tests OK |
+| `python -m unittest discover -s tests -p test_simulation_policy_contract.py -v` | 6 tests OK |
+| `python -m py_compile scripts/ops/glpi_readback_probe.py scripts/ops/itsm_link_diagnosis.py` | PASS |
+| `git diff --check` | PASS |
+
+Total : **83 tests locaux**. Les 44 fixtures synthétiques sont rejouées sans
+mutation et restent HOLD faute de preuve API indépendante. Cela ne qualifie ni
+les 44 lignes réelles ni l'idempotence d'une écriture durable.
+Le SHA final et la réexécution exacte sont consignés dans la description de la
+PR #455 après validation, pour éviter une auto-référence SHA dans ce document.
+CI distante non attestée par ce bilan ; dépréciation Starlette/httpx sans échec.
+Readback réel, PG16 transactionnel/concurrent, E2E et qualification Debian :
+**NON EXÉCUTÉS / HOLD**. Aucun merge, écriture GLPI/PostgreSQL ou déploiement.
+Rollback : revert du correctif de revue uniquement, sans supprimer le document
+d'inventaire transversal ni restaurer les faux PASS. Aucun rollback de données.
