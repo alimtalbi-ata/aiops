@@ -55,6 +55,14 @@ Before resuming work in a new session, read these documents in order:
 
 **Maintenance rule:** every significant development session must update the continuity record and all affected architecture, decision, component, qualification and release documents in the same branch/PR. Prefer adapting qualified AIOps v1/V145 capabilities over rebuilding them, but verify source, contracts, dependencies and tests before declaring a component reusable. Never treat a file listing or synthetic demo as qualification evidence.
 
+## Installed platform registry
+
+GitHub also maintains the timestamped host installation inventory and the rules for recording installed components, functions, dependencies and qualification:
+- [Installation and capability registry](docs/operations/AIOPS2-INSTALLATION-REGISTRY.md)
+- [SRV-DEB-05 installed runtime snapshot — 2026-11-08](docs/operations/SRV-DEB-05-INVENTORY-2026-11-08.md)
+
+Update the host snapshot after each material deployment or consolidation. Runtime observations are timestamped evidence, not a substitute for source, tests or qualification.
+
 ## Enterprise AIOps convergence
 
 The current development architecture, ITIL 4 operating model, ACME SAN→Payments synthetic customer journey, 48-hour execution board, reuse register, AI benchmark governance and autonomous five-schedule development team are documented here:
