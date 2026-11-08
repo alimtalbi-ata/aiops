@@ -1,0 +1,142 @@
+{
+  "schema": "aiops2-component-candidates-v1",
+  "candidates": [
+    {
+      "name": "Twin Decimal filesystem metrics #448",
+      "component": "twin",
+      "github_sha": "50466734c629840e8852c36c3e6a9a14e19d0076",
+      "features": [
+        "Decimal-safe filesystem metrics contract"
+      ],
+      "ci_evidence": [
+        "6 successful check-run executions on exact PR head, some repeated"
+      ],
+      "integration_evidence": [
+        "PR reports operator-run Twin/Core metrics observations; not independently host-verified"
+      ],
+      "missing_evidence": [
+        "current host image digest and source mapping",
+        "independent metrics scrape and 48h deploy provenance",
+        "backup and rollback"
+      ]
+    },
+    {
+      "name": "Worker V28 SAN isolation #431",
+      "component": "worker",
+      "github_sha": "fd347ec92a1ca3d003bbb8daae70dffba117f308",
+      "features": [
+        "FS synthetic OBSERVE avoids SAN Twin mutations"
+      ],
+      "ci_evidence": [
+        "18 successful check-run executions on exact PR head, some repeated"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "actual host source/image mapping",
+        "bound EVD run and cross-service E2E",
+        "backup and rollback"
+      ]
+    },
+    {
+      "name": "Worker FS147 Policy adapters #443",
+      "component": "worker",
+      "github_sha": "72397eda63e191acdb815beb96d2d3c94b44976d",
+      "features": [
+        "read-only fail-closed Policy adapters"
+      ],
+      "ci_evidence": [
+        "3 successful generic check-runs"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "authenticated Worker/Analyst/Critic/Policy integration",
+        "Core durable claim and GLPI147 E2E"
+      ]
+    },
+    {
+      "name": "Core action-bound HITL #450",
+      "component": "core",
+      "github_sha": "ab06382a7859675b55a071d2bee8808bd78a2d21",
+      "features": [
+        "native action-bound HITL and outbox fencing"
+      ],
+      "ci_evidence": [
+        "3 successful generic check-runs"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "targeted independently verified HITL tests",
+        "authenticated GLPI/PostgreSQL16/Temporal E2E"
+      ]
+    },
+    {
+      "name": "Twin FS147 SAN isolation #451",
+      "component": "twin",
+      "github_sha": "2a3fa9f86684564920a1cda92c47cbe074e40c5c",
+      "features": [
+        "SAN isolation synthetic fixtures"
+      ],
+      "ci_evidence": [
+        "8 success, 1 database-migrations failure, 1 skipped"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "fix migration failure",
+        "real incident and Twin integration",
+        "host provenance"
+      ]
+    },
+    {
+      "name": "Worker Temporal guard #446",
+      "component": "worker",
+      "github_sha": "c15d9b9ea65993ad781cbaec5abbbc820e03a191",
+      "features": [
+        "Temporal execution guard"
+      ],
+      "ci_evidence": [
+        "12 success, 2 database-migrations failures, 2 skipped"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "fix migration failures",
+        "review worker main scope",
+        "host provenance and cross-service E2E"
+      ]
+    },
+    {
+      "name": "Portal FS147 projection #438",
+      "component": "portal",
+      "github_sha": "236d6c503c9a30a38a364ab607f231c6244e4d09",
+      "features": [
+        "opt-in two-button read-only frontend projection"
+      ],
+      "ci_evidence": [
+        "3 successful generic check-runs"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "authenticated backend route",
+        "mounted frontend integration",
+        "Chromium E2E",
+        "installed Portal image preservation"
+      ]
+    },
+    {
+      "name": "FS147 release receipt #449",
+      "component": "release",
+      "github_sha": "a1f6d18e0e529b434e8cf45db2e294cc504411af",
+      "features": [
+        "receipt schema checker"
+      ],
+      "ci_evidence": [
+        "8 success, runtime-e2e and quality-build-package failed, 1 skipped"
+      ],
+      "integration_evidence": [],
+      "missing_evidence": [
+        "fix runtime E2E",
+        "fix package build",
+        "real cross-service ticket147 receipt"
+      ]
+    }
+  ]
+}
