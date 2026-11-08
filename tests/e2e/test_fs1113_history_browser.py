@@ -63,10 +63,10 @@ class HistoryBrowserRegression(unittest.TestCase):
                           body=json.dumps(fixture(metric, window)))
 
         page.route("**/api/fs1089/prometheus/history?*", route_handler)
-        page.goto(URL + "/fs1051/visual", wait_until="domcontentloaded")
+        page.goto(URL + "/explorer/visual", wait_until="domcontentloaded")
         self.assertEqual(page.locator("#history-chart").count(), 1,
                          "candidate route or authenticated session unavailable")
-        page.locator("#history-status").get_by_text("5 séries", exact=False).wait_for()
+        page.wait_for_function("document.querySelector('#history-status')?.textContent.includes('5 séries')")
         return context, page, requests
 
     def assert_five(self, page):
@@ -81,12 +81,11 @@ class HistoryBrowserRegression(unittest.TestCase):
                 for window in WINDOWS:
                     page.locator("#history-window").select_option(window)
                     page.locator("#history-refresh").click()
-                    page.locator("#history-status").get_by_text(
-                        "5 séries", exact=False).wait_for()
+                    page.wait_for_function("document.querySelector('#history-status')?.textContent.includes('5 séries')")
                     self.assert_five(page)
                     self.assertIn((metric, window), requests)
             page.reload(wait_until="domcontentloaded")
-            page.locator("#history-status").get_by_text("5 séries", exact=False).wait_for()
+            page.wait_for_function("document.querySelector('#history-status')?.textContent.includes('5 séries')")
             self.assert_five(page)
         finally:
             context.close()
@@ -98,7 +97,7 @@ class HistoryBrowserRegression(unittest.TestCase):
             page.locator("#history-window").select_option("24h")
             page.locator("#history-metric").select_option("scrape_duration")
             page.locator("#history-window").select_option("1h")
-            page.locator("#history-status").get_by_text("5 séries", exact=False).wait_for()
+            page.wait_for_function("document.querySelector('#history-status')?.textContent.includes('5 séries')")
             self.assert_five(page)
             self.assertEqual(page.locator("#history-window").input_value(), "1h")
             self.assertIn(("scrape_duration", "1h"), requests)
@@ -112,8 +111,7 @@ class HistoryBrowserRegression(unittest.TestCase):
                 page.locator("#history-metric").select_option(metric)
                 for window in WINDOWS:
                     page.locator("#history-window").select_option(window)
-                    page.locator("#history-status").get_by_text(
-                        "5 séries", exact=False).wait_for()
+                    page.wait_for_function("document.querySelector('#history-status')?.textContent.includes('5 séries')")
                     self.assert_five(page)
             self.assertTrue(page.locator("#history-chart").is_visible())
         finally:
