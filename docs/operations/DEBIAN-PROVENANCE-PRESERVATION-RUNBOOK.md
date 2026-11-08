@@ -123,3 +123,20 @@ python3 scripts/ops/join_debian_github_evidence.py \
 ```
 
 Keep the resulting report private until all Compose paths, mount sources, tags and service identifiers have been reviewed. Matching by component name is never treated as a deployed SHA. All eight candidates remain `PRESERVE_AND_QUALIFY`, not `GO`; known failed migrations and E2E gates must be resolved separately.
+
+
+## 9. Use the existing Debian-to-GitHub report without changing the host
+
+A real report was observed on the existing `ops/debian-runtime-reports` branch at `ops/debian-reports/SRV-DEB-05/latest.json`, timestamp `2026-11-08T11:18:01.997388+00:00`. It recorded 78 containers (59 running, 18 exited, 1 created), `docker.available=true`, `docker.truncated=false`; 20 healthy, 7 unhealthy and 51 without health checks. This is a **point-in-time reporter result**, not evidence of image digests, backups or the latest state of the host.
+
+`scripts/ops/adapt_existing_debian_report.py` converts a **locally reviewed copy** of that existing reporter-v1 JSON to the provenance-v1 shape consumed by the join/comparison scripts. It sets all immutable image IDs to null and Compose/mount provenance to unknown; it never guesses image IDs from mutable tags.
+
+```sh
+python3 -m unittest discover -s tests -p 'test_adapt_existing_debian_report.py' -v
+python3 scripts/ops/adapt_existing_debian_report.py /private/latest.json > /private/legacy-adapted.json
+python3 scripts/ops/join_debian_github_evidence.py \
+  /private/legacy-adapted.json \
+  docs/operations/github-component-candidates-2026-11-08.json
+```
+
+This permits a conservative GitHub-only comparison **without** a new cron or direct Debian access. Do not commit a full adapted report, sensitive paths, host metadata or unreviewed inventory to GitHub. The legacy snapshot cannot fulfill G0: full provenance and verified backup/rollback remain required.
