@@ -45,3 +45,13 @@ ChatGPT owns architecture/evidence review; Codex owns code investigation/patch/t
 - Other potentially relevant branches include `fix/fs1250-itsm-identity-audit`, `feat/p1-glpi-real-http-ci-20261028`, `feat/portal-signed-core-glpi-native-contract-20261101-1110`, `feat/portal-sim-glpi-stable-readback-20261102-2105`, `integration/core-xref-migration-012-20261031`, `release/acme-core-worker-ticket-20261103`. Not yet inspected; names alone prove no functionality.
 
 **Updated decision:** GLPI client and xref read contracts are **ALREADY DEVELOPED in other GitHub branches**. Before writing any new code, compare their exact dependencies and historical branches with `deploy/aiops2-stable` and the running Debian images. No new GLPI API implementation is justified by the audit-branch absence.
+
+## Discovery pass 3 — GLPI API source behavior (2026-11-08)
+
+**Important correction:** the already-developed `feat/glpi-ai-ticket-enrichment-e2e:app/portal/glpi_client.py` (blob `8cd3cd2381356e23d777dd6c0087ac03bd9b7375`) is **not only a read client**. It contains `get_ticket` (line 82), `search_tickets` (87), `create_ticket` (102, native POST Ticket), `update_ticket` (121, native PUT Ticket), and `find_ticket_for_run` (130). This is a **write-capable historical implementation**. Presence in a feature branch does not prove it is deployed, invoked, authorized or safe for FS1250. Any reuse must disable/guard ticket creation and update for the FS1250 reconciliation path to prevent duplicates.
+
+The existing `fix/core-xref-glpi-readback-gate-20261101:app/core/itsm_xref.py` (blob `c59c2a281be351ce61064269dbc65bc4b689d9aa`) is **read-only**: `_glpi_readback` at line 93 performs authenticated source verification including Ticket and Item_Ticket; `GET /api/tenants/{tenant_id}/itsm/glpi/{instance_id}/tickets/{ticket_id}/xref` at line 293; `_evaluate` at line 223 requires scoped signed source/ownership. It does not write the missing FS1250 xref. Compare with actual deployed schema and client configuration before selective port.
+
+The `core/fs147-fs1250-reconcile-20261108:app/core/itsm_reconcile_contract.py` (blob `49dacf4b11813df1aeab72cc92361ed7e8aed739`) is a pure classifier (`classify` line 34), not a writer. **Do not connect its EXISTING_UNLINKED outcome directly to a mutation.**
+
+**Next targeted trace:** find callers of `GLPIClient.create_ticket`, `update_ticket`, `find_ticket_for_run`, existing outbox/event consumer and deployed FS1130 producer. Compare with PR #455 read-only diagnostic and #454 classifier. No source changes, GLPI writes or Debian access performed in this pass.
