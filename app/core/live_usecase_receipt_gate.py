@@ -53,7 +53,15 @@ def classify(receipt, now=None, max_age_seconds=180):
         if item["status"] == "NOT_APPLICABLE":
             if name not in optional or by_name["policy_denial_safety"]["status"] != "PASS":
                 return Qualification.UNVERIFIED
-    # A policy-denial safety probe alone does not prove this run was blocked.\n    # NOT_APPLICABLE for Worker/HITL requires the blocked-run evidence bound\n    # to the same receipt, rather than an unrelated successful safety test.\n    if any(by_name[name]["status"] == "NOT_APPLICABLE" for name in optional):\n        denial = by_name["policy_denial_safety"].get("evidence")\n        if (not isinstance(denial, dict) or denial.get("run_status") != "BLOCKED"\n                or denial.get("critic_policy_outbox") != "PASS"):\n            return Qualification.UNVERIFIED\n    execution = receipt.get("probe_execution")
+    # A policy-denial safety probe alone does not prove this run was blocked.
+    # NOT_APPLICABLE for Worker/HITL requires the blocked-run evidence bound
+    # to the same receipt, rather than an unrelated successful safety test.
+    if any(by_name[name]["status"] == "NOT_APPLICABLE" for name in optional):
+        denial = by_name["policy_denial_safety"].get("evidence")
+        if (not isinstance(denial, dict) or denial.get("run_status") != "BLOCKED"
+                or denial.get("critic_policy_outbox") != "PASS"):
+            return Qualification.UNVERIFIED
+    execution = receipt.get("probe_execution")
     if not isinstance(execution, dict) or any(
         not isinstance(execution.get(name), dict) or type(execution[name].get("exit")) is not int
         or execution[name]["exit"] != 0 for name in ("platform", "linkage")
