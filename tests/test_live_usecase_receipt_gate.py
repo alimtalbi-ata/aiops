@@ -25,6 +25,23 @@ class ReceiptTests(unittest.TestCase):
     def test_complete_claim_is_not_authorization(self):
         self.assertEqual(classify(receipt(), NOW), Qualification.PASS_CLAIM_ONLY)
 
+    def test_all_pass_without_canonical_run_is_unverified(self):
+        for invalid in (None, "", " ", "TEST-001", "RUN-", " RUN-001", "RUN-001 ", 123, ["RUN-001"], "RUN-" + "X" * 82):
+            with self.subTest(invalid=invalid):
+                r = receipt()
+                r["run_id"] = invalid
+                before = deepcopy(r)
+                self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                self.assertEqual(r, before)
+
+    def test_hold_without_run_identity_is_unverified(self):
+        r = receipt()
+        r.pop("run_id")
+        r["checks"][0]["status"] = "HOLD"
+        r["blocking"] = [r["checks"][0]["name"]]
+        r["verdict"] = "HOLD"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
     def test_missing_report(self):
         self.assertEqual(classify(None, NOW), Qualification.UNVERIFIED)
 
