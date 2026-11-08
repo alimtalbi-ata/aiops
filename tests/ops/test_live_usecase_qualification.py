@@ -7,7 +7,7 @@ s=importlib.util.spec_from_file_location("live",p)
 m=importlib.util.module_from_spec(s)
 s.loader.exec_module(m)
 def linkage():
-    return {"run_id":m.RUN_ID,"checks":{
+    return {"run_id":m.RUN_ID,"database":{"run":{"status":"BLOCKED"}},"checks":{
         "core_run":"PASS","core_api":"PASS","evidence_api":"PASS",
         "critic_policy_outbox":"PASS","temporal_worker_execution":"UNVERIFIED",
         "hitl_action_binding":"UNVERIFIED","glpi_core_link":"MISSING","itsm_readback":"UNVERIFIED"}}
@@ -20,7 +20,8 @@ class LiveQualificationTests(unittest.TestCase):
     def test_real_existing_blockers_are_not_masked(self):
         result=m.summarize(linkage(),platform(),{},"2026-11-08T15:00Z",portal())
         self.assertEqual(result["verdict"],"HOLD")
-        self.assertIn("temporal_worker_history",result["blocking"])
+        self.assertNotIn("temporal_worker_history",result["blocking"])
+        self.assertEqual(next(x for x in result["checks"] if x["name"]=="temporal_worker_history")["status"],"NOT_APPLICABLE")
         self.assertIn("itsm_cross_reference",result["blocking"])
         self.assertEqual(next(x for x in result["checks"] if x["name"]=="critic_policy_outbox")["status"],"PASS")
     def test_missing_probe_fails_closed(self):
@@ -39,6 +40,17 @@ class LiveQualificationTests(unittest.TestCase):
         r=m.summarize(linkage(),p,{},"2026-11-08T15:00Z",portal())
         self.assertIn("platform_smoke",r["blocking"])
         self.assertIn("worker:HEALTH_NOT_200",str(r))
+    def test_nonblocked_run_requires_real_temporal_and_hitl_proof(self):
+        l=linkage()
+        l["database"]["run"]["status"]="RUNNING"
+        result=m.summarize(l,platform(),{},"2026-11-08T15:00Z",portal())
+        self.assertIn("temporal_worker_history",result["blocking"])
+        self.assertIn("hitl_action_binding",result["blocking"])
+    def test_denied_run_requires_policy_outbox(self):
+        l=linkage()
+        l["checks"]["critic_policy_outbox"]="UNVERIFIED"
+        result=m.summarize(l,platform(),{},"2026-11-08T15:00Z",portal())
+        self.assertIn("policy_denial_safety",result["blocking"])
     def test_portal_absent_is_not_falsely_passed(self):
         r=m.summarize(linkage(),platform(),{},"2026-11-08T15:00Z")
         self.assertIn("portal_runtime",r["blocking"])
