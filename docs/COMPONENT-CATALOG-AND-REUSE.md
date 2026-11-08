@@ -173,3 +173,14 @@ For every new installation, upgrade, rollback or feature deployment, update the 
 ### Debian host reporting and publication jobs (observed, not yet qualified)
 
 SRV-DEB-05's `aiops` crontab contains a per-minute `aiops-debian-reporter` job followed by a per-minute `aiops-publish-report` SSH publisher, both protected by `flock`. These are the preferred existing mechanisms to investigate for runtime inventory capture and GitHub backup. Their exact inventory coverage, secret redaction, destination, file allowlist and publication success are not yet verified. Do not create a parallel cron or treat task launch as successful publication. See the timestamped [SRV-DEB-05 inventory evidence](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
+
+
+### Five-stack development version and feature comparison (design target)
+
+The existing Debian reporter is currently host-health oriented, not a component qualification engine. Its Docker probe captures container name, state, health and configured image string only (80-container cap). It does not yet collect immutable image digest, Compose service/project labels, source commit, dependencies, feature inventory or test evidence. The separate SSH publisher sends one `latest.json` to `ops/debian-reports/SRV-DEB-05/latest.json` on `ops/debian-runtime-reports`; it does not currently update this catalog or `main`.
+
+The host inventory previously identified five Compose projects: `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover`, and `aiops2-demo-observability`. These are five observed runtime stacks, distinct from the four user crontab entries. The target is to use the one existing reporter/publisher cadence to compare component variants across those stacks. Preserve all stacks while evaluating.
+
+The component decision must prioritize usable functionality and integration over version number alone. Required evidence per candidate: immutable image digest, exact source commit/build provenance, component contract/dependency compatibility, feature implementation links, passing CI/contract/integration/E2E tests, runtime health/readiness, data/schema compatibility and rollback. Produce a matrix with recommended candidate, alternatives, implemented feature deltas, evidence, unknowns and blockers. Unknown provenance/tests mean NOT_QUALIFIED; no inference from tags/container names.
+
+Do not automatically promote, deploy, delete stacks, remove volumes or migrate databases. Selection is a recommendation only; consolidation requires a separate approved and rollback-tested change. The existing `poll.sh` is a protected-branch deployment mechanism and must remain separate from this read-only qualification pipeline. See [Project Continuity](PROJECT-CONTINUITY.md) for the full audited script findings and acceptance criteria.
