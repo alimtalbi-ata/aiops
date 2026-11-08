@@ -105,5 +105,28 @@ class LiveHoldSelectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "UNVERIFIED")
         self.assertIsNone(result["hold"])
 
+    def test_qualified_policy_reason_does_not_mask_browser_hold(self):
+        result = first_portal_hold(receipt([
+            {"id": "safe", "status": "HOLD", "owner": "portal",
+             "component": "browser", "reason": "policy_denied: auth_401"},
+            {"id": "browser", "status": "HOLD", "owner": "portal",
+             "component": "browser", "reason": "legend_duplicate"}]), NOW)
+        self.assertEqual(result["status"], "HOLD")
+        self.assertEqual(result["hold"]["id"], "browser")
+
+    def test_qualified_hitl_reason_is_not_portal_failure(self):
+        result = first_portal_hold(receipt([
+            {"id": "pending", "status": "HOLD", "owner": "portal",
+             "reason": "HITL_PENDING; awaiting approval"}]), NOW)
+        self.assertEqual(result["status"], "UNVERIFIED")
+        self.assertIsNone(result["hold"])
+
+    def test_policy_prefix_without_boundary_remains_actionable(self):
+        result = first_portal_hold(receipt([
+            {"id": "browser", "status": "HOLD", "owner": "browser",
+             "reason": "policy_denied_extra"}]), NOW)
+        self.assertEqual(result["status"], "HOLD")
+        self.assertEqual(result["hold"]["id"], "browser")
+
 if __name__ == "__main__":
     unittest.main()
