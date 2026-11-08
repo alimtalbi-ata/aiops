@@ -91,6 +91,24 @@ class ReceiptTests(unittest.TestCase):
         r["verdict"] = "HOLD"
         self.assertEqual(classify(r, NOW), Qualification.HOLD)
 
+    def test_malformed_blocking_entries_fail_closed(self):
+        for malformed in ([{"name": "core_run_consistency"}], [["core_run_consistency"]], [None], [1], [True]):
+            with self.subTest(malformed=malformed):
+                r = receipt()
+                r["checks"][0]["status"] = "HOLD"
+                r["verdict"] = "HOLD"
+                r["blocking"] = malformed
+                before = deepcopy(r)
+                self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                self.assertEqual(r, before)
+
+    def test_duplicate_blocking_entries_fail_closed(self):
+        r = receipt()
+        r["checks"][0]["status"] = "HOLD"
+        r["verdict"] = "HOLD"
+        r["blocking"] = [r["checks"][0]["name"]] * 2
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
     def test_live_mutation_receipt(self):
         r = receipt()
         r["read_only"] = False
