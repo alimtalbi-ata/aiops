@@ -3,12 +3,22 @@
 This is an integration contract test, not a Debian E2E test.
 """
 import unittest
+from datetime import datetime, timezone
 
 
 def verdict(receipt):
     if not isinstance(receipt, dict) or receipt.get("schema") != "aiops2-live-usecase-qualification-v1":
         return "UNVERIFIED"
-    if receipt.get("read_only") is not True or not receipt.get("utc"):
+    if receipt.get("read_only") is not True or not isinstance(receipt.get("utc"), str):
+        return "UNVERIFIED"
+    try:
+        observed = datetime.fromisoformat(receipt["utc"].replace("Z", "+00:00"))
+        if observed.tzinfo is None or observed.utcoffset() is None:
+            return "UNVERIFIED"
+        age = (datetime.now(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()
+        if age < -60 or age > 180:
+            return "UNVERIFIED"
+    except (ValueError, TypeError, OverflowError):
         return "UNVERIFIED"
     checks = receipt.get("checks")
     if not isinstance(checks, list) or not checks:
@@ -25,10 +35,16 @@ def verdict(receipt):
 
 class ReceiptContract(unittest.TestCase):
     def setUp(self):
-        self.receipt = {"schema": "aiops2-live-usecase-qualification-v1", "utc": "2026-11-08T20:00:00+00:00", "read_only": True, "verdict": "PASS", "blocking": [], "checks": [{"name": "platform_smoke", "status": "PASS", "evidence": {}, "next_action": None}]}
+        self.receipt = {"schema": "aiops2-live-usecase-qualification-v1", "utc": datetime.now(timezone.utc).isoformat(), "read_only": True, "verdict": "PASS", "blocking": [], "checks": [{"name": "platform_smoke", "status": "PASS", "evidence": {}, "next_action": None}]}
 
     def test_pass(self):
         self.assertEqual(verdict(self.receipt), "PASS")
+
+    def test_stale_or_future_receipt_is_unverified(self):
+        for utc in ("2026-11-08T20:00:00+00:00", "2999-01-01T00:00:00Z", "not-a-date", "2026-11-08T20:00:00"):
+            with self.subTest(utc=utc):
+                self.receipt["utc"] = utc
+                self.assertEqual(verdict(self.receipt), "UNVERIFIED")
 
     def test_hold_cannot_be_pass(self):
         self.receipt["checks"][0]["status"] = "HOLD"
