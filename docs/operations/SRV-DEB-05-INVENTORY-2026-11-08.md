@@ -214,3 +214,14 @@ The `aiops` user crontab contains three per-minute, `flock`-guarded jobs: `poll.
 This is evidence of scheduler activity only. It does not establish successful report generation or publication. The root crontab could not be inspected because sudo requested a password. Script contents, output path/schema, secret redaction, publisher destination/branch, exit codes and GitHub commit freshness remain unverified.
 
 **Consolidation decision:** review and reuse the existing reporter → publisher chain; do not create a new cron or duplicate inventory agent. Preserve schedules and locks. Do not invoke or modify the deployment poller or filesystem watcher until their behavior has been reviewed. See [Project Continuity](../PROJECT-CONTINUITY.md) for required verification steps.
+
+
+## Reporter/publisher source audit — 2026-11-08
+
+Read-only source inspection confirmed:
+- Reporter hash: `71246acf9b642fa18bfa4c19651c8e52ecc6fb7405ad3c4c4ef798adb12ad1f5`. It collects OS/kernel/uptime/load/memory/disk, five loopback TCP probes and up to 80 Docker containers. Per-container metadata is limited to name, state, health and configured image string.
+- Publisher hash: `cb500ddaf896070d5dccbd05996e8a7081f5788946743c25737debb8046b6355`. It publishes local `latest.json` to `ops/debian-reports/SRV-DEB-05/latest.json` on `ops/debian-runtime-reports`, with fast-forward-only Git behavior and no commit when unchanged.
+- Deployment poller hash: `ccfe96805977953bfd3380301800991635181ed8a2c73b9544c32a1b62b10511`. It can execute an approved deployment script after detecting a new protected-branch descendant; it is not a read-only inventory task.
+- FS watcher hash: `eadf8e8046ce1f92828e8af6c0aed91762de11853b8694d1ebabbedef71f5107`. It runs Docker inspection/exec disk probes and writes a local log; remediation is disabled.
+
+The reporter currently lacks the provenance and feature/test evidence required to select a best-integrated usable component. Five Compose projects observed in the prior host inventory are the comparison scope; four cron entries were observed separately. Full comparison requirements and non-destructive constraints are in [Project Continuity](../PROJECT-CONTINUITY.md).
