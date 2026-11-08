@@ -24,9 +24,11 @@ def reject_foreign_provenance(envelope, foreign):
     foreign_ids = {foreign[k] for k in IDENTITY_KEYS if isinstance(foreign.get(k), str)}
     seen = set()
 
-    def check_string(value, path):
-        # Decode bounded layers to catch nested URI encoding without unbounded work.
-        # Match whole identity tokens, never substrings of ordinary prose.
+    def check_string(value, path, nesting=0):
+        # Bound both percent-decoding and nested URI carriers. An encoded URL in
+        # a query parameter must not hide a foreign Evidence or RUN identifier.
+        if nesting > 4:
+            raise ValueError("nested provenance URI depth exceeded")
         decoded = value
         for _ in range(4):
             if decoded in foreign_ids:
@@ -39,6 +41,9 @@ def reject_foreign_provenance(envelope, foreign):
                 tokens += parts.fragment.replace(":", "/").split("/")
                 if any(token in foreign_ids for token in tokens):
                     raise ValueError("foreign SAN/FS provenance in URI at " + "/".join(path))
+                for token in tokens:
+                    if urlsplit(token).scheme in {"http", "https", "urn"}:
+                        check_string(token, path + ("<nested-uri>",), nesting + 1)
             next_decoded = unquote(decoded)
             if next_decoded == decoded:
                 break
@@ -121,6 +126,18 @@ class TwinIngressNestedIsolation(unittest.TestCase):
                 with self.subTest(graph=own["graph"], carrier=carrier):
                     event = copy.deepcopy(own)
                     event["metadata"] = {"uri": carrier}
+                    with self.assertRaisesRegex(ValueError, "foreign SAN/FS provenance"):
+                        reject_foreign_provenance(event, foreign)
+
+    def test_nested_uri_in_query_rejects_foreign_run_and_evidence(self):
+        from urllib.parse import quote
+        for own, foreign in ((LAB, SAN), (SAN, LAB)):
+            for field in ("run_id", "evidence_ref"):
+                inner = "https://example.invalid/receipt/" + foreign[field]
+                carrier = "https://example.invalid/redirect?next=" + quote(inner, safe="")
+                with self.subTest(graph=own["graph"], field=field):
+                    event = copy.deepcopy(own)
+                    event["metadata"] = {"redirect": carrier}
                     with self.assertRaisesRegex(ValueError, "foreign SAN/FS provenance"):
                         reject_foreign_provenance(event, foreign)
 
