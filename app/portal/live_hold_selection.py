@@ -12,6 +12,16 @@ NON_PORTAL_COMPONENTS = frozenset(("policy", "hitl", "approval", "policy-engine"
 SAFE_POLICY_STATES = frozenset(("denied", "rejected", "pending", "approval_required", "hitl_pending"))
 
 
+def _safe_policy_reason(reason):
+    """Recognize explicit safe-policy reason codes, including qualified details.
+
+    A prefix must end at a token boundary; e.g. policy_denied_extra is NOT
+    a Policy denial. Never infer a denial from arbitrary free text.
+    """
+    return any(reason == code or reason.startswith(code + separator)
+               for code in SAFE_POLICY_REASONS for separator in (":", " ", ";", "|"))
+
+
 def first_portal_hold(receipt, now_utc):
     """Return the first explicitly Portal-owned HOLD, or a fail-closed reason.
 
@@ -30,7 +40,7 @@ def first_portal_hold(receipt, now_utc):
         policy_states = {str(check.get(key) or "").strip().lower()
                          for key in ("policy_status", "policy_state", "hitl_status", "hitl_state")}
         if (owner in PORTAL_OWNERS and component not in NON_PORTAL_COMPONENTS
-                and reason not in SAFE_POLICY_REASONS and policy_states.isdisjoint(SAFE_POLICY_STATES)):
+                and not _safe_policy_reason(reason) and policy_states.isdisjoint(SAFE_POLICY_STATES)):
             return {"status": "HOLD", "reason": "portal_hold", "hold": {
                 "id": str(check.get("id") or "unknown"),
                 "reason": str(check.get("reason") or "unspecified")}}
