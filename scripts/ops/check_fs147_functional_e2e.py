@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed functional acceptance for the FS147 synthetic filesystem use case.
+"""Fail-closed functional acceptance for a synthetic filesystem incident use case.
 
 Consumes a reviewed, sanitized E2E receipt. Never triggers actions, HITL or GLPI.
 A green generic CI check or Docker health status is not an E2E receipt.
@@ -15,7 +15,7 @@ REQUIRED = ("run_id", "source", "result")
 
 
 def evaluate(receipt):
-    if receipt.get("schema") != "aiops2-fs147-functional-e2e-v1":
+    if receipt.get("schema") not in ("aiops2-fs147-functional-e2e-v1", "aiops2-filesystem-functional-e2e-v1"):
         raise ValueError("unsupported receipt schema")
     if receipt.get("mode") != "SIMULATED":
         raise ValueError("receipt must explicitly be SIMULATED")
@@ -54,7 +54,7 @@ def evaluate(receipt):
         if not isinstance(stage.get("evidence_ref"), str) or not stage["evidence_ref"].strip():
             failures.append(name + ":missing_evidence_ref")
     return {
-        "schema": "aiops2-fs147-functional-e2e-verdict-v1",
+        "schema": "aiops2-filesystem-functional-e2e-verdict-v1",
         "run_id": run_id,
         "result": "PASS" if not failures else "BLOCKED",
         "failures": failures,
