@@ -1,0 +1,71 @@
+"""Read-only fail-closed validation of Debian live-usecase receipts.
+
+A receipt is a claim, not authorization to execute. Never performs IO.
+"""
+from datetime import datetime, timezone
+from enum import Enum
+
+
+class Qualification(str, Enum):
+    HOLD = "HOLD"
+    UNVERIFIED = "UNVERIFIED"
+    PASS_CLAIM_ONLY = "PASS_CLAIM_ONLY"
+
+
+REQUIRED = frozenset({
+    "core_run_consistency", "evidence_readback", "critic_policy_outbox",
+    "policy_denial_safety", "temporal_worker_history", "hitl_action_binding",
+    "itsm_cross_reference", "platform_smoke", "portal_runtime",
+    "intelligence_runtime",
+})
+
+
+def classify(receipt, now=None, max_age_seconds=180):
+    """Only accept fresh, complete read-only claims; never grant action admission."""
+    if not isinstance(receipt, dict) or receipt.get("schema") != "aiops2-live-usecase-qualification-v1":
+        return Qualification.UNVERIFIED
+    if receipt.get("read_only") is not True:
+        return Qualification.UNVERIFIED
+    try:
+        timestamp = datetime.fromisoformat(receipt["utc"].replace("Z", "+00:00"))
+        clock = now if now is not None else datetime.now(timezone.utc)
+        age = (clock - timestamp).total_seconds()
+        if timestamp.tzinfo is None or clock.tzinfo is None or age < -60 or age > max_age_seconds:
+            return Qualification.UNVERIFIED
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return Qualification.UNVERIFIED
+    checks = receipt.get("checks")
+    if not isinstance(checks, list) or len(checks) != len(REQUIRED):
+        return Qualification.UNVERIFIED
+    by_name = {}
+    for item in checks:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            return Qualification.UNVERIFIED
+        name = item["name"]
+        if name in by_name or name not in REQUIRED or item.get("status") not in ("PASS", "HOLD", "NOT_APPLICABLE", "UNVERIFIED"):
+            return Qualification.UNVERIFIED
+        by_name[name] = item
+    if set(by_name) != REQUIRED:
+        return Qualification.UNVERIFIED
+    # A blocked run may legitimately lack HITL and Worker execution evidence.
+    optional = {"temporal_worker_history", "hitl_action_binding"}
+    for name, item in by_name.items():
+        if item["status"] == "NOT_APPLICABLE":
+            if name not in optional or by_name["policy_denial_safety"]["status"] != "PASS":
+                return Qualification.UNVERIFIED
+    execution = receipt.get("probe_execution")
+    if not isinstance(execution, dict) or any(
+        not isinstance(execution.get(name), dict) or type(execution[name].get("exit")) is not int
+        or execution[name]["exit"] != 0 for name in ("platform", "linkage")
+    ):
+        return Qualification.UNVERIFIED
+    blocked = receipt.get("blocking")
+    if not isinstance(blocked, list) or set(blocked) != {
+        name for name, item in by_name.items() if item["status"] == "HOLD"
+    } or len(blocked) != len(set(blocked)):
+        return Qualification.UNVERIFIED
+    if any(item["status"] in ("HOLD", "UNVERIFIED") for item in by_name.values()):
+        return Qualification.HOLD if receipt.get("verdict") == "HOLD" else Qualification.UNVERIFIED
+    if receipt.get("verdict") != "PASS":
+        return Qualification.UNVERIFIED
+    return Qualification.PASS_CLAIM_ONLY
