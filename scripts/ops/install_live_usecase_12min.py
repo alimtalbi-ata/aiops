@@ -15,7 +15,8 @@ import tempfile
 
 REPO="alimtalbi-ata/aiops"
 BRANCH="audit/preserve-debian-48h-20261108"
-FILES=("scripts/ops/live_usecase_qualification.py",\n       "scripts/ops/publish_platform_evidence.py")
+FILES=("scripts/ops/live_usecase_qualification.py",
+       "scripts/ops/publish_platform_evidence.py")
 MARKER="# AIOPS2_LIVE_USECASE_12MIN_MANAGED"
 
 def call(args, **kwargs):
