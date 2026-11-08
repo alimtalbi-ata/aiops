@@ -340,3 +340,42 @@ Reuse the existing `aiops-debian-reporter` → `aiops-publish-report` chain as t
 6. Only after the above, update the existing component catalog, runtime inventory and continuity records from verified evidence. Keep runtime facts separate from source/feature claims.
 
 **Current qualification:** cron scheduler ACTIVE; task launches OBSERVED; reporter success NOT_VERIFIED; publisher success NOT_VERIFIED; GitHub freshness NOT_VERIFIED; root crontab UNKNOWN. No new cron or runtime changes authorized.
+
+
+## 2026-11-08 — Existing reporter/publisher source audit and five-stack comparison objective
+
+**Source evidence:** read-only source and metadata audit supplied for SRV-DEB-05. The four scripts were printed for inspection, not executed. SHA-256:
+- `aiops-debian-reporter`: `71246acf9b642fa18bfa4c19651c8e52ecc6fb7405ad3c4c4ef798adb12ad1f5`
+- `aiops-publish-report`: `cb500ddaf896070d5dccbd05996e8a7081f5788946743c25737debb8046b6355`
+- `poll.sh`: `ccfe96805977953bfd3380301800991635181ed8a2c73b9544c32a1b62b10511`
+- `fs-watch.sh`: `eadf8e8046ce1f92828e8af6c0aed91762de11853b8694d1ebabbedef71f5107`
+
+### What the existing reporting chain actually does
+
+- `aiops-debian-reporter` is a fixed-probe, read-only Python collector. It gathers host OS/kernel/architecture/uptime, load, memory, disk usage, loopback TCP probes (5432, 7233, 17777, 3000, 9090), and Docker containers.
+- Docker collection uses `docker ps --all --format {{.Names}}`, capped at 80 names, then one `docker inspect` per container. Current per-container fields are only state, health (or no-healthcheck), configured image string and inspect success. It does **not** currently record immutable image digest, Compose project/config-file labels, service name, source commit, mounts/volumes, network attachments, published ports, build provenance, application version, feature set or test results.
+- The collector writes a local `latest.json` with a 64 KiB cap and a local lock. Its GitHub API publishing function exists in the source, but `main()` explicitly only collects locally; the separate SSH publisher is the scheduled publication path.
+- `aiops-publish-report` copies that one JSON report to `ops/debian-reports/SRV-DEB-05/latest.json` on branch `ops/debian-runtime-reports`. It clones/fetches that branch, fast-forward only, commits only when content changes, and pushes. This is **not** currently a push to `main` and does not publish the source catalog or a component comparison.
+- The cron journal observed launches, but no execution receipt, successful exit code or matching GitHub commit was provided. Publication success and report freshness remain NOT_VERIFIED.
+
+### Other existing scheduled jobs — do not conflate with inventory
+
+- `poll.sh` runs every minute and follows protected `deploy/aiops2-stable`. When it detects a new descendant commit, it invokes `deploy/deploy-demo-studio-v2.sh`. This is a deployment mechanism, not an inventory job; preserve it and do not reuse it for component comparisons.
+- `fs-watch.sh` runs every 10 minutes. It uses `docker inspect` and `docker exec` against the FS lab to measure disk usage, then records selected rebuild container states to a local log. It declares remediation disabled. Keep this separate from the reporter and do not expand its scope without review.
+- The crontab evidence contains four user entries (three every minute and one every 10 minutes), not five cron entries. The earlier Docker audit separately observed five Compose projects: `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover` and `aiops2-demo-observability`. Treat these as five development/runtime stacks, not as cron schedules, unless a further host inventory proves otherwise.
+
+### User's target: one comparative development qualification pipeline
+
+Use the existing reporter → publisher chain as the single collection/publication cadence, and evolve its report schema so one run compares the five observed development stacks component-by-component. Do not add another cron. The comparison must identify the best integrated and most advanced *usable* candidate, not merely the highest version number.
+
+For each component in each stack, capture only evidence-backed facts: Compose project/service, image tag and immutable digest, source repository and exact commit when available, build provenance, API/event contracts and dependency versions, config/migration compatibility, health/readiness, and linked CI/integration/E2E results. Feature maturity must be linked to implemented code, issue/PR and passing tests; do not infer a feature from an image tag or container name.
+
+Score/compare candidates on (1) functional feature coverage and usability, (2) integration with Core/Policy/Worker/Portal/Twin/Evidence and existing workflows, (3) passing contract/integration/E2E tests, (4) operational stability and recovery/rollback, and (5) compatibility and data/schema safety. Keep an evidence link and confidence/status for every score. Mark missing provenance or missing tests UNKNOWN/NOT_QUALIFIED rather than awarding a pass. A newer build with weaker integration or failing tests must not displace a proven usable candidate.
+
+The output should be a component decision matrix with one recommended candidate, alternatives, feature delta, integration/test evidence, blockers and rollback reference. Preserve all five development stacks during comparison. No automatic deployment, stack deletion, volume cleanup, database migration or promotion is part of the comparison job. Any consolidation is a later, separately approved change after backup and rollback qualification.
+
+### Publication/data handling
+
+The user confirms these are development stacks and simulated data and wants their project information available in the central GitHub repository. Publish the sanitized infrastructure inventory, component/version matrix, feature evidence and test results to the existing repository. Do not publish authentication material (for example the local GitHub token file), private keys, credentials or session headers; those remain credentials even in development. Preserve report history with timestamped artifacts rather than only overwriting `latest.json`.
+
+**Current status:** script source audited; current reporter coverage insufficient for component-level comparison; current publisher targets a dedicated ops branch; no cron or runtime configuration changed; no script executed; no candidate version selected.
