@@ -2,7 +2,7 @@
 """Install read-only live use-case checks on Debian without a local Git checkout.
 
 Fetch a specific immutable GitHub commit, validate Python before replacing,
-preserve prior tools, schedule one managed cron, and produce a first receipt.
+preserve prior tools, never modify cron, and produce a first receipt.
 No Docker restart, ITSM POST, database mutation, or new Git credential.
 """
 import argparse
@@ -30,7 +30,7 @@ def fetch_pinned(commit):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--commit",required=True,help="40-char immutable source commit")
-    p.add_argument("--no-cron",action="store_true")
+    p.add_argument("--no-cron",action="store_true",help="compatibility flag; cron is always untouched")
     a=p.parse_args()
     if not re.fullmatch(r"[a-fA-F0-9]{40}",a.commit):
         p.error("commit must be 40 hex characters")
@@ -48,33 +48,8 @@ def main():
         stage=Path(handle.name)
     os.replace(stage,target)
     target.chmod(0o700)
-    log=receipts/"usecase-cron.log"
-    lock=receipts/"usecase.lock"
-    wrapper=root/"live_usecase_12min.sh"
-    wrapper.write_text(
-        "#!/bin/sh\nset -u\numask 077\n"
-        f'exec /usr/bin/flock -n "{lock}" /bin/sh -c '
-        f"'"+f'/usr/bin/python3 "{target}" --output-dir "{receipts}" >> "{log}" 2>&1; '
-        f'rc=$?; echo "gate_exit=$rc" >> "{log}"; exit 0'+"'\n")
-    wrapper.chmod(0o700)
+    # Existing Debian scheduler is owned externally. Never create/replace a cron entry.
     status="SKIPPED"
-    if not a.no_cron:
-        old=subprocess.run(["crontab","-l"],capture_output=True,text=True)
-        if old.returncode not in (0,1):
-            raise RuntimeError("cannot inspect user crontab")
-        lines=old.stdout.splitlines() if old.returncode==0 else []
-        existing=[line for line in lines if MARKER in line]
-        if len(existing)>1:
-            raise RuntimeError("multiple managed cron entries; refusing changes")
-        line=f"2,14,26,38,50 * * * * {wrapper} {MARKER}"
-        lines=[line if MARKER in entry else entry for entry in lines]
-        if not existing: lines.append(line)
-        if not existing or existing[0]!=line:
-            changed=subprocess.run(["crontab","-"],input="\n".join(lines)+"\n",
-                                   capture_output=True,text=True)
-            if changed.returncode:
-                raise RuntimeError("crontab install failed: "+changed.stderr[-200:])
-        status="INSTALLED" if not existing else "ALREADY_INSTALLED"
     probe=subprocess.run([sys.executable,str(target),"--output-dir",str(receipts)],
                          capture_output=True,text=True,timeout=240)
     receipt={"schema":"aiops2-usecase-installer-v2","utc":stamp,"source_commit":a.commit.lower(),
@@ -85,6 +60,7 @@ def main():
     out.write_text(json.dumps(receipt,indent=2)+"\n")
     print(json.dumps({"receipt":str(out),"cron":status,
                       "initial_gate_exit":probe.returncode,"source_commit":a.commit.lower()},indent=2))
-    return 0 if probe.returncode in (0,2) else 1
+    # HOLD must propagate to the caller, not masquerade as successful qualification.
+    return 0 if probe.returncode == 0 else (2 if probe.returncode == 2 else 1)
 if __name__=="__main__":
     raise SystemExit(main())
