@@ -207,3 +207,32 @@ The latest non-documentation change on `main` within the inspected 48-hour windo
 - FS147 release receipt: [PR #449](https://github.com/alimtalbi-ata/aiops/pull/449), Draft; runtime-e2e and quality-build-package checks failed.
 
 Do not compare these PRs as a single version ladder: they implement different features and target branches. Use them as component-level feature increments. The recent Debian deployment remains the priority baseline until its exact image/source/Compose/volume provenance is independently captured. Green PR checks do not prove host installation or end-to-end usability. Full details and decision are in [Project Continuity](PROJECT-CONTINUITY.md).
+
+
+## 2026-11-08 — Advanced component triage: recent + advanced + integrated + tested
+
+**Scope and epistemic limit:** verified GitHub PR head metadata and check-run conclusions as of 2026-11-08. No live Debian access or new host backup; host deployment membership and last-48h provenance remain UNKNOWN. The existing installed Debian variant is always the preservation baseline until its immutable image ID/digest, source commit/dirty state, effective Compose, volumes, data, and rollback are attested.
+
+### Candidate comparison, by functionality (not a single version ladder)
+
+| Component/slice | Exact PR head | GitHub check-run observations | Functional/integration evidence | Decision |
+|---|---|---|---|---|
+| Twin filesystem Decimal metrics | [#448](https://github.com/alimtalbi-ata/aiops/pull/448) `50466734c629` | 6 success; merged into `fix/fs-1002-prometheus-metrics-content-type` (not necessarily main) | PR documents operator-reported host Twin/Core cutovers, numeric contract tests, isolated ASGI against real DB and exporter source hash `2cedd1ae...`; rebuilt candidate not externally scraped end-to-end | HIGH preservation and source-reuse priority; verify deployed SHA/digest before selecting |
+| Worker V28 SAN-write isolation | [#431](https://github.com/alimtalbi-ata/aiops/pull/431) `fd347ec92a1c` | 18 success (includes repeated jobs) | Isolated source/CI checks green; no host EVD or full cross-service E2E claim | HIGH candidate for integration, not automatic replacement |
+| Worker FS147 read-only adapters | [#443](https://github.com/alimtalbi-ata/aiops/pull/443) `72397eda63e1` | 3 success | Distinct-run and fail-closed tests/source; real authenticated bridge, Analyst/Critic/Policy, Core durable claim and GLPI linkage not proven | PRESERVE candidate; NOT_QUALIFIED for end-to-end |
+| Core native HITL/fencing | [#450](https://github.com/alimtalbi-ata/aiops/pull/450) `ab06382a7859` | 3 success | New malformed-attestation type checks and 24 cases added, execution not independently attested; no authoritative GLPI/PG16/Temporal proof | PRESERVE candidate; NOT_QUALIFIED for live integration |
+| Twin FS147 SAN isolation | [#451](https://github.com/alimtalbi-ata/aiops/pull/451) `2a3fa9f86684` | 8 success, 1 failure (database-migrations), 1 skipped | Synthetic namespace/graph/run/evidence isolation tests; no host proof | FIX CI failure; no promotion |
+| Portal FS147 projection | [#438](https://github.com/alimtalbi-ata/aiops/pull/438) `236d6c503c9a` | 3 success | Read-only opt-in frontend; required authenticated backend route and real browser E2E absent | PRESERVE as optional candidate, not production |
+| Worker Temporal execution guard | [#446](https://github.com/alimtalbi-ata/aiops/pull/446) `c15d9b9ea659` | 12 success, 2 failures (database-migrations), 2 skipped | PR describes DEMO Temporal and offline gate tests, not production deployment; broad diff including `app/worker/main.py` requires review | PRESERVE useful gate; FIX failures and review diff |
+| FS147 end-to-end receipt gate | [#449](https://github.com/alimtalbi-ata/aiops/pull/449) `a1f6d18e0e52` | 8 success, 2 failures (runtime-e2e and quality-build-package), 1 skipped | Receipt schema gate, no independently verified single-run GLPI147 authenticated E2E | NO_GO; repair failures, retain evidence |
+
+**Interpretation:** check-run counts are counts of reported job executions, not independent tests, and some are duplicated. Success of a generic workflow does not prove the feature's own targeted tests passed, or prove deployment on Debian. Draft PRs are not automatically deployable. These slices implement different functions and must be compared within the same component/functionality, never ranked against each other as interchangeable versions.
+
+### Decision algorithm
+
+1. Preservation hard gate: recent Debian deployed source/images/config/data/volumes and rollback are captured and verifiably recoverable. Unknown provenance => preserve, no replacement.
+2. Eligibility hard gate: exact candidate commit, immutable build identity, feature parity/delta, API/DB compatibility, relevant targeted unit/contract/integration/E2E checks, no critical CI failures, no unauthorized side effects. Any missing hard-gate evidence => NOT_QUALIFIED, regardless of numeric score.
+3. Among eligible same-function candidates, apply weighted score: actual cross-service integration 30%, implemented usable features 25%, reproducible tests/reliability 20%, preservation of recent Debian work 15%, maintainability/rollback 10%. These are decision weights, **not measured scores**; no numerical candidate score is assigned without source/host evidence.
+4. Retain additive proven features from alternate branches; select an installed baseline plus reviewed additive patches when safer than wholesale replacement. Keep five stacks intact until a separate approved retirement plan.
+
+**Next integration blocker:** collect Debian 48h deployment receipts and image/Compose/source/volume provenance using the existing reporter → publisher; cross-reference #448 and #431 first, then #443/#450/#451/#438/#446, and repair #449 before any FS147 release decision.
