@@ -44,3 +44,18 @@ Always list failed, skipped and not-run tests. Expected output is not evidence o
 - [ ] Cumulative ZIP includes required source/scripts/docs/evidence, without secrets or runtime databases.
 - [ ] Commit and PR verified on GitHub.
 - [ ] Next steps, unresolved risks and current runtime snapshot recorded in `docs/PROJECT-CONTINUITY.md`.
+
+
+## Runtime inventory maintenance
+
+After every material installation, upgrade, rollback, Compose change or service retirement:
+
+1. Capture a read-only timestamped inventory on the affected host.
+2. Record Compose project labels, working directories, all effective Compose files and SHA-256 hashes, container IDs/states/health, image tags **and immutable digests**, source commit/build provenance, published ports, restart policies, networks, mounts and volume ownership.
+3. Reconcile observed state against the intended architecture and existing component catalog. Record drift and UNKNOWN fields explicitly; do not infer source ownership from container names or image tags.
+4. Update the existing `docs/COMPONENT-CATALOG-AND-REUSE.md`, `docs/ARCHITECTURE-AND-BOUNDARIES.md` where topology changed, and `docs/PROJECT-CONTINUITY.md` in the same documentation change. Add a dated snapshot under `docs/operations/` when a full host-level capture is needed.
+5. Attach exact commit/PR and relevant CI, integration, synthetic E2E or runtime evidence. Distinguish Docker running from application-ready and from qualified.
+6. Preserve previous snapshots and decision-log history. Do not silently overwrite historical evidence.
+7. Do not stop, remove, migrate, merge or retire runtime components/volumes as part of an inventory-only task. Require an approved change, backup, dependency review and tested rollback.
+
+For the SRV-DEB-05 2026-11-08 snapshot, the capture is read-only and does not itself qualify any component or authorize cleanup. See [the recorded inventory](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
