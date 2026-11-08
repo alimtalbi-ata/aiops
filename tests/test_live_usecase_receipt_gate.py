@@ -13,6 +13,7 @@ def receipt():
         "schema": "aiops2-live-usecase-qualification-v1",
         "utc": "2026-11-08T16:09:00+00:00",
         "read_only": True,
+        "run_id": "RUN-TEST-001",
         "verdict": "PASS",
         "checks": [{"name": name, "status": "PASS"} for name in sorted(REQUIRED)],
         "blocking": [],
@@ -56,7 +57,7 @@ class ReceiptTests(unittest.TestCase):
         r = receipt()
         for c in r["checks"]:
             if c["name"] == "policy_denial_safety":
-                c["evidence"] = {"run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
+                c["evidence"] = {"run_id": r["run_id"], "run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
             if c["name"] in ("hitl_action_binding", "temporal_worker_history"):
                 c["status"] = "NOT_APPLICABLE"
         self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
@@ -83,6 +84,27 @@ class ReceiptTests(unittest.TestCase):
             if check["name"] == "policy_denial_safety":
                 check["evidence"] = {"run_status": "BLOCKED", "critic_policy_outbox": "UNKNOWN"}
             if check["name"] == "temporal_worker_history":
+                check["status"] = "NOT_APPLICABLE"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
+    def test_not_applicable_rejects_unbound_or_other_run(self):
+        for other_run in (None, "RUN-OTHER"):
+            with self.subTest(other_run=other_run):
+                r = receipt()
+                for check in r["checks"]:
+                    if check["name"] == "policy_denial_safety":
+                        check["evidence"] = {"run_id": other_run, "run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
+                    if check["name"] == "temporal_worker_history":
+                        check["status"] = "NOT_APPLICABLE"
+                self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
+    def test_not_applicable_requires_receipt_run_id(self):
+        r = receipt()
+        del r["run_id"]
+        for check in r["checks"]:
+            if check["name"] == "policy_denial_safety":
+                check["evidence"] = {"run_id": "RUN-TEST-001", "run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
+            if check["name"] == "hitl_action_binding":
                 check["status"] = "NOT_APPLICABLE"
         self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
 
