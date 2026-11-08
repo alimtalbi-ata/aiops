@@ -1,11 +1,10 @@
-# Portal handoff — 2026-11-08 16:44 UTC
+# Portal handoff — 2026-11-08 18:51 UTC
 
-- Role / issue: Portal / #461; isolated branch `agent/portal/461-live-hold-selection`; HEAD `e928b773f9f185cefe9dc2ec9eff67b52d737831`.
-- Changed: `app/portal/live_hold_selection.py` and `tests/test_portal_live_hold_selection.py`. Read-only selection of first explicitly Portal-owned HOLD; stale/missing receipts remain UNVERIFIED/STALE; safe Policy/HITL denials not treated as defects.
-- Dependencies: `app/portal/live_receipt.py` from Portal candidate; Debian producer `scripts/ops/live_usecase_qualification.py`. No HTTP auth or runtime changes.
-- Tests: five synthetic unittest cases added, NOT EXECUTED; CI NOT_VERIFIED; no Chromium evidence.
-- Debian: `ops/debian-runtime-reports:ops/debian-reports/SRV-DEB-05/latest.json`, collected `2026-11-08T16:43:01.837486Z`, fresh (<3 min) at consultation ~16:44 UTC; production portal observed `aiops2-portal:fs1073-csp-candidate`, no image digest/source SHA attested. `latest-usecase.json` fetch failed/not available: UNVERIFIED, not functional FAIL.
-- CODE: committed; CI: NOT_VERIFIED; DEBIAN: minute report only, candidate not deployed; E2E: NOT_VERIFIED. Verdict NO_GO.
-- Risks: selection relies on explicit `owner`/`component` labels; unlabelled HOLD is deliberately not assigned. No false resolution/approval, no live mutation.
-- Rollback: revert the two additive commits in this isolated branch only; no production rollback required.
-- Next: Integration to confirm receipt schema/producer and freshness; Portal to execute `python -m unittest tests.test_portal_live_hold_selection` and authenticated Chromium FS1113 matrix on an isolated candidate after gate; Core/Worker/Policy/Evidence to supply verified trace receipts.
+- Role/issue: Portal / #461; branch `agent/portal/461-live-hold-selection`; source commits `c1b767e7402e623918fa58097b26db387f02c5aa` (code), `53267535583ebbb7df505c270b8cff08006b575c` (tests).
+- Paths: `app/portal/live_hold_selection.py`, `tests/test_portal_live_hold_selection.py`. Mixed-owner receipts now exclude explicit Policy/HITL components even if `owner=portal`; browser HOLD remains actionable. Two new synthetic regressions.
+- Interface: read-only `first_portal_hold(receipt, now_utc)`; no backend calls, approvals, resolutions or GLPI writes. Dependencies: Debian `latest-usecase.json` schema and Policy/Portal owner labels.
+- Tests: 2 tests added; **NOT EXECUTED**. Run `python -m unittest tests.test_portal_live_hold_selection` in isolated worktree. CI: NOT_VERIFIED; Chromium FS1113: NOT_VERIFIED.
+- Debian: `ops/debian-runtime-reports:ops/debian-reports/SRV-DEB-05/latest.json` collected `2026-11-08T18:50:01.970294Z`, fresh at consultation ~18:51 UTC (<3 min); portal image `aiops2-portal:fs1073-csp-candidate` running. No source SHA/digest attested. `latest-usecase.json` fetch unavailable: UNVERIFIED, not FAIL. Re-check freshness before any later use.
+- CODE: committed; CI: NOT_VERIFIED; DEBIAN: report only; E2E: NOT_VERIFIED. Gate: NO_GO.
+- Risks: Policy component classification requires explicit metadata; unknown labels fail closed only when no Portal-owned actionable HOLD. Rollback: revert additive source/test commits on isolated branch; production unchanged.
+- Next owner: Integration confirm producer/receipt schema and evidence; Portal run unit tests and isolated Chromium matrix 1h/6h/24h for availability/scrape_duration, rapid period changes, refresh, mobile, before any promotion.
