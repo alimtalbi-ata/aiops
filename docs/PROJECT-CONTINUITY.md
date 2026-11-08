@@ -3,7 +3,7 @@
 **Author:** Abdelhalim Talbi  
 **Repository:** https://github.com/alimtalbi-ata/aiops  
 **Default branch:** `main` (DEV baseline; GitHub currently reports branch protection disabled; use focused PRs and architect-enforced exact-head gates)  
-**Last updated:** 2026-10-30
+**Last updated:** 2026-11-08
 
 ## Why this document exists
 
@@ -267,3 +267,15 @@ Branch review found #195 architecture branch 218 commits ahead of main, #201 112
 
 The durable operating model is `docs/operations/AIOPS2-AUTONOMOUS-DEV-TEAM-OPERATING-MODEL-2026-10-31.md`. The customer value target remains one ITIL 4-aligned ACME synthetic journey: Event → Incident → Twin impact → Analyst/Critic → Evidence → Policy/HITL → SIMULATE → verification → resolution/reopen and continual improvement. No production or LIVE qualification is claimed.
 \n\n## 2026-10-31 22:05 Europe/Paris — Architect integration checkpoint\n\n**Current DEV main:** `2c87bc931b170208b7c2f253218d0f939381355a`.\n\nMerged #221 (daily hosted quality schedule) and #224 (enterprise reference architecture, ITIL 4 customer journey, autonomous five-schedule team model, automation control plane and offline heartbeat validator). Post-merge main quality runs: #41240948760 and #41241604652, both **3/3 SUCCESS**. PR #195 was closed as superseded after selective port; its 218-commit history was not imported.\n\nFive ChatGPT team automations are enabled and hourly in Europe/Paris at staggered starts 22:00, 22:10, 22:20, 22:30 and 22:45. Immediate runs completed. Their API still returns `next_run_time=null`; recurring future runs are not yet attested.\n\nCurrent specialist handoffs: #198 ACME 3/3 CI but 3 new tests not included (keep Draft); #223 Portal 3/3 CI but stacked on stale #201; #205 Core new head lacks CI and has a reproduced CMDB entity-provenance defect; #204 Policy 4 qualification workflows green but remains stacked on #194/Draft. #201 is 112 commits ahead of old main and behind current main; no wholesale merge.\n\nGitHub still reports `main.protected=false`. Debian host cron, runtime and report publication remain NOT_ATTESTED; the expected `latest.json` does not exist. `RELEASE_STABLE=NO_GO`; no production or LIVE.\n
+
+## 2026-11-08 — SRV-DEB-05 runtime inventory checkpoint
+
+**Evidence source:** read-only Docker audit supplied for host `SRV-DEB-05`, captured 2026-11-08. Full timestamped detail: [operations/SRV-DEB-05-INVENTORY-2026-11-08.md](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
+
+Observed snapshot: 78 containers (59 running, 18 exited, 1 created), five Compose projects, 18 Docker networks and 78 listed Docker volumes. These are point-in-time Docker observations, not application readiness or production qualification. Many containers have no configured health check; several rollback/before-metrics containers are exited and some are unhealthy. The audit was read-only: no HTTP/database access, container lifecycle operation, volume removal or configuration modification.
+
+The active runtime is not one clean homogeneous stack: separate `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover` and `aiops2-demo-observability` Compose projects coexist. Some containers have mismatched Compose project labels/names; one metrics-cutover Compose source path references a missing temporary file. Do not infer ownership or retire anything from container names alone.
+
+Core, Portal, Worker, Temporal, Twin, Evidence, Policy, Intelligence, GLPI/MariaDB, n8n, Prometheus, Grafana, Alertmanager, OpenTelemetry, Loki, Tempo, CloudBeaver and FS qualification/ingestion surfaces are represented in the observed container inventory. The precise runtime-to-source-to-feature mapping remains to be established against Compose definitions, source commits, image digests, contracts and tests. Intended responsibilities remain governed by the existing [component catalog](COMPONENT-CATALOG-AND-REUSE.md) and [architecture boundaries](ARCHITECTURE-AND-BOUNDARIES.md).
+
+**Next maintenance actions:** refresh the snapshot after material deployment changes; reconcile each runtime container with exact Compose file hashes and image digests; update the existing component catalog and reuse decisions; attach exact-head CI and runtime evidence; explicitly record unresolved drift. No production/LIVE qualification or retirement approval is implied by this inventory.
