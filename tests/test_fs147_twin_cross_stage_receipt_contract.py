@@ -11,7 +11,9 @@ from test_fs147_twin_nested_provenance_contract import reject_foreign_provenance
 
 STAGES = ("event", "core", "critic", "policy", "worker", "evidence", "portal", "itsm")
 IDENTITY = ("tenant_id", "graph", "namespace", "incident_id", "run_id",
-            "evidence_ref", "source_event_id", "correlation_id")
+            "evidence_ref", "source_event_id", "correlation_id",
+            "source_system", "payload_ref", "metric", "resource",
+            "schema_version", "observed_at", "received_at")
 
 
 def qualify_trace(trace, own, foreign):
@@ -107,6 +109,19 @@ class TwinCrossStageReceiptContract(unittest.TestCase):
                         else:
                             trace[index]["receipt_id"] = replacement
                         with self.assertRaisesRegex(ValueError, "receipt replay"):
+                            qualify_trace(trace, own, foreign)
+
+    def test_cross_stage_source_and_timestamp_substitution_rejected(self):
+        """No stage may silently relabel source, measurement, or observation time."""
+        fields = ("source_system", "payload_ref", "metric", "resource",
+                  "schema_version", "observed_at", "received_at")
+        for own, foreign in ((LAB, SAN), (SAN, LAB)):
+            for field in fields:
+                for index, stage in enumerate(STAGES):
+                    with self.subTest(graph=own["graph"], field=field, stage=stage):
+                        trace = synthetic_trace(own)
+                        trace[index][field] = foreign[field]
+                        with self.assertRaisesRegex(ValueError, "identity drift"):
                             qualify_trace(trace, own, foreign)
 
     def test_cross_graph_dependency_at_portal_rejected(self):
