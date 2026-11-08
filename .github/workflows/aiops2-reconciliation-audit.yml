@@ -8,7 +8,7 @@ on:
       - 'scripts/ops/live_correlation_gate.py'
       - 'tests/ops/test_run_linkage_gate.py'
       - 'tests/ops/test_publish_platform_evidence.py'
-      - 'scripts/ops/publish_platform_evidence.py scripts/ops/usecase_acceptance.py'
+      - 'scripts/ops/publish_platform_evidence.py'
       - 'scripts/ops/platform_gap_analyzer.py'
       - 'tests/ops/test_platform_gap_analyzer.py'
       - 'scripts/ops/usecase_acceptance.py'
@@ -39,7 +39,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Python syntax
-        run: python -m py_compile scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py scripts/ops/platform_gap_analyzer.py scripts/ops/publish_platform_evidence.py
+        run: python -m py_compile scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py scripts/ops/platform_gap_analyzer.py scripts/ops/publish_platform_evidence.py scripts/ops/usecase_acceptance.py
       - name: Read-only gate contract tests
         run: |
           python -m unittest discover -s tests/ops -p 'test_run_linkage_gate.py' -v
