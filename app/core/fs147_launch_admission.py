@@ -6,6 +6,7 @@ outbox transaction before any downstream effect.
 """
 from dataclasses import dataclass
 from enum import Enum
+import unicodedata
 
 
 class LaunchDecision(str, Enum):
@@ -60,7 +61,8 @@ def classify_launch(value):
            not getattr(value, key) or
            getattr(value, key).strip() != getattr(value, key) or
            len(getattr(value, key)) > 512 or
-           any(ord(ch) < 32 or ord(ch) == 127 for ch in getattr(value, key))
+           not unicodedata.is_normalized("NFC", getattr(value, key)) or
+           any(unicodedata.category(ch) in ("Cc", "Cf", "Cs") for ch in getattr(value, key))
            for key in fields):
         return LaunchDecision.UNKNOWN
     if value.policy not in {"ALLOW", "DENY", "STOP_AUTO", "UNKNOWN"}:
