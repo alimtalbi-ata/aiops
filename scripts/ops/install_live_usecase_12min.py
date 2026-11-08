@@ -15,7 +15,7 @@ import tempfile
 
 REPO="alimtalbi-ata/aiops"
 BRANCH="audit/preserve-debian-48h-20261108"
-FILES=("scripts/ops/live_usecase_qualification.py",)
+FILES=("scripts/ops/live_usecase_qualification.py",\n       "scripts/ops/publish_platform_evidence.py")
 MARKER="# AIOPS2_LIVE_USECASE_12MIN_MANAGED"
 
 def call(args, **kwargs):
@@ -56,13 +56,24 @@ def main():
         os.replace(stage,dest)
         dest.chmod(0o700)
     wrapper=root/"live_usecase_12min.sh"
-    wrapper.write_text(
-        "#!/bin/sh\nset -u\numask 077\n"
-        "exec /usr/bin/flock -n \""+str(receipts/"usecase.lock")+"\" "
-        "/bin/sh -c '/usr/bin/python3 \""+str(root/"live_usecase_qualification.py")+
-        "\" --output-dir \""+str(receipts)+"\" >> \""+str(receipts/"usecase-cron.log")+
-        "\" 2>&1; rc=$?; echo \"gate_exit=$rc\" >> \""+str(receipts/"usecase-cron.log")+
-        "\"; exit 0'\n")
+    qualifier=root/"live_usecase_qualification.py"
+    publisher=root/"publish_platform_evidence.py"
+    log=receipts/"usecase-cron.log"
+    lock=receipts/"usecase.lock"
+    # Run publisher even when qualification correctly returns HOLD (exit 2).
+    shell=f"""#!/bin/sh
+set -u
+umask 077
+exec /usr/bin/flock -n "{lock}" /bin/sh -c '
+  /usr/bin/python3 "{qualifier}" --output-dir "{receipts}" >> "{log}" 2>&1
+  gate_rc=$?
+  /usr/bin/python3 "{publisher}" --checkout "{checkout}" --reports "{receipts}" >> "{log}" 2>&1
+  push_rc=$?
+  echo "gate_exit=$gate_rc publish_exit=$push_rc" >> "{log}"
+  exit $push_rc
+'
+"""
+    wrapper.write_text(shell)
     wrapper.chmod(0o700)
     current=subprocess.run(["crontab","-l"],capture_output=True,text=True)
     if current.returncode not in (0,1):
