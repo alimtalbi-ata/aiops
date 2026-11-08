@@ -42,7 +42,12 @@ def guard(intent, approval, *, now, critic_pass, policy_pass, evidence_fresh,
                 'action_digest': digest(intent), 'policy_revision': intent.policy_revision}
     if any(approval.get(k) != v for k, v in required.items()):
         return 'BLOCKED'
-    if approval.get('decision') != 'APPROVED' or approval.get('approver_id') in (None, '', approval.get('requester_id')):
+    requester = approval.get('requester_id')
+    approver = approval.get('approver_id')
+    if (approval.get('decision') != 'APPROVED'
+            or not isinstance(requester, str) or not requester.strip()
+            or not isinstance(approver, str) or not approver.strip()
+            or requester.strip() == approver.strip()):
         return 'BLOCKED'
     deadline = approval.get('valid_until')
     if not isinstance(deadline, datetime) or deadline.tzinfo is None or deadline.utcoffset() is None:
@@ -86,6 +91,15 @@ class ActionBindingTests(unittest.TestCase):
                            ('action_digest', 'sha256:wrong'), ('policy_revision', 'old'),
                            ('decision', 'DENIED'), ('approver_id', 'requester')]:
             with self.subTest(key=key):
+                self.assertEqual(self.check(approval=self.approval | {key: value}), 'BLOCKED')
+
+    def test_approver_identity_must_be_nonempty_distinct_string(self):
+        for key, value in [('requester_id', None), ('requester_id', ''),
+                           ('requester_id', '  '), ('requester_id', 1),
+                           ('approver_id', 0), ('approver_id', False),
+                           ('approver_id', []), ('approver_id', '  '),
+                           ('approver_id', ' requester ')]:
+            with self.subTest(key=key, value=value):
                 self.assertEqual(self.check(approval=self.approval | {key: value}), 'BLOCKED')
 
     def test_expiration_and_temporal_mismatch(self):
