@@ -38,6 +38,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_join_debian_github_evidence.py" -v
       - name: Existing Debian reporter compatibility offline regression
         run: python -m unittest discover -s tests -p "test_adapt_existing_debian_report.py" -v
+      - name: FS147 functional E2E receipt fail-closed regression
+        run: python -m unittest discover -s tests -p "test_fs147_functional_e2e.py" -v
       - name: Policy safety unit tests
         run: python -m unittest discover -s tests -p "test_policy_safety.py" -v
       - name: Portal registry and integration navigation unit tests
