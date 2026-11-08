@@ -27,11 +27,11 @@ class PlatformIntakeExitContract(unittest.TestCase):
                     def __exit__(self, *args): return False
                     def read(self, size=-1): return payload
                 completed = mock.Mock(returncode=gate_code, stdout="gate", stderr="")
-                with mock.patch.dict(os.environ, {"HOME": home}), \\
-                     mock.patch.object(module.Path, "home", return_value=Path(home)), \\
-                     mock.patch.object(module.urllib.request, "urlopen", return_value=Response()), \\
-                     mock.patch.object(module.subprocess, "run", return_value=completed), \\
-                     mock.patch("sys.argv", ["install_platform_readiness.py", "--sha256", sha, "--output-dir", str(Path(home)/"receipts")]), \\
+                with mock.patch.dict(os.environ, {"HOME": home}), \
+                     mock.patch.object(module.Path, "home", return_value=Path(home)), \
+                     mock.patch.object(module.urllib.request, "urlopen", return_value=Response()), \
+                     mock.patch.object(module.subprocess, "run", return_value=completed), \
+                     mock.patch("sys.argv", ["install_platform_readiness.py", "--sha256", sha, "--output-dir", str(Path(home)/"receipts")]), \
                      contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                     result = module.main()
                 self.assertEqual(result, expected)
