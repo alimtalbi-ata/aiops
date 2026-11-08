@@ -24,6 +24,9 @@ def sanitize_platform(source):
         clean["runtime"][name]={k:info.get(k) for k in ("image","image_id","state","health","networks")}
     return clean
 
+# Backward-compatible contract for the existing publisher regression tests.
+sanitize=sanitize_platform
+
 def sanitize_usecase(source):
     data=json.loads(source.read_text())
     if data.get("schema")!="aiops2-live-usecase-qualification-v1" or data.get("read_only") is not True:
