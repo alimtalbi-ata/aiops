@@ -13,6 +13,23 @@ import subprocess
 import sys
 
 RUN_ID="RUN-8CA56A39E58944F1"
+PORTAL="aiops2-rebuild-portal"
+
+def portal_probe():
+    """Independent Docker inspection; platform gate does not inspect Portal."""
+    try:
+        p=subprocess.run(["docker","inspect","--format","{{json .State}}",PORTAL],
+                         capture_output=True,text=True,timeout=15)
+        if p.returncode:
+            return {"status":"UNVERIFIED","reason":"DOCKER_INSPECT_FAILED"}
+        state=json.loads(p.stdout)
+        return {"status":"PASS" if state.get("Status")=="running" and
+                state.get("Health",{}).get("Status")!="unhealthy" else "HOLD",
+                "state":state.get("Status"),
+                "health":state.get("Health",{}).get("Status","NOT_CONFIGURED")}
+    except (OSError,ValueError,subprocess.TimeoutExpired):
+        return {"status":"UNVERIFIED","reason":"DOCKER_INSPECT_ERROR"}
+
 def invoke(argv, timeout=180):
     try:
         p=subprocess.run(argv,capture_output=True,text=True,timeout=timeout)
@@ -20,12 +37,13 @@ def invoke(argv, timeout=180):
     except (OSError,subprocess.TimeoutExpired) as e:
         return {"exit":127,"error":type(e).__name__}
 
-def summarize(linkage, platform, execution, stamp):
+def summarize(linkage, platform, execution, stamp, portal=None):
     checks=linkage.get("checks") or {}
     db=linkage.get("database") or {}
     core=linkage.get("core") or {}
     runtime=platform.get("runtime") or {}
     probes=platform.get("probes") or {}
+    portal=portal or {}
     def check(name, condition, detail, action):
         return {"name":name,"status":"PASS" if condition else "HOLD",
                 "evidence":detail,"next_action":None if condition else action}
@@ -50,9 +68,8 @@ def summarize(linkage, platform, execution, stamp):
         check("platform_smoke",platform.get("verdict")=="PASS",
               {"verdict":platform.get("verdict"),"failures":platform.get("failures",[]),"error":platform.get("error")},
               "fix first failing cross-service probe"),
-        check("portal_runtime",runtime.get("aiops2-rebuild-portal",{}).get("state")=="running",
-              {"state":runtime.get("aiops2-rebuild-portal",{}).get("state")},
-              "restore Portal runtime and qualify UI browser E2E"),
+        check("portal_runtime",portal.get("status")=="PASS",
+              portal,"inspect Portal container independently; platform gate does not include Portal"),
         check("intelligence_runtime",runtime.get("aiops2-rebuild-intelligence",{}).get("state")=="running",
               {"state":runtime.get("aiops2-rebuild-intelligence",{}).get("state")},
               "restore Intelligence runtime and qualify Critic decision"),
@@ -94,7 +111,7 @@ def main():
         except (OSError,ValueError):
             return {}
     result=summarize(read("linkage"),read("platform"),executions,
-                     dt.datetime.now(dt.timezone.utc).isoformat())
+                     dt.datetime.now(dt.timezone.utc).isoformat(),portal_probe())
     out=args.output_dir/f"usecase-summary-{stamp}.json"
     out.write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n")
     print(f"USECASE={result['verdict']} checks={len(result['checks'])} blocking={','.join(result['blocking'])} receipt={out}")
