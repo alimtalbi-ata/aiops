@@ -44,6 +44,11 @@ def summarize(linkage, platform, execution, stamp, portal=None):
     runtime=platform.get("runtime") or {}
     probes=platform.get("probes") or {}
     portal=portal or {}
+    run=(linkage.get("database") or {}).get("run") or {}
+    observed_status=str(run.get("status") or (linkage.get("core") or {}).get("run",{}).get("status") or "").upper()
+    blocked_safely=(observed_status=="BLOCKED" and
+                    checks.get("critic_policy_outbox")=="PASS")
+
     def check(name, condition, detail, action):
         return {"name":name,"status":"PASS" if condition else "HOLD",
                 "evidence":detail,"next_action":None if condition else action}
@@ -56,12 +61,17 @@ def summarize(linkage, platform, execution, stamp, portal=None):
         check("critic_policy_outbox",checks.get("critic_policy_outbox")=="PASS",
               {"outbox":checks.get("critic_policy_outbox")},
               "repair Critic→Policy outbox reconciliation"),
-        check("temporal_worker_history",checks.get("temporal_worker_execution")=="PASS",
-              {"history":checks.get("temporal_worker_execution")},
-              "add real Temporal workflow history/activity readback; never infer from executor label"),
-        check("hitl_action_binding",checks.get("hitl_action_binding")=="PASS",
-              {"binding":checks.get("hitl_action_binding")},
-              "add authorization-bound HITL action receipt readback"),
+        check("policy_denial_safety",blocked_safely,
+              {"run_status":observed_status,"critic_policy_outbox":checks.get("critic_policy_outbox")},
+              "verify blocked run status and durable reconciled Policy decision"),
+        check("temporal_worker_history",blocked_safely or checks.get("temporal_worker_execution")=="PASS",
+              {"history":checks.get("temporal_worker_execution"),
+               "applicability":"NOT_APPLICABLE_BLOCKED" if blocked_safely else "REQUIRED"},
+              "read Temporal history for an authorized action; never execute a blocked action"),
+        check("hitl_action_binding",blocked_safely or checks.get("hitl_action_binding")=="PASS",
+              {"binding":checks.get("hitl_action_binding"),
+               "applicability":"NOT_APPLICABLE_BLOCKED" if blocked_safely else "REQUIRED"},
+              "verify authorization-bound HITL receipt on an approved action, not a denied one"),
         check("itsm_cross_reference",checks.get("glpi_core_link")=="PASS" and checks.get("itsm_readback")=="PASS",
               {"core_link":checks.get("glpi_core_link"),"readback":checks.get("itsm_readback")},
               "reconcile existing GLPI ticket without creating a duplicate"),
@@ -79,7 +89,7 @@ def summarize(linkage, platform, execution, stamp, portal=None):
             "run_id":linkage.get("run_id",RUN_ID),"read_only":True,
             "verdict":"PASS" if not failed else "HOLD","checks":items,
             "blocking":failed,"probe_execution":execution,
-            "interpretation":"A blocked unsafe remediation is an acceptable Policy outcome; unverified integrations still HOLD."}
+            "interpretation":"A BLOCKED run proves denial safety, not Temporal/HITL execution; approved execution needs a separate run."}
 
 def main():
     p=argparse.ArgumentParser()
