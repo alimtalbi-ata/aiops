@@ -165,8 +165,8 @@ def main():
     if args.output:
         # Explicit opt-in local output; never write to GitHub, Docker or cron.
         dest = Path(args.output)
-        with dest.open("x", encoding="utf-8") as f:
-            os.chmod(dest, 0o600)
+        fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(payload)
         print("created:" + str(dest))
     else:
