@@ -28,6 +28,18 @@ class AdmissionTests(unittest.TestCase):
     def test_missing_or_malformed(self):
         for change in ({'evidence':{}}, {'evidence':{'x':float('nan')}}, {'observed_at':'invalid'}, {'source_event_id':''}):
             with self.subTest(change=change): self.assertEqual(self.check(**change)['status'], 'UNKNOWN')
+    def test_insufficient_nested_evidence_fails_closed(self):
+        for evidence in ({'value': None}, {'value': '   '}, {'nested': {}},
+                         {'nested': {'metric': None}}, {'samples': []},
+                         {'samples': [1, None]}, {'value': float('inf')},
+                         {'value': object()}):
+            with self.subTest(evidence=repr(evidence)):
+                result = self.check(evidence=evidence)
+                self.assertEqual(result['status'], 'UNKNOWN')
+                self.assertEqual(result['reason'], 'INSUFFICIENT_EVIDENCE')
+                self.assertIsNone(result['fingerprint'])
+    def test_nonempty_nested_evidence_admitted(self):
+        self.assertEqual(self.check(evidence={'samples': [{'metric': 92}]} )['status'], 'ACCEPTED')
     def test_replay_fingerprint_changes_with_event(self):
         self.assertNotEqual(self.check()['fingerprint'], self.check(source_event_id='evt-2')['fingerprint'])
     def test_bad_policy_fails_closed(self):
