@@ -36,6 +36,10 @@ def reject_foreign_provenance(envelope, foreign):
             parts = urlsplit(decoded)
             if parts.scheme in {"http", "https", "urn"}:
                 tokens = parts.path.replace(":", "/").split("/")
+                # URL authority is also a provenance carrier (userinfo and host labels).
+                # A foreign RUN in a hostname must not bypass path/query checks.
+                tokens += parts.netloc.replace("@", "/").replace(":", "/").split("/")
+                tokens += parts.hostname.split(".") if parts.hostname else []
                 tokens += [key for key, _ in parse_qsl(parts.query, keep_blank_values=True)]
                 tokens += [val for _, val in parse_qsl(parts.query, keep_blank_values=True)]
                 tokens += parts.fragment.replace(":", "/").split("/")
@@ -138,6 +142,18 @@ class TwinIngressNestedIsolation(unittest.TestCase):
                 with self.subTest(graph=own["graph"], field=field):
                     event = copy.deepcopy(own)
                     event["metadata"] = {"redirect": carrier}
+                    with self.assertRaisesRegex(ValueError, "foreign SAN/FS provenance"):
+                        reject_foreign_provenance(event, foreign)
+
+    def test_foreign_identity_in_uri_authority_rejected_bidirectionally(self):
+        for own, foreign in ((LAB, SAN), (SAN, LAB)):
+            for carrier in (
+                "https://" + foreign["run_id"] + ".example.invalid/receipt",
+                "https://" + foreign["evidence_ref"] + "@example.invalid/receipt",
+            ):
+                with self.subTest(graph=own["graph"], carrier=carrier):
+                    event = copy.deepcopy(own)
+                    event["metadata"] = {"source_uri": carrier}
                     with self.assertRaisesRegex(ValueError, "foreign SAN/FS provenance"):
                         reject_foreign_provenance(event, foreign)
 
