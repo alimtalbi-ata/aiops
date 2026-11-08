@@ -16,7 +16,7 @@
 | Created | 1 |
 | Compose projects reported by `docker compose ls -a` | 5 |
 | Docker networks listed | 18 |
-| Docker volumes listed | 59 |
+| Docker volumes listed | 78 |
 
 The container-state counts are derived from the supplied `docker inspect` output. The 18-network and 59-volume counts are counts of the entries printed by the corresponding Docker list commands. Health checks are not configured for many containers; `NOT_CONFIGURED` must not be interpreted as healthy.
 
