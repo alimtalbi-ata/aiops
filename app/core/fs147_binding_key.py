@@ -27,6 +27,7 @@ def _identifier(value: object) -> bool:
         type(value) is str
         and 0 < len(value) <= 512
         and value == value.strip()
+        and unicodedata.is_normalized("NFC", value)
         and all(unicodedata.category(ch) not in ("Cc", "Cf", "Cs") for ch in value)
     )
 
