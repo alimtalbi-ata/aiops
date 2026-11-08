@@ -65,4 +65,4 @@ Never collapse these states into a generic "installed/OK" flag.
 
 See [SRV-DEB-05 inventory snapshot — 2026-11-08](SRV-DEB-05-INVENTORY-2026-11-08.md).
 
-The snapshot currently reports 78 containers (59 running, 18 exited, 1 created), five Compose projects, 18 networks and 59 volumes. These are historical observations from 2026-11-08 and must be refreshed before operational decisions.
+The snapshot currently reports 78 containers (59 running, 18 exited, 1 created), five Compose projects, 18 networks and 78 volumes. These are historical observations from 2026-11-08 and must be refreshed before operational decisions.
