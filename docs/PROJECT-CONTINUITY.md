@@ -379,3 +379,37 @@ The output should be a component decision matrix with one recommended candidate,
 The user confirms these are development stacks and simulated data and wants their project information available in the central GitHub repository. Publish the sanitized infrastructure inventory, component/version matrix, feature evidence and test results to the existing repository. Do not publish authentication material (for example the local GitHub token file), private keys, credentials or session headers; those remain credentials even in development. Preserve report history with timestamped artifacts rather than only overwriting `latest.json`.
 
 **Current status:** script source audited; current reporter coverage insufficient for component-level comparison; current publisher targets a dedicated ops branch; no cron or runtime configuration changed; no script executed; no candidate version selected.
+
+
+## 2026-11-08 — Priority correction: preserve the last 48 hours of Debian development first
+
+**User's explicit priority:** prioritize what is already installed, with first priority given to development deployed on Debian during the last 48 hours. The goal is to retain the strongest actually integrated and usable work, not to prefer the highest version number or an attractive but uninstalled GitHub branch.
+
+### Mandatory order of precedence
+
+1. **Recent Debian deployed state (last 48 hours):** preserve first. This includes deployed container/image identities and digests, Compose definitions and overrides, source commits/worktrees, configuration, networks, mounts and named volumes, generated artifacts, test evidence, and rollback material. Treat all of these as valuable until inventoried and backed up.
+2. Other components already installed and working on the main Debian development platform.
+3. Existing qualification/E2E stacks and their test evidence.
+4. GitHub branches, worktrees, patches and candidate features not yet deployed.
+5. Older/duplicate environments, only considered for retirement after comparison and explicit approval.
+
+A newer tag, a more recent branch commit, or a larger feature list never overrides verified recent deployed state without a documented comparison and passing compatibility/integration tests.
+
+### Preservation gate before consolidation
+
+- Establish a timestamped baseline of the current Debian runtime and compare it with available deployment receipts, Git commits, image digests and filesystem timestamps to identify changes in the last 48 hours. Timestamps alone are clues, not proof of deployment chronology.
+- Capture immutable image IDs/digests, container configuration metadata, Compose project/config-file labels, effective Compose source file paths and checksums, Git commit and dirty-worktree status, network/mount/volume associations, and health/test results.
+- Back up the exact source/configuration and required simulated development data; verify archive checksums and that backups are readable before any cleanup.
+- Record dependencies and feature/integration evidence for each component. Mark unknown provenance as UNKNOWN; do not replace unknown with a guessed version or commit.
+- Create a per-component preservation manifest and a rollback path. Keep all five observed development stacks intact while the comparison is underway.
+- Only after the preservation gate passes may a candidate be recommended. Any cleanup, environment retirement, image replacement, volume deletion, database migration or promotion is a separate explicitly approved operation.
+
+### Selection rule
+
+The preferred implementation is the one that maximizes verified usable features and integration while retaining the recent Debian work. The recent Debian deployment is the baseline/reference candidate, not an automatic winner if tests show it is broken; any proposed replacement must demonstrate feature parity or a documented feature gain, contract and schema compatibility, passing relevant tests, operational readiness, and a tested rollback. Do not discard useful partial work: record feature deltas and porting opportunities.
+
+### Current evidence limitation
+
+The supplied audits show current running containers and identify existing cron reporter/publisher scripts, but do not yet establish a complete timestamped per-component deployment history for the last 48 hours. The existing reporter omits image digests, Compose labels, source commits, mounts and feature/test evidence. Therefore the recent-deployment preservation inventory is **NOT YET COMPLETE**. Do not claim that any specific version is the best until this gap is closed.
+
+**Execution constraint:** use the existing Debian reporter → publisher chain as the inventory path after reviewing and extending it safely. No new cron, no deployment poller reuse, no automatic cleanup, no service restart, and no destructive consolidation.
