@@ -47,6 +47,9 @@ def guard(intent, approval, *, now, critic_pass, policy_pass, evidence_fresh,
     required = {'tenant_id': intent.tenant_id, 'ticket_id': intent.ticket_id,
                 'run_id': intent.run_id, 'action_id': intent.action_id,
                 'action_digest': digest(intent), 'policy_revision': intent.policy_revision}
+    # Python considers True == 1: never accept boolean ticket IDs as approvals.
+    if type(approval.get('ticket_id')) is not int:
+        return 'BLOCKED'
     if any(approval.get(k) != v for k, v in required.items()):
         return 'BLOCKED'
     requester = approval.get('requester_id')
@@ -99,6 +102,13 @@ class ActionBindingTests(unittest.TestCase):
                            ('decision', 'DENIED'), ('approver_id', 'requester')]:
             with self.subTest(key=key):
                 self.assertEqual(self.check(approval=self.approval | {key: value}), 'BLOCKED')
+
+    def test_approval_ticket_boolean_never_matches_integer_one(self):
+        intent = Intent(**(self.intent.__dict__ | {'ticket_id': 1}))
+        approval = self.approval | {'ticket_id': True, 'action_digest': digest(intent)}
+        self.assertEqual(self.check(intent=intent, approval=approval), 'BLOCKED')
+        approval = approval | {'ticket_id': 1}
+        self.assertEqual(self.check(intent=intent, approval=approval), 'SIMULATE')
 
     def test_approver_identity_must_be_nonempty_distinct_string(self):
         for key, value in [('requester_id', None), ('requester_id', ''),
