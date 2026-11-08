@@ -10,7 +10,7 @@ from pathlib import Path
 
 STAGES = ("filesystem_incident", "twin_evidence", "core_run",
           "worker_analysis", "worker_critique", "policy_decision",
-          "glpi_ticket_147", "hitl_action_binding", "safe_resume")
+          "glpi_ticket", "hitl_action_binding", "safe_resume")
 REQUIRED = ("run_id", "source", "result")
 
 
@@ -28,6 +28,17 @@ def evaluate(receipt):
         failures.append("missing_run_id")
     if receipt.get("real_effects_executed") is not False:
         failures.append("real_effects_must_be_false")
+    ticket = receipt.get("glpi_ticket")
+    if not isinstance(ticket, dict):
+        failures.append("glpi_ticket:missing_identity")
+    else:
+        for field in ("ticket_id", "correlation_id", "operation", "evidence_ref"):
+            if not isinstance(ticket.get(field), str) or not ticket[field].strip():
+                failures.append("glpi_ticket:missing_" + field)
+        if ticket.get("operation") not in ("create", "update", "read"):
+            failures.append("glpi_ticket:invalid_operation")
+        if ticket.get("correlation_id") != run_id:
+            failures.append("glpi_ticket:correlation_mismatch")
     for name in STAGES:
         stage = stages.get(name)
         if not isinstance(stage, dict):
