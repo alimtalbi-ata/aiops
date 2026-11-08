@@ -10,7 +10,7 @@ import argparse
 import datetime as dt
 import json
 import os
-import subprocess
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -26,6 +26,11 @@ def glpi_get(base, path, token, app_token=None):
     except urllib.error.HTTPError as exc:
         return exc.code,{"error":"HTTP_"+str(exc.code)}
 
+def exact_marker(text, marker):
+    """Reject prefixes/suffixes of another canonical identifier."""
+    return bool(marker and re.search(r"(?<![\w-])" + re.escape(marker) + r"(?![\w-])", text))
+
+
 def inspect_ticket(ticket, run_id, incident_id, base, token, app_token=None):
     status,payload=glpi_get(base,f"Ticket/{ticket}",token,app_token)
     if status in (401,403):
@@ -35,9 +40,13 @@ def inspect_ticket(ticket, run_id, incident_id, base, token, app_token=None):
     title=str(payload.get("name") or "")
     content=str(payload.get("content") or "")
     # Exact run marker is necessary but not sufficient for a durable Core link.
-    match=run_id in title or run_id in content
-    incident_match=incident_id in title or incident_id in content
-    return {"ticket_id":ticket,"http":status,"readback":"MATCHED_MARKER" if match else "MISMATCH",
+    match=exact_marker(title, run_id) or exact_marker(content, run_id)
+    incident_match=exact_marker(title, incident_id) or exact_marker(content, incident_id)
+    ticket_match=(type(payload.get("id")) is int and payload["id"] == ticket)
+    active=payload.get("is_deleted") in (0, "0") and type(payload.get("is_deleted")) is not bool
+    identity_match=ticket_match and match and incident_match and active
+    return {"ticket_id":ticket,"http":status,"readback":"MATCHED_MARKER" if identity_match else "MISMATCH",
+            "ticket_id_verified":ticket_match,"ticket_active":active,
             "run_marker_present":match,"incident_marker_present":incident_match,
             "title_excerpt":title[:180],"glpi_status":payload.get("status"),
             "glpi_date":payload.get("date")}
