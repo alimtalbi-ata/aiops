@@ -1,12 +1,13 @@
 """Pure fail-closed Analyst/Critic/Policy handoff; no IO or dispatch."""
 from hashlib import sha256
 import json
+import re
 
 def evaluate_handoff(observation_receipt, analyst, critic, policy, *, run_id, ticket_id, tenant_id):
     def result(reason, digest=None):
         return {"status": "UNKNOWN" if reason != "READ_ONLY_APPROVED" else "READY_FOR_EVIDENCE",
                 "reason": reason, "digest": digest, "dispatch_allowed": False}
-    if not isinstance(observation_receipt, dict) or observation_receipt.get("status") != "ACCEPTED" or not isinstance(observation_receipt.get("fingerprint"), str) or len(observation_receipt["fingerprint"]) != 64:
+    if not isinstance(observation_receipt, dict) or observation_receipt.get("status") != "ACCEPTED" or not isinstance(observation_receipt.get("fingerprint"), str) or re.fullmatch(r"[0-9a-f]{64}", observation_receipt["fingerprint"]) is None:
         return result("OBSERVATION_UNVERIFIED")
     if not isinstance(run_id, str) or not run_id.strip() or not isinstance(tenant_id, str) or not tenant_id.strip() or type(ticket_id) is not int or ticket_id <= 0:
         return result("INVALID_IDENTITY")
