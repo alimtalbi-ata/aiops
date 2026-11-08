@@ -193,3 +193,17 @@ Selection order is mandatory: (1) components and artifacts already deployed on S
 Before selecting or deleting anything, capture exact image IDs/digests, Compose project/service/config file labels, source commit and dirty state, effective configuration, networks, mounts and named volumes, test evidence, and a verified backup/rollback. Preserve all candidate stacks during comparison. Unknown deployment provenance must be marked UNKNOWN, not inferred from image tags or timestamps. Any environment/volume removal or deployment change requires separate approval after the preservation gate.
 
 The full decision and evidence gap are documented in [Project Continuity](PROJECT-CONTINUITY.md).
+
+
+### GitHub candidate status — 2026-11-08 preservation review
+
+The latest non-documentation change on `main` within the inspected 48-hour window is FS1111 commit `fbe692c20e50` (2026-11-06 23:13 UTC). The current candidate set is component-specific:
+
+- Twin Decimal metrics: [PR #448](https://github.com/alimtalbi-ata/aiops/pull/448), merged into the FS1002 feature branch, not necessarily main or the Debian host. Preserve its exporter source hash, image overlay and host qualification evidence.
+- Worker FS-V28 Twin-write isolation: [PR #431](https://github.com/alimtalbi-ata/aiops/pull/431), Draft against `deploy/aiops2-stable`; listed isolated checks are green, but real host and full cross-service qualification are not claimed.
+- FS147 Worker: [PR #443](https://github.com/alimtalbi-ata/aiops/pull/443), Draft; listed integration/static checks green, but real bridge and service E2E remain unverified.
+- FS147 Core HITL: [PR #450](https://github.com/alimtalbi-ata/aiops/pull/450), Draft; synthetic contract checks only, authoritative GLPI/PG16/Temporal integration remains blocked.
+- FS147 Twin isolation: [PR #451](https://github.com/alimtalbi-ata/aiops/pull/451), Draft; database-migrations check failed.
+- FS147 release receipt: [PR #449](https://github.com/alimtalbi-ata/aiops/pull/449), Draft; runtime-e2e and quality-build-package checks failed.
+
+Do not compare these PRs as a single version ladder: they implement different features and target branches. Use them as component-level feature increments. The recent Debian deployment remains the priority baseline until its exact image/source/Compose/volume provenance is independently captured. Green PR checks do not prove host installation or end-to-end usability. Full details and decision are in [Project Continuity](PROJECT-CONTINUITY.md).
