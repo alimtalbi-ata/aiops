@@ -180,6 +180,25 @@ class ReceiptTests(unittest.TestCase):
         r["read_only"] = False
         self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
 
+    def test_blocked_exemption_requires_actual_outbox_check_pass(self):
+        # A nested claim cannot override a contradictory authoritative check.
+        for status in ("HOLD", "UNVERIFIED"):
+            with self.subTest(status=status):
+                r = receipt()
+                for check in r["checks"]:
+                    if check["name"] == "policy_denial_safety":
+                        check["evidence"] = {"run_id": r["run_id"], "run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
+                    elif check["name"] == "critic_policy_outbox":
+                        check["status"] = status
+                    elif check["name"] == "temporal_worker_history":
+                        check["status"] = "NOT_APPLICABLE"
+                if status == "HOLD":
+                    r["blocking"] = ["critic_policy_outbox"]
+                    r["verdict"] = "HOLD"
+                before = deepcopy(r)
+                self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                self.assertEqual(r, before)
+
 
 if __name__ == "__main__":
     unittest.main()
