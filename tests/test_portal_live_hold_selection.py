@@ -49,6 +49,23 @@ class LiveHoldSelectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "UNVERIFIED")
         self.assertIsNone(result["hold"])
 
+    def test_cross_domain_component_cannot_be_attributed_to_portal(self):
+        result = first_portal_hold(receipt([
+            {"id": "core-auth", "status": "HOLD", "owner": "portal",
+             "component": "core", "reason": "auth_401"},
+            {"id": "worker", "status": "HOLD", "owner": "portal",
+             "component": "worker", "reason": "timeout"},
+            {"id": "browser", "status": "HOLD", "owner": "portal",
+             "component": "browser", "reason": "legend_duplicate"}]), NOW)
+        self.assertEqual(result["hold"]["id"], "browser")
+
+    def test_only_cross_domain_components_fail_closed(self):
+        result = first_portal_hold(receipt([
+            {"id": "core", "status": "HOLD", "owner": "portal",
+             "component": "core", "reason": "auth_401"}]), NOW)
+        self.assertEqual(result["status"], "UNVERIFIED")
+        self.assertIsNone(result["hold"])
+
     def test_pass_does_not_imply_live_success(self):
         result = first_portal_hold(receipt([{"status": "PASS", "owner": "portal"}]), NOW)
         self.assertEqual(result["status"], "UNVERIFIED")
