@@ -43,7 +43,7 @@ def guard(intent, approval, *, now, critic_pass, policy_pass, evidence_fresh,
         return 'BLOCKED'
     if not isinstance(approval.get('valid_until'), datetime) or now >= approval['valid_until']:
         return 'BLOCKED'
-    return 'SIMULATE' if intent.dry_run else 'BLOCKED'
+    return 'SIMULATE' if intent.dry_run is True else 'BLOCKED'
 
 class ActionBindingTests(unittest.TestCase):
     def setUp(self):
@@ -66,6 +66,13 @@ class ActionBindingTests(unittest.TestCase):
     def test_simulated_only(self):
         self.assertEqual(self.check(), 'SIMULATE')
         self.assertEqual(self.check(intent=Intent(**(self.intent.__dict__ | {'dry_run': False}))), 'BLOCKED')
+
+    def test_dry_run_must_be_literal_boolean_true(self):
+        for value in (False, None, 1, 0, 'true', 'false', 'yes', [], {}):
+            with self.subTest(value=value):
+                altered = Intent(**(self.intent.__dict__ | {'dry_run': value}))
+                approval = self.approval | {'action_digest': digest(altered)}
+                self.assertEqual(self.check(intent=altered, approval=approval), 'BLOCKED')
 
     def test_binding_rejections(self):
         for key, value in [('ticket_id', 146), ('run_id', 'RUN-OTHER'),
