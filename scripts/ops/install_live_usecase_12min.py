@@ -1,103 +1,90 @@
 #!/usr/bin/env python3
-"""Install a 12-minute read-only use-case gate using existing GitHub remote.
+"""Install read-only live use-case checks on Debian without a local Git checkout.
 
-No production changes. One managed cron entry, backup of replaced audit
-scripts, pinned Git commit, and first qualification receipt. Never runs deploy.
+Fetch a specific immutable GitHub commit, validate Python before replacing,
+preserve prior tools, schedule one managed cron, and produce a first receipt.
+No Docker restart, ITSM POST, database mutation, or new Git credential.
 """
 import argparse
 import datetime as dt
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
+import urllib.request
 
 REPO="alimtalbi-ata/aiops"
-BRANCH="audit/preserve-debian-48h-20261108"
-FILES=("scripts/ops/live_usecase_qualification.py",
-       "scripts/ops/publish_platform_evidence.py")
+SOURCE="scripts/ops/live_usecase_qualification.py"
 MARKER="# AIOPS2_LIVE_USECASE_12MIN_MANAGED"
-
-def call(args, **kwargs):
-    p=subprocess.run(args,text=True,capture_output=True,timeout=120,**kwargs)
-    if p.returncode:
-        raise RuntimeError(f"{args[0]} returned {p.returncode}: {p.stderr[-150:]}")
-    return p.stdout
+def fetch_pinned(commit):
+    url=f"https://raw.githubusercontent.com/{REPO}/{commit}/{SOURCE}"
+    with urllib.request.urlopen(url,timeout=30) as response:
+        data=response.read(2000001)
+    if len(data)>2000000: raise RuntimeError("script too large")
+    compile(data,url,"exec")
+    return data
 
 def main():
-    ap=argparse.ArgumentParser()
-    ap.add_argument("--checkout",type=Path,default=Path.home()/"aiops")
-    ap.add_argument("--commit",required=True,help="Full audited commit SHA")
-    args=ap.parse_args()
-    if len(args.commit)!=40 or any(x not in "0123456789abcdef" for x in args.commit.lower()):
-        ap.error("commit must be 40 hex characters")
-    checkout=args.checkout.resolve()
-    remote=call(["git","remote","get-url","origin"],cwd=checkout).strip()
-    if not ("github.com" in remote and REPO in remote):
-        raise RuntimeError("Git origin not the expected AIOps2 repository")
-    call(["git","fetch","origin",BRANCH],cwd=checkout)
-    head=call(["git","rev-parse","FETCH_HEAD"],cwd=checkout).strip()
-    if head!=args.commit.lower():
-        raise RuntimeError("branch moved; refuse unreviewed script revision")
+    p=argparse.ArgumentParser()
+    p.add_argument("--commit",required=True,help="40-char immutable source commit")
+    p.add_argument("--no-cron",action="store_true")
+    a=p.parse_args()
+    if not re.fullmatch(r"[a-fA-F0-9]{40}",a.commit):
+        p.error("commit must be 40 hex characters")
+    data=fetch_pinned(a.commit.lower())
     root=Path.home()/"aiops2-audit-tools"
     receipts=Path.home()/"aiops2-release-receipts"
     root.mkdir(parents=True,exist_ok=True)
     receipts.mkdir(parents=True,exist_ok=True)
     stamp=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    for source in FILES:
-        raw=call(["git","show",head+":"+source],cwd=checkout)
-        compile(raw,source,"exec")
-        dest=root/Path(source).name
-        if dest.exists():
-            (root/(dest.name+".backup-"+stamp)).write_bytes(dest.read_bytes())
-        with tempfile.NamedTemporaryFile(dir=root,delete=False) as f:
-            f.write(raw.encode())
-            stage=Path(f.name)
-        os.replace(stage,dest)
-        dest.chmod(0o700)
-    wrapper=root/"live_usecase_12min.sh"
-    qualifier=root/"live_usecase_qualification.py"
-    publisher=root/"publish_platform_evidence.py"
+    target=root/"live_usecase_qualification.py"
+    if target.exists():
+        (root/f"live_usecase_qualification.py.backup-{stamp}").write_bytes(target.read_bytes())
+    with tempfile.NamedTemporaryFile(dir=root,prefix=".usecase-",delete=False) as handle:
+        handle.write(data)
+        stage=Path(handle.name)
+    os.replace(stage,target)
+    target.chmod(0o700)
     log=receipts/"usecase-cron.log"
     lock=receipts/"usecase.lock"
-    # Run publisher even when qualification correctly returns HOLD (exit 2).
-    shell=f"""#!/bin/sh
-set -u
-umask 077
-exec /usr/bin/flock -n "{lock}" /bin/sh -c '
-  /usr/bin/python3 "{qualifier}" --output-dir "{receipts}" >> "{log}" 2>&1
-  gate_rc=$?
-  /usr/bin/python3 "{publisher}" --checkout "{checkout}" --reports "{receipts}" >> "{log}" 2>&1
-  push_rc=$?
-  echo "gate_exit=$gate_rc publish_exit=$push_rc" >> "{log}"
-  exit $push_rc
-'
-"""
-    wrapper.write_text(shell)
+    wrapper=root/"live_usecase_12min.sh"
+    wrapper.write_text(
+        "#!/bin/sh\nset -u\numask 077\n"
+        f'exec /usr/bin/flock -n "{lock}" /bin/sh -c '
+        f"'"+f'/usr/bin/python3 "{target}" --output-dir "{receipts}" >> "{log}" 2>&1; '
+        f'rc=$?; echo "gate_exit=$rc" >> "{log}"; exit 0'+"'\n")
     wrapper.chmod(0o700)
-    current=subprocess.run(["crontab","-l"],capture_output=True,text=True)
-    if current.returncode not in (0,1):
-        raise RuntimeError("cannot read crontab")
-    entries=current.stdout.splitlines() if current.returncode==0 else []
-    managed=[x for x in entries if MARKER in x]
-    if len(managed)>1:
-        raise RuntimeError("duplicate managed entries; refuse to modify crontab")
-    line=f"2,14,26,38,50 * * * * {wrapper} {MARKER}"
-    entries=[line if MARKER in x else x for x in entries]
-    if not managed: entries.append(line)
-    if not managed or managed[0]!=line:
-        call(["crontab","-"],input="\n".join(entries)+"\n")
-    # Run once, but HOLD (exit=2) is an expected result, not install failure.
-    probe=subprocess.run([sys.executable,str(root/"live_usecase_qualification.py"),
-        "--output-dir",str(receipts)],capture_output=True,text=True,timeout=180)
-    receipt={"schema":"aiops2-usecase-installer-v1","utc":stamp,"source_commit":head,
-             "cron":line,"initial_exit":probe.returncode,
-             "initial_output":probe.stdout[-500:],"production_modified":False}
-    dest=receipts/f"usecase-install-{stamp}.json"
-    dest.write_text(json.dumps(receipt,indent=2)+"\n")
-    print(json.dumps({"receipt":str(dest),"cron":"INSTALLED","initial_gate_exit":probe.returncode,
-                      "source_commit":head},indent=2))
+    status="SKIPPED"
+    if not a.no_cron:
+        old=subprocess.run(["crontab","-l"],capture_output=True,text=True)
+        if old.returncode not in (0,1):
+            raise RuntimeError("cannot inspect user crontab")
+        lines=old.stdout.splitlines() if old.returncode==0 else []
+        existing=[line for line in lines if MARKER in line]
+        if len(existing)>1:
+            raise RuntimeError("multiple managed cron entries; refusing changes")
+        line=f"2,14,26,38,50 * * * * {wrapper} {MARKER}"
+        lines=[line if MARKER in entry else entry for entry in lines]
+        if not existing: lines.append(line)
+        if not existing or existing[0]!=line:
+            changed=subprocess.run(["crontab","-"],input="\n".join(lines)+"\n",
+                                   capture_output=True,text=True)
+            if changed.returncode:
+                raise RuntimeError("crontab install failed: "+changed.stderr[-200:])
+        status="INSTALLED" if not existing else "ALREADY_INSTALLED"
+    probe=subprocess.run([sys.executable,str(target),"--output-dir",str(receipts)],
+                         capture_output=True,text=True,timeout=240)
+    receipt={"schema":"aiops2-usecase-installer-v2","utc":stamp,"source_commit":a.commit.lower(),
+             "source_path":SOURCE,"installed_path":str(target),"cron":status,
+             "initial_exit":probe.returncode,"initial_output":probe.stdout[-500:],
+             "initial_error":probe.stderr[-300:],"production_containers_changed":False}
+    out=receipts/f"usecase-install-{stamp}.json"
+    out.write_text(json.dumps(receipt,indent=2)+"\n")
+    print(json.dumps({"receipt":str(out),"cron":status,
+                      "initial_gate_exit":probe.returncode,"source_commit":a.commit.lower()},indent=2))
     return 0 if probe.returncode in (0,2) else 1
 if __name__=="__main__":
     raise SystemExit(main())
