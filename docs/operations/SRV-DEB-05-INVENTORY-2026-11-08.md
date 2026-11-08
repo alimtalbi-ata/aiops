@@ -225,3 +225,12 @@ Read-only source inspection confirmed:
 - FS watcher hash: `eadf8e8046ce1f92828e8af6c0aed91762de11853b8694d1ebabbedef71f5107`. It runs Docker inspection/exec disk probes and writes a local log; remediation is disabled.
 
 The reporter currently lacks the provenance and feature/test evidence required to select a best-integrated usable component. Five Compose projects observed in the prior host inventory are the comparison scope; four cron entries were observed separately. Full comparison requirements and non-destructive constraints are in [Project Continuity](../PROJECT-CONTINUITY.md).
+
+
+## Preservation-first priority — last 48 hours on Debian
+
+The current comparison baseline is the development state already deployed on SRV-DEB-05 during the last 48 hours. Preserve images, exact image IDs/digests, Compose files and overrides, source commits/worktrees, configuration, networks, mounts/volumes, simulated development data, generated artifacts and test evidence before evaluating candidates.
+
+Existing supplied evidence is not yet sufficient to reconstruct this 48-hour deployment timeline: the reporter records container names, state, health and image strings but not image digests, Compose labels, source commits, mounts or feature/test evidence. The exact component/version chronology is therefore NOT YET VERIFIED. Do not guess it from tags or filesystem timestamps.
+
+The selection order and preservation gate are recorded in [Project Continuity](../PROJECT-CONTINUITY.md). No stack retirement, volume deletion, rebuild, migration, restart or automatic promotion is authorized by this priority change.
