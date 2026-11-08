@@ -141,3 +141,30 @@ Reuse `tools/check_cumulative_release_kit.py` from draft #201 (HEAD `03a5b0cce44
 ### 5/5 source-transport catalog — 2026-10-30T16:15:33.055Z
 
 #201 main-based `477da60d92dc777e1e635eea4c5510c350a5d90c`: reused #198's existing ACME locator and tests (UTC epoch/canonical fail-closed), plus #202's existing Portal Run-detail and read-session JS/tests (strict four-field Core identity, no authority promotion, visible HTTP 401/403/503). **No new service, engine, UI, store, connector, OIDC, ticket authority or remediation capability.** Exact-head Quality pending; runtime/tenant ACL and Evidence links UNKNOWN. #194/#204/#196 selective port and cumulative kit remain release blockers.
+
+
+## 2026-11-08 — SRV-DEB-05 observed runtime cross-reference
+
+The timestamped Docker observation is recorded in [SRV-DEB-05 inventory — 2026-11-08](operations/SRV-DEB-05-INVENTORY-2026-11-08.md) and the session checkpoint in [Project Continuity](PROJECT-CONTINUITY.md). It records 78 containers: 59 running, 18 exited and one created, across five Compose projects. This section adds runtime evidence to the catalog; it does not change the qualification status of any component.
+
+| Catalog capability | Runtime names observed on SRV-DEB-05 | What this observation establishes | Remaining verification before claiming qualification |
+|---|---|---|---|
+| Portal / Command Center | `aiops2-rebuild-portal`, candidate and rollback Portal containers, `aiops2-demo-web-v1`, `aiops2-demo-readonly` | Images/containers exist; some are running, others exited | Exact source SHA, Compose ownership, API/auth contracts, UI flow and runtime tests |
+| Core | `aiops2-rebuild-core`, v27/E2E Core containers, v28 QF containers, rollback Core | Multiple Core builds/environments coexist | Canonical state ownership, image digest ↔ commit, migrations, API and E2E qualification |
+| Temporal / Worker | rebuild, v27 and E2E Temporal/Worker containers; Temporal UI and admin-tools jobs | Multiple orchestration/worker stacks coexist | Workflow compatibility, task queues, retry/idempotency, namespace/schema ownership and recovery |
+| Digital Twin | rebuild, v27 and E2E Twin containers; rollback Twin | Multiple Twin builds/environments coexist | Graph/schema provenance, freshness, impact contract and source SHA |
+| Evidence | rebuild, v27 and E2E Evidence containers; rollback Evidence | Evidence service images/containers exist in several environments | Append-only behavior, provenance, integrity, retention and contract tests |
+| Policy | rebuild, v27 and E2E Policy containers; rollback Policy | Policy service images/containers exist in several environments | Deterministic rules, fail-closed behavior, independent authorization tests |
+| Intelligence / Copilot / RAG | rebuild Intelligence/test-LLM/Copilot, NOC RAG test and Copilot test containers; v27/E2E Intelligence/test-LLM | Several AI-related runtime candidates coexist | Model/provider identity, grounded structured outputs, evaluator results, ACL and advisory-only boundary |
+| ITSM / integration | rebuild GLPI + MariaDB, GLPI HTTP qualification/recovery DB, n8n | GLPI, database, qualification and integration services are present | GLPI schema/version, connector permissions, ticket lifecycle boundary, n8n flow contracts |
+| Observability | rebuild Prometheus/Grafana/Alertmanager; demo OTel/Loki/Tempo; metrics normalizer | Multiple monitoring/logging/tracing services and demo observability project exist | Scrape/OTLP routes, alert rules, dashboard provenance, retention and alert-to-Incident contract |
+| Database administration | CloudBeaver | Administration UI container exists | Authentication, network exposure, least privilege and audit |
+| FS-specific integration/qualification | `aiops2-fs385-ingest`, `aiops2-fs-lab`, `aiops2-fs-qualification`, HTTP qualification and portal candidates | Feature-specific services and test surfaces exist | Map each feature ID/PR to exact code, owning service, contracts and passing tests |
+
+### Runtime-to-source mapping status
+
+**Not yet established by the Docker snapshot alone:** immutable image digest to Git commit; exact feature/PR ownership for candidate tags; published-port exposure; all effective Compose overrides; health-check configuration; named-volume purpose/backup; service-to-service API/event dependencies. Record these as UNKNOWN until inspected. Do not label a component reusable, qualified, production-ready or safe to retire based only on container presence or `running` state.
+
+### Catalog maintenance rule
+
+For every new installation, upgrade, rollback or feature deployment, update the existing row(s) above and the relevant component detail with: runtime name/project, image tag and digest, source repository/commit, Compose file hashes, interfaces/dependencies, persistent data, tests and evidence links, observed timestamp, qualification status and rollback target. Keep historical snapshots and decision-log entries; do not silently overwrite old evidence.
