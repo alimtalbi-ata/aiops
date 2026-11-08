@@ -49,8 +49,8 @@ def harness():
 
 @pytest.mark.parametrize("ack,reason", [
     (False, "DUPLICATE_RUN"),
-    (None, "DUPLICATE_RUN"),
-    (1, "DUPLICATE_RUN"),
+    (None, "IDEMPOTENCY_UNAVAILABLE"),
+    (1, "IDEMPOTENCY_UNAVAILABLE"),
 ])
 def test_duplicate_or_ambiguous_claim_never_observes(harness, ack, reason):
     calls, deps, _ = harness
