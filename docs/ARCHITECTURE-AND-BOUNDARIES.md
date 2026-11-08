@@ -105,3 +105,16 @@ Presence is not proof of readiness. The reported orchestrator directory had no f
 - Do not publish internal ports by default.
 - Validate bind addresses, authentication, authorization, CORS and secrets handling before exposing an API.
 - Use separate demo credentials/data and guard synthetic mutations by explicit mode and token.
+
+
+## 8. SRV-DEB-05 observed deployment topology — 2026-11-08
+
+The read-only runtime snapshot is documented in [operations/SRV-DEB-05-INVENTORY-2026-11-08.md](operations/SRV-DEB-05-INVENTORY-2026-11-08.md). It shows five concurrent Compose projects: `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover` and `aiops2-demo-observability`. These represent distinct rebuild, qualification, E2E, cutover and demo-observability contexts. They must not be collapsed into one logical production deployment without a verified dependency/data migration plan.
+
+Observed runtime services cover Portal, Core, Worker, Temporal, Twin, Evidence, Policy, Intelligence/test-LLM, GLPI/MariaDB, n8n, Prometheus/Grafana/Alertmanager, OpenTelemetry/Loki/Tempo, CloudBeaver and FS-specific qualification/ingestion. This list is deployment evidence only; the target responsibility map above remains the intended architecture, not proof that every component is integrated.
+
+The audit reports multiple versions/candidates of Core, Worker, Temporal, Twin, Evidence, Policy and Intelligence across rebuild, v27 and E2E projects. This is a material topology/ownership risk: identify the canonical runtime and exact image-to-source commit for each before any consolidation. Container names, running state and image tags are insufficient proof of canonical ownership.
+
+Observed network inventory includes control/data/Temporal-data networks and separate rebuild/qualification networks. The intended simulator execution isolation remains mandatory; confirm effective network attachments and allowed paths from each Compose definition before asserting isolation. A missing temporary Compose source in the metrics-cutover project and containers with missing/mismatched Compose labels are configuration-drift findings requiring investigation.
+
+No application/API/database functional checks were run in the supplied audit. Consequently, no availability, service-contract, production, LIVE or end-to-end qualification claim is made by this section.
