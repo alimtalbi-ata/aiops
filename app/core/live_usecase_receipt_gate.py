@@ -64,7 +64,11 @@ def classify(receipt, now=None, max_age_seconds=180):
         name for name, item in by_name.items() if item["status"] == "HOLD"
     } or len(blocked) != len(set(blocked)):
         return Qualification.UNVERIFIED
-    if any(item["status"] in ("HOLD", "UNVERIFIED") for item in by_name.values()):
+    # Missing evidence is not a functional failure. A HOLD claim cannot
+    # upgrade an UNVERIFIED check to a diagnosed failing component.
+    if any(item["status"] == "UNVERIFIED" for item in by_name.values()):
+        return Qualification.UNVERIFIED
+    if any(item["status"] == "HOLD" for item in by_name.values()):
         return Qualification.HOLD if receipt.get("verdict") == "HOLD" else Qualification.UNVERIFIED
     if receipt.get("verdict") != "PASS":
         return Qualification.UNVERIFIED
