@@ -60,7 +60,9 @@ def classify(receipt, now=None, max_age_seconds=180):
     ):
         return Qualification.UNVERIFIED
     blocked = receipt.get("blocking")
-    if not isinstance(blocked, list) or set(blocked) != {
+    if not isinstance(blocked, list) or any(type(name) is not str for name in blocked):
+        return Qualification.UNVERIFIED
+    if set(blocked) != {
         name for name, item in by_name.items() if item["status"] == "HOLD"
     } or len(blocked) != len(set(blocked)):
         return Qualification.UNVERIFIED
