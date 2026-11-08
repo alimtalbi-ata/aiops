@@ -34,7 +34,7 @@ def classify(receipt, now=None, max_age_seconds=180):
             return Qualification.UNVERIFIED
     except (ValueError, TypeError, KeyError, AttributeError):
         return Qualification.UNVERIFIED
-    checks = receipt.get("checks")
+    # Every qualification is scoped to one canonical Run. A missing or malformed\n    # identity cannot establish even a read-only PASS claim.\n    run_id = receipt.get("run_id")\n    if (type(run_id) is not str or not run_id.startswith("RUN-")\n            or len(run_id) > 84 or len(run_id) <= 4 or run_id != run_id.strip()):\n        return Qualification.UNVERIFIED\n    checks = receipt.get("checks")
     if not isinstance(checks, list) or len(checks) != len(REQUIRED):
         return Qualification.UNVERIFIED
     by_name = {}
