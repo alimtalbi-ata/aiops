@@ -108,3 +108,18 @@ python3 scripts/ops/join_debian_github_evidence.py /private/runtime.json /privat
 ```
 
 The join always returns `release_decision: HOLD` and `backup_restoration: NOT_ATTESTED`. Even an exact claimed image-ID match does not establish build provenance from the GitHub SHA. Independent source/build receipts and Debian backup/restore checks remain mandatory. This step introduces **no new cron, publisher, GitHub API call, Docker mutation, or release promotion**.
+
+
+## 8. Reviewed GitHub candidate catalogue
+
+The versioned, **non-runtime** input `docs/operations/github-component-candidates-2026-11-08.json` records eight GitHub candidates with exact PR-head SHA, implemented feature claims, known CI evidence and explicit missing host/E2E evidence. These observations are dated 2026-11-08 and must be refreshed before a later release decision. The manifest deliberately contains **no** `verified_runtime_image_id` because the current Debian image/source mapping has not been proven.
+
+When a private, operator-reviewed snapshot is available, run:
+
+```sh
+python3 scripts/ops/join_debian_github_evidence.py \
+  /private/runtime.json \
+  docs/operations/github-component-candidates-2026-11-08.json
+```
+
+Keep the resulting report private until all Compose paths, mount sources, tags and service identifiers have been reviewed. Matching by component name is never treated as a deployed SHA. All eight candidates remain `PRESERVE_AND_QUALIFY`, not `GO`; known failed migrations and E2E gates must be resolved separately.
