@@ -1,10 +1,10 @@
-# Portal handoff — 2026-11-08 18:51 UTC
+# Portal handoff — 2026-11-08 21:49 UTC
 
-- Role/issue: Portal / #461; branch `agent/portal/461-live-hold-selection`; source commits `c1b767e7402e623918fa58097b26db387f02c5aa` (code), `53267535583ebbb7df505c270b8cff08006b575c` (tests).
-- Paths: `app/portal/live_hold_selection.py`, `tests/test_portal_live_hold_selection.py`. Mixed-owner receipts now exclude explicit Policy/HITL components even if `owner=portal`; browser HOLD remains actionable. Two new synthetic regressions.
-- Interface: read-only `first_portal_hold(receipt, now_utc)`; no backend calls, approvals, resolutions or GLPI writes. Dependencies: Debian `latest-usecase.json` schema and Policy/Portal owner labels.
-- Tests: 2 tests added; **NOT EXECUTED**. Run `python -m unittest tests.test_portal_live_hold_selection` in isolated worktree. CI: NOT_VERIFIED; Chromium FS1113: NOT_VERIFIED.
-- Debian: `ops/debian-runtime-reports:ops/debian-reports/SRV-DEB-05/latest.json` collected `2026-11-08T18:50:01.970294Z`, fresh at consultation ~18:51 UTC (<3 min); portal image `aiops2-portal:fs1073-csp-candidate` running. No source SHA/digest attested. `latest-usecase.json` fetch unavailable: UNVERIFIED, not FAIL. Re-check freshness before any later use.
-- CODE: committed; CI: NOT_VERIFIED; DEBIAN: report only; E2E: NOT_VERIFIED. Gate: NO_GO.
-- Risks: Policy component classification requires explicit metadata; unknown labels fail closed only when no Portal-owned actionable HOLD. Rollback: revert additive source/test commits on isolated branch; production unchanged.
-- Next owner: Integration confirm producer/receipt schema and evidence; Portal run unit tests and isolated Chromium matrix 1h/6h/24h for availability/scrape_duration, rapid period changes, refresh, mobile, before any promotion.
+- Role/issue: Portal / #461; branch `agent/portal/461-live-hold-selection`; CODE commits `9888b175eb932a37baad505c1546dc55433b1ae3`, `44ad49d71c47a3920dff15bbb81238c741854be1` (format correction), `d1e5f26308a29cfba1defeef6e4a056da00bbdf8` (regression tests).
+- Delta: `app/portal/live_hold_selection.py` checks *all* Policy/HITL state fields instead of choosing the first nonempty field. Conflicting APPROVED/DENIED or HITL_PENDING receipts cannot be classified as Portal failures. `tests/test_portal_live_hold_selection.py` adds two synthetic regressions. No Core, ITSM, approval or runtime write.
+- Contract: `first_portal_hold(receipt, now_utc)` read-only; explicit safe Policy/HITL states take precedence over a generic auth_401 reason; other actionable browser HOLDs remain selectable. Unknown/stale receipts never imply PASS.
+- Tests: new tests committed but **NOT EXECUTED**; run `python -m unittest tests.test_portal_live_hold_selection` on isolated checkout. CI: NOT_VERIFIED. Browser FS1113 (1h/6h/24h, both metrics, race, refresh, mobile): NOT_VERIFIED.
+- Debian receipt: `ops/debian-runtime-reports:ops/debian-reports/SRV-DEB-05/latest.json`, `collected_at=2026-11-08T21:48:01.259636+00:00`, fresh at inspection ~21:49 UTC (<3 min), image `aiops2-portal:fs1073-csp-candidate`, running; no source SHA/digest proof. `latest-usecase.json` 404 => UNVERIFIED, not failure. Freshness must be recomputed at each future read; publication error not attested.
+- CODE: COMMITTED; CI: NOT_VERIFIED; DEBIAN: historical minute receipt only, candidate not deployed; E2E: NOT_VERIFIED; verdict NO_GO.
+- Risk/rollback: broadened fail-closed exclusion could mask a genuine Portal issue when upstream Policy/HITL metadata is contradictory; upstream must correct receipt. Revert isolated commits if necessary; production untouched.
+- Next owner: Integration confirm live-usecase publisher/schema and source-image mapping. Portal execute tests and candidate-only Chromium gate, inspect first real Portal HOLD. No SSH, merge, cron, production mutation or GLPI/PG writes.
