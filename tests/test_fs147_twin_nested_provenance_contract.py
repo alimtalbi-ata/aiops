@@ -32,7 +32,7 @@ def reject_foreign_provenance(envelope, foreign):
         decoded = unquote(value)
         parts = urlsplit(decoded)
         if parts.scheme in {"http", "https", "urn"}:
-            tokens = [unquote(x) for x in parts.path.split("/")]
+            tokens = [unquote(x) for x in parts.path.replace(":", "/").split("/")]
             tokens += [unquote(v) for _, v in parse_qsl(parts.query, keep_blank_values=True)]
             tokens += [unquote(parts.fragment)]
             if any(token in foreign_ids for token in tokens):
