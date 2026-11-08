@@ -48,7 +48,22 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
     if (now_utc - observed).total_seconds() > max_age_seconds:
         return receipt('UNKNOWN', 'STALE_OBSERVATION')
     evidence = envelope.get('evidence')
-    if not isinstance(evidence, dict) or not evidence or not isinstance(envelope.get('source_event_id'), str) or not envelope['source_event_id'].strip():
+    def has_signal(value, depth=0):
+        if depth > 8:
+            return False
+        if isinstance(value, dict):
+            return bool(value) and all(isinstance(k, str) and bool(k.strip()) and has_signal(v, depth + 1) for k, v in value.items())
+        if isinstance(value, list):
+            return bool(value) and all(has_signal(v, depth + 1) for v in value)
+        if isinstance(value, str):
+            return bool(value.strip())
+        if isinstance(value, bool):
+            return True
+        if type(value) in (int, float):
+            from math import isfinite
+            return isfinite(value)
+        return False
+    if not isinstance(evidence, dict) or not has_signal(evidence) or not isinstance(envelope.get('source_event_id'), str) or not envelope['source_event_id'].strip():
         return receipt('UNKNOWN', 'INSUFFICIENT_EVIDENCE')
     try:
         canonical = json.dumps({k: envelope[k] for k in ('tenant_id', 'ticket_id', 'run_id', 'source', 'source_event_id', 'observed_at', 'evidence')}, sort_keys=True, separators=(',', ':'), allow_nan=False)
