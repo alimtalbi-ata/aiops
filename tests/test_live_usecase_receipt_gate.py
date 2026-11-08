@@ -55,9 +55,36 @@ class ReceiptTests(unittest.TestCase):
     def test_blocked_action_not_applicable(self):
         r = receipt()
         for c in r["checks"]:
+            if c["name"] == "policy_denial_safety":
+                c["evidence"] = {"run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
             if c["name"] in ("hitl_action_binding", "temporal_worker_history"):
                 c["status"] = "NOT_APPLICABLE"
         self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
+    def test_not_applicable_without_blocked_run_evidence_is_unverified(self):
+        r = receipt()
+        for check in r["checks"]:
+            if check["name"] == "temporal_worker_history":
+                check["status"] = "NOT_APPLICABLE"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
+    def test_not_applicable_rejects_unrelated_safety_evidence(self):
+        r = receipt()
+        for check in r["checks"]:
+            if check["name"] == "policy_denial_safety":
+                check["evidence"] = {"run_status": "RUNNING", "critic_policy_outbox": "PASS"}
+            if check["name"] == "hitl_action_binding":
+                check["status"] = "NOT_APPLICABLE"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
+    def test_not_applicable_rejects_unverified_outbox(self):
+        r = receipt()
+        for check in r["checks"]:
+            if check["name"] == "policy_denial_safety":
+                check["evidence"] = {"run_status": "BLOCKED", "critic_policy_outbox": "UNKNOWN"}
+            if check["name"] == "temporal_worker_history":
+                check["status"] = "NOT_APPLICABLE"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
 
     def test_unjustified_not_applicable(self):
         r = receipt()
