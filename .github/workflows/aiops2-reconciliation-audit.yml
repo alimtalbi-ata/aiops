@@ -4,6 +4,10 @@ on:
     branches:
       - audit/preserve-debian-48h-20261108
     paths:
+      - 'scripts/ops/glpi_readback_probe.py'
+      - 'tests/ops/test_glpi_readback_probe.py'
+      - 'scripts/ops/itsm_link_diagnosis.py'
+      - 'tests/ops/test_itsm_link_diagnosis.py'
       - 'scripts/ops/run_linkage_gate.py'
       - 'scripts/ops/live_correlation_gate.py'
       - 'tests/ops/test_run_linkage_gate.py'
@@ -16,12 +20,14 @@ on:
       - 'scripts/ops/live_usecase_qualification.py'
       - 'tests/ops/test_live_usecase_qualification.py'
       - 'scripts/ops/install_live_usecase_12min.py'
-      - 'scripts/ops/itsm_link_diagnosis.py'
-      - 'tests/ops/test_itsm_link_diagnosis.py'
       - 'docs/architecture/**'
       - '.github/workflows/aiops2-reconciliation-audit.yml'
   pull_request:
     paths:
+      - 'scripts/ops/glpi_readback_probe.py'
+      - 'tests/ops/test_glpi_readback_probe.py'
+      - 'scripts/ops/itsm_link_diagnosis.py'
+      - 'tests/ops/test_itsm_link_diagnosis.py'
       - 'scripts/ops/run_linkage_gate.py'
       - 'scripts/ops/live_correlation_gate.py'
       - 'tests/ops/test_run_linkage_gate.py'
@@ -44,9 +50,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Python syntax
-        run: python -m py_compile scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py scripts/ops/platform_gap_analyzer.py scripts/ops/publish_platform_evidence.py scripts/ops/usecase_acceptance.py scripts/ops/live_usecase_qualification.py scripts/ops/install_live_usecase_12min.py scripts/ops/itsm_link_diagnosis.py
+        run: python -m py_compile scripts/ops/glpi_readback_probe.py scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py scripts/ops/platform_gap_analyzer.py scripts/ops/publish_platform_evidence.py scripts/ops/usecase_acceptance.py scripts/ops/live_usecase_qualification.py scripts/ops/install_live_usecase_12min.py scripts/ops/itsm_link_diagnosis.py
       - name: Read-only gate contract tests
         run: |
+          python -m unittest discover -s tests/ops -p 'test_glpi_readback_probe.py' -v
           python -m unittest discover -s tests/ops -p 'test_run_linkage_gate.py' -v
           python -m unittest discover -s tests/ops -p 'test_publish_platform_evidence.py' -v
           python -m unittest discover -s tests/ops -p 'test_platform_gap_analyzer.py' -v

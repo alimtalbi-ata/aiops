@@ -39,6 +39,11 @@ class PolicySafetyTests(unittest.TestCase):
         self.assertEqual(result["state"], "UNKNOWN")
         self.assertEqual(result["decision"], "HUMAN_APPROVAL")
 
+    def test_critic_refusal_blocks_even_non_mutating_live_request(self):
+        result = evaluate(decision(command="OBSERVE", critic_validated=False))
+        self.assertEqual(result["state"], "BLOCKED")
+        self.assertNotEqual(result["decision"], "ALLOW")
+
     def test_live_missing_fencing_is_blocked(self):
         result = evaluate(decision(fencing_verified=False))
         self.assertEqual(result["state"], "BLOCKED")

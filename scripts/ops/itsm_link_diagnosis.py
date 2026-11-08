@@ -19,33 +19,44 @@ def diagnose(linkage, readback=None):
     other=[x for x in links if observed is not None and str(x.get("glpi_ticket_id"))!=str(observed)]
     matching_xref=[x for x in xrefs if observed is not None and str(x.get("ticket_id"))==str(observed)]
     glpi=(readback or {}).get("ticket") or {}
+    incident_id=run.get("incident_id")
+    identity_ok=(bool(linkage.get("run_id")) and bool(incident_id)
+                 and run.get("run_id")==linkage.get("run_id"))
+    rows_identity_ok=all(x.get("incident_id")==incident_id for x in links+xrefs)
+    readback_identity_ok=(readback is None or (
+        readback.get("run_id")==linkage.get("run_id")
+        and readback.get("incident_id")==incident_id
+        and str(glpi.get("ticket_id"))==str(observed)))
+    marker_verified=(readback_identity_ok and glpi.get("readback")=="MATCHED_MARKER"
+                     and all(glpi.get(k) is True for k in (
+                         "ticket_id_verified", "ticket_active", "run_marker_present", "incident_marker_present")))
     if not run:
         cause="CORE_RUN_MISSING"
         action="Repair run persistence/identity before ITSM reconciliation"
+    elif not identity_ok or not rows_identity_ok or not readback_identity_ok:
+        cause="IDENTITY_MISMATCH"
+        action="Verify exact Run/Incident/ticket identity; do not reconcile"
     elif observed is None:
         cause="TICKET_ID_NOT_PROVIDED"
         action="Supply the existing observed ticket ID; do not create a ticket"
+    elif other or len(matched)>1:
+        cause="DIFFERENT_TICKET_LINKED" if other and not matched else "AMBIGUOUS_TICKET_LINKS"
+        action="Review conflicting or duplicate links; preserve confirmed links"
+    elif readback is not None and not marker_verified:
+        cause="GLPI_READBACK_AUTH_REQUIRED" if glpi.get("readback")=="AUTH_REQUIRED" else "GLPI_TICKET_IDENTITY_MISMATCH"
+        action="Verify existing ticket through native GLPI GET before reconciliation"
     elif matched and any(x.get("state")=="CONFIRMED" for x in matched) and any(x.get("glpi_ticket_readback_verified") is True for x in matching_xref):
         cause="LINK_VERIFIED"
         action=None
     elif matched:
         cause="LINK_PRESENT_NOT_CONFIRMED"
         action="Inspect existing link state and readback reconciliation, without inserting duplicates"
-    elif other:
-        cause="DIFFERENT_TICKET_LINKED"
-        action="Investigate ticket identity mismatch; never overwrite or create a duplicate"
     elif matching_xref:
         cause="XREF_WITHOUT_CORE_LINK"
         action="Repair link projection from existing xref event; preserve original ticket identity"
-    elif glpi.get("readback")=="MATCHED_MARKER":
+    elif marker_verified:
         cause="GLPI_MARKERS_MATCH_CORE_LINK_ABSENT"
         action="Inspect ITSM event consumer/outbox and idempotent Core link persistence"
-    elif glpi.get("readback")=="MISMATCH":
-        cause="GLPI_TICKET_IDENTITY_MISMATCH"
-        action="Do not reconcile until ticket identity is verified"
-    elif glpi.get("readback")=="AUTH_REQUIRED":
-        cause="GLPI_READBACK_AUTH_REQUIRED"
-        action="Configure existing read-only GLPI API access; do not expose tokens"
     else:
         cause="CORE_LINK_ABSENT_GLPI_UNVERIFIED"
         action="Read existing GLPI ticket identity, then inspect ITSM outbox and Core link consumer"

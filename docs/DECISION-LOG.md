@@ -190,3 +190,8 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 ### 2026-10-30 — ADR delta: one main-based candidate, fail-closed source transport
 
 **Decision:** retain #201 as the only release integration candidate; port six exact source blobs from #198/#202 without merging stacked/divergent PRs or replacing Portal main/Compose/Core. Canonical Evidence UTC must be bounded and Portal must refuse unqualified authority claims, expose 401/403/503 without navigation, and never persist bearer credentials. **Rationale:** preserve Core authority and operator-visible UNKNOWN, prevent false customer evidence. **Qualification:** [new exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) queued; T0 not yet passed, T4/T5 NO-GO. No merge, Debian or LIVE.
+
+
+## 2026-11-08 — FS1250 — ne pas reconstruire un consommateur absent
+
+Décision : corriger les faux positifs du readback/diagnostic dans le dépôt, sans inventer le schéma Debian ni un second writer. La correction persistante exige le source réel, un readback authentifié indépendant et une transaction idempotente sur le chemin existant. HOLD ; aucun ticket ni déploiement autorisé. Rapport : [qualification FS1250](architecture/FS1250-ITSM-RECONCILIATION-QUALIFICATION-20261108.md).

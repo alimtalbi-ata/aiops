@@ -236,3 +236,8 @@ Do not compare these PRs as a single version ladder: they implement different fe
 4. Retain additive proven features from alternate branches; select an installed baseline plus reviewed additive patches when safer than wholesale replacement. Keep five stacks intact until a separate approved retirement plan.
 
 **Next integration blocker:** collect Debian 48h deployment receipts and image/Compose/source/volume provenance using the existing reporter → publisher; cross-reference #448 and #431 first, then #443/#450/#451/#438/#446, and repair #449 before any FS147 release decision.
+
+
+## 2026-11-08 — FS1250 — dépendances absentes
+
+Réutiliser le probe natif GLPI ; adapter les contrôles d’identité. Writer FS1250, consommateur xref et GLPIClient importé par le bridge : absents de cette branche ; réutilisation et provenance Debian UNKNOWN. Aucun remplacement de composant. Rapport : [qualification FS1250](architecture/FS1250-ITSM-RECONCILIATION-QUALIFICATION-20261108.md).
