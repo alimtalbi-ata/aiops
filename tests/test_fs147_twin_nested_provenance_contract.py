@@ -25,18 +25,24 @@ def reject_foreign_provenance(envelope, foreign):
     seen = set()
 
     def check_string(value, path):
-        # URI carriers may embed foreign IDs as complete path/query/fragment tokens.
-        # Never substring-match ordinary prose (avoids false positives).
-        if value in foreign_ids:
-            raise ValueError("foreign SAN/FS provenance at " + "/".join(path))
-        decoded = unquote(value)
-        parts = urlsplit(decoded)
-        if parts.scheme in {"http", "https", "urn"}:
-            tokens = [unquote(x) for x in parts.path.replace(":", "/").split("/")]
-            tokens += [unquote(v) for _, v in parse_qsl(parts.query, keep_blank_values=True)]
-            tokens += [unquote(parts.fragment)]
-            if any(token in foreign_ids for token in tokens):
-                raise ValueError("foreign SAN/FS provenance in URI at " + "/".join(path))
+        # Decode bounded layers to catch nested URI encoding without unbounded work.
+        # Match whole identity tokens, never substrings of ordinary prose.
+        decoded = value
+        for _ in range(4):
+            if decoded in foreign_ids:
+                raise ValueError("foreign SAN/FS provenance at " + "/".join(path))
+            parts = urlsplit(decoded)
+            if parts.scheme in {"http", "https", "urn"}:
+                tokens = parts.path.replace(":", "/").split("/")
+                tokens += [key for key, _ in parse_qsl(parts.query, keep_blank_values=True)]
+                tokens += [val for _, val in parse_qsl(parts.query, keep_blank_values=True)]
+                tokens += parts.fragment.replace(":", "/").split("/")
+                if any(token in foreign_ids for token in tokens):
+                    raise ValueError("foreign SAN/FS provenance in URI at " + "/".join(path))
+            next_decoded = unquote(decoded)
+            if next_decoded == decoded:
+                break
+            decoded = next_decoded
 
     def walk(value, path):
         if isinstance(value, (dict, list)):
@@ -93,6 +99,22 @@ class TwinIngressNestedIsolation(unittest.TestCase):
                 "https://example.invalid/evidence/" + quote(foreign["evidence_ref"], safe=""),
                 "https://example.invalid/trace?run=" + quote(foreign["run_id"], safe=""),
                 "urn:trace:" + foreign["source_event_id"],
+            ):
+                with self.subTest(graph=own["graph"], carrier=carrier):
+                    event = copy.deepcopy(own)
+                    event["metadata"] = {"uri": carrier}
+                    with self.assertRaisesRegex(ValueError, "foreign SAN/FS provenance"):
+                        reject_foreign_provenance(event, foreign)
+
+    def test_nested_uri_encoding_query_key_and_fragment_tokens_rejected(self):
+        from urllib.parse import quote
+        for own, foreign in ((LAB, SAN), (SAN, LAB)):
+            foreign_run = foreign["run_id"]
+            for carrier in (
+                "https://example.invalid/trace?" + quote(foreign_run, safe="") + "=1",
+                "https://example.invalid/trace#section/" + foreign_run,
+                "https://example.invalid/trace?run=" + quote(quote(foreign_run, safe=""), safe=""),
+                "https://example.invalid/trace#ref:" + foreign_run,
             ):
                 with self.subTest(graph=own["graph"], carrier=carrier):
                     event = copy.deepcopy(own)
