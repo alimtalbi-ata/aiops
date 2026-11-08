@@ -272,7 +272,7 @@ The durable operating model is `docs/operations/AIOPS2-AUTONOMOUS-DEV-TEAM-OPERA
 
 **Evidence source:** read-only Docker audit supplied for host `SRV-DEB-05`, captured 2026-11-08. Full timestamped detail: [operations/SRV-DEB-05-INVENTORY-2026-11-08.md](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
 
-Observed snapshot: 78 containers (59 running, 18 exited, 1 created), five Compose projects, 18 Docker networks and 78 listed Docker volumes. These are point-in-time Docker observations, not application readiness or production qualification. Many containers have no configured health check; several rollback/before-metrics containers are exited and some are unhealthy. The audit was read-only: no HTTP/database access, container lifecycle operation, volume removal or configuration modification.
+Observed snapshot: 78 containers (59 running, 18 exited, 1 created), five Compose projects, 18 Docker networks and 59 listed Docker volumes. These are point-in-time Docker observations, not application readiness or production qualification. Many containers have no configured health check; several rollback/before-metrics containers are exited and some are unhealthy. The audit was read-only: no HTTP/database access, container lifecycle operation, volume removal or configuration modification.
 
 The active runtime is not one clean homogeneous stack: separate `aiops2-rebuild`, `aiops2-v27-qual`, `aiops2-e2e-v1`, `aiops2-metrics-cutover` and `aiops2-demo-observability` Compose projects coexist. Some containers have mismatched Compose project labels/names; one metrics-cutover Compose source path references a missing temporary file. Do not infer ownership or retire anything from container names alone.
 
