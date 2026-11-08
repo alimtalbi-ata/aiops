@@ -59,3 +59,18 @@ After every material installation, upgrade, rollback, Compose change or service 
 7. Do not stop, remove, migrate, merge or retire runtime components/volumes as part of an inventory-only task. Require an approved change, backup, dependency review and tested rollback.
 
 For the SRV-DEB-05 2026-11-08 snapshot, the capture is read-only and does not itself qualify any component or authorize cleanup. See [the recorded inventory](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
+
+
+## Existing Debian cron reuse — mandatory controls
+
+The default approach is to reuse and, if approved, extend an existing suitable Debian cron job in place. Do not install a duplicate scheduler or create a second inventory pipeline.
+
+Before changing any job, perform read-only discovery of user/system crontabs, cron spool, systemd timers, referenced scripts, ownership, cadence, logs and execution receipts. Do not reveal environment values, credentials or tokens. Map the selected job to its exact script and GitHub publication mechanism.
+
+An infrastructure inventory job must be observational only: no `docker exec`, Compose lifecycle commands, restarts, prune, database access or business/API mutations. Collect only metadata required for installation/function provenance, sanitize before publication, and upload a timestamped report plus checksum through an existing least-privilege mechanism. Do not grant a general runner unrestricted Docker socket access.
+
+The existing GitHub-hosted daily `quality.yml` schedule at 02:23 UTC validates repository source and tests; it is not a Debian runtime inventory. PR #188 remains Draft because its proposed self-hosted runtime smoke uses `docker exec` and unrestricted Docker access; do not merge/install it as written. The six-hour PR #189 schedule is redundant and must not be duplicated.
+
+A Debian job is not considered active/healthy until a recent timestamped execution receipt and successful GitHub publication are independently observed. The existing heartbeat gate must continue to report UNATTESTED/missing evidence as WARN or FAIL, never PASS.
+
+For current findings and the no-new-cron decision, see [Project Continuity — 2026-11-08](PROJECT-CONTINUITY.md).
