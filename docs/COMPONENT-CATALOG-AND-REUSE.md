@@ -168,3 +168,8 @@ The timestamped Docker observation is recorded in [SRV-DEB-05 inventory — 2026
 ### Catalog maintenance rule
 
 For every new installation, upgrade, rollback or feature deployment, update the existing row(s) above and the relevant component detail with: runtime name/project, image tag and digest, source repository/commit, Compose file hashes, interfaces/dependencies, persistent data, tests and evidence links, observed timestamp, qualification status and rollback target. Keep historical snapshots and decision-log entries; do not silently overwrite old evidence.
+
+
+### Debian host reporting and publication jobs (observed, not yet qualified)
+
+SRV-DEB-05's `aiops` crontab contains a per-minute `aiops-debian-reporter` job followed by a per-minute `aiops-publish-report` SSH publisher, both protected by `flock`. These are the preferred existing mechanisms to investigate for runtime inventory capture and GitHub backup. Their exact inventory coverage, secret redaction, destination, file allowlist and publication success are not yet verified. Do not create a parallel cron or treat task launch as successful publication. See the timestamped [SRV-DEB-05 inventory evidence](operations/SRV-DEB-05-INVENTORY-2026-11-08.md).
