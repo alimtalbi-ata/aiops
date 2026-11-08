@@ -26,6 +26,10 @@ def qualify_trace(trace, own, foreign):
                 raise ValueError("E2E identity drift: " + key)
         if receipt.get("dependencies") != own["dependencies"]:
             raise ValueError("E2E dependency drift")
+        # An empty, missing or mutated observation must not count as an E2E receipt.
+        # This is a synthetic contract, not a claim about the live API schema.
+        if receipt.get("observations") != {"source_event_id": own["source_event_id"]}:
+            raise ValueError("E2E observation drift")
         reject_foreign_provenance(receipt, foreign)
     return {"fixture": "QUALIFIED", "debian_e2e": "UNVERIFIED"}
 
@@ -73,6 +77,19 @@ class TwinCrossStageReceiptContract(unittest.TestCase):
                     drift[5][key] = foreign[key]
                     with self.assertRaisesRegex(ValueError, "identity drift"):
                         qualify_trace(drift, own, foreign)
+
+    def test_missing_or_mutated_observation_rejected_at_every_stage(self):
+        for own, foreign in ((LAB, SAN), (SAN, LAB)):
+            for index, stage in enumerate(STAGES):
+                for mutation in (None, {}, {"source_event_id": "unrelated"}):
+                    with self.subTest(graph=own["graph"], stage=stage, mutation=mutation):
+                        trace = synthetic_trace(own)
+                        if mutation is None:
+                            trace[index].pop("observations")
+                        else:
+                            trace[index]["observations"] = mutation
+                        with self.assertRaisesRegex(ValueError, "observation drift"):
+                            qualify_trace(trace, own, foreign)
 
     def test_cross_graph_dependency_at_portal_rejected(self):
         for own, foreign in ((LAB, SAN), (SAN, LAB)):
