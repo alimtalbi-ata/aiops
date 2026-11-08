@@ -54,5 +54,21 @@ class LiveHoldSelectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "UNVERIFIED")
 
 
+    def test_policy_component_with_portal_owner_is_not_portal_failure(self):
+        result = first_portal_hold(receipt([
+            {"id": "policy-fence", "status": "HOLD", "owner": "portal",
+             "component": "policy", "reason": "auth_401"},
+            {"id": "ui-defect", "status": "HOLD", "owner": "portal",
+             "component": "browser", "reason": "legend_duplicate"}]), NOW)
+        self.assertEqual(result["status"], "HOLD")
+        self.assertEqual(result["hold"]["id"], "ui-defect")
+
+    def test_policy_only_mixed_labels_fail_closed(self):
+        result = first_portal_hold(receipt([
+            {"id": "hitl", "status": "HOLD", "owner": "portal",
+             "component": "hitl", "reason": "auth_401"}]), NOW)
+        self.assertEqual(result["status"], "UNVERIFIED")
+        self.assertIsNone(result["hold"])
+
 if __name__ == "__main__":
     unittest.main()
