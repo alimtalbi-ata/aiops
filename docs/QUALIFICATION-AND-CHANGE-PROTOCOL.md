@@ -83,3 +83,12 @@ Use the existing `aiops-debian-reporter` and `aiops-publish-report` schedule as 
 The component comparison must use immutable image digests and exact source commits, Compose project/service ownership, contracts/dependency compatibility, implemented feature evidence and passing CI/contract/integration/E2E tests. Prefer the most advanced **usable and integrated** candidate, not the numerically newest tag. Unknown evidence is NOT_QUALIFIED. Retain all development stacks while comparing; no automated promotion, deletion, volume cleanup or database migration. Any later consolidation requires a separate reviewed change, backup and tested rollback.
 
 Publish sanitized simulated-development inventory and feature/test evidence to GitHub with timestamped history. Do not publish credentials or authentication material, even if the environment contains only simulated data.
+
+
+## Preservation-first qualification order (mandatory)
+
+Before cross-version scoring or consolidation, preserve the development state deployed on SRV-DEB-05 during the preceding 48 hours. It takes precedence over undeployed GitHub candidates and older qualification stacks as the baseline for comparison. Then consider other installed/working Debian components, qualification/E2E candidates, undeployed branches/worktrees, and only lastly old duplicates.
+
+The preservation gate requires a timestamped runtime snapshot, immutable image IDs/digests, Compose project/service/config sources, exact source commit and dirty state, effective configuration, network/mount/volume mapping, feature/test evidence, and verified backup plus rollback. Do not use tags or timestamps alone to infer provenance. If evidence is missing, mark UNKNOWN and preserve the artifact.
+
+A replacement recommendation must prove usable feature gain, integration and contract/schema compatibility, passing relevant tests, operational readiness and rollback. Keep all environments intact during comparison. Deletion, volume cleanup, rebuild, migration, restart, deployment or promotion are separate changes requiring explicit approval after preservation is verified.
