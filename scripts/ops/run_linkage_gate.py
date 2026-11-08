@@ -43,11 +43,19 @@ for key,path in [('run','/api/runs/'+rid),('evidence','/api/runs/'+rid+'/evidenc
    obj=json.load(r)
    if key=='run':
     if isinstance(obj,dict):
-     out[key]={'status':obj.get('status'),'incident_id':obj.get('incident_id'),
-               'event_count':len(obj.get('events',[])),
-               'events':[{'stage':e.get('stage'),'type':e.get('type'),
-                          'status':e.get('status'),'decision':e.get('decision')}
-                         for e in obj.get('events',[])]}
+     candidates=[obj]
+     for k in ('run','data','result'):
+      if isinstance(obj.get(k),dict):
+       candidates.append(obj[k])
+       if isinstance(obj[k].get('run'),dict): candidates.append(obj[k]['run'])
+     match=next((x for x in candidates if x.get('incident_id') and x.get('run_id')),None)
+     if match:
+      events=match.get('events',obj.get('events',[]))
+      out[key]={'http':r.status,'parse_status':'PARSED','run_id':match.get('run_id'),
+                'incident_id':match.get('incident_id'),'status':match.get('status'),
+                'event_count':len(events) if isinstance(events,list) else 0}
+     else: out[key]={'http':r.status,'parse_status':'UNRECOGNIZED','keys':list(obj)[:15]}
+    else: out[key]={'http':r.status,'parse_status':'UNRECOGNIZED'}
    elif key=='evidence':
     out[key]={'http':r.status,'count':len(obj.get('items',[])) if isinstance(obj,dict) else None}
    else: out[key]={'http':r.status,'accessible':True}
@@ -95,8 +103,18 @@ SELECT json_build_object(
         db=report["database"]
         checks={}
         checks["core_run"]= "PASS" if db.get("run") else "FAIL"
-        checks["core_api"]= "PASS" if report["core"].get("run",{}).get("incident_id")==(
-            db.get("run") or {}).get("incident_id") and db.get("run") else "UNKNOWN"
+        core_run=report["core"].get("run",{})
+        db_run=db.get("run") or {}
+        if core_run.get("http") in (401,403):
+            checks["core_api"]="AUTH_REQUIRED"
+        elif core_run.get("http")==404:
+            checks["core_api"]="FAIL"
+        elif core_run.get("parse_status")!="PARSED" or not db_run:
+            checks["core_api"]="UNKNOWN"
+        elif core_run.get("incident_id")==db_run.get("incident_id") and core_run.get("run_id")==db_run.get("run_id"):
+            checks["core_api"]="PASS"
+        else:
+            checks["core_api"]="FAIL"
         checks["evidence_api"]= "PASS" if report["core"].get("evidence",{}).get("http")==200 else "UNKNOWN"
         checks["critic_policy_outbox"]= "PASS" if any(
             x.get("status")=="RECONCILED" and x.get("policy_decision_id")
