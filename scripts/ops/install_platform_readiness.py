@@ -58,6 +58,15 @@ def main():
     print(json.dumps({"receipt":str(receipt_file),"report":str(report),
                       "gate_exit":result.returncode,"installed_sha256":digest},indent=2))
     print(result.stdout)
-    return 0 if result.returncode in (0,2) else 1
+    # A HOLD verdict (exit 2) must propagate to the calling release gate.
+    # Previously this installer returned 0 for both PASS and HOLD, masking
+    # a failed platform qualification from the existing publisher/poller.
+    if result.returncode == 0:
+        return 0
+    if result.returncode == 2:
+        print("PLATFORM_INTAKE=HOLD (no promotion authorized)",file=sys.stderr)
+        return 2
+    print("PLATFORM_INTAKE=ERROR (no promotion authorized)",file=sys.stderr)
+    return 1
 if __name__=="__main__":
     sys.exit(main())
