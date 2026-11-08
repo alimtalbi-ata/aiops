@@ -309,3 +309,34 @@ Core, Portal, Worker, Temporal, Twin, Evidence, Policy, Intelligence, GLPI/Maria
 8. Emit a signed/hashed execution receipt with start/end time, exit code, inventory timestamp, Git commit and upload result. Feed that receipt into the existing heartbeat gate; absence, stale data or failed upload must remain WARN/FAIL, never PASS.
 
 **No infrastructure action authorized by this documentation update:** no Debian cron change, runner installation, Docker access, restart, container/volume cleanup, database access or deployment.
+
+
+## 2026-11-08 — Debian cron inventory/report pipeline discovered
+
+**Evidence:** user-supplied read-only command output from SRV-DEB-05, captured around 2026-11-08 01:17 Europe/Paris. No configuration or service changes were made by the inspection.
+
+### Observed schedule (user crontab `aiops`)
+
+| Schedule | Command | Observed purpose / status |
+|---|---|---|
+| Every minute | `/home/aiops/aiops2-auto-deploy/poll.sh`, protected by `flock` | Existing deployment polling path. Treat as potentially change-capable; do not alter or invoke manually until script is reviewed. |
+| Every minute | `/home/aiops/.local/bin/aiops-debian-reporter`, protected by `flock` | Existing Debian report generator; likely primary inventory collector, exact scope/output still unverified. |
+| Every minute | `/home/aiops/.local/bin/aiops-publish-report`, protected by `flock` | Existing report publisher, marked `AIOPS2_REPORT_SSH_PUBLISH`; destination, branch, file list and credential scope still unverified. |
+| Every 10 minutes | `$HOME/aiops2-operations/fs-watch.sh` | Existing FS watch; scope and write behavior still unverified. |
+
+Cron service reports `active`. System crontab and `/etc/cron.d` show standard Debian entries (anacron, e2scrub_all, placeholder); root crontab inspection prompted for sudo password and therefore root crontab contents are **UNKNOWN**, not empty. Cron journal shows the three per-minute aiops jobs being launched repeatedly between 01:12 and 01:17 Europe/Paris, and normal session closures. This proves scheduling/launch, **not** successful script exit, fresh inventory generation, successful SSH/GitHub publication or data correctness. No script exit codes, reporter output contents, publisher destination or successful commit receipt were included in the evidence.
+
+### Decision
+
+Reuse the existing `aiops-debian-reporter` → `aiops-publish-report` chain as the preferred inventory/documentation publication path, subject to read-only script and artifact review. Do not add another cron, duplicate reporter, GitHub runner or parallel registry. Preserve the current `flock` guards and all existing schedules while reviewing. Do not touch `poll.sh` or `fs-watch.sh` as part of the reporter change until their behavior is understood.
+
+### Remaining proof required
+
+1. Read the four referenced scripts without executing them; record SHA-256, owner/mode and whether each is tracked in Git.
+2. Inspect only sanitized reporter output metadata: output path, timestamp, schema, inventory coverage, redaction behavior and last successful generation.
+3. Inspect publisher logic: exact SSH destination/repository/branch/path, host-key verification, retry/error handling, file allowlist and whether it can publish secrets or unrelated workspace files.
+4. Verify the published GitHub commit and compare its report timestamp/checksum to the host's latest generated artifact.
+5. Inspect reporter/publisher logs for exit/error summaries and lock contention; do not dump raw logs if they may contain secrets.
+6. Only after the above, update the existing component catalog, runtime inventory and continuity records from verified evidence. Keep runtime facts separate from source/feature claims.
+
+**Current qualification:** cron scheduler ACTIVE; task launches OBSERVED; reporter success NOT_VERIFIED; publisher success NOT_VERIFIED; GitHub freshness NOT_VERIFIED; root crontab UNKNOWN. No new cron or runtime changes authorized.
