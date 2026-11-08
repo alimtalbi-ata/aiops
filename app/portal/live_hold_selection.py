@@ -27,9 +27,9 @@ def first_portal_hold(receipt, now_utc):
         owner = str(check.get("owner") or check.get("component") or "").strip().lower()
         component = str(check.get("component") or "").strip().lower()
         reason = str(check.get("reason") or "").strip().lower()
-        policy_state = str(check.get("policy_status") or check.get("policy_state") or "").strip().lower()
+        policy_states = {str(check.get(key) or "").strip().lower()\n                         for key in ("policy_status", "policy_state", "hitl_status", "hitl_state")}
         if (owner in PORTAL_OWNERS and component not in NON_PORTAL_COMPONENTS
-                and reason not in SAFE_POLICY_REASONS and policy_state not in SAFE_POLICY_STATES):
+                and reason not in SAFE_POLICY_REASONS and policy_states.isdisjoint(SAFE_POLICY_STATES)):
             return {"status": "HOLD", "reason": "portal_hold", "hold": {
                 "id": str(check.get("id") or "unknown"),
                 "reason": str(check.get("reason") or "unspecified")}}
