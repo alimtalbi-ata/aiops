@@ -443,3 +443,10 @@ Within the inspected 48-hour window, the latest non-documentation commit visible
 - Next evidence required from Debian: image IDs/digests, Compose labels and effective file hashes, dirty worktree commits, mount/volume mapping, deployment receipts and a verified backup manifest for the last 48 hours.
 
 This review is a preservation/qualification decision only. No PR was merged, no code deployed, and no Debian runtime was changed.
+
+
+### 2026-11-08 02:03 UTC — GitHub-only qualification delta
+
+- [Core FS147 PR #450](https://github.com/alimtalbi-ata/aiops/pull/450) is still open/draft, now at exact HEAD [`ac2e3822dd073411ee7450940a5716cdc88fca5a`](https://github.com/alimtalbi-ata/aiops/commit/ac2e3822dd073411ee7450940a5716cdc88fca5a). GitHub Actions `AIOps quality gates` run [42434613507](https://github.com/alimtalbi-ata/aiops/actions/runs/42434613507) completed SUCCESS for that SHA. This is **CI evidence only**: native GLPI 147 approval, Temporal resume, Debian installation and cross-service E2E remain UNKNOWN/NOT_QUALIFIED.
+- [Integration FS147 PR #449](https://github.com/alimtalbi-ata/aiops/pull/449) remains at `a1f6d18e0e529b434e8cf45db2e294cc504411af`: isolated receipt run [42379782717](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782717) SUCCESS, general quality run [42379782613](https://github.com/alimtalbi-ata/aiops/actions/runs/42379782613) FAILURE. No integration release qualification.
+- **Priority blocker unchanged:** existing Debian reporter/publisher lacks immutable image IDs/digests, Compose labels/config hashes, worktree dirty state, mounts/volumes, deployment receipts, test evidence and verified backup/rollback for the five preserved stacks. This GitHub review does not inspect SRV-DEB-05, its four cron entries, or establish deployed chronology. Do not consolidate, deploy or mutate any stack. FS1113 candidate remains separate from FS147 and from stable `aiops2-portal:fs1073-csp-candidate`.
