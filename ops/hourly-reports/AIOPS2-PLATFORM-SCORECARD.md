@@ -48,3 +48,10 @@ Horodatage; livraisons et SHAs depuis le rapport précédent; CI run; reçu Debi
 - Les tâches ChatGPT passent à H:00/12/24/36/48; elles doivent consommer les preuves minute les plus récentes et transmettre les commits au rôle suivant.
 - Le rapport horaire présente les timestamps des preuves, la fraîcheur, la dernière livraison CODE, CI, DEBIAN et E2E et les écarts entre ces dimensions.
 - Pour une preuve d'aller-retour GitHub→Debian→GitHub: demander un reçu signé par le contenu (SHA de l'artefact), horodaté sur Debian, publié par le cron minute et vérifié côté GitHub. La simple présence d'un cron ne suffit pas.
+
+## Preuve GitHub vérifiée — 2026-11-08
+- Lecture directe réussie sur la branche `ops/debian-runtime-reports` du fichier `ops/debian-reports/SRV-DEB-05/latest.json` (Git blob `8bf58bf8a58b5e26d9fadf00a6f87f57f72d6355`).
+- Champ `collected_at`: `2026-11-08T12:56:01.245620+00:00`; agent `aiops-debian-readonly` v1.0.0; Docker available=true. Le rapport contient Core, Worker et Portal, notamment Core image `aiops2-core:fs1212-integrated-candidate` et Worker image `aiops2-worker:fs-demo-candidate-20261105`, tous deux indiqués healthy dans cet instantané.
+- Cette preuve confirme **au moins une publication du reporter existant** Debian→GitHub; elle ne démontre pas une publication chaque minute sans comparer des horodatages successifs, ni un déploiement GitHub→Debian.
+- `ops/debian-reports/SRV-DEB-05/latest-platform.json` absent de cette branche lors du contrôle. Le raccordement du gate transversal au canal existant reste `NOT_VERIFIED`.
+- Prochaine étape vérifiable: relever deux SHA/timestamps successifs du latest.json, puis examiner `poll.sh` via un reçu non sensible pour qualifier le sens GitHub→Debian.
