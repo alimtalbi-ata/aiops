@@ -35,8 +35,14 @@ def main():
     p.add_argument("--reports",type=Path,default=Path.home()/"aiops2-release-receipts")
     a=p.parse_args()
     reports=sorted(a.reports.glob("platform-*.json"),key=lambda x:x.stat().st_mtime)
-    if not reports: raise RuntimeError("no platform reports found")
-    data=sanitize(reports[-1])
+    data=sanitize(reports[-1]) if reports else None
+    usecases=sorted(a.reports.glob("usecase-summary-*.json"),key=lambda x:x.stat().st_mtime)
+    usecase=json.loads(usecases[-1].read_text()) if usecases else None
+    if usecase is not None:
+        if usecase.get("schema")!="aiops2-live-usecase-qualification-v1" or usecase.get("read_only") is not True:
+            raise ValueError("unexpected use-case schema")
+        usecase={k:usecase.get(k) for k in ("schema","utc","run_id","read_only","verdict","checks","blocking","interpretation")}
+    if data is None and usecase is None: raise RuntimeError("no platform or usecase report found")
     checkout=a.checkout.resolve()
     if not (checkout/".git").exists(): raise RuntimeError("existing Git checkout not found")
     remote=run(["git","remote","get-url","origin"],cwd=checkout).stdout.strip()
