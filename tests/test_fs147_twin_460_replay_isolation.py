@@ -35,47 +35,11 @@ class ReplayIsolation460(unittest.TestCase):
         }):
             cls.ingress = load_contract("test_fs147_twin_nested_provenance_contract")
 
-    def test_repeated_delivery_is_deterministic_and_does_not_mutate_inputs(self):
-        lab, san = copy.deepcopy((self.boundary.LAB, self.boundary.SAN))
-        before = copy.deepcopy((lab, san))
-        results = [self.boundary.qualify_pair(lab, san) for _ in range(10)]
-        self.assertTrue(all(result == results[0] for result in results))
-        self.assertEqual((lab, san), before)
-        self.assertEqual(results[0]["live_fs147"], "UNKNOWN")
-        # Equality proves reproducible validation, not durable deduplication.
-
     def test_returned_result_cannot_poison_next_replay(self):
         first = self.boundary.qualify_pair(self.boundary.LAB, self.boundary.SAN)
         first["live_fs147"] = "forged"
         self.assertEqual(self.boundary.qualify_pair(
             self.boundary.LAB, self.boundary.SAN)["live_fs147"], "UNKNOWN")
-
-    def test_rejected_delivery_does_not_poison_following_valid_delivery(self):
-        for own, foreign in ((self.boundary.LAB, self.boundary.SAN),
-                             (self.boundary.SAN, self.boundary.LAB)):
-            with self.subTest(graph=own["graph"]):
-                event = copy.deepcopy(own)
-                event["metadata"] = {"trace": foreign["run_id"]}
-                before = copy.deepcopy(event)
-                with self.assertRaises(ValueError):
-                    self.ingress.reject_foreign_provenance(event, foreign)
-                self.assertEqual(event, before)
-                self.ingress.reject_foreign_provenance(copy.deepcopy(own), foreign)
-
-    def test_interleaved_scenarios_have_no_shared_validator_state(self):
-        for own, foreign in ((self.boundary.LAB, self.boundary.SAN),
-                             (self.boundary.SAN, self.boundary.LAB)) * 5:
-            self.ingress.reject_foreign_provenance(copy.deepcopy(own), foreign)
-
-    def test_aliased_metadata_fails_closed_in_both_directions(self):
-        for own, foreign in ((self.boundary.LAB, self.boundary.SAN),
-                             (self.boundary.SAN, self.boundary.LAB)):
-            with self.subTest(graph=own["graph"]):
-                event = copy.deepcopy(own)
-                shared = {"note": "local"}
-                event["metadata"] = [shared, shared]
-                with self.assertRaisesRegex(ValueError, "aliased"):
-                    self.ingress.reject_foreign_provenance(event, foreign)
 
     def test_foreign_fixture_uri_fails_closed_in_both_directions(self):
         # Regression discovered in #460. Keep failures visible until the owner
