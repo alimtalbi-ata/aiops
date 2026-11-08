@@ -75,3 +75,36 @@ python3 scripts/ops/compare_debian_provenance.py /private/before.json /private/a
 The comparator reads two local JSON files and prints a JSON diff to stdout; it never calls Docker, GitHub, a network or a deployment tool. It detects added/missing container names, changes to immutable image IDs and Compose project/service/config hash, and differences in Compose YAML SHA-256. It deliberately emits `release_decision: HOLD`, `feature_parity: UNKNOWN`, `deployment_chronology: UNKNOWN` and `backup_restoration: NOT_ATTESTED`, even when the two snapshots are identical. A container name change is not necessarily a removal or new deployment; a missing container can reflect incomplete access. The comparison is evidence for operator review, **not a feature score, backup or automatic release gate**.
 
 The existing `quality.yml` workflow now executes both collector and comparator tests. Generic CI successes are not proof of Debian host behavior.
+
+
+## 7. Join existing Debian and GitHub evidence — offline
+
+`scripts/ops/join_debian_github_evidence.py` joins an operator-reviewed candidate manifest to an already captured runtime snapshot. It **never** guesses a source SHA from a tag, service name or image creation date. Candidate entries must have `name`, `component`, `github_sha`; optional `verified_runtime_image_id` must be an exact `sha256:...` image ID. Evidence arrays (`features`, `ci_evidence`, `integration_evidence`, `missing_evidence`) are explicitly operator supplied, not auto-certified.
+
+Minimal private local candidate manifest:
+
+```json
+{
+  "schema": "aiops2-component-candidates-v1",
+  "candidates": [
+    {
+      "name": "Worker V28 isolation",
+      "component": "worker",
+      "github_sha": "fd347ec92a1ca3d003bbb8daae70dffba117f308",
+      "features": ["SAN-write isolation in FS synthetic observation"],
+      "ci_evidence": ["PR #431: 18 successful check-run records, some repeated"],
+      "integration_evidence": [],
+      "missing_evidence": ["deployed source/image linkage", "host E2E", "backup"]
+    }
+  ]
+}
+```
+
+Commands on an already reviewed checkout:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_join_debian_github_evidence.py' -v
+python3 scripts/ops/join_debian_github_evidence.py /private/runtime.json /private/candidates.json
+```
+
+The join always returns `release_decision: HOLD` and `backup_restoration: NOT_ATTESTED`. Even an exact claimed image-ID match does not establish build provenance from the GitHub SHA. Independent source/build receipts and Debian backup/restore checks remain mandatory. This step introduces **no new cron, publisher, GitHub API call, Docker mutation, or release promotion**.
