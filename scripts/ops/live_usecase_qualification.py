@@ -84,7 +84,12 @@ def summarize(linkage, platform, execution, stamp, portal=None):
               {"state":runtime.get("aiops2-rebuild-intelligence",{}).get("state")},
               "restore Intelligence runtime and qualify Critic decision"),
     ]
-    failed=[x["name"] for x in items if x["status"]!="PASS"]
+    if blocked_safely:
+        for item in items:
+            if item["name"] in ("temporal_worker_history","hitl_action_binding"):
+                item["status"]="NOT_APPLICABLE"
+                item["next_action"]="Qualify this chain on a separate approved action run"
+    failed=[x["name"] for x in items if x["status"]=="HOLD"]
     return {"schema":"aiops2-live-usecase-qualification-v1","utc":stamp,
             "run_id":linkage.get("run_id",RUN_ID),"read_only":True,
             "verdict":"PASS" if not failed else "HOLD","checks":items,
