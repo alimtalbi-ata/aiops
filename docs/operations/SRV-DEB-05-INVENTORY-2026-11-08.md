@@ -205,3 +205,12 @@ This list preserves every container name in the supplied audit. `running`, `exit
 ## Provenance
 
 Source: user-provided read-only Docker audit captured on `SRV-DEB-05` and supplied in the conversation on 2026-11-08. The source command inspected Docker Compose projects, containers, images, labels, networks, mounts and volumes, and checked Compose file presence and SHA-256. It explicitly reported no HTTP requests, database access, container start/stop/removal, volume removal or configuration modification.
+
+
+## Existing Debian scheduled reporting pipeline — observed 2026-11-08
+
+The `aiops` user crontab contains three per-minute, `flock`-guarded jobs: `poll.sh` (deployment polling), `aiops-debian-reporter` (report generation), and `aiops-publish-report` (SSH report publication). It also contains `fs-watch.sh` every 10 minutes. The cron service is active. The cron journal shows repeated launches of the three per-minute jobs during the inspected interval.
+
+This is evidence of scheduler activity only. It does not establish successful report generation or publication. The root crontab could not be inspected because sudo requested a password. Script contents, output path/schema, secret redaction, publisher destination/branch, exit codes and GitHub commit freshness remain unverified.
+
+**Consolidation decision:** review and reuse the existing reporter → publisher chain; do not create a new cron or duplicate inventory agent. Preserve schedules and locks. Do not invoke or modify the deployment poller or filesystem watcher until their behavior has been reviewed. See [Project Continuity](../PROJECT-CONTINUITY.md) for required verification steps.
