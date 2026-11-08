@@ -1,15 +1,52 @@
-# Worker #459 — BLOCKED handoff
+# Worker #459 — incremental offline safety regression handoff
 
-UTC: 2026-11-08T16:52:18+00:00
+UTC: 2026-11-08T17:00:32+00:00
 Issue: https://github.com/alimtalbi-ata/aiops/issues/459
 Role: Worker
 Branch: agent/worker/459-pipeline
-Source base: adcceb74bfd6289c161e344382e19be7952e3859 (orchestration candidate, not approved integration base).
-Handoff commit: retrieve exact SHA with `git rev-parse HEAD`; no application commit produced.
-Changed paths: docs/handoffs/worker/latest.md only.
-Interfaces touched: NONE.
+Exact test implementation SHA: 97bb87fb7c9d66c540db51a0428ce52f1eadf9a1
+Source base: adcceb74bfd6289c161e344382e19be7952e3859 (orchestration candidate).
+Changed paths: tests/test_worker_pipeline_safety.py; docs/handoffs/worker/latest.md.
+Interfaces touched: NONE. No application source, Core/Twin/Portal/Integration, cron or Compose changes.
 
-## Discovery and blockers
+## Current result
+
+User requested continuation after the initial blocked report. Added independently executable Worker safety regressions without editing the active #446 Worker entrypoint or copying the root-level FS147 pipeline. Runtime changes still require ownership/base arbitration.
+
+Five tests execute existing activity/workflow bodies selected from app/worker/main.py using AST. Decorators/imports/startup are excluded; service calls and Temporal activity scheduling use test doubles. Covers invalid modes before service effects; LIVE refusal before Evidence/Twin/Policy calls across seven stages; Policy BLOCKED/UNKNOWN/FAIL with no completed event/checkpoint; repeated activities retaining event/command keys while attempt metadata changes; Critic/Policy BLOCKED workflow results preventing HITL/REMEDIATE/VERIFY/RESOLVE.
+
+This is an incremental test contribution, not a runtime fix or complete issue acceptance. It does not prove SDK integration, actual Temporal history replay, durable duplicate suppression, concurrent delivery, authenticated Critic/Policy behavior or production safety. Stable idempotency keys alone do not establish Core deduplication. Critic coverage here is the workflow boundary's BLOCKED result, not a live Analyst/Critic adapter.
+
+## Commands and results
+
+```
+cd /workspace/aiops
+python -m unittest discover -s tests -p 'test_worker_pipeline_safety.py' -v
+# 5 PASS
+python -m unittest discover -s tests -p 'test_simulation_policy_contract.py' -v
+# 6 PASS
+git diff --check
+# PASS
+```
+
+Earlier exact candidate 578c46e31fb543a682c710d3502ee18aa005a00e was exported with git archive into /tmp/worker459-validation; `python -m unittest discover -s tests -p 'test_worker_fs147*.py' -v` passed 29 existing tests there. These are distinct source/test targets, not 40 tests on the current branch.
+
+CODE: COMMITTED — tests only; no application behavior changed.
+CI: NOT_VERIFIED. Existing workflow does not explicitly select this new test filename; standalone command above is required. No workflow edited under Worker ownership.
+DEBIAN: UNKNOWN. No receipt inspected or remote command run.
+E2E: NOT_VERIFIED. Actual Temporal replay/restart/concurrency remains UNRUN.
+
+Dependencies: Integration #457 approval of integration base and ownership for any application patch; Core #458 authoritative claim/outbox contracts; api.github.com network access for draft PR/comment and CI queries. Existing GH_TOKEN presence is not a reason to request a replacement token.
+Risk: offline source-body execution excludes SDK wiring; no claim of deployment readiness. Unknown/denied states remain fail closed.
+Rollback: revert 97bb87fb7c9d66c540db51a0428ce52f1eadf9a1 to remove the test addition; no runtime rollback needed.
+Next owner: Integration, review this independent test increment and arrange inclusion in its test command; then Worker, qualify replay/durable dedup on the approved runtime candidate.
+
+## GitHub publication
+
+Git branch pushes work. API attempts return 403 Forbidden; draft PR/comment and exact-SHA CI cannot be confirmed. Proposed PR base: ops/aiops2-multiagent-orchestration-20261108, subject to Integration review; no merge authorized. Earlier onboarding draft reads/save failed INVALID_ARGUMENT, so the api.github.com domain addition is not confirmed persisted. Environment status on continuation shows enforced restricted policy with no api.github.com entry. Add that destination in environment network settings while preserving other destinations, then retry API publication.
+
+## Initial discovery (historical; application edits remain gated)
+
 
 Read AGENTS.md and orchestration contract on ops/aiops2-multiagent-orchestration-20261108; continuity, component/reuse catalog and cross-branch reuse inventory. Read issues #457/#458/#459 and PRs #446/#450/#456 through public GitHub pages. Git HTTPS fetch works; API GraphQL and REST return proxy HTTP 403 Forbidden. A GH_TOKEN binding is present; no credential values were inspected. This is not evidence that a new token is needed.
 
@@ -19,29 +56,3 @@ Existing PR #446 remains Draft and explicitly modifies `app/worker/main.py` (exe
 
 STOP: orchestration contract requires Integration arbitration on overlapping active ownership. Do not patch PR #446's Worker entrypoint or copy the existing FS147 implementation into a duplicate. Integration must confirm #446 ownership, approve the integration base and assign the root `worker/**` pipeline path before an incremental application change. User explicitly launched this execution; the issue's older PREPARATION ONLY text is not treated as cancellation of that instruction.
 
-## Tests actually executed
-
-Exported exact candidate SHA with `git archive` into `/tmp/worker459-validation` (temporary source export, not another writable Git checkout), then ran:
-
-```
-cd /tmp/worker459-validation
-python -m unittest discover -s tests -p 'test_worker_fs147*.py' -v
-```
-
-29 tests PASS. Synthetic callbacks only: duplicate durable-claim response prevents downstream callbacks; Critic refusal prevents Policy; Policy refusal remains NO_EFFECT; foreign actors/evidence and malformed observations/findings fail closed. These are existing candidate tests, not new tests and not a Temporal history replay test. Actual Temporal replay/restart/concurrent delivery integration remains UNRUN.
-
-CODE: BLOCKED, no application changes.
-CI: NOT_VERIFIED, no exact-SHA Actions result retrieved.
-DEBIAN: UNKNOWN; no receipt inspected, no commands on Debian.
-E2E: NOT_VERIFIED; no GLPI/PostgreSQL/Temporal service exercised.
-
-Dependencies: Integration #457 ownership/base arbitration; Core #458 authoritative claim/outbox contracts; GitHub API network access for draft PR/comment/CI queries.
-Risk: changing a different Worker source than the runtime candidate or duplicating the existing root-level module; fixtures cannot attest production safety.
-Rollback: remove/revert this documentation-only handoff; no runtime rollback needed.
-Next owner: Integration; resolve ownership/base and API access, then Worker can select an additive regression and patch on this isolated branch.
-
-## Publication limitations
-
-No draft PR or issue comment could be created through the blocked API. The intended issue comment is this handoff plus the exact commit SHA from Git. No merge, deployment, production writes, cron/Compose changes or HITL/Policy bypass performed.
-
-Earlier onboarding configuration draft reads failed twice; saving the required api.github.com domain addition was not confirmed (INVALID_ARGUMENT). No configuration persistence or publication claimed. Add api.github.com in environment network settings while preserving existing domains, then retry API access; do not enter secret values in chat.
