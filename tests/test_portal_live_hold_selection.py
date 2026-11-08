@@ -34,6 +34,21 @@ class LiveHoldSelectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "UNVERIFIED")
         self.assertIsNone(result["hold"])
 
+    def test_explicit_policy_denial_is_not_portal_defect_even_with_auth_reason(self):
+        result = first_portal_hold(receipt([
+            {"id": "blocked", "status": "HOLD", "owner": "portal",
+             "reason": "auth_401", "policy_status": "DENIED"},
+            {"id": "browser", "status": "HOLD", "owner": "browser",
+             "reason": "legend_duplicate"}]), NOW)
+        self.assertEqual(result["hold"]["id"], "browser")
+
+    def test_hitl_pending_without_safe_reason_is_not_actionable(self):
+        result = first_portal_hold(receipt([
+            {"id": "waiting", "status": "HOLD", "component": "ui",
+             "reason": "auth_401", "policy_state": " hitl_pending "}]), NOW)
+        self.assertEqual(result["status"], "UNVERIFIED")
+        self.assertIsNone(result["hold"])
+
     def test_pass_does_not_imply_live_success(self):
         result = first_portal_hold(receipt([{"status": "PASS", "owner": "portal"}]), NOW)
         self.assertEqual(result["status"], "UNVERIFIED")
