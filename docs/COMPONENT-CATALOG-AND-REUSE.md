@@ -184,3 +184,12 @@ The host inventory previously identified five Compose projects: `aiops2-rebuild`
 The component decision must prioritize usable functionality and integration over version number alone. Required evidence per candidate: immutable image digest, exact source commit/build provenance, component contract/dependency compatibility, feature implementation links, passing CI/contract/integration/E2E tests, runtime health/readiness, data/schema compatibility and rollback. Produce a matrix with recommended candidate, alternatives, implemented feature deltas, evidence, unknowns and blockers. Unknown provenance/tests mean NOT_QUALIFIED; no inference from tags/container names.
 
 Do not automatically promote, deploy, delete stacks, remove volumes or migrate databases. Selection is a recommendation only; consolidation requires a separate approved and rollback-tested change. The existing `poll.sh` is a protected-branch deployment mechanism and must remain separate from this read-only qualification pipeline. See [Project Continuity](PROJECT-CONTINUITY.md) for the full audited script findings and acceptance criteria.
+
+
+### Priority: preserve recent Debian deployments before comparing candidates
+
+Selection order is mandatory: (1) components and artifacts already deployed on SRV-DEB-05 during the last 48 hours, (2) other installed/working components on the main Debian development platform, (3) qualification/E2E candidates, (4) undeployed GitHub branches/worktrees/patches, and (5) old duplicate environments. The recent Debian state is the preservation baseline. Do not replace it solely because another candidate has a higher version or more advertised features.
+
+Before selecting or deleting anything, capture exact image IDs/digests, Compose project/service/config file labels, source commit and dirty state, effective configuration, networks, mounts and named volumes, test evidence, and a verified backup/rollback. Preserve all candidate stacks during comparison. Unknown deployment provenance must be marked UNKNOWN, not inferred from image tags or timestamps. Any environment/volume removal or deployment change requires separate approval after the preservation gate.
+
+The full decision and evidence gap are documented in [Project Continuity](PROJECT-CONTINUITY.md).
