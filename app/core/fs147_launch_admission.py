@@ -49,7 +49,7 @@ def classify_launch(value):
         return LaunchDecision.UNKNOWN
     if value.mode == "LIVE" or (type(value.ticket_id) is int and value.ticket_id != 147):
         return LaunchDecision.DENIED
-    if value.policy in {"DENY", "STOP_AUTO"} or value.native_hitl == "REJECTED":
+    if type(value.policy) is str and value.policy in {"DENY", "STOP_AUTO"} or value.native_hitl == "REJECTED":
         return LaunchDecision.DENIED
     if value.mode != "DEMO" or type(value.ticket_id) is not int:
         return LaunchDecision.UNKNOWN
@@ -65,9 +65,9 @@ def classify_launch(value):
            any(unicodedata.category(ch) in ("Cc", "Cf", "Cs") for ch in getattr(value, key))
            for key in fields):
         return LaunchDecision.UNKNOWN
-    if value.policy not in {"ALLOW", "DENY", "STOP_AUTO", "UNKNOWN"}:
+    if type(value.policy) is not str or value.policy not in {"ALLOW", "DENY", "STOP_AUTO", "UNKNOWN"}:
         return LaunchDecision.UNKNOWN
-    if value.native_hitl not in {"ACCEPTED", "REJECTED", "PENDING", "UNKNOWN"}:
+    if type(value.native_hitl) is not str or value.native_hitl not in {"ACCEPTED", "REJECTED", "PENDING", "UNKNOWN"}:
         return LaunchDecision.UNKNOWN
     if value.policy == "UNKNOWN":
         return LaunchDecision.UNKNOWN
@@ -89,6 +89,8 @@ def classify_launch(value):
     if type(value.authoritative_reads) is not bool or type(value.lease_cas_verified) is not bool:
         return LaunchDecision.UNKNOWN
     if not value.authoritative_reads or not value.lease_cas_verified:
+        return LaunchDecision.UNKNOWN
+    if type(value.temporal_state) is not str:
         return LaunchDecision.UNKNOWN
     if value.temporal_state in {"DISPATCHING", "UNCERTAIN", "DELIVERED"}:
         return LaunchDecision.UNKNOWN
