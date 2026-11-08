@@ -128,5 +128,22 @@ class LiveHoldSelectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "HOLD")
         self.assertEqual(result["hold"]["id"], "browser")
 
+    def test_explicit_policy_blocked_state_does_not_mask_browser_hold(self):
+        result = first_portal_hold(receipt([
+            {"id": "policy", "status": "HOLD", "owner": "portal",
+             "component": "browser", "reason": "auth_401",
+             "policy_state": "BLOCKED_BY_POLICY"},
+            {"id": "browser", "status": "HOLD", "owner": "browser",
+             "component": "browser", "reason": "legend_duplicate"}]), NOW)
+        self.assertEqual(result["hold"]["id"], "browser")
+
+    def test_awaiting_human_approval_is_not_portal_failure(self):
+        result = first_portal_hold(receipt([
+            {"id": "approval", "status": "HOLD", "owner": "portal",
+             "component": "ui", "reason": "auth_401",
+             "hitl_state": "AWAITING_HUMAN_APPROVAL"}]), NOW)
+        self.assertEqual(result["status"], "UNVERIFIED")
+        self.assertIsNone(result["hold"])
+
 if __name__ == "__main__":
     unittest.main()
