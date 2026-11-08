@@ -6,8 +6,21 @@ from dataclasses import replace
 
 import pytest
 
-from app.core.fs147_temporal_resume import ResumeDecision, classify_resume
-from tests.test_fs147_temporal_resume import fixture
+from app.core.fs147_temporal_resume import ResumeDecision, ResumeEvidence, classify_resume
+
+
+def fixture():
+    return ResumeEvidence(
+        tenant_id='tenant', alert_fingerprint='fp', incident_id='inc',
+        run_id='run', evidence_id='ev', ticket_id=147, mode='DEMO',
+        workflow_id='wf', workflow_run_id='temporal-run',
+        expected_workflow_id='wf', expected_workflow_run_id='temporal-run',
+        action_id='inspect', approved_action_id='inspect', policy='ALLOW',
+        native_hitl='ACCEPTED', owner_id='worker', lease_owner_id='worker',
+        fencing_token=7, observed_fencing_token=7,
+        durable_outbox_state='READY', temporal_state='WAITING_FOR_HUMAN',
+        authoritative_reads=True, lease_cas_verified=True,
+    )
 
 
 @pytest.mark.parametrize("outbox,temporal", [
