@@ -40,3 +40,11 @@
 
 ## Contrat de chaque rapport
 Horodatage; livraisons et SHAs depuis le rapport précédent; CI run; reçu Debian; résultats E2E; écarts par composant; bloqueur; prochaine action; verdict `ON_TRACK` ou `AT_RISK` et justification. En l'absence de preuves nouvelles: `NO_NEW_EVIDENCE`.
+
+## Contrat de fraîcheur des preuves — 2026-11-08
+- Les cron Debian `poll.sh`, `aiops-debian-reporter`, `aiops-publish-report` sont programmés **chaque minute**. Le passage cron ne prouve ni succès de la commande ni publication réussie: vérifier timestamp, commit, résultat, et erreurs.
+- Toute tâche ChatGPT lit d'abord `ops/debian-runtime-reports` et `ops/debian-reports/SRV-DEB-05/latest.json` lorsqu'ils existent, ainsi que les reçus et le dernier SHA. Si la preuve a plus de **3 minutes**, signaler `STALE` et investiguer le poll/reporter/publisher plutôt que répéter un état périmé.
+- Le contrôle transversal `platform_hourly.sh` reste à **H:17** tant que le cron n'a pas été modifié sur Debian. Ne pas qualifier ses mesures comme des résultats minute.
+- Les tâches ChatGPT passent à H:00/12/24/36/48; elles doivent consommer les preuves minute les plus récentes et transmettre les commits au rôle suivant.
+- Le rapport horaire présente les timestamps des preuves, la fraîcheur, la dernière livraison CODE, CI, DEBIAN et E2E et les écarts entre ces dimensions.
+- Pour une preuve d'aller-retour GitHub→Debian→GitHub: demander un reçu signé par le contenu (SHA de l'artefact), horodaté sur Debian, publié par le cron minute et vérifié côté GitHub. La simple présence d'un cron ne suffit pas.
