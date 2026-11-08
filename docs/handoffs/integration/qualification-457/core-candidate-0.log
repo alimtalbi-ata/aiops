@@ -1,0 +1,18 @@
+test_complete_inventory_missing (test_itsm_reconcile_contract.ReconciliationTests.test_complete_inventory_missing) ... ok
+test_conflicting_xref (test_itsm_reconcile_contract.ReconciliationTests.test_conflicting_xref) ... ok
+test_duplicate_candidates (test_itsm_reconcile_contract.ReconciliationTests.test_duplicate_candidates) ... ok
+test_existing_fs147 (test_itsm_reconcile_contract.ReconciliationTests.test_existing_fs147) ... ok
+test_existing_unlinked (test_itsm_reconcile_contract.ReconciliationTests.test_existing_unlinked) ... ok
+test_live_denied (test_itsm_reconcile_contract.ReconciliationTests.test_live_denied) ... ok
+test_malformed (test_itsm_reconcile_contract.ReconciliationTests.test_malformed) ... ok
+test_missing_xref_not_missing_ticket (test_itsm_reconcile_contract.ReconciliationTests.test_missing_xref_not_missing_ticket) ... ok
+test_pure_repeat (test_itsm_reconcile_contract.ReconciliationTests.test_pure_repeat) ... ok
+test_ui_not_authoritative (test_itsm_reconcile_contract.ReconciliationTests.test_ui_not_authoritative) ... ok
+test_unknown_mode (test_itsm_reconcile_contract.ReconciliationTests.test_unknown_mode) ... ok
+test_wrong_run (test_itsm_reconcile_contract.ReconciliationTests.test_wrong_run) ... ok
+test_wrong_tenant (test_itsm_reconcile_contract.ReconciliationTests.test_wrong_tenant) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.001s
+
+OK

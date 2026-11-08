@@ -1,0 +1,10 @@
+test_actual_postgres_and_core_health (test_core_noc_real_integration.CoreNocRealIntegration.test_actual_postgres_and_core_health) ... ok
+test_live_observed_and_missing_incidents_fail_closed (test_core_noc_real_integration.CoreNocRealIntegration.test_live_observed_and_missing_incidents_fail_closed) ... ok
+test_missing_or_invalid_internal_token_is_rejected (test_core_noc_real_integration.CoreNocRealIntegration.test_missing_or_invalid_internal_token_is_rejected) ... ok
+test_synthetic_modes_are_bounded_unattested_reads (test_core_noc_real_integration.CoreNocRealIntegration.test_synthetic_modes_are_bounded_unattested_reads) ... ok
+test_tenant_a_b_and_null_scope_all_fail_closed (test_core_noc_real_integration.CoreNocRealIntegration.test_tenant_a_b_and_null_scope_all_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.253s
+
+OK

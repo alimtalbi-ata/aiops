@@ -1,0 +1,21 @@
+test_worker_fs147_bridge_adapter (unittest.loader._FailedTest.test_worker_fs147_bridge_adapter) ... ERROR
+
+======================================================================
+ERROR: test_worker_fs147_bridge_adapter (unittest.loader._FailedTest.test_worker_fs147_bridge_adapter)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_worker_fs147_bridge_adapter
+Traceback (most recent call last):
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/loader.py", line 396, in _find_test_path
+    module = self._get_module_from_name(name)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/loader.py", line 339, in _get_module_from_name
+    __import__(name)
+  File "/workspace/aiops-qualification/candidates/worker/tests/test_worker_fs147_bridge_adapter.py", line 2, in <module>
+    import pytest
+ModuleNotFoundError: No module named 'pytest'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

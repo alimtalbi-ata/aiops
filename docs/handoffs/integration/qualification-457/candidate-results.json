@@ -1,0 +1,99 @@
+[
+  {
+    "role": "core",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_itsm_reconcile_contract.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/core-candidate-0.log",
+    "utc": "2026-11-08T16:41:04.905283+00:00"
+  },
+  {
+    "role": "core",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_live_usecase_receipt_gate.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/core-candidate-1.log",
+    "utc": "2026-11-08T16:41:05.019277+00:00"
+  },
+  {
+    "role": "worker",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_fs147_action_binding_contract_20261108.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/worker-candidate-0.log",
+    "utc": "2026-11-08T16:41:05.110110+00:00"
+  },
+  {
+    "role": "worker",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_worker_fs147_bridge_adapter.py",
+      "-v"
+    ],
+    "exit": 1,
+    "log": "/workspace/aiops-setup/worker-candidate-1.log",
+    "utc": "2026-11-08T16:41:05.203892+00:00"
+  },
+  {
+    "role": "twin",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_fs147_twin*contract.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/twin-candidate-0.log",
+    "utc": "2026-11-08T16:41:05.298393+00:00"
+  },
+  {
+    "role": "portal",
+    "command": [
+      "node",
+      "--test",
+      "portal-fs364/fs-real-questions-read-gating.test.mjs",
+      "portal-fs364/fs-real-two-actions-contract.test.mjs"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/portal-candidate-0.log",
+    "utc": "2026-11-08T16:41:05.552467+00:00"
+  }
+]

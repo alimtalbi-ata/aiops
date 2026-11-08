@@ -1,0 +1,81 @@
+[
+  {
+    "role": "integration",
+    "command": [
+      "bash",
+      "tests/static-audit.sh"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/integration-qualification.log",
+    "sha": "adcceb74bfd6289c161e344382e19be7952e3859",
+    "utc": "2026-11-08T16:40:37.624940+00:00"
+  },
+  {
+    "role": "core",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_core_noc_real_integration.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/core-qualification.log",
+    "sha": "adcceb74bfd6289c161e344382e19be7952e3859",
+    "utc": "2026-11-08T16:40:38.297316+00:00"
+  },
+  {
+    "role": "worker",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_simulation_policy_contract.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/worker-qualification.log",
+    "sha": "adcceb74bfd6289c161e344382e19be7952e3859",
+    "utc": "2026-11-08T16:40:38.425906+00:00"
+  },
+  {
+    "role": "twin",
+    "command": [
+      "/workspace/aiops/.venv/bin/python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_acme_impact_read_model.py",
+      "-v"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/twin-qualification.log",
+    "sha": "adcceb74bfd6289c161e344382e19be7952e3859",
+    "utc": "2026-11-08T16:40:39.095725+00:00"
+  },
+  {
+    "role": "portal",
+    "command": [
+      "node",
+      "--test",
+      "tests/test_portal_navigation_client.mjs",
+      "tests/test_portal_bootstrap_client.mjs",
+      "tests/test_portal_noc_client.cjs"
+    ],
+    "exit": 0,
+    "log": "/workspace/aiops-setup/portal-qualification.log",
+    "sha": "adcceb74bfd6289c161e344382e19be7952e3859",
+    "utc": "2026-11-08T16:40:39.348200+00:00"
+  }
+]

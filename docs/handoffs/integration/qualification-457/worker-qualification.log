@@ -1,0 +1,11 @@
+test_http_start_validates_mode_before_temporal_connection (test_simulation_policy_contract.SimulationPolicyContractTests.test_http_start_validates_mode_before_temporal_connection) ... ok
+test_live_mode_keeps_strict_effect_policy_path (test_simulation_policy_contract.SimulationPolicyContractTests.test_live_mode_keeps_strict_effect_policy_path) ... ok
+test_policy_request_uses_mapped_command (test_simulation_policy_contract.SimulationPolicyContractTests.test_policy_request_uses_mapped_command) ... ok
+test_synthetic_modes_request_observation_not_execution (test_simulation_policy_contract.SimulationPolicyContractTests.test_synthetic_modes_request_observation_not_execution) ... ok
+test_unknown_modes_rejected (test_simulation_policy_contract.SimulationPolicyContractTests.test_unknown_modes_rejected) ... ok
+test_worker_validates_mode_before_first_stage_event (test_simulation_policy_contract.SimulationPolicyContractTests.test_worker_validates_mode_before_first_stage_event) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.009s
+
+OK

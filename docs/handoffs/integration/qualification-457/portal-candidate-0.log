@@ -1,0 +1,19 @@
+✔ does not invoke human question reader on missing Core (3.5352ms)
+✔ does not invoke human question reader on ticket 146 (5.503275ms)
+✔ does not invoke human question reader on LIVE mismatch (0.834264ms)
+✔ does not invoke human question reader on missing no-live guarantee (0.365629ms)
+✔ reads human questions only after Core confirms GLPI 147 (1.223514ms)
+✔ lab button never invokes human question reader (0.62002ms)
+✔ both Portal actions consume one authenticated read-only backend contract (11.348313ms)
+✔ missing authenticated actor fails closed for both buttons before any read (1.587898ms)
+✔ tenant ACL denial fails closed for both buttons before any read (1.164878ms)
+✔ unavailable Core cannot lend Temporal/Policy a fabricated run (1.0065ms)
+✔ ticket 146 observations cannot become ticket 147 state (0.995955ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 138.501501

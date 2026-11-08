@@ -1,0 +1,13 @@
+test_binding_rejections (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_binding_rejections) ... ok
+test_claim_and_replay (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_claim_and_replay) ... ok
+test_digest_changes_with_bound_fields (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_digest_changes_with_bound_fields) ... ok
+test_dry_run_must_be_literal_boolean_true (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_dry_run_must_be_literal_boolean_true) ... ok
+test_expiration_and_temporal_mismatch (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_expiration_and_temporal_mismatch) ... ok
+test_fail_closed_decisions (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_fail_closed_decisions) ... ok
+test_simulated_only (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_simulated_only) ... ok
+test_untrusted_clock_and_expiry_fail_closed (test_fs147_action_binding_contract_20261108.ActionBindingTests.test_untrusted_clock_and_expiry_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.001s
+
+OK

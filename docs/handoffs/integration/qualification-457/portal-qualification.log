@@ -1,0 +1,41 @@
+✔ hypothetical server-qualified read uses no cookies/cache; DOM is text-only (5.018207ms)
+✔ legacy unscoped HTTP 200 cannot populate cockpit metrics or Run IDs (1.709106ms)
+✔ denied and missing tokens never render stale data (0.845363ms)
+✔ clear invalidates a pending response before it can render (0.921949ms)
+✔ forged or malformed bootstrap envelopes fail closed before DOM updates (12.292256ms)
+✔ all unavailable sources remain UNKNOWN even after HTTP 200 (1.743952ms)
+✔ future server-qualified fixture clears token and labels links unverified (5.485238ms)
+✔ legacy bearer-only HTTP 200 cannot reveal operator-configured links (2.25904ms)
+✔ forged LIVE claim and script URL fail closed without a partial link (6.804863ms)
+✔ clear invalidates a delayed successful response even when fetch ignores abort (1.085963ms)
+✔ HTTP error and malformed response remain UNKNOWN (2.114571ms)
+✔ correlateNoc preserves HTTP 401 and redacts upstream errors (4.227325ms)
+✔ correlateNoc preserves HTTP 403 and redacts upstream errors (1.81612ms)
+✔ correlateNoc preserves HTTP 503 and redacts upstream errors (1.336886ms)
+✔ grafanaHealth preserves HTTP 401 and redacts upstream errors (2.063296ms)
+✔ grafanaHealth preserves HTTP 403 and redacts upstream errors (1.015337ms)
+✔ grafanaHealth preserves HTTP 503 and redacts upstream errors (1.114829ms)
+✔ demoRag preserves HTTP 401 and redacts upstream errors (1.206589ms)
+✔ demoRag preserves HTTP 403 and redacts upstream errors (1.129204ms)
+✔ demoRag preserves HTTP 503 and redacts upstream errors (1.534904ms)
+✔ correlateNoc rejects HTTP 200 without server-qualified tenant ACL (2.12244ms)
+✔ grafanaHealth rejects HTTP 200 without server-qualified tenant ACL (3.367063ms)
+✔ synthetic RAG stays visibly SYNTHETIC, never runtime-attested (1.372945ms)
+✔ RAG rejects forged 200 runtime-attested data (4.081861ms)
+✔ correlateNoc ignores stale HTTP 200 after a newer HTTP 403 (1.239656ms)
+✔ correlateNoc ignores stale network errors after a newer refusal (1.43533ms)
+✔ grafanaHealth ignores stale HTTP 200 after a newer HTTP 403 (1.436193ms)
+✔ grafanaHealth ignores stale network errors after a newer refusal (1.593704ms)
+✔ demoRag ignores stale HTTP 200 after a newer HTTP 403 (1.681885ms)
+✔ demoRag ignores stale network errors after a newer refusal (1.10892ms)
+✔ a missing token on the latest click invalidates an in-flight NOC response (1.725052ms)
+✔ missing token never triggers NOC request (0.84964ms)
+✔ transport errors are redacted (1.009613ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 153.862456

@@ -1,0 +1,14 @@
+test_api_and_page_explicitly_synthetic (test_acme_impact_read_model.AcmeImpactTests.test_api_and_page_explicitly_synthetic) ... ok
+test_canonical_portal_mounts_acme_routes (test_acme_impact_read_model.AcmeImpactTests.test_canonical_portal_mounts_acme_routes) ... ok
+test_deterministic_ids_and_no_glpi_runtime_claim (test_acme_impact_read_model.AcmeImpactTests.test_deterministic_ids_and_no_glpi_runtime_claim) ... ok
+test_duplicate_json_keys_fail_closed (test_acme_impact_read_model.AcmeImpactTests.test_duplicate_json_keys_fail_closed) ... ok
+test_invalid_fixture_returns_503_not_healthy_demo (test_acme_impact_read_model.AcmeImpactTests.test_invalid_fixture_returns_503_not_healthy_demo) ... ok
+test_rejects_cycles_and_unknown_dependencies (test_acme_impact_read_model.AcmeImpactTests.test_rejects_cycles_and_unknown_dependencies) ... ok
+test_rejects_live_or_unsafe_actions (test_acme_impact_read_model.AcmeImpactTests.test_rejects_live_or_unsafe_actions) ... ok
+test_stable_san_to_payments_path_and_blast_radius (test_acme_impact_read_model.AcmeImpactTests.test_stable_san_to_payments_path_and_blast_radius) ... ok
+test_symlink_fixture_fails_closed (test_acme_impact_read_model.AcmeImpactTests.test_symlink_fixture_fails_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.144s
+
+OK
