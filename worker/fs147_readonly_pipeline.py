@@ -162,7 +162,10 @@ def execute(request: FS147Request, *, stop_auto: bool,
         if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
                 or ("dispatch_allowed" in decision and decision["dispatch_allowed"] is not False)
                 or ("resolved" in decision and decision["resolved"] is not False)
-                or ("effect" in decision and decision["effect"] != "NO_EFFECT")):
+                or ("effect" in decision and decision["effect"] != "NO_EFFECT")
+                or ("action_executed" in decision and decision["action_executed"] is not False)
+                or ("remediation_executed" in decision and decision["remediation_executed"] is not False)
+                or ("ticket_transition" in decision and decision["ticket_transition"] is not None)):
             return _blocked("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.
