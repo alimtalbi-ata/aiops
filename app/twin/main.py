@@ -147,6 +147,20 @@ def scenario_facts(run_id:str, authorization:str|None=Header(default=None)):
         ).fetchall()
     if len(rows) > 500:
         raise HTTPException(409, 'scenario fact limit exceeded')
+    # Defense in depth: reject an inconsistent adapter/DB result rather than
+    # returning another RUN's evidence as if it belonged to this RUN.
+    import json
+    for row in rows:
+        value = row[3]
+        try:
+            payload = json.loads(value) if isinstance(value, str) else value
+        except (ValueError, TypeError):
+            payload = None
+        if (not isinstance(payload, dict)
+                or payload.get('run_id') != run_id
+                or payload.get('synthetic') not in (True, 'true')
+                or payload.get('synthetic') in (1,)):
+            raise HTTPException(409, 'scenario fact provenance mismatch')
     k = ['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']
     return {'run_id':run_id,'synthetic':True,'record_type':'twin_fact',
             'facts':[dict(zip(k,row)) for row in rows]}
