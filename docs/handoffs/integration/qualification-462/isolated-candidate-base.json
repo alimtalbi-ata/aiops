@@ -1,0 +1,139 @@
+{
+  "schema": "aiops2.isolated-candidate-base.v1",
+  "issue": 462,
+  "agent": 7,
+  "recorded_at_utc": "2026-11-09T20:44:19.266380+00:00",
+  "candidate_branch": "agent/integration/462-isolated-candidate",
+  "common_source_base": {
+    "pr": 194,
+    "sha": "40d38705cf2bde3be6052340442c117a81908f65",
+    "branch": "feat/temporal-hitl-v1",
+    "rule": "Frozen application base; preserve OIDC HITL, approval/outbox leases, Analyst/Critic, IA ledger and Policy refusal behavior"
+  },
+  "scope": "CLOUD_DISPOSABLE_BENCH_ONLY; no Debian or production GLPI/PostgreSQL writes",
+  "publication_order": "Publish this base/ownership commit before source changes or service startup. Git publication is available; API/issue comment remains blocked by proxy HTTP403.",
+  "single_writer_rule": "Agent 7 is the sole writer on this integration candidate. Named component roles review; no parallel writing to the same file. This is a candidate-only handoff, no ownership transfer or writes on component branches.",
+  "ownership": [
+    {
+      "paths": [
+        "app/core/main.py"
+      ],
+      "writer": "Agent 7 on candidate only",
+      "reviewers": [
+        "Core #458 / owners #466/#470/#472/#474",
+        "Worker #459"
+      ],
+      "allowed_change": "Only execute route: adapt existing #470/#472/#474 protections as one provenance-recorded increment. Preserve all other #194 functions/routes and psycopg cursor fix."
+    },
+    {
+      "paths": [
+        "app/worker/main.py",
+        "app/worker/workflow.py"
+      ],
+      "writer": "Agent 7 on candidate only",
+      "reviewers": [
+        "Worker #459",
+        "Core #458 / owner #194"
+      ],
+      "allowed_change": "Frozen initially. If a reproduced isolated startup/DEMO issue requires a narrow compatibility patch, record proof and patch separately; never replace with minimal #468 Worker or remove HITL barriers."
+    },
+    {
+      "paths": [
+        "app/core/action_bound_admission.py",
+        "tests/test_action_bound_admission.py"
+      ],
+      "writer": "Agent 7 for any future candidate port only",
+      "reviewers": [
+        "Core #458 / owner #466"
+      ],
+      "allowed_change": "Deferred after bootstrap; pure gate is never LIVE dispatch authorization."
+    },
+    {
+      "paths": [
+        "tools/qualification/bench462.py",
+        "tools/qualification/bench462.Dockerfile",
+        "tests/test_candidate_core_execute.py",
+        "docs/handoffs/integration/qualification-462/isolated-*",
+        "docs/handoffs/integration/qualification-462/bench462-*"
+      ],
+      "writer": "Agent 7",
+      "reviewers": [
+        "Integration #462",
+        "Core #458",
+        "Worker #459"
+      ],
+      "allowed_change": "Reproducible isolated service harness, exact-source manifest, qualification tests and receipts. Reuse #468 runner protections where applicable; no product demo or production installer."
+    }
+  ],
+  "frozen_sources": {
+    "sha": "40d38705cf2bde3be6052340442c117a81908f65",
+    "paths": [
+      "app/shared/**",
+      "app/policy/**",
+      "app/evidence/**",
+      "app/intelligence/**",
+      "app/core/hitl_identity.py",
+      "app/core/denial*.py",
+      "app/core/critic_denial*.py",
+      "app/test_provider/**",
+      "app/twin/**",
+      "app/portal/**",
+      "db/migrations/**",
+      "compose.yml",
+      "deploy/**",
+      ".github/**"
+    ],
+    "rule": "No edits in initial increment; only run in newly labelled disposable resources. Existing deterministic test provider may be selected for DEMO with explicit synthetic labels, not represented as a real model."
+  },
+  "upstream_reserved_read_only": {
+    "core454": [
+      "app/core/live_usecase_receipt_gate.py",
+      "tests/test_live_usecase_receipt_gate.py"
+    ],
+    "twin453": [
+      "tests/test_fs147_twin_nested_provenance_contract.py",
+      "tests/test_fs147_twin_adapter_boundary_contract.py",
+      "tests/test_fs147_twin_san_isolation_contract.py"
+    ],
+    "integration_producer": [
+      "scripts/ops/live_usecase_qualification.py"
+    ],
+    "rule": "No modification here; producer/receipt compatibility is not part of bootstrap."
+  },
+  "planned_provenance": [
+    {
+      "purpose": "Core execute protections",
+      "pr": 474,
+      "sha": "c13d56acf050126e65fae120ac8d2f7f1abd5a3f",
+      "paths": [
+        "app/core/main.py",
+        "tests/test_core_live_execute_guard.py"
+      ],
+      "rule": "Adapt function/test only, not source tree; document delta and test fixture RequestException correction."
+    },
+    {
+      "purpose": "Reuse local-runner resource/source integrity checks",
+      "pr": 468,
+      "sha": "7fada03229b58f0292e881470ef92307d1655e12",
+      "paths": [
+        "scripts/ops/run_local_temporal_demo.py"
+      ],
+      "rule": "Reuse safety/manifest patterns; run #194 real service entrypoints, do not copy minimal Worker/Policy/Evidence."
+    }
+  ],
+  "first_acceptance": [
+    "Start isolated PostgreSQL, Temporal, Core, Worker, Policy, Evidence, Intelligence and Twin with their actual #194 entrypoints",
+    "Real HTTP Core create/execute DEMO, actual Temporal history and Worker activities, Policy receipt, HITL DEMO no-authority stage",
+    "IA analyses/critiques and Policy ledger persisted/read back; deterministic existing provider explicitly SYNTHETIC_TEST_PROVIDER",
+    "Durable execution receipt; repeat Core execute after progression returns same workflow with no second dispatch/history",
+    "SDK replay of actual isolated history; preserve OIDC/outbox code and verify rejection/simulation boundaries separately",
+    "GLPI authenticated and browser validation deferred, no false real-model/GLPI/production E2E claim"
+  ],
+  "global_holds": [
+    "DEBIAN",
+    "FS1250",
+    "REAL_E2E",
+    "GLPI_AUTHENTICATED",
+    "BROWSER_QUALIFICATION"
+  ]
+}
