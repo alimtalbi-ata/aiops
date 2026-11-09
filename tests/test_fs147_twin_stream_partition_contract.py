@@ -30,6 +30,9 @@ def partition_receipts(receipts, expected=(LAB, SAN)):
         key = tuple(receipt.get(field) for field in IDENTITY)
         if key not in groups:
             raise ValueError("unknown or cross-graph identity")
+        stage = receipt.get("stage")
+        if stage not in STAGES or receipt.get("receipt_id") != receipt.get("run_id") + ":" + stage:
+            raise ValueError("invalid or foreign stage receipt identity")
         groups[key].append(copy.deepcopy(receipt))
     for key, trace in groups.items():
         if tuple(r.get("stage") for r in trace) != STAGES:
@@ -69,6 +72,15 @@ class StreamPartitionContract(unittest.TestCase):
         for poisoned in cases:
             with self.subTest(length=len(poisoned)):
                 with self.assertRaisesRegex(ValueError, "missing, duplicated or reordered"):
+                    partition_receipts(poisoned)
+
+    def test_reject_foreign_or_missing_receipt_id_even_with_valid_partition(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for receipt_id in (SAN["run_id"] + ":event", "", None, "RUN-FS147-FIXTURE:policy"):
+            with self.subTest(receipt_id=receipt_id):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0]["receipt_id"] = receipt_id
+                with self.assertRaisesRegex(ValueError, "foreign stage receipt"):
                     partition_receipts(poisoned)
 
     def test_reject_ambiguous_expected_identity(self):
