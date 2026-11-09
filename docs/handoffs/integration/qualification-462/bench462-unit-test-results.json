@@ -1,0 +1,50 @@
+[
+  {
+    "pattern": "test_hitl_identity.py",
+    "tests_executed": 11,
+    "exit_code": 0,
+    "python": "3.13 container",
+    "scope": "Existing fixture/unit tests in a separate exec process, not real IdP approval/provider inference",
+    "log": "unit-test_hitl_identity.py.log"
+  },
+  {
+    "pattern": "test_hitl_workflow_contract.py",
+    "tests_executed": 9,
+    "exit_code": 1,
+    "python": "3.13 container",
+    "scope": "Existing fixture/unit tests in a separate exec process, not real IdP approval/provider inference",
+    "log": "unit-test_hitl_workflow_contract.py.log"
+  },
+  {
+    "pattern": "test_intelligence_contract.py",
+    "tests_executed": 16,
+    "exit_code": 0,
+    "python": "3.13 container",
+    "scope": "Existing fixture/unit tests in a separate exec process, not real IdP approval/provider inference",
+    "log": "unit-test_intelligence_contract.py.log"
+  },
+  {
+    "pattern": "test_critic_schema_retry_v24.py",
+    "tests_executed": 4,
+    "exit_code": 0,
+    "python": "3.13 container",
+    "scope": "Existing fixture/unit tests in a separate exec process, not real IdP approval/provider inference",
+    "log": "unit-test_critic_schema_retry_v24.py.log"
+  },
+  {
+    "pattern": "test_candidate_core_execute.py",
+    "tests_executed": 7,
+    "exit_code": 0,
+    "python": "3.13 container",
+    "scope": "Existing fixture/unit tests in a separate exec process, not real IdP approval/provider inference",
+    "log": "unit-test_candidate_core_execute.py.log"
+  },
+  {
+    "pattern": "test_hitl_workflow_contract.py",
+    "tests_executed": 9,
+    "exit_code": 0,
+    "python": "3.13 container",
+    "scope": "Existing static contract test; rerun after providing original migration fixture at expected path, no code changes",
+    "log": "unit-test_hitl_workflow_contract-rerun.log"
+  }
+]

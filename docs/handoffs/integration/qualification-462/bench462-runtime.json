@@ -1,0 +1,126 @@
+{
+  "recorded_at_utc": "2026-11-09T20:54:02.136931+00:00",
+  "project": "aiops2-agent7-462-eb1af91f",
+  "scope": "CLOUD_DISPOSABLE_BENCH_NOT_DEBIAN",
+  "services": [
+    {
+      "service": "worker",
+      "container": "aiops2-agent7-462-eb1af91f-worker-1",
+      "container_id": "f1c19743eac7",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "core",
+      "container": "aiops2-agent7-462-eb1af91f-core-1",
+      "container_id": "f343afe157b7",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "policy",
+      "container": "aiops2-agent7-462-eb1af91f-policy-1",
+      "container_id": "665dc694d894",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "intelligence",
+      "container": "aiops2-agent7-462-eb1af91f-intelligence-1",
+      "container_id": "481747a97a4f",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "provider",
+      "container": "aiops2-agent7-462-eb1af91f-provider-1",
+      "container_id": "56c3a4eab410",
+      "state": "running",
+      "health": null,
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "evidence",
+      "container": "aiops2-agent7-462-eb1af91f-evidence-1",
+      "container_id": "5d5949f9cfb0",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "twin",
+      "container": "aiops2-agent7-462-eb1af91f-twin-1",
+      "container_id": "c8a432c258e1",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "configured_image": "aiops2-agent7-462:49b98b4840c2db6a",
+      "repo_digests": [],
+      "published_ports": {}
+    },
+    {
+      "service": "temporal",
+      "container": "aiops2-agent7-462-eb1af91f-temporal-1",
+      "container_id": "455e089e4508",
+      "state": "exited",
+      "health": null,
+      "image_id": "sha256:7f6329af06589e776091ad8802ec5dfcc82bbfd6f7e7dc28a2e68e30c2f6cca0",
+      "configured_image": "temporalio/temporal:1.10.0@sha256:003508da05989e7cf0d583cfce521c4bb2732e733574e3040db8f1284783baa2",
+      "repo_digests": [
+        "temporalio/temporal@sha256:003508da05989e7cf0d583cfce521c4bb2732e733574e3040db8f1284783baa2"
+      ],
+      "published_ports": {}
+    },
+    {
+      "service": "postgres",
+      "container": "aiops2-agent7-462-eb1af91f-postgres-1",
+      "container_id": "d62e5d66296e",
+      "state": "running",
+      "health": "healthy",
+      "image_id": "sha256:4278d7b1e3deb3193ddc803158f6532963f059fc25a2eefaee4b5a9e71741873",
+      "configured_image": "postgres:16-alpine",
+      "repo_digests": [
+        "postgres@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139"
+      ],
+      "published_ports": {}
+    }
+  ],
+  "networks_internal": true,
+  "no_published_ports": true,
+  "configuration_contains_ephemeral_secrets": "Private compose.json outside checkout, not published",
+  "source_commit": "8fced9821c0cd2419105cd3209c058862e400177",
+  "ci": "UNKNOWN_NOT_RUN_ON_CANDIDATE_BRANCH",
+  "api_publication": "Git branch publication available; issue comment blocked by CONNECT403",
+  "global_holds": [
+    "DEBIAN",
+    "FS1250",
+    "REAL_E2E",
+    "REAL_MODEL",
+    "REAL_OIDC_APPROVAL",
+    "GLPI_AUTHENTICATED",
+    "BROWSER"
+  ],
+  "persistent_bench": "BLOCKED_TEMPORAL_SCANNER_PANIC"
+}

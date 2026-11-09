@@ -1,0 +1,12 @@
+test_corrupt_persisted_modes_never_dispatch (test_candidate_core_execute.LiveExecutionGateTests.test_corrupt_persisted_modes_never_dispatch) ... ok
+test_live_never_calls_worker_or_writes (test_candidate_core_execute.LiveExecutionGateTests.test_live_never_calls_worker_or_writes) ... ok
+test_non_executable_live_state_is_not_dispatched (test_candidate_core_execute.LiveExecutionGateTests.test_non_executable_live_state_is_not_dispatched) ... ok
+test_non_live_progressed_without_receipt_fails_closed (test_candidate_core_execute.LiveExecutionGateTests.test_non_live_progressed_without_receipt_fails_closed) ... ok
+test_non_live_retry_after_progression_returns_durable_receipt (test_candidate_core_execute.LiveExecutionGateTests.test_non_live_retry_after_progression_returns_durable_receipt) ... ok
+test_receipt_without_workflow_id_never_returns_success (test_candidate_core_execute.LiveExecutionGateTests.test_receipt_without_workflow_id_never_returns_success) ... ok
+test_worker_receipt_identity_must_match_run_before_persistence (test_candidate_core_execute.LiveExecutionGateTests.test_worker_receipt_identity_must_match_run_before_persistence) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.742s
+
+OK

@@ -1,0 +1,10 @@
+{
+  "source_base": "40d38705cf2bde3be6052340442c117a81908f65",
+  "application_files_checked": 64,
+  "byte_identical_application_files": 63,
+  "only_changed_path": "app/core/main.py",
+  "only_changed_symbol": "execute",
+  "all_other_core_ast_identical": true,
+  "worker_workflow_pair_unchanged": true,
+  "policy_intelligence_evidence_shared_human_identity_outbox_unchanged": true
+}

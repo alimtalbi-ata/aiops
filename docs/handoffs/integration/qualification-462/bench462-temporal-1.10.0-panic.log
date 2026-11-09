@@ -1,0 +1,45 @@
+panic: Client must be created with client.Dial() or client.NewLazyClient()
+
+goroutine 2481 [running]:
+go.temporal.io/sdk/internal.NewWorker(...)
+	/home/runner/go/pkg/mod/go.temporal.io/sdk@v1.47.0/internal/worker.go:581
+go.temporal.io/sdk/worker.New({_, _}, {_, _}, {0xa, 0x0, 0x0, 0x0, 0x0, 0x8, ...})
+	/home/runner/go/pkg/mod/go.temporal.io/sdk@v1.47.0/worker/worker.go:278 +0xe5
+go.temporal.io/server/common/sdk.(*clientFactory).NewWorker(_, {_, _}, {_, _}, {0xa, 0x0, 0x0, 0x0, 0x0, ...})
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/common/sdk/factory.go:125 +0x94
+go.temporal.io/server/service/worker/scanner.(*Scanner).Start(0x28bd421f6300)
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/scanner/scanner.go:274 +0x1a2a
+go.temporal.io/server/service/worker.(*Service).startScanner(0x28bd421f4a80)
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/service.go:357 +0x2e
+go.temporal.io/server/service/worker.(*Service).Start(0x28bd421f4a80)
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/service.go:258 +0x145
+go.uber.org/fx/internal/lifecycle.Wrap[...].func1()
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/internal/lifecycle/lifecycle.go:80 +0x13
+go.uber.org/fx/internal/lifecycle.(*Lifecycle).runStartHook(0x28bd425b8ee0, {0x4ee9e10, 0x28bd41c94d20}, {0x28bd41a6be18, 0x28bd41a6be30, {0x28bd42293780, 0x3a}, {0x28bd42293880, 0x39}, {{0x28bd42293980, ...}, ...}})
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/internal/lifecycle/lifecycle.go:256 +0x208
+go.uber.org/fx/internal/lifecycle.(*Lifecycle).Start(0x28bd425b8ee0, {0x4ee9e10, 0x28bd41c94d20})
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/internal/lifecycle/lifecycle.go:216 +0x4d2
+go.uber.org/fx.(*App).start-fm.(*App).start.func1({0x4ee9e10?, 0x28bd41c94d20?})
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/app.go:702 +0x31
+go.uber.org/fx.(*App).withRollback(0x28bd41aad970, {0x4ee9e10, 0x28bd41c94d20}, 0x2c6da8e?)
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/app.go:684 +0x32
+go.uber.org/fx.(*App).start(...)
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/app.go:701
+go.uber.org/fx.withTimeout.func1()
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/app.go:801 +0x6b
+created by go.uber.org/fx.withTimeout in goroutine 90
+	/home/runner/go/pkg/mod/go.uber.org/fx@v1.24.0/app.go:789 +0xc5
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x1 addr=0xa8 pc=0x373131f]
+
+goroutine 2512 [running]:
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflow(_, {_, _}, {_, _}, {{0x46b840b, 0x17}, {0x46f7a5f, 0x23}, 0x0, ...}, ...)
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/scanner/scanner.go:331 +0x9f
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflowWithRetry.func1({0x4ee9da0, 0x28bd42873590})
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/scanner/scanner.go:307 +0x150
+go.temporal.io/server/common/backoff.ThrottleRetryContext({0x4ee9da0, 0x28bd42873590}, 0x28bd439b1e10, {0x4e87400, 0x28bd42a2c240}, 0x28bd435594f0?)
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/common/backoff/retry.go:69 +0x1b9
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflowWithRetry(_, {_, _}, {{0x46b840b, 0x17}, {0x46f7a5f, 0x23}, 0x0, 0x188e6d68b0000, 0x0, ...}, ...)
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/scanner/scanner.go:306 +0x190
+created by go.temporal.io/server/service/worker/scanner.(*Scanner).Start in goroutine 2481
+	/home/runner/go/pkg/mod/go.temporal.io/server@v1.32.2/service/worker/scanner/scanner.go:182 +0x858

@@ -1,0 +1,23 @@
+test_action_cannot_be_marked_executable (test_intelligence_contract.IntelligenceContractTests.test_action_cannot_be_marked_executable) ... ok
+test_action_rejects_unlisted_execution_action_type (test_intelligence_contract.IntelligenceContractTests.test_action_rejects_unlisted_execution_action_type) ... ok
+test_action_supports_explicit_allowlisted_hitl_proposal_fields (test_intelligence_contract.IntelligenceContractTests.test_action_supports_explicit_allowlisted_hitl_proposal_fields) ... ok
+test_critic_cannot_validate_an_unsupported_claim (test_intelligence_contract.IntelligenceContractTests.test_critic_cannot_validate_an_unsupported_claim) ... ok
+test_critic_issue_with_unknown_evidence_fails_closed (test_intelligence_contract.IntelligenceContractTests.test_critic_issue_with_unknown_evidence_fails_closed) ... ok
+test_extra_fields_are_rejected (test_intelligence_contract.IntelligenceContractTests.test_extra_fields_are_rejected) ... ok
+test_health_does_not_claim_provider_is_ready (test_intelligence_contract.IntelligenceContractTests.test_health_does_not_claim_provider_is_ready) ... ok
+test_hypothesis_requires_evidence_or_explicit_assumption (test_intelligence_contract.IntelligenceContractTests.test_hypothesis_requires_evidence_or_explicit_assumption) ... ok
+test_invalid_critic_disposition_is_rejected (test_intelligence_contract.IntelligenceContractTests.test_invalid_critic_disposition_is_rejected) ... ok
+test_malformed_provider_json_returns_gateway_error (test_intelligence_contract.IntelligenceContractTests.test_malformed_provider_json_returns_gateway_error) ... model call or contract validation failed: JSONDecodeError
+ok
+test_missing_evidence_does_not_create_references (test_intelligence_contract.IntelligenceContractTests.test_missing_evidence_does_not_create_references) ... ok
+test_provider_request_uses_schema_and_deterministic_temperature (test_intelligence_contract.IntelligenceContractTests.test_provider_request_uses_schema_and_deterministic_temperature) ... ok
+test_provider_timeout_returns_gateway_error (test_intelligence_contract.IntelligenceContractTests.test_provider_timeout_returns_gateway_error) ... model call or contract validation failed: Timeout
+ok
+test_provider_unconfigured_fails_closed (test_intelligence_contract.IntelligenceContractTests.test_provider_unconfigured_fails_closed) ... ok
+test_supported_critic_claim_requires_evidence (test_intelligence_contract.IntelligenceContractTests.test_supported_critic_claim_requires_evidence) ... ok
+test_unknown_analyst_evidence_reference_is_detected (test_intelligence_contract.IntelligenceContractTests.test_unknown_analyst_evidence_reference_is_detected) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.018s
+
+OK

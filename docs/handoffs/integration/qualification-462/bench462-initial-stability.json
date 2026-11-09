@@ -1,0 +1,21 @@
+{
+  "project": "aiops2-agent7-462-eb1af91f",
+  "source_commit": "8fced9821c0cd2419105cd3209c058862e400177",
+  "initial_demo": "PASS_ISOLATED_DEMO_ONLY",
+  "persistent_bench": "BLOCKED_TEMPORAL_SCANNER_PANIC",
+  "temporal_state": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 2,
+    "Error": "",
+    "StartedAt": "2026-11-09T20:49:12.5596965Z",
+    "FinishedAt": "2026-11-09T20:50:13.228460626Z"
+  },
+  "diagnosis": "Official temporal dev image 1.10.0 exits after ~60s with SDK NewWorker/scanner panic; OOMKilled=false. No application or Debian source change. A new pinned dev-server version and sustained readiness check are required.",
+  "no_global_cleanup": true
+}
