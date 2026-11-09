@@ -1,0 +1,78 @@
+{
+  "branch": "ops/debian-runtime-reports",
+  "commit": "ba0806e07f6d3750c8c2a4daf15ce0b19b615f5c",
+  "path": "ops/debian-reports/SRV-DEB-05/latest.json",
+  "blob": "bfc9985dd5deb5d586f12fe6ac5a0d06bdb02d90",
+  "content_sha256": "c8583bf9d69df5497145193a332e14bd996e841982e92f5c8f2f8bc53e4e7057",
+  "collected_at": "2026-11-08T16:53:01.379176+00:00",
+  "assessed_at": "2026-11-08T16:58:58.857942+00:00",
+  "age_seconds": 357.478766,
+  "freshness_threshold_seconds": 180,
+  "freshness": "STALE",
+  "agent": {
+    "name": "aiops-debian-readonly",
+    "version": "1.0.0"
+  },
+  "host": "SRV-DEB-05",
+  "os": {
+    "PRETTY_NAME": "Debian GNU/Linux 13 (trixie)",
+    "VERSION_ID": "13"
+  },
+  "docker_available": true,
+  "truncated": false,
+  "containers": [
+    {
+      "health": "healthy",
+      "image": "aiops2-worker:fs-demo-candidate-20261105",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-worker",
+      "state": "running"
+    },
+    {
+      "health": "healthy",
+      "image": "aiops2-core:fs1212-integrated-candidate",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-core",
+      "state": "running"
+    },
+    {
+      "health": "no-healthcheck",
+      "image": "aiops2-portal:fs1073-csp-candidate",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-portal",
+      "state": "running"
+    },
+    {
+      "health": "no-healthcheck",
+      "image": "aiops2-twin:fs1009-decimal-metrics-candidate-20261106",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-twin",
+      "state": "running"
+    },
+    {
+      "health": "healthy",
+      "image": "aiops2-evidence:prometheus-fix-20261104",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-evidence",
+      "state": "running"
+    },
+    {
+      "health": "healthy",
+      "image": "aiops2-policy:prometheus-fix-20261104",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-policy",
+      "state": "running"
+    },
+    {
+      "health": "healthy",
+      "image": "temporalio/server:1.31.0",
+      "inspect_ok": true,
+      "name": "aiops2-rebuild-temporal",
+      "state": "running"
+    }
+  ],
+  "source_to_image": "UNKNOWN",
+  "image_digest": "NOT_PRESENT",
+  "independent_signature": "NOT_VERIFIED",
+  "latest_usecase_present": false
+}

@@ -1,0 +1,15 @@
+test_denied_run_requires_policy_outbox (test_live_usecase_qualification.LiveQualificationTests.test_denied_run_requires_policy_outbox) ... ok
+test_failed_platform_gate_fails (test_live_usecase_qualification.LiveQualificationTests.test_failed_platform_gate_fails) ... ok
+test_full_evidence_passes (test_live_usecase_qualification.LiveQualificationTests.test_full_evidence_passes) ... ok
+test_missing_probe_fails_closed (test_live_usecase_qualification.LiveQualificationTests.test_missing_probe_fails_closed) ... ok
+test_nonblocked_run_requires_real_temporal_and_hitl_proof (test_live_usecase_qualification.LiveQualificationTests.test_nonblocked_run_requires_real_temporal_and_hitl_proof) ... ok
+test_portal_absent_is_not_falsely_passed (test_live_usecase_qualification.LiveQualificationTests.test_portal_absent_is_not_falsely_passed) ... ok
+test_portal_inspect_error_fails_closed (test_live_usecase_qualification.LiveQualificationTests.test_portal_inspect_error_fails_closed) ... ok
+test_portal_running_is_verified_independently (test_live_usecase_qualification.LiveQualificationTests.test_portal_running_is_verified_independently) ... ok
+test_real_existing_blockers_are_not_masked (test_live_usecase_qualification.LiveQualificationTests.test_real_existing_blockers_are_not_masked) ... ok
+test_runner_does_not_mutate_runtime (test_live_usecase_qualification.LiveQualificationTests.test_runner_does_not_mutate_runtime) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

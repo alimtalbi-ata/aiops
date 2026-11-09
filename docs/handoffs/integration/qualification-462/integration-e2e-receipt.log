@@ -1,0 +1,15 @@
+test_all_stages_consistent_is_receipt_pass_not_release_go (test_fs147_functional_e2e.FunctionalTests.test_all_stages_consistent_is_receipt_pass_not_release_go) ... ok
+test_any_ticket_identity_is_accepted (test_fs147_functional_e2e.FunctionalTests.test_any_ticket_identity_is_accepted) ... ok
+test_cross_run_ticket_blocks (test_fs147_functional_e2e.FunctionalTests.test_cross_run_ticket_blocks) ... ok
+test_missing_policy_evidence_blocks (test_fs147_functional_e2e.FunctionalTests.test_missing_policy_evidence_blocks) ... ok
+test_missing_ticket_identity_blocks (test_fs147_functional_e2e.FunctionalTests.test_missing_ticket_identity_blocks) ... ok
+test_missing_worker_critique_blocks (test_fs147_functional_e2e.FunctionalTests.test_missing_worker_critique_blocks) ... ok
+test_real_effects_block (test_fs147_functional_e2e.FunctionalTests.test_real_effects_block) ... ok
+test_ticket_run_correlation_blocks (test_fs147_functional_e2e.FunctionalTests.test_ticket_run_correlation_blocks) ... ok
+test_unproven_safe_resume_blocks (test_fs147_functional_e2e.FunctionalTests.test_unproven_safe_resume_blocks) ... ok
+test_wrong_mode_rejected (test_fs147_functional_e2e.FunctionalTests.test_wrong_mode_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

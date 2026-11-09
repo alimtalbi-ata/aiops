@@ -1,0 +1,32 @@
+test_44_synthetic_links_replay_without_mutation_or_api_proof (test_itsm_link_diagnosis.DiagnosisTests.test_44_synthetic_links_replay_without_mutation_or_api_proof) ... ok
+test_absent_link_is_not_missing_ticket (test_itsm_link_diagnosis.DiagnosisTests.test_absent_link_is_not_missing_ticket) ... ok
+test_auth_required (test_itsm_link_diagnosis.DiagnosisTests.test_auth_required) ... ok
+test_cli_returns_hold_exit_code_and_preserves_inputs (test_itsm_link_diagnosis.DiagnosisTests.test_cli_returns_hold_exit_code_and_preserves_inputs) ... ok
+test_concurrent_or_contradictory_xrefs_never_select_a_good_row (test_itsm_link_diagnosis.DiagnosisTests.test_concurrent_or_contradictory_xrefs_never_select_a_good_row) ... ok
+test_consistent_json_receipts_still_do_not_authenticate_glpi (test_itsm_link_diagnosis.DiagnosisTests.test_consistent_json_receipts_still_do_not_authenticate_glpi) ... ok
+test_core_run_mismatch_or_missing (test_itsm_link_diagnosis.DiagnosisTests.test_core_run_mismatch_or_missing) ... ok
+test_database_boolean_alone_never_verifies (test_itsm_link_diagnosis.DiagnosisTests.test_database_boolean_alone_never_verifies) ... ok
+test_different_ticket_link_is_preserved (test_itsm_link_diagnosis.DiagnosisTests.test_different_ticket_link_is_preserved) ... ok
+test_duplicate_xrefs_are_ambiguous_even_identical (test_itsm_link_diagnosis.DiagnosisTests.test_duplicate_xrefs_are_ambiguous_even_identical) ... ok
+test_foreign_link_run_incident_tenant_instance (test_itsm_link_diagnosis.DiagnosisTests.test_foreign_link_run_incident_tenant_instance) ... ok
+test_foreign_xref_run_ticket_incident_tenant_instance (test_itsm_link_diagnosis.DiagnosisTests.test_foreign_xref_run_ticket_incident_tenant_instance) ... ok
+test_forged_authentication_flags_do_not_enable_pass (test_itsm_link_diagnosis.DiagnosisTests.test_forged_authentication_flags_do_not_enable_pass) ... ok
+test_incomplete_marker_claim (test_itsm_link_diagnosis.DiagnosisTests.test_incomplete_marker_claim) ... ok
+test_invalid_ticket_values (test_itsm_link_diagnosis.DiagnosisTests.test_invalid_ticket_values) ... ok
+test_legacy_incident_only_rows_remain_unverified (test_itsm_link_diagnosis.DiagnosisTests.test_legacy_incident_only_rows_remain_unverified) ... ok
+test_malformed_reports_fail_closed (test_itsm_link_diagnosis.DiagnosisTests.test_malformed_reports_fail_closed) ... ok
+test_marker_claim_without_link_is_not_pass (test_itsm_link_diagnosis.DiagnosisTests.test_marker_claim_without_link_is_not_pass) ... ok
+test_missing_scope_is_not_assumed (test_itsm_link_diagnosis.DiagnosisTests.test_missing_scope_is_not_assumed) ... ok
+test_multiple_links_are_not_collapsed (test_itsm_link_diagnosis.DiagnosisTests.test_multiple_links_are_not_collapsed) ... ok
+test_no_run (test_itsm_link_diagnosis.DiagnosisTests.test_no_run) ... ok
+test_readback_envelope_foreign_identity (test_itsm_link_diagnosis.DiagnosisTests.test_readback_envelope_foreign_identity) ... ok
+test_readback_foreign_ticket (test_itsm_link_diagnosis.DiagnosisTests.test_readback_foreign_ticket) ... ok
+test_single_revoked_or_negative_xref_is_not_a_consistent_link (test_itsm_link_diagnosis.DiagnosisTests.test_single_revoked_or_negative_xref_is_not_a_consistent_link) ... ok
+test_ticket_body_cannot_contradict_envelope (test_itsm_link_diagnosis.DiagnosisTests.test_ticket_body_cannot_contradict_envelope) ... ok
+test_xref_without_link (test_itsm_link_diagnosis.DiagnosisTests.test_xref_without_link) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 0.007s
+
+OK
+{"schema": "aiops2-itsm-link-diagnosis-v2", "run_id": "RUN-8CA56A39E58944F1", "incident_id": "INC-FS1250-AUTOGLPI-625916362ACD42C9", "observed_ticket_id": 201, "read_only": true, "cause": "LINK_CONSISTENT_UNATTESTED", "link_count": 1, "xref_count": 1, "matching_link_count": 1, "matching_xref_count": 1, "identity_conflicts": [], "missing_identity": [], "glpi_readback": "NOT_CHECKED", "independent_verification": "NOT_PERFORMED_BY_OFFLINE_DIAGNOSIS", "core_link_check": "PASS", "next_action": "Verify scoped identities through the existing authenticated Core/GLPI read path; preserve links and Policy denial", "verdict": "HOLD"}

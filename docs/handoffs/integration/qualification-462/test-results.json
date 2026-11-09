@@ -1,0 +1,228 @@
+{
+  "captured_at": "2026-11-08T16:57:16.586569+00:00",
+  "candidates": {
+    "core": "87f0c5746a9d78f1e3696ecfe73bbeea8278eefb",
+    "worker": "338636c55233233c16d941ba541212edf779f2f6",
+    "worker459": "fe4963577fd52173388d487bf0b2bf4a7a35becd",
+    "worker_actor": "578c46e31fb543a682c710d3502ee18aa005a00e",
+    "core_hitl": "f2f45c37e052c76cb9d3b521b5c70c96a69c0679",
+    "portal": "de58b7ac7ff43d46df4db37caceaf3712f1882fa",
+    "twin": "d99f552a2e48b9dcdd0bbda585e1d1339c670576",
+    "itsm": "23d8fc6dbd0b78ab36c82bfbca2d363918355858"
+  },
+  "base": "adcceb74bfd6289c161e344382e19be7952e3859",
+  "results": [
+    {
+      "name": "integration-static",
+      "cwd": "/workspace/aiops",
+      "command": [
+        "bash",
+        "tests/static-audit.sh"
+      ],
+      "exit_code": 0,
+      "output": "integration-static.log"
+    },
+    {
+      "name": "integration-provenance",
+      "cwd": "/workspace/aiops",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*debian*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "integration-provenance.log"
+    },
+    {
+      "name": "integration-e2e-receipt",
+      "cwd": "/workspace/aiops",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_fs147_functional_e2e.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "integration-e2e-receipt.log"
+    },
+    {
+      "name": "integration-denial",
+      "cwd": "/workspace/aiops",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ops",
+        "-p",
+        "test_live_usecase_qualification.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "integration-denial.log"
+    },
+    {
+      "name": "core-classifier",
+      "cwd": "/tmp/462-candidates/core",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_itsm_reconcile_contract.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "core-classifier.log"
+    },
+    {
+      "name": "core-receipt",
+      "cwd": "/tmp/462-candidates/core",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_live_usecase_receipt_gate.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "core-receipt.log"
+    },
+    {
+      "name": "worker-bridge",
+      "cwd": "/tmp/462-candidates/worker",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_worker_fs147_bridge_adapter.py",
+        "tests/test_fs147_service_fail_closed.py",
+        "tests/test_fs147_service_pipeline.py",
+        "tests/test_fs147_policy_reply_correlation.py"
+      ],
+      "exit_code": 0,
+      "output": "worker-bridge.log"
+    },
+    {
+      "name": "worker-actor",
+      "cwd": "/tmp/462-candidates/worker_actor",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_worker_fs147*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "worker-actor.log"
+    },
+    {
+      "name": "twin-negative",
+      "cwd": "/tmp/462-candidates/twin",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_fs147_twin*contract.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "twin-negative.log"
+    },
+    {
+      "name": "portal-selection",
+      "cwd": "/tmp/462-candidates/portal",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_portal_live*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "portal-selection.log"
+    },
+    {
+      "name": "itsm-diagnostic",
+      "cwd": "/tmp/462-candidates/itsm",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ops",
+        "-p",
+        "test_itsm_link_diagnosis.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "itsm-diagnostic.log"
+    },
+    {
+      "name": "policy-safety",
+      "cwd": "/workspace/aiops",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_policy_safety.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "output": "policy-safety.log"
+    },
+    {
+      "name": "core-hitl",
+      "cwd": "/tmp/462-candidates/core_hitl",
+      "command": [
+        "/workspace/aiops-462-venv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_fs147_hitl_scope.py",
+        "tests/test_fs147_dispatch_reconciliation.py",
+        "tests/test_fs147_temporal_signal_admission.py",
+        "tests/test_fs147_evidence_provenance.py"
+      ],
+      "exit_code": 0,
+      "output": "core-hitl.log"
+    }
+  ]
+}

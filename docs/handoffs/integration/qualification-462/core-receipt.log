@@ -1,0 +1,15 @@
+test_blocked_action_not_applicable (test_live_usecase_receipt_gate.ReceiptTests.test_blocked_action_not_applicable) ... ok
+test_complete_claim_is_not_authorization (test_live_usecase_receipt_gate.ReceiptTests.test_complete_claim_is_not_authorization) ... ok
+test_duplicate_check (test_live_usecase_receipt_gate.ReceiptTests.test_duplicate_check) ... ok
+test_hold_not_success (test_live_usecase_receipt_gate.ReceiptTests.test_hold_not_success) ... ok
+test_live_mutation_receipt (test_live_usecase_receipt_gate.ReceiptTests.test_live_mutation_receipt) ... ok
+test_missing_check (test_live_usecase_receipt_gate.ReceiptTests.test_missing_check) ... ok
+test_missing_report (test_live_usecase_receipt_gate.ReceiptTests.test_missing_report) ... ok
+test_probe_not_executed (test_live_usecase_receipt_gate.ReceiptTests.test_probe_not_executed) ... ok
+test_stale (test_live_usecase_receipt_gate.ReceiptTests.test_stale) ... ok
+test_unjustified_not_applicable (test_live_usecase_receipt_gate.ReceiptTests.test_unjustified_not_applicable) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

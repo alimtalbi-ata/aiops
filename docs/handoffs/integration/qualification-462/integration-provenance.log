@@ -1,0 +1,32 @@
+test_bad_schema_refused (test_adapt_existing_debian_report.AdapterTests.test_bad_schema_refused) ... ok
+test_duplicate_names_refused (test_adapt_existing_debian_report.AdapterTests.test_duplicate_names_refused) ... ok
+test_failed_inspect_is_error (test_adapt_existing_debian_report.AdapterTests.test_failed_inspect_is_error) ... ok
+test_preserves_only_known_metadata (test_adapt_existing_debian_report.AdapterTests.test_preserves_only_known_metadata) ... ok
+test_truncated_is_error (test_adapt_existing_debian_report.AdapterTests.test_truncated_is_error) ... ok
+test_unavailable_is_error (test_adapt_existing_debian_report.AdapterTests.test_unavailable_is_error) ... ok
+test_add_missing_and_compose_hash (test_compare_debian_provenance.CompareTests.test_add_missing_and_compose_hash) ... ok
+test_compose_project_drift_even_if_image_unchanged (test_compare_debian_provenance.CompareTests.test_compose_project_drift_even_if_image_unchanged) ... ok
+test_duplicate_container_names_refused (test_compare_debian_provenance.CompareTests.test_duplicate_container_names_refused) ... ok
+test_image_drift_detected (test_compare_debian_provenance.CompareTests.test_image_drift_detected) ... ok
+test_invalid_schema_refused (test_compare_debian_provenance.CompareTests.test_invalid_schema_refused) ... ok
+test_snapshot_errors_retained_and_no_promotion (test_compare_debian_provenance.CompareTests.test_snapshot_errors_retained_and_no_promotion) ... ok
+test_unchanged_never_authorizes_release (test_compare_debian_provenance.CompareTests.test_unchanged_never_authorizes_release) ... ok
+test_http_only_opt_in_and_loopback (test_debian_functional_inventory.InventoryTests.test_http_only_opt_in_and_loopback) ... ok
+test_no_http_without_opt_in (test_debian_functional_inventory.InventoryTests.test_no_http_without_opt_in) ... ok
+test_secret_field_names_not_collected (test_debian_functional_inventory.InventoryTests.test_secret_field_names_not_collected) ... ok
+test_compose_file_hash_and_symlink_rejection (test_debian_provenance_snapshot.ProvenanceTests.test_compose_file_hash_and_symlink_rejection) ... ok
+test_failure_is_reported_not_fabricated (test_debian_provenance_snapshot.ProvenanceTests.test_failure_is_reported_not_fabricated) ... ok
+test_no_environment_or_secret_labels_or_log_data (test_debian_provenance_snapshot.ProvenanceTests.test_no_environment_or_secret_labels_or_log_data) ... ok
+test_optional_output_does_not_overwrite (test_debian_provenance_snapshot.ProvenanceTests.test_optional_output_does_not_overwrite) ... ok
+test_optional_output_private_permissions (test_debian_provenance_snapshot.ProvenanceTests.test_optional_output_private_permissions) ... ok
+test_duplicate_candidates_refused (test_join_debian_github_evidence.JoinTests.test_duplicate_candidates_refused) ... ok
+test_exact_image_match_is_not_source_proof (test_join_debian_github_evidence.JoinTests.test_exact_image_match_is_not_source_proof) ... ok
+test_invalid_claim_refused (test_join_debian_github_evidence.JoinTests.test_invalid_claim_refused) ... ok
+test_no_image_claim_does_not_infer_from_names (test_join_debian_github_evidence.JoinTests.test_no_image_claim_does_not_infer_from_names) ... ok
+test_unmatched_image_does_not_claim_deployment (test_join_debian_github_evidence.JoinTests.test_unmatched_image_does_not_claim_deployment) ... ok
+test_wrong_schema_refused (test_join_debian_github_evidence.JoinTests.test_wrong_schema_refused) ... ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 0.007s
+
+OK

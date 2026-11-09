@@ -23,10 +23,15 @@ def portal_probe():
         if p.returncode:
             return {"status":"UNVERIFIED","reason":"DOCKER_INSPECT_FAILED"}
         state=json.loads(p.stdout)
-        return {"status":"PASS" if state.get("Status")=="running" and
-                state.get("Health",{}).get("Status")!="unhealthy" else "HOLD",
-                "state":state.get("Status"),
-                "health":state.get("Health",{}).get("Status","NOT_CONFIGURED")}
+        health=(state.get("Health") or {}).get("Status","NOT_CONFIGURED")
+        running=state.get("Status")=="running"
+        # A running container without a healthcheck is inventory, not readiness.
+        status=("HOLD" if not running or health=="unhealthy" else
+                "PASS" if health=="healthy" else "UNVERIFIED")
+        return {"status":status,"state":state.get("Status"),"health":health,
+                "reason":None if status=="PASS" else
+                         "NO_HEALTH_EVIDENCE" if running and health!="unhealthy" else
+                         "NOT_READY"}
     except (OSError,ValueError,subprocess.TimeoutExpired):
         return {"status":"UNVERIFIED","reason":"DOCKER_INSPECT_ERROR"}
 
@@ -92,7 +97,9 @@ def summarize(linkage, platform, execution, stamp, portal=None):
     failed=[x["name"] for x in items if x["status"]=="HOLD"]
     return {"schema":"aiops2-live-usecase-qualification-v1","utc":stamp,
             "run_id":linkage.get("run_id",RUN_ID),"read_only":True,
-            "verdict":"PASS" if not failed else "HOLD","checks":items,
+            "verdict":"PASS" if not failed and not blocked_safely else "HOLD",
+            "e2e_verdict":"NOT_VERIFIED",
+            "checks":items,
             "blocking":failed,"probe_execution":execution,
             "interpretation":"A BLOCKED run proves denial safety, not Temporal/HITL execution; approved execution needs a separate run."}
 
