@@ -11,6 +11,9 @@ def evaluate_handoff(observation_receipt, analyst, critic, policy, *, run_id, ti
         return result("OBSERVATION_UNVERIFIED")
     if not isinstance(run_id, str) or not run_id.strip() or not isinstance(tenant_id, str) or not tenant_id.strip() or type(ticket_id) is not int or ticket_id <= 0:
         return result("INVALID_IDENTITY")
+    if any(type(observation_receipt.get(k)) is not type(v) or observation_receipt.get(k) != v
+           for k, v in (("run_id", run_id), ("tenant_id", tenant_id), ("ticket_id", ticket_id))):
+        return result("OBSERVATION_IDENTITY_MISMATCH")
     for name, stage in (("ANALYST", analyst), ("CRITIC", critic), ("POLICY", policy)):
         if not isinstance(stage, dict):
             return result(name + "_MISSING")
