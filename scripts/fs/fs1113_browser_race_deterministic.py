@@ -16,6 +16,7 @@ INJECT = r"""
 (() => {
   const nativeFetch = window.fetch.bind(window);
   let seq = 0;
+  window.__fs1113HistoryFetchCount = 0;
   const makeSeries = (marker) => Array.from({length:5}, (_, i) => ({
     job: 'fs1113-' + marker, instance: 'target-' + i,
     points: [[1700000000, i + 1], [1700000060, i + 2]]
@@ -27,6 +28,7 @@ INJECT = r"""
     const metric = u.searchParams.get('metric');
     const windowSize = u.searchParams.get('window');
     const order = ++seq;
+    window.__fs1113HistoryFetchCount = order;
     // First response resolves AFTER the second even if its signal was aborted.
     const delay = order === 1 ? 1400 : 30;
     return new Promise(resolve => setTimeout(() => resolve(new Response(
@@ -47,7 +49,7 @@ def main():
             # Each fresh page starts with a deliberately slow 1h request.
             for metric in ("availability", "scrape_duration"):
                 for window_size in ("1h", "6h", "24h"):
-                    page = browser.new_page()
+                    page = browser.new_page(viewport={"width": 390 if window_size == "24h" else 1280, "height": 844})
                     try:
                         page.add_init_script(INJECT)
                         response = page.goto(BASE + "/explorer/visual", wait_until="domcontentloaded", timeout=25000)
@@ -70,7 +72,24 @@ def main():
                         labels = page.locator("#history-legend > span").all_inner_texts()
                         assert all("fs1113-" + metric + "-" + window_size in item for item in labels), (metric, window_size, labels)
                         assert page.locator("#history-status").inner_text().endswith(" · " + window_size)
-                        print(f"FS1113_DETERMINISTIC_STALE_RESPONSE=PASS metric={metric} window={window_size}")
+                        # Refresh must issue a new request, replace (not append) the legend,
+                        # and leave the selected metric/window unchanged, including mobile.
+                        fetch_count = page.evaluate("window.__fs1113HistoryFetchCount")
+                        page.locator("#history-refresh").click()
+                        page.wait_for_function(
+                            "(previous) => window.__fs1113HistoryFetchCount > previous",
+                            arg=fetch_count, timeout=10000)
+                        page.wait_for_function("""([m, w]) => {
+                          const s=document.querySelector('#history-status')?.textContent || '';
+                          return s.endsWith(' · ' + w) && s.includes('points') &&
+                                 !document.querySelector('#history-refresh').disabled &&
+                                 document.querySelector('#history-metric').value === m;
+                        }""", arg=[metric, window_size], timeout=10000)
+                        assert page.locator("#history-legend > span").count() == 5, (metric, window_size, "refresh")
+                        assert page.locator("#history-chart path").count() == 5, (metric, window_size, "refresh")
+                        assert all("fs1113-" + metric + "-" + window_size in item
+                                   for item in page.locator("#history-legend > span").all_inner_texts())
+                        print(f"FS1113_DETERMINISTIC_STALE_RESPONSE_REFRESH=PASS metric={metric} window={window_size} viewport={page.viewport_size['width']}")
                     finally:
                         page.close()
         finally:
