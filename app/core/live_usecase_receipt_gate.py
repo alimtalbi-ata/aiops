@@ -81,7 +81,8 @@ def classify(receipt, now=None, max_age_seconds=180):
     execution = receipt.get("probe_execution")
     if not isinstance(execution, dict) or any(
         not isinstance(execution.get(name), dict) or type(execution[name].get("exit")) is not int
-        or execution[name]["exit"] != 0 for name in ("platform", "linkage")
+        or execution[name]["exit"] != 0 or execution[name].get("error") is not None
+        for name in ("platform", "linkage")
     ):
         return Qualification.UNVERIFIED
     blocked = receipt.get("blocking")
