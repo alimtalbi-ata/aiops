@@ -1,14 +1,14 @@
 """Pure action-bound HITL admission; no IO, no dispatch or durable claim."""
 import hmac
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 def check_action_binding(intent, approval, *, now):
     def deny(reason):
         return {"status": "UNKNOWN", "reason": reason, "dispatch_allowed": False}
-    if not isinstance(now, datetime) or now.tzinfo is None:
+    if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
         return deny("CLOCK_UNVERIFIED")
     if not isinstance(intent, dict) or not isinstance(approval, dict):
         return deny("BINDING_MISSING")
@@ -33,6 +33,13 @@ def check_action_binding(intent, approval, *, now):
         parsed = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
     except ValueError:
         return deny("EXPIRY_UNVERIFIED")
-    if parsed.tzinfo is None or parsed.astimezone(timezone.utc) <= now.astimezone(timezone.utc):
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return deny("EXPIRY_UNVERIFIED")
+    remaining = parsed.astimezone(timezone.utc) - now.astimezone(timezone.utc)
+    if remaining <= timedelta(0):
         return deny("APPROVAL_EXPIRED")
+    # A long-lived approval cannot be replayed indefinitely after Policy changes.
+    # The maximum horizon is intentionally conservative for this dry-run gate.
+    if remaining > timedelta(minutes=10):
+        return deny("APPROVAL_HORIZON_EXCEEDED")
     return {"status": "BOUND_READ_ONLY", "reason": "DRY_RUN_ONLY", "dispatch_allowed": False}
