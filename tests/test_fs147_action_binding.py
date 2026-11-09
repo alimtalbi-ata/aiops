@@ -9,7 +9,7 @@ class TestActionBinding(unittest.TestCase):
                            parameters_digest="a"*64, policy_revision="p1", dry_run=True)
         self.approval = {k: self.intent[k] for k in
                          ("tenant_id","run_id","action_id","target","parameters_digest","policy_revision")}
-        self.approval.update(decision="APPROVED", authenticated=True, expires_at="2026-11-09T06:10:00Z")
+        self.approval.update(decision="APPROVED", authenticated=True, issued_at="2026-11-09T06:00:00Z", expires_at="2026-11-09T06:10:00Z")
     def check(self):
         return check_action_binding(self.intent, self.approval, now=self.now)
     def test_read_only_never_dispatch(self):
@@ -58,3 +58,20 @@ class TestActionBinding(unittest.TestCase):
         self.assertEqual(self.check()["status"], "BOUND_READ_ONLY")
         self.approval["expires_at"] = "2026-11-09T07:10:01+01:00"
         self.assertEqual(self.check()["reason"], "APPROVAL_HORIZON_EXCEEDED")
+
+    def test_missing_issuance_is_unknown(self):
+        self.approval.pop("issued_at")
+        self.assertEqual(self.check()["reason"], "ISSUED_AT_UNVERIFIED")
+
+    def test_replay_of_old_approval_with_near_expiry(self):
+        self.now = datetime(2026, 11, 9, 6, 9, tzinfo=timezone.utc)
+        self.approval["expires_at"] = "2026-11-09T06:11:00Z"
+        self.assertEqual(self.check()["reason"], "APPROVAL_HORIZON_EXCEEDED")
+
+    def test_future_issuance_rejected(self):
+        self.approval["issued_at"] = "2026-11-09T06:01:00Z"
+        self.assertEqual(self.check()["reason"], "APPROVAL_TIME_INVALID")
+
+    def test_timezone_issuance_equivalence(self):
+        self.approval["issued_at"] = "2026-11-09T07:00:00+01:00"
+        self.assertEqual(self.check()["status"], "BOUND_READ_ONLY")
