@@ -275,14 +275,14 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         if row[4] not in ('CREATED','WAITING'):
             raise HTTPException(409,f'run not executable from {row[4]}')
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
-    try:
-        r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
-        # Worker uses the canonical run ID as the Temporal workflow ID.
-        # Never persist or acknowledge a receipt for another Run/workflow.
-        if (not isinstance(data,dict) or data.get('run_id') != rid
-                or data.get('workflow_id') != rid):
-            raise HTTPException(502,'execution service returned unverified workflow identity')
-        with db() as c:
+        # Serialize first starts until the bounded Worker call and receipt readback finish.
+        try:
+            r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
+            # Worker uses the canonical run ID as the Temporal workflow ID.
+            # Never persist or acknowledge a receipt for another Run/workflow.
+            if (not isinstance(data,dict) or data.get('run_id') != rid
+                    or data.get('workflow_id') != rid):
+                raise HTTPException(502,'execution service returned unverified workflow identity')
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
             winner_row=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
             # A concurrent writer may win ON CONFLICT. Never acknowledge a
@@ -290,9 +290,9 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
             if not winner_row or winner_row[0] != rid:
                 raise HTTPException(409,'execution receipt winner has unverified workflow identity')
             winner=winner_row[0]
-        data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
-        return data
-    except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
+            data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
+            return data
+        except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
 @app.post('/api/runs/{rid}/events')
 def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
