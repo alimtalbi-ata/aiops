@@ -159,7 +159,10 @@ def execute(request: FS147Request, *, stop_auto: bool,
         if not _matching(decision, request) or decision.get("evidence_id") != observation["evidence_id"]:
             return _blocked("POLICY_SCOPE", steps)
         steps.append("POLICY")
-        if decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE":
+        if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
+                or ("dispatch_allowed" in decision and decision["dispatch_allowed"] is not False)
+                or ("resolved" in decision and decision["resolved"] is not False)
+                or ("effect" in decision and decision["effect"] != "NO_EFFECT")):
             return _blocked("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.
