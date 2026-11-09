@@ -253,12 +253,34 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select run_id,mode,scenario_id,version,status from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row: raise HTTPException(404,'run not found')
-        if row[4] not in ('CREATED','WAITING'): raise HTTPException(409,f'run not executable from {row[4]}')
+        # Preserve the historical LIVE state rejection, even on retries.
+        if row[1] == 'LIVE' and row[4] not in ('CREATED','WAITING'):
+            raise HTTPException(409,f'run not executable from {row[4]}')
+        # LIVE execution is forbidden until the real action-bound Policy/HITL
+        # admission is wired into this route. A standalone eligibility check
+        # is not an authorization to start a Worker workflow.
+        if row[1] == 'LIVE':
+            raise HTTPException(403,'LIVE execution requires verified action-bound Policy/HITL admission')
+        # Database state is not guaranteed to have passed RunIn validation.
+        # Never forward unknown/NULL/corrupt modes to the Worker as synthetic.
+        if row[1] not in ('DEMO', 'REPLAY', 'STORY'):
+            raise HTTPException(422,'run execution mode unknown or unsupported')
+        # A completed dispatch may already have advanced the Run. Return its
+        # durable receipt instead of issuing a second Worker start on retry.
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
-        if existing:return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
+        if existing:
+            if not existing[0]: raise HTTPException(409,'execution receipt missing workflow identity')
+            return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
+        if row[4] not in ('CREATED','WAITING'):
+            raise HTTPException(409,f'run not executable from {row[4]}')
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
     try:
         r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
+        # Worker uses the canonical run ID as the Temporal workflow ID.
+        # Never persist or acknowledge a receipt for another Run/workflow.
+        if (not isinstance(data,dict) or data.get('run_id') != rid
+                or data.get('workflow_id') != rid):
+            raise HTTPException(502,'execution service returned unverified workflow identity')
         with db() as c:
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
             winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]

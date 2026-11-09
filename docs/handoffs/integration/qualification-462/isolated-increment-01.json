@@ -1,0 +1,22 @@
+{
+  "increment": "I1_CORE_EXECUTE_ONLY",
+  "base_sha": "40d38705cf2bde3be6052340442c117a81908f65",
+  "source_pr": 474,
+  "source_sha": "c13d56acf050126e65fae120ac8d2f7f1abd5a3f",
+  "source_chain": [
+    466,
+    470,
+    472,
+    474
+  ],
+  "changed_application_paths": [
+    "app/core/main.py"
+  ],
+  "changed_symbol": "execute",
+  "other_core_ast_unchanged": true,
+  "test_path": "tests/test_candidate_core_execute.py",
+  "test_adaptation": "Original #474 assertions retained; requests Mock supplied real RequestException class to fix fixture-only catch TypeError.",
+  "source_function_sha256": "6fd6079c4f0d5dee6cb9bbca5dee5c07fbb46da53f0c5dd4db95af77e9e88632",
+  "debian": false,
+  "real_e2e": "HOLD"
+}
