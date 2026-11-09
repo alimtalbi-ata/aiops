@@ -93,7 +93,8 @@ def run():
                                              stderr=subprocess.STDOUT, start_new_session=True,
                                              pass_fds=(lock.fileno(),))
                     save(status='cycle_running', cycle=cycle, child_pid=child.pid,
-                         command=command, cycle_log=str(prefix) + '.jsonl')
+                         command=command, cycle_log=str(prefix) + '.jsonl',
+                         **({'first_cycle': 'RUNNING'} if cycle == 1 else {}))
                     reason = 'completed'
                     while child.poll() is None:
                         if time.time() >= DEADLINE:
@@ -105,10 +106,13 @@ def run():
                         time.sleep(min(0.2, max(0, DEADLINE - time.time())))
                     kill_group(child)  # also remove surviving descendants after normal exit
                     code = child.returncode
+                    if reason == 'completed' and code != 0:
+                        reason = 'child_failed_or_timed_out'
                     child = None
                     save(status='waiting', cycle=cycle, child_pid=None,
                          last_exit=code, last_cycle_reason=reason,
-                         last_cycle_completed=(reason == 'completed'))
+                         last_cycle_completed=(reason == 'completed'),
+                         **({'first_cycle': 'COMPLETED' if reason == 'completed' else 'FAILED_OR_INTERRUPTED'} if cycle == 1 else {}))
                 if reason in ('deadline', 'operator_stop'):
                     break
                 while time.monotonic() - start < INTERVAL:
