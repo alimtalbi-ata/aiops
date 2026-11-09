@@ -4,6 +4,7 @@ on:
     paths:
       - 'ops/coordination/**'
       - 'tests/test_coordination_message.py'
+      - 'tests/test_probe_debian_dispatch.py'
       - '.github/workflows/coordination-contract.yml'
   workflow_dispatch:
 permissions:
@@ -18,4 +19,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Run fail-closed message contract tests
-        run: python -m unittest discover -s tests -p test_coordination_message.py -v
+        run: python -m unittest discover -s tests -p 'test_*coordination*.py' -v
+      - name: Run dispatch discovery probe tests
+        run: python -m unittest discover -s tests -p test_probe_debian_dispatch.py -v
