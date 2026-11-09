@@ -56,7 +56,10 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
-    report={"schema":"aiops2-platform-readiness-v1","utc":dt.datetime.now(dt.timezone.utc).isoformat(),"read_only":True}
+    report={"schema":"aiops2-platform-readiness-v1","utc":dt.datetime.now(dt.timezone.utc).isoformat(),"read_only":True,
+            "qualification_scope":"read_only_platform_smoke",
+            "e2e_verdict":"NOT_VERIFIED",
+            "deployment_verdict":"NOT_VERIFIED"}
     try:
         containers=docker_state()
         report["runtime"]={c["Name"].lstrip("/"):{"image":c["Config"]["Image"],
