@@ -269,7 +269,8 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         # durable receipt instead of issuing a second Worker start on retry.
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
         if existing:
-            if not existing[0]: raise HTTPException(409,'execution receipt missing workflow identity')
+            if not isinstance(existing[0], str) or existing[0] != rid:
+                raise HTTPException(409,'execution receipt has unverified workflow identity')
             return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
         if row[4] not in ('CREATED','WAITING'):
             raise HTTPException(409,f'run not executable from {row[4]}')
