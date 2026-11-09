@@ -15,7 +15,7 @@ EXPECTED = "aiops2-portal:fs1073-csp-candidate"
 
 
 class GateRuntimeFence(unittest.TestCase):
-    def run_gate(self, *, change_id=False, change_image=False, fail_post=False, fail_pre=False, wrong_tag=False):
+    def run_gate(self, *, change_id=False, change_image=False, fail_post=False, fail_post_identity=False, fail_pre=False, wrong_tag=False):
         source = GATE.read_text(encoding="utf-8")
         # Do not invoke either candidate build or browser gate in this unit test.
         source = source.replace(
@@ -60,6 +60,7 @@ class GateRuntimeFence(unittest.TestCase):
                 "FS1113_CHANGE_ID": str(int(change_id)),
                 "FS1113_CHANGE_IMAGE": str(int(change_image)),
                 "FS1113_FAIL_POST": str(int(fail_post)),
+                "FS1113_FAIL_POST_IDENTITY": str(int(fail_post_identity)),
                 "FS1113_FAIL_PRE": str(int(fail_pre)),
                 "FS1113_WRONG_TAG": str(int(wrong_tag)),
             })
@@ -87,6 +88,12 @@ class GateRuntimeFence(unittest.TestCase):
         self.assertIn("FS1113_ERROR=PRODUCTION_POSTCHECK_UNAVAILABLE", result.stdout)
         self.assertNotIn("FS1113_RESULT=PASS", result.stdout)
 
+
+    def test_postcheck_identity_unavailable_fails_closed(self):
+        result = self.run_gate(fail_post_identity=True)
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertIn("FS1113_ERROR=PRODUCTION_IDENTITY_POSTCHECK_UNAVAILABLE", result.stdout)
+        self.assertNotIn("FS1113_RESULT=PASS", result.stdout)
 
     def test_precheck_unavailable_fails_closed(self):
         result = self.run_gate(fail_pre=True)
