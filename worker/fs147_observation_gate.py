@@ -53,15 +53,19 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
     if (now_utc - observed).total_seconds() > max_age_seconds:
         return receipt('UNKNOWN', 'STALE_OBSERVATION')
     evidence = envelope.get('evidence')
+    # Bound untrusted bridge payload traversal before canonical JSON encoding.
+    # Limits are deliberately conservative for an observation admission receipt.
+    budget = [1024]
     def has_signal(value, depth=0):
-        if depth > 8:
+        budget[0] -= 1
+        if budget[0] < 0 or depth > 8:
             return False
         if isinstance(value, dict):
-            return bool(value) and all(isinstance(k, str) and bool(k.strip()) and has_signal(v, depth + 1) for k, v in value.items())
+            return bool(value) and len(value) <= 1024 and all(isinstance(k, str) and 0 < len(k) <= 256 and bool(k.strip()) and has_signal(v, depth + 1) for k, v in value.items())
         if isinstance(value, list):
-            return bool(value) and all(has_signal(v, depth + 1) for v in value)
+            return bool(value) and len(value) <= 1024 and all(has_signal(v, depth + 1) for v in value)
         if isinstance(value, str):
-            return bool(value.strip())
+            return 0 < len(value) <= 4096 and bool(value.strip())
         if isinstance(value, bool):
             return True
         if type(value) in (int, float):
@@ -74,4 +78,6 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
         canonical = json.dumps({k: envelope[k] for k in ('tenant_id', 'ticket_id', 'run_id', 'source', 'access_mode', 'source_event_id', 'observed_at', 'received_at', 'evidence')}, sort_keys=True, separators=(',', ':'), allow_nan=False)
     except (ValueError, TypeError, KeyError):
         return receipt('UNKNOWN', 'NONCANONICAL_EVIDENCE')
+    if len(canonical.encode('utf-8')) > 65536:
+        return receipt('UNKNOWN', 'EVIDENCE_TOO_LARGE')
     return receipt('ACCEPTED', 'READ_ONLY_OBSERVATION', sha256(canonical.encode()).hexdigest())
