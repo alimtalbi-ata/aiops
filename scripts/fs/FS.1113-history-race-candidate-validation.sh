@@ -75,5 +75,21 @@ PROD_TAG_ID_BEFORE="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')"
 # Always rebuild from current checkout; never trust a cached candidate tag.
 bash "$ROOT/scripts/fs/FS.1097-build-history-chart-candidate.sh"
 
+# Fail closed after candidate build, before starting browser/network qualification.
+PROD_TAG_ID_AFTER_BUILD="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')" || {
+  echo "FS1113_ERROR=PRODUCTION_TAG_POSTBUILD_UNAVAILABLE"
+  exit 4
+}
+if [[ "$PROD_TAG_ID_AFTER_BUILD" != "$PROD_TAG_ID_BEFORE" ]]; then
+  echo "FS1113_ERROR=PRODUCTION_TAG_RETARGETED_DURING_BUILD"
+  exit 3
+fi
+PROD_ID_AFTER_BUILD="$(docker inspect "$PROD" --format '{{.Id}}')" || exit 4
+PROD_IMAGE_ID_AFTER_BUILD="$(docker inspect "$PROD" --format '{{.Image}}')" || exit 4
+if [[ "$PROD_ID_AFTER_BUILD" != "$PROD_ID_BEFORE" || "$PROD_IMAGE_ID_AFTER_BUILD" != "$PROD_IMAGE_ID_BEFORE" ]]; then
+  echo "FS1113_ERROR=PRODUCTION_CHANGED_DURING_BUILD"
+  exit 3
+fi
+
 # Reuse publish-first rootless network lifecycle and full Chromium matrix.
 bash "$ROOT/scripts/fs/FS.1107-full-history-candidate-external-first-browser.sh"
