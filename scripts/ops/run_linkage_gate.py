@@ -32,14 +32,18 @@ def pg_query(sql):
     return records[0]
 
 def core_get(run_id):
-    script = """import json,sys,urllib.request,urllib.error
+    script = """import json,os,sys,urllib.request,urllib.error
 rid=sys.argv[1]
+token=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('ADMIN_TOKEN')
+headers={'Accept':'application/json'}
+if token: headers['Authorization']='Bearer '+token
 out={}
 for key,path in [('run','/api/runs/'+rid),('evidence','/api/runs/'+rid+'/evidence'),
                  ('policy_status','/api/noc/runs/'+rid+'/policy-status'),
                  ('ai_ledger','/api/runs/'+rid+'/ai-ledger')]:
  try:
-  with urllib.request.urlopen('http://127.0.0.1:810'+path,timeout=7) as r:
+  request=urllib.request.Request('http://127.0.0.1:810'+path,headers=headers,method='GET')
+  with urllib.request.urlopen(request,timeout=7) as r:
    obj=json.load(r)
    if key=='run':
     if isinstance(obj,dict):
@@ -58,6 +62,24 @@ for key,path in [('run','/api/runs/'+rid),('evidence','/api/runs/'+rid+'/evidenc
     else: out[key]={'http':r.status,'parse_status':'UNRECOGNIZED'}
    elif key=='evidence':
     out[key]={'http':r.status,'count':len(obj.get('items',[])) if isinstance(obj,dict) else None}
+   elif key=='ai_ledger':
+    if not isinstance(obj,dict) or obj.get('run_id')!=rid:
+     raise ValueError('ledger Run identity mismatch')
+    fields={
+     'analyses':('analysis_id','revision','contract_version','provider','model','prompt_version','evidence_ids','evidence_set_hash','output','confidence','status','created_at'),
+     'critiques':('critique_id','analysis_id','contract_version','provider','model','validated','issues','evidence_ids','output','diagnostic_confidence','created_at'),
+     'policy_decisions':('policy_decision_id','analysis_id','critique_id','policy_version','decision','state','reasons','created_at')}
+    projected={'run_id':rid}
+    for collection,allowed in fields.items():
+     rows=obj.get(collection)
+     if not isinstance(rows,list):raise ValueError('invalid ledger collection')
+     projected[collection]=[{k:row[k] for k in allowed if k in row}
+                            for row in rows if isinstance(row,dict)]
+    out[key]={'http':r.status,'accessible':True,'data':projected}
+   elif key=='policy_status':
+    allowed=('schema','run_id','incident_id','mode','run_status','policy_gate_state','policy_decision','policy_gate_recorded','explanation_code','provenance')
+    if not isinstance(obj,dict) or obj.get('run_id')!=rid:raise ValueError('policy Run identity mismatch')
+    out[key]={'http':r.status,'accessible':True,'data':{k:obj[k] for k in allowed if k in obj}}
    else: out[key]={'http':r.status,'accessible':True}
  except urllib.error.HTTPError as e: out[key]={'http':e.code,'accessible':False}
  except Exception as e: out[key]={'error':type(e).__name__}
