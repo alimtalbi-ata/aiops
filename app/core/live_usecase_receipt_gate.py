@@ -59,6 +59,13 @@ def classify(receipt, now=None, max_age_seconds=180):
         by_name[name] = item
     if set(by_name) != REQUIRED:
         return Qualification.UNVERIFIED
+    # An explicit cross-run evidence reference contradicts the receipt identity.
+    # Absence is not proof of matching; other gates still determine completeness.
+    for item in by_name.values():
+        evidence = item.get("evidence")
+        if isinstance(evidence, dict) and "run_id" in evidence:
+            if type(evidence["run_id"]) is not str or evidence["run_id"] != run_id:
+                return Qualification.UNVERIFIED
     # A blocked run may legitimately lack HITL and Worker execution evidence.
     optional = {"temporal_worker_history", "hitl_action_binding"}
     for name, item in by_name.items():
