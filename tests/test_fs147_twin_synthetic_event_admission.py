@@ -1,0 +1,92 @@
+"""Twin synthetic-event admission regression (offline; no database or Docker).
+
+Executes the actual route function AST with a fake DB to avoid importing
+production configuration/secrets or opening network connections.
+"""
+import ast
+from pathlib import Path
+import types
+import unittest
+
+
+class HTTPException(Exception):
+    def __init__(self, status_code, detail):
+        self.status_code, self.detail = status_code, detail
+
+
+class Event:
+    def __init__(self, action, target_node_id=None, run_id="RUN-FIXTURE", payload=None):
+        self.action, self.target_node_id, self.run_id = action, target_node_id, run_id
+        self.payload = payload or {}
+
+
+class DB:
+    def __init__(self):
+        self.calls = 0
+        self.statements = []
+
+    def __call__(self):
+        self.calls += 1
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def execute(self, query, params):
+        self.statements.append((query, params))
+
+
+def load_route(fake_db):
+    path = Path(__file__).resolve().parents[1] / "app" / "twin" / "main.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    route = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "synthetic_event")
+    route.decorator_list = []
+    namespace = {"HTTPException": HTTPException, "SyntheticEvent": Event,
+                 "Header": lambda default=None: default, "SIM_TOKEN": "fixture-secret",
+                 "db": fake_db, "new": lambda prefix: prefix + "-FIXTURE"}
+    exec(compile(ast.Module(body=[route], type_ignores=[]), str(path), "exec"), namespace)
+    return namespace["synthetic_event"]
+
+
+class SyntheticEventAdmission(unittest.TestCase):
+    def test_unknown_action_fails_closed_without_database_access(self):
+        db = DB()
+        route = load_route(db)
+        for action in ("NOOP", "DELETE", "", "OBSERVE "):
+            with self.subTest(action=action), self.assertRaises(HTTPException) as caught:
+                route(Event(action, "SAN-ARRAY"), authorization="Bearer fixture-secret")
+            self.assertEqual(caught.exception.status_code, 422)
+        self.assertEqual(db.calls, 0)
+
+    def test_supported_actions_require_target_before_database_access(self):
+        db = DB()
+        route = load_route(db)
+        for action in ("OBSERVE", "SET_STATE"):
+            with self.subTest(action=action), self.assertRaises(HTTPException) as caught:
+                route(Event(action), authorization="Bearer fixture-secret")
+            self.assertEqual(caught.exception.status_code, 422)
+        self.assertEqual(db.calls, 0)
+
+    def test_valid_observation_retains_existing_contract(self):
+        db = DB()
+        result = load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE",
+                                      payload={"metric": "fs_used", "value": 91}),
+                                authorization="Bearer fixture-secret")
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(db.calls, 1)
+        self.assertEqual(len(db.statements), 1)
+        self.assertIn("insert into aiops.observations", db.statements[0][0])
+
+    def test_invalid_token_does_not_open_database(self):
+        db = DB()
+        with self.assertRaises(HTTPException) as caught:
+            load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE"), authorization="Bearer wrong")
+        self.assertEqual(caught.exception.status_code, 401)
+        self.assertEqual(db.calls, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
