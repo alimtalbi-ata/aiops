@@ -125,6 +125,19 @@ class ReceiptTests(unittest.TestCase):
                         self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
                         self.assertEqual(r, before)
 
+    def test_abort_flags_reject_false_equivalent_non_boolean_values(self):
+        # Python equality treats 0 == False and "" == False is false, but
+        # serialized probe flags must be explicit JSON booleans or null.
+        for probe_name in ("platform", "linkage"):
+            for field in ("timed_out", "cancelled"):
+                for value in (0, 0.0, [], {}):
+                    with self.subTest(probe=probe_name, field=field, value=value):
+                        r = receipt()
+                        r["probe_execution"][probe_name][field] = value
+                        before = deepcopy(r)
+                        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                        self.assertEqual(r, before)
+
     def test_explicit_non_aborted_probes_remain_claim_only(self):
         r = receipt()
         for probe in r["probe_execution"].values():
