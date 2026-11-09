@@ -4,6 +4,7 @@ A receipt is a claim, not authorization to execute. Never performs IO.
 """
 from datetime import datetime, timezone
 from enum import Enum
+import re
 
 
 class Qualification(str, Enum):
@@ -37,8 +38,7 @@ def classify(receipt, now=None, max_age_seconds=180):
     # Every qualification is scoped to one canonical Run. A missing or malformed
     # identity cannot establish even a read-only PASS claim.
     run_id = receipt.get("run_id")
-    if (type(run_id) is not str or not run_id.startswith("RUN-")
-            or len(run_id) > 84 or len(run_id) <= 4 or run_id != run_id.strip()):
+    if (type(run_id) is not str or re.fullmatch(r"RUN-[A-Za-z0-9][A-Za-z0-9_-]{0,79}", run_id) is None):
         return Qualification.UNVERIFIED
     checks = receipt.get("checks")
     if not isinstance(checks, list) or len(checks) != len(REQUIRED):
