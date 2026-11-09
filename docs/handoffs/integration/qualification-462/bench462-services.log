@@ -25,7 +25,7 @@ evidence-1      | INFO:     Waiting for application startup.
 twin-1          | INFO:     Started server process [1]
 postgres-1      | The files belonging to this database system will be owned by user "postgres".
 postgres-1      | This user must also own the server process.
-postgres-1      | 
+postgres-1      |
 postgres-1      | The database cluster will be initialized with locale "en_US.utf8".
 core-1          | INFO:     Started server process [1]
 twin-1          | INFO:     Waiting for application startup.
@@ -80,12 +80,12 @@ core-1          | INFO:     172.18.0.8:48310 - "POST /api/runs/RUN-D26145DBCD554
 core-1          | INFO:     172.18.0.8:48326 - "GET /api/runs/RUN-D26145DBCD5542B4 HTTP/1.1" 200 OK
 evidence-1      | INFO:     Uvicorn running on http://0.0.0.0:812 (Press CTRL+C to quit)
 core-1          | INFO:     172.18.0.8:48330 - "POST /api/runs/RUN-D26145DBCD5542B4/events HTTP/1.1" 200 OK
-postgres-1      | 
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48340 - "GET /api/runs/RUN-D26145DBCD5542B4 HTTP/1.1" 200 OK
 postgres-1      | Data page checksums are disabled.
 core-1          | INFO:     172.18.0.8:48356 - "GET /api/scenarios/SCN-GOLDEN-PAYMENT-P1 HTTP/1.1" 200 OK
 core-1          | INFO:     172.18.0.8:48366 - "POST /api/runs/RUN-D26145DBCD5542B4/critique-record HTTP/1.1" 200 OK
-postgres-1      | 
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48382 - "POST /api/runs/RUN-D26145DBCD5542B4/events HTTP/1.1" 200 OK
 postgres-1      | fixing permissions on existing directory /var/lib/postgresql/data ... ok
 core-1          | INFO:     172.18.0.8:48394 - "POST /api/runs/RUN-D26145DBCD5542B4/checkpoint HTTP/1.1" 200 OK
@@ -111,12 +111,12 @@ postgres-1      | performing post-bootstrap initialization ... ok
 postgres-1      | initdb: warning: enabling "trust" authentication for local connections
 postgres-1      | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
 postgres-1      | syncing data to disk ... ok
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | Success. You can now start the database server using:
-postgres-1      | 
+postgres-1      |
 postgres-1      |     pg_ctl -D /var/lib/postgresql/data -l logfile start
-postgres-1      | 
+postgres-1      |
 postgres-1      | waiting for server to start....2026-11-09 20:49:13.712 UTC [43] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
 postgres-1      | 2026-11-09 20:49:13.713 UTC [43] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
 postgres-1      | 2026-11-09 20:49:13.715 UTC [46] LOG:  database system was shut down at 2026-11-09 20:49:13 UTC
@@ -124,17 +124,17 @@ postgres-1      | 2026-11-09 20:49:13.717 UTC [43] LOG:  database system is read
 postgres-1      |  done
 postgres-1      | server started
 postgres-1      | CREATE DATABASE
-postgres-1      | 
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48502 - "POST /api/runs/RUN-D26145DBCD5542B4/events HTTP/1.1" 200 OK
-postgres-1      | 
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48508 - "POST /api/runs/RUN-D26145DBCD5542B4/checkpoint HTTP/1.1" 200 OK
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/000_n8n.sql
 core-1          | INFO:     172.18.0.8:48510 - "POST /api/runs/RUN-D26145DBCD5542B4/events HTTP/1.1" 200 OK
 postgres-1      | CREATE DATABASE
 core-1          | INFO:     172.18.0.8:48514 - "POST /api/runs/RUN-D26145DBCD5542B4/events HTTP/1.1" 200 OK
-postgres-1      | 
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48528 - "POST /api/runs/RUN-D26145DBCD5542B4/checkpoint HTTP/1.1" 200 OK
-postgres-1      | 
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48540 - "POST /api/runs/RUN-D26145DBCD5542B4/demo-artifacts HTTP/1.1" 200 OK
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/001_schema.sql
 postgres-1      | CREATE SCHEMA
@@ -166,8 +166,8 @@ postgres-1      | CREATE INDEX
 postgres-1      | CREATE INDEX
 evidence-1      | INFO:     172.18.0.8:40256 - "POST /api/evidence HTTP/1.1" 200 OK
 postgres-1      | CREATE INDEX
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 core-1          | INFO:     172.18.0.8:48546 - "POST /api/runs/RUN-D26145DBCD5542B4/events HTTP/1.1" 200 OK
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/002_integrity.sql
 postgres-1      | CREATE FUNCTION
@@ -198,13 +198,13 @@ postgres-1      | CREATE TRIGGER
 postgres-1      | psql:/docker-entrypoint-initdb.d/002_integrity.sql:3: NOTICE:  trigger "trg_evidence_immutable" for relation "aiops.evidence" does not exist, skipping
 postgres-1      | DROP TRIGGER
 postgres-1      | CREATE TRIGGER
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/003_seed_twin.sql
 postgres-1      | INSERT 0 7
 postgres-1      | INSERT 0 6
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/004_operational_model.sql
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE INDEX
@@ -218,19 +218,19 @@ postgres-1      | CREATE TABLE
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE TABLE
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/005_seed_acme.sql
 postgres-1      | INSERT 0 18
 postgres-1      | INSERT 0 17
 postgres-1      | INSERT 0 4
 postgres-1      | INSERT 0 7
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/006_execution_receipts.sql
 postgres-1      | CREATE TABLE
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/007_runtime_hardening.sql
 postgres-1      | CREATE INDEX
 postgres-1      | CREATE INDEX
@@ -239,13 +239,13 @@ postgres-1      | CREATE INDEX
 postgres-1      | CREATE INDEX
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE TABLE
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/008_event_idempotency.sql
 postgres-1      | ALTER TABLE
 postgres-1      | CREATE INDEX
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/009_ai_decision_ledger.sql
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE INDEX
@@ -305,41 +305,41 @@ postgres-1      | CREATE TRIGGER
 postgres-1      | DROP TRIGGER
 postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:309: NOTICE:  trigger "trg_immutable_delete_effect_receipts" for relation "aiops.effect_receipts" does not exist, skipping
 postgres-1      | CREATE TRIGGER
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/010_evidence_identity.sql
 postgres-1      | CREATE INDEX
 postgres-1      | CREATE INDEX
 postgres-1      | CREATE INDEX
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/011_hitl_decision_outbox.sql
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE INDEX
 postgres-1      | CREATE INDEX
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/090_critic_denial_outbox.sql
 postgres-1      | BEGIN
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE INDEX
 postgres-1      | COMMIT
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/091_critic_denial_fencing.sql
 postgres-1      | BEGIN
 postgres-1      | ALTER TABLE
 postgres-1      | CREATE INDEX
 postgres-1      | COMMIT
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/092_critic_denial_resume.sql
 postgres-1      | BEGIN
 postgres-1      | CREATE TABLE
 postgres-1      | CREATE INDEX
 postgres-1      | COMMIT
-postgres-1      | 
-postgres-1      | 
+postgres-1      |
+postgres-1      |
 postgres-1      | waiting for server to shut down....2026-11-09 20:49:14.228 UTC [43] LOG:  received fast shutdown request
 postgres-1      | 2026-11-09 20:49:14.228 UTC [43] LOG:  aborting any active transactions
 postgres-1      | 2026-11-09 20:49:14.230 UTC [43] LOG:  background worker "logical replication launcher" (PID 49) exited with exit code 1
@@ -349,9 +349,9 @@ postgres-1      | 2026-11-09 20:49:14.242 UTC [44] LOG:  checkpoint complete: wr
 postgres-1      | 2026-11-09 20:49:14.248 UTC [43] LOG:  database system is shut down
 postgres-1      |  done
 postgres-1      | server stopped
-postgres-1      | 
+postgres-1      |
 postgres-1      | PostgreSQL init process complete; ready for start up.
-postgres-1      | 
+postgres-1      |
 postgres-1      | 2026-11-09 20:49:14.352 UTC [1] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
 postgres-1      | 2026-11-09 20:49:14.353 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
 postgres-1      | 2026-11-09 20:49:14.353 UTC [1] LOG:  listening on IPv6 address "::", port 5432

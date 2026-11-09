@@ -36,7 +36,7 @@ Sept tests ciblés Core ont d’abord passé localement. Puis, dans l’image **
 
 Un premier essai du contrat HITL a donné 8 PASS et 1 erreur : le répertoire de migration n’avait pas été fourni au chemin attendu par la suite statique. Après copie des mêmes fichiers d’origine dans l’espace de tests du conteneur, rerun 9 PASS. L’échec initial et le rerun restent joints ; aucun code/contrat n’a été changé pour masquer l’échec. Les modifications d’environnement de ces tests concernent leurs processus exec séparés, pas les services.
 
-Preuves : `bench462-receipt.json`, `bench462-run.json`, `bench462-ledger.json`, `bench462-history.json`, `bench462-source-manifest.json`, `bench462-preservation.json`, `bench462-runtime.json`, logs de suites et `bench462-services.log`. Empreintes dans `bench462-SHA256SUMS`. Les artefacts ont été vérifiés contre les secrets propres au banc avant publication. Le compose privé n’est pas dans Git.
+Preuves : `bench462-receipt.json`, `bench462-run.json`, `bench462-ledger.json`, `bench462-history.json`, `bench462-source-manifest.json`, `bench462-preservation.json`, `bench462-runtime.json`, logs de suites et `bench462-services.log`. Empreintes dans `bench462-SHA256SUMS`. Les seuls espaces de fin de ligne des logs publiés ont été normalisés ; empreintes avant/après dans `bench462-log-normalization.json`, originaux conservés hors checkout. Les artefacts ont été vérifiés contre les secrets propres au banc avant publication. Le compose privé n’est pas dans Git.
 
 ## Reproduction
 
@@ -57,3 +57,7 @@ Les neuf conteneurs sont propres à ce banc. Le harness ne nettoie pas des resso
 GLPI authentifié, navigateur, modèle réel et approbation OIDC réelle sont différés. **Debian, FS1250 et E2E réels restent HOLD.** Aucun remplacement Debian n’a été choisi à partir des checkouts modifiés ou d’une provenance inconnue. Aucun merge/PR créé, aucune écriture GLPI ou PostgreSQL de production, aucun réglage cron/Compose de production changé.
 
 La base/attribution a été publiée par Git HTTPS avant les travaux. L’API GitHub reste bloquée par CONNECT 403 : aucun commentaire #462 n’est prétendu posté par Codex. Les preuves et ce handoff sont publiés dans la même branche candidate pour revue Core/Worker, sans écriture concurrente. Tout nouvel incrément devra conserver ces capacités et ce reçu de non-redispatch.
+
+## Recontrôle de stabilité
+
+Le second essai avec Temporal 1.4.1 a aussi échoué avant le Run : le scanner tente son appel local via le proxy de session (network unreachable), puis panique. Le changement de version seul ne résout donc pas le défaut. Le harness ajoute explicitement 0.0.0.0 aux seules adresses locales exclues du proxy pour les communications du banc ; aucun accès externe ni politique réseau ne sont modifiés. Une nouvelle exécution doit valider cette correction avant de déclarer le maintien en service PASS.

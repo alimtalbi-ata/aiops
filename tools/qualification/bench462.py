@@ -147,7 +147,7 @@ def main():
     image_data=json.loads(call(docker+['image','inspect',image],capture_output=True,text=True).stdout)[0]
     assert image_data['Config']['Labels']['aiops2.source_manifest']==digest
     token,password=secrets.token_hex(32),secrets.token_hex(24)
-    no_proxy=environment.get('NO_PROXY','')+',localhost,127.0.0.1,postgres,temporal,provider,'+','.join(SERVICES)
+    no_proxy=environment.get('NO_PROXY','')+',localhost,127.0.0.1,0.0.0.0,postgres,temporal,provider,'+','.join(SERVICES)
     common={'AIOPS_INTERNAL_TOKEN':token,'AIOPS_ADMIN_TOKEN':token,'ADMIN_TOKEN':token,
             'DATABASE_URL':f'postgresql://aiops:{password}@postgres:5432/aiops','TEMPORAL_ADDRESS':'temporal:7233',
             'NO_PROXY':no_proxy,'no_proxy':no_proxy,'AIOPS_HITL_IDENTITY_MODE':'DISABLED','AIOPS_HITL_SIMULATOR_ENABLED':'false'}

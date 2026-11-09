@@ -1,0 +1,8 @@
+[
+  {
+    "path": "bench462-services.log",
+    "raw_sha256": "02084c562492fcab66edf36e8ec89b6d5b79d97eec1474bc1ae681c7cfe5f8b8",
+    "published_sha256": "a6c0825159f55955759088e6e3ca2bbc10fa86c91617fdbeff643dc89acbc921",
+    "transform": "Strip trailing line whitespace only; content and line order preserved. Raw originals retained outside checkout under bench artifacts."
+  }
+]
