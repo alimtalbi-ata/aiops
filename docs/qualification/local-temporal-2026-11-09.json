@@ -1,0 +1,31 @@
+{
+  "scope": "LOCAL_ISOLATED_SYNTHETIC_TEMPORAL",
+  "base_commit": "983dc20859f1207082e04b0c0fda5597b56751e6",
+  "run_id": "RUN-36A9512212F364E6",
+  "temporal_status": "COMPLETED",
+  "workflow_result": {
+    "final_version": 29,
+    "run_id": "RUN-36A9512212F364E6",
+    "status": "RESOLVED"
+  },
+  "history_events": 95,
+  "real_sdk_replay": "PASS",
+  "source_sha256": {
+    "worker/main.py": "860130d4d33b96650163e9230bd5c3eb64b12c92aa8745e7d19a5a11878693cd",
+    "worker/workflow.py": "26fe0fd091bab5e31a32a3672213f967d147549e2ab47b8f31ae8c1346d8d3a9",
+    "core/main.py": "7d5d60e2c5660d9d388ed81accd833292f20bcebeca9d88946d564d525848d7a"
+  },
+  "debian_verified": false,
+  "glpi_verified": false,
+  "portal_verified": false,
+  "real_model_verified": false,
+  "observed_at_utc": "2026-11-09T12:56:22.090284+00:00",
+  "core_status": "RESOLVED",
+  "completed_stages": 13,
+  "linked_synthetic_evidence": 13,
+  "policy_state": "PASS",
+  "policy_decision": "SIMULATE",
+  "runtime_note": "Application image built from base commit, then the three source files patched in isolated containers; executed hashes match candidate. Not an immutable release image.",
+  "temporal_dev_image": "temporalio/temporal:1.10.0@sha256:003508da05989e7cf0d583cfce521c4bb2732e733574e3040db8f1284783baa2",
+  "temporal_server_version": "1.32.2"
+}
