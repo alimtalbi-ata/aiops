@@ -67,6 +67,11 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
     if x.action == 'OBSERVE':
         if not isinstance(x.payload.get('metric'), str) or not x.payload['metric'].strip() or x.payload.get('value') is None:
             raise HTTPException(422, 'observation metric and value required')
+        # Evidence must be a finite numeric measurement, not a boolean, object or NaN.
+        import math
+        value = x.payload['value']
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise HTTPException(422, 'observation value must be a finite number')
     if x.action == 'SET_STATE':
         if not isinstance(x.payload.get('state'), str) or not x.payload['state'].strip():
             raise HTTPException(422, 'state required')
