@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[4]
 RUN = ROOT.parent / 'runtime'
-DEADLINE = dt.datetime(2026, 11, 10, 7, tzinfo=ZoneInfo('Europe/Paris')).timestamp()
+DEADLINE = dt.datetime(2026, 11, 10, 11, tzinfo=ZoneInfo('Europe/Paris')).timestamp()
 INTERVAL = 600
 CYCLE_LIMIT = 540
 LOCK = Path('/tmp/aiops2-night-20261109.lock')
@@ -25,7 +25,7 @@ def save(**fields):
     if (RUN / 'state.json').exists():
         state = json.loads((RUN / 'state.json').read_text())
     state.update(fields, updated_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
-                 deadline='2026-11-10T07:00:00+01:00')
+                 deadline=dt.datetime.fromtimestamp(DEADLINE, ZoneInfo('Europe/Paris')).isoformat())
     tmp = RUN / 'state.tmp'
     tmp.write_text(json.dumps(state, indent=2) + '\n')
     tmp.replace(RUN / 'state.json')

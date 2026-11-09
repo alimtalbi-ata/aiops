@@ -29,6 +29,10 @@ jobs:
         run: python -m compileall -q app tests tools
       - name: Candidate Core execute fail-closed and durable receipt regression tests
         run: python -m unittest discover -s tests -p "test_candidate_core_execute.py" -v
+      - name: FS147 readonly Critic and clock regression tests
+        run: |
+          python -m compileall -q worker
+          python -m unittest discover -s tests -p "test_fs147_*.py" -v
       - name: Policy safety unit tests
         env:
           PYTHONPATH: app
