@@ -61,3 +61,13 @@ La base/attribution a été publiée par Git HTTPS avant les travaux. L’API Gi
 ## Recontrôle de stabilité
 
 Le second essai avec Temporal 1.4.1 a aussi échoué avant le Run : le scanner tente son appel local via le proxy de session (network unreachable), puis panique. Le changement de version seul ne résout donc pas le défaut. Le harness ajoute explicitement 0.0.0.0 aux seules adresses locales exclues du proxy pour les communications du banc ; aucun accès externe ni politique réseau ne sont modifiés. Une nouvelle exécution doit valider cette correction avant de déclarer le maintien en service PASS.
+
+## Résultat du banc corrigé : PASS DEMO isolé
+
+L'exécution au commit **a4ea1970** conserve exactement le même code applicatif et la même image que le premier Run. Le changement est limité au harness : version Temporal épinglée à 1.4.1 (digest dans le reçu), puis adresse locale 0.0.0.0 explicitement exclue du proxy pour les communications internes. Ni scanner ni garde Policy/HITL désactivés. Le changement de version seul avait échoué : `bench462-second-failure.json` et `bench462-second-temporal.log` en conservent la preuve.
+
+Run **RUN-03A3F5BF7578B5ED**, Temporal Run ID **01a1c21b-b8f1-7a26-bed0-4ddd9814e1b8** : Core RESOLVED, Temporal COMPLETED, replay SDK PASS, 95 événements. Stabilité observée avant/après exécution : 98 secondes ; snapshot ultérieur : neuf conteneurs running, zéro restart, aucun port publié. Trois execute supplémentaires retournent le même reçu ; une seule ligne de reçu et un seul POST Worker avant/après rejeu.
+
+Les preuves de cette exécution sont les fichiers `bench462-stable-*`. Les empreintes applicatives sont identiques au premier essai et aux 47 tests ciblés ; aucune nouvelle exécution des tests unitaires n'est revendiquée pour ce seul changement de routage local. Les logs publiés ne normalisent que les espaces de fin de ligne, avec empreintes originales et publiées conservées.
+
+**Démarrage prolongé et Run DEMO sur banc corrigé : PASS au périmètre observé.** Les deux pannes antérieures restent documentées. Ce contrôle court ne prouve pas une disponibilité de production. CI candidate UNKNOWN ; GLPI authentifié, navigateur et approbation OIDC réelle non qualifiés. Debian, FS1250 et E2E réels restent HOLD.

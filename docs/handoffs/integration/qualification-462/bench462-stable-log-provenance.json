@@ -1,0 +1,5 @@
+{
+  "original_sha256": "63a3a6bc4c5a014c4bd9e1f989074a27cb3c0ebb350532c0ca4cfe0788cd430d",
+  "published_sha256": "1b707c1a504c9b166bec0288016941826fc7eefb82ae241fb624ced98ea9dab9",
+  "transformation": "rstrip trailing line spaces only; original retained outside checkout"
+}

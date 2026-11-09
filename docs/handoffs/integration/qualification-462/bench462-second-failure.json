@@ -1,0 +1,7 @@
+{
+  "error": "AssertionError",
+  "reason": "STABILITY_FAILURE_temporal",
+  "source_commit": "6131ec4bd6ab487f4960f4e4639b710ec05d2ada",
+  "real_e2e": "HOLD",
+  "scope": "OWNED_CLOUD_BENCH_ONLY"
+}

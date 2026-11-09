@@ -1,0 +1,79 @@
+{
+  "project": "aiops2-agent7-462-3f5f6820",
+  "containers": [
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-intelligence-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-provider-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": null,
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-policy-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-core-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-worker-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-evidence-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-twin-1",
+      "image_id": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-temporal-1",
+      "image_id": "sha256:d8cb51d50614bae68128056d67a59876fd89ea8e59f62cc579c5c02f7ae5dafa",
+      "state": "running",
+      "health": null,
+      "restarts": 0,
+      "port_bindings": {}
+    },
+    {
+      "name": "/aiops2-agent7-462-3f5f6820-postgres-1",
+      "image_id": "sha256:4278d7b1e3deb3193ddc803158f6532963f059fc25a2eefaee4b5a9e71741873",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {}
+    }
+  ],
+  "all_nine_running": true,
+  "no_published_ports": true
+}

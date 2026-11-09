@@ -1,0 +1,47 @@
+time=2026-11-09T20:54:36.997 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:37.181 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:37.527 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:38.205 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:39.733 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:42.756 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:47.203 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:51.909 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:54:56.216 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:00.481 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:05.343 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:09.862 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:14.602 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:19.094 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:23.392 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:28.028 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:32.893 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:36.865 level=WARN msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+time=2026-11-09T20:55:36.865 level=ERROR msg="error creating sdk client" service=worker error="failed reaching server: connection error: desc = \"transport: Error while dialing: dial tcp 172.31.5.221:8080: connect: network is unreachable\""
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x70 pc=0x287437f]
+
+goroutine 2535 [running]:
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflow(_, {_, _}, {_, _}, {{0x3450e12, 0x17}, {0x348700c, 0x23}, 0x0, ...}, ...)
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:262 +0x9f
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflowWithRetry.func1({0x6ef3850, 0xc001918d20})
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:238 +0x116
+go.temporal.io/server/common/backoff.ThrottleRetryContext({0x6ef3850, 0xc001918d20}, 0xc0010f1e28, {0x6ebd2c0, 0xc000d7a0c0}, 0x0?)
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/common/backoff/retry.go:65 +0x206
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflowWithRetry(_, {_, _}, {{0x3450e12, 0x17}, {0x348700c, 0x23}, 0x0, 0x188e6d68b0000, 0x0, ...}, ...)
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:237 +0x1b4
+created by go.temporal.io/server/service/worker/scanner.(*Scanner).Start in goroutine 2478
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:170 +0x731
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x70 pc=0x287437f]
+
+goroutine 2536 [running]:
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflow(_, {_, _}, {_, _}, {{0x3464b38, 0x1c}, {0x34a0754, 0x28}, 0x0, ...}, ...)
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:262 +0x9f
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflowWithRetry.func1({0x6ef3850, 0xc001918d20})
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:238 +0x116
+go.temporal.io/server/common/backoff.ThrottleRetryContext({0x6ef3850, 0xc001918d20}, 0xc0014fde28, {0x6ebd2c0, 0xc000cf6180}, 0xc000834b40?)
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/common/backoff/retry.go:65 +0x206
+go.temporal.io/server/service/worker/scanner.(*Scanner).startWorkflowWithRetry(_, {_, _}, {{0x3464b38, 0x1c}, {0x34a0754, 0x28}, 0x0, 0x0, 0x0, ...}, ...)
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:237 +0x1b4
+created by go.temporal.io/server/service/worker/scanner.(*Scanner).Start in goroutine 2478
+	/Users/cdf/go/pkg/mod/go.temporal.io/server@v1.28.0/service/worker/scanner/scanner.go:176 +0x8d7
