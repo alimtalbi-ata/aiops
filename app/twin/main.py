@@ -91,7 +91,9 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
             raise HTTPException(404, 'target node not found')
         if x.action=='SET_STATE' and x.target_node_id:
             record_id = new('FACT')
-            p=x.payload; c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
+            # Synthetic scenario state is evidence, never a canonical node mutation.
+            # The canonical graph stays unchanged; scenario consumers read twin_facts.
+            p=x.payload
             c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(record_id,x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
         elif x.action=='OBSERVE' and x.target_node_id:
             record_id = new('OBS')
