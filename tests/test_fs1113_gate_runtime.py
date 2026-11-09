@@ -15,7 +15,7 @@ EXPECTED = "aiops2-portal:fs1073-csp-candidate"
 
 
 class GateRuntimeFence(unittest.TestCase):
-    def run_gate(self, *, change_id=False, change_image=False, fail_post=False):
+    def run_gate(self, *, change_id=False, change_image=False, fail_post=False, fail_pre=False, wrong_tag=False):
         source = GATE.read_text(encoding="utf-8")
         # Do not invoke either candidate build or browser gate in this unit test.
         source = source.replace(
@@ -59,6 +59,8 @@ class GateRuntimeFence(unittest.TestCase):
                 "FS1113_CHANGE_ID": str(int(change_id)),
                 "FS1113_CHANGE_IMAGE": str(int(change_image)),
                 "FS1113_FAIL_POST": str(int(fail_post)),
+                "FS1113_FAIL_PRE": str(int(fail_pre)),
+                "FS1113_WRONG_TAG": str(int(wrong_tag)),
             })
             return subprocess.run(["bash", str(gate)], capture_output=True, text=True, env=env, timeout=10)
 
@@ -82,6 +84,18 @@ class GateRuntimeFence(unittest.TestCase):
         result = self.run_gate(fail_post=True)
         self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
         self.assertIn("FS1113_ERROR=PRODUCTION_POSTCHECK_UNAVAILABLE", result.stdout)
+        self.assertNotIn("FS1113_RESULT=PASS", result.stdout)
+
+
+    def test_precheck_unavailable_fails_closed(self):
+        result = self.run_gate(fail_pre=True)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("FS1113_RESULT=PASS", result.stdout)
+
+    def test_unexpected_production_tag_fails_closed(self):
+        result = self.run_gate(wrong_tag=True)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("FS1113_ERROR=UNEXPECTED_PRODUCTION_IMAGE", result.stdout)
         self.assertNotIn("FS1113_RESULT=PASS", result.stdout)
 
 
