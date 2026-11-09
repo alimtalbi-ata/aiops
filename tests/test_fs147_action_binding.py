@@ -40,3 +40,21 @@ class TestActionBinding(unittest.TestCase):
         self.assertEqual(check_action_binding(None,self.approval,now=self.now)["status"], "UNKNOWN")
     def test_naive_clock(self):
         self.assertEqual(check_action_binding(self.intent,self.approval,now=datetime(2026,11,9))["reason"], "CLOCK_UNVERIFIED")
+
+    def test_long_lived_approval_is_not_replayable(self):
+        self.approval["expires_at"] = "2026-11-10T06:00:00Z"
+        result = self.check()
+        self.assertEqual(result["reason"], "APPROVAL_HORIZON_EXCEEDED")
+        self.assertFalse(result["dispatch_allowed"])
+
+    def test_approval_horizon_boundary(self):
+        self.approval["expires_at"] = "2026-11-09T06:10:00Z"
+        self.assertEqual(self.check()["status"], "BOUND_READ_ONLY")
+        self.approval["expires_at"] = "2026-11-09T06:10:01Z"
+        self.assertEqual(self.check()["reason"], "APPROVAL_HORIZON_EXCEEDED")
+
+    def test_expiry_timezone_equivalence(self):
+        self.approval["expires_at"] = "2026-11-09T07:10:00+01:00"
+        self.assertEqual(self.check()["status"], "BOUND_READ_ONLY")
+        self.approval["expires_at"] = "2026-11-09T07:10:01+01:00"
+        self.assertEqual(self.check()["reason"], "APPROVAL_HORIZON_EXCEEDED")
