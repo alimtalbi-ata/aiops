@@ -104,7 +104,9 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("ANALYST_SCOPE", steps)
         if (not isinstance(analysis.get("findings"), list)
                 or not analysis["findings"]
+                or len(analysis["findings"]) > 64
                 or any(not isinstance(item, str) or not item.strip()
+                       or len(item) > 2048
                        for item in analysis["findings"])):
             return _blocked("INSUFFICIENT_ANALYSIS", steps)
         steps.append("ANALYST")
