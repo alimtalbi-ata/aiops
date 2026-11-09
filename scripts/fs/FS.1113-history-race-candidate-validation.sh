@@ -7,6 +7,7 @@ EXPECTED_PROD=aiops2-portal:fs1073-csp-candidate
 PROD_BEFORE=""
 PROD_ID_BEFORE=""
 PROD_IMAGE_ID_BEFORE=""
+PROD_TAG_ID_BEFORE=""
 
 # Inspect only: this gate must never deploy or modify the production container.
 check_production_on_exit() {
@@ -26,6 +27,15 @@ check_production_on_exit() {
     fi
     if [[ "$prod_id_after" != "$PROD_ID_BEFORE" || "$prod_image_id_after" != "$PROD_IMAGE_ID_BEFORE" ]]; then
       echo "FS1113_ERROR=PRODUCTION_CONTAINER_OR_IMAGE_ID_CHANGED"
+      exit 3
+    fi
+    local prod_tag_id_after
+    if ! prod_tag_id_after="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')"; then
+      echo "FS1113_ERROR=PRODUCTION_TAG_POSTCHECK_UNAVAILABLE"
+      exit 4
+    fi
+    if [[ "$prod_tag_id_after" != "$PROD_TAG_ID_BEFORE" ]]; then
+      echo "FS1113_ERROR=PRODUCTION_TAG_RETARGETED"
       exit 3
     fi
     if [[ "$prod_after" != "$PROD_BEFORE" ]]; then
@@ -51,6 +61,14 @@ PROD_ID_BEFORE="$(docker inspect "$PROD" --format '{{.Id}}')"
 PROD_IMAGE_ID_BEFORE="$(docker inspect "$PROD" --format '{{.Image}}')"
 [[ "$PROD_BEFORE" == "$EXPECTED_PROD" ]] || {
   echo "FS1113_ERROR=UNEXPECTED_PRODUCTION_IMAGE"
+  exit 2
+}
+PROD_TAG_ID_BEFORE="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')" || {
+  echo "FS1113_ERROR=PRODUCTION_TAG_PREFLIGHT_UNAVAILABLE"
+  exit 4
+}
+[[ "$PROD_TAG_ID_BEFORE" == "$PROD_IMAGE_ID_BEFORE" ]] || {
+  echo "FS1113_ERROR=PRODUCTION_TAG_CONTAINER_MISMATCH"
   exit 2
 }
 
