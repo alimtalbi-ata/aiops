@@ -168,10 +168,26 @@ class SyntheticEventAdmission(unittest.TestCase):
         self.assertEqual(result["run_id"], "RUN-FIXTURE")
         self.assertEqual(result["record_id"], "FACT-FIXTURE")
         self.assertEqual(result["record_type"], "twin_fact")
-        self.assertEqual(db.statements[2][1][0], result["record_id"])
-        self.assertEqual(len(db.statements), 3)
-        self.assertIn("update aiops.twin_nodes", db.statements[1][0])
-        self.assertIn("insert into aiops.twin_facts", db.statements[2][0])
+        self.assertEqual(db.statements[1][1][0], result["record_id"])
+        self.assertEqual(len(db.statements), 2)
+        self.assertFalse(any('update aiops.twin_nodes' in query.lower() for query, _ in db.statements))
+        self.assertIn("insert into aiops.twin_facts", db.statements[1][0])
+
+    def test_synthetic_state_never_mutates_canonical_graph(self):
+        db = DB()
+        route = load_route(db)
+        for target, run_id in (("FS-FIXTURE-NODE", "RUN-FS147"), ("SAN-FIXTURE-NODE", "RUN-SAN147")):
+            with self.subTest(target=target):
+                result = route(Event("SET_STATE", target, run_id=run_id,
+                                     payload={"state": "FAILED", "health": "CRITICAL"}),
+                               authorization="Bearer fixture-secret")
+                self.assertEqual(result["record_type"], "twin_fact")
+                self.assertEqual(result["run_id"], run_id)
+        writes = [(sql, params) for sql, params in db.statements if sql.lstrip().lower().startswith(("insert", "update", "delete"))]
+        self.assertEqual(len(writes), 2)
+        self.assertTrue(all("insert into aiops.twin_facts" in sql for sql, _ in writes))
+        self.assertFalse(any("aiops.twin_nodes" in sql for sql, _ in writes))
+        self.assertEqual([row[1][1] for row in writes], ["FS-FIXTURE-NODE", "SAN-FIXTURE-NODE"])
 
     def test_invalid_token_does_not_open_database(self):
         db = DB()
