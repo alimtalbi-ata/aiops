@@ -94,20 +94,46 @@ class SyntheticEventAdmission(unittest.TestCase):
                 self.assertEqual(caught.exception.status_code, 422)
                 self.assertEqual(db.calls, 0)
 
-    def test_valid_observation_retains_existing_contract(self):
+    def test_valid_observation_is_fenced_from_canonical_telemetry(self):
+        import json
         db = DB()
         result = load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE",
+                                      run_id="RUN-FS147",
                                       payload={"metric": "fs_used", "value": 91}),
                                 authorization="Bearer fixture-secret")
         self.assertEqual(result["status"], "PASS")
-        self.assertEqual(result["run_id"], "RUN-FIXTURE")
-        self.assertEqual(result["record_id"], "OBS-FIXTURE")
-        self.assertEqual(result["record_type"], "observation")
-        self.assertEqual(db.statements[1][1][0], result["record_id"])
-        self.assertEqual(db.calls, 1)
+        self.assertEqual(result["run_id"], "RUN-FS147")
+        self.assertEqual(result["record_id"], "FACT-FIXTURE")
+        self.assertEqual(result["record_type"], "twin_fact")
         self.assertEqual(len(db.statements), 2)
         self.assertIn("select 1 from aiops.twin_nodes", db.statements[0][0])
-        self.assertIn("insert into aiops.observations", db.statements[1][0])
+        self.assertIn("insert into aiops.twin_facts", db.statements[1][0])
+        self.assertNotIn("aiops.observations", db.statements[1][0])
+        payload = json.loads(db.statements[1][1][3])
+        self.assertEqual(payload["run_id"], "RUN-FS147")
+        self.assertIs(payload["synthetic"], True)
+        self.assertEqual(payload["metric"], "fs_used")
+        self.assertEqual(payload["value"], 91)
+
+    def test_fs_and_san_observations_never_write_canonical_telemetry(self):
+        import json
+        db = DB()
+        route = load_route(db)
+        for node, run in (("FS-FIXTURE-NODE", "RUN-FS147"),
+                          ("SAN-FIXTURE-NODE", "RUN-SAN147")):
+            route(Event("OBSERVE", node, run_id=run,
+                        payload={"metric": "latency", "value": 12}),
+                  authorization="Bearer fixture-secret")
+        writes = [(sql, params) for sql, params in db.statements
+                  if sql.lstrip().lower().startswith(("insert", "update", "delete"))]
+        self.assertEqual(len(writes), 2)
+        self.assertTrue(all("aiops.twin_facts" in sql for sql, _ in writes))
+        self.assertFalse(any("aiops.observations" in sql or "aiops.twin_nodes" in sql
+                             for sql, _ in writes))
+        self.assertEqual([params[1] for _, params in writes],
+                         ["FS-FIXTURE-NODE", "SAN-FIXTURE-NODE"])
+        self.assertEqual([json.loads(params[3])["run_id"] for _, params in writes],
+                         ["RUN-FS147", "RUN-SAN147"])
 
     def test_missing_target_never_writes_or_claims_pass(self):
         for action in ('OBSERVE', 'SET_STATE'):
