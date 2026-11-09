@@ -3,7 +3,7 @@ from worker.fs147_stage_handoff import evaluate_handoff
 
 class TestHandoff(unittest.TestCase):
     def setUp(self):
-        self.obs = {"status":"ACCEPTED","fingerprint":"a"*64}
+        self.obs = {"status":"ACCEPTED","fingerprint":"a"*64,"run_id":"run-1","ticket_id":147,"tenant_id":"tenant-1"}
         self.base = {"run_id":"run-1","ticket_id":147,"tenant_id":"tenant-1","observation_fingerprint":"a"*64,"status":"PASS","unknown":False}
         self.analyst = dict(self.base,evidence_sufficient=True)
         self.critic = dict(self.base,approved=True)
@@ -15,6 +15,17 @@ class TestHandoff(unittest.TestCase):
         self.assertEqual(a["status"],"READY_FOR_EVIDENCE")
         self.assertFalse(a["dispatch_allowed"])
         self.assertEqual(a,self.call())
+    def test_observation_receipt_cross_run_replay_denied(self):
+        for field, wrong in (("run_id", "run-2"), ("tenant_id", "other"),
+                             ("ticket_id", 148), ("ticket_id", True)):
+            with self.subTest(field=field, wrong=wrong):
+                self.obs[field] = wrong
+                receipt = self.call()
+                self.assertEqual(receipt["reason"], "OBSERVATION_IDENTITY_MISMATCH")
+                self.assertFalse(receipt["dispatch_allowed"])
+                self.assertIsNone(receipt["digest"])
+                self.obs[field] = {"run_id":"run-1","tenant_id":"tenant-1","ticket_id":147}[field]
+
     def test_missing_observation(self):
         self.obs={}
         self.assertEqual(self.call()["status"],"UNKNOWN")
