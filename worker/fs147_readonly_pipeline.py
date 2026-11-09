@@ -108,6 +108,11 @@ def execute(request: FS147Request, *, stop_auto: bool,
                        for item in analysis["findings"])):
             return _blocked("INSUFFICIENT_ANALYSIS", steps)
         steps.append("ANALYST")
+        # An expensive Analyst call may exhaust the observation freshness budget.
+        # Do not invoke Critic on expired evidence, even if Policy would later deny.
+        age_after_analyst = now() - observed_at
+        if not timedelta(seconds=-30) <= age_after_analyst <= timedelta(minutes=5):
+            return _blocked("STALE_OBSERVATION", steps)
         critique = critic(request, observation, analysis)
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
             return _blocked("CRITIC_SCOPE", steps)
