@@ -62,6 +62,14 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
         raise HTTPException(422, 'unsupported synthetic action')
     if not x.target_node_id:
         raise HTTPException(422, 'target_node_id required')
+    # Never claim a successful observation/state transition for empty evidence.
+    # Validate before DB access, preserving the read-only topology lookup gate.
+    if x.action == 'OBSERVE':
+        if not isinstance(x.payload.get('metric'), str) or not x.payload['metric'].strip() or x.payload.get('value') is None:
+            raise HTTPException(422, 'observation metric and value required')
+    if x.action == 'SET_STATE':
+        if not isinstance(x.payload.get('state'), str) or not x.payload['state'].strip():
+            raise HTTPException(422, 'state required')
     with db() as c:
         # Fail closed before writing an observation or topology fact.
         if not c.execute('select 1 from aiops.twin_nodes where node_id=%s', (x.target_node_id,)).fetchone():
