@@ -27,3 +27,9 @@ Autres vérifications : `bash -n tests/postgres-dr-rehearsal.sh`, `git diff --ch
 ## Publication et limites
 
 Un commit distinct sera poussé sur `agent/integration/462-isolated-candidate`, déclenchant le workflow qualité par événement push sur son nouveau SHA ; résultat à relever séparément, sans réattribuer cette CI au parent gelé. Le descriptif de PR préparé est conservé ; aucune nouvelle tentative API. Le correctif ne qualifie aucun système réel : Debian, FS1250 et E2E réels HOLD. Aucun merge, déploiement ou changement applicatif.
+
+## Second incrément : compatibilité du runner
+
+Le premier correctif publié `8011ddd6ff0130e52500a0832db187759a0e1025` déclenche le run 42702179382. Son job PostgreSQL échoue à l'installation avec code APT100, avant les migrations ; l'annotation confirme la migration ubuntu-latest vers Ubuntu26. Le détail APT de ce run n'est pas prétendu lu. Reproduction locale indépendante : `FROM ubuntu:26.04`, `apt-get update && apt-get install -y postgresql-client-16` échoue bien avec `Unable to locate package postgresql-client-16`, code100. Contrôle positif : mêmes commandes sur `ubuntu:24.04` et les trois `--version` sous `/usr/lib/postgresql/16/bin` passent.
+
+Correction séparée : seul `database-migrations.runs-on` devient `ubuntu-24.04`, distribution fournissant nativement ces clients. Tous les autres jobs restent sur leur runner actuel. Logs complets de ces deux builds joints ; aucune erreur ignorée. Le test de restauration lui-même conserve tous ses contrôles et la preuve jetable PASS du premier incrément reste applicable : ce second incrément change uniquement le runner CI et les preuves documentaires.

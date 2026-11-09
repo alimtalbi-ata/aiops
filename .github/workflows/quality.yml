@@ -132,7 +132,8 @@ jobs:
         run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
-    runs-on: ubuntu-latest
+    # PostgreSQL 16 clients are native to Noble; ubuntu-latest moved to 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
