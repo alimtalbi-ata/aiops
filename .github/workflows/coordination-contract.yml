@@ -7,6 +7,7 @@ on:
       - 'tests/test_probe_debian_dispatch.py'
       - 'tests/test_coordination_reducer.py'
       - 'tests/test_codex_roundtrip.py'
+      - 'tests/test_codex_dispatch_once.py'
       - '.github/workflows/coordination-contract.yml'
   workflow_dispatch:
 permissions:
@@ -24,5 +25,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*coordination*.py' -v
       - name: Run Codex roundtrip receipt tests
         run: python -m unittest discover -s tests -p test_codex_roundtrip.py -v
+      - name: Run one-shot dispatch contract tests
+        run: python -m unittest discover -s tests -p test_codex_dispatch_once.py -v
       - name: Run dispatch discovery probe tests
         run: python -m unittest discover -s tests -p test_probe_debian_dispatch.py -v
