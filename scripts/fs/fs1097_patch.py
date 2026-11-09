@@ -54,6 +54,7 @@ let historyRequestId=0,historyAbortController=null;
 const historyColors=["#62c6ff","#64ddb0","#ffbd69","#d7a5ff","#ff929c","#9bd3ae"];
 function historyElement(tag,attrs,text){const e=document.createElementNS("http://www.w3.org/2000/svg",tag);Object.entries(attrs||{}).forEach(([k,v])=>e.setAttribute(k,String(v)));if(text!==undefined)e.textContent=text;return e}
 function historyTime(ts){return new Date(ts*1000).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+function historyValidPoint(p){return Array.isArray(p)&&p.length===2&&p.every(v=>(typeof v==="number"||typeof v==="string")&&String(v).trim()!==""&&Number.isFinite(Number(v)))}
 async function loadHistory(){
  const requestId=++historyRequestId;
  if(historyAbortController)historyAbortController.abort();
@@ -79,7 +80,7 @@ async function loadHistory(){
    if(seenTargets.has(key))return false;
    seenTargets.add(key);return true;
   }).slice(0,30);
-  const points=series.flatMap(s=>s.points).filter(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])));
+  const points=series.flatMap(s=>s.points).filter(historyValidPoint);
   chart.replaceChildren();
   if(!points.length){chart.append(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Aucune donnée disponible pour cette période"));status.textContent="Aucune série avec points disponibles.";return}
   const width=900,height=320,left=64,right=18,top=18,bottom=42,plotW=width-left-right,plotH=height-top-bottom;
@@ -90,7 +91,7 @@ async function loadHistory(){
   for(let i=0;i<=4;i++){const yy=top+i*plotH/4,val=maxV-i*(maxV-minV)/4;chart.append(historyElement("line",{x1:left,y1:yy,x2:width-right,y2:yy,class:"history-grid"}));chart.append(historyElement("text",{x:left-9,y:yy+4,"text-anchor":"end",class:"history-axis"},Number(val.toPrecision(3)).toString()))}
   for(let i=0;i<=4;i++){const xx=left+i*plotW/4,stamp=minT+i*(maxT-minT)/4;chart.append(historyElement("text",{x:xx,y:height-13,"text-anchor":"middle",class:"history-axis"},historyTime(stamp)))}
   series.forEach((s,index)=>{
-   const valid=s.points.filter(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])));
+   const valid=s.points.filter(historyValidPoint);
    if(!valid.length)return;
    const color=historyColors[index%historyColors.length],d=valid.map((p,i)=>(i?"L":"M")+x(p[0]).toFixed(2)+" "+y(p[1]).toFixed(2)).join(" ");
    chart.append(historyElement("path",{d,fill:"none",stroke:color,"stroke-width":2.2,"stroke-linejoin":"round","stroke-linecap":"round"}));
