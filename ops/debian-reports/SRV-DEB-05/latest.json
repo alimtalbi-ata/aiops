@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-09T21:59:01.435047+00:00",
+  "collected_at": "2026-11-09T22:00:01.937171+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:e0559a90b34adcfe59ad3545e44195a10274398c17a308b6d8df316d4552eed1",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-portal",
+        "state": "running"
+      },
       {
         "health": "healthy",
         "image": "aiops2-intelligence:intelligence-event-verified-v1-20261109",
@@ -25,8 +32,8 @@
         "health": "no-healthcheck",
         "image": "sha256:f8df32ea0fc9107e1dd1cc5c40b8bd38257336fdaa1a2be00b5597a8609f10e8",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-portal",
-        "state": "running"
+        "name": "aiops2-rebuild-portal-rollback-20261109T215925202141Z",
+        "state": "exited"
       },
       {
         "health": "unhealthy",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-e2e-v1-aiops2-core-1",
         "state": "running"
-      },
-      {
-        "health": "no-healthcheck",
-        "image": "aiops2-e2e-v1-aiops2-policy",
-        "inspect_ok": true,
-        "name": "aiops2-e2e-v1-aiops2-policy-1",
-        "state": "running"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 5 days, 12 hours, 10 minutes"
+    "uptime": "up 4 weeks, 5 days, 12 hours, 11 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 139533836288,
+      "free_bytes": 139531132928,
       "total_bytes": 172898033664,
-      "used_bytes": 24506875904
+      "used_bytes": 24509579264
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.27294921875,
-      1.3642578125,
-      1.31005859375
+      1.8935546875,
+      1.5732421875,
+      1.38623046875
     ],
     "memory_bytes": {
-      "MemAvailable": 18672754688,
+      "MemAvailable": 18606780416,
       "MemTotal": 25205911552,
       "SwapFree": 10029432832,
       "SwapTotal": 10838077440
