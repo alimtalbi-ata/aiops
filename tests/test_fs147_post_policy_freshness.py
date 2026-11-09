@@ -17,7 +17,8 @@ class PostPolicyFreshnessTests(unittest.TestCase):
                                 filesystem="/fs-lab", read_only=True)
 
     def run_case(self, times, critic_state="PASS"):
-        calls = iter(times)
+        # Clock now checked after observation and after Analyst before Critic.
+        calls = iter([times[0], times[0], *times[1:]] )
         policy_calls = []
         def analyst(req, obs):
             return dict(self.base, evidence_id="evidence-1", findings=["usage high"])
@@ -53,6 +54,25 @@ class PostPolicyFreshnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "NO_EFFECT")
         self.assertFalse(result["resolved"])
         self.assertEqual(len(calls), 1)
+
+    def test_analyst_latency_expires_before_critic(self):
+        critic_calls = []
+        base = dict(self.base, evidence_id="evidence-1")
+        def analyst(req, obs):
+            return dict(base, findings=["usage high"])
+        def critic(req, obs, analysis):
+            critic_calls.append(True)
+            return dict(base, state="PASS")
+        result = execute(self.request, stop_auto=False,
+                         observe=lambda req: self.observation,
+                         analyst=analyst, critic=critic,
+                         policy=lambda *args: self.fail("Policy must not run"),
+                         claim_once=lambda key: True,
+                         now=iter([self.start + timedelta(minutes=4),
+                                   self.start + timedelta(minutes=5, seconds=1)]).__next__)
+        self.assertEqual(result["reason"], "STALE_OBSERVATION")
+        self.assertEqual(result["steps"], ["OBSERVE", "ANALYST"])
+        self.assertEqual(critic_calls, [])
 
     def test_critic_refusal_does_not_call_policy(self):
         result, calls = self.run_case([self.start + timedelta(minutes=4)],
