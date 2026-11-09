@@ -18,7 +18,19 @@ def check_action_binding(intent, approval, *, now):
         if not isinstance(value, str) or not value.strip() or len(value) > 256:
             return deny("INVALID_INTENT")
         other = approval.get(field)
-        if not isinstance(other, str) or not hmac.compare_digest(value, other):
+        # compare_digest(str, str) raises TypeError for non-ASCII identifiers.
+        # Refuse malformed scope rather than turning a denial into an exception.
+        try:
+            value_bytes = value.encode("ascii")
+        except UnicodeEncodeError:
+            return deny("INVALID_INTENT")
+        if not isinstance(other, str):
+            return deny("APPROVAL_MISMATCH")
+        try:
+            other_bytes = other.encode("ascii")
+        except UnicodeEncodeError:
+            return deny("APPROVAL_MISMATCH")
+        if not hmac.compare_digest(value_bytes, other_bytes):
             return deny("APPROVAL_MISMATCH")
     if _SHA.fullmatch(intent["parameters_digest"]) is None:
         return deny("INVALID_DIGEST")
