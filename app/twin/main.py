@@ -113,11 +113,17 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
             p=x.payload
             c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(record_id,x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
         elif x.action=='OBSERVE' and x.target_node_id:
-            record_id = new('OBS')
-            p=x.payload;c.execute('insert into aiops.observations(observation_id,node_id,metric,value,unit,observed_at,status,payload) values(%s,%s,%s,%s,%s,now(),%s,%s)',(record_id,x.target_node_id,p.get('metric','synthetic'),p.get('value'),p.get('unit'),p.get('status','UNKNOWN'),__import__('json').dumps({'run_id':x.run_id,'synthetic':True})))
+            # Qualification observations are scenario facts, never canonical telemetry.
+            # Persist run provenance in the same fenced store as synthetic state.
+            record_id = new('FACT')
+            p=x.payload
+            c.execute("insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,%s,%s,now(),1.0)",
+                      (record_id,x.target_node_id,'observation',__import__('json').dumps({
+                          'metric':p['metric'],'value':p['value'],'unit':p.get('unit'),
+                          'status':p.get('status','UNKNOWN'),'run_id':x.run_id,'synthetic':True})))
     return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True,
             'run_id':x.run_id,'record_id':record_id,
-            'record_type':'twin_fact' if x.action == 'SET_STATE' else 'observation'}
+            'record_type':'twin_fact'}
 
 @app.get('/metrics')
 def metrics():
