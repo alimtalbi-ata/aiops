@@ -5,6 +5,7 @@ on:
       - 'ops/coordination/**'
       - 'tests/test_coordination_message.py'
       - 'tests/test_probe_debian_dispatch.py'
+      - 'tests/test_coordination_reducer.py'
       - '.github/workflows/coordination-contract.yml'
   workflow_dispatch:
 permissions:
