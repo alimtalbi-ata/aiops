@@ -34,6 +34,27 @@ class LineageSafetyTests(unittest.TestCase):
         self.assertEqual(result["approval"], "UNVERIFIED")
         self.assertEqual(result["resolution"], "UNVERIFIED")
 
+    def test_invalid_glpi_ids_do_not_claim_verified_xref(self):
+        invalid = [
+            {"system": "", "id": 201, "verification": "VERIFIED", "evidence_ref": "r"},
+            {"system": "GLPI", "id": " ", "verification": "VERIFIED", "evidence_ref": "r"},
+            {"system": "GLPI", "id": True, "verification": "VERIFIED", "evidence_ref": "r"},
+            {"system": "GLPI", "id": 201, "verification": "VERIFIED", "evidence_ref": " "},
+        ]
+        result = mod.project_lineage({"stages": {"itsm": {"status": "PASS", "evidence_ref": "ui"}},
+                                      "external_refs": invalid})
+        self.assertEqual(result["verified_external_refs"], [])
+        self.assertEqual(result["stages"]["itsm"]["status"], "UNKNOWN")
+
+    def test_duplicate_verified_xrefs_have_one_canonical_identity(self):
+        result = mod.project_lineage({"external_refs": [
+            {"system": " GLPI ", "id": "201", "verification": "VERIFIED", "evidence_ref": "readback-1"},
+            {"system": "GLPI", "id": 201, "verification": "VERIFIED", "evidence_ref": "readback-2"},
+        ]})
+        self.assertEqual(result["verified_external_refs"],
+                         [{"system": "GLPI", "id": "201", "evidence_ref": "readback-1"}])
+        self.assertEqual(result["approval"], "UNVERIFIED")
+
     def test_pass_requires_evidence(self):
         result = mod.project_lineage({"stages": {"core": {"status": "PASS"},
                                                  "source": {"status": "PASS", "evidence_ref": "prom-1"}}})
