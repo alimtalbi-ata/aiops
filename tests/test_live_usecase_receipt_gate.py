@@ -59,6 +59,22 @@ class ReceiptTests(unittest.TestCase):
                     self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
                     self.assertEqual(r, before)
 
+    def test_check_level_cross_run_attestation_fails_closed(self):
+        for name in sorted(REQUIRED):
+            for invalid in ("RUN-OTHER", None, ["RUN-TEST-001"], 0):
+                with self.subTest(check=name, run_id=invalid):
+                    r = receipt()
+                    next(c for c in r["checks"] if c["name"] == name)["run_id"] = invalid
+                    before = deepcopy(r)
+                    self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                    self.assertEqual(r, before)
+
+    def test_matching_check_level_run_attestation_remains_claim_only(self):
+        r = receipt()
+        for check in r["checks"]:
+            check["run_id"] = r["run_id"]
+        self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
     def test_matching_explicit_run_evidence_remains_claim_only(self):
         r = receipt()
         for item in r["checks"]:
