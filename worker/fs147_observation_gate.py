@@ -71,7 +71,7 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
     if not isinstance(evidence, dict) or not has_signal(evidence) or not isinstance(envelope.get('source_event_id'), str) or not envelope['source_event_id'].strip():
         return receipt('UNKNOWN', 'INSUFFICIENT_EVIDENCE')
     try:
-        canonical = json.dumps({k: envelope[k] for k in ('tenant_id', 'ticket_id', 'run_id', 'source', 'source_event_id', 'observed_at', 'evidence')}, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        canonical = json.dumps({k: envelope[k] for k in ('tenant_id', 'ticket_id', 'run_id', 'source', 'access_mode', 'source_event_id', 'observed_at', 'received_at', 'evidence')}, sort_keys=True, separators=(',', ':'), allow_nan=False)
     except (ValueError, TypeError, KeyError):
         return receipt('UNKNOWN', 'NONCANONICAL_EVIDENCE')
     return receipt('ACCEPTED', 'READ_ONLY_OBSERVATION', sha256(canonical.encode()).hexdigest())
