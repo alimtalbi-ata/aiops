@@ -68,7 +68,7 @@ class TestHandoff(unittest.TestCase):
         self.analyst["nested"] = root
         receipt = self.call()
         self.assertEqual(receipt["status"], "UNKNOWN")
-        self.assertEqual(receipt["reason"], "NONCANONICAL_HANDOFF")
+        self.assertEqual(receipt["reason"], "HANDOFF_TOO_COMPLEX")
         self.assertIsNone(receipt["digest"])
         self.assertFalse(receipt["dispatch_allowed"])
 if __name__ == "__main__":
