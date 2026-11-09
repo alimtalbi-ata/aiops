@@ -1,0 +1,56 @@
+{
+  "sha": "e7c76514b8e98cb35a9594226e7106fde98a42aa",
+  "exact_sha_link": true,
+  "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327",
+  "jobs": [
+    {
+      "job": "quality-build-package",
+      "labels": [
+        "completed successfully: "
+      ],
+      "concluded": true,
+      "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327/job/129450566989"
+    },
+    {
+      "job": "database-migrations",
+      "labels": [
+        "completed successfully: "
+      ],
+      "concluded": true,
+      "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327/job/129450567458"
+    },
+    {
+      "job": "mariadb-dr-rehearsal",
+      "labels": [
+        "completed successfully: "
+      ],
+      "concluded": true,
+      "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327/job/129450568222"
+    },
+    {
+      "job": "migration-runner-upgrade",
+      "labels": [
+        "completed successfully: "
+      ],
+      "concluded": true,
+      "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327/job/129450567026"
+    },
+    {
+      "job": "runtime-e2e",
+      "labels": [
+        "completed successfully: "
+      ],
+      "concluded": true,
+      "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327/job/129450566672"
+    },
+    {
+      "job": "release-kit",
+      "labels": [
+        "completed successfully: "
+      ],
+      "concluded": true,
+      "url": "https://github.com/alimtalbi-ata/aiops/actions/runs/42702493327/job/129451512705"
+    }
+  ],
+  "conclusion": "SUCCESS"
+}
