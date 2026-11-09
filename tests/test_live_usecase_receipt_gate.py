@@ -49,6 +49,22 @@ class ReceiptTests(unittest.TestCase):
         r["run_id"] = "RUN-8CA56A39E58944F1"
         self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
 
+    def test_explicit_cross_run_evidence_fails_closed(self):
+        for check_name in sorted(REQUIRED):
+            for bad_id in ("RUN-OTHER", None, ["RUN-TEST-001"]):
+                with self.subTest(check=check_name, bad_id=bad_id):
+                    r = receipt()
+                    next(item for item in r["checks"] if item["name"] == check_name)["evidence"] = {"run_id": bad_id}
+                    before = deepcopy(r)
+                    self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                    self.assertEqual(r, before)
+
+    def test_matching_explicit_run_evidence_remains_claim_only(self):
+        r = receipt()
+        for item in r["checks"]:
+            item["evidence"] = {"run_id": r["run_id"]}
+        self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
     def test_hold_without_run_identity_is_unverified(self):
         r = receipt()
         r.pop("run_id")
