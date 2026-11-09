@@ -70,7 +70,13 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
         # Evidence must be a finite numeric measurement, not a boolean, object or NaN.
         import math
         value = x.payload['value']
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise HTTPException(422, 'observation value must be a finite number')
+        try:
+            finite = math.isfinite(value)
+        except (OverflowError, ValueError, TypeError):
+            finite = False
+        if not finite:
             raise HTTPException(422, 'observation value must be a finite number')
     if x.action == 'SET_STATE':
         if not isinstance(x.payload.get('state'), str) or not x.payload['state'].strip():
