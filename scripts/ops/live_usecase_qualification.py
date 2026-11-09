@@ -97,7 +97,9 @@ def summarize(linkage, platform, execution, stamp, portal=None):
     failed=[x["name"] for x in items if x["status"]=="HOLD"]
     return {"schema":"aiops2-live-usecase-qualification-v1","utc":stamp,
             "run_id":linkage.get("run_id",RUN_ID),"read_only":True,
-            "verdict":"PASS" if not failed and not blocked_safely else "HOLD",\n            "e2e_verdict":"NOT_VERIFIED",\n            "checks":items,
+            "verdict":"PASS" if not failed and not blocked_safely else "HOLD",
+            "e2e_verdict":"NOT_VERIFIED",
+            "checks":items,
             "blocking":failed,"probe_execution":execution,
             "interpretation":"A BLOCKED run proves denial safety, not Temporal/HITL execution; approved execution needs a separate run."}
 
