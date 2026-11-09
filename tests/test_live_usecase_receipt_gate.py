@@ -113,6 +113,25 @@ class ReceiptTests(unittest.TestCase):
                 self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
                 self.assertEqual(r, before)
 
+    def test_success_exit_with_timeout_or_cancellation_is_unverified(self):
+        # An exit code alone cannot overrule an explicit execution abort.
+        for probe_name in ("platform", "linkage"):
+            for field in ("timed_out", "cancelled"):
+                for value in (True, "true", 1):
+                    with self.subTest(probe=probe_name, field=field, value=value):
+                        r = receipt()
+                        r["probe_execution"][probe_name][field] = value
+                        before = deepcopy(r)
+                        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                        self.assertEqual(r, before)
+
+    def test_explicit_non_aborted_probes_remain_claim_only(self):
+        r = receipt()
+        for probe in r["probe_execution"].values():
+            probe["timed_out"] = False
+            probe["cancelled"] = False
+        self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
     def test_probe_attestation_cannot_belong_to_another_run(self):
         for probe_name in ("platform", "linkage"):
             for invalid in ("RUN-OTHER", None, ["RUN-TEST-001"]):
