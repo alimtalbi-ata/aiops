@@ -31,7 +31,8 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
                 'ticket_id': expected_ticket_id}
     if not isinstance(envelope, dict) or not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
         return receipt('UNKNOWN', 'MALFORMED_INPUT')
-    if type(max_age_seconds) not in (int, float) or not 0 < max_age_seconds <= 86400:
+    from math import isfinite
+    if type(max_age_seconds) not in (int, float) or not isfinite(max_age_seconds) or not 0 < max_age_seconds <= 86400:
         return receipt('UNKNOWN', 'INVALID_FRESHNESS_POLICY')
     for key, expected in [('run_id', expected_run_id), ('tenant_id', expected_tenant_id), ('ticket_id', expected_ticket_id)]:
         if expected is None or type(envelope.get(key)) is not type(expected) or envelope.get(key) != expected:
