@@ -1,0 +1,21 @@
+name: Coordination message contract
+on:
+  pull_request:
+    paths:
+      - 'ops/coordination/**'
+      - 'tests/test_coordination_message.py'
+      - '.github/workflows/coordination-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run fail-closed message contract tests
+        run: python -m unittest discover -s tests -p test_coordination_message.py -v
