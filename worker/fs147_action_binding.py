@@ -36,6 +36,10 @@ def check_action_binding(intent, approval, *, now):
         return deny("INVALID_DIGEST")
     if intent.get("dry_run") is not True or approval.get("decision") != "APPROVED":
         return deny("LIVE_OR_REFUSED")
+    # A Policy approval explicitly scoped to LIVE must never be reused for a
+    # dry-run intent, even when the other action identifiers match.
+    if approval.get("dry_run") is False or approval.get("mode") in ("LIVE", "REMEDIATE"):
+        return deny("APPROVAL_MODE_MISMATCH")
     if approval.get("authenticated") is not True:
         return deny("AUTHENTICATION_UNVERIFIED")
     expiry = approval.get("expires_at")
