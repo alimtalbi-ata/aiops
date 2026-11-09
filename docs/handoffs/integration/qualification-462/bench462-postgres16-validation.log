@@ -1,0 +1,343 @@
+DR_CLIENT|tool=pg_dump|path=/usr/lib/postgresql/16/bin/pg_dump|version=pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)
+DR_CLIENT|tool=pg_restore|path=/usr/lib/postgresql/16/bin/pg_restore|version=pg_restore (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)
+DR_CLIENT|tool=psql|path=/usr/lib/postgresql/16/bin/psql|version=psql (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)
+DR_SERVER|host=127.0.0.1|port=5432|version=16.15 (Debian 16.15-1.pgdg12+2)|version_num=160015
+BINDIR|/usr/lib/postgresql/16/bin
+VERSION|PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2)
+CREATE DATABASE
+POSTGRES_DR_REHEARSAL=PASS|tables=32|scope=disposable_ci_only
++ set -Eeuo pipefail
++ : ci-only-password
++ HOST=127.0.0.1
++ PORT=5432
++ USER=aiops
++ SOURCE=aiops
++ TARGET=aiops_dr_rehearsal
++ [[ 127.0.0.1 == 127.0.0.1 ]]
++ [[ aiops == aiops ]]
++ [[ aiops_dr_rehearsal != \a\i\o\p\s ]]
++ export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=aiops
++ PGHOST=127.0.0.1
++ PGPORT=5432
++ PGUSER=aiops
++ DR_POSTGRES_BINDIR=/usr/lib/postgresql/16/bin
++ for tool in pg_dump pg_restore psql
++ tool_path=/usr/lib/postgresql/16/bin/pg_dump
++ [[ -x /usr/lib/postgresql/16/bin/pg_dump ]]
+++ /usr/lib/postgresql/16/bin/pg_dump --version
++ tool_version='pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)'
+++ readlink -f /usr/lib/postgresql/16/bin/pg_dump
++ echo 'DR_CLIENT|tool=pg_dump|path=/usr/lib/postgresql/16/bin/pg_dump|version=pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)'
++ [[ pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2) =~ \(PostgreSQL\) 16\. ]]
++ for tool in pg_dump pg_restore psql
++ tool_path=/usr/lib/postgresql/16/bin/pg_restore
++ [[ -x /usr/lib/postgresql/16/bin/pg_restore ]]
+++ /usr/lib/postgresql/16/bin/pg_restore --version
++ tool_version='pg_restore (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)'
+++ readlink -f /usr/lib/postgresql/16/bin/pg_restore
++ echo 'DR_CLIENT|tool=pg_restore|path=/usr/lib/postgresql/16/bin/pg_restore|version=pg_restore (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)'
++ [[ pg_restore (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2) =~ \(PostgreSQL\) 16\. ]]
++ for tool in pg_dump pg_restore psql
++ tool_path=/usr/lib/postgresql/16/bin/psql
++ [[ -x /usr/lib/postgresql/16/bin/psql ]]
+++ /usr/lib/postgresql/16/bin/psql --version
++ tool_version='psql (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)'
+++ readlink -f /usr/lib/postgresql/16/bin/psql
++ echo 'DR_CLIENT|tool=psql|path=/usr/lib/postgresql/16/bin/psql|version=psql (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)'
++ [[ psql (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2) =~ \(PostgreSQL\) 16\. ]]
++ export PATH=/usr/lib/postgresql/16/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/postgresql/16/bin
++ PATH=/usr/lib/postgresql/16/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/postgresql/16/bin
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SHOW server_version'
++ server_version='16.15 (Debian 16.15-1.pgdg12+2)'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SHOW server_version_num'
++ server_version_num=160015
++ echo 'DR_SERVER|host=127.0.0.1|port=5432|version=16.15 (Debian 16.15-1.pgdg12+2)|version_num=160015'
++ [[ 160015 =~ ^16[0-9]{4}$ ]]
++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT name, setting FROM pg_config WHERE name IN ('\''BINDIR'\'', '\''VERSION'\'') ORDER BY name'
++++ dirname /qualification/tests/postgres-dr-rehearsal.sh
+++ cd /qualification/tests/..
+++ pwd
++ ROOT=/qualification
++ mkdir -p /qualification/reports
+++ mktemp -d
++ TMP=/tmp/tmp.t1puhXueJS
++ trap 'rm -rf "$TMP"' EXIT
+++ psql -d postgres -At -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM pg_database WHERE datname='\''aiops_dr_rehearsal'\'''
++ [[ 0 != 0 ]]
++ pg_dump -d aiops --format=custom -f /tmp/tmp.t1puhXueJS/source.dump
++ pg_restore --list /tmp/tmp.t1puhXueJS/source.dump
++ test -s /tmp/tmp.t1puhXueJS/toc
++ printf 'invalid backup corruption fixture\n'
++ pg_restore --list /tmp/tmp.t1puhXueJS/corrupt.dump
++ psql -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE aiops_dr_rehearsal'
++ trap 'cleanup_db; rm -rf "$TMP"' EXIT
++ pg_restore -d aiops_dr_rehearsal --no-owner --exit-on-error --single-transaction /tmp/tmp.t1puhXueJS/source.dump
++ QUERY='SELECT table_name FROM information_schema.tables WHERE table_schema='\''aiops'\'' AND table_type='\''BASE TABLE'\'' ORDER BY table_name'
++ mapfile -t tables
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT table_name FROM information_schema.tables WHERE table_schema='\''aiops'\'' AND table_type='\''BASE TABLE'\'' ORDER BY table_name'
++ [[ 32 -gt 0 ]]
++ for table in "${tables[@]}"
++ [[ action_proposals =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."action_proposals" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."action_proposals" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."action_proposals" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ analysis_records =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."analysis_records" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."analysis_records" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."analysis_records" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ api_audit =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."api_audit" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."api_audit" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."api_audit" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ approval_records =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."approval_records" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."approval_records" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."approval_records" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ changes =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."changes" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."changes" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."changes" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ command_receipts =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."command_receipts" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."command_receipts" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."command_receipts" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ critic_denial_outbox =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critic_denial_outbox" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critic_denial_outbox" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critic_denial_outbox" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ critic_denial_resume =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critic_denial_resume" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critic_denial_resume" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critic_denial_resume" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ critique_records =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critique_records" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critique_records" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."critique_records" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ demo_artifacts =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."demo_artifacts" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."demo_artifacts" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."demo_artifacts" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ effect_receipts =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."effect_receipts" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."effect_receipts" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."effect_receipts" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ evidence =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."evidence" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."evidence" t'
++ lhs=2:6148b433b845fab20963e26eb4f33b7e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."evidence" t'
++ rhs=2:6148b433b845fab20963e26eb4f33b7e
++ [[ 2:6148b433b845fab20963e26eb4f33b7e == \2\:\6\1\4\8\b\4\3\3\b\8\4\5\f\a\b\2\0\9\6\3\e\2\6\e\b\4\f\3\3\b\7\e ]]
++ for table in "${tables[@]}"
++ [[ execution_receipts =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."execution_receipts" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."execution_receipts" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."execution_receipts" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ gates =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."gates" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."gates" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."gates" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ hitl_decision_outbox =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."hitl_decision_outbox" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."hitl_decision_outbox" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."hitl_decision_outbox" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ impact_assessments =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."impact_assessments" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."impact_assessments" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."impact_assessments" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ incidents =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."incidents" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."incidents" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."incidents" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ learning_cases =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."learning_cases" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."learning_cases" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."learning_cases" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ model_evaluation_runs =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."model_evaluation_runs" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."model_evaluation_runs" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."model_evaluation_runs" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ observations =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."observations" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."observations" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."observations" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ policy_decisions =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."policy_decisions" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."policy_decisions" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."policy_decisions" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ reconciliation_records =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."reconciliation_records" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."reconciliation_records" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."reconciliation_records" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ run_checkpoints =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_checkpoints" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_checkpoints" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_checkpoints" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ run_events =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_events" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_events" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_events" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ run_stage_state =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_stage_state" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_stage_state" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."run_stage_state" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ runs =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."runs" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."runs" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."runs" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ scenario_steps =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."scenario_steps" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."scenario_steps" t'
++ lhs=7:0578b5b4104c73cfd305042a51bae6d8
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."scenario_steps" t'
++ rhs=7:0578b5b4104c73cfd305042a51bae6d8
++ [[ 7:0578b5b4104c73cfd305042a51bae6d8 == \7\:\0\5\7\8\b\5\b\4\1\0\4\c\7\3\c\f\d\3\0\5\0\4\2\a\5\1\b\a\e\6\d\8 ]]
++ for table in "${tables[@]}"
++ [[ scenarios =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."scenarios" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."scenarios" t'
++ lhs=4:edd270e906a10e8ae131a0a5fea03488
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."scenarios" t'
++ rhs=4:edd270e906a10e8ae131a0a5fea03488
++ [[ 4:edd270e906a10e8ae131a0a5fea03488 == \4\:\e\d\d\2\7\0\e\9\0\6\a\1\0\e\8\a\e\1\3\1\a\0\a\5\f\e\a\0\3\4\8\8 ]]
++ for table in "${tables[@]}"
++ [[ twin_edges =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_edges" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_edges" t'
++ lhs=23:c9d0ee46d73d93d6c7511c595e48e770
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_edges" t'
++ rhs=23:c9d0ee46d73d93d6c7511c595e48e770
++ [[ 23:c9d0ee46d73d93d6c7511c595e48e770 == \2\3\:\c\9\d\0\e\e\4\6\d\7\3\d\9\3\d\6\c\7\5\1\1\c\5\9\5\e\4\8\e\7\7\0 ]]
++ for table in "${tables[@]}"
++ [[ twin_facts =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_facts" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_facts" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_facts" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ for table in "${tables[@]}"
++ [[ twin_nodes =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_nodes" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_nodes" t'
++ lhs=25:2d60a8287a10ba66a9d0fba61965ca15
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."twin_nodes" t'
++ rhs=25:2d60a8287a10ba66a9d0fba61965ca15
++ [[ 25:2d60a8287a10ba66a9d0fba61965ca15 == \2\5\:\2\d\6\0\a\8\2\8\7\a\1\0\b\a\6\6\a\9\d\0\f\b\a\6\1\9\6\5\c\a\1\5 ]]
++ for table in "${tables[@]}"
++ [[ verification_records =~ ^[a-zA-Z_][a-zA-Z_0-9]*$ ]]
++ SQL='SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."verification_records" t'
+++ psql -d aiops -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."verification_records" t'
++ lhs=0:d41d8cd98f00b204e9800998ecf8427e
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*)::text || '\'':'\'' || md5(coalesce(string_agg(md5(row_to_json(t)::text), '\'''\'' ORDER BY md5(row_to_json(t)::text)),'\'''\'')) FROM aiops."verification_records" t'
++ rhs=0:d41d8cd98f00b204e9800998ecf8427e
++ [[ 0:d41d8cd98f00b204e9800998ecf8427e == \0\:\d\4\1\d\8\c\d\9\8\f\0\0\b\2\0\4\e\9\8\0\0\9\9\8\e\c\f\8\4\2\7\e ]]
++ SOURCE_COUNT=32
+++ psql -d aiops_dr_rehearsal -At -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM information_schema.tables WHERE table_schema='\''aiops'\'' AND table_type='\''BASE TABLE'\'''
++ TARGET_COUNT=32
++ [[ 32 == \3\2 ]]
++ python3 - /qualification/reports/postgres-dr-rehearsal.json 32
++ echo 'POSTGRES_DR_REHEARSAL=PASS|tables=32|scope=disposable_ci_only'
++ cleanup_db
++ psql -d postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS aiops_dr_rehearsal'
++ rm -rf /tmp/tmp.t1puhXueJS

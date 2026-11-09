@@ -74,7 +74,17 @@
         "Core #458",
         "Worker #459"
       ],
-      "allowed_change": "2026-11-09 user request for DRAFT and exact HEAD CI: add candidate branch push trigger and seven existing candidate Core regression tests only; preserve all pre-existing jobs, permissions and safety checks."
+      "allowed_change": "2026-11-09 user request for DRAFT and exact HEAD CI: add candidate branch push trigger and seven existing candidate Core regression tests only; preserve all pre-existing jobs, permissions and safety checks. Subsequent explicit PostgreSQL16 correction: select versioned clients for database-migrations only and log runner defaults; retain all jobs."
+    },
+    {
+      "paths": [
+        "tests/postgres-dr-rehearsal.sh"
+      ],
+      "writer": "Agent 7 on candidate only",
+      "reviewers": [
+        "Integration #462"
+      ],
+      "allowed_change": "Explicit user-authorized correction from e0fc66c3: record client/server provenance, require PostgreSQL 16 toolchain; preserve every restoration/integrity control; no SQL filtering or application changes."
     }
   ],
   "frozen_sources": {

@@ -10,6 +10,22 @@ TARGET="aiops_dr_rehearsal"
 [[ "$HOST" == 127.0.0.1 || "$HOST" == localhost ]] || { echo 'FAIL|dr_must_run_on_loopback'; exit 2; }
 [[ "$SOURCE" == aiops && "$TARGET" != "$SOURCE" ]] || { echo 'FAIL|dr_unsafe_database_identity'; exit 2; }
 export PGHOST="$HOST" PGPORT="$PORT" PGUSER="$USER"
+# Use one explicitly selected PostgreSQL 16 toolchain. Never rewrite dump SQL.
+DR_POSTGRES_BINDIR="${DR_POSTGRES_BINDIR:-$(dirname "$(command -v pg_dump)")}"
+for tool in pg_dump pg_restore psql; do
+  tool_path="$DR_POSTGRES_BINDIR/$tool"
+  [[ -x "$tool_path" ]] || { echo "FAIL|dr_missing_client|$tool_path"; exit 2; }
+  tool_version="$("$tool_path" --version)"
+  echo "DR_CLIENT|tool=$tool|path=$(readlink -f "$tool_path")|version=$tool_version"
+  [[ "$tool_version" =~ \(PostgreSQL\)\ 16\. ]] || { echo "FAIL|dr_client_major_must_be_16|$tool"; exit 2; }
+done
+export PATH="$DR_POSTGRES_BINDIR:$PATH"
+server_version="$(psql -d "$SOURCE" -At -v ON_ERROR_STOP=1 -c 'SHOW server_version')"
+server_version_num="$(psql -d "$SOURCE" -At -v ON_ERROR_STOP=1 -c 'SHOW server_version_num')"
+echo "DR_SERVER|host=$HOST|port=$PORT|version=$server_version|version_num=$server_version_num"
+[[ "$server_version_num" =~ ^16[0-9]{4}$ ]] || { echo 'FAIL|dr_server_major_must_be_16'; exit 2; }
+# Ask this disposable server for its executable path; not a host filesystem probe.
+psql -d "$SOURCE" -At -v ON_ERROR_STOP=1 -c "SELECT name, setting FROM pg_config WHERE name IN ('BINDIR', 'VERSION') ORDER BY name"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$ROOT/reports"
 TMP="$(mktemp -d)"

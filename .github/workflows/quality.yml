@@ -151,8 +151,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 16 clients and record runner defaults
+        run: |
+          for tool in pg_dump pg_restore psql; do
+            if command -v "$tool"; then
+              "$tool" --version
+            fi
+          done
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          echo "DR_POSTGRES_BINDIR=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password

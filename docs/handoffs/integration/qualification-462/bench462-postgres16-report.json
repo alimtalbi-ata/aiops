@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "kind": "disposable_postgres_logical_restore",
+  "table_count": 32,
+  "table_row_hashes": "MATCH",
+  "corruption_negative_control": "PASS",
+  "target": "ephemeral_ci_database",
+  "live_system_touched": false,
+  "temporal_mariadb_volumes": "NOT_QUALIFIED",
+  "timestamp_utc": "2026-11-09T21:23:30.860271+00:00"
+}
