@@ -63,6 +63,18 @@
         "Worker #459"
       ],
       "allowed_change": "Reproducible isolated service harness, exact-source manifest, qualification tests and receipts. Reuse #468 runner protections where applicable; no product demo or production installer."
+    },
+    {
+      "paths": [
+        ".github/workflows/quality.yml"
+      ],
+      "writer": "Agent 7 on candidate only",
+      "reviewers": [
+        "Integration #462",
+        "Core #458",
+        "Worker #459"
+      ],
+      "allowed_change": "2026-11-09 user request for DRAFT and exact HEAD CI: add candidate branch push trigger and seven existing candidate Core regression tests only; preserve all pre-existing jobs, permissions and safety checks."
     }
   ],
   "frozen_sources": {
@@ -83,7 +95,7 @@
       "deploy/**",
       ".github/**"
     ],
-    "rule": "No edits in initial increment; only run in newly labelled disposable resources. Existing deterministic test provider may be selected for DEMO with explicit synthetic labels, not represented as a real model."
+    "rule": "No edits in initial increment; only run in newly labelled disposable resources. Existing deterministic test provider may be selected for DEMO with explicit synthetic labels, not represented as a real model. Subsequent narrowly scoped exception: .github/workflows/quality.yml ownership entry above, for candidate HEAD CI only."
   },
   "upstream_reserved_read_only": {
     "core454": [

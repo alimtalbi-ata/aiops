@@ -20,3 +20,7 @@ Le premier objectif utilise les vrais services #194 et le SDK Temporal. Le fourn
 Chaque incrément conserve SHA source, delta, tests et manifeste. Pas de merge global des arbres récents. Rejeu du même Run attendu sans second dispatch et replay SDK de l’historique isolé. Debian, FS1250 et E2E réels restent HOLD.
 
 Git HTTPS permet la publication de cette référence. L’API GitHub reste refusée par le proxy (CONNECT 403) ; aucune création de PR ni commentaire d’issue n’est prétendu effectué par Codex. La branche d’intégration précédente et ses modifications distantes sont laissées intactes.
+
+## Exception CI demandée après qualification locale
+
+Agent 7 reste seul rédacteur de `.github/workflows/quality.yml` sur cette candidate : ajout du déclencheur push pour cette seule branche et des sept tests Core existants. Tous les jobs et permissions existants sont conservés. Cette exception précise au gel initial `.github/**` répond à la demande de PR DRAFT et de CI sur son HEAD. Sur push, checkout utilise le SHA de cet événement ; les checks pull_request peuvent porter sur un commit de merge synthétique, à distinguer du HEAD.
