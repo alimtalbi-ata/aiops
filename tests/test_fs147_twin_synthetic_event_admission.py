@@ -97,6 +97,40 @@ class SyntheticEventAdmission(unittest.TestCase):
                 self.assertEqual(len(db.statements), 1)
                 self.assertTrue(db.statements[0][0].startswith('select 1'))
 
+    def test_missing_observation_evidence_fails_before_db(self):
+        for payload in ({}, {"metric": "fs_used"}, {"metric": "", "value": 91},
+                        {"metric": "  ", "value": 91},
+                        {"metric": 147, "value": 91},
+                        {"metric": "fs_used", "value": None}):
+            with self.subTest(payload=payload):
+                db = DB()
+                with self.assertRaises(HTTPException) as caught:
+                    load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE", payload=payload),
+                                   authorization="Bearer fixture-secret")
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(db.calls, 0)
+
+    def test_missing_state_fails_before_db(self):
+        for payload in ({}, {"state": ""}, {"state": " "},
+                        {"state": None}, {"state": 1}):
+            with self.subTest(payload=payload):
+                db = DB()
+                with self.assertRaises(HTTPException) as caught:
+                    load_route(db)(Event("SET_STATE", "SAN-FIXTURE-NODE", payload=payload),
+                                   authorization="Bearer fixture-secret")
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(db.calls, 0)
+
+    def test_valid_state_retains_write_path(self):
+        db = DB()
+        result = load_route(db)(Event("SET_STATE", "SAN-FIXTURE-NODE",
+                                      payload={"state": "DEGRADED", "health": "WARN"}),
+                                authorization="Bearer fixture-secret")
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(len(db.statements), 3)
+        self.assertIn("update aiops.twin_nodes", db.statements[1][0])
+        self.assertIn("insert into aiops.twin_facts", db.statements[2][0])
+
     def test_invalid_token_does_not_open_database(self):
         db = DB()
         with self.assertRaises(HTTPException) as caught:
