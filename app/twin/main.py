@@ -113,7 +113,7 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
             # Synthetic scenario state is evidence, never a canonical node mutation.
             # The canonical graph stays unchanged; scenario consumers read twin_facts.
             p=x.payload
-            c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(record_id,x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
+            c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(record_id,x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'target_node_id':x.target_node_id,'synthetic':True})))
         elif x.action=='OBSERVE' and x.target_node_id:
             # Qualification observations are scenario facts, never canonical telemetry.
             # Persist run provenance in the same fenced store as synthetic state.
@@ -122,7 +122,7 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
             c.execute("insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,%s,%s,now(),1.0)",
                       (record_id,x.target_node_id,'observation',__import__('json').dumps({
                           'metric':p['metric'],'value':p['value'],'unit':p.get('unit'),
-                          'status':p.get('status','UNKNOWN'),'run_id':x.run_id,'synthetic':True})))
+                          'status':p.get('status','UNKNOWN'),'run_id':x.run_id,'target_node_id':x.target_node_id,'synthetic':True})))
     return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True,
             'run_id':x.run_id,'record_id':record_id,
             'record_type':'twin_fact'}
@@ -158,6 +158,8 @@ def scenario_facts(run_id:str, authorization:str|None=Header(default=None)):
             payload = None
         if (not isinstance(payload, dict)
                 or payload.get('run_id') != run_id
+                or (payload.get('target_node_id') is not None
+                    and payload.get('target_node_id') != row[1])
                 or payload.get('synthetic') not in (True, 'true')
                 or payload.get('synthetic') in (1,)):
             raise HTTPException(409, 'scenario fact provenance mismatch')
