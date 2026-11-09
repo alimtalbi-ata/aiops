@@ -26,6 +26,16 @@ class TestEvidence(unittest.TestCase):
             p=Path(td)/"report.json"
             p.write_text('{"schema":"other","read_only":true}')
             with self.assertRaises(ValueError): module.sanitize(p)
+    def test_published_usecase_preserves_selected_run_binding(self):
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"usecase.json"
+            path.write_text(json.dumps({"schema":"aiops2-live-usecase-qualification-v1",
+                "read_only":True,"run_id":"RUN-NEWDEMO01","requested_run_id":"RUN-NEWDEMO01",
+                "verdict":"HOLD","checks":[],"blocking":["requested_run_binding"]}))
+            clean=module.sanitize_usecase(path)
+            self.assertEqual(clean["requested_run_id"],"RUN-NEWDEMO01")
+            self.assertEqual(clean["blocking"],["requested_run_binding"])
+
     def test_no_force_push(self):
         self.assertNotIn("--force",PATH.read_text().split('run(["git","push"')[1].split(")",1)[0])
 if __name__=="__main__":

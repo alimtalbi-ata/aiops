@@ -22,12 +22,15 @@ class BundleInstallationTests(unittest.TestCase):
             with patch.object(m.Path,'home',return_value=home), \
                  patch.object(m,'fetch_pinned',return_value=b'# qualified source\n') as fetch, \
                  patch.object(m.subprocess,'run',return_value=Mock(returncode=2,stdout='',stderr='')) as probe, \
-                 patch('sys.argv',['installer','--commit',SHA]):
+                 patch('sys.argv',['installer','--commit',SHA,'--run-id','RUN-NEWDEMO01',
+                                   '--observed-glpi-ticket','321']):
                 self.assertEqual(m.main(),2)
             self.assertEqual(fetch.call_args_list[0].args,(SHA,))
             self.assertEqual([call.args for call in fetch.call_args_list[1:]],
                              [(SHA,source) for source in m.DEPENDENCIES])
             self.assertIn('--tools',probe.call_args.args[0])
+            self.assertEqual(probe.call_args.args[0][-4:],
+                             ['--run-id','RUN-NEWDEMO01','--observed-glpi-ticket','321'])
             self.assertIn(str(root),probe.call_args.args[0])
             receipts=list((home/'aiops2-release-receipts').glob('usecase-install-*.json'))
             receipt=json.loads(receipts[0].read_text())
@@ -40,6 +43,16 @@ class BundleInstallationTests(unittest.TestCase):
             backup=next(t['backup_path'] for t in receipt['installed_tools']
                         if t['source_path'].endswith('run_linkage_gate.py'))
             self.assertEqual(Path(backup).read_text(),'# prior source\n')
+
+    def test_invalid_selected_identity_rejected_before_network_or_install(self):
+        for args in (["--run-id", "RUN-bad;SQL"], ["--run-id", "RUN-X"],
+                     ["--observed-glpi-ticket", "0"]):
+            with self.subTest(args=args), patch.object(m,"fetch_pinned") as fetch, \
+                 patch("sys.argv",["installer","--commit",SHA,*args]):
+                with self.assertRaises(SystemExit) as error:
+                    m.main()
+                self.assertEqual(error.exception.code,2)
+                fetch.assert_not_called()
 
     def test_dependency_fetch_failure_preserves_all_existing_tools(self):
         with tempfile.TemporaryDirectory() as td:

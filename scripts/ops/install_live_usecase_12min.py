@@ -36,9 +36,15 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--commit",required=True,help="40-char immutable source commit")
     p.add_argument("--no-cron",action="store_true",help="compatibility flag; cron is always untouched")
+    p.add_argument("--run-id", help="existing Run to qualify; never creates or executes a Run")
+    p.add_argument("--observed-glpi-ticket",type=int,help="optional lead, not verified linkage")
     a=p.parse_args()
     if not re.fullmatch(r"[a-fA-F0-9]{40}",a.commit):
         p.error("commit must be 40 hex characters")
+    if a.run_id is not None and not re.fullmatch(r"RUN-[A-Z0-9-]{6,80}",a.run_id):
+        p.error("invalid run ID")
+    if a.observed_glpi_ticket is not None and a.observed_glpi_ticket < 1:
+        p.error("ticket must be positive")
     data=fetch_pinned(a.commit.lower())
     # Fetch and syntax-check every prerequisite before replacing any local tool.
     # All files come from the same immutable source, never a moving branch.
@@ -71,11 +77,17 @@ def main():
     target=root/Path(SOURCE).name
     # Existing Debian scheduler is owned externally. Never create/replace a cron entry.
     status="SKIPPED"
-    probe=subprocess.run([sys.executable,str(target),"--tools",str(root),"--output-dir",str(receipts)],
+    command=[sys.executable,str(target),"--tools",str(root),"--output-dir",str(receipts)]
+    if a.run_id is not None:
+        command.extend(["--run-id",a.run_id])
+    if a.observed_glpi_ticket is not None:
+        command.extend(["--observed-glpi-ticket",str(a.observed_glpi_ticket)])
+    probe=subprocess.run(command,
                          capture_output=True,text=True,timeout=240)
     receipt={"schema":"aiops2-usecase-installer-v2","utc":stamp,"source_commit":a.commit.lower(),
              "source_path":SOURCE,"installed_path":str(target),"cron":status,
-             "installed_tools":installed,
+             "installed_tools":installed,"requested_run_id":a.run_id,
+             "observed_glpi_ticket":a.observed_glpi_ticket,
              "initial_exit":probe.returncode,"initial_output":probe.stdout[-500:],
              "initial_error":probe.stderr[-300:],"production_containers_changed":False}
     out=receipts/f"usecase-install-{stamp}.json"
