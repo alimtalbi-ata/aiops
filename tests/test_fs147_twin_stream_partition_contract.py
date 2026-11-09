@@ -40,7 +40,7 @@ def partition_receipts(receipts, expected=(LAB, SAN)):
         if key not in groups:
             raise ValueError("unknown or cross-graph identity")
         stage = receipt.get("stage")
-        if stage not in STAGES or receipt.get("receipt_id") != receipt.get("run_id") + ":" + stage:
+        if (not isinstance(stage, str) or stage not in STAGES\n                or not isinstance(receipt.get("receipt_id"), str)\n                or receipt["receipt_id"] != receipt["run_id"] + ":" + stage):
             raise ValueError("invalid or foreign stage receipt identity")
         groups[key].append(copy.deepcopy(receipt))
     for key, trace in groups.items():
@@ -116,6 +116,19 @@ class StreamPartitionContract(unittest.TestCase):
                         partition_receipts(poisoned)
                     with self.assertRaisesRegex(ValueError, "malformed identity"):
                         partition_receipts([], expected=(dict(LAB, **{field: value}), SAN))
+
+    def test_malformed_stage_and_receipt_id_fail_closed_without_typeerror(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for field, invalid in (("stage", []), ("stage", {}),
+                               ("stage", None), ("stage", 7),
+                               ("receipt_id", []), ("receipt_id", {}),
+                               ("receipt_id", 9), ("receipt_id", None)):
+            with self.subTest(field=field, invalid=invalid):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0][field] = invalid
+                with self.assertRaisesRegex(ValueError, "invalid or foreign stage receipt"):
+                    partition_receipts(poisoned)
+                self.assertEqual(mixed[0]["stage"], "event")
 
     def test_reject_ambiguous_expected_identity(self):
         with self.assertRaisesRegex(ValueError, "ambiguous"):
