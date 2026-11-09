@@ -9,10 +9,12 @@ def fixture(mode="DEMO"):
     i = dict(tenant_id="t1", incident_id="i1", run_id="r1",
              action_id="a1", action_digest="sha256:abc",
              fencing_token="f1", fencing_epoch=2, mode=mode,
-             live_preflight_verified=(mode == "LIVE"))
+             live_preflight_verified=(mode == "LIVE"),
+             policy_decision_id="pol-1")
     b = {k: i[k] for k in ("tenant_id", "run_id", "action_id", "action_digest")}
-    return (i, dict(b, decision="ALLOW", mode=mode),
-            dict(b, decision="APPROVED", mode=mode),
+    return (i, dict(b, decision="ALLOW", mode=mode, decision_id="pol-1"),
+            dict(b, decision="APPROVED", mode=mode, policy_decision_id="pol-1",
+                 approval_id="hitl-1", approver_id="operator-1"),
             dict(b, fencing_token="f1", fencing_epoch=2, active=True),
             dict(b, fencing_token="f1", fencing_epoch=2,
                  state="WAITING_APPROVAL", resume_requested=False))
@@ -51,6 +53,23 @@ class TestActionBoundAdmission(unittest.TestCase):
                                 (4, "resume_requested", True),
                                 (4, "state", "RUNNING")):
             with self.subTest(pos=pos, key=key):
+                args = fixture()
+                args[pos][key] = value
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+    def test_native_hitl_policy_decision_binding(self):
+        for pos, key, value in (
+            (0, "policy_decision_id", "pol-other"),
+            (0, "policy_decision_id", None),
+            (1, "decision_id", "pol-other"),
+            (1, "decision_id", ""),
+            (2, "policy_decision_id", "pol-other"),
+            (2, "approval_id", None),
+            (2, "approval_id", ""),
+            (2, "approver_id", None),
+            (2, "approver_id", " "),
+        ):
+            with self.subTest(pos=pos, key=key, value=value):
                 args = fixture()
                 args[pos][key] = value
                 self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
