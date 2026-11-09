@@ -324,5 +324,22 @@ class ReceiptTests(unittest.TestCase):
                 self.assertEqual(r, before)
 
 
+    def test_explicit_probe_status_cannot_contradict_success_exit(self):
+        # A zero exit code is insufficient when the probe declares a failure.
+        for probe_name in ("platform", "linkage"):
+            for status in ("HOLD", "UNVERIFIED", "FAIL", None, False):
+                with self.subTest(probe=probe_name, status=status):
+                    r = receipt()
+                    r["probe_execution"][probe_name]["status"] = status
+                    before = deepcopy(r)
+                    self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                    self.assertEqual(r, before)
+
+    def test_explicit_probe_pass_status_preserves_read_only_claim(self):
+        r = receipt()
+        for probe in r["probe_execution"].values():
+            probe["status"] = "PASS"
+        self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
 if __name__ == "__main__":
     unittest.main()
