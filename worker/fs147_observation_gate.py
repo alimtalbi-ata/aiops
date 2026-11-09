@@ -34,6 +34,8 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
     from math import isfinite
     if type(max_age_seconds) not in (int, float) or not isfinite(max_age_seconds) or not 0 < max_age_seconds <= 86400:
         return receipt('UNKNOWN', 'INVALID_FRESHNESS_POLICY')
+    if any(not isinstance(v, str) or not v.strip() for v in (expected_run_id, expected_tenant_id)):
+        return receipt('UNKNOWN', 'INVALID_IDENTITY')
     for key, expected in [('run_id', expected_run_id), ('tenant_id', expected_tenant_id), ('ticket_id', expected_ticket_id)]:
         if expected is None or type(envelope.get(key)) is not type(expected) or envelope.get(key) != expected:
             return receipt('UNKNOWN', 'IDENTITY_MISMATCH')
