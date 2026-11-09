@@ -1,0 +1,39 @@
+# Night cycle #462 — Core #479 review and unchanged ownership blockers
+
+UTC: 2026-11-09T22:13:09.208491+00:00. Dedicated branch `agent/integration/462-night-20261109`. Local Git HEAD remains `0489932e8682b3ed8dda5dbcaa874b60d63f00c4`; remote parent `4e5ce53932f4d1b21d4b6f4998f821e881f64501`. Exact published delivery SHA is in the GitHub publication comment. PR #478 remains DRAFT, base `agent/integration/462-isolated-candidate` @ `3218228ab4b0d24faa117b49d08272c8e025750a`. Reference candidate `e0fc66c3bc8f56cace0074de2f0a07d5bb551303` retained in history.
+
+## Preservation, reading and delivery inventory
+
+Checkout started dirty: previous latest-cycle.md plus cycle-2200.md and two proposed patches. Preserved all interrupted work; previous cycle report and proposals unchanged. Read README, continuity, architecture/boundaries, decision log, component catalog, stack inventory and qualification protocol. AGENTS.md absent locally; read orchestration branch AGENTS.md and its architecture/orchestration contract and reuse inventory through GitHub. Read #458/#459/#462 and recent comments, QA #68 (no comments), PR #476/#477/#478/#479 recent comments, open PR branches, local history and remote heads. Full diffs #477/#479 inspected; #476 remains unchanged from previous full review. No blind import, merge, rebase or cherry-pick.
+
+`git fetch origin` attempted and failed because .git/FETCH_HEAD is read-only. Do not modify mount permissions or other checkouts. `git ls-remote origin` succeeds. Existing normal GitHub Git API publication of handoff-only paths reused with current remote parent; no new checkout, supervisor or Codex process. gh issue view default GraphQL failed on deprecated projectCards; REST gh api succeeded. Cloud runtime skill read; environment_status tool unavailable and /etc/codex/network-policy.json absent; no readiness inferred.
+
+DAG: Core #470 -> #472 -> #474 -> #475 -> #476 -> NEW #479. Worker #469 -> #471 -> #473 -> #477. #476 exact head `a3a4a210d54594c347ee9c7c6a3f5fe22b0febd8`; #477 `d9666f7b62c1560569d8c860747b339126141ce2`; both unchanged, owners have not applied proposals. Core #479 `8fc931e2426f8d098333883f4d879fcce0b2cde4` keeps Run FOR UPDATE transaction open across bounded Worker start and receipt readback. Source-level scope test proves nesting only; not concurrent PostgreSQL/Temporal behavior. HTTP timeout after Temporal start remains UNKNOWN. No application candidate imported.
+
+## Tests actually executed
+
+Downloaded exact #479 app/core/main.py, app/shared/db.py and three tests to `/tmp/aiops-night-20261109/runtime/review-479` as plain fixtures, not a Git checkout. Also inspected exact-head app/worker/main.py: start_workflow returns handle, workflow activity calls Core START later; this inspection is not runtime deadlock proof.
+
+1. `python3 -m unittest discover -s /tmp/aiops-night-20261109/runtime/review-479/tests -p 'test_core*.py' -v`: 11 tests, FAILED with 11 subtest errors. New lock-scope AST check PASS. Existing receipt-identity/winner rejection tests still raise TypeError because Mock RequestException is not an exception class, masking expected HTTP 502/409. This independently reproduces the previous harness defect on the new exact source head.
+2. Second and final diagnostic attempt added only `requests.RequestException = type("RequestException", (Exception,), {})` to load_execute in temporary fixture: 11/11 PASS. Application source unchanged; this is corrected-fixture evidence, not exact unmodified head PASS. Existing core-476-harness-proposed.patch remains applicable. No extra retries.
+3. `bash -n tests/postgres-dr-rehearsal.sh` PASS; `git diff --check` PASS before publication. No heavy tests or local PostgreSQL/Temporal/container runs. Worker defect not rerun because published head unchanged and previous two attempts already documented.
+
+Ownership arbitration remains required: Core #458 owner should apply minimal harness fix across #479 stack and include targeted route tests in existing feature CI. Worker #459 owner should apply recorded unmatched-parenthesis repair on #477 stack and run its targeted Critic metadata suite. No active owner path overwritten. Independent concurrency test remains required before promoting lock claim. QA #68 has no published E2E receipt.
+
+## CI and PostgreSQL
+
+Previous nightly delivery `4e5ce53932f4d1b21d4b6f4998f821e881f64501`: all three existing runs now SUCCESS, including https://github.com/alimtalbi-ata/aiops/actions/runs/42708311811 , https://github.com/alimtalbi-ata/aiops/actions/runs/42708311861 and https://github.com/alimtalbi-ata/aiops/actions/runs/42708312018 . This qualifies that SHA and selected CI scenarios only; not newly reviewed Core/Worker candidates.
+
+Core #479 exact SHA checks SUCCESS: https://github.com/alimtalbi-ata/aiops/actions/runs/42709094773 (core-postgres-noc-real-integration, grafana-real-integration, policy-and-static). The green suite does not establish targeted execute-route coverage; the local exact-source harness failure remains. Previous Core #476 CI https://github.com/alimtalbi-ata/aiops/actions/runs/42700054700 and Worker #477 CI https://github.com/alimtalbi-ata/aiops/actions/runs/42701600099 remain prior observations, not newly reexecuted tests.
+
+Base CI https://github.com/alimtalbi-ata/aiops/actions/runs/42703074786 freshly confirmed SUCCESS at `3218228ab4b0d24faa117b49d08272c8e025750a`. Full run logs freshly read: pg_dump/pg_restore/psql all 16.15, /usr/lib/postgresql/16/bin; server 16.15 / 160015. Existing fixes `8011ddd6ff0130e52500a0832db187759a0e1025` + `e7c76514b8e98cb35a9594226e7106fde98a42aa` retained. Restore script read: loopback/identity/version fences, existing target refusal, corruption negative control, transaction/exit-on-error, row/count hashes, scoped cleanup retained. No PG command executed locally. New delivery SHA CI UNKNOWN until observed.
+
+## Runtime and qualification
+
+GitHub-only Debian reporter read at 22:12 UTC, collected_at `2026-11-09T22:11:01.825428+00:00`, age 73 seconds at observation; expires 22:14:01Z under three-minute rule. Recompute at consumption. Inventory truncated=true; cannot assert exhaustive inventory. Core healthy image `sha256:87427734395dd212f550f03498fb77954c572675b41d8e5ba5dd4f295ecbef4d`; Portal running/no-healthcheck `sha256:e0559a90b34adcfe59ad3545e44195a10274398c17a308b6d8df316d4552eed1`; previous Portal `sha256:f8df32ea0fc9107e1dd1cc5c40b8bd38257336fdaa1a2be00b5597a8609f10e8` preserved in exited rollback container. Worker healthy tag `aiops2-worker:fs-demo-candidate-20261105`. This is dated observation, no candidate source/image parity established. `latest-usecase.json` freshly HTTP 404: ABSENT/UNVERIFIED, not functional FAIL.
+
+CODE: application unchanged, #479 new source scope assertion passes but harness defect persists; minimal proposal validated only on fixture. CI: previous night SHA success; new delivery UNKNOWN; #479 green limited checks do not clear reproduced defect. DEBIAN: source parity UNKNOWN. E2E: NOT_VERIFIED (real), CI synthetic scope separate. FS1250/G1/G2/G3 HOLD.
+
+Only handoff latest-cycle.md and cycle-2213.md changed this cycle. Previous cycle/patches preserved. No supervisor.py/test_supervisor.py/mission/canonical doc changes. No remote commands, production GLPI/PG writes, deployment/restart, secrets/permissions/Docker/cron/Compose changes, conversation control or Policy/Critic/HITL bypass.
+
+Risks: uncorrected owner stacks, limited green CI coverage, lock/concurrency/timeout not qualified, source/runtime parity unknown. Rollback: abandon dedicated branch/close DRAFT PR; no deployment to reverse. Next: owners apply published proposals and run feature checks on exact new heads; then isolated Actions concurrency qualification and fresh provenance/E2E receipt. Cycle publication before 540-second budget; hard stop 2026-11-10 06:00 UTC.
