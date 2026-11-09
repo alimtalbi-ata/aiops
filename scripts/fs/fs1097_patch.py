@@ -70,7 +70,15 @@ async function loadHistory(){
   const data=await response.json();
   if(requestId!==historyRequestId)return;
   if(data.metric!==metric||data.window!==windowSize||!Array.isArray(data.series))throw new Error("Contrat de données invalide");
-  // A repeated target in an upstream payload must not create a duplicate legend.\n  // Keep the first occurrence, preserving the server order and the five-target contract.\n  const seenTargets=new Set();\n  const series=data.series.filter(s=>{\n   if(!s||!Array.isArray(s.points)||!s.points.length)return false;\n   const key=JSON.stringify([s.job??null,s.instance??null]);\n   if(seenTargets.has(key))return false;\n   seenTargets.add(key);return true;\n  }).slice(0,30);
+  // Deduplicate only labelled Prometheus targets; preserve unknown identities.
+  const seenTargets=new Set();
+  const series=data.series.filter(s=>{
+   if(!s||!Array.isArray(s.points)||!s.points.length)return false;
+   if(!s.job&&!s.instance)return true;
+   const key=JSON.stringify([s.job??null,s.instance??null]);
+   if(seenTargets.has(key))return false;
+   seenTargets.add(key);return true;
+  }).slice(0,30);
   const points=series.flatMap(s=>s.points).filter(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(Number(p[0]))&&Number.isFinite(Number(p[1])));
   chart.replaceChildren();
   if(!points.length){chart.append(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Aucune donnée disponible pour cette période"));status.textContent="Aucune série avec points disponibles.";return}
