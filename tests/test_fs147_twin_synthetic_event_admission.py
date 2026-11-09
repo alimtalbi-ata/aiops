@@ -21,9 +21,10 @@ class Event:
 
 
 class DB:
-    def __init__(self):
+    def __init__(self, node_exists=True):
         self.calls = 0
         self.statements = []
+        self.node_exists = node_exists
 
     def __call__(self):
         self.calls += 1
@@ -37,6 +38,10 @@ class DB:
 
     def execute(self, query, params):
         self.statements.append((query, params))
+        return self
+
+    def fetchone(self):
+        return (1,) if self.node_exists else None
 
 
 def load_route(fake_db):
@@ -77,8 +82,20 @@ class SyntheticEventAdmission(unittest.TestCase):
                                 authorization="Bearer fixture-secret")
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(db.calls, 1)
-        self.assertEqual(len(db.statements), 1)
-        self.assertIn("insert into aiops.observations", db.statements[0][0])
+        self.assertEqual(len(db.statements), 2)
+        self.assertIn("select 1 from aiops.twin_nodes", db.statements[0][0])
+        self.assertIn("insert into aiops.observations", db.statements[1][0])
+
+    def test_missing_target_never_writes_or_claims_pass(self):
+        for action in ('OBSERVE', 'SET_STATE'):
+            with self.subTest(action=action):
+                db = DB(node_exists=False)
+                with self.assertRaises(HTTPException) as caught:
+                    load_route(db)(Event(action, 'SAN-NOT-IN-TOPOLOGY'), authorization='Bearer fixture-secret')
+                self.assertEqual(caught.exception.status_code, 404)
+                self.assertEqual(db.calls, 1)
+                self.assertEqual(len(db.statements), 1)
+                self.assertTrue(db.statements[0][0].startswith('select 1'))
 
     def test_invalid_token_does_not_open_database(self):
         db = DB()
