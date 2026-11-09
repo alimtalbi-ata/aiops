@@ -55,13 +55,17 @@ class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
     if (authorization or '').removeprefix('Bearer ')!=SIM_TOKEN: raise HTTPException(401,'invalid token')
-    if not x.run_id: raise HTTPException(422,'run_id required')
+    if (not isinstance(x.run_id, str) or not x.run_id or x.run_id != x.run_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in x.run_id)):
+        raise HTTPException(422, 'valid run_id required')
     # A synthetic receipt must never claim PASS without a supported operation.
     # Validate before opening a DB transaction; unknown actions fail closed.
     if x.action not in ('SET_STATE', 'OBSERVE'):
         raise HTTPException(422, 'unsupported synthetic action')
-    if not x.target_node_id:
-        raise HTTPException(422, 'target_node_id required')
+    if (not isinstance(x.target_node_id, str) or not x.target_node_id
+            or x.target_node_id != x.target_node_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in x.target_node_id)):
+        raise HTTPException(422, 'valid target_node_id required')
     # Never claim a successful observation/state transition for empty evidence.
     # Validate before DB access, preserving the read-only topology lookup gate.
     if x.action == 'OBSERVE':
