@@ -72,3 +72,18 @@ The current development architecture, ITIL 4 operating model, ACME SAN→Payment
 - [Automation control plane](docs/operations/AIOPS2-AUTOMATION-CONTROL-PLANE-2026-10-31.md)
 
 These are development architecture and synthetic qualification plans; they do not claim production deployment or live connector qualification.
+
+
+### Démonstration locale Core / Temporal
+
+Depuis cette candidate, sur Linux avec Docker Engine et Compose :
+
+```bash
+python3 scripts/ops/run_local_temporal_demo.py --keep
+```
+
+La commande construit les sources applicatives, crée un banc jetable avec PostgreSQL et Temporal dev, lance un Run DEMO et exige 13 étapes terminées, des preuves synthétiques, Policy PASS/SIMULATE, Temporal COMPLETED et un replay réussi. Elle vérifie les empreintes des sources dans l'image avant de créer le Run. À la fin, elle affiche le Run, son reçu JSON, le lien Temporal UI sur `http://127.0.0.1:18233` et la commande de nettoyage de ce seul banc. Sans `--keep`, le banc est retiré après la recette. Aucun service Debian existant, cron, GLPI ou fichier Compose de production n'est modifié.
+
+Docker rootless : ajouter `--docker-host "unix://${XDG_RUNTIME_DIR}/docker.sock"`. Ports personnalisables avec `--core-port` et `--ui-port`. Une image applicative déjà construite peut être réutilisée avec `--image`. Prévoir plusieurs Gio libres ; VFS peut consommer bien plus que la taille affichée des images. Les paramètres et jetons du banc restent dans un répertoire temporaire privé, jamais dans le reçu.
+
+Cette recette est une simulation exécutée sur de vrais services. Elle ne qualifie ni les modèles IA réels, ni Portal/GLPI, ni le runtime Debian, ni une remédiation LIVE. Les étapes de la base restent synthétiques. Voir le reçu d'exécution locale conservé dans `docs/qualification/local-temporal-2026-11-09.json`.

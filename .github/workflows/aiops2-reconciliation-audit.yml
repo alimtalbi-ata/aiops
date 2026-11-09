@@ -7,6 +7,8 @@ on:
       - 'scripts/ops/run_linkage_gate.py'
       - 'scripts/ops/live_correlation_gate.py'
       - 'tests/ops/test_run_linkage_gate.py'
+      - 'scripts/ops/run_local_temporal_demo.py'
+      - 'tests/ops/test_local_temporal_demo.py'
       - 'scripts/ops/install_live_usecase_12min.py'
       - 'tests/ops/test_usecase_bundle_installation.py'
       - 'tests/test_live_usecase_installer_safety.py'
@@ -28,6 +30,8 @@ on:
       - 'scripts/ops/run_linkage_gate.py'
       - 'scripts/ops/live_correlation_gate.py'
       - 'tests/ops/test_run_linkage_gate.py'
+      - 'scripts/ops/run_local_temporal_demo.py'
+      - 'tests/ops/test_local_temporal_demo.py'
       - 'scripts/ops/install_live_usecase_12min.py'
       - 'tests/ops/test_usecase_bundle_installation.py'
       - 'tests/test_live_usecase_installer_safety.py'
@@ -50,10 +54,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Python syntax
-        run: python -m py_compile scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py scripts/ops/platform_gap_analyzer.py scripts/ops/publish_platform_evidence.py scripts/ops/usecase_acceptance.py scripts/ops/live_usecase_qualification.py scripts/ops/install_live_usecase_12min.py scripts/ops/itsm_link_diagnosis.py
+        run: python -m py_compile scripts/ops/run_local_temporal_demo.py scripts/ops/run_linkage_gate.py scripts/ops/live_correlation_gate.py scripts/ops/platform_gap_analyzer.py scripts/ops/publish_platform_evidence.py scripts/ops/usecase_acceptance.py scripts/ops/live_usecase_qualification.py scripts/ops/install_live_usecase_12min.py scripts/ops/itsm_link_diagnosis.py
       - name: Read-only gate contract tests
         run: |
           python -m unittest discover -s tests/ops -p 'test_run_linkage_gate.py' -v
+          python -m unittest discover -s tests/ops -p 'test_local_temporal_demo.py' -v
           python -m unittest discover -s tests/ops -p 'test_publish_platform_evidence.py' -v
           python -m unittest discover -s tests/ops -p 'test_platform_gap_analyzer.py' -v
           python -m unittest discover -s tests/ops -p 'test_usecase_acceptance.py' -v
