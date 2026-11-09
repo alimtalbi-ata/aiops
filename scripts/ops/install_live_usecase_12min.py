@@ -8,6 +8,7 @@ No Docker restart, ITSM POST, database mutation, or new Git credential.
 import argparse
 import datetime as dt
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -19,8 +20,12 @@ import urllib.request
 REPO="alimtalbi-ata/aiops"
 SOURCE="scripts/ops/live_usecase_qualification.py"
 MARKER="# AIOPS2_LIVE_USECASE_12MIN_MANAGED"
-def fetch_pinned(commit):
-    url=f"https://raw.githubusercontent.com/{REPO}/{commit}/{SOURCE}"
+DEPENDENCIES=("scripts/ops/platform_readiness_gate.py",
+              "scripts/ops/run_linkage_gate.py",
+              "scripts/ops/publish_platform_evidence.py")
+
+def fetch_pinned(commit, source=SOURCE):
+    url=f"https://raw.githubusercontent.com/{REPO}/{commit}/{source}"
     with urllib.request.urlopen(url,timeout=30) as response:
         data=response.read(2000001)
     if len(data)>2000000: raise RuntimeError("script too large")
@@ -35,25 +40,42 @@ def main():
     if not re.fullmatch(r"[a-fA-F0-9]{40}",a.commit):
         p.error("commit must be 40 hex characters")
     data=fetch_pinned(a.commit.lower())
+    # Fetch and syntax-check every prerequisite before replacing any local tool.
+    # All files come from the same immutable source, never a moving branch.
+    bundle={SOURCE:data}
+    for source in DEPENDENCIES:
+        bundle[source]=fetch_pinned(a.commit.lower(), source)
     root=Path.home()/"aiops2-audit-tools"
     receipts=Path.home()/"aiops2-release-receipts"
     root.mkdir(parents=True,exist_ok=True)
     receipts.mkdir(parents=True,exist_ok=True)
     stamp=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    target=root/"live_usecase_qualification.py"
-    if target.exists():
-        (root/f"live_usecase_qualification.py.backup-{stamp}").write_bytes(target.read_bytes())
-    with tempfile.NamedTemporaryFile(dir=root,prefix=".usecase-",delete=False) as handle:
-        handle.write(data)
-        stage=Path(handle.name)
-    os.replace(stage,target)
-    target.chmod(0o700)
+    installed=[]
+    for source, content in bundle.items():
+        target=root/Path(source).name
+        backup=None
+        if target.exists():
+            backup=root/f"{target.name}.backup-{stamp}"
+            backup.write_bytes(target.read_bytes())
+        with tempfile.NamedTemporaryFile(dir=root,prefix=".usecase-",delete=False) as handle:
+            handle.write(content)
+            stage=Path(handle.name)
+        try:
+            stage.chmod(0o700)
+            os.replace(stage,target)
+        finally:
+            stage.unlink(missing_ok=True)
+        installed.append({"source_path":source,"installed_path":str(target),
+                          "sha256":hashlib.sha256(content).hexdigest(),
+                          "backup_path":str(backup) if backup else None})
+    target=root/Path(SOURCE).name
     # Existing Debian scheduler is owned externally. Never create/replace a cron entry.
     status="SKIPPED"
-    probe=subprocess.run([sys.executable,str(target),"--output-dir",str(receipts)],
+    probe=subprocess.run([sys.executable,str(target),"--tools",str(root),"--output-dir",str(receipts)],
                          capture_output=True,text=True,timeout=240)
     receipt={"schema":"aiops2-usecase-installer-v2","utc":stamp,"source_commit":a.commit.lower(),
              "source_path":SOURCE,"installed_path":str(target),"cron":status,
+             "installed_tools":installed,
              "initial_exit":probe.returncode,"initial_output":probe.stdout[-500:],
              "initial_error":probe.stderr[-300:],"production_containers_changed":False}
     out=receipts/f"usecase-install-{stamp}.json"
