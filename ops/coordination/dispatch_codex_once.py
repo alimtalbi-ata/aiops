@@ -84,6 +84,9 @@ def execute(comment_id, expected_sha, state_dir, checkout, authorized_login):
                     code = process.returncode
                 except subprocess.TimeoutExpired:
                     code = 124
+                except OSError:
+                    # A missing CLI must produce a terminal receipt, not strand STARTED.
+                    code = 127
             session = None
             for line in events.read_text().splitlines():
                 try:
@@ -101,12 +104,12 @@ def execute(comment_id, expected_sha, state_dir, checkout, authorized_login):
             receipt.write_text(json.dumps(data, indent=2)+"\n")
             # Never publish raw logs, environment variables or model-generated secrets.
             # Only publish fixed metadata. Keep model output local for review.
-            body = ("## AIOps2 Codex inbound receipt (manual one-shot)\n\n"
+            body = ("## AIOps2 Codex inbound receipt\n\n"
                     f"- Command comment: #{comment_id}\n- SHA: `{expected_sha}`\n"
                     f"- Session: `{session or 'NOT_RECORDED'}`\n- Exit: `{code}`\n"
                     f"- Status: **{data['status']}**\n"
                     "- Result retained locally for review; not automatically published.\n"
-                    "- This proves manual inbound polling, not unattended scheduling.\n")
+                    "- Execution mode must be verified from the caller and cron logs.\n")
             posted = run(["gh", "issue", "comment", str(ISSUE), "--repo", REPO,
                           "--body", body], timeout=45)
             if posted.returncode:
