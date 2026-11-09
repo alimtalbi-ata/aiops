@@ -10,8 +10,13 @@ INITIAL_NETWORK=aiops2-rebuild-public
 NETWORKS=(aiops2-rebuild-control aiops2-rebuild-integration aiops2-rebuild-observability)
 PLAYWRIGHT_PY=/home/aiops/.local/share/aiops-playwright-venv/bin/python
 
+# Never remove a container we did not create. In particular, a preflight
+# collision must not delete the pre-existing candidate on EXIT.
+CANDIDATE_CREATED=NO
 cleanup() {
-  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  if [[ "$CANDIDATE_CREATED" == YES ]]; then
+    docker rm -f "$NAME" >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -53,6 +58,7 @@ docker run -d --name "$NAME" --restart no \
   -e EXPLORER_ENABLED=1 \
   -e EXPLORER_ALLOWED_CIDRS=0.0.0.0/0 \
   "$IMAGE" >/dev/null
+CANDIDATE_CREATED=YES
 
 check_stage() {
   local stage="$1"
