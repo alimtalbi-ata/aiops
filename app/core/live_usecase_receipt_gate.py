@@ -89,8 +89,10 @@ def classify(receipt, now=None, max_age_seconds=180):
     if not isinstance(execution, dict) or any(
         not isinstance(execution.get(name), dict) or type(execution[name].get("exit")) is not int
         or execution[name]["exit"] != 0 or execution[name].get("error") is not None
-        or execution[name].get("timed_out") not in (None, False)
-        or execution[name].get("cancelled") not in (None, False)
+        or (execution[name].get("timed_out") is not None
+            and execution[name].get("timed_out") is not False)
+        or (execution[name].get("cancelled") is not None
+            and execution[name].get("cancelled") is not False)
         for name in ("platform", "linkage")
     ):
         return Qualification.UNVERIFIED
