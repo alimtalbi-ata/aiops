@@ -19,7 +19,7 @@ import time
 
 REPO = Path(__file__).resolve().parents[2]
 BASE = '40d38705cf2bde3be6052340442c117a81908f65'
-TEMPORAL_IMAGE = 'temporalio/temporal:1.10.0@sha256:003508da05989e7cf0d583cfce521c4bb2732e733574e3040db8f1284783baa2'
+TEMPORAL_IMAGE = 'temporalio/temporal:1.4.1@sha256:9844298258519ebece82b3253f1ee1fc4eb8d87b7abcc264cfb676be342c74a5'
 SERVICES = {'core':810, 'worker':815, 'twin':811, 'policy':813, 'evidence':812, 'intelligence':817}
 CLIENT = r'''
 import asyncio,hashlib,json,os,sys,time,urllib.request,urllib.error,uuid
@@ -199,11 +199,24 @@ def main():
             time.sleep(1)
         if not ready:raise RuntimeError('SERVICES_NOT_READY')
         print('SERVICES_READY',flush=True)
+        # The previous dev image crashed its background scanner after ~60 s.
+        # Validate services beyond that interval rather than accepting a short run.
+        initial_ids={}
+        for name in ('temporal', 'core', 'worker'):
+            initial_ids[name]=call(compose+['ps','-q',name],capture_output=True,text=True).stdout.strip()
+        stability_started=time.monotonic()
+        while time.monotonic()-stability_started < 90:
+            for name,cid in initial_ids.items():
+                snapshot=json.loads(call(docker+['inspect',cid],capture_output=True,text=True).stdout)[0]
+                assert snapshot['State']['Status']=='running' and snapshot['RestartCount']==0, 'STABILITY_FAILURE_'+name
+            if int(time.monotonic()-stability_started)%15==0:
+                print('STABILITY_CHECK seconds='+str(int(time.monotonic()-stability_started)),flush=True)
+            time.sleep(3)
         first=client('run',digest)
         before=dispatches();assert before==1, 'FIRST_DISPATCH_COUNT_NOT_ONE'
         retry=client('retry',first['run_id']);after=dispatches()
         assert after==before, 'SECOND_WORKER_DISPATCH'
-        first.update(retry=retry,worker_dispatches_before_retry=before,worker_dispatches_after_retry=after,
+        first.update(stability_observed_seconds=int(time.monotonic()-stability_started),temporal_dev_image=TEMPORAL_IMAGE,retry=retry,worker_dispatches_before_retry=before,worker_dispatches_after_retry=after,
                      source_commit=revision,source_base=BASE,image_id=image_data['Id'],image_source_revision=image_data['Config']['Labels'].get('org.opencontainers.image.revision'),
                      project=project,bench_result='PASS_ISOLATED_DEMO_ONLY',real_e2e='HOLD')
         (artifacts/'receipt.json').write_text(json.dumps(first,indent=2)+'\n')
