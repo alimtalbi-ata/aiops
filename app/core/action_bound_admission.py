@@ -43,7 +43,11 @@ def admit_resume(intent: Mapping, policy: Mapping, approval: Mapping,
             or any(type(approval.get(k)) is not str or not approval[k].strip()
                    for k in ("approval_id", "approver_id"))):
         return Admission("NEEDS_HUMAN", "approval_not_bound")
-    # Native HITL must explicitly attest that the approval is neither revoked\n    # nor already consumed. Missing fields are UNKNOWN, never implicit consent.\n    if approval.get("revoked") is not False or approval.get("consumed") is not False:\n        return Admission("NEEDS_HUMAN", "approval_lifecycle_unknown")\n    for label, record in (("owner", owner), ("temporal", temporal)):
+    # Native HITL must explicitly attest that the approval is neither revoked
+    # nor already consumed. Missing fields are UNKNOWN, never implicit consent.
+    if approval.get("revoked") is not False or approval.get("consumed") is not False:
+        return Admission("NEEDS_HUMAN", "approval_lifecycle_unknown")
+    for label, record in (("owner", owner), ("temporal", temporal)):
         if (record.get("fencing_token") != intent["fencing_token"]
                 or type(record.get("fencing_epoch")) is not int
                 or record["fencing_epoch"] != epoch):
