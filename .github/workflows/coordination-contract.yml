@@ -1,0 +1,36 @@
+name: Coordination message contract
+on:
+  pull_request:
+    paths:
+      - 'ops/coordination/**'
+      - 'tests/test_coordination_message.py'
+      - 'tests/test_probe_debian_dispatch.py'
+      - 'tests/test_coordination_reducer.py'
+      - 'tests/test_codex_roundtrip.py'
+      - 'tests/test_codex_dispatch_once.py'
+      - 'tests/test_poll_codex_commands.py'
+      - '.github/workflows/coordination-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run fail-closed message contract tests
+        run: python -m unittest discover -s tests -p 'test_*coordination*.py' -v
+      - name: Run Codex roundtrip receipt tests
+        run: python -m unittest discover -s tests -p test_codex_roundtrip.py -v
+      - name: Run one-shot dispatch contract tests
+        run: python -m unittest discover -s tests -p test_codex_dispatch_once.py -v
+      - name: Validate opt-in cron installer syntax
+        run: bash -n ops/coordination/install_codex_poll_cron.sh
+      - name: Run Codex queue polling tests
+        run: python -m unittest discover -s tests -p test_poll_codex_commands.py -v
+      - name: Run dispatch discovery probe tests
+        run: python -m unittest discover -s tests -p test_probe_debian_dispatch.py -v
