@@ -14,7 +14,8 @@ def fixture(mode="DEMO"):
     b = {k: i[k] for k in ("tenant_id", "incident_id", "run_id", "action_id", "action_digest")}
     return (i, dict(b, decision="ALLOW", mode=mode, decision_id="pol-1"),
             dict(b, decision="APPROVED", mode=mode, policy_decision_id="pol-1",
-                 approval_id="hitl-1", approver_id="operator-1",\n                 revoked=False, consumed=False),
+                 approval_id="hitl-1", approver_id="operator-1",
+                 revoked=False, consumed=False),
             dict(b, fencing_token="f1", fencing_epoch=2, active=True),
             dict(b, fencing_token="f1", fencing_epoch=2,
                  state="WAITING_APPROVAL", resume_requested=False))
