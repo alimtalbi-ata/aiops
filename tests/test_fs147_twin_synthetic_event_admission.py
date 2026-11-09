@@ -75,6 +75,25 @@ class SyntheticEventAdmission(unittest.TestCase):
             self.assertEqual(caught.exception.status_code, 422)
         self.assertEqual(db.calls, 0)
 
+    def test_ambiguous_run_and_target_ids_fail_before_database_access(self):
+        for run_id in ("", " ", " RUN-FIXTURE", "RUN-FIXTURE ", "RUN\\nFS", "RUN\\x7fFS"):
+            with self.subTest(run_id=repr(run_id)):
+                db = DB()
+                with self.assertRaises(HTTPException) as caught:
+                    load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE", run_id=run_id,
+                                         payload={"metric": "fs_used", "value": 91}),
+                                   authorization="Bearer fixture-secret")
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(db.calls, 0)
+        for node in ("", " ", " SAN-ARRAY", "FS-FIXTURE-NODE ", "FS\\nSAN", "FS\\x7fSAN"):
+            with self.subTest(node=repr(node)):
+                db = DB()
+                with self.assertRaises(HTTPException) as caught:
+                    load_route(db)(Event("SET_STATE", node, payload={"state": "DEGRADED"}),
+                                   authorization="Bearer fixture-secret")
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(db.calls, 0)
+
     def test_valid_observation_retains_existing_contract(self):
         db = DB()
         result = load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE",
