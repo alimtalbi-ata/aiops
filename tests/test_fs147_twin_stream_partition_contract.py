@@ -108,7 +108,7 @@ class StreamPartitionContract(unittest.TestCase):
     def test_reject_ambiguous_whitespace_and_control_identity(self):
         mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
         for field in IDENTITY:
-            for value in (" " + LAB[field], LAB[field] + " ", LAB[field] + "\\n", LAB[field] + "\\x00"):
+            for value in (" " + LAB[field], LAB[field] + " ", LAB[field] + "\n", LAB[field] + "\x00"):
                 with self.subTest(field=field, value=repr(value)):
                     poisoned = copy.deepcopy(mixed)
                     poisoned[0][field] = value
