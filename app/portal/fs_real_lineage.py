@@ -25,14 +25,24 @@ def project_lineage(receipt):
         stages[name] = {"status": status, "evidence_ref": ref}
     refs = receipt.get("external_refs")
     refs = refs if isinstance(refs, list) else []
-    verified = [
-        {"system": r["system"], "id": str(r["id"]), "evidence_ref": r["evidence_ref"]}
-        for r in refs if isinstance(r, Mapping)
-        and r.get("verification") == "VERIFIED"
-        and isinstance(r.get("system"), str)
-        and isinstance(r.get("id"), (str, int))
-        and isinstance(r.get("evidence_ref"), str) and r["evidence_ref"].strip()
-    ]
+    verified = []
+    seen_refs = set()
+    for r in refs:
+        if not isinstance(r, Mapping) or r.get("verification") != "VERIFIED":
+            continue
+        system, external_id, evidence = r.get("system"), r.get("id"), r.get("evidence_ref")
+        # A visible GLPI ticket or an empty/boolean identifier is not a Core xref.
+        if not isinstance(system, str) or not system.strip():
+            continue
+        if isinstance(external_id, bool) or not isinstance(external_id, (str, int)):
+            continue
+        if not str(external_id).strip() or not isinstance(evidence, str) or not evidence.strip():
+            continue
+        key = (system.strip(), str(external_id).strip())
+        if key in seen_refs:
+            continue
+        seen_refs.add(key)
+        verified.append({"system": key[0], "id": key[1], "evidence_ref": evidence.strip()})
     if not verified:
         stages["itsm"] = {"status": "UNKNOWN", "evidence_ref": None}
     return {
