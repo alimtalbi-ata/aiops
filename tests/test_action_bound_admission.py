@@ -10,7 +10,7 @@ def fixture(mode="DEMO"):
              action_id="a1", action_digest="sha256:abc",
              fencing_token="f1", fencing_epoch=2, mode=mode,
              live_preflight_verified=(mode == "LIVE"),
-             policy_decision_id="pol-1")
+             policy_decision_id="pol-1", workflow_id="workflow-r1")
     b = {k: i[k] for k in ("tenant_id", "incident_id", "run_id", "action_id", "action_digest")}
     return (i, dict(b, decision="ALLOW", mode=mode, decision_id="pol-1"),
             dict(b, decision="APPROVED", mode=mode, policy_decision_id="pol-1",
@@ -18,7 +18,8 @@ def fixture(mode="DEMO"):
                  revoked=False, consumed=False),
             dict(b, fencing_token="f1", fencing_epoch=2, active=True),
             dict(b, fencing_token="f1", fencing_epoch=2,
-                 state="WAITING_APPROVAL", resume_requested=False))
+                 state="WAITING_APPROVAL", resume_requested=False,
+                 workflow_id="workflow-r1"))
 
 
 class TestActionBoundAdmission(unittest.TestCase):
@@ -112,6 +113,17 @@ class TestActionBoundAdmission(unittest.TestCase):
             args = fixture()
             del args[2][field]
             self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+    def test_temporal_workflow_binding(self):
+        for pos, value in ((0, None), (0, ""), (0, "workflow-other"),
+                           (4, None), (4, ""), (4, "workflow-other")):
+            with self.subTest(authority=pos, workflow_id=value):
+                args = fixture()
+                args[pos]["workflow_id"] = value
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+        args = fixture()
+        del args[4]["workflow_id"]
+        self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
 
     def test_bool_epoch_rejected(self):
         args = fixture()
