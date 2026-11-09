@@ -31,7 +31,7 @@ def sanitize_usecase(source):
     data=json.loads(source.read_text())
     if data.get("schema")!="aiops2-live-usecase-qualification-v1" or data.get("read_only") is not True:
         raise ValueError("unexpected use-case schema")
-    return {k:data.get(k) for k in ("schema","utc","run_id","read_only","verdict","checks","blocking","interpretation")}
+    return {k:data.get(k) for k in ("schema","utc","run_id","requested_run_id","read_only","verdict","checks","blocking","interpretation")}
 
 def latest(folder,glob):
     items=sorted(folder.glob(glob),key=lambda x:x.stat().st_mtime)

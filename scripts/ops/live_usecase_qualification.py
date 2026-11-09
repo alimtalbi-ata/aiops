@@ -8,6 +8,7 @@ with specific next engineering actions.
 import argparse
 import datetime as dt
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -37,7 +38,7 @@ def invoke(argv, timeout=180):
     except (OSError,subprocess.TimeoutExpired) as e:
         return {"exit":127,"error":type(e).__name__}
 
-def summarize(linkage, platform, execution, stamp, portal=None):
+def summarize(linkage, platform, execution, stamp, portal=None, requested_run_id=None):
     checks=linkage.get("checks") or {}
     db=linkage.get("database") or {}
     core=linkage.get("core") or {}
@@ -52,7 +53,28 @@ def summarize(linkage, platform, execution, stamp, portal=None):
     def check(name, condition, detail, action):
         return {"name":name,"status":"PASS" if condition else "HOLD",
                 "evidence":detail,"next_action":None if condition else action}
-    items=[
+    # A JSON artifact alone cannot prove that this cycle ran its probes.
+    # Exit 2 is a valid HOLD receipt; missing/failed execution stays unverified.
+    execution = execution if isinstance(execution, dict) else {}
+    execution_checks = []
+    for name in ("platform", "linkage"):
+        receipt = execution.get(name)
+        valid = (isinstance(receipt, dict)
+                 and type(receipt.get("exit")) is int
+                 and receipt["exit"] in (0, 2)
+                 and not receipt.get("error"))
+        execution_checks.append(check(
+            name + "_probe_execution", valid,
+            {"exit": receipt.get("exit") if isinstance(receipt, dict) else None},
+            "run the installed " + name + " probe and retain its exit receipt"))
+    if requested_run_id is not None:
+        records=(linkage, db.get("run"), core.get("run"))
+        matches=all(isinstance(record,dict) and record.get("run_id")==requested_run_id
+                    for record in records)
+        execution_checks.append(check(
+            "requested_run_binding", matches, {"requested_run_id":requested_run_id},
+            "collect Core and database receipts for the exact requested Run"))
+    items=execution_checks + [
         check("core_run_consistency",checks.get("core_run")=="PASS" and checks.get("core_api")=="PASS",
               {"db":checks.get("core_run"),"api":checks.get("core_api")},
               "repair Core run persistence or API parsing"),
@@ -91,7 +113,8 @@ def summarize(linkage, platform, execution, stamp, portal=None):
                 item["next_action"]="Qualify this chain on a separate approved action run"
     failed=[x["name"] for x in items if x["status"]=="HOLD"]
     return {"schema":"aiops2-live-usecase-qualification-v1","utc":stamp,
-            "run_id":linkage.get("run_id",RUN_ID),"read_only":True,
+            "run_id":requested_run_id or linkage.get("run_id",RUN_ID),
+            "requested_run_id":requested_run_id,"read_only":True,
             "verdict":"PASS" if not failed else "HOLD","checks":items,
             "blocking":failed,"probe_execution":execution,
             "interpretation":"A BLOCKED run proves denial safety, not Temporal/HITL execution; approved execution needs a separate run."}
@@ -101,17 +124,22 @@ def main():
     p.add_argument("--tools",type=Path,default=Path.home()/"aiops2-audit-tools")
     p.add_argument("--output-dir",type=Path,default=Path.home()/"aiops2-release-receipts")
     p.add_argument("--run-id",default=RUN_ID)
-    p.add_argument("--observed-glpi-ticket",type=int,default=201)
+    p.add_argument("--observed-glpi-ticket",type=int)
     args=p.parse_args()
-    if not args.run_id.startswith("RUN-") or len(args.run_id)>84:
+    if not re.fullmatch(r"RUN-[A-Z0-9-]{6,80}",args.run_id):
         p.error("invalid run ID")
+    if args.observed_glpi_ticket is not None and args.observed_glpi_ticket < 1:
+        p.error("ticket must be positive")
     stamp=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     args.output_dir.mkdir(parents=True,exist_ok=True)
     artifacts={}
     executions={}
+    linkage_args=["--run-id",args.run_id]
+    if args.observed_glpi_ticket is not None:
+        linkage_args.extend(["--observed-glpi-ticket",str(args.observed_glpi_ticket)])
     for name,script,extra in [
         ("platform","platform_readiness_gate.py",[]),
-        ("linkage","run_linkage_gate.py",["--run-id",args.run_id,"--observed-glpi-ticket",str(args.observed_glpi_ticket)])
+        ("linkage","run_linkage_gate.py",linkage_args)
     ]:
         path=args.output_dir/f"usecase-{name}-{stamp}.json"
         artifacts[name]=path
@@ -126,7 +154,7 @@ def main():
         except (OSError,ValueError):
             return {}
     result=summarize(read("linkage"),read("platform"),executions,
-                     dt.datetime.now(dt.timezone.utc).isoformat(),portal_probe())
+                     dt.datetime.now(dt.timezone.utc).isoformat(),portal_probe(),requested_run_id=args.run_id)
     out=args.output_dir/f"usecase-summary-{stamp}.json"
     out.write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n")
     print(f"USECASE={result['verdict']} checks={len(result['checks'])} blocking={','.join(result['blocking'])} receipt={out}")

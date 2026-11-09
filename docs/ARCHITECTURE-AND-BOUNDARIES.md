@@ -118,3 +118,8 @@ The audit reports multiple versions/candidates of Core, Worker, Temporal, Twin, 
 Observed network inventory includes control/data/Temporal-data networks and separate rebuild/qualification networks. The intended simulator execution isolation remains mandatory; confirm effective network attachments and allowed paths from each Compose definition before asserting isolation. A missing temporary Compose source in the metrics-cutover project and containers with missing/mismatched Compose labels are configuration-drift findings requiring investigation.
 
 No application/API/database functional checks were run in the supplied audit. Consequently, no availability, service-contract, production, LIVE or end-to-end qualification claim is made by this section.
+
+
+### 2026-11-09 — Frontière Core / ITSM dans la candidate #468
+
+Le collecteur Core fournit le contexte au handoff, puis l'adaptateur de lecture demande un ticket au lecteur du propriétaire GLPI existant. L'authentification et les ACL tenant/entité restent à ce propriétaire ; le lecteur est une dépendance serveur, jamais une entrée navigateur. L'adaptateur compare les identités et propose une liaison ; Core reste seul propriétaire de sa persistance par incident_id. READY_FOR_CORE_RECONCILIATION ne prouve ni liaison durable, ni HITL, ni effet Worker. Pas de changement de topologie ni de déploiement.

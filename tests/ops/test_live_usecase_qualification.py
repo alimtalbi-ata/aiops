@@ -32,7 +32,44 @@ class LiveQualificationTests(unittest.TestCase):
         l=linkage()
         l["checks"].update({"temporal_worker_execution":"PASS","hitl_action_binding":"PASS",
                             "glpi_core_link":"PASS","itsm_readback":"PASS"})
-        self.assertEqual(m.summarize(l,platform(),{},"2026-11-08T15:00Z",portal())["verdict"],"PASS")
+        self.assertEqual(m.summarize(l,platform(),{"platform":{"exit":0},"linkage":{"exit":2}},"2026-11-08T15:00Z",portal())["verdict"],"PASS")
+    def test_pass_artifacts_cannot_hide_failed_or_missing_probe_execution(self):
+        l=linkage()
+        l["checks"].update({"glpi_core_link":"PASS","itsm_readback":"PASS"})
+        for bad in (None, {}, {"exit":127}, {"exit":124}, {"exit":False},
+                    {"exit":0,"error":"SCRIPT_NOT_INSTALLED"}):
+            for name in ("platform", "linkage"):
+                with self.subTest(name=name, receipt=bad):
+                    execution={"platform":{"exit":0},"linkage":{"exit":0}}
+                    execution[name]=bad
+                    result=m.summarize(l,platform(),execution,"2026-11-08T15:00Z",portal())
+                    self.assertEqual(result["verdict"],"HOLD")
+                    self.assertIn(name+"_probe_execution",result["blocking"])
+
+    def test_selected_run_requires_both_core_and_database_identity(self):
+        rid="RUN-NEWDEMO01"
+        for source in ("report", "database", "core", "none"):
+            with self.subTest(source=source):
+                l=linkage()
+                l["run_id"]=rid
+                l["database"]["run"]["run_id"]=rid
+                l["core"]={"run":{"run_id":rid,"status":"BLOCKED"}}
+                if source=="report":
+                    l["run_id"]=m.RUN_ID
+                elif source in ("database","core"):
+                    l[source]["run"]["run_id"]=m.RUN_ID
+                result=m.summarize(l,platform(),{"platform":{"exit":0},"linkage":{"exit":2}},
+                                   "2026-11-09T12:00Z",portal(),requested_run_id=rid)
+                self.assertEqual(result["run_id"],rid)
+                self.assertEqual(result["requested_run_id"],rid)
+                check=next(c for c in result["checks"] if c["name"]=="requested_run_binding")
+                self.assertEqual(check["status"],"PASS" if source=="none" else "HOLD")
+
+    def test_missing_report_keeps_requested_identity_without_default_substitution(self):
+        result=m.summarize({}, {}, {}, "2026-11-09T12:00Z",requested_run_id="RUN-NEWDEMO01")
+        self.assertEqual(result["run_id"],"RUN-NEWDEMO01")
+        self.assertIn("requested_run_binding",result["blocking"])
+
     def test_failed_platform_gate_fails(self):
         p=platform()
         p["verdict"]="HOLD"

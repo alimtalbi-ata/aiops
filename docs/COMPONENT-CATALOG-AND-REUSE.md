@@ -236,3 +236,8 @@ Do not compare these PRs as a single version ladder: they implement different fe
 4. Retain additive proven features from alternate branches; select an installed baseline plus reviewed additive patches when safer than wholesale replacement. Keep five stacks intact until a separate approved retirement plan.
 
 **Next integration blocker:** collect Debian 48h deployment receipts and image/Compose/source/volume provenance using the existing reporter → publisher; cross-reference #448 and #431 first, then #443/#450/#451/#438/#446, and repair #449 before any FS147 release decision.
+
+
+### 2026-11-09 — Adaptateur de lecture GLPI, candidate #468
+
+`ops/coordination/glpi_handoff_consumer.py` ne possède plus de transport HTTP ni de jetons. Il exige le lecteur authentifié/ACL du propriétaire existant via injection côté serveur ; sans raccordement, HOLD. Réutilisation préparée, connecteur réel non raccordé et non qualifié. Aucun second poller/writer, aucune persistance Core. Contrats Core natifs couverts par tests simulés ; voir PROJECT-CONTINUITY.md.

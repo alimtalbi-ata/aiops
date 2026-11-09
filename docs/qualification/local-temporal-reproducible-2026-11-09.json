@@ -1,0 +1,27 @@
+{
+  "scope": "LOCAL_ISOLATED_SYNTHETIC_TEMPORAL",
+  "run_id": "RUN-D5B2D0D253734BD6",
+  "temporal_run_id": "01a1c075-8124-79fd-8813-bc16772f4583",
+  "application_manifest_sha256": "bc2154acedb19a6103a3f1a61327467b100a63318ed66ca2606a62fd05ae101f",
+  "core_status": "RESOLVED",
+  "temporal_status": "COMPLETED",
+  "completed_stages": 13,
+  "linked_synthetic_evidence": 13,
+  "policy": "PASS/SIMULATE",
+  "history_events": 95,
+  "replay": "PASS",
+  "debian_verified": false,
+  "glpi_verified": false,
+  "portal_verified": false,
+  "real_model_verified": false,
+  "runner_commit": "338159b4a0f200acd0ff50f2bcec8e80ea568999",
+  "image_id": "sha256:a05a866373349f560c9739e7906e195d1887c414423ccc59e39cd20c1fe076bd",
+  "temporal_ui": "http://127.0.0.1:18233/namespaces/default/workflows/RUN-D5B2D0D253734BD6/01a1c075-8124-79fd-8813-bc16772f4583/history",
+  "runner_source_sha256": "186bbaa94a60c4dbb58ab16d1402f1240c2b7767e24eda8ccc08273ca099f862",
+  "browser_verification": {
+    "tool": "Playwright Chromium",
+    "workflow_completed_visible": true,
+    "history_events_visible": 95,
+    "screenshot": "local-temporal-demo-2026-11-09.png"
+  }
+}
