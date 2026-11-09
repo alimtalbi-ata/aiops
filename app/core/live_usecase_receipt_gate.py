@@ -4,6 +4,7 @@ A receipt is a claim, not authorization to execute. Never performs IO.
 """
 from datetime import datetime, timezone
 from enum import Enum
+import math
 import re
 
 
@@ -26,6 +27,11 @@ def classify(receipt, now=None, max_age_seconds=180):
     if not isinstance(receipt, dict) or receipt.get("schema") != "aiops2-live-usecase-qualification-v1":
         return Qualification.UNVERIFIED
     if receipt.get("read_only") is not True:
+        return Qualification.UNVERIFIED
+    # Reject invalid freshness policy inputs: NaN comparisons otherwise bypass
+    # both age bounds and can turn an expired receipt into a PASS claim.
+    if (type(max_age_seconds) not in (int, float)
+            or not math.isfinite(max_age_seconds) or max_age_seconds < 0):
         return Qualification.UNVERIFIED
     try:
         timestamp = datetime.fromisoformat(receipt["utc"].replace("Z", "+00:00"))
