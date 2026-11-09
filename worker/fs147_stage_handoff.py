@@ -25,6 +25,6 @@ def evaluate_handoff(observation_receipt, analyst, critic, policy, *, run_id, ti
     canonical = {"run_id":run_id,"ticket_id":ticket_id,"tenant_id":tenant_id,"observation_fingerprint":observation_receipt["fingerprint"],"analyst":analyst,"critic":critic,"policy":policy}
     try:
         digest = sha256(json.dumps(canonical, sort_keys=True, separators=(",",":"), allow_nan=False).encode()).hexdigest()
-    except (ValueError, TypeError, OverflowError):
+    except (ValueError, TypeError, OverflowError, RecursionError):
         return result("NONCANONICAL_HANDOFF")
     return result("READ_ONLY_APPROVED",digest)
