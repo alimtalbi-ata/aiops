@@ -45,6 +45,7 @@ class GateRuntimeFence(unittest.TestCase):
                 "if not post and os.environ.get('FS1113_FAIL_PRE')=='1': sys.exit(1)\n"
                 "if post and os.environ.get('FS1113_FAIL_POST')=='1': sys.exit(1)\n"
                 "fmt=sys.argv[-1]\n"
+                "if post and fmt in ('{{.Id}}','{{.Image}}') and os.environ.get('FS1113_FAIL_POST_IDENTITY')=='1': sys.exit(1)\n"
                 "if fmt=='{{.Config.Image}}': value='aiops2-portal:unexpected' if not post and os.environ.get('FS1113_WRONG_TAG')=='1' else 'aiops2-portal:fs1073-csp-candidate'\n"
                 "elif fmt=='{{.Id}}': value='container-changed' if post and os.environ.get('FS1113_CHANGE_ID')=='1' else 'container-original'\n"
                 "elif fmt=='{{.Image}}': value='sha256:changed' if post and os.environ.get('FS1113_CHANGE_IMAGE')=='1' else 'sha256:original'\n"
