@@ -140,7 +140,11 @@ def execute(request: FS147Request, *, stop_auto: bool,
         critique = critic(request, observation, analysis)
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
             return _blocked("CRITIC_SCOPE", steps)
-        if critique.get("state") != "PASS":
+        if (critique.get("state") != "PASS"
+                or critique.get("validated") is False
+                or (isinstance(critique.get("missing_information"), list)
+                    and bool(critique["missing_information"]))):
+            # Explicit Critic rejection or unresolved evidence gaps override PASS.
             return _blocked("CRITIC_REFUSED", steps)
         steps.append("CRITIC")
         # The observation can expire while Analyst/Critic are running. Never
