@@ -154,8 +154,8 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         if row[4] not in ('CREATED','WAITING'):
             raise HTTPException(409,f'run not executable from {row[4]}')
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
-    # Keep the FOR UPDATE transaction open through Worker dispatch and receipt
-    # readback. Concurrent first starts serialize on the canonical Run row.
+        # Keep the FOR UPDATE transaction open through Worker dispatch and receipt
+        # readback. Concurrent first starts serialize on the canonical Run row.
         try:
             r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
             # Worker uses the canonical run ID as the Temporal workflow ID.
