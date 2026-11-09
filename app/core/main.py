@@ -57,8 +57,13 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
-        row=c.execute('select run_id,mode,scenario_id,status,version from aiops.runs where idempotency_key=%s',(x.idempotency_key,)).fetchone()
-        if row:return dict(zip(['run_id','mode','scenario_id','status','version'],row))
+        row=c.execute('select run_id,mode,scenario_id,status,version,incident_id from aiops.runs where idempotency_key=%s for update',(x.idempotency_key,)).fetchone()
+        if row:
+            # A reused key must not alias a different incident or execution intent.
+            # In particular, never silently return a DEMO receipt for a LIVE request.
+            if (row[1],row[2],row[5]) != (x.mode,x.scenario_id,x.incident_id):
+                raise HTTPException(409,'idempotency key belongs to a different run intent')
+            return dict(zip(['run_id','mode','scenario_id','status','version'],row[:5]))
         rid=new('RUN'); c.execute('insert into aiops.runs(run_id,incident_id,mode,scenario_id,status,idempotency_key) values(%s,%s,%s,%s,%s,%s)',(rid,x.incident_id,x.mode,x.scenario_id,'CREATED',x.idempotency_key))
         for stage in STAGES:c.execute('insert into aiops.run_stage_state(run_id,stage,state) values(%s,%s,\'PENDING\')',(rid,stage))
         append_event(c,rid,'INGEST','RUN_CREATED','CREATED',payload={'mode':x.mode,'scenario_id':x.scenario_id},event_key='run-created')
