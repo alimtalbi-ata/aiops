@@ -54,10 +54,25 @@ class TestActionBoundAdmission(unittest.TestCase):
                 self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
 
     def test_policy_denial(self):
-        for decision in ("DENY", None, "UNKNOWN"):
-            args = fixture()
-            args[1]["decision"] = decision
-            self.assertEqual(admit_resume(*args).state, "DENIED")
+        args = fixture()
+        args[1]["decision"] = "DENY"
+        self.assertEqual(admit_resume(*args).state, "DENIED")
+        self.assertEqual(admit_resume(*args).reason, "policy_denied")
+
+    def test_missing_or_unrecognized_policy_is_not_a_denial_or_success(self):
+        for decision in (None, "UNKNOWN", "", False, 0):
+            with self.subTest(decision=decision):
+                args = fixture()
+                args[1]["decision"] = decision
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+        args = fixture()
+        del args[1]["decision"]
+        self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+        for invalid_mode in (None, "LIVE", "UNKNOWN"):
+            with self.subTest(policy_mode=invalid_mode):
+                args = fixture()
+                args[1]["mode"] = invalid_mode
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
 
     def test_fencing_and_temporal_replay(self):
         for pos, key, value in ((3, "fencing_epoch", 1),
