@@ -42,20 +42,28 @@ def main():
     args = p.parse_args()
     if not re.fullmatch(r"[0-9a-f]{40}", args.sha):
         p.error("invalid SHA")
-    # GitHub paginates; fail closed if queue is too large for a bounded scan.
-    proc = subprocess.run(["gh", "api", f"repos/{REPO}/issues/{ISSUE}/comments",
-                           "-f", "per_page=100", "-f", "page=1", "--method", "GET"],
-                          text=True, capture_output=True, timeout=45)
-    if proc.returncode:
-        print("QUEUE_UNAVAILABLE", file=sys.stderr)
-        return 2
+    # Bounded full pagination: never silently ignore eligible older commands.
+    comments = []
     try:
-        comments = json.loads(proc.stdout)
-        if not isinstance(comments, list) or len(comments) >= 100:
-            raise ValueError("queue pagination boundary; refusing incomplete scan")
+        for page in range(1, 21):
+            proc = subprocess.run(
+                ["gh", "api", "--method", "GET",
+                 f"repos/{REPO}/issues/{ISSUE}/comments",
+                 "-f", "per_page=100", "-f", f"page={page}"],
+                text=True, capture_output=True, timeout=45)
+            if proc.returncode:
+                raise ValueError("GitHub queue unavailable")
+            batch = json.loads(proc.stdout)
+            if not isinstance(batch, list) or len(batch) > 100:
+                raise ValueError("malformed GitHub page")
+            comments.extend(batch)
+            if len(batch) < 100:
+                break
+        else:
+            raise ValueError("queue exceeds 2000 comments; fail closed")
         ready = candidates(comments, dt.datetime.now(dt.timezone.utc), args.sha,
                            args.authorized_login, args.state_dir)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, subprocess.TimeoutExpired):
         print("QUEUE_UNVERIFIED", file=sys.stderr)
         return 2
     if args.dry_run:
