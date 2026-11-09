@@ -51,12 +51,17 @@ def collect(run_id, base_url="http://127.0.0.1:810", token=None, timeout=5):
         run = _get_json(base_url, "/api/runs/" + rid, token, timeout)
         if not isinstance(run, dict):
             raise ValueError("Core run response is not an object")
-        actual_id = run.get("run_id") or run.get("id")
+        # Deployed Core wraps the run under {"run": {...}, "events": ..., ...}.
+        # Accept the direct shape as well, but never silently trust an unknown wrapper.
+        record = run.get("run", run)
+        if not isinstance(record, dict):
+            raise ValueError("Core run record is not an object")
+        actual_id = record.get("run_id") or record.get("id")
         if actual_id != run_id:
             raise ValueError("Core run ID mismatch")
         envelope["checks"]["core_run"] = "PASS"
-        envelope["incident_id"] = run.get("incident_id")
-        envelope["run_status"] = run.get("status")
+        envelope["incident_id"] = record.get("incident_id")
+        envelope["run_status"] = record.get("status")
         if not isinstance(envelope["incident_id"], str) or not envelope["incident_id"]:
             envelope["reason_codes"].append("INCIDENT_CORRELATION_MISSING")
         if envelope["run_status"] == "BLOCKED":
