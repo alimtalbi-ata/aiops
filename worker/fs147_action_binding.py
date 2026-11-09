@@ -35,7 +35,23 @@ def check_action_binding(intent, approval, *, now):
         return deny("EXPIRY_UNVERIFIED")
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return deny("EXPIRY_UNVERIFIED")
-    remaining = parsed.astimezone(timezone.utc) - now.astimezone(timezone.utc)
+    issued = approval.get("issued_at")
+    if not isinstance(issued, str):
+        return deny("ISSUED_AT_UNVERIFIED")
+    try:
+        issued_dt = datetime.fromisoformat(issued.replace("Z", "+00:00"))
+    except ValueError:
+        return deny("ISSUED_AT_UNVERIFIED")
+    if issued_dt.tzinfo is None or issued_dt.utcoffset() is None:
+        return deny("ISSUED_AT_UNVERIFIED")
+    issued_utc = issued_dt.astimezone(timezone.utc)
+    now_utc = now.astimezone(timezone.utc)
+    expiry_utc = parsed.astimezone(timezone.utc)
+    if issued_utc > now_utc or expiry_utc <= issued_utc:
+        return deny("APPROVAL_TIME_INVALID")
+    if expiry_utc - issued_utc > timedelta(minutes=10):
+        return deny("APPROVAL_HORIZON_EXCEEDED")
+    remaining = expiry_utc - now_utc
     if remaining <= timedelta(0):
         return deny("APPROVAL_EXPIRED")
     # A long-lived approval cannot be replayed indefinitely after Policy changes.
