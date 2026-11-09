@@ -99,7 +99,7 @@ class SyntheticEventAdmission(unittest.TestCase):
 
     def test_observation_rejects_nonfinite_or_nonnumeric_value_without_db(self):
         import math
-        for value in (True, False, "91", [], {}, float("nan"), float("inf"), -float("inf")):
+        for value in (True, False, "91", [], {}, float("nan"), float("inf"), -float("inf"), 10 ** 1000):
             with self.subTest(value=repr(value)):
                 db = DB()
                 with self.assertRaises(HTTPException) as caught:
