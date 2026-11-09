@@ -3,10 +3,24 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-09T15:48:01.438677+00:00",
+  "collected_at": "2026-11-09T15:49:01.942747+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:f8df32ea0fc9107e1dd1cc5c40b8bd38257336fdaa1a2be00b5597a8609f10e8",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-portal",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "sha256:a4b0eefe2da01dba3c858682538686853e982f0b4f369e84f4a3b2edddc9b4ce",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-core",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "aiops2-core:fs1212-integrated-candidate",
@@ -22,11 +36,11 @@
         "state": "running"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "aiops2-core:fs1212-integrated-candidate",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-core",
-        "state": "running"
+        "name": "aiops2-rebuild-core-rollback-20261109T154818152697Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -39,8 +53,8 @@
         "health": "no-healthcheck",
         "image": "aiops2-portal:fs1073-csp-candidate",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-portal",
-        "state": "running"
+        "name": "aiops2-rebuild-portal-rollback-20261109T154818152697Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -564,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 5 days, 5 hours, 59 minutes"
+    "uptime": "up 4 weeks, 5 days, 6 hours, 0 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 139551969280,
+      "free_bytes": 139549896704,
       "total_bytes": 172898033664,
-      "used_bytes": 24488742912
+      "used_bytes": 24490815488
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -578,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.79150390625,
-      1.2861328125,
-      1.34912109375
+      1.5009765625,
+      1.4140625,
+      1.39013671875
     ],
     "memory_bytes": {
-      "MemAvailable": 18526736384,
+      "MemAvailable": 18530611200,
       "MemTotal": 25205911552,
       "SwapFree": 10029432832,
       "SwapTotal": 10838077440
