@@ -100,6 +100,10 @@ class SyntheticEventAdmission(unittest.TestCase):
                                       payload={"metric": "fs_used", "value": 91}),
                                 authorization="Bearer fixture-secret")
         self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["run_id"], "RUN-FIXTURE")
+        self.assertEqual(result["record_id"], "OBS-FIXTURE")
+        self.assertEqual(result["record_type"], "observation")
+        self.assertEqual(db.statements[1][1][0], result["record_id"])
         self.assertEqual(db.calls, 1)
         self.assertEqual(len(db.statements), 2)
         self.assertIn("select 1 from aiops.twin_nodes", db.statements[0][0])
@@ -158,6 +162,10 @@ class SyntheticEventAdmission(unittest.TestCase):
                                       payload={"state": "DEGRADED", "health": "WARN"}),
                                 authorization="Bearer fixture-secret")
         self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["run_id"], "RUN-FIXTURE")
+        self.assertEqual(result["record_id"], "FACT-FIXTURE")
+        self.assertEqual(result["record_type"], "twin_fact")
+        self.assertEqual(db.statements[2][1][0], result["record_id"])
         self.assertEqual(len(db.statements), 3)
         self.assertIn("update aiops.twin_nodes", db.statements[1][0])
         self.assertIn("insert into aiops.twin_facts", db.statements[2][0])
