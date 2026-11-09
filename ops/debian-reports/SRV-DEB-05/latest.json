@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-09T20:13:01.351779+00:00",
+  "collected_at": "2026-11-09T20:14:01.906937+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "healthy",
+        "image": "sha256:87427734395dd212f550f03498fb77954c572675b41d8e5ba5dd4f295ecbef4d",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-core",
+        "state": "running"
+      },
       {
         "health": "no-healthcheck",
         "image": "sha256:f8df32ea0fc9107e1dd1cc5c40b8bd38257336fdaa1a2be00b5597a8609f10e8",
@@ -15,11 +22,11 @@
         "state": "running"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "sha256:a4b0eefe2da01dba3c858682538686853e982f0b4f369e84f4a3b2edddc9b4ce",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-core",
-        "state": "running"
+        "name": "aiops2-rebuild-core-rollback-20261109T201354139196Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -559,16 +566,9 @@
         "inspect_ok": true,
         "name": "aiops2-e2e-v1-aiops2-policy-1",
         "state": "running"
-      },
-      {
-        "health": "healthy",
-        "image": "postgres:16-alpine",
-        "inspect_ok": true,
-        "name": "aiops2-e2e-v1-aiops2-postgres-1",
-        "state": "running"
       }
     ],
-    "truncated": false
+    "truncated": true
   },
   "host": {
     "architecture": "x86_64",
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 5 days, 10 hours, 24 minutes"
+    "uptime": "up 4 weeks, 5 days, 10 hours, 25 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 139530522624,
+      "free_bytes": 139528855552,
       "total_bytes": 172898033664,
-      "used_bytes": 24510189568
+      "used_bytes": 24511856640
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.69970703125,
-      0.8740234375,
-      0.9833984375
+      1.1337890625,
+      0.9482421875,
+      1.0029296875
     ],
     "memory_bytes": {
-      "MemAvailable": 18527858688,
+      "MemAvailable": 18400501760,
       "MemTotal": 25205911552,
       "SwapFree": 10029432832,
       "SwapTotal": 10838077440
