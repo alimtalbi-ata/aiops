@@ -40,7 +40,9 @@ def partition_receipts(receipts, expected=(LAB, SAN)):
         if key not in groups:
             raise ValueError("unknown or cross-graph identity")
         stage = receipt.get("stage")
-        if (not isinstance(stage, str) or stage not in STAGES\n                or not isinstance(receipt.get("receipt_id"), str)\n                or receipt["receipt_id"] != receipt["run_id"] + ":" + stage):
+        if (not isinstance(stage, str) or stage not in STAGES
+                or not isinstance(receipt.get("receipt_id"), str)
+                or receipt["receipt_id"] != receipt["run_id"] + ":" + stage):
             raise ValueError("invalid or foreign stage receipt identity")
         groups[key].append(copy.deepcopy(receipt))
     for key, trace in groups.items():
