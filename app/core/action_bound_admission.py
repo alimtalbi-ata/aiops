@@ -20,7 +20,7 @@ def admit_resume(intent: Mapping, policy: Mapping, approval: Mapping,
     mode = intent.get("mode")
     if mode not in ("DEMO", "LIVE"):
         return Admission("NEEDS_HUMAN", "mode_unknown")
-    keys = ("tenant_id", "run_id", "action_id", "action_digest")
+    keys = ("tenant_id", "incident_id", "run_id", "action_id", "action_digest")
     if any(type(intent.get(k)) is not str or not intent[k].strip()
            for k in (*keys, "incident_id", "fencing_token")):
         return Admission("NEEDS_HUMAN", "identity_unknown")
