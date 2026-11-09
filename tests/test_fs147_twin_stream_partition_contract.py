@@ -26,7 +26,7 @@ def partition_receipts(receipts, expected=(LAB, SAN)):
         if not isinstance(item, dict):
             raise ValueError("malformed identity")
         values = tuple(item.get(field) for field in IDENTITY)
-        if any(not isinstance(value, str) or not value.strip() for value in values):
+        if any(not isinstance(value, str) or not value.strip() or value != value.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in value) for value in values):
             raise ValueError("malformed identity")
         return values
     keys = [identity(item) for item in expected]
@@ -104,6 +104,18 @@ class StreamPartitionContract(unittest.TestCase):
             with self.subTest(expected=invalid):
                 with self.assertRaises(ValueError):
                     partition_receipts([], expected=invalid)
+
+    def test_reject_ambiguous_whitespace_and_control_identity(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for field in IDENTITY:
+            for value in (" " + LAB[field], LAB[field] + " ", LAB[field] + "\\n", LAB[field] + "\\x00"):
+                with self.subTest(field=field, value=repr(value)):
+                    poisoned = copy.deepcopy(mixed)
+                    poisoned[0][field] = value
+                    with self.assertRaisesRegex(ValueError, "malformed identity"):
+                        partition_receipts(poisoned)
+                    with self.assertRaisesRegex(ValueError, "malformed identity"):
+                        partition_receipts([], expected=(dict(LAB, **{field: value}), SAN))
 
     def test_reject_ambiguous_expected_identity(self):
         with self.assertRaisesRegex(ValueError, "ambiguous"):
