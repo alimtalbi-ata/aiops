@@ -47,5 +47,18 @@ class TestHandoff(unittest.TestCase):
     def test_mismatched_fingerprint_stage_refused(self):
         self.critic["observation_fingerprint"] = "b"*64
         self.assertEqual(self.call()["reason"], "CRITIC_IDENTITY_MISMATCH")
+    def test_deeply_nested_analyst_payload_fails_closed(self):
+        root = {}
+        node = root
+        for _ in range(10000):
+            child = {}
+            node["next"] = child
+            node = child
+        self.analyst["nested"] = root
+        receipt = self.call()
+        self.assertEqual(receipt["status"], "UNKNOWN")
+        self.assertEqual(receipt["reason"], "NONCANONICAL_HANDOFF")
+        self.assertIsNone(receipt["digest"])
+        self.assertFalse(receipt["dispatch_allowed"])
 if __name__ == "__main__":
     unittest.main()
