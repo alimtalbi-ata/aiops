@@ -47,6 +47,8 @@ def check_action_binding(intent, approval, *, now):
     issued_utc = issued_dt.astimezone(timezone.utc)
     now_utc = now.astimezone(timezone.utc)
     expiry_utc = parsed.astimezone(timezone.utc)
+    if expiry_utc <= now_utc:
+        return deny("APPROVAL_EXPIRED")
     if issued_utc > now_utc or expiry_utc <= issued_utc:
         return deny("APPROVAL_TIME_INVALID")
     if expiry_utc - issued_utc > timedelta(minutes=10):
