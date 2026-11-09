@@ -26,8 +26,29 @@ def evaluate_handoff(observation_receipt, analyst, critic, policy, *, run_id, ti
     if critic.get("approved") is not True or policy.get("allowed_mode") != "OBSERVE":
         return result("CRITIC_OR_POLICY_REFUSED")
     canonical = {"run_id":run_id,"ticket_id":ticket_id,"tenant_id":tenant_id,"observation_fingerprint":observation_receipt["fingerprint"],"analyst":analyst,"critic":critic,"policy":policy}
+    # Bound untrusted Analyst/Critic/Policy replies before JSON serialization.
+    # This is an admission limit, not a durable Temporal idempotency claim.
+    budget = [2048]
+    def bounded(value, depth=0):
+        budget[0] -= 1
+        if budget[0] < 0 or depth > 16:
+            return False
+        if isinstance(value, dict):
+            return len(value) <= 2048 and all(
+                isinstance(k, str) and len(k) <= 256 and bounded(v, depth + 1)
+                for k, v in value.items())
+        if isinstance(value, (list, tuple)):
+            return len(value) <= 2048 and all(bounded(v, depth + 1) for v in value)
+        if isinstance(value, str):
+            return len(value) <= 8192
+        return value is None or type(value) in (bool, int, float)
+    if not bounded(canonical):
+        return result("HANDOFF_TOO_COMPLEX")
     try:
-        digest = sha256(json.dumps(canonical, sort_keys=True, separators=(",",":"), allow_nan=False).encode()).hexdigest()
+        serialized = json.dumps(canonical, sort_keys=True, separators=(",",":"), allow_nan=False).encode()
+        if len(serialized) > 65536:
+            return result("HANDOFF_TOO_LARGE")
+        digest = sha256(serialized).hexdigest()
     except (ValueError, TypeError, OverflowError, RecursionError):
         return result("NONCANONICAL_HANDOFF")
     return result("READ_ONLY_APPROVED",digest)
