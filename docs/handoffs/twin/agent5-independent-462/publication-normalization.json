@@ -1,0 +1,14 @@
+[
+  {
+    "file": "services.log",
+    "original_sha256": "281218b20a8d0c02722bde47a6b2735bb9b99033bafc8d22bd0d39646403bba7",
+    "published_sha256": "89aacce44ffbe5a33b410c105d2bced856a6b5d48337efb84dba7193375c8cd7",
+    "operation": "Trailing whitespace normalization only; raw originals retained locally. Diff is for review, not patch application."
+  },
+  {
+    "file": "delta-e0fc66c3.patch",
+    "original_sha256": "8eee134a2a21c670124f99ce819cc78ad116bb1c7582ac1656937d40a6eb530b",
+    "published_sha256": "c4622b43f9d3e74b7527c879546e0ec2163fb4c450239858cf4cbd735a78d7f3",
+    "operation": "Trailing whitespace normalization only; raw originals retained locally. Diff is for review, not patch application."
+  }
+]

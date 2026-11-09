@@ -1,0 +1,117 @@
+[
+  {
+    "pattern": "test_hitl_identity.py",
+    "exit_code": 0,
+    "tests_executed": 11,
+    "command": [
+      "docker",
+      "--host=unix:///var/run/docker.sock",
+      "exec",
+      "-w",
+      "/qualification",
+      "771452963aedd483942d5f003d2f4dfddf1264c59117ee3b60659b045ff9a7e2",
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_hitl_identity.py",
+      "-v"
+    ],
+    "utc": "2026-11-09T21:05:32.688567+00:00"
+  },
+  {
+    "pattern": "test_hitl_workflow_contract.py",
+    "exit_code": 0,
+    "tests_executed": 9,
+    "command": [
+      "docker",
+      "--host=unix:///var/run/docker.sock",
+      "exec",
+      "-w",
+      "/qualification",
+      "771452963aedd483942d5f003d2f4dfddf1264c59117ee3b60659b045ff9a7e2",
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_hitl_workflow_contract.py",
+      "-v"
+    ],
+    "utc": "2026-11-09T21:05:32.838594+00:00"
+  },
+  {
+    "pattern": "test_intelligence_contract.py",
+    "exit_code": 0,
+    "tests_executed": 16,
+    "command": [
+      "docker",
+      "--host=unix:///var/run/docker.sock",
+      "exec",
+      "-w",
+      "/qualification",
+      "771452963aedd483942d5f003d2f4dfddf1264c59117ee3b60659b045ff9a7e2",
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_intelligence_contract.py",
+      "-v"
+    ],
+    "utc": "2026-11-09T21:05:33.385052+00:00"
+  },
+  {
+    "pattern": "test_critic_schema_retry_v24.py",
+    "exit_code": 0,
+    "tests_executed": 4,
+    "command": [
+      "docker",
+      "--host=unix:///var/run/docker.sock",
+      "exec",
+      "-w",
+      "/qualification",
+      "771452963aedd483942d5f003d2f4dfddf1264c59117ee3b60659b045ff9a7e2",
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_critic_schema_retry_v24.py",
+      "-v"
+    ],
+    "utc": "2026-11-09T21:05:33.923067+00:00"
+  },
+  {
+    "pattern": "test_candidate_core_execute.py",
+    "exit_code": 0,
+    "tests_executed": 7,
+    "command": [
+      "docker",
+      "--host=unix:///var/run/docker.sock",
+      "exec",
+      "-w",
+      "/qualification",
+      "771452963aedd483942d5f003d2f4dfddf1264c59117ee3b60659b045ff9a7e2",
+      "python",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "test_candidate_core_execute.py",
+      "-v"
+    ],
+    "utc": "2026-11-09T21:05:34.742613+00:00"
+  }
+]

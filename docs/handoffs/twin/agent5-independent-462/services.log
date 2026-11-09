@@ -1,0 +1,569 @@
+worker-1  | INFO:     Started server process [1]
+intelligence-1  | INFO:     Started server process [1]
+worker-1        | INFO:     Waiting for application startup.
+intelligence-1  | INFO:     Waiting for application startup.
+worker-1        | INFO:     Application startup complete.
+intelligence-1  | INFO:     Application startup complete.
+worker-1        | INFO:     Uvicorn running on http://0.0.0.0:815 (Press CTRL+C to quit)
+intelligence-1  | INFO:     Uvicorn running on http://0.0.0.0:817 (Press CTRL+C to quit)
+worker-1        | INFO:     127.0.0.1:41758 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:48072 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:41610 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:33856 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:41624 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:33866 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:41636 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:33878 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43292 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43308 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:60676 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:60680 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:60694 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:37558 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:37574 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:37582 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:34682 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:34692 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:34696 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:51642 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:51658 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:51668 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:51680 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:40954 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:40962 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:40968 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:39960 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:39964 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:39968 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:58988 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:58994 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:59000 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:50246 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:50252 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:50256 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:42882 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     172.18.0.7:57562 - "POST /api/execution/start HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:42896 - "GET /health HTTP/1.1" 200 OK
+worker-1        | INFO:     127.0.0.1:42906 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43320 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:35074 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:35090 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:35096 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58974 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58982 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58990 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43134 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43148 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43152 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:43168 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:40962 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:40970 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:40984 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:40042 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:40058 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:40062 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58788 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58798 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58812 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58952 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58964 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58970 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58744 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58752 - "GET /health HTTP/1.1" 200 OK
+intelligence-1  | INFO:     172.18.0.9:41278 - "POST /api/intelligence/analyze HTTP/1.1" 200 OK
+intelligence-1  | INFO:     172.18.0.9:41288 - "POST /api/intelligence/critic HTTP/1.1" 200 OK
+intelligence-1  | INFO:     127.0.0.1:58764 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | The files belonging to this database system will be owned by user "postgres".
+postgres-1      | This user must also own the server process.
+postgres-1      |
+postgres-1      | The database cluster will be initialized with locale "en_US.utf8".
+postgres-1      | The default database encoding has accordingly been set to "UTF8".
+postgres-1      | The default text search configuration will be set to "english".
+postgres-1      |
+postgres-1      | Data page checksums are disabled.
+postgres-1      |
+postgres-1      | fixing permissions on existing directory /var/lib/postgresql/data ... ok
+postgres-1      | creating subdirectories ... ok
+postgres-1      | selecting dynamic shared memory implementation ... posix
+postgres-1      | selecting default max_connections ... 100
+postgres-1      | selecting default shared_buffers ... 128MB
+postgres-1      | selecting default time zone ... UTC
+postgres-1      | creating configuration files ... ok
+postgres-1      | running bootstrap script ... ok
+postgres-1      | sh: locale: not found
+postgres-1      | 2026-11-09 21:05:16.826 UTC [36] WARNING:  no usable system locales were found
+postgres-1      | performing post-bootstrap initialization ... ok
+postgres-1      | syncing data to disk ... ok
+postgres-1      |
+postgres-1      |
+postgres-1      | Success. You can now start the database server using:
+postgres-1      |
+postgres-1      |     pg_ctl -D /var/lib/postgresql/data -l logfile start
+postgres-1      |
+postgres-1      | initdb: warning: enabling "trust" authentication for local connections
+postgres-1      | initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+postgres-1      | waiting for server to start....2026-11-09 21:05:17.218 UTC [42] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1      | 2026-11-09 21:05:17.220 UTC [42] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1      | 2026-11-09 21:05:17.221 UTC [45] LOG:  database system was shut down at 2026-11-09 21:05:17 UTC
+postgres-1      | 2026-11-09 21:05:17.224 UTC [42] LOG:  database system is ready to accept connections
+postgres-1      |  done
+postgres-1      | server started
+postgres-1      | CREATE DATABASE
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/000_n8n.sql
+postgres-1      | CREATE DATABASE
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/001_schema.sql
+postgres-1      | CREATE SCHEMA
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/002_integrity.sql
+postgres-1      | CREATE FUNCTION
+postgres-1      | DROP TRIGGER
+postgres-1      | psql:/docker-entrypoint-initdb.d/002_integrity.sql:2: NOTICE:  trigger "trg_events_immutable" for relation "aiops.run_events" does not exist, skipping
+postgres-1      | psql:/docker-entrypoint-initdb.d/002_integrity.sql:3: NOTICE:  trigger "trg_evidence_immutable" for relation "aiops.evidence" does not exist, skipping
+postgres-1      | CREATE TRIGGER
+postgres-1      | DROP TRIGGER
+postgres-1      | CREATE TRIGGER
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/003_seed_twin.sql
+postgres-1      | INSERT 0 7
+postgres-1      | INSERT 0 6
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/004_operational_model.sql
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/005_seed_acme.sql
+postgres-1      | INSERT 0 18
+postgres-1      | INSERT 0 17
+postgres-1      | INSERT 0 4
+postgres-1      | INSERT 0 7
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/006_execution_receipts.sql
+postgres-1      | CREATE TABLE
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/007_runtime_hardening.sql
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE TABLE
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/008_event_idempotency.sql
+postgres-1      | ALTER TABLE
+postgres-1      | CREATE INDEX
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/009_ai_decision_ledger.sql
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+evidence-1      | INFO:     Started server process [1]
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE FUNCTION
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_analysis_records" for relation "aiops.analysis_records" does not exist, skipping
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_critique_records" for relation "aiops.critique_records" does not exist, skipping
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_policy_decisions" for relation "aiops.policy_decisions" does not exist, skipping
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_approval_records" for relation "aiops.approval_records" does not exist, skipping
+postgres-1      | DO
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_verification_records" for relation "aiops.verification_records" does not exist, skipping
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_reconciliation_records" for relation "aiops.reconciliation_records" does not exist, skipping
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:110: NOTICE:  trigger "trg_immutable_model_evaluation_runs" for relation "aiops.model_evaluation_runs" does not exist, skipping
+postgres-1      | CREATE FUNCTION
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:148: NOTICE:  trigger "trg_guard_gold_learning_case" for relation "aiops.learning_cases" does not exist, skipping
+postgres-1      | DROP TRIGGER
+postgres-1      | CREATE TRIGGER
+evidence-1      | INFO:     Waiting for application startup.
+postgres-1      | CREATE FUNCTION
+evidence-1      | INFO:     Application startup complete.
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:206: NOTICE:  trigger "trg_guard_action_proposal_transition" for relation "aiops.action_proposals" does not exist, skipping
+evidence-1      | INFO:     Uvicorn running on http://0.0.0.0:812 (Press CTRL+C to quit)
+evidence-1      | INFO:     127.0.0.1:54202 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:35738 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:35744 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:35756 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:53596 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:53610 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:53620 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:41260 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:41262 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:41270 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:45120 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:45122 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:45132 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:54810 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:54820 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:54832 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:54842 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:46098 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:46104 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:46106 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:56514 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     Started server process [1]
+evidence-1      | INFO:     127.0.0.1:56522 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     Waiting for application startup.
+evidence-1      | INFO:     127.0.0.1:56526 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     Application startup complete.
+evidence-1      | INFO:     127.0.0.1:49980 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     Uvicorn running on http://0.0.0.0:811 (Press CTRL+C to quit)
+evidence-1      | INFO:     127.0.0.1:49984 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:38274 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:50000 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:55824 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:49534 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:55832 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:49550 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:55834 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:49552 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:55026 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:49562 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:55038 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     127.0.0.1:45936 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:55054 - "GET /health HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34614 - "POST /api/evidence HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:36742 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:36748 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | DROP TRIGGER
+twin-1          | INFO:     127.0.0.1:36756 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | CREATE TRIGGER
+twin-1          | INFO:     127.0.0.1:47414 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | CREATE FUNCTION
+twin-1          | INFO:     127.0.0.1:47422 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:47436 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:32906 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:32908 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:32914 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:32918 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:56026 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:56030 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:56036 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:48538 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:48548 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:48562 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:48246 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:48256 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:48272 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:35408 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:35412 - "GET /health HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:35416 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:239: NOTICE:  trigger "trg_guard_action_proposal_insert" for relation "aiops.action_proposals" does not exist, skipping
+postgres-1      | DROP TRIGGER
+twin-1          | INFO:     127.0.0.1:56012 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | CREATE TRIGGER
+twin-1          | INFO:     127.0.0.1:56020 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | CREATE FUNCTION
+twin-1          | INFO:     172.18.0.9:48326 - "POST /api/twin/synthetic-event HTTP/1.1" 200 OK
+twin-1          | INFO:     172.18.0.9:48336 - "POST /api/twin/synthetic-event HTTP/1.1" 200 OK
+twin-1          | INFO:     127.0.0.1:56036 - "GET /health HTTP/1.1" 200 OK
+postgres-1      | DROP TRIGGER
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:275: NOTICE:  trigger "trg_guard_effect_receipt" for relation "aiops.effect_receipts" does not exist, skipping
+postgres-1      | CREATE TRIGGER
+postgres-1      | CREATE FUNCTION
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:290: NOTICE:  trigger "trg_guard_verification_record" for relation "aiops.verification_records" does not exist, skipping
+postgres-1      | DROP TRIGGER
+postgres-1      | CREATE TRIGGER
+postgres-1      | CREATE FUNCTION
+postgres-1      | DROP TRIGGER
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:304: NOTICE:  trigger "trg_guard_reconciliation_record" for relation "aiops.reconciliation_records" does not exist, skipping
+postgres-1      | CREATE TRIGGER
+postgres-1      | DROP TRIGGER
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:307: NOTICE:  trigger "trg_immutable_delete_action_proposals" for relation "aiops.action_proposals" does not exist, skipping
+postgres-1      | CREATE TRIGGER
+postgres-1      | DROP TRIGGER
+postgres-1      | psql:/docker-entrypoint-initdb.d/009_ai_decision_ledger.sql:309: NOTICE:  trigger "trg_immutable_delete_effect_receipts" for relation "aiops.effect_receipts" does not exist, skipping
+postgres-1      | CREATE TRIGGER
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/010_evidence_identity.sql
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/011_hitl_decision_outbox.sql
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | CREATE INDEX
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/090_critic_denial_outbox.sql
+postgres-1      | BEGIN
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | COMMIT
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/091_critic_denial_fencing.sql
+postgres-1      | BEGIN
+postgres-1      | ALTER TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | COMMIT
+postgres-1      |
+postgres-1      |
+postgres-1      | /usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/092_critic_denial_resume.sql
+postgres-1      | BEGIN
+postgres-1      | CREATE TABLE
+postgres-1      | CREATE INDEX
+postgres-1      | COMMIT
+postgres-1      |
+postgres-1      |
+postgres-1      | waiting for server to shut down....2026-11-09 21:05:17.633 UTC [42] LOG:  received fast shutdown request
+postgres-1      | 2026-11-09 21:05:17.633 UTC [42] LOG:  aborting any active transactions
+postgres-1      | 2026-11-09 21:05:17.634 UTC [42] LOG:  background worker "logical replication launcher" (PID 48) exited with exit code 1
+postgres-1      | 2026-11-09 21:05:17.636 UTC [43] LOG:  shutting down
+postgres-1      | 2026-11-09 21:05:17.636 UTC [43] LOG:  checkpoint starting: shutdown immediate
+postgres-1      | 2026-11-09 21:05:17.650 UTC [43] LOG:  checkpoint complete: wrote 1946 buffers (11.9%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.014 s, sync=0.001 s, total=0.015 s; sync files=777, longest=0.001 s, average=0.000 s; distance=9698 kB, estimate=9698 kB; lsn=0/1E6FC90, redo lsn=0/1E6FC90
+postgres-1      | 2026-11-09 21:05:17.654 UTC [42] LOG:  database system is shut down
+postgres-1      |  done
+postgres-1      | server stopped
+postgres-1      |
+postgres-1      | PostgreSQL init process complete; ready for start up.
+postgres-1      |
+postgres-1      | 2026-11-09 21:05:17.747 UTC [1] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+postgres-1      | 2026-11-09 21:05:17.748 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+postgres-1      | 2026-11-09 21:05:17.748 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+postgres-1      | 2026-11-09 21:05:17.749 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+postgres-1      | 2026-11-09 21:05:17.752 UTC [88] LOG:  database system was shut down at 2026-11-09 21:05:17 UTC
+core-1          | INFO:     Started server process [1]
+postgres-1      | 2026-11-09 21:05:17.772 UTC [1] LOG:  database system is ready to accept connections
+evidence-1      | INFO:     172.18.0.9:34616 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34624 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34640 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34652 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34658 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34668 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34672 - "GET /api/evidence?run_id=RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34684 - "GET /api/evidence?run_id=RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     Waiting for application startup.
+evidence-1      | INFO:     172.18.0.9:34694 - "POST /api/evidence HTTP/1.1" 200 OK
+core-1          | INFO:     Application startup complete.
+evidence-1      | INFO:     172.18.0.9:34706 - "GET /api/evidence?run_id=RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     Uvicorn running on http://0.0.0.0:810 (Press CTRL+C to quit)
+evidence-1      | INFO:     172.18.0.9:34716 - "POST /api/evidence HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:41316 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:41326 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:53276 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59314 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:51748 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59316 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:51762 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:51768 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59324 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:33156 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:39016 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:33158 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:39028 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:39034 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:33170 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:43986 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:38942 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:43998 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:38948 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:38954 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:44002 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:54812 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:38188 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:54814 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:54816 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:38190 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:38204 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:35370 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:56294 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:35386 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:35394 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:56302 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:56306 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:35398 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:47808 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:51118 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:51120 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:47824 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:47840 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:51132 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59522 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:36090 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59532 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:36096 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34724 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34730 - "POST /api/evidence HTTP/1.1" 200 OK
+evidence-1      | INFO:     172.18.0.9:34732 - "POST /api/evidence HTTP/1.1" 200 OK
+policy-1        | INFO:     Started server process [1]
+evidence-1      | INFO:     127.0.0.1:45940 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     Waiting for application startup.
+policy-1        | INFO:     Application startup complete.
+policy-1        | INFO:     Uvicorn running on http://0.0.0.0:813 (Press CTRL+C to quit)
+policy-1        | INFO:     127.0.0.1:55550 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:35294 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:35300 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:35316 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:40986 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:40990 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:41000 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:37812 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:37814 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:37822 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:41942 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:41952 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:41956 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:43396 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:43404 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:43416 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:43430 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:60376 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:60380 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:60386 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:44878 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:44888 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:44900 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:34426 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:34436 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:34438 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:40030 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:40042 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:40058 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:46212 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     127.0.0.1:46214 - "GET /health HTTP/1.1" 200 OK
+policy-1        | INFO:     172.18.0.9:52764 - "POST /api/policy/check HTTP/1.1" 200 OK
+temporal-1      | CLI 1.4.1 (Server 1.28.0, UI 2.39.0)
+temporal-1      |
+core-1          | INFO:     172.18.0.9:36104 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59540 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:55488 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:36272 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:55492 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:55496 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:36276 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:36280 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59906 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:49194 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59920 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:59934 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:49202 - "POST /api/denial-intents/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:49208 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:45476 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37052 - "POST /api/incidents HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37068 - "POST /api/runs HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37078 - "POST /api/runs/RUN-57EE6BF058F80903/execute HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37090 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59266 - "POST /api/runs/RUN-57EE6BF058F80903/command HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59280 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59284 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59298 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59302 - "POST /api/hitl/decision-outbox/claim HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59304 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59306 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59322 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59332 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59334 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59344 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59352 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59362 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59366 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59372 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59374 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59380 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59382 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     127.0.0.1:45492 - "GET /health HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59388 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59390 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59396 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59402 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59408 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59420 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59422 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59436 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59438 - "GET /api/scenarios/SCN-GOLDEN-PAYMENT-P1 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59440 - "POST /api/runs/RUN-57EE6BF058F80903/analysis-record HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59442 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59452 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59464 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59466 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59470 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59472 - "GET /api/scenarios/SCN-GOLDEN-PAYMENT-P1 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59474 - "POST /api/runs/RUN-57EE6BF058F80903/critique-record HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37094 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59488 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59498 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59502 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59506 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59518 - "POST /api/runs/RUN-57EE6BF058F80903/policy-record HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59524 - "POST /api/runs/RUN-57EE6BF058F80903/gates HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59526 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59532 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59540 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59546 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59562 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59564 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59566 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59580 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59588 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59594 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59598 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+temporal-1      | Server:  0.0.0.0:7233
+core-1          | INFO:     172.18.0.9:59614 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59624 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59630 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59636 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59640 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59650 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59664 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59672 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59680 - "POST /api/runs/RUN-57EE6BF058F80903/events HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59696 - "POST /api/runs/RUN-57EE6BF058F80903/checkpoint HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59712 - "POST /api/runs/RUN-57EE6BF058F80903/demo-artifacts HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.9:59726 - "POST /api/runs/RUN-57EE6BF058F80903/command HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37108 - "GET /api/runs/RUN-57EE6BF058F80903 HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37114 - "GET /api/runs/RUN-57EE6BF058F80903/ai-ledger HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37124 - "GET /api/hitl/decision-outbox/status HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37132 - "POST /api/proposals/nonexistent/approval HTTP/1.1" 503 Service Unavailable
+core-1          | INFO:     172.18.0.7:37146 - "POST /api/runs/RUN-57EE6BF058F80903/execute HTTP/1.1" 200 OK
+temporal-1      | Metrics: http://0.0.0.0:40023/metrics
+core-1          | INFO:     172.18.0.7:37156 - "POST /api/runs/RUN-57EE6BF058F80903/execute HTTP/1.1" 200 OK
+core-1          | INFO:     172.18.0.7:37168 - "POST /api/runs/RUN-57EE6BF058F80903/execute HTTP/1.1" 200 OK

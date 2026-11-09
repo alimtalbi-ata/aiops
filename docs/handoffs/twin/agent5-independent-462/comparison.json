@@ -1,0 +1,117 @@
+{
+  "run_id": {
+    "published": "RUN-03A3F5BF7578B5ED",
+    "independent": "RUN-57EE6BF058F80903",
+    "equal": false
+  },
+  "incident_id": {
+    "published": "INC-BENCH462-529D9ECA1A67",
+    "independent": "INC-BENCH462-B387913B1D81",
+    "equal": false
+  },
+  "temporal_run_id": {
+    "published": "01a1c21b-b8f1-7a26-bed0-4ddd9814e1b8",
+    "independent": "01a1c222-b09b-7b88-8aa5-c222f14551df",
+    "equal": false
+  },
+  "source_commit": {
+    "published": "a4ea1970284da1f1199d10a43ed7f7bc3a4ded09",
+    "independent": "3f2e361c1997ff14a490bb240eea902820a1302f",
+    "equal": false
+  },
+  "image_id": {
+    "published": "sha256:4d4720c1caa132ed62c98dc9133dfd8ecd6bc1abc6d6ebe1ae4e9bcfa74f1818",
+    "independent": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+    "equal": false
+  },
+  "image_source_revision": {
+    "published": "8fced9821c0cd2419105cd3209c058862e400177",
+    "independent": "3f2e361c1997ff14a490bb240eea902820a1302f",
+    "equal": false
+  },
+  "application_manifest_sha256": {
+    "published": "49b98b4840c2db6a74318a773e1fbffe6062345507dc7f38b8f602c37c0bd8a3",
+    "independent": "49b98b4840c2db6a74318a773e1fbffe6062345507dc7f38b8f602c37c0bd8a3",
+    "equal": true
+  },
+  "stability_observed_seconds": {
+    "published": 98,
+    "independent": 95,
+    "equal": false
+  },
+  "core_status": {
+    "published": "RESOLVED",
+    "independent": "RESOLVED",
+    "equal": true
+  },
+  "temporal_status": {
+    "published": "COMPLETED",
+    "independent": "COMPLETED",
+    "equal": true
+  },
+  "history_events": {
+    "published": 95,
+    "independent": 95,
+    "equal": true
+  },
+  "sdk_replay": {
+    "published": "PASS",
+    "independent": "PASS",
+    "equal": true
+  },
+  "execution_receipt_rows": {
+    "published": 1,
+    "independent": 1,
+    "equal": true
+  },
+  "analysis_records": {
+    "published": 1,
+    "independent": 1,
+    "equal": true
+  },
+  "critique_records": {
+    "published": 1,
+    "independent": 1,
+    "equal": true
+  },
+  "policy_records": {
+    "published": 1,
+    "independent": 1,
+    "equal": true
+  },
+  "native_approval_rows": {
+    "published": 0,
+    "independent": 0,
+    "equal": true
+  },
+  "hitl_outbox_rows": {
+    "published": 0,
+    "independent": 0,
+    "equal": true
+  },
+  "worker_dispatches_before_retry": {
+    "published": 1,
+    "independent": 1,
+    "equal": true
+  },
+  "worker_dispatches_after_retry": {
+    "published": 1,
+    "independent": 1,
+    "equal": true
+  },
+  "temporal_dev_image": {
+    "published": "temporalio/temporal:1.4.1@sha256:9844298258519ebece82b3253f1ee1fc4eb8d87b7abcc264cfb676be342c74a5",
+    "independent": "temporalio/temporal:1.4.1@sha256:9844298258519ebece82b3253f1ee1fc4eb8d87b7abcc264cfb676be342c74a5",
+    "equal": true
+  },
+  "bench_result": {
+    "published": "PASS_ISOLATED_DEMO_ONLY",
+    "independent": "PASS_ISOLATED_DEMO_ONLY",
+    "equal": true
+  },
+  "real_e2e": {
+    "published": "HOLD",
+    "independent": "HOLD",
+    "equal": true
+  }
+}

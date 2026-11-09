@@ -1,0 +1,14 @@
+test_core_approval_uses_verified_oidc_subject_and_role_not_browser_actor_fields (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_core_approval_uses_verified_oidc_subject_and_role_not_browser_actor_fields) ... ok
+test_live_hitl_requires_persisted_proposal_and_human_decision (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_live_hitl_requires_persisted_proposal_and_human_decision) ... ok
+test_missing_persisted_proposal_blocks_before_remediation (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_missing_persisted_proposal_blocks_before_remediation) ... ok
+test_outbox_claim_uses_skip_locked_and_ack_requires_active_lease_token (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_outbox_claim_uses_skip_locked_and_ack_requires_active_lease_token) ... ok
+test_proposal_builder_requires_clean_critic_and_explicit_action_contract (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_proposal_builder_requires_clean_critic_and_explicit_action_contract) ... ok
+test_synthetic_modes_skip_hitl_without_creating_approval_or_execution_authority (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_synthetic_modes_skip_hitl_without_creating_approval_or_execution_authority) ... ok
+test_terminal_approval_writes_transactional_outbox_in_same_core_transaction (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_terminal_approval_writes_transactional_outbox_in_same_core_transaction) ... ok
+test_workflow_has_signal_and_durable_wait (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_workflow_has_signal_and_durable_wait) ... ok
+test_workflow_never_turns_approval_into_execution_authority (test_hitl_workflow_contract.TemporalHitlWorkflowContractTests.test_workflow_never_turns_approval_into_execution_authority) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.004s
+
+OK

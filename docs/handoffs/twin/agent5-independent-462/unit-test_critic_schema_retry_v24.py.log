@@ -1,0 +1,14 @@
+test_extra_field_repaired_without_dropping_objections (test_critic_schema_retry_v24.CriticRetryTests.test_extra_field_repaired_without_dropping_objections) ... critic_schema_retry: [{'loc': ['claim_checks', 0, 'assumptions'], 'type': 'extra_forbidden'}]
+ok
+test_repair_cannot_delete_unsafe_findings (test_critic_schema_retry_v24.CriticRetryTests.test_repair_cannot_delete_unsafe_findings) ... critic_schema_retry: [{'loc': ['claim_checks', 0, 'assumptions'], 'type': 'extra_forbidden'}]
+model call or contract validation failed: ValueError
+ok
+test_repair_cannot_delete_unsupported_claim (test_critic_schema_retry_v24.CriticRetryTests.test_repair_cannot_delete_unsupported_claim) ... critic_schema_retry: [{'loc': ['claim_checks', 0, 'assumptions'], 'type': 'extra_forbidden'}]
+model call or contract validation failed: ValueError
+ok
+test_valid_critic_no_retry (test_critic_schema_retry_v24.CriticRetryTests.test_valid_critic_no_retry) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.011s
+
+OK

@@ -1,0 +1,124 @@
+{
+  "project": "aiops2-agent7-462-dad67c67",
+  "utc": "2026-11-09T21:17:51.777712+00:00",
+  "containers": [
+    {
+      "name": "/aiops2-agent7-462-dad67c67-core-1",
+      "id": "771452963aedd483942d5f003d2f4dfddf1264c59117ee3b60659b045ff9a7e2",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-evidence-1",
+      "id": "86875c987a48e69eac319597372e93d0adc3c4c36fe5e1a5910d538e3fd8c858",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-intelligence-1",
+      "id": "bba113151e5a0e84ae7a38133c7d62e9e0626f4eba2ba841b732581dc78b5c28",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-policy-1",
+      "id": "2e2c15cb7136d3cbf36e2801b0b01053fb2e4895a89988a5ba85b994f9b93d6f",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-postgres-1",
+      "id": "9d10aeae2a0456c6cd68897cae8749241a4829ff2c27a779a2f26b240f4dc25a",
+      "image_id": "sha256:4278d7b1e3deb3193ddc803158f6532963f059fc25a2eefaee4b5a9e71741873",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-provider-1",
+      "id": "48a753707e033166a48097d63b7e615cfd94b4797dc573d738fa08616923e84f",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": null,
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-temporal-1",
+      "id": "906a0a75ea2662361ab168a48737e61b4691df71fb5575605e396b9b532fc6fb",
+      "image_id": "sha256:d8cb51d50614bae68128056d67a59876fd89ea8e59f62cc579c5c02f7ae5dafa",
+      "state": "running",
+      "health": null,
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-twin-1",
+      "id": "372e720fe4dfb4a7cd794e399460f90e72237c8ec1b4f8e1ebb30092fb219f55",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    },
+    {
+      "name": "/aiops2-agent7-462-dad67c67-worker-1",
+      "id": "dc2b2567fe09eb4916520df604e03e06df670887a6e2fc4662db9bfafe65c65d",
+      "image_id": "sha256:845e8789c87741b28a98e18a27d94a65f6a67f5fafcd84a5a8b71bfd65b5a746",
+      "state": "running",
+      "health": "healthy",
+      "restarts": 0,
+      "port_bindings": {},
+      "networks": [
+        "aiops2-agent7-462-dad67c67_default"
+      ]
+    }
+  ],
+  "all_nine_running": true,
+  "zero_restarts": true,
+  "no_published_ports": true,
+  "networks": [
+    {
+      "name": "aiops2-agent7-462-dad67c67_default",
+      "internal": true,
+      "id": "6ed6550775727bd4cc30bae18a2865e26a911c5f8e55a368a6188ea228e69e81"
+    }
+  ]
+}
