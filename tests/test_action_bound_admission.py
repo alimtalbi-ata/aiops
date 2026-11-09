@@ -1,0 +1,65 @@
+"""Offline contract tests: no network, GLPI, PostgreSQL, or Temporal writes."""
+import copy
+import unittest
+
+from app.core.action_bound_admission import admit_resume
+
+
+def fixture(mode="DEMO"):
+    i = dict(tenant_id="t1", incident_id="i1", run_id="r1",
+             action_id="a1", action_digest="sha256:abc",
+             fencing_token="f1", fencing_epoch=2, mode=mode,
+             live_preflight_verified=(mode == "LIVE"))
+    b = {k: i[k] for k in ("tenant_id", "run_id", "action_id", "action_digest")}
+    return (i, dict(b, decision="ALLOW", mode=mode),
+            dict(b, decision="APPROVED", mode=mode),
+            dict(b, fencing_token="f1", fencing_epoch=2, active=True),
+            dict(b, fencing_token="f1", fencing_epoch=2,
+                 state="WAITING_APPROVAL", resume_requested=False))
+
+
+class TestActionBoundAdmission(unittest.TestCase):
+    def test_demo_and_nonmutation(self):
+        args = fixture()
+        before = copy.deepcopy(args)
+        self.assertEqual(admit_resume(*args).state, "ELIGIBLE")
+        self.assertEqual(args, before)
+
+    def test_live_preflight_unknown(self):
+        args = fixture("LIVE")
+        args[0]["live_preflight_verified"] = None
+        self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+    def test_every_authority_bound_to_action(self):
+        for pos in (1, 2, 3, 4):
+            for key in ("tenant_id", "run_id", "action_id", "action_digest"):
+                with self.subTest(pos=pos, key=key):
+                    args = fixture()
+                    args[pos][key] = "foreign"
+                    self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+    def test_policy_denial(self):
+        for decision in ("DENY", None, "UNKNOWN"):
+            args = fixture()
+            args[1]["decision"] = decision
+            self.assertEqual(admit_resume(*args).state, "DENIED")
+
+    def test_fencing_and_temporal_replay(self):
+        for pos, key, value in ((3, "fencing_epoch", 1),
+                                (3, "active", False),
+                                (4, "fencing_token", "stale"),
+                                (4, "resume_requested", True),
+                                (4, "state", "RUNNING")):
+            with self.subTest(pos=pos, key=key):
+                args = fixture()
+                args[pos][key] = value
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+    def test_bool_epoch_rejected(self):
+        args = fixture()
+        args[0]["fencing_epoch"] = True
+        self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+
+if __name__ == "__main__":
+    unittest.main()
