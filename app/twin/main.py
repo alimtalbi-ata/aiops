@@ -50,6 +50,8 @@ def at(known_at:str):
     # belong to an isolated qualification plane, not the canonical at-time view.
     import json
     def canonical(row):
+        # Older adapters may serialize the marker as the string 'true'.
+        # Treat both representations as qualification-only evidence.
         value = row[3]
         if isinstance(value, dict):
             payload = value
@@ -60,7 +62,7 @@ def at(known_at:str):
                 payload = None
         else:
             payload = None
-        return not (isinstance(payload, dict) and payload.get('synthetic') is True)
+        return not (isinstance(payload, dict) and (payload.get('synthetic') is True or payload.get('synthetic') == 'true'))
     k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']
     return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r if canonical(x)]}
 import os
