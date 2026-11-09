@@ -20,14 +20,23 @@ def partition_receipts(receipts, expected=(LAB, SAN)):
     """
     if not isinstance(receipts, list):
         raise ValueError("invalid receipt stream")
-    keys = [tuple(item[field] for field in IDENTITY) for item in expected]
+    if not isinstance(expected, (tuple, list)) or not expected:
+        raise ValueError("invalid expected identities")
+    def identity(item):
+        if not isinstance(item, dict):
+            raise ValueError("malformed identity")
+        values = tuple(item.get(field) for field in IDENTITY)
+        if any(not isinstance(value, str) or not value.strip() for value in values):
+            raise ValueError("malformed identity")
+        return values
+    keys = [identity(item) for item in expected]
     if len(set(keys)) != len(keys):
         raise ValueError("ambiguous expected identities")
     groups = {key: [] for key in keys}
     for receipt in receipts:
         if not isinstance(receipt, dict):
             raise ValueError("malformed receipt")
-        key = tuple(receipt.get(field) for field in IDENTITY)
+        key = identity(receipt)
         if key not in groups:
             raise ValueError("unknown or cross-graph identity")
         stage = receipt.get("stage")
@@ -82,6 +91,19 @@ class StreamPartitionContract(unittest.TestCase):
                 poisoned[0]["receipt_id"] = receipt_id
                 with self.assertRaisesRegex(ValueError, "foreign stage receipt"):
                     partition_receipts(poisoned)
+
+    def test_reject_malformed_identity_without_typeerror(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for field, value in (("tenant_id", []), ("graph", {}), ("namespace", None), ("run_id", ""), ("tenant_id", 42)):
+            with self.subTest(field=field, value=value):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0][field] = value
+                with self.assertRaisesRegex(ValueError, "malformed identity"):
+                    partition_receipts(poisoned)
+        for invalid in ([], [dict(LAB, run_id=[])], [dict(LAB, graph="")]):
+            with self.subTest(expected=invalid):
+                with self.assertRaises(ValueError):
+                    partition_receipts([], expected=invalid)
 
     def test_reject_ambiguous_expected_identity(self):
         with self.assertRaisesRegex(ValueError, "ambiguous"):
