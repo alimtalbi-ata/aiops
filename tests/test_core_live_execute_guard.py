@@ -111,6 +111,25 @@ class LiveExecutionGateTests(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 409)
         requests.post.assert_not_called()
 
+    def test_worker_receipt_identity_must_match_run_before_persistence(self):
+        for response in (
+            None, [], "ok", {},
+            {"run_id": "RUN-OTHER", "workflow_id": "RUN-1"},
+            {"run_id": "RUN-1", "workflow_id": "RUN-OTHER"},
+            {"run_id": "RUN-1", "workflow_id": None},
+            {"run_id": "RUN-1", "workflow_id": ""},
+        ):
+            with self.subTest(response=response):
+                connection = FakeDB("DEMO", "CREATED")
+                requests = Mock()
+                requests.post.return_value.json.return_value = response
+                with self.assertRaises(HTTPException) as caught:
+                    load_execute(lambda: connection, requests)("RUN-1", "Bearer offline-test")
+                self.assertEqual(caught.exception.status_code, 502)
+                self.assertEqual(len(connection.queries), 2)
+                self.assertTrue(all(q.lstrip().lower().startswith("select") for q in connection.queries))
+                requests.post.assert_called_once()
+
     def test_non_executable_live_state_is_not_dispatched(self):
         connection = FakeDB("LIVE", "RESOLVED")
         requests = Mock()

@@ -155,6 +155,11 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
     try:
         r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
+        # Worker uses the canonical run ID as the Temporal workflow ID.
+        # Never persist or acknowledge a receipt for another Run/workflow.
+        if (not isinstance(data,dict) or data.get('run_id') != rid
+                or data.get('workflow_id') != rid):
+            raise HTTPException(502,'execution service returned unverified workflow identity')
         with db() as c:
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
             winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]
