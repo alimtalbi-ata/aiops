@@ -32,7 +32,20 @@ class LiveQualificationTests(unittest.TestCase):
         l=linkage()
         l["checks"].update({"temporal_worker_execution":"PASS","hitl_action_binding":"PASS",
                             "glpi_core_link":"PASS","itsm_readback":"PASS"})
-        self.assertEqual(m.summarize(l,platform(),{},"2026-11-08T15:00Z",portal())["verdict"],"PASS")
+        self.assertEqual(m.summarize(l,platform(),{"platform":{"exit":0},"linkage":{"exit":2}},"2026-11-08T15:00Z",portal())["verdict"],"PASS")
+    def test_pass_artifacts_cannot_hide_failed_or_missing_probe_execution(self):
+        l=linkage()
+        l["checks"].update({"glpi_core_link":"PASS","itsm_readback":"PASS"})
+        for bad in (None, {}, {"exit":127}, {"exit":124}, {"exit":False},
+                    {"exit":0,"error":"SCRIPT_NOT_INSTALLED"}):
+            for name in ("platform", "linkage"):
+                with self.subTest(name=name, receipt=bad):
+                    execution={"platform":{"exit":0},"linkage":{"exit":0}}
+                    execution[name]=bad
+                    result=m.summarize(l,platform(),execution,"2026-11-08T15:00Z",portal())
+                    self.assertEqual(result["verdict"],"HOLD")
+                    self.assertIn(name+"_probe_execution",result["blocking"])
+
     def test_failed_platform_gate_fails(self):
         p=platform()
         p["verdict"]="HOLD"

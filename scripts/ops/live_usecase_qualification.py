@@ -52,7 +52,21 @@ def summarize(linkage, platform, execution, stamp, portal=None):
     def check(name, condition, detail, action):
         return {"name":name,"status":"PASS" if condition else "HOLD",
                 "evidence":detail,"next_action":None if condition else action}
-    items=[
+    # A JSON artifact alone cannot prove that this cycle ran its probes.
+    # Exit 2 is a valid HOLD receipt; missing/failed execution stays unverified.
+    execution = execution if isinstance(execution, dict) else {}
+    execution_checks = []
+    for name in ("platform", "linkage"):
+        receipt = execution.get(name)
+        valid = (isinstance(receipt, dict)
+                 and type(receipt.get("exit")) is int
+                 and receipt["exit"] in (0, 2)
+                 and not receipt.get("error"))
+        execution_checks.append(check(
+            name + "_probe_execution", valid,
+            {"exit": receipt.get("exit") if isinstance(receipt, dict) else None},
+            "run the installed " + name + " probe and retain its exit receipt"))
+    items=execution_checks + [
         check("core_run_consistency",checks.get("core_run")=="PASS" and checks.get("core_api")=="PASS",
               {"db":checks.get("core_run"),"api":checks.get("core_api")},
               "repair Core run persistence or API parsing"),
