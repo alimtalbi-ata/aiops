@@ -283,7 +283,12 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
             raise HTTPException(502,'execution service returned unverified workflow identity')
         with db() as c:
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
-            winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]
+            winner_row=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
+            # A concurrent writer may win ON CONFLICT. Never acknowledge a
+            # foreign or missing durable workflow identity as successful.
+            if not winner_row or winner_row[0] != rid:
+                raise HTTPException(409,'execution receipt winner has unverified workflow identity')
+            winner=winner_row[0]
         data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
         return data
     except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
