@@ -21,6 +21,13 @@ def admit_resume(intent: Mapping, policy: Mapping, approval: Mapping,
     if mode not in ("DEMO", "LIVE"):
         return Admission("NEEDS_HUMAN", "mode_unknown")
     keys = ("tenant_id", "incident_id", "run_id", "action_id", "action_digest")
+    # A Temporal resume must target the exact durable workflow, not merely a Run.
+    workflow_id = intent.get("workflow_id")
+    if type(workflow_id) is not str or not workflow_id.strip():
+        return Admission("NEEDS_HUMAN", "workflow_identity_unknown")
+    if (type(temporal.get("workflow_id")) is not str
+            or temporal["workflow_id"] != workflow_id):
+        return Admission("NEEDS_HUMAN", "temporal_workflow_mismatch")
     if any(type(intent.get(k)) is not str or not intent[k].strip()
            for k in (*keys, "incident_id", "fencing_token")):
         return Admission("NEEDS_HUMAN", "identity_unknown")
