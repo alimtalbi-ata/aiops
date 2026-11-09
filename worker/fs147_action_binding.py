@@ -38,7 +38,7 @@ def check_action_binding(intent, approval, *, now):
         return deny("LIVE_OR_REFUSED")
     # A Policy approval explicitly scoped to LIVE must never be reused for a
     # dry-run intent, even when the other action identifiers match.
-    if approval.get("dry_run") is False or approval.get("mode") in ("LIVE", "REMEDIATE"):
+    if ("dry_run" in approval and approval["dry_run"] is not True) or ("mode" in approval and approval["mode"] not in ("DRY_RUN", "OBSERVE")):
         return deny("APPROVAL_MODE_MISMATCH")
     if approval.get("authenticated") is not True:
         return deny("AUTHENTICATION_UNVERIFIED")
