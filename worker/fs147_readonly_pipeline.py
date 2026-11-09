@@ -95,7 +95,27 @@ def execute(request: FS147Request, *, stop_auto: bool,
         # an authenticated bridge response.
         observed_at = datetime.fromisoformat(
             observation["collected_at"].replace("Z", "+00:00"))
-        age = now() - observed_at
+        # Host clock is a security input: naive/non-datetime clocks must not
+        # turn into a generic service error or make freshness unverifiable.
+        last_clock = None
+
+        def observation_age():
+            nonlocal last_clock
+            current = now()
+            if (not isinstance(current, datetime) or current.tzinfo is None
+                    or current.utcoffset() is None):
+                return None
+            current_utc = current.astimezone(timezone.utc)
+            # A wall-clock rollback can make an expired observation appear fresh.
+            # Fail closed even when the rollback remains within the 30s skew budget.
+            if last_clock is not None and current_utc < last_clock:
+                return None
+            last_clock = current_utc
+            return current_utc - observed_at.astimezone(timezone.utc)
+
+        age = observation_age()
+        if age is None:
+            return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
         steps.append("OBSERVE")
@@ -112,7 +132,9 @@ def execute(request: FS147Request, *, stop_auto: bool,
         steps.append("ANALYST")
         # An expensive Analyst call may exhaust the observation freshness budget.
         # Do not invoke Critic on expired evidence, even if Policy would later deny.
-        age_after_analyst = now() - observed_at
+        age_after_analyst = observation_age()
+        if age_after_analyst is None:
+            return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_analyst <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
         critique = critic(request, observation, analysis)
@@ -123,7 +145,9 @@ def execute(request: FS147Request, *, stop_auto: bool,
         steps.append("CRITIC")
         # The observation can expire while Analyst/Critic are running. Never
         # authorize even a simulation from evidence that is stale at Policy time.
-        age_at_policy = now() - observed_at
+        age_at_policy = observation_age()
+        if age_at_policy is None:
+            return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_at_policy <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
         decision = policy(request, observation, analysis, critique)
@@ -134,7 +158,9 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.
-        age_after_policy = now() - observed_at
+        age_after_policy = observation_age()
+        if age_after_policy is None:
+            return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_policy <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
         return {"status": "NO_EFFECT", "effect": "NO_EFFECT", "resolved": False,
