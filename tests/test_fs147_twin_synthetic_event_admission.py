@@ -76,7 +76,7 @@ class SyntheticEventAdmission(unittest.TestCase):
         self.assertEqual(db.calls, 0)
 
     def test_ambiguous_run_and_target_ids_fail_before_database_access(self):
-        for run_id in ("", " ", " RUN-FIXTURE", "RUN-FIXTURE ", "RUN\\nFS", "RUN\\x7fFS"):
+        for run_id in ("", " ", " RUN-FIXTURE", "RUN-FIXTURE ", "RUN\nFS", "RUN\x7fFS"):
             with self.subTest(run_id=repr(run_id)):
                 db = DB()
                 with self.assertRaises(HTTPException) as caught:
@@ -85,7 +85,7 @@ class SyntheticEventAdmission(unittest.TestCase):
                                    authorization="Bearer fixture-secret")
                 self.assertEqual(caught.exception.status_code, 422)
                 self.assertEqual(db.calls, 0)
-        for node in ("", " ", " SAN-ARRAY", "FS-FIXTURE-NODE ", "FS\\nSAN", "FS\\x7fSAN"):
+        for node in ("", " ", " SAN-ARRAY", "FS-FIXTURE-NODE ", "FS\nSAN", "FS\x7fSAN"):
             with self.subTest(node=repr(node)):
                 db = DB()
                 with self.assertRaises(HTTPException) as caught:
@@ -114,7 +114,10 @@ class SyntheticEventAdmission(unittest.TestCase):
             with self.subTest(action=action):
                 db = DB(node_exists=False)
                 with self.assertRaises(HTTPException) as caught:
-                    load_route(db)(Event(action, 'SAN-NOT-IN-TOPOLOGY'), authorization='Bearer fixture-secret')
+                    load_route(db)(Event(action, 'SAN-NOT-IN-TOPOLOGY',
+                                         payload={'metric': 'latency', 'value': 1} if action == 'OBSERVE'
+                                         else {'state': 'DEGRADED'}),
+                                   authorization='Bearer fixture-secret')
                 self.assertEqual(caught.exception.status_code, 404)
                 self.assertEqual(db.calls, 1)
                 self.assertEqual(len(db.statements), 1)
