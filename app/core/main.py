@@ -138,6 +138,10 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         # is not an authorization to start a Worker workflow.
         if row[1] == 'LIVE':
             raise HTTPException(403,'LIVE execution requires verified action-bound Policy/HITL admission')
+        # Database state is not guaranteed to have passed RunIn validation.
+        # Never forward unknown/NULL/corrupt modes to the Worker as synthetic.
+        if row[1] not in ('DEMO', 'REPLAY', 'STORY'):
+            raise HTTPException(422,'run execution mode unknown or unsupported')
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
         if existing:return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
