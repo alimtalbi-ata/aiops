@@ -5,6 +5,8 @@ ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 PROD=aiops2-rebuild-portal
 EXPECTED_PROD=aiops2-portal:fs1073-csp-candidate
 PROD_BEFORE=""
+PROD_ID_BEFORE=""
+PROD_IMAGE_ID_BEFORE=""
 
 # Inspect only: this gate must never deploy or modify the production container.
 check_production_on_exit() {
@@ -17,6 +19,15 @@ check_production_on_exit() {
       exit 4
     fi
     echo "FS1113_PRODUCTION_IMAGE_AFTER=$prod_after"
+    local prod_id_after prod_image_id_after
+    if ! prod_id_after="$(docker inspect "$PROD" --format '{{.Id}}')" || ! prod_image_id_after="$(docker inspect "$PROD" --format '{{.Image}}')"; then
+      echo "FS1113_ERROR=PRODUCTION_IDENTITY_POSTCHECK_UNAVAILABLE"
+      exit 4
+    fi
+    if [[ "$prod_id_after" != "$PROD_ID_BEFORE" || "$prod_image_id_after" != "$PROD_IMAGE_ID_BEFORE" ]]; then
+      echo "FS1113_ERROR=PRODUCTION_CONTAINER_OR_IMAGE_ID_CHANGED"
+      exit 3
+    fi
     if [[ "$prod_after" != "$PROD_BEFORE" ]]; then
       echo "FS1113_ERROR=PRODUCTION_IMAGE_CHANGED"
       exit 3
@@ -36,6 +47,8 @@ trap check_production_on_exit EXIT
 echo "FS1113_MODE=NONPRODUCTION_HISTORY_RACE_FIX_BUILD_AND_FULL_BROWSER_GATE"
 PROD_BEFORE="$(docker inspect "$PROD" --format '{{.Config.Image}}')"
 echo "FS1113_PRODUCTION_IMAGE_BEFORE=$PROD_BEFORE"
+PROD_ID_BEFORE="$(docker inspect "$PROD" --format '{{.Id}}')"
+PROD_IMAGE_ID_BEFORE="$(docker inspect "$PROD" --format '{{.Image}}')"
 [[ "$PROD_BEFORE" == "$EXPECTED_PROD" ]] || {
   echo "FS1113_ERROR=UNEXPECTED_PRODUCTION_IMAGE"
   exit 2
