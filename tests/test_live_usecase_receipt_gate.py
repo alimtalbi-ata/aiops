@@ -113,6 +113,22 @@ class ReceiptTests(unittest.TestCase):
                 self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
                 self.assertEqual(r, before)
 
+    def test_probe_attestation_cannot_belong_to_another_run(self):
+        for probe_name in ("platform", "linkage"):
+            for invalid in ("RUN-OTHER", None, ["RUN-TEST-001"]):
+                with self.subTest(probe=probe_name, run_id=invalid):
+                    r = receipt()
+                    r["probe_execution"][probe_name]["run_id"] = invalid
+                    before = deepcopy(r)
+                    self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                    self.assertEqual(r, before)
+
+    def test_matching_probe_run_attestation_is_claim_only(self):
+        r = receipt()
+        for probe in r["probe_execution"].values():
+            probe["run_id"] = r["run_id"]
+        self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
     def test_blocked_producer_evidence_without_run_binding_is_unverified(self):
         # The current producer's blocked-run evidence omits run_id.
         r = receipt()
