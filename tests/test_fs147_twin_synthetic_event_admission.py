@@ -97,6 +97,18 @@ class SyntheticEventAdmission(unittest.TestCase):
                 self.assertEqual(len(db.statements), 1)
                 self.assertTrue(db.statements[0][0].startswith('select 1'))
 
+    def test_observation_rejects_nonfinite_or_nonnumeric_value_without_db(self):
+        import math
+        for value in (True, False, "91", [], {}, float("nan"), float("inf"), -float("inf")):
+            with self.subTest(value=repr(value)):
+                db = DB()
+                with self.assertRaises(HTTPException) as caught:
+                    load_route(db)(Event("OBSERVE", "FS-FIXTURE-NODE",
+                                         payload={"metric": "fs_used", "value": value}),
+                                   authorization="Bearer fixture-secret")
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertEqual(db.calls, 0)
+
     def test_missing_observation_evidence_fails_before_db(self):
         for payload in ({}, {"metric": "fs_used"}, {"metric": "", "value": 91},
                         {"metric": "  ", "value": 91},
