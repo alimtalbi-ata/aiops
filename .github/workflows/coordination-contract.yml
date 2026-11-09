@@ -28,6 +28,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_codex_roundtrip.py -v
       - name: Run one-shot dispatch contract tests
         run: python -m unittest discover -s tests -p test_codex_dispatch_once.py -v
+      - name: Validate opt-in cron installer syntax
+        run: bash -n ops/coordination/install_codex_poll_cron.sh
       - name: Run Codex queue polling tests
         run: python -m unittest discover -s tests -p test_poll_codex_commands.py -v
       - name: Run dispatch discovery probe tests
