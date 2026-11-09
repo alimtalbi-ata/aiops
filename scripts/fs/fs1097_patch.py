@@ -74,7 +74,8 @@ async function loadHistory(){
   // Deduplicate only labelled Prometheus targets; preserve unknown identities.
   const seenTargets=new Set();
   const series=data.series.filter(s=>{
-   // A series with only null/NaN samples must not inflate the legend or KPI.\n   if(!s||!Array.isArray(s.points)||!s.points.some(historyValidPoint))return false;
+   // A series with only null/NaN samples must not inflate the legend or KPI.
+   if(!s||!Array.isArray(s.points)||!s.points.some(historyValidPoint))return false;
    if(!s.job&&!s.instance)return true;
    const key=JSON.stringify([s.job??null,s.instance??null]);
    if(seenTargets.has(key))return false;
