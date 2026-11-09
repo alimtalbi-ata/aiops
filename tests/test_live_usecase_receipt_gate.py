@@ -87,6 +87,26 @@ class ReceiptTests(unittest.TestCase):
         r["probe_execution"]["linkage"]["exit"] = 127
         self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
 
+    def test_successful_probe_with_error_is_unverified(self):
+        # A producer must not report both success and an execution failure.
+        for name in ("platform", "linkage"):
+            with self.subTest(name=name):
+                r = receipt()
+                r["probe_execution"][name]["error"] = "TIMEOUT"
+                before = deepcopy(r)
+                self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                self.assertEqual(r, before)
+
+    def test_blocked_producer_evidence_without_run_binding_is_unverified(self):
+        # The current producer's blocked-run evidence omits run_id.
+        r = receipt()
+        for item in r["checks"]:
+            if item["name"] == "policy_denial_safety":
+                item["evidence"] = {"run_status": "BLOCKED", "critic_policy_outbox": "PASS"}
+            elif item["name"] in ("temporal_worker_history", "hitl_action_binding"):
+                item["status"] = "NOT_APPLICABLE"
+        self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+
     def test_hold_not_success(self):
         r = receipt()
         r["checks"][0]["status"] = "HOLD"
