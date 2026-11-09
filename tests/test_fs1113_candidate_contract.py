@@ -32,6 +32,16 @@ class FS1113CandidateContract(unittest.TestCase):
         self.assertIn('[[ "$prod_after" != "$PROD_BEFORE" ]]', source)
         self.assertIn("trap check_production_on_exit EXIT", source)
 
+    def test_production_identity_is_guarded_not_only_tag(self):
+        source = GATE.read_text(encoding="utf-8")
+        self.assertIn("PROD_ID_BEFORE=", source)
+        self.assertIn("PROD_IMAGE_ID_BEFORE=", source)
+        self.assertIn('prod_id_after="$(docker inspect', source)
+        self.assertIn('prod_image_id_after="$(docker inspect', source)
+        self.assertIn('"$prod_id_after" != "$PROD_ID_BEFORE"', source)
+        self.assertIn('"$prod_image_id_after" != "$PROD_IMAGE_ID_BEFORE"', source)
+        self.assertIn("FS1113_ERROR=PRODUCTION_CONTAINER_OR_IMAGE_ID_CHANGED", source)
+
 
 if __name__ == "__main__":
     unittest.main()
