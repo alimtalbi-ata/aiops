@@ -138,6 +138,10 @@ echo "FS1107_BROWSER_MATRIX_BEGIN"
 "$PLAYWRIGHT_PY" "$ROOT/scripts/fs/fs1098_browser_history.py"
 echo "FS1107_BROWSER_MATRIX_END"
 
+# Deterministic out-of-order fetch fixture, still against this isolated candidate.
+"$PLAYWRIGHT_PY" "$ROOT/scripts/fs/fs1113_browser_race_deterministic.py"
+echo "FS1113_DETERMINISTIC_RACE_GATE=PASS"
+
 echo "FS1107_FINAL_NETWORKS=$(docker inspect "$NAME" --format '{{json .NetworkSettings.Networks}}')"
 echo "FS1107_CONTAINER_LOG_TAIL_BEGIN"
 docker logs --tail 30 "$NAME" 2>&1 || true
