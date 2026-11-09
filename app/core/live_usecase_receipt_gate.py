@@ -59,6 +59,12 @@ def classify(receipt, now=None, max_age_seconds=180):
         by_name[name] = item
     if set(by_name) != REQUIRED:
         return Qualification.UNVERIFIED
+    # Check-level run attestations must also match the receipt. A producer may
+    # attach run_id beside evidence rather than inside it; never trust a PASS
+    # from another Run even when the nested evidence has no identity.
+    for item in by_name.values():
+        if "run_id" in item and (type(item["run_id"]) is not str or item["run_id"] != run_id):
+            return Qualification.UNVERIFIED
     # An explicit cross-run evidence reference contradicts the receipt identity.
     # Absence is not proof of matching; other gates still determine completeness.
     for item in by_name.values():
