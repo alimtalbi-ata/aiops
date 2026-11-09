@@ -125,6 +125,11 @@ def execute(request: FS147Request, *, stop_auto: bool,
         steps.append("POLICY")
         if decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE":
             return _blocked("POLICY_REFUSED", steps)
+        # Policy is a remote call: its latency can expire the observation.
+        # A pre-call freshness check alone can incorrectly report success.
+        age_after_policy = now() - observed_at
+        if not timedelta(seconds=-30) <= age_after_policy <= timedelta(minutes=5):
+            return _blocked("STALE_OBSERVATION", steps)
         return {"status": "NO_EFFECT", "effect": "NO_EFFECT", "resolved": False,
                 "steps": steps, "run_id": request.run_id,
                 "ticket_id": request.ticket_id, "evidence_id": observation["evidence_id"]}
