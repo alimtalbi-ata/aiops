@@ -16,8 +16,8 @@ class HTTPException(Exception):
 
 
 class FakeDB:
-    def __init__(self, mode, status="CREATED"):
-        self.mode, self.status = mode, status
+    def __init__(self, mode, status="CREATED", receipt=None):
+        self.mode, self.status, self.receipt = mode, status, receipt
         self.queries = []
 
     def __enter__(self):
@@ -31,6 +31,8 @@ class FakeDB:
         return self
 
     def fetchone(self):
+        if self.queries[-1].lstrip().lower().startswith("select workflow_id"):
+            return (self.receipt,) if self.receipt is not None else None
         return ("RUN-1", self.mode, "scenario", 1, self.status)
 
 
@@ -81,6 +83,33 @@ class LiveExecutionGateTests(unittest.TestCase):
                     self.assertEqual(len(connection.queries), 1)
                     self.assertTrue(connection.queries[0].lstrip().lower().startswith("select"))
                     requests.post.assert_not_called()
+
+    def test_non_live_retry_after_progression_returns_durable_receipt(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for status in ("RUNNING", "RESOLVED", "FAILED"):
+                with self.subTest(mode=mode, status=status):
+                    connection = FakeDB(mode, status, receipt="wf-existing")
+                    requests = Mock()
+                    result = load_execute(lambda: connection, requests)("RUN-1", "Bearer offline-test")
+                    self.assertEqual(result, {"run_id": "RUN-1", "workflow_id": "wf-existing", "idempotent": True})
+                    self.assertEqual(len(connection.queries), 2)
+                    requests.post.assert_not_called()
+
+    def test_non_live_progressed_without_receipt_fails_closed(self):
+        connection = FakeDB("DEMO", "RUNNING")
+        requests = Mock()
+        with self.assertRaises(HTTPException) as caught:
+            load_execute(lambda: connection, requests)("RUN-1", "Bearer offline-test")
+        self.assertEqual(caught.exception.status_code, 409)
+        requests.post.assert_not_called()
+
+    def test_receipt_without_workflow_id_never_returns_success(self):
+        connection = FakeDB("DEMO", "WAITING", receipt="")
+        requests = Mock()
+        with self.assertRaises(HTTPException) as caught:
+            load_execute(lambda: connection, requests)("RUN-1", "Bearer offline-test")
+        self.assertEqual(caught.exception.status_code, 409)
+        requests.post.assert_not_called()
 
     def test_non_executable_live_state_is_not_dispatched(self):
         connection = FakeDB("LIVE", "RESOLVED")
