@@ -60,6 +60,15 @@ class ReceiptTests(unittest.TestCase):
     def test_missing_report(self):
         self.assertEqual(classify(None, NOW), Qualification.UNVERIFIED)
 
+    def test_invalid_freshness_threshold_never_upgrades_receipt(self):
+        # NaN makes both age comparisons false without an explicit finite guard.
+        for threshold in (float("nan"), float("inf"), float("-inf"), -1, None, True, "180"):
+            with self.subTest(threshold=threshold):
+                r = receipt()
+                before = deepcopy(r)
+                self.assertEqual(classify(r, NOW + timedelta(days=1), threshold), Qualification.UNVERIFIED)
+                self.assertEqual(r, before)
+
     def test_stale(self):
         self.assertEqual(classify(receipt(), NOW + timedelta(minutes=5)), Qualification.UNVERIFIED)
 
