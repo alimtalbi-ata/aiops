@@ -1,0 +1,26 @@
+name: FS147 receipt contract (isolated)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/fs/fs147_receipt_gate.py'
+      - 'tests/test_fs147_receipt_gate_contract.py'
+      - '.github/workflows/fs147-receipt-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  receipt-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Negative-only schema tests (no services, secrets, or mutations)
+        run: |
+          python -m unittest discover -s tests -p 'test_fs147_receipt_gate_contract.py' -v
+          python scripts/fs/fs147_receipt_gate.py --self-test
