@@ -90,11 +90,15 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
         if not c.execute('select 1 from aiops.twin_nodes where node_id=%s', (x.target_node_id,)).fetchone():
             raise HTTPException(404, 'target node not found')
         if x.action=='SET_STATE' and x.target_node_id:
+            record_id = new('FACT')
             p=x.payload; c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
-            c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(new('FACT'),x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
+            c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(record_id,x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
         elif x.action=='OBSERVE' and x.target_node_id:
-            p=x.payload;c.execute('insert into aiops.observations(observation_id,node_id,metric,value,unit,observed_at,status,payload) values(%s,%s,%s,%s,%s,now(),%s,%s)',(new('OBS'),x.target_node_id,p.get('metric','synthetic'),p.get('value'),p.get('unit'),p.get('status','UNKNOWN'),__import__('json').dumps({'run_id':x.run_id,'synthetic':True})))
-    return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True}
+            record_id = new('OBS')
+            p=x.payload;c.execute('insert into aiops.observations(observation_id,node_id,metric,value,unit,observed_at,status,payload) values(%s,%s,%s,%s,%s,now(),%s,%s)',(record_id,x.target_node_id,p.get('metric','synthetic'),p.get('value'),p.get('unit'),p.get('status','UNKNOWN'),__import__('json').dumps({'run_id':x.run_id,'synthetic':True})))
+    return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True,
+            'run_id':x.run_id,'record_id':record_id,
+            'record_type':'twin_fact' if x.action == 'SET_STATE' else 'observation'}
 
 @app.get('/metrics')
 def metrics():
