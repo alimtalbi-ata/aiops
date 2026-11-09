@@ -1,0 +1,11 @@
+--- a/worker/fs147_readonly_pipeline.py
++++ b/worker/fs147_readonly_pipeline.py
+@@ -144,7 +144,7 @@
+                 or ("validated" in critique and critique["validated"] is not True)
+                 or ("missing_information" in critique
+                     and (not isinstance(critique["missing_information"], list)
+-                         or bool(critique["missing_information"]))))):
++                         or bool(critique["missing_information"])))):
+             # Explicit Critic rejection or unresolved evidence gaps override PASS.
+             return _blocked("CRITIC_REFUSED", steps)
+         steps.append("CRITIC")
