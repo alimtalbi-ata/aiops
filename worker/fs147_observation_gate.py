@@ -26,7 +26,9 @@ def admit_observation(envelope, *, now, max_age_seconds=180, expected_run_id=Non
     An accepted envelope does not authorize remediation, ITSM writes, or HITL.
     """
     def receipt(status, reason, fingerprint=None):
-        return {'status': status, 'reason': reason, 'fingerprint': fingerprint,\n                'run_id': expected_run_id, 'tenant_id': expected_tenant_id,\n                'ticket_id': expected_ticket_id}
+        return {'status': status, 'reason': reason, 'fingerprint': fingerprint,
+                'run_id': expected_run_id, 'tenant_id': expected_tenant_id,
+                'ticket_id': expected_ticket_id}
     if not isinstance(envelope, dict) or not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
         return receipt('UNKNOWN', 'MALFORMED_INPUT')
     if type(max_age_seconds) not in (int, float) or not 0 < max_age_seconds <= 86400:
