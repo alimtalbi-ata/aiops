@@ -34,6 +34,21 @@ class ReceiptTests(unittest.TestCase):
                 self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
                 self.assertEqual(r, before)
 
+    def test_run_identity_rejects_control_chars_and_non_ascii(self):
+        # Prevent ambiguous identity joins across Core, Policy, Temporal and ITSM.
+        for invalid in ("RUN-A B", "RUN-A\\nB", "RUN-A\\tB", "RUN-é", "RUN-ABC/DEF", "RUN-ABC.DEF", "RUN-_"):
+            with self.subTest(invalid=invalid):
+                r = receipt()
+                r["run_id"] = invalid
+                before = deepcopy(r)
+                self.assertEqual(classify(r, NOW), Qualification.UNVERIFIED)
+                self.assertEqual(r, before)
+
+    def test_run_identity_accepts_canonical_ascii(self):
+        r = receipt()
+        r["run_id"] = "RUN-8CA56A39E58944F1"
+        self.assertEqual(classify(r, NOW), Qualification.PASS_CLAIM_ONLY)
+
     def test_hold_without_run_identity_is_unverified(self):
         r = receipt()
         r.pop("run_id")
