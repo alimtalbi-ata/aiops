@@ -55,6 +55,7 @@ const historyColors=["#62c6ff","#64ddb0","#ffbd69","#d7a5ff","#ff929c","#9bd3ae"
 function historyElement(tag,attrs,text){const e=document.createElementNS("http://www.w3.org/2000/svg",tag);Object.entries(attrs||{}).forEach(([k,v])=>e.setAttribute(k,String(v)));if(text!==undefined)e.textContent=text;return e}
 function historyTime(ts){return new Date(ts*1000).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
 function historyValidPoint(p){return Array.isArray(p)&&p.length===2&&p.every(v=>(typeof v==="number"||typeof v==="string")&&String(v).trim()!==""&&Number.isFinite(Number(v)))}
+function historySegmentedPath(samples,x,y){let continuous=false;return samples.map(p=>{if(!historyValidPoint(p)){continuous=false;return ""}const cmd=continuous?"L":"M";continuous=true;return cmd+x(p[0]).toFixed(2)+" "+y(p[1]).toFixed(2)}).filter(Boolean).join(" ")}
 async function loadHistory(){
  const requestId=++historyRequestId;
  if(historyAbortController)historyAbortController.abort();
@@ -94,7 +95,8 @@ async function loadHistory(){
   series.forEach((s,index)=>{
    const valid=s.points.filter(historyValidPoint);
    if(!valid.length)return;
-   const color=historyColors[index%historyColors.length],d=valid.map((p,i)=>(i?"L":"M")+x(p[0]).toFixed(2)+" "+y(p[1]).toFixed(2)).join(" ");
+   // Missing samples are gaps, not observed continuity: restart the SVG path.
+   const color=historyColors[index%historyColors.length],d=historySegmentedPath(s.points,x,y);
    chart.append(historyElement("path",{d,fill:"none",stroke:color,"stroke-width":2.2,"stroke-linejoin":"round","stroke-linecap":"round"}));
    const name=[s.job,s.instance].filter(Boolean).join(" · ")||("Série "+(index+1));
    const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.className="history-swatch history-swatch-"+(index%historyColors.length);label.textContent=name;item.append(swatch,label);legend.append(item);
