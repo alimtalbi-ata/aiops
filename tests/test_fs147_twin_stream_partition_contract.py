@@ -132,6 +132,24 @@ class StreamPartitionContract(unittest.TestCase):
                     partition_receipts(poisoned)
                 self.assertEqual(mixed[0]["stage"], "event")
 
+    def test_partition_deep_copies_nested_observations_and_dependencies(self):
+        """No shared mutable provenance between original stream and projected traces."""
+        lab, san = fixture(LAB), fixture(SAN)
+        lab[0]["observations"] = [{"resource_id": "fs-volume-147", "value": 91}]
+        lab[0]["dependencies"] = [{"source": "fs-volume-147", "target": "fs-service"}]
+        san[0]["observations"] = [{"resource_id": "san-lun-1", "value": 12}]
+        san[0]["dependencies"] = [{"source": "san-lun-1", "target": "san-array"}]
+        mixed = [r for pair in zip(lab, san) for r in pair]
+        original = copy.deepcopy(mixed)
+        projected = partition_receipts(mixed)
+        fs_trace = projected[tuple(LAB[k] for k in IDENTITY)]
+        san_trace = projected[tuple(SAN[k] for k in IDENTITY)]
+        fs_trace[0]["observations"][0]["resource_id"] = "san-lun-1"
+        fs_trace[0]["dependencies"][0]["target"] = "san-array"
+        self.assertEqual(mixed, original)
+        self.assertEqual(san_trace[0], san[0])
+        self.assertEqual(partition_receipts(mixed)[tuple(LAB[k] for k in IDENTITY)], lab)
+
     def test_reject_ambiguous_expected_identity(self):
         with self.assertRaisesRegex(ValueError, "ambiguous"):
             partition_receipts([], expected=(LAB, copy.deepcopy(LAB)))
