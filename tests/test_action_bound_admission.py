@@ -11,7 +11,7 @@ def fixture(mode="DEMO"):
              fencing_token="f1", fencing_epoch=2, mode=mode,
              live_preflight_verified=(mode == "LIVE"),
              policy_decision_id="pol-1")
-    b = {k: i[k] for k in ("tenant_id", "run_id", "action_id", "action_digest")}
+    b = {k: i[k] for k in ("tenant_id", "incident_id", "run_id", "action_id", "action_digest")}
     return (i, dict(b, decision="ALLOW", mode=mode, decision_id="pol-1"),
             dict(b, decision="APPROVED", mode=mode, policy_decision_id="pol-1",
                  approval_id="hitl-1", approver_id="operator-1"),
@@ -34,11 +34,23 @@ class TestActionBoundAdmission(unittest.TestCase):
 
     def test_every_authority_bound_to_action(self):
         for pos in (1, 2, 3, 4):
-            for key in ("tenant_id", "run_id", "action_id", "action_digest"):
+            for key in ("tenant_id", "incident_id", "run_id", "action_id", "action_digest"):
                 with self.subTest(pos=pos, key=key):
                     args = fixture()
                     args[pos][key] = "foreign"
                     self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+
+    def test_cross_incident_replay_is_not_eligible(self):
+        for pos in (1, 2, 3, 4):
+            with self.subTest(authority=pos):
+                args = fixture()
+                args[pos]["incident_id"] = "another-incident"
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
+        for pos in (1, 2, 3, 4):
+            with self.subTest(authority=pos):
+                args = fixture()
+                args[pos].pop("incident_id")
+                self.assertEqual(admit_resume(*args).state, "NEEDS_HUMAN")
 
     def test_policy_denial(self):
         for decision in ("DENY", None, "UNKNOWN"):
