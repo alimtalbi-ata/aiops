@@ -21,7 +21,8 @@ def build_handoff(context):
     run_id, incident_id, run_status = (context.get(k) for k in ("run_id", "incident_id", "run_status"))
     if not isinstance(run_id, str) or not run_id.startswith("RUN-") or not isinstance(incident_id, str) or not incident_id:
         raise ValueError("missing correlation identifiers")
-    if run_status not in ("BLOCKED", "SUCCESS", "FAILED", "PENDING", "RUNNING"):
+    if run_status not in ("CREATED", "WAITING", "RUNNING", "BLOCKED", "RESOLVED", "FAILED",
+                           "CANCELLED", "SUCCESS", "PENDING"):
         raise ValueError("unsupported or missing run status")
     key = hashlib.sha256(("aiops2:itsm:v1:" + incident_id).encode("utf-8")).hexdigest()
     blocked = run_status == "BLOCKED"
