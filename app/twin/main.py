@@ -45,7 +45,24 @@ def impact(node_id:str):
 @app.get('/api/twin/at')
 def at(known_at:str):
     with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
-    k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']; return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r]}
+    # Historical canonical reads must never silently ingest simulated RUN facts.
+    # Synthetic facts are stored alongside canonical facts for audit, but they
+    # belong to an isolated qualification plane, not the canonical at-time view.
+    import json
+    def canonical(row):
+        value = row[3]
+        if isinstance(value, dict):
+            payload = value
+        elif isinstance(value, str):
+            try:
+                payload = json.loads(value)
+            except (ValueError, TypeError):
+                payload = None
+        else:
+            payload = None
+        return not (isinstance(payload, dict) and payload.get('synthetic') is True)
+    k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']
+    return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r if canonical(x)]}
 import os
 from pydantic import BaseModel
 from shared.ids import new
