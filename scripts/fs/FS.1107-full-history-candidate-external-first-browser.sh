@@ -12,10 +12,17 @@ PLAYWRIGHT_PY=/home/aiops/.local/share/aiops-playwright-venv/bin/python
 
 # Never remove a container we did not create. In particular, a preflight
 # collision must not delete the pre-existing candidate on EXIT.
-CANDIDATE_CREATED=NO
+CANDIDATE_ID=""
 cleanup() {
-  if [[ "$CANDIDATE_CREATED" == YES ]]; then
-    docker rm -f "$NAME" >/dev/null 2>&1 || true
+  # A reused name is not proof of ownership. Only remove our exact container ID.
+  if [[ -n "$CANDIDATE_ID" ]]; then
+    local current_id
+    current_id="$(docker inspect "$NAME" --format '{{.Id}}' 2>/dev/null)" || return 0
+    if [[ "$current_id" == "$CANDIDATE_ID" ]]; then
+      docker rm -f "$CANDIDATE_ID" >/dev/null 2>&1 || true
+    else
+      echo "FS1107_CLEANUP_SKIPPED=IDENTITY_CHANGED" >&2
+    fi
   fi
 }
 trap cleanup EXIT
@@ -51,14 +58,14 @@ fi
 docker image inspect "$IMAGE" >/dev/null
 
 echo "FS1107_CREATE_BEGIN initial_network=$INITIAL_NETWORK image=$IMAGE"
-docker run -d --name "$NAME" --restart no \
+CANDIDATE_ID="$(docker run -d --name "$NAME" --restart no \
   --network "$INITIAL_NETWORK" \
   --publish "127.0.0.1:${PORT}:777/tcp" \
   -e AIOPS_INTERNAL_TOKEN=fs1107-ephemeral-candidate-only \
   -e EXPLORER_ENABLED=1 \
   -e EXPLORER_ALLOWED_CIDRS=0.0.0.0/0 \
-  "$IMAGE" >/dev/null
-CANDIDATE_CREATED=YES
+  "$IMAGE")"
+[[ -n "$CANDIDATE_ID" ]] || { echo "FS1107_ERROR=EMPTY_CANDIDATE_ID"; exit 2; }
 
 check_stage() {
   local stage="$1"
