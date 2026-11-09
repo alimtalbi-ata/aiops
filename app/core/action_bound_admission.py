@@ -32,7 +32,16 @@ def admit_resume(intent: Mapping, policy: Mapping, approval: Mapping,
             return Admission("NEEDS_HUMAN", label + "_binding_mismatch")
     if policy.get("decision") != "ALLOW" or policy.get("mode") != mode:
         return Admission("DENIED", "policy_not_allow")
-    if approval.get("decision") != "APPROVED" or approval.get("mode") != mode:
+    # Approval must be an identifiable, action-specific native HITL decision
+    # bound to the exact Policy decision, not a free-standing APPROVED flag.
+    policy_id = policy.get("decision_id")
+    if (type(policy_id) is not str or not policy_id.strip()
+            or intent.get("policy_decision_id") != policy_id
+            or approval.get("policy_decision_id") != policy_id):
+        return Admission("NEEDS_HUMAN", "policy_decision_binding_unknown")
+    if (approval.get("decision") != "APPROVED" or approval.get("mode") != mode
+            or any(type(approval.get(k)) is not str or not approval[k].strip()
+                   for k in ("approval_id", "approver_id"))):
         return Admission("NEEDS_HUMAN", "approval_not_bound")
     for label, record in (("owner", owner), ("temporal", temporal)):
         if (record.get("fencing_token") != intent["fencing_token"]
