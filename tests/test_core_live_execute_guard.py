@@ -68,6 +68,20 @@ class LiveExecutionGateTests(unittest.TestCase):
                 self.assertTrue(connection.queries[0].lstrip().lower().startswith("select"))
                 requests.post.assert_not_called()
 
+    def test_corrupt_persisted_modes_never_dispatch(self):
+        for mode in (None, "", "UNKNOWN", "live", "LIVE ", "SIMULATION", False, 0):
+            for state in ("CREATED", "WAITING"):
+                with self.subTest(mode=mode, state=state):
+                    connection = FakeDB(mode, state)
+                    requests = Mock()
+                    execute = load_execute(lambda: connection, requests)
+                    with self.assertRaises(HTTPException) as caught:
+                        execute("RUN-1", "Bearer offline-test")
+                    self.assertEqual(caught.exception.status_code, 422)
+                    self.assertEqual(len(connection.queries), 1)
+                    self.assertTrue(connection.queries[0].lstrip().lower().startswith("select"))
+                    requests.post.assert_not_called()
+
     def test_non_executable_live_state_is_not_dispatched(self):
         connection = FakeDB("LIVE", "RESOLVED")
         requests = Mock()
