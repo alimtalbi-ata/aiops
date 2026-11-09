@@ -30,8 +30,13 @@ def admit_resume(intent: Mapping, policy: Mapping, approval: Mapping,
     for label, record in zip(("policy", "approval", "owner", "temporal"), records[1:]):
         if any(type(record.get(k)) is not str or record[k] != intent[k] for k in keys):
             return Admission("NEEDS_HUMAN", label + "_binding_mismatch")
-    if policy.get("decision") != "ALLOW" or policy.get("mode") != mode:
-        return Admission("DENIED", "policy_not_allow")
+    # An absent or malformed Policy decision is UNKNOWN, not an explicit denial.
+    # Keep explicit DENY separate from missing proof for operator reconciliation.
+    decision = policy.get("decision")
+    if decision == "DENY":
+        return Admission("DENIED", "policy_denied")
+    if decision != "ALLOW" or policy.get("mode") != mode:
+        return Admission("NEEDS_HUMAN", "policy_decision_unknown")
     # Approval must be an identifiable, action-specific native HITL decision
     # bound to the exact Policy decision, not a free-standing APPROVED flag.
     policy_id = policy.get("decision_id")
