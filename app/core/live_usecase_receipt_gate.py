@@ -92,7 +92,7 @@ def classify(receipt, now=None, max_age_seconds=180):
         for name in ("platform", "linkage")
     ):
         return Qualification.UNVERIFIED
-    blocked = receipt.get("blocking")
+    # Probe attestations are scoped to this Run as well. A successful exit\n    # from another Run cannot qualify the current incident lifecycle.\n    for probe_name in ("platform", "linkage"):\n        probe = execution[probe_name]\n        if "run_id" in probe and (type(probe["run_id"]) is not str or probe["run_id"] != run_id):\n            return Qualification.UNVERIFIED\n    blocked = receipt.get("blocking")
     if not isinstance(blocked, list) or any(type(name) is not str for name in blocked):
         return Qualification.UNVERIFIED
     if set(blocked) != {
