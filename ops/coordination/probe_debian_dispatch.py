@@ -10,13 +10,13 @@ import re
 from pathlib import Path
 
 HINTS = {
-    "poller": re.compile(r"(?i)(poll\\.sh|github.*poll|poll.*github)"),
+    "poller": re.compile(r"(?i)(poll\.sh|github.*poll|poll.*github)"),
     "publisher": re.compile(r"(?i)(publish.*(github|report)|report.*publish)"),
-    "codex": re.compile(r"(?i)(codex\\s+(exec|resume)|codex-cli|codex\\.cloud)"),
+    "codex": re.compile(r"(?i)(codex\s+(exec|resume)|codex-cli|codex\.cloud)"),
     "queue": re.compile(r"(?i)(task_request|dispatch|inbox|work[_-]?queue)"),
-    "receipt": re.compile(r"(?i)(task_accepted|session[_-]?id|receipt|latest\\.json)"),
+    "receipt": re.compile(r"(?i)(task_accepted|session[_-]?id|receipt|latest\.json)"),
 }
-SECRET = re.compile(r"(?i)(gh[pousr]_[a-z0-9_]+|github_pat_[a-z0-9_]+|(?:token|password|secret|authorization)\\s*[:=]\\s*\\S+)")
+SECRET = re.compile(r"(?i)(gh[pousr]_[a-z0-9_]+|github_pat_[a-z0-9_]+|(?:token|password|secret|authorization)\s*[:=]\s*\S+)")
 MAX_INPUT = 262144
 
 def evaluate(sources):
