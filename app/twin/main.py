@@ -125,6 +125,30 @@ def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)
             'run_id':x.run_id,'record_id':record_id,
             'record_type':'twin_fact'}
 
+@app.get('/api/twin/scenario/{run_id}/facts')
+def scenario_facts(run_id:str, authorization:str|None=Header(default=None)):
+    """Read-only, RUN-fenced qualification evidence; never a canonical topology view."""
+    if (authorization or '').removeprefix('Bearer ') != SIM_TOKEN:
+        raise HTTPException(401, 'invalid token')
+    if (not run_id or run_id != run_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in run_id)):
+        raise HTTPException(422, 'valid run_id required')
+    # Both predicates are mandatory: a matching run_id alone is not proof of
+    # synthetic provenance. Never fall back to canonical observations or nodes.
+    with db() as c:
+        rows = c.execute(
+            """select fact_id,node_id,attribute,value,valid_from,valid_to,known_at,confidence
+               from aiops.twin_facts
+               where value::jsonb ->> 'run_id' = %s
+                 and value::jsonb ->> 'synthetic' = 'true'
+               order by known_at,fact_id limit 501""", (run_id,)
+        ).fetchall()
+    if len(rows) > 500:
+        raise HTTPException(409, 'scenario fact limit exceeded')
+    k = ['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']
+    return {'run_id':run_id,'synthetic':True,'record_type':'twin_fact',
+            'facts':[dict(zip(k,row)) for row in rows]}
+
 @app.get('/metrics')
 def metrics():
     with db() as c:
