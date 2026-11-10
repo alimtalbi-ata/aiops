@@ -10,7 +10,7 @@ services:
     volumes:
       - aiops2-postgres-data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
-    networks: [aiops2-data]
+    networks: [aiops2-data, aiops2-integration]
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -18,6 +18,7 @@ services:
       retries: 30
 
   aiops2-core:
+    image: ${AIOPS_CORE_IMAGE:-aiops2-isolated-aiops2-core}
     build: {context: ./app, dockerfile: core/Dockerfile}
     restart: unless-stopped
     environment:
@@ -32,6 +33,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:810/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-twin:
+    image: ${AIOPS_TWIN_IMAGE:-aiops2-isolated-aiops2-twin}
     build: {context: ./app, dockerfile: twin/Dockerfile}
     restart: unless-stopped
     environment:
@@ -43,6 +45,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:811/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-evidence:
+    image: ${AIOPS_EVIDENCE_IMAGE:-aiops2-isolated-aiops2-evidence}
     build: {context: ./app, dockerfile: evidence/Dockerfile}
     restart: unless-stopped
     environment:
@@ -53,6 +56,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:812/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-policy:
+    image: ${AIOPS_POLICY_IMAGE:-aiops2-isolated-aiops2-policy}
     build: {context: ./app, dockerfile: policy/Dockerfile}
     restart: unless-stopped
     expose: ["813"]
@@ -60,6 +64,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:813/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-copilot:
+    image: ${AIOPS_COPILOT_IMAGE:-aiops2-isolated-aiops2-copilot}
     build: {context: ./app, dockerfile: copilot/Dockerfile}
     restart: unless-stopped
     environment:
@@ -76,6 +81,7 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:814/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-worker:
+    image: ${AIOPS_WORKER_IMAGE:-aiops2-isolated-aiops2-worker}
     build: {context: ./app, dockerfile: worker/Dockerfile}
     restart: unless-stopped
     environment:
@@ -98,16 +104,18 @@ services:
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:815/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-simulator:
+    image: ${AIOPS_SIMULATOR_IMAGE:-aiops2-isolated-aiops2-simulator}
     build: {context: ./app, dockerfile: simulator/Dockerfile}
     restart: unless-stopped
     environment:
       CORE_URL: http://aiops2-core:810
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["816"]
-    networks: [aiops2-execution]
+    networks: [aiops2-execution, aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:816/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-portal:
+    image: ${AIOPS_PORTAL_IMAGE:-aiops2-isolated-aiops2-portal}
     build: {context: ./app, dockerfile: portal/Dockerfile}
     restart: unless-stopped
     environment:
