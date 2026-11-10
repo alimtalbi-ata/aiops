@@ -78,7 +78,7 @@ async function loadHistory(){
   const data=await Promise.race([response.json(),historyDeadline]);
   if(requestId!==historyRequestId)return;
   if(historyTimedOut)throw new Error("History request timed out");
-  if(data.metric!==metric||data.window!==windowSize||!Array.isArray(data.series))throw new Error("Contrat de données invalide");
+  if(data.metric!==metric||data.window!==windowSize||!Array.isArray(data.series)||!Number.isFinite(data.step_seconds)||data.step_seconds<=0||!data.series.every(s=>s&&Array.isArray(s.points)))throw new Error("Contrat de données invalide");
   // Deduplicate only labelled Prometheus targets; preserve unknown identities.
   const seenTargets=new Set();
   const series=data.series.filter(s=>{
