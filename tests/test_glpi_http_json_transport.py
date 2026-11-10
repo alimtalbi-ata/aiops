@@ -129,6 +129,19 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(credentials, [])
         self.assertEqual(opener.calls, [])
 
+    def test_missing_or_network_path_refused_before_credentials(self):
+        opener = FakeOpener(Response())
+        credentials = []
+        with patch("shared.glpi_http_json_transport.build_opener", return_value=opener):
+            get = make_json_get(get_token=lambda **kw: credentials.append(kw) or "token",
+                                allowed_origin="https://core.internal")
+        for url in ("https://core.internal", "https://core.internal//evil",
+                    "https://core.internal?x=1"):
+            with self.subTest(url=url), self.assertRaises(ReadTransportBlocked):
+                get(url=url, actor="operator", tenant_id="tenant-a")
+        self.assertEqual(credentials, [])
+        self.assertEqual(opener.calls, [])
+
     def test_credentials_never_sent_to_other_origin(self):
         get, opener = self.create()
         for url in ("https://evil.internal/api/runs/RUN-1",
