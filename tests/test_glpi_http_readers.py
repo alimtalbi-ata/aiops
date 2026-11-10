@@ -65,7 +65,12 @@ class HTTPReadersTests(unittest.TestCase):
     def test_untrusted_endpoint_and_missing_acl_rejected(self):
         for changes in ({"core_base_url": "http://core.internal"},
                         {"glpi_base_url": "https://user@glpi.internal"},
-                        {"authorize_read": None}):
+                        {"authorize_read": None},
+                        {"core_base_url": "https://core.internal/evil"},
+                        {"core_base_url": "https://core.internal:invalid"},
+                        {"core_base_url": "https://core.internal\\\\@evil.invalid"},
+                        {"core_base_url": "https://core.internal:0"},
+                        {"core_base_url": "https://core.internal?next=evil"}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.readers(**changes)
 
