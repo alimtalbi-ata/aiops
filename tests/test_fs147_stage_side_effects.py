@@ -83,6 +83,33 @@ class StageEffectsTests(unittest.TestCase):
                 self.assertEqual(self.calls, ["observe", "analyst", "critic", "policy"])
                 self.assertEqual(len(claims), 1)
 
+    def test_policy_execution_metadata_must_match_simulation(self):
+        for field, value in (("dry_run", False), ("dry_run", None),
+                             ("dry_run", 1), ("dry_run", "true"),
+                             ("execution_mode", "LIVE"),
+                             ("execution_mode", None),
+                             ("execution_mode", "DEMO")):
+            with self.subTest(field=field, value=value):
+                self.calls = []
+                def policy(*args):
+                    return dict(self.policy(*args), **{field: value})
+                result = execute(self.req, stop_auto=False, observe=self.observe,
+                                 analyst=self.analyst, critic=self.critic,
+                                 policy=policy, claim_once=lambda _: True,
+                                 now=self.clock)
+                self.assertEqual((result["status"], result["reason"], result["effect"]),
+                                 ("BLOCKED", "POLICY_REFUSED", "NO_EFFECT"))
+                self.assertEqual(self.calls, ["observe", "analyst", "critic", "policy"])
+
+    def test_policy_explicit_simulation_metadata_is_readonly(self):
+        def policy(*args):
+            return dict(self.policy(*args), dry_run=True, execution_mode="SIMULATE")
+        result = execute(self.req, stop_auto=False, observe=self.observe,
+                         analyst=self.analyst, critic=self.critic,
+                         policy=policy, claim_once=lambda _: True, now=self.clock)
+        self.assertEqual(result["status"], "NO_EFFECT")
+        self.assertEqual(result["effect"], "NO_EFFECT")
+
     def test_policy_explicit_no_mutation_remains_readonly(self):
         def policy(*args):
             return dict(self.policy(*args), mutation_performed=False)
