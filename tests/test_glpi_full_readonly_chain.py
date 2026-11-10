@@ -102,7 +102,9 @@ class FullChainTests(unittest.TestCase):
         openers = [Opener(self.requests, core_incident),
                    GLPISessionOpener(self.requests)]
         with patch("shared.glpi_http_json_transport.build_opener",
-                   side_effect=openers):
+                   return_value=openers[0]), patch(
+                   "shared.glpi_session_readonly.build_opener",
+                   return_value=openers[1]):
             return make_server_glpi_readonly_qualifier(
                 secret=self.secret, fetch_signed_event=fetch,
                 consume_nonce=nonce, authorize_actor=acl,
