@@ -46,6 +46,19 @@ def _valid_observation_time(value):
         return False
 
 
+def _claims_side_effect(payload):
+    """Reject explicit mutation/execution claims from any read-only stage."""
+    return (any(field in payload and payload[field] is not False
+                for field in ("action_executed", "remediation_executed",
+                              "mutation_performed"))
+            or ("ticket_transition" in payload
+                and payload["ticket_transition"] is not None)
+            or ("dispatch_allowed" in payload
+                and payload["dispatch_allowed"] is not False)
+            or ("resolved" in payload and payload["resolved"] is not False)
+            or ("effect" in payload and payload["effect"] != "NO_EFFECT"))
+
+
 def execute(request: FS147Request, *, stop_auto: bool,
             observe: Callable, analyst: Callable, critic: Callable,
             policy: Callable, claim_once: Callable, now: Callable = lambda: datetime.now(timezone.utc)):
@@ -88,7 +101,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or not math.isfinite(observation["used_percent"])
                 or not 0 <= observation["used_percent"] <= 100
                 or observation.get("filesystem") != "/fs-lab"
-                or not observation.get("read_only") is True):
+                or not observation.get("read_only") is True
+                or _claims_side_effect(observation)):
             return _blocked("INSUFFICIENT_OBSERVATION", steps)
         # A historical lab measurement is not proof of a fresh bridge observation.
         # Clock injection is only for deterministic tests, never a substitute for
@@ -122,6 +136,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
         analysis = analyst(request, observation)
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
             return _blocked("ANALYST_SCOPE", steps)
+        if _claims_side_effect(analysis):
+            return _blocked("ANALYST_SIDE_EFFECT", steps)
         if (not isinstance(analysis.get("findings"), list)
                 or not analysis["findings"]
                 or len(analysis["findings"]) > 64
@@ -140,6 +156,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
         critique = critic(request, observation, analysis)
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
             return _blocked("CRITIC_SCOPE", steps)
+        if _claims_side_effect(critique):
+            return _blocked("CRITIC_SIDE_EFFECT", steps)
         if (critique.get("state") != "PASS"
                 or ("validated" in critique and critique["validated"] is not True)
                 or ("missing_information" in critique
@@ -162,7 +180,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
         if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
                 or ("dispatch_allowed" in decision and decision["dispatch_allowed"] is not False)
                 or ("resolved" in decision and decision["resolved"] is not False)
-                or ("effect" in decision and decision["effect"] != "NO_EFFECT")):
+                or ("effect" in decision and decision["effect"] != "NO_EFFECT")
+                or _claims_side_effect(decision)):
             return _blocked("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.
