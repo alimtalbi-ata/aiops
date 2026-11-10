@@ -142,7 +142,10 @@ def validate_intent(x):
 def core_readback(x):
     """Independently authenticated Core read; never caller-supplied evidence."""
     base = os.getenv('CORE_URL', 'http://aiops2-core:810').rstrip('/')
-    target = urlsplit(base)
+    try:
+        target = urlsplit(base)
+    except ValueError:
+        raise HTTPException(503, 'independent_core_url_invalid') from None
     # Do not forward the internal bearer token to an arbitrary configured origin.
     # Match the existing Compose Core DNS names and the disposable local test origin.
     if (target.scheme not in ('http', 'https')
@@ -152,10 +155,14 @@ def core_readback(x):
             or target.query or target.fragment):
         raise HTTPException(503, 'independent_core_url_invalid')
     try:
-        response = requests.get(
-            base + '/api/sandbox/acme/e2e/' + x.attempt_id,
-            headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN']},
-            timeout=5, allow_redirects=False)
+        # Fixed Core host/port alone is insufficient when requests inherits HTTP(S)_PROXY.
+        # Never expose the internal bearer to an environment-configured proxy.
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.get(
+                base + '/api/sandbox/acme/e2e/' + x.attempt_id,
+                headers={'Authorization': 'Bearer ' + os.environ['AIOPS_INTERNAL_TOKEN']},
+                timeout=5, allow_redirects=False)
         if response.status_code != 200 or len(response.content) > 32768:
             raise ValueError('unavailable')
         result = response.json()
