@@ -80,6 +80,17 @@ Le travail autorisé à ce stade est **sur GitHub** (audit, code, tests, PR, doc
 
 **Nouvelle priorité parallèle :** consolider le paquet Portal (#541, #547→#550, #544→#551, #538) avec des tests UX/sécurité communs pendant que l'audit Core/Worker/Twin progresse ; aucune fusion automatique.
 
+## 5 ter. Audit de divergence avec `main` (2026-11-10)
+
+Comparaisons GitHub `main...head` effectuées **sur les branches complètes**, avec résultat `diverged` pour les trois :
+- **#515 Core : 244 commits ahead / 33 behind ; 121 fichiers** renvoyés par la comparaison.
+- **#516 Worker : 170 ahead / 33 behind ; 87 fichiers**.
+- **#517 Twin : 897 ahead / 86 behind ; 300 fichiers** renvoyés (vérifier toute limite éventuelle de pagination/réponse avant un inventaire exhaustif).
+
+**Interprétation** : ces compteurs reflètent l'historique **hérité** des branches, pas la taille propre des patches #515/#516/#517. **Ne pas merger les branches telles quelles dans `main`** ; revoir les diffs *PR-vers-base*, puis identifier leurs dépendances minimales avant cherry-pick ou nouvelle implémentation ciblée sur une base intégrée autorisée.
+
+**Prochaine tâche concrète affinée** : analyse des trois patches PR-vers-base et des tests associés, cartographie des imports/interfaces, puis composition d'un lot minimal Core/Worker/Twin ; parallèlement, intégrer le paquet Portal en respectant les chaînes #547→#550, #544→#551 et les tests #538. Actualiser les SHA des tâches horaires juste avant tout lot.
+
 ## 6. Prochaine action concrète pour un nouvel agent
 
 **Ne pas commencer par le déploiement Debian.** Commencer par récupérer l'état actuel des PR et les diffs/commits cumulés **#515, #516, #517** contre leurs bases et contre `main`. Construire une matrice « changement utile / dépendance / risque / test requis », puis créer une branche/PR de consolidation **uniquement si** les dépendances sont comprises et le périmètre testable. Garder les PR sources en Draft et ne rien fusionner automatiquement.
