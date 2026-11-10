@@ -76,6 +76,18 @@ PROD_TAG_ID_BEFORE="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')"
 bash "$ROOT/scripts/fs/FS.1097-build-history-chart-candidate.sh"
 
 # Fail closed after candidate build, before starting browser/network qualification.
+# A candidate that resolves to the protected production image is not isolated.
+# Check image IDs, not just tags, before any candidate container is created.
+CANDIDATE_IMAGE=aiops2-portal:fs1097-history-chart-candidate
+CANDIDATE_IMAGE_ID="$(docker image inspect "$CANDIDATE_IMAGE" --format '{{.Id}}')" || {
+  echo "FS1113_ERROR=CANDIDATE_IMAGE_UNAVAILABLE_AFTER_BUILD"
+  exit 4
+}
+if [[ "$CANDIDATE_IMAGE_ID" == "$PROD_IMAGE_ID_BEFORE" || "$CANDIDATE_IMAGE_ID" == "$PROD_TAG_ID_BEFORE" ]]; then
+  echo "FS1113_ERROR=CANDIDATE_EQUALS_PRODUCTION_IMAGE"
+  exit 3
+fi
+
 PROD_TAG_ID_AFTER_BUILD="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')" || {
   echo "FS1113_ERROR=PRODUCTION_TAG_POSTBUILD_UNAVAILABLE"
   exit 4
