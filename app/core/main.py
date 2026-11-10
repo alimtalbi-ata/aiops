@@ -74,6 +74,10 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
+        # A command receipt is not action-bound Policy/HITL authorization.
+        # Deny LIVE starts/resolutions even when an old idempotency receipt exists.
+        if row[2] == 'LIVE' and x.command in ('START', 'RESOLVE'):
+            raise HTTPException(403,'LIVE command requires verified action-bound Policy/HITL admission')
         rec=c.execute('select run_id,command,response from aiops.command_receipts where idempotency_key=%s for update',(x.idempotency_key,)).fetchone()
         if rec:
             # A command receipt is bound to the original Run and command intent.
