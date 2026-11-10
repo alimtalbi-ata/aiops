@@ -1,0 +1,11 @@
+[Unit]
+Description=Run AIOps2 existing-host observer every 15 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+RandomizedDelaySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=AIOps2 existing Debian host observer (read-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=aiops
+Group=aiops
+Environment=AIOPS_ROOT=/home/aiops/aiops2
+Environment=AIOPS_PUBLISH=1
+ExecStart=/usr/bin/python3 /opt/aiops2-observer/existing_host_observer.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=
