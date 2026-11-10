@@ -38,6 +38,12 @@ jobs:
         run: python -m unittest discover -s tests -p "test_ai_failure_injection.py" -v
       - name: Portal demo launch contract tests
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
+      - name: Portal scope-attestation regression guard
+        run: python -m unittest discover -s tests -p "test_portal_auth_contract_guard.py" -v
+      - name: Portal disconnected projection policy tests
+        run: python -m unittest discover -s tests -p "test_portal_operational_projection.py" -v
+      - name: Portal operational-state JavaScript unit tests
+        run: node --test app/portal/components/operational_state.test.mjs
       - name: AI evaluation harness tests
         run: python -m unittest discover -s tests -p "test_ai_eval_harness.py" -v
       - name: Model evaluation API unit tests
@@ -126,6 +132,17 @@ jobs:
             echo "APPLY $file"
             psql -h 127.0.0.1 -U aiops -d aiops -v ON_ERROR_STOP=1 -f "$file"
           done
+      - name: Set up Python for PostgreSQL integration tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PostgreSQL integration test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "requests==2.32.4" "temporalio==1.17.0" "psycopg[binary]==3.2.9"
+      - name: Qualify model-evaluation idempotency against PostgreSQL
+        env:
+          DATABASE_URL: postgresql://aiops:ci-only-password@127.0.0.1:5432/aiops
+          AIOPS_INTERNAL_TOKEN: postgres-integration-only-token
+        run: python -m unittest discover -s tests -p "test_model_evaluation_postgres_integration.py" -v
       - name: Assert AI decision ledger and immutable audit triggers exist
         env:
           PGPASSWORD: ci-only-password
