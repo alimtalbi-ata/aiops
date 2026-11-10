@@ -78,7 +78,7 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
             with opener.open(req, timeout=timeout) as response:
                 if response.status != 200:
                     raise ReadTransportBlocked("upstream_non_200")
-                if "application/json" not in response.headers.get("Content-Type", "").lower():
+                if response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
                     raise ReadTransportBlocked("upstream_non_json")
                 data = response.read(max_bytes + 1)
                 if len(data) > max_bytes:
