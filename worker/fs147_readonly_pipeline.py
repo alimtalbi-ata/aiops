@@ -48,11 +48,45 @@ def _valid_observation_time(value):
 
 
 
+def _nested_hitl_artifact(payload):
+    """Fail closed on action/approval claims hidden inside adapter metadata.
+
+    Inspect bounded JSON-like structures only. Cycles, excessive nesting and
+    oversized payloads cannot be safely interpreted as read-only evidence.
+    """
+    forbidden = {"approval_binding", "approval_token", "action_intent"}
+    flags = {"approval_granted", "approval_consumed", "hitl_approved",
+             "action_dispatched", "action_executed", "remediation_executed",
+             "mutation_performed", "ticket_updated", "dispatch_allowed"}
+    stack = [(payload, 0)]
+    seen = set()
+    budget = 4096
+    while stack:
+        value, depth = stack.pop()
+        budget -= 1
+        if budget < 0 or depth > 16:
+            return True
+        if isinstance(value, (Mapping, list, tuple)):
+            identity = id(value)
+            if identity in seen:
+                return True
+            seen.add(identity)
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                if key in forbidden or (key in flags and child is not False):
+                    return True
+                stack.append((child, depth + 1))
+        elif isinstance(value, (list, tuple)):
+            stack.extend((child, depth + 1) for child in value)
+    return False
+
+
 def _claims_side_effect(payload):
     """Reject explicit mutation/execution claims from any read-only stage."""
     # Action-bound HITL artifacts are never authorization for this diagnostic
     # workflow. Even null/empty bindings are ambiguous and must fail closed.
-    return (any(field in payload for field in ("approval_binding",
+    return (_nested_hitl_artifact(payload)
+            or any(field in payload for field in ("approval_binding",
                                                "approval_token", "action_intent"))
             or any(field in payload and payload[field] is not False
                 for field in ("action_executed", "remediation_executed",
