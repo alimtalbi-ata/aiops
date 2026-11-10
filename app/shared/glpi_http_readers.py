@@ -37,7 +37,8 @@ def make_core_glpi_readers(
                 or parsed.username is not None or parsed.password is not None
                 or parsed.path or parsed.query or parsed.fragment
                 or base.endswith("/") or port == 0
-                or any(ch.isspace() or ord(ch) < 33 for ch in base)
+                or any(ch.isspace() or ord(ch) < 33 or ord(ch) == 127
+                       for ch in base)
                 or "\\" in base):
             raise ValueError("trusted_https_endpoint_required")
         origins.append((parsed.hostname.lower(), port or 443))
