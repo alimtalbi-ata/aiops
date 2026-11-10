@@ -33,12 +33,14 @@ def make_glpi_session_ticket_get(
             or type(max_bytes) is not int or not 1024 <= max_bytes <= 1048576):
         raise ValueError("glpi_session_dependencies_missing")
     try:
+        if not isinstance(glpi_base_url, str) or len(glpi_base_url) > 512:
+            raise ValueError("glpi_origin_invalid")
         base = urlsplit(glpi_base_url)
         port = base.port
         if (not isinstance(glpi_base_url, str) or base.scheme != "https"
                 or not base.hostname or base.username is not None
                 or base.password is not None or base.path or base.query
-                or base.fragment or port == 0
+                or base.fragment or glpi_base_url.endswith("/") or port == 0
                 or any(ord(c) <= 32 or ord(c) == 127 for c in glpi_base_url)
                 or "\\" in glpi_base_url):
             raise ValueError("glpi_origin_invalid")
