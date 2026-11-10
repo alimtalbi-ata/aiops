@@ -23,6 +23,7 @@ def make_core_glpi_readers(
     implementations enforcing TLS, authentication, timeouts and no redirects.
     authorize_read must check actor+tenant+resource ACL and return exactly True.
     """
+    origins = []
     for base in (core_base_url, glpi_base_url):
         if not isinstance(base, str) or len(base) > 512:
             raise ValueError("trusted_https_endpoint_required")
@@ -38,6 +39,9 @@ def make_core_glpi_readers(
                 or any(ch.isspace() or ord(ch) < 33 for ch in base)
                 or "\\" in base):
             raise ValueError("trusted_https_endpoint_required")
+        origins.append((parsed.hostname.lower(), port or 443))
+    if origins[0] == origins[1]:
+        raise ValueError("core_glpi_service_origins_must_differ")
     if not all(callable(fn) for fn in (core_get, glpi_get, authorize_read)):
         raise ValueError("authenticated_read_dependencies_missing")
 
