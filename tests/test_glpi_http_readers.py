@@ -85,7 +85,9 @@ class HTTPReadersTests(unittest.TestCase):
                         {"core_base_url": "https://core.internal:invalid"},
                         {"core_base_url": "https://core.internal\\\\@evil.invalid"},
                         {"core_base_url": "https://core.internal:0"},
-                        {"core_base_url": "https://core.internal?next=evil"}):
+                        {"core_base_url": "https://core.internal?next=evil"},
+                        {"glpi_base_url": "https://core.internal"},
+                        {"glpi_base_url": "https://CORE.internal:443"}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.readers(**changes)
 
