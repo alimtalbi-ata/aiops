@@ -35,3 +35,27 @@ test('synthetic conflicting duplicate evidence is UNKNOWN, not silently first-wi
  }
  assert.equal(filterEvidence([a,{...a}]).records.length,1);
 });
+
+test('synthetic empty source and unmatched filters have distinct accessible announcements',()=>{
+ class Element {
+  constructor(tag,doc){this.tag=tag;this.ownerDocument=doc;this.children=[];this.attrs={};this.value=tag==='select'?'ALL':'';this.textContent='';this.events={};}
+  setAttribute(k,v){this.attrs[k]=v;}
+  append(...xs){this.children.push(...xs);}
+  replaceChildren(...xs){this.children=xs;}
+  addEventListener(k,fn){this.events[k]=fn;}
+ }
+ const doc={createElement(tag){return new Element(tag,doc)}};
+ const root=new Element('div',doc);
+ const view=mountEvidenceFilter(root,{records:[]});
+ const form=root.children[0],input=form.children[0].children[0],count=form.children[2];
+ assert.equal(count.textContent,'Aucune preuve disponible');
+ assert.equal(count.attrs.role,'status');
+ view.setRecords([{id:'synthetic-1',label:'Disque',status:'READY'}]);
+ input.value='introuvable';input.events.input();
+ assert.equal(count.textContent,'Aucune preuve ne correspond aux filtres');
+ view.setRecords(null);
+ assert.equal(count.textContent,'Preuves non vérifiables');
+ view.setRecords([{id:'synthetic-1',label:'Disque',status:'READY'}]);
+ input.value='';input.events.input();
+ assert.match(count.textContent,/1 preuve/);
+});
