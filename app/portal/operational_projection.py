@@ -4,6 +4,7 @@ The trusted identity provider and per-tenant data source are prerequisites. This
 module does not authenticate HTTP callers or confer authority on its own.
 """
 from datetime import datetime, timezone
+import math
 
 
 class ProjectionDenied(Exception):
@@ -42,7 +43,7 @@ def project_authorized_records(*, identity, tenant_id, authorized_tenants, sourc
         raise ProjectionUnavailable("source_scope_unverified")
     observed = _timestamp(source.get("observed_at"))
     current = now if now is not None else datetime.now(timezone.utc)
-    if not isinstance(current, datetime) or current.tzinfo is None or current.utcoffset() is None or not isinstance(max_age_seconds, (int, float)) or not 0 < max_age_seconds <= 3600:
+    if not isinstance(current, datetime) or current.tzinfo is None or current.utcoffset() is None or isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, (int, float)) or not math.isfinite(max_age_seconds) or not 0 < max_age_seconds <= 3600:
         raise ProjectionUnavailable("freshness_policy_invalid")
     age = (current.astimezone(timezone.utc) - observed).total_seconds()
     if age < 0 or age > max_age_seconds:
