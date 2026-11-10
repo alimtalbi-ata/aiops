@@ -180,19 +180,43 @@ jobs:
           data = json.loads(path.read_text(encoding="utf-8"))
           assert data.get("active") is False, "n8n template must remain inactive"
           nodes = data.get("nodes")
-          assert isinstance(nodes, list) and nodes, "n8n nodes must exist"
-          assert {n.get("type") for n in nodes} == {
-              "n8n-nodes-base.webhook", "n8n-nodes-base.respondToWebhook"
-          }, "n8n template may not contain HTTP/action nodes"
-          response = next(n for n in nodes if n["type"].endswith(".respondToWebhook"))
-          assert "HOLD" in response.get("parameters", {}).get("responseBody", ""), (
-              "n8n template must explicitly return HOLD"
+          assert isinstance(nodes, list) and len(nodes) == 2, (
+              "n8n template must have exactly two nodes"
           )
-          assert set(data.get("connections", {})) == {"Incident Webhook"}, (
-              "n8n template must only route webhook to HOLD response"
+          by_name = {node.get("name"): node for node in nodes}
+          assert len(by_name) == 2 and set(by_name) == {
+              "Incident Webhook", "Respond"
+          }, "n8n node names must be unique and fixed"
+          webhook = by_name["Incident Webhook"]
+          response = by_name["Respond"]
+          assert webhook.get("type") == "n8n-nodes-base.webhook"
+          assert webhook.get("parameters") == {
+              "httpMethod": "POST",
+              "path": "acme-incident",
+              "responseMode": "responseNode"
+          }, "webhook must be configured for responseNode"
+          assert response.get("type") == "n8n-nodes-base.respondToWebhook"
+          parameters = response.get("parameters")
+          assert isinstance(parameters, dict)
+          assert set(parameters) == {"respondWith", "responseBody"}
+          assert parameters["respondWith"] == "json"
+          body = parameters["responseBody"]
+          assert isinstance(body, str) and not body.startswith("="), (
+              "HOLD response must be static JSON, not an expression"
           )
-          # Inspect executable node configuration, not explanatory HOLD text:
-          # the response is allowed to describe authorization requirements.
+          payload = json.loads(body)
+          assert isinstance(payload, dict)
+          assert payload.get("status") == "HOLD"
+          assert payload.get("reason") == "N8N_TEMPLATE_DISABLED"
+          assert isinstance(payload.get("message"), str) and payload["message"]
+          expected_connections = {
+              "Incident Webhook": {
+                  "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+              }
+          }
+          assert data.get("connections") == expected_connections, (
+              "n8n graph must route only the webhook to the HOLD response"
+          )
           assert not any(
               term in json.dumps(node, sort_keys=True).lower()
               for node in nodes
