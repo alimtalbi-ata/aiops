@@ -26,7 +26,7 @@ class Cursor:
 
     def fetchone(self):
         if "from aiops.runs where run_id" in self.last:
-            return ("RUN-147", 4, "DEMO") if False else ("RUNNING", 4, "DEMO")
+            return ("RUNNING", 4, "DEMO")
         if "from aiops.command_receipts" in self.last:
             return self.receipt
         raise AssertionError(self.last)
