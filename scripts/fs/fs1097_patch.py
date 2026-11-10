@@ -66,7 +66,7 @@ async function loadHistory(){
  const historyDeadline=new Promise((_,reject)=>{historyTimeout=setTimeout(()=>{historyTimedOut=true;controller.abort();reject(new Error("History request timed out"))},20000)});
  const metric=$("history-metric").value,windowSize=$("history-window").value;
  const status=$("history-status"),chart=$("history-chart"),legend=$("history-legend"),button=$("history-refresh");
- button.disabled=true;status.textContent="Chargement des séries historiques…";legend.replaceChildren();
+ button.disabled=true;chart.setAttribute("aria-busy","true");status.textContent="Chargement des séries historiques…";legend.replaceChildren();
  chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Chargement…"));
  try{
   const url="/api/fs1089/prometheus/history?"+new URLSearchParams({metric,window:windowSize});
@@ -112,7 +112,7 @@ async function loadHistory(){
   });
   status.textContent=series.length+" séries · "+points.length+" points · pas "+data.step_seconds+" s · "+windowSize;
  }catch(error){if(requestId!==historyRequestId||(!historyTimedOut&&(controller.signal.aborted||error?.name==="AbortError")))return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));legend.replaceChildren();status.textContent=error?.historyAuthDenied?"Accès refusé à l’historique · authentification ou autorisation requise":"Historique indisponible · réessayez ou contactez l’exploitation";}
- finally{clearTimeout(historyTimeout);if(requestId===historyRequestId){button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
+ finally{clearTimeout(historyTimeout);if(requestId===historyRequestId){chart.setAttribute("aria-busy","false");button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
 }
 $("history-refresh").addEventListener("click",loadHistory);
 $("history-metric").addEventListener("change",loadHistory);
