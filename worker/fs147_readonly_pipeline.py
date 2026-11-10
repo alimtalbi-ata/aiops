@@ -252,8 +252,11 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return block("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_policy <= timedelta(minutes=5):
             return block("STALE_OBSERVATION", steps)
+        # Successful diagnostic receipts require the same tenant/incident lineage
+        # as blocked receipts; consumers must not infer tenant from run_id.
         return {"status": "NO_EFFECT", "effect": "NO_EFFECT", "resolved": False,
-                "steps": steps, "run_id": request.run_id,
+                "steps": steps, "tenant_id": request.tenant_id,
+                "incident_id": request.incident_id, "run_id": request.run_id,
                 "ticket_id": request.ticket_id, "evidence_id": observation["evidence_id"]}
     except TimeoutError:
         # A timeout is an indeterminate remote outcome, not proof of failure.
