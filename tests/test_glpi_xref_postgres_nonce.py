@@ -97,6 +97,20 @@ class NonceBarrierTests(unittest.TestCase):
             lambda: BrokenConnection(self.db))(**self.args))
         self.assertEqual(self.db.closed, 1)
 
+    def test_malformed_returning_nonce_is_rejected(self):
+        for row in (("wrong-nonce",), (True,), ("nonce123456789012", "extra"),
+                    {"nonce": "nonce123456789012"}, ()):
+            with self.subTest(row=row):
+                class ForgedCursor(Cursor):
+                    def fetchone(self):
+                        return row
+                class ForgedConnection(Connection):
+                    def cursor(self):
+                        return ForgedCursor(self.db)
+                self.assertFalse(make_postgres_nonce_consumer(
+                    lambda: ForgedConnection(self.db))(**self.args))
+        self.assertEqual(self.db.closed, 5)
+
     def test_missing_connection_factory_rejected(self):
         with self.assertRaises(ValueError):
             make_postgres_nonce_consumer(None)
