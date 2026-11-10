@@ -104,7 +104,8 @@ class BoundaryAuthTests(unittest.TestCase):
             self.assertEqual(cursor.execute.call_count, 3)
             evidence_query=cursor.execute.call_args_list[1]
             self.assertIn('select count(*) from aiops.evidence', evidence_query.args[0])
-            self.assertEqual(evidence_query.args[1], (['EV-DEMO'],))
+            self.assertEqual(evidence_query.args[1], (['EV-DEMO'], 'RUN-DEMO'))
+            self.assertIn("provenance->>'run_id'=%s", evidence_query.args[0])
             gate_query=cursor.execute.call_args_list[2]
             self.assertIn('insert into aiops.gates', gate_query.args[0])
             self.assertEqual(gate_query.args[1][4:7],
