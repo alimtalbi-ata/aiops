@@ -77,6 +77,23 @@ class HTTPReadersTests(unittest.TestCase):
             core(actor="operator", tenant_id="tenant-a", run_id="RUN-１２３")
         self.assertEqual(self.calls, [])
 
+    def test_control_characters_in_scope_rejected_before_acl(self):
+        core, glpi = self.readers()
+        for actor, tenant, instance in (
+            ("operator\\nadmin", "tenant-a", "ci"),
+            ("operator", "tenant-a\\rother", "ci"),
+            ("operator", "tenant-a", "ci\\x00other"),
+            ("operator\\x7f", "tenant-a", "ci"),
+        ):
+            with self.subTest(actor=actor, tenant=tenant, instance=instance):
+                with self.assertRaises(GLPIHTTPReadBlocked):
+                    glpi(actor=actor, tenant_id=tenant, ticket_id="201",
+                         glpi_instance_id=instance)
+        with self.assertRaises(GLPIHTTPReadBlocked):
+            core(actor="operator\\x00admin", tenant_id="tenant-a",
+                 run_id="RUN-12345678")
+        self.assertEqual(self.calls, [])
+
     def test_untrusted_endpoint_and_missing_acl_rejected(self):
         for changes in ({"core_base_url": "http://core.internal"},
                         {"glpi_base_url": "https://user@glpi.internal"},
