@@ -116,3 +116,24 @@ class GateEvidenceRunBindingTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class GateProvenanceObjectTests(unittest.TestCase):
+    def test_nonobject_provenance_is_not_legacy_ownership(self):
+        # SQL double models the PostgreSQL '?' absent-key behavior on scalars.
+        # Actual JSON operators are exercised by the Actions-only PG fixture.
+        for provenance in (None, [], ["other"], "legacy", 42, False):
+            connection = Connection()
+            original = connection.execute
+            def execute(query, params):
+                result = original(query, params)
+                if 'count(*)' in query:
+                    connection.row = (int("jsonb_typeof(provenance)='object'" not in query),)
+                return result
+            connection.execute = execute
+            with self.subTest(provenance=provenance):
+                with self.assertRaises(HTTPException) as caught:
+                    load_gate(connection)('RUN-1', dict(stage='OBSERVE', state='PASS',
+                        evidence_ids=['EV-1'], required_evidence=['observation']), 'token')
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertFalse(connection.writes)

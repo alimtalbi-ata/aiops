@@ -233,7 +233,9 @@ with checkpoint_db() as connection:
 try:
     for provenance, allowed in (({'run_id': 'FOREIGN'}, False), ({'run_id': None}, False),
                                 ({'run_id': ''}, False), ({'run_id': 42}, False),
-                                ({'run_id': gate_rid}, True), ({}, True)):
+                                ({'run_id': gate_rid}, True), ({}, True),
+                                (None, False), ([], False), (['other'], False),
+                                ('legacy', False), (42, False), (False, False)):
         with checkpoint_db() as connection:
             connection.execute('delete from aiops.gates where run_id=%s', (gate_rid,))
             gate_eid = gate_rid + '-EVIDENCE-' + uuid.uuid4().hex
@@ -250,6 +252,7 @@ try:
         with checkpoint_db() as connection:
             assert connection.execute('select count(*) from aiops.gates where run_id=%s',
                                       (gate_rid,)).fetchone()[0] == int(allowed)
+    print('CANDIDATE_GATE_PG_PROVENANCE_OBJECT=PASS; nonobject_cases=6')
     print('CANDIDATE_GATE_PG_RUN_BINDING=PASS; legacy_owner_absent=compatible; category_proof=NOT_VERIFIED')
 finally:
     with checkpoint_db() as connection:

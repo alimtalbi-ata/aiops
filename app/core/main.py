@@ -435,6 +435,7 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
             # Legacy evidence may omit run_id; an explicit owner must match.
             # JSON null, empty and malformed owners cannot prove this binding.
             n=c.execute("select count(*) from aiops.evidence where evidence_id=any(%s) "
+                        "and jsonb_typeof(provenance)='object' "
                         "and (not (provenance ? 'run_id') or provenance->>'run_id'=%s)",
                         (eids,rid)).fetchone()[0]
             if n!=len(set(eids)):raise HTTPException(422,'gate references unknown or foreign-run evidence')
