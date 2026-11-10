@@ -32,8 +32,10 @@ def make_postgres_nonce_consumer(connect: Callable):
         raise ValueError("postgres_connection_factory_missing")
 
     def consume_nonce(*, tenant_id, nonce, expires_at):
-        if (not isinstance(tenant_id, str) or not tenant_id
-                or len(tenant_id) > 128 or not isinstance(nonce, str)
+        if (not isinstance(tenant_id, str) or not tenant_id.strip()
+                or len(tenant_id) > 128
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in tenant_id)
+                or not isinstance(nonce, str)
                 or not 16 <= len(nonce) <= 128
                 or not nonce.isascii() or not nonce.isalnum()
                 or type(expires_at) is not int or expires_at <= 0):
