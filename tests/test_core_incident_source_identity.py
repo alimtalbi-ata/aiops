@@ -72,8 +72,24 @@ class IncidentIdentityTests(unittest.TestCase):
                 self.assertIn("returning incident_id", sql.lower())
                 self.assertEqual(params[5:7], (source, synthetic))
 
+    def test_existing_resolved_incident_is_not_reported_open(self):
+        result, calls = self.invoke(("INC-CANONICAL-EXISTING", "P1", "RESOLVED", True))
+        self.assertEqual(result, {
+            "incident_id": "INC-CANONICAL-EXISTING",
+            "severity": "P1",
+            "state": "RESOLVED",
+            "synthetic": True,
+        })
+        self.assertIn("returning incident_id,severity,state,synthetic", calls[0][0].lower())
+
+    def test_existing_non_synthetic_identity_is_preserved(self):
+        result, _ = self.invoke(("INC-LIVE", "P3", "BLOCKED", False),
+                                source="san-monitor", synthetic=False)
+        self.assertEqual(result["synthetic"], False)
+        self.assertEqual(result["state"], "BLOCKED")
+
     def test_same_identity_is_replayable(self):
-        result, calls = self.invoke(("INC-CANONICAL-EXISTING",))
+        result, calls = self.invoke(("INC-CANONICAL-EXISTING", "P2", "OPEN", True))
         self.assertEqual(result["incident_id"], "INC-CANONICAL-EXISTING")
         self.assertEqual(result["synthetic"], True)
         self.assertEqual(len(calls), 1)
