@@ -32,7 +32,7 @@ def validate(plan, inventory):
         return ["empty_inventory_refused"]
     try:
         parsed = {name: ipaddress.ip_network(cidr, strict=True) for name, cidr in nets.items()}
-        occupied = [ipaddress.ip_network(cidr, strict=False) for cidr in routes + docker_nets]
+        occupied = [ipaddress.ip_network(cidr, strict=False) for cidr in routes + docker_nets]\n        # A default route is not an allocated local subnet.\n        occupied = [net for net in occupied if net.prefixlen != 0]
         if any(n.version != 4 for n in list(parsed.values()) + occupied):
             errors.append("ipv4_only")
     except (ValueError, TypeError, AttributeError) as exc:
