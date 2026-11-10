@@ -74,8 +74,10 @@ PROD_TAG_ID_BEFORE="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')"
 
 # Bind the candidate build to an immutable, clean checkout. A moving or dirty
 # worktree cannot provide reproducible source-to-image provenance.
+# Include untracked non-ignored files: docker build uses the working directory
+# as its context and may otherwise package source absent from the Git SHA.
 SOURCE_SHA_BEFORE="$(git -C "$ROOT" rev-parse HEAD)" || exit 4
-if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]]; then
+if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=all)" ]]; then
   echo "FS1113_ERROR=DIRTY_SOURCE_CHECKOUT"
   exit 2
 fi
@@ -85,7 +87,7 @@ echo "FS1113_SOURCE_SHA=$SOURCE_SHA_BEFORE"
 bash "$ROOT/scripts/fs/FS.1097-build-history-chart-candidate.sh"
 
 SOURCE_SHA_AFTER="$(git -C "$ROOT" rev-parse HEAD)" || exit 4
-if [[ "$SOURCE_SHA_AFTER" != "$SOURCE_SHA_BEFORE" || -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]]; then
+if [[ "$SOURCE_SHA_AFTER" != "$SOURCE_SHA_BEFORE" || -n "$(git -C "$ROOT" status --porcelain --untracked-files=all)" ]]; then
   echo "FS1113_ERROR=SOURCE_CHANGED_DURING_BUILD"
   exit 3
 fi
