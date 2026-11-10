@@ -220,6 +220,14 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         # Never forward unknown/NULL/corrupt modes to the Worker as synthetic.
         if row[1] not in ('DEMO', 'REPLAY', 'STORY'):
             raise HTTPException(422,'run execution mode unknown or unsupported')
+        # Legacy or externally corrupted persisted intent must not reach Worker,
+        # including through a previously stored execution receipt. RunIn only
+        # validates new requests; dispatch must validate the durable row too.
+        scenario_id = row[2]
+        if (not isinstance(scenario_id, str) or not scenario_id.strip()
+                or scenario_id != scenario_id.strip()
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in scenario_id)):
+            raise HTTPException(422, 'persisted run scenario identity unknown')
         # A completed dispatch may already have advanced the Run. Return its
         # durable receipt instead of issuing a second Worker start on retry.
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
