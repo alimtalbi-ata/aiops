@@ -131,3 +131,26 @@ def test_gate_explicit_unknown_state_is_not_pass(fixture_gate):
                   authorization="token")
     assert result["state"] == "UNKNOWN"
     assert cursor.writes[0][1][3] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("stage", [
+    " POLICY", "POLICY ", "POLICY\\n", "POLICY\\t", "POLICY\\x00", "POLICY\\x7f",
+])
+def test_gate_rejects_ambiguous_stage_alias_without_write(fixture_gate, stage):
+    gate, cursor = fixture_gate
+    with pytest.raises(HTTPException) as exc:
+        gate("RUN-1", {"stage": stage, "state": "UNKNOWN",
+                       "required_evidence": [], "evidence_ids": []},
+             authorization="token")
+    assert exc.value.status_code == 422
+    assert cursor.writes == []
+
+
+def test_gate_canonical_stage_still_accepts_unknown(fixture_gate):
+    gate, cursor = fixture_gate
+    result = gate("RUN-1", {"stage": "POLICY", "state": "UNKNOWN",
+                            "required_evidence": [], "evidence_ids": []},
+                  authorization="token")
+    assert result["stage"] == "POLICY"
+    assert result["state"] == "UNKNOWN"
+    assert len(cursor.writes) == 1

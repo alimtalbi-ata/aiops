@@ -260,7 +260,8 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     # stage must never be stored under a shared UNKNOWN key across retries.
     stage=x.get('stage')
     state=x.get('state')
-    if not isinstance(stage,str) or not stage.strip():
+    if (not isinstance(stage,str) or not stage.strip()
+            or stage != stage.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
         raise HTTPException(422,'gate stage identity unknown')
     if state not in ('PASS','FAIL','BLOCKED','UNKNOWN','NEEDS_HUMAN','PENDING','RUNNING'):
         raise HTTPException(422,'gate state unknown')
