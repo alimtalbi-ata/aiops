@@ -17,6 +17,12 @@ class HistoryTimeoutContract(unittest.TestCase):
         self.assertIn('if(requestId!==historyRequestId||(!historyTimedOut&&(controller.signal.aborted||error?.name==="AbortError")))return;', source)
         self.assertIn('status.textContent="Historique indisponible · réessayez ou contactez l’exploitation"', source)
 
+    def test_late_success_after_timeout_is_not_rendered_as_success(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertEqual(source.count('if(historyTimedOut)throw new Error("History request timed out");'), 2)
+        self.assertRegex(source, r'const response=await fetch\\([^;]+;\\s*if\\(requestId!==historyRequestId\\)return;\\s*if\\(historyTimedOut\\)throw')
+        self.assertRegex(source, r'const data=await response\\.json\\(\\);\\s*if\\(requestId!==historyRequestId\\)return;\\s*if\\(historyTimedOut\\)throw')
+
     def test_request_generation_still_guards_old_responses(self):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("const requestId=++historyRequestId;", source)
