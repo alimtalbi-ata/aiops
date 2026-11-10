@@ -65,6 +65,23 @@ class SessionTests(unittest.TestCase):
                          ["initSession", "Ticket/201", "killSession"])
         self.assertEqual({r.get_method() for _, r in calls}, {"GET"})
 
+    def test_reader_contract_without_ticket_keyword(self):
+        calls = []
+        fn = self.make(calls)
+        payload = fn(url="https://glpi.internal/Ticket/201", actor="operator",
+                     tenant_id="tenant-a", glpi_instance_id="ci")
+        self.assertEqual(payload["id"], 201)
+        self.assertEqual([name for name, _ in calls],
+                         ["initSession", "Ticket/201", "killSession"])
+
+    def test_explicit_ticket_mismatch_rejected_before_credentials(self):
+        calls = []
+        fn = self.make(calls)
+        with self.assertRaises(GLPISessionReadBlocked):
+            fn(url="https://glpi.internal/Ticket/201", actor="operator",
+               tenant_id="tenant-a", ticket_id="202", glpi_instance_id="ci")
+        self.assertEqual(calls, [])
+
     def test_ticket_failure_still_closes_session(self):
         calls = []
         with self.assertRaises(GLPISessionReadBlocked):
