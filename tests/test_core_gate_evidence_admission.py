@@ -107,3 +107,27 @@ def test_gate_upsert_reconciles_required_evidence_on_repeated_stage(fixture_gate
     assert first_params[4] == '["EV-1"]'
     assert second_params[4] == "[]"
     assert second_params[3] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("payload", [
+    {"state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+    {"stage": "", "state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+    {"stage": None, "state": "UNKNOWN"},
+    {"stage": "POLICY", "state": None},
+    {"stage": "POLICY", "state": "SUCCESS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+])
+def test_gate_unknown_stage_or_state_cannot_write(fixture_gate, payload):
+    gate, cursor = fixture_gate
+    with pytest.raises(HTTPException) as exc:
+        gate("RUN-1", payload, authorization="token")
+    assert exc.value.status_code == 422
+    assert cursor.writes == []
+
+
+def test_gate_explicit_unknown_state_is_not_pass(fixture_gate):
+    gate, cursor = fixture_gate
+    result = gate("RUN-1", {"stage": "POLICY", "state": "UNKNOWN",
+                             "required_evidence": [], "evidence_ids": []},
+                  authorization="token")
+    assert result["state"] == "UNKNOWN"
+    assert cursor.writes[0][1][3] == "UNKNOWN"
