@@ -41,6 +41,11 @@ def make_postgres_nonce_consumer(connect: Callable):
                 or type(expires_at) is not int or expires_at <= 0):
             return False
         try:
+            # Reject timestamps PostgreSQL cannot represent before opening a DB connection.
+            expiry = datetime.fromtimestamp(expires_at, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return False
+        try:
             connection = connect()
             try:
                 with connection:
@@ -52,7 +57,7 @@ def make_postgres_nonce_consumer(connect: Callable):
                             "ON CONFLICT (tenant_id, nonce) DO NOTHING "
                             "RETURNING nonce",
                             (tenant_id, nonce,
-                             datetime.fromtimestamp(expires_at, tz=timezone.utc)),
+                             expiry),
                         )
                         row = cursor.fetchone()
                         # Only the exact inserted nonce proves successful
