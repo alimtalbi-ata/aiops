@@ -57,6 +57,16 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
 @app.post('/api/runs')
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Identity validation must precede the idempotency lock and every DB write.
+    # Whitespace aliases or control characters must not silently create runs.
+    for name, value in (('scenario_id', x.scenario_id), ('idempotency_key', x.idempotency_key)):
+        if (not isinstance(value, str) or not value.strip() or value != value.strip()
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)):
+            raise HTTPException(422, f'run {name} identity unknown')
+    if x.incident_id is not None and (not isinstance(x.incident_id, str)
+            or not x.incident_id.strip() or x.incident_id != x.incident_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in x.incident_id)):
+        raise HTTPException(422, 'run incident_id identity unknown')
     with db() as c:
         # Serialize first-time dispatches for the same key before checking existence.
         # A row lock cannot protect an absent row. The transaction-scoped advisory
