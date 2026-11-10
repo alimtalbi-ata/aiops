@@ -33,8 +33,9 @@ export function renderOperationalState(root,state,{details='',retry=null}={}) {
  root.replaceChildren(section);return section;
 }
 /** Latest-only reader: also fences sources that ignore AbortSignal. */
-export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15000}={}){
+export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15000,maxAgeMs=180000}={}){
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)throw new RangeError('timeoutMs must be 1..120000');
+ if(!Number.isSafeInteger(maxAgeMs)||maxAgeMs<1||maxAgeMs>86400000)throw new RangeError('maxAgeMs must be 1..86400000');
  if(typeof read!=='function'||typeof publish!=='function')throw new TypeError('read/publish required');
  const timeoutMarker=Symbol('operational-timeout');
  let generation=0,controller=null,active=false;
@@ -57,7 +58,7 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
     // already enforced actor/tenant scope; this UI only refuses to display
     // an unqualified projection as READY. Never authorize in the browser.
     const scoped=result && result.scope_verified===true && result.authorization_source==='server';
-    const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now()}) : 'UNKNOWN';
+    const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now(),maxAgeMs}) : 'UNKNOWN';
     active=false;
     publish({state,result:state==='READY'||state==='EMPTY'?result:null});
    }catch(error){
