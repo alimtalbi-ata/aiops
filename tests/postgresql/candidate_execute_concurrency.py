@@ -94,3 +94,72 @@ finally:
     with psycopg.connect(DSN) as connection:
         connection.execute('delete from aiops.execution_receipts where run_id=%s', (rid,))
         connection.execute('delete from aiops.runs where run_id=%s', (rid,))
+
+# Exercise the actual checkpoint route against PostgreSQL, not a SQL simulator.
+import ast
+from test_candidate_core_execute import HTTPException
+
+source = pathlib.Path(__file__).resolve().parents[2] / 'app/core/main.py'
+function = next(n for n in ast.parse(source.read_text()).body
+                if isinstance(n, ast.FunctionDef) and n.name == 'checkpoint')
+function.decorator_list = []
+
+def checkpoint_db():
+    return psycopg.connect(DSN, options='-c statement_timeout=12000 -c lock_timeout=10000')
+
+namespace = {'db': checkpoint_db, 'auth': lambda _: None, 'bearer': lambda x: x,
+             'Header': lambda default=None: default, 'HTTPException': HTTPException}
+exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), namespace)
+checkpoint = namespace['checkpoint']
+checkpoint_rid = 'CI-CHECKPOINT-' + uuid.uuid4().hex
+
+def save_checkpoint(version, stage='POLICY', workflow=None):
+    return checkpoint(checkpoint_rid, {'stage': stage, 'version': version,
+                                      'workflow_id': workflow})
+
+def refused(version, stage='POLICY', workflow=None, status=409):
+    try:
+        save_checkpoint(version, stage, workflow)
+    except HTTPException as error:
+        assert error.status_code == status
+    else:
+        raise AssertionError('Conflicting checkpoint accepted')
+
+with checkpoint_db() as connection:
+    connection.execute("insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
+                       "values(%s,'DEMO','CI-CHECKPOINT','CREATED',%s)",
+                       (checkpoint_rid, checkpoint_rid))
+try:
+    save_checkpoint(1, 'INGEST')
+    save_checkpoint(1, 'INGEST', checkpoint_rid)  # canonical identity enrichment
+    refused(0, 'INGEST')
+    refused(1, 'POLICY')
+    refused(2, workflow='FOREIGN')
+    refused(True, status=422)
+    barrier = threading.Barrier(2)
+    def race(version):
+        barrier.wait(timeout=5)
+        try:
+            save_checkpoint(version)
+            return 200
+        except HTTPException as error:
+            return error.status_code
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        low, high = pool.submit(race, 2), pool.submit(race, 3)
+        assert low.result(timeout=15) in (200, 409)
+        assert high.result(timeout=15) == 200
+    save_checkpoint(3)  # exact retry and absent identity preserve canonical owner
+    with checkpoint_db() as connection:
+        assert connection.execute('select stage,version,workflow_id from aiops.run_checkpoints where run_id=%s',
+                                  (checkpoint_rid,)).fetchone() == ('POLICY', 3, checkpoint_rid)
+        connection.execute('update aiops.run_checkpoints set workflow_id=%s where run_id=%s',
+                           ('FOREIGN', checkpoint_rid))
+    refused(4, workflow=checkpoint_rid)  # never adopt a foreign stored owner
+    with checkpoint_db() as connection:
+        assert connection.execute('select version,workflow_id from aiops.run_checkpoints where run_id=%s',
+                                  (checkpoint_rid,)).fetchone() == (3, 'FOREIGN')
+    print('CANDIDATE_CHECKPOINT_PG_MONOTONIC=PASS; concurrent_clients=2; temporal=NOT_VERIFIED')
+finally:
+    with checkpoint_db() as connection:
+        connection.execute('delete from aiops.run_checkpoints where run_id=%s', (checkpoint_rid,))
+        connection.execute('delete from aiops.runs where run_id=%s', (checkpoint_rid,))
