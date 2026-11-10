@@ -33,7 +33,8 @@ export function renderOperationalState(root,state,{details='',retry=null}={}) {
  root.replaceChildren(section);return section;
 }
 /** Latest-only reader: also fences sources that ignore AbortSignal. */
-export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
+export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15000}={}){
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)throw new RangeError('timeoutMs must be 1..120000');
  if(typeof read!=='function'||typeof publish!=='function')throw new TypeError('read/publish required');
  let generation=0,controller=null;
  return {
@@ -43,8 +44,15 @@ export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
    controller=new AbortController();
    const signal=controller.signal;
    publish({state:'LOADING'});
+   let timer;
    try{
-    const result=await read(query,{signal});
+    // A hung adapter must not leave the operator in LOADING forever.
+    // Fence late responses even if the transport ignores AbortSignal.
+    const timed=Promise.race([
+     Promise.resolve().then(()=>read(query,{signal})),
+     new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('OPERATIONAL_TIMEOUT')),timeoutMs);})
+    ]);
+    const result=await timed;
     if(id!==generation||signal.aborted)return;
     // A transport success is not an evidence success. The server must have
     // already enforced actor/tenant scope; this UI only refuses to display
@@ -54,7 +62,12 @@ export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
     publish({state,result:state==='READY'||state==='EMPTY'?result:null});
    }catch(error){
     if(id!==generation||signal.aborted)return;
-    publish({state:'ERROR',error});
+    if(error?.message==='OPERATIONAL_TIMEOUT'){
+     controller.abort();
+     publish({state:'UNKNOWN',reason:'TIMEOUT',result:null});
+    }else publish({state:'ERROR',error});
+   }finally{
+    clearTimeout(timer);
    }
   },
   cancel(){generation++;if(controller)controller.abort();controller=null;}
