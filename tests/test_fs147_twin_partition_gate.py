@@ -1,0 +1,69 @@
+"""Regression tests for the read-only FS147/SAN partition gate."""
+import importlib.util
+import unittest
+from pathlib import Path
+
+path = Path(__file__).resolve().parents[1] / "scripts/fs/fs147_twin_partition_gate.py"
+spec = importlib.util.spec_from_file_location("fs147_partition_gate", path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+
+def fixture():
+    def node(identifier, namespace):
+        return {"node_id": identifier, "namespace": namespace}
+    def facts(run, node_id, fact_id):
+        return {"run_id": run, "synthetic": True, "facts": [
+            {"fact_id": fact_id, "node_id": node_id,
+             "value": {"run_id": run, "synthetic": True,
+                       "target_node_id": node_id}}]}
+    return ({"nodes": [node("FS-147", "lab/fs147"), node("SAN-1", "lab/san")],
+             "edges": []},
+            facts("RUN-FS", "FS-147", "FACT-FS"),
+            facts("RUN-SAN", "SAN-1", "FACT-SAN"))
+
+
+class PartitionGateTests(unittest.TestCase):
+    def check(self, graph, fs, san):
+        return module.qualify(graph, fs, san, "lab/fs147", "lab/san")
+
+    def test_valid_isolated_capture(self):
+        self.assertEqual(self.check(*fixture())["status"], "PASS")
+
+    def test_cross_namespace_dependency(self):
+        graph, fs, san = fixture()
+        graph["edges"].append({"edge_id": "EDGE-X", "source_id": "FS-147",
+                               "target_id": "SAN-1"})
+        with self.assertRaises(module.IsolationError):
+            self.check(graph, fs, san)
+
+    def test_san_fact_substituted_into_fs_run(self):
+        graph, fs, san = fixture()
+        fs["facts"][0]["node_id"] = "SAN-1"
+        with self.assertRaises(module.IsolationError):
+            self.check(graph, fs, san)
+
+    def test_cross_run_and_missing_target(self):
+        for field, value in (("run_id", "RUN-SAN"), ("target_node_id", None)):
+            with self.subTest(field=field):
+                graph, fs, san = fixture()
+                fs["facts"][0]["value"][field] = value
+                with self.assertRaises(module.IsolationError):
+                    self.check(graph, fs, san)
+
+    def test_duplicate_ids_and_missing_namespace(self):
+        for kind in ("duplicate_node", "duplicate_fact", "unscoped"):
+            with self.subTest(kind=kind):
+                graph, fs, san = fixture()
+                if kind == "duplicate_node":
+                    graph["nodes"][1]["node_id"] = "FS-147"
+                elif kind == "duplicate_fact":
+                    san["facts"][0]["fact_id"] = "FACT-FS"
+                else:
+                    graph["nodes"][1].pop("namespace")
+                with self.assertRaises(module.IsolationError):
+                    self.check(graph, fs, san)
+
+
+if __name__ == "__main__":
+    unittest.main()
