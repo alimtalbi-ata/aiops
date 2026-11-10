@@ -1,0 +1,159 @@
+"""FS147 candidate: strict, lossless offline demultiplexing of Twin receipts.
+
+No live I/O. Synthetic adapter contract, not Debian E2E proof.
+A consumer must not silently drop an unknown receipt or accept a partial RUN.
+"""
+import copy
+import unittest
+
+STAGES = ("event", "core", "critic", "policy", "worker", "evidence", "portal", "itsm")
+IDENTITY = ("tenant_id", "graph", "namespace", "run_id")
+LAB = dict(tenant_id="fixture-client-a", graph="filesystem-lab", namespace="fs-lab", run_id="RUN-FS147-FIXTURE")
+SAN = dict(tenant_id="fixture-client-b", graph="twin-san", namespace="acme-san", run_id="RUN-SAN-FIXTURE")
+
+
+def partition_receipts(receipts, expected=(LAB, SAN)):
+    """Fail closed on unknown identities, duplicates, gaps or wrong order.
+
+    Caller must run the full stage-level provenance/evidence validator on
+    each returned trace. This function proves lossless routing only.
+    """
+    if not isinstance(receipts, list):
+        raise ValueError("invalid receipt stream")
+    if not isinstance(expected, (tuple, list)) or not expected:
+        raise ValueError("invalid expected identities")
+    def identity(item):
+        if not isinstance(item, dict):
+            raise ValueError("malformed identity")
+        values = tuple(item.get(field) for field in IDENTITY)
+        if any(not isinstance(value, str) or not value.strip() or value != value.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in value) for value in values):
+            raise ValueError("malformed identity")
+        return values
+    keys = [identity(item) for item in expected]
+    if len(set(keys)) != len(keys):
+        raise ValueError("ambiguous expected identities")
+    groups = {key: [] for key in keys}
+    for receipt in receipts:
+        if not isinstance(receipt, dict):
+            raise ValueError("malformed receipt")
+        key = identity(receipt)
+        if key not in groups:
+            raise ValueError("unknown or cross-graph identity")
+        stage = receipt.get("stage")
+        if (not isinstance(stage, str) or stage not in STAGES
+                or not isinstance(receipt.get("receipt_id"), str)
+                or receipt["receipt_id"] != receipt["run_id"] + ":" + stage):
+            raise ValueError("invalid or foreign stage receipt identity")
+        groups[key].append(copy.deepcopy(receipt))
+    for key, trace in groups.items():
+        if tuple(r.get("stage") for r in trace) != STAGES:
+            raise ValueError("missing, duplicated or reordered RUN stage")
+    return groups
+
+
+def fixture(own):
+    return [dict(**own, stage=stage, receipt_id=own["run_id"] + ":" + stage) for stage in STAGES]
+
+
+class StreamPartitionContract(unittest.TestCase):
+    def test_interleaved_lossless_deterministic_and_nonmutating(self):
+        lab, san = fixture(LAB), fixture(SAN)
+        mixed = [r for pair in zip(lab, san) for r in pair]
+        snapshot = copy.deepcopy(mixed)
+        first = partition_receipts(mixed)
+        self.assertEqual(first[tuple(LAB[k] for k in IDENTITY)], lab)
+        self.assertEqual(first[tuple(SAN[k] for k in IDENTITY)], san)
+        self.assertEqual(partition_receipts(mixed), first)
+        self.assertEqual(mixed, snapshot)
+
+    def test_reject_unknown_and_forged_partial_identity(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for key, value in (("tenant_id", "intruder"), ("graph", SAN["graph"]),
+                           ("namespace", SAN["namespace"]), ("run_id", SAN["run_id"])):
+            with self.subTest(field=key):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0][key] = value
+                with self.assertRaisesRegex(ValueError, "unknown or cross-graph"):
+                    partition_receipts(poisoned)
+
+    def test_reject_missing_duplicate_and_reordered_stage(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        cases = (mixed[:-1], mixed + [copy.deepcopy(mixed[0])],
+                 [mixed[2], mixed[1], mixed[0]] + mixed[3:])
+        for poisoned in cases:
+            with self.subTest(length=len(poisoned)):
+                with self.assertRaisesRegex(ValueError, "missing, duplicated or reordered"):
+                    partition_receipts(poisoned)
+
+    def test_reject_foreign_or_missing_receipt_id_even_with_valid_partition(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for receipt_id in (SAN["run_id"] + ":event", "", None, "RUN-FS147-FIXTURE:policy"):
+            with self.subTest(receipt_id=receipt_id):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0]["receipt_id"] = receipt_id
+                with self.assertRaisesRegex(ValueError, "foreign stage receipt"):
+                    partition_receipts(poisoned)
+
+    def test_reject_malformed_identity_without_typeerror(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for field, value in (("tenant_id", []), ("graph", {}), ("namespace", None), ("run_id", ""), ("tenant_id", 42)):
+            with self.subTest(field=field, value=value):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0][field] = value
+                with self.assertRaisesRegex(ValueError, "malformed identity"):
+                    partition_receipts(poisoned)
+        for invalid in ([], [dict(LAB, run_id=[])], [dict(LAB, graph="")]):
+            with self.subTest(expected=invalid):
+                with self.assertRaises(ValueError):
+                    partition_receipts([], expected=invalid)
+
+    def test_reject_ambiguous_whitespace_and_control_identity(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for field in IDENTITY:
+            for value in (" " + LAB[field], LAB[field] + " ", LAB[field] + "\n", LAB[field] + "\x00"):
+                with self.subTest(field=field, value=repr(value)):
+                    poisoned = copy.deepcopy(mixed)
+                    poisoned[0][field] = value
+                    with self.assertRaisesRegex(ValueError, "malformed identity"):
+                        partition_receipts(poisoned)
+                    with self.assertRaisesRegex(ValueError, "malformed identity"):
+                        partition_receipts([], expected=(dict(LAB, **{field: value}), SAN))
+
+    def test_malformed_stage_and_receipt_id_fail_closed_without_typeerror(self):
+        mixed = [r for pair in zip(fixture(LAB), fixture(SAN)) for r in pair]
+        for field, invalid in (("stage", []), ("stage", {}),
+                               ("stage", None), ("stage", 7),
+                               ("receipt_id", []), ("receipt_id", {}),
+                               ("receipt_id", 9), ("receipt_id", None)):
+            with self.subTest(field=field, invalid=invalid):
+                poisoned = copy.deepcopy(mixed)
+                poisoned[0][field] = invalid
+                with self.assertRaisesRegex(ValueError, "invalid or foreign stage receipt"):
+                    partition_receipts(poisoned)
+                self.assertEqual(mixed[0]["stage"], "event")
+
+    def test_partition_deep_copies_nested_observations_and_dependencies(self):
+        """No shared mutable provenance between original stream and projected traces."""
+        lab, san = fixture(LAB), fixture(SAN)
+        lab[0]["observations"] = [{"resource_id": "fs-volume-147", "value": 91}]
+        lab[0]["dependencies"] = [{"source": "fs-volume-147", "target": "fs-service"}]
+        san[0]["observations"] = [{"resource_id": "san-lun-1", "value": 12}]
+        san[0]["dependencies"] = [{"source": "san-lun-1", "target": "san-array"}]
+        mixed = [r for pair in zip(lab, san) for r in pair]
+        original = copy.deepcopy(mixed)
+        projected = partition_receipts(mixed)
+        fs_trace = projected[tuple(LAB[k] for k in IDENTITY)]
+        san_trace = projected[tuple(SAN[k] for k in IDENTITY)]
+        fs_trace[0]["observations"][0]["resource_id"] = "san-lun-1"
+        fs_trace[0]["dependencies"][0]["target"] = "san-array"
+        self.assertEqual(mixed, original)
+        self.assertEqual(san_trace[0], san[0])
+        self.assertEqual(partition_receipts(mixed)[tuple(LAB[k] for k in IDENTITY)], lab)
+
+    def test_reject_ambiguous_expected_identity(self):
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            partition_receipts([], expected=(LAB, copy.deepcopy(LAB)))
+
+
+if __name__ == "__main__":
+    unittest.main()

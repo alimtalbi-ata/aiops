@@ -36,6 +36,38 @@ def graph():
     with db() as c:
         ns=c.execute('select node_id,type,name,site,state,criticality,health,confidence from aiops.twin_nodes').fetchall(); es=c.execute('select edge_id,source_id,target_id,relation_type,redundancy,confidence from aiops.twin_edges').fetchall()
     nk=['node_id','type','name','site','state','criticality','health','confidence']; ek=['edge_id','source_id','target_id','relation_type','redundancy','confidence']; return {'nodes':[dict(zip(nk,x)) for x in ns],'edges':[dict(zip(ek,x)) for x in es]}
+@app.get('/api/twin/qualification/graph')
+def qualification_graph(authorization:str|None=Header(default=None)):
+    """Read-only explicitly scoped topology for SAN/FS E2E qualification.
+
+    No namespace is inferred from a node name, site or customer identifier.
+    The complete node_id->namespace map is supplied by the isolated candidate
+    configuration; missing/invalid coverage is HOLD, never a partial PASS.
+    """
+    import json
+    if (authorization or '').removeprefix('Bearer ') != SIM_TOKEN:
+        raise HTTPException(401, 'invalid token')
+    try:
+        mapping = json.loads(os.getenv('AIOPS_TWIN_QUALIFICATION_NODE_NAMESPACES', ''))
+    except (ValueError, TypeError):
+        raise HTTPException(503, 'qualification namespace mapping unavailable')
+    if (not isinstance(mapping, dict) or not mapping
+            or any(not isinstance(k, str) or not k or
+                   not isinstance(v, str) or not v.strip() or v != v.strip()
+                   for k, v in mapping.items())):
+        raise HTTPException(503, 'qualification namespace mapping unavailable')
+    canonical = graph()
+    ids = [node['node_id'] for node in canonical['nodes']]
+    if not ids or len(ids) != len(set(ids)) or set(ids) != set(mapping):
+        raise HTTPException(409, 'qualification namespace coverage mismatch')
+    for edge in canonical['edges']:
+        a, b = edge['source_id'], edge['target_id']
+        if a not in mapping or b not in mapping or mapping[a] != mapping[b]:
+            raise HTTPException(409, 'cross-namespace or orphan dependency')
+    return {'nodes': [{**node, 'namespace': mapping[node['node_id']]}
+                      for node in canonical['nodes']], 'edges': canonical['edges'],
+            'scope': 'qualification-only', 'namespace_source': 'explicit-candidate-config'}
+
 @app.get('/api/twin/impact/{node_id}')
 def impact(node_id:str):
     with db() as c:
@@ -45,7 +77,26 @@ def impact(node_id:str):
 @app.get('/api/twin/at')
 def at(known_at:str):
     with db() as c:r=c.execute("select f.fact_id,f.node_id,f.attribute,f.value,f.valid_from,f.valid_to,f.known_at,f.confidence from aiops.twin_facts f where f.known_at<=%s and f.valid_from<=%s and (f.valid_to is null or f.valid_to>%s) order by f.node_id,f.attribute",(known_at,known_at,known_at)).fetchall()
-    k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']; return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r]}
+    # Historical canonical reads must never silently ingest simulated RUN facts.
+    # Synthetic facts are stored alongside canonical facts for audit, but they
+    # belong to an isolated qualification plane, not the canonical at-time view.
+    import json
+    def canonical(row):
+        # Older adapters may serialize the marker as the string 'true'.
+        # Treat both representations as qualification-only evidence.
+        value = row[3]
+        if isinstance(value, dict):
+            payload = value
+        elif isinstance(value, str):
+            try:
+                payload = json.loads(value)
+            except (ValueError, TypeError):
+                payload = None
+        else:
+            payload = None
+        return not (isinstance(payload, dict) and (payload.get('synthetic') is True or payload.get('synthetic') == 'true'))
+    k=['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']
+    return {'known_at':known_at,'facts':[dict(zip(k,x)) for x in r if canonical(x)]}
 import os
 from pydantic import BaseModel
 from shared.ids import new
@@ -55,14 +106,98 @@ class SyntheticEvent(BaseModel):action:str;target_node_id:str|None=None;payload:
 @app.post('/api/twin/synthetic-event')
 def synthetic_event(x:SyntheticEvent,authorization:str|None=Header(default=None)):
     if (authorization or '').removeprefix('Bearer ')!=SIM_TOKEN: raise HTTPException(401,'invalid token')
-    if not x.run_id: raise HTTPException(422,'run_id required')
+    if (not isinstance(x.run_id, str) or not x.run_id or x.run_id != x.run_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in x.run_id)):
+        raise HTTPException(422, 'valid run_id required')
+    # A synthetic receipt must never claim PASS without a supported operation.
+    # Validate before opening a DB transaction; unknown actions fail closed.
+    if x.action not in ('SET_STATE', 'OBSERVE'):
+        raise HTTPException(422, 'unsupported synthetic action')
+    if (not isinstance(x.target_node_id, str) or not x.target_node_id
+            or x.target_node_id != x.target_node_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in x.target_node_id)):
+        raise HTTPException(422, 'valid target_node_id required')
+    # Never claim a successful observation/state transition for empty evidence.
+    # Validate before DB access, preserving the read-only topology lookup gate.
+    if x.action == 'OBSERVE':
+        if not isinstance(x.payload.get('metric'), str) or not x.payload['metric'].strip() or x.payload.get('value') is None:
+            raise HTTPException(422, 'observation metric and value required')
+        # Evidence must be a finite numeric measurement, not a boolean, object or NaN.
+        import math
+        value = x.payload['value']
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise HTTPException(422, 'observation value must be a finite number')
+        try:
+            finite = math.isfinite(value)
+        except (OverflowError, ValueError, TypeError):
+            finite = False
+        if not finite:
+            raise HTTPException(422, 'observation value must be a finite number')
+    if x.action == 'SET_STATE':
+        if not isinstance(x.payload.get('state'), str) or not x.payload['state'].strip():
+            raise HTTPException(422, 'state required')
     with db() as c:
+        # Fail closed before writing an observation or topology fact.
+        if not c.execute('select 1 from aiops.twin_nodes where node_id=%s', (x.target_node_id,)).fetchone():
+            raise HTTPException(404, 'target node not found')
         if x.action=='SET_STATE' and x.target_node_id:
-            p=x.payload; c.execute('update aiops.twin_nodes set state=%s,health=%s,known_at=now() where node_id=%s',(p.get('state','UNKNOWN'),p.get('health'),x.target_node_id))
-            c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(new('FACT'),x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'synthetic':True})))
+            record_id = new('FACT')
+            # Synthetic scenario state is evidence, never a canonical node mutation.
+            # The canonical graph stays unchanged; scenario consumers read twin_facts.
+            p=x.payload
+            c.execute('insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,\'state\',%s,now(),1.0)',(record_id,x.target_node_id,__import__('json').dumps({'state':p.get('state'),'run_id':x.run_id,'target_node_id':x.target_node_id,'synthetic':True})))
         elif x.action=='OBSERVE' and x.target_node_id:
-            p=x.payload;c.execute('insert into aiops.observations(observation_id,node_id,metric,value,unit,observed_at,status,payload) values(%s,%s,%s,%s,%s,now(),%s,%s)',(new('OBS'),x.target_node_id,p.get('metric','synthetic'),p.get('value'),p.get('unit'),p.get('status','UNKNOWN'),__import__('json').dumps({'run_id':x.run_id,'synthetic':True})))
-    return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True}
+            # Qualification observations are scenario facts, never canonical telemetry.
+            # Persist run provenance in the same fenced store as synthetic state.
+            record_id = new('FACT')
+            p=x.payload
+            c.execute("insert into aiops.twin_facts(fact_id,node_id,attribute,value,valid_from,confidence) values(%s,%s,%s,%s,now(),1.0)",
+                      (record_id,x.target_node_id,'observation',__import__('json').dumps({
+                          'metric':p['metric'],'value':p['value'],'unit':p.get('unit'),
+                          'status':p.get('status','UNKNOWN'),'run_id':x.run_id,'target_node_id':x.target_node_id,'synthetic':True})))
+    return {'status':'PASS','action':x.action,'target_node_id':x.target_node_id,'synthetic':True,
+            'run_id':x.run_id,'record_id':record_id,
+            'record_type':'twin_fact'}
+
+@app.get('/api/twin/scenario/{run_id}/facts')
+def scenario_facts(run_id:str, authorization:str|None=Header(default=None)):
+    """Read-only, RUN-fenced qualification evidence; never a canonical topology view."""
+    if (authorization or '').removeprefix('Bearer ') != SIM_TOKEN:
+        raise HTTPException(401, 'invalid token')
+    if (not run_id or run_id != run_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in run_id)):
+        raise HTTPException(422, 'valid run_id required')
+    # Both predicates are mandatory: a matching run_id alone is not proof of
+    # synthetic provenance. Never fall back to canonical observations or nodes.
+    with db() as c:
+        rows = c.execute(
+            """select fact_id,node_id,attribute,value,valid_from,valid_to,known_at,confidence
+               from aiops.twin_facts
+               where value::jsonb ->> 'run_id' = %s
+                 and value::jsonb ->> 'synthetic' = 'true'
+               order by known_at,fact_id limit 501""", (run_id,)
+        ).fetchall()
+    if len(rows) > 500:
+        raise HTTPException(409, 'scenario fact limit exceeded')
+    # Defense in depth: reject an inconsistent adapter/DB result rather than
+    # returning another RUN's evidence as if it belonged to this RUN.
+    import json
+    for row in rows:
+        value = row[3]
+        try:
+            payload = json.loads(value) if isinstance(value, str) else value
+        except (ValueError, TypeError):
+            payload = None
+        if (not isinstance(payload, dict)
+                or payload.get('run_id') != run_id
+                or (payload.get('target_node_id') is not None
+                    and payload.get('target_node_id') != row[1])
+                or payload.get('synthetic') not in (True, 'true')
+                or payload.get('synthetic') in (1,)):
+            raise HTTPException(409, 'scenario fact provenance mismatch')
+    k = ['fact_id','node_id','attribute','value','valid_from','valid_to','known_at','confidence']
+    return {'run_id':run_id,'synthetic':True,'record_type':'twin_fact',
+            'facts':[dict(zip(k,row)) for row in rows]}
 
 @app.get('/metrics')
 def metrics():
