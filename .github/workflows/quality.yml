@@ -44,6 +44,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_glpi_signed_xref_boundary.py" -v
       - name: GLPI signed xref and raw Core GLPI qualification pipeline (offline only)
         run: python -m unittest discover -s tests -p "test_glpi_raw_qualification.py" -v
+      - name: GLPI HMAC xref signature ACL expiry and replay regressions (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_xref_hmac_verifier.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
