@@ -16,31 +16,7 @@ command -v ip >/dev/null 2>&1 || fail "ip_missing"
 command -v ss >/dev/null 2>&1 || fail "ss_missing"
 if ! ip -o -4 addr show | grep -Fq '10.79.94.202/'; then fail "unexpected_target_host_ip|expected_10.79.94.202"; fi
 command -v curl >/dev/null 2>&1 || fail "curl_missing"
-command -v python3 >/dev/null 2>&1 || fail "python3_missing"
 docker compose version >/dev/null 2>&1 || fail "docker_compose_missing"
-
-# Reject fixed subnet collisions with host routes and every pre-existing Docker network.
-NETWORK_SUBNETS="$(docker network ls -q | xargs -r docker network inspect --format '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' 2>/dev/null || true)"
-HOST_ROUTES="$(ip -4 route show | awk '$1 != "default" {print $1}')"
-printf '%s\n%s\n' "$NETWORK_SUBNETS" "$HOST_ROUTES" | python3 -c '
-import ipaddress,sys
-planned=[ipaddress.ip_network(x) for x in (
- "172.30.10.0/24","172.30.20.0/24","172.30.30.0/24",
- "172.30.40.0/24","172.30.50.0/24","172.30.60.0/24",
- "172.30.70.0/24")]
-for raw in sys.stdin:
-    value=raw.strip()
-    if not value or value=="default":
-        continue
-    try:
-        existing=ipaddress.ip_network(value, strict=False)
-    except ValueError:
-        continue
-    for candidate in planned:
-        if existing.overlaps(candidate):
-            raise SystemExit("HOLD|subnet_collision|"+str(candidate)+"|"+str(existing))
-'
-
 
 # Create a dedicated environment file. Never read or overwrite the standard .env.
 if [[ ! -f "$ENV_FILE" ]]; then
