@@ -50,8 +50,7 @@ def _valid_observation_time(value):
 
 def _claims_side_effect(payload):
     """Reject explicit mutation/execution claims from any read-only stage."""
-    return (any(field in payload and payload[field] is not False
-                for field in ("action_executed", "remediation_executed",
+    # Action-bound HITL artifacts are never authorization for this diagnostic\n    # workflow. Even null/empty bindings are ambiguous and must fail closed.\n    return (any(field in payload for field in ("approval_binding",\n                                               "approval_token", "action_intent"))\n            or any(field in payload and payload[field] is not False\n                for field in ("action_executed", "remediation_executed",
                               "mutation_performed", "approval_granted",
                               "approval_consumed", "hitl_approved",
                               "action_dispatched", "ticket_updated"))
