@@ -88,3 +88,22 @@ def test_gate_missing_persisted_evidence_fails_closed(fixture_gate):
                         "evidence_ids": ["EV-1"]}, authorization="token")
     assert error.value.status_code == 422
     assert not cursor.writes
+
+
+def test_gate_upsert_reconciles_required_evidence_on_repeated_stage(fixture_gate):
+    """A changed stage contract must not leave stale required_evidence in DB."""
+    gate, cursor = fixture_gate
+    gate("RUN-1", {"stage": "POLICY", "state": "PASS",
+                   "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+         authorization="token")
+    gate("RUN-1", {"stage": "POLICY", "state": "UNKNOWN",
+                   "required_evidence": [], "evidence_ids": []},
+         authorization="token")
+    assert len(cursor.writes) == 2
+    first_sql, first_params = cursor.writes[0]
+    second_sql, second_params = cursor.writes[1]
+    assert "required_evidence=excluded.required_evidence" in first_sql
+    assert "required_evidence=excluded.required_evidence" in second_sql
+    assert first_params[4] == '["EV-1"]'
+    assert second_params[4] == "[]"
+    assert second_params[3] == "UNKNOWN"
