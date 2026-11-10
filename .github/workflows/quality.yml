@@ -94,7 +94,7 @@ jobs:
         run: |
           bash deploy/init-env.sh .env.isolated
           sed -i "s/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=aiops2-isolated/" .env.isolated
-          docker compose --env-file .env.isolated -p aiops2-isolated -f compose.yml -f compose.isolated.yml config --quiet
+          docker compose --env-file .env.isolated -p aiops2-isolated -f compose.isolated.yml config --quiet
       - name: Automation control-plane heartbeat offline gate
         run: python -m unittest discover -s tests -p "test_automation_heartbeat_gate.py" -v
       - name: Static repository audit
