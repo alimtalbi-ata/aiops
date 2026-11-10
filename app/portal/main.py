@@ -108,6 +108,45 @@ def copilot(authorization: str | None = Header(default=None)):
         'source': 'COPILOT_NOT_TENANT_AUTHORIZED',
         'source_freshness': 'UNKNOWN',
     }, status_code=503)
+def _glpi_copilot_ticket_compatibility(ticket_id: str, authorization: str | None = Header(default=None)):
+    """Preserve historical ticket-scoped URL contracts without unsafe fallback.
+
+    A shared Portal bearer is not an actor/tenant ACL. Until the canonical
+    association and independent GLPI/Core readbacks are wired to this route,
+    it must not read GLPI, query Copilot, or create a HITL proposal.
+    """
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({'detail': exc.detail}, status_code=exc.status_code)
+    import re
+    if not re.fullmatch(r'[1-9][0-9]{0,17}', ticket_id):
+        return _noc_json_response({
+            'state': 'UNKNOWN',
+            'reason': 'INVALID_GLPI_TICKET_ID',
+            'source': 'GLPI_COPILOT_COMPATIBILITY_GATE',
+        }, status_code=422)
+    return _noc_json_response({
+        'state': 'UNKNOWN',
+        'reason': 'GLPI_COPILOT_TENANT_ACL_AND_CANONICAL_XREF_NOT_QUALIFIED',
+        'source': 'GLPI_COPILOT_COMPATIBILITY_GATE',
+        'ticket_id': ticket_id,
+        'glpi_read_performed': False,
+        'core_read_performed': False,
+        'copilot_query_performed': False,
+        'hitl_proposal_created': False,
+        'execution_allowed': False,
+    }, status_code=503)
+
+
+# Keep both observed historical spellings routable. These are compatibility
+# gates only, not claims that the old GLPI → Copilot workflow is restored.
+app.add_api_route('/api/copilot/ticket/{ticket_id}',
+                  _glpi_copilot_ticket_compatibility, methods=['POST'])
+app.add_api_route('/api/copilot/glpi-ticket/{ticket_id}',
+                  _glpi_copilot_ticket_compatibility, methods=['POST'])
+
+
 @app.post('/api/demo')
 def demo(authorization: str | None = Header(default=None)):
     # A browser-supplied operator bearer authenticates only a DEMO request.
