@@ -29,6 +29,21 @@ class FS147JSONBoundaryTests(unittest.TestCase):
                                            "effect": "NO_EFFECT"}}}
         self.assertFalse(_claims_side_effect(payload))
 
+    def test_utf8_metadata_budget_rejects_large_single_values_and_keys(self):
+        # Node-count-only validation previously accepted these oversized inputs.
+        self.assertTrue(_claims_side_effect({"metadata": {"blob": "x" * 262145}}))
+        self.assertTrue(_claims_side_effect({"metadata": {"é" * 140000: "ok"}}))
+        self.assertTrue(_claims_side_effect({"metadata": {"blob": "🚀" * 70000}}))
+
+    def test_budget_is_aggregate_and_exact_small_payloads_remain_valid(self):
+        self.assertTrue(_claims_side_effect({
+            "metadata": {"first": "a" * 140000, "second": "b" * 140000}
+        }))
+        self.assertFalse(_claims_side_effect({
+            "metadata": {"first": "a" * 4000, "second": "b" * 4000,
+                         "dry_run": True, "effect": "NO_EFFECT"}
+        }))
+
     def test_cyclic_and_deep_payloads_remain_denied(self):
         cycle = []
         cycle.append(cycle)
