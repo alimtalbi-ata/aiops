@@ -21,6 +21,14 @@ class RawReadbackTests(unittest.TestCase):
             with self.assertRaises(RawReadbackInvalid):
                 normalize_core_run_readback(wrong, expected_run_id="RUN-12345678")
 
+    def test_raw_core_rejects_matching_but_noncanonical_run_identity(self):
+        for run_id in ("RUN-abc12345", "RUN-1", "RUN-" + "A" * 65):
+            with self.subTest(run_id=run_id), self.assertRaises(RawReadbackInvalid):
+                normalize_core_run_readback(
+                    {"run": {"run_id": run_id,
+                             "incident_id": "INC-DEMO-12345678", "mode": "DEMO"}},
+                    expected_run_id=run_id)
+
     def test_core_incident_identifier_grammar_matches_signed_xref(self):
         for incident in ("INC-", "INC-abc", "INC-../bad",
                          "INC-" + "x" * 129, "INC-" + chr(10) + "abcd"):
