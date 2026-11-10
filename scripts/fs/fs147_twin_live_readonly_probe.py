@@ -68,7 +68,7 @@ def qualify_live(base_url, token, fs_namespace, san_namespace, fs_run, san_run, 
         raise IsolationError("two distinct independent Core RUN IDs required")
     if any(ch in run for run in (fs_run, san_run) for ch in ("/", "?", "#", "\\", "\n", "\r")):
         raise IsolationError("unsafe Core RUN ID")
-    graph = fetch(base_url, "/api/twin/graph", token)
+    graph = fetch(base_url, "/api/twin/qualification/graph", token)
     fs = fetch(base_url, "/api/twin/scenario/" + quote(fs_run, safe="") + "/facts", token)
     san = fetch(base_url, "/api/twin/scenario/" + quote(san_run, safe="") + "/facts", token)
     result = qualify(graph, fs, san, fs_namespace, san_namespace, fs_run, san_run)
