@@ -164,3 +164,33 @@ test('tight freshness budget cannot override missing server authorization',async
  await reader.load('evidence');
  assert.deepEqual(events.at(-1),{state:'UNKNOWN',result:null});
 });
+
+test('inherited qualification cannot authorize a read-only projection',async()=>{
+ const events=[];
+ const inheritedScope=Object.assign(Object.create({scope_verified:true}),{
+  records:[{id:'other-tenant'}],observed_at:fresh,authorization_source:'server'
+ });
+ const inheritedAuth=Object.assign(Object.create({authorization_source:'server'}),{
+  records:[{id:'other-tenant'}],observed_at:fresh,scope_verified:true
+ });
+ const inheritedRecords=Object.assign(Object.create({records:[{id:'other-tenant'}]}),{
+  observed_at:fresh,scope_verified:true,authorization_source:'server'
+ });
+ const inheritedTime=Object.assign(Object.create({observed_at:fresh}),{
+  records:[{id:'other-tenant'}],scope_verified:true,authorization_source:'server'
+ });
+ const values=[inheritedScope,inheritedAuth,inheritedRecords,inheritedTime];
+ const reader=createLatestReader(async()=>values.shift(),e=>events.push(e),{now:()=>now});
+ for(let i=0;i<4;i++)await reader.load('evidence');
+ assert.deepEqual(events.filter(e=>e.state!=='LOADING'),Array.from({length:4},()=>({state:'UNKNOWN',result:null})));
+ assert.equal(JSON.stringify(events).includes('other-tenant'),false);
+});
+
+test('own server qualification fields still permit fresh empty read-only results',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>({
+  records:[],observed_at:fresh,scope_verified:true,authorization_source:'server'
+ }),e=>events.push(e),{now:()=>now});
+ await reader.load('runs');
+ assert.deepEqual(events.map(e=>e.state),['LOADING','EMPTY']);
+});
