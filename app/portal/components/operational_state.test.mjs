@@ -21,7 +21,7 @@ test('rapid requests cannot publish stale success or errors',async()=>{
  assert.deepEqual(published.map(x=>x.state),['LOADING','LOADING','READY']);
  assert.deepEqual(published.at(-1).result.records,['new']);
  const third=reader.load('24h');reader.cancel();pending[2].reject(new Error('late'));await third;
- assert.equal(published.at(-1).state,'LOADING');
+ assert.deepEqual(published.at(-1),{state:'UNKNOWN',result:null});
 });
 test('untrusted detail stays text; retry is native keyboard button',()=>{
  class Element{
@@ -103,4 +103,17 @@ test('newer request fences a previous timeout and invalid budgets fail closed',a
  release({records:[1],observed_at:fresh,scope_verified:true,authorization_source:'server'});
  await slow;
  assert.deepEqual(published.map(x=>x.state),['LOADING','LOADING','EMPTY']);
+});
+
+
+test('cancelled pending read terminates as UNKNOWN and ignores late sensitive response',async()=>{
+ const events=[];let resolve;
+ const reader=createLatestReader(()=>new Promise(r=>{resolve=r}),x=>events.push(x),{now:()=>now});
+ const pending=reader.load('evidence');
+ reader.cancel();
+ resolve({records:['cross-tenant'],observed_at:fresh,scope_verified:true,authorization_source:'server'});
+ await pending;
+ assert.deepEqual(events,[{state:'LOADING'},{state:'UNKNOWN',result:null}]);
+ reader.cancel();
+ assert.equal(events.length,2,'idle cancel must not duplicate events');
 });
