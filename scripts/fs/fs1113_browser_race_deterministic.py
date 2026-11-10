@@ -16,6 +16,7 @@ assert BASE.startswith("http://127.0.0.1:") or BASE.startswith("http://localhost
 INJECT = r"""
 (() => {
   const rejectStale = __FS1113_REJECT_STALE__;
+  const rejectActive = __FS1113_REJECT_ACTIVE__;
   const nativeFetch = window.fetch.bind(window);
   let seq = 0;
   window.__fs1113HistoryFetchCount = 0;
@@ -39,6 +40,7 @@ INJECT = r"""
     // Alternate by metric to exercise the generation guard in try AND catch.
     const delay = order === 1 ? 1400 : 30;
     return new Promise((resolve, reject) => setTimeout(() => {
+      if (rejectActive) { reject(null); return; }
       if (order === 1 && rejectStale) {
         reject(new Error('FS1113 deliberately stale transport failure'));
         return;
@@ -65,7 +67,7 @@ def main():
                     page = browser.new_page(viewport={"width": 390 if window_size == "24h" else 1280, "height": 844})
                     try:
                         page.add_init_script(INJECT.replace('__FS1113_REJECT_STALE__',
-                                                        'true' if metric == 'scrape_duration' else 'false'))
+                                                        'true' if metric == 'scrape_duration' else 'false').replace('__FS1113_REJECT_ACTIVE__', 'false'))
                         response = page.goto(BASE + "/explorer/visual", wait_until="domcontentloaded", timeout=25000)
                         assert response and response.status == 200, "candidate visual endpoint unavailable"
                         # The stale request must actually be in flight before changing controls.
@@ -114,6 +116,23 @@ def main():
                         print(f"FS1113_DETERMINISTIC_STALE_RESPONSE_REFRESH=PASS metric={metric} window={window_size} viewport={page.viewport_size['width']}")
                     finally:
                         page.close()
+            # Active transport failures can reject with non-Error values.
+            # The UI must remain usable, clear stale legend and avoid exposing internals.
+            page = browser.new_page()
+            try:
+                page.add_init_script(INJECT.replace('__FS1113_REJECT_STALE__', 'false').replace('__FS1113_REJECT_ACTIVE__', 'true'))
+                response = page.goto(BASE + "/explorer/visual", wait_until="domcontentloaded", timeout=25000)
+                assert response and response.status == 200
+                page.wait_for_function("""() => {
+                  const status = document.querySelector('#history-status')?.textContent || '';
+                  return status.includes('Historique indisponible') &&
+                         !document.querySelector('#history-refresh').disabled;
+                }""", timeout=10000)
+                assert page.locator("#history-legend > span").count() == 0
+                assert not page.evaluate("window.__fs1113UnhandledRejections || []")
+                print("FS1113_ACTIVE_NULL_REJECTION=PASS")
+            finally:
+                page.close()
         finally:
             browser.close()
 
