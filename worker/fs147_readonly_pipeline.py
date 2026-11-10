@@ -63,6 +63,9 @@ def _nested_hitl_artifact(payload):
     stack = [(payload, 0)]
     seen = set()
     budget = 4096
+    # Bound total UTF-8 metadata, not just nesting/node count. A single giant
+    # string otherwise evades the node budget and can exhaust remote adapters.
+    remaining_bytes = 262144
     while stack:
         value, depth = stack.pop()
         budget -= 1
@@ -80,6 +83,9 @@ def _nested_hitl_artifact(payload):
                 # including keys that become privileged claims downstream.
                 if type(key) is not str:
                     return True
+                remaining_bytes -= len(key.encode("utf-8"))
+                if remaining_bytes < 0:
+                    return True
                 if (key in forbidden or (key in flags and child is not False)
                         or (key == "resolved" and child is not False)
                         or (key == "ticket_transition" and child is not None)
@@ -90,7 +96,11 @@ def _nested_hitl_artifact(payload):
                 stack.append((child, depth + 1))
         elif isinstance(value, (list, tuple)):
             stack.extend((child, depth + 1) for child in value)
-        elif value is None or type(value) in (str, bool, int):
+        elif type(value) is str:
+            remaining_bytes -= len(value.encode("utf-8"))
+            if remaining_bytes < 0:
+                return True
+        elif value is None or type(value) in (bool, int):
             continue
         elif type(value) is float and math.isfinite(value):
             continue
