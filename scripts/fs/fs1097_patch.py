@@ -86,8 +86,10 @@ async function loadHistory(){
   chart.replaceChildren();
   if(!points.length){chart.append(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Aucune donnée disponible pour cette période"));status.textContent="Aucune série avec points disponibles.";return}
   const width=900,height=320,left=64,right=18,top=18,bottom=42,plotW=width-left-right,plotH=height-top-bottom;
-  let minT=Math.min(...points.map(p=>Number(p[0]))),maxT=Math.max(...points.map(p=>Number(p[0])));
-  let minV=Math.min(...points.map(p=>Number(p[1]))),maxV=Math.max(...points.map(p=>Number(p[1])));
+  // Reduce bounds without spreading every sample into function arguments.
+  // Large 24h responses must not trigger engine argument-count limits.
+  let minT=Infinity,maxT=-Infinity,minV=Infinity,maxV=-Infinity;
+  for(const p of points){const t=Number(p[0]),v=Number(p[1]);if(t<minT)minT=t;if(t>maxT)maxT=t;if(v<minV)minV=v;if(v>maxV)maxV=v}
   if(minT===maxT)maxT=minT+1;if(minV===maxV){minV-=.5;maxV+=.5}
   const x=t=>left+(Number(t)-minT)/(maxT-minT)*plotW,y=v=>top+(maxV-Number(v))/(maxV-minV)*plotH;
   for(let i=0;i<=4;i++){const yy=top+i*plotH/4,val=maxV-i*(maxV-minV)/4;chart.append(historyElement("line",{x1:left,y1:yy,x2:width-right,y2:yy,class:"history-grid"}));chart.append(historyElement("text",{x:left-9,y:yy+4,"text-anchor":"end",class:"history-axis"},Number(val.toPrecision(3)).toString()))}
