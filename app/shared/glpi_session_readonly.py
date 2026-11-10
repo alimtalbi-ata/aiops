@@ -71,10 +71,18 @@ def make_glpi_session_ticket_get(
         return result
 
     def get(*, url, actor, tenant_id, ticket_id=None, glpi_instance_id=None, **scope):
+        prefix = origin + "/Ticket/"
+        if isinstance(url, str) and url.startswith(prefix):
+            url_ticket_id = url[len(prefix):]
+        else:
+            url_ticket_id = None
+        if ticket_id is None:
+            ticket_id = url_ticket_id
         if (not isinstance(actor, str) or not actor.strip()
                 or not isinstance(tenant_id, str) or not tenant_id.strip()
                 or not isinstance(ticket_id, str) or not ticket_id.isascii()
-                or not ticket_id.isdecimal() or int(ticket_id) < 1
+                or not ticket_id.isdecimal() or not 1 <= len(ticket_id) <= 18
+                or ticket_id.startswith("0") or url_ticket_id != ticket_id
                 or not isinstance(glpi_instance_id, str) or not glpi_instance_id.strip()
                 or url != origin + "/Ticket/" + ticket_id):
             raise GLPISessionReadBlocked("glpi_ticket_scope_invalid")
