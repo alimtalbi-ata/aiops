@@ -145,6 +145,29 @@ class SessionTests(unittest.TestCase):
         self.assertEqual([name for name, _ in calls],
                          ["initSession", "Ticket/201", "killSession"])
 
+    def test_invalid_scope_rejected_before_credential_callbacks(self):
+        calls = []
+        credentials = []
+        def credential(**kwargs):
+            credentials.append(kwargs)
+            return "app-secret"
+        fn = self.make(calls, get_app_token=credential)
+        for field, value in (("actor", "operator" + chr(10) + "admin"),
+                             ("tenant_id", "tenant" + chr(0) + "other"),
+                             ("glpi_instance_id", "ci" + chr(127)),
+                             ("glpi_instance_id", "   "),
+                             ("actor", "a" * 257),
+                             ("tenant_id", "t" * 129)):
+            with self.subTest(field=field):
+                args = dict(url="https://glpi.internal/Ticket/201",
+                            actor="operator", tenant_id="tenant-a",
+                            ticket_id="201", glpi_instance_id="ci")
+                args[field] = value
+                with self.assertRaises(GLPISessionReadBlocked):
+                    fn(**args)
+        self.assertEqual(credentials, [])
+        self.assertEqual(calls, [])
+
     def test_invalid_credentials_never_open_session(self):
         calls = []
         with self.assertRaises(GLPISessionReadBlocked):
