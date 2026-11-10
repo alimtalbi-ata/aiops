@@ -270,7 +270,7 @@ def _terminal_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
-def _terminal_reply(receipt, digest, *, idempotent):
+def _terminal_reply(receipt, digest, *, idempotent, incident_id=None):
     # Raw lease tokens, token hashes, bearer credentials and approval identity
     # are deliberately excluded from the response.
     return _response(status="DEAD", receipt_schema=TERMINAL_SCHEMA,
@@ -280,7 +280,8 @@ def _terminal_reply(receipt, digest, *, idempotent):
                      proposal_revision=receipt["proposal_revision"],
                      actor_id=receipt["actor_id"], attempts=receipt["attempts"],
                      dead_at=receipt["dead_at"], receipt_sha256=digest,
-                     idempotent=idempotent)
+                     idempotent=idempotent,
+                     **({"incident_id": incident_id} if incident_id is not None else {}))
 
 
 @router.post("/api/tenants/{tenant_id}/hitl/reject-delivery/{event_id}/dead")
@@ -381,3 +382,142 @@ def terminal_reject(tenant_id: str, event_id: str, payload: dict,
         return _terminal_reply(receipt, digest, idempotent=False)
     except Exception:
         return _response(503)
+
+
+# A terminal-only recovery operation is intentionally separate from claim/ACK.
+# The eighth lease token stays in Core PG16; a restarted Worker with the same
+# authenticated service identity never needs to put that secret in Temporal
+# workflow arguments, logs or history. This is NOT a human GLPI authorization.
+_TERMINAL_RECOVERY_KEYS = {
+    "owner", "run_id", "incident_id", "proposal_id", "proposal_hash",
+    "proposal_revision", "execution_allowed", "effect_allowed"
+}
+
+
+def _terminal_recovery(tenant_id, event_id, payload, authorization, *, mutate):
+    actor, denial = _authorized(authorization, tenant_id)
+    if denial is not None:
+        return denial
+    # Separate permission, not automatically conferred by delivery/terminal.
+    if not {"hitl:reject:terminal", "hitl:reject:recover"}.issubset(
+            actor["permissions"]):
+        return _response(403)
+    if (not _valid(tenant_id) or not _valid(event_id)
+            or type(payload) is not dict
+            or set(payload) != _TERMINAL_RECOVERY_KEYS
+            or payload["owner"] != actor["actor_id"]
+            or not all(_valid(payload[k]) for k in ("run_id", "incident_id", "proposal_id"))
+            or not _valid(payload["proposal_hash"], _HASH)
+            or type(payload["proposal_revision"]) is not int
+            or payload["proposal_revision"] < 1
+            or payload["execution_allowed"] is not False
+            or payload["effect_allowed"] is not False):
+        return _response()
+    try:
+        with _x().db() as c:
+            # FOR UPDATE serializes a restart retry, competing terminal
+            # activity and the legacy token-bound /dead transition.
+            row = c.execute(_TERMINAL_SQL, (tenant_id, event_id)).fetchone()
+            if row is None:
+                return _response()
+            (status, attempts, owner, token, expiry, proposal_id, run_id,
+             proposal_hash, revision, source_status, *ownership) = row
+            if (status not in ("LEASED", "DEAD")
+                    or type(attempts) is not int or attempts != 8
+                    or owner != actor["actor_id"]
+                    or not _valid(token, _TOKEN)
+                    or proposal_id != payload["proposal_id"]
+                    or run_id != payload["run_id"]
+                    or proposal_hash != payload["proposal_hash"]
+                    or revision != payload["proposal_revision"]
+                    or source_status not in ("REJECTED", "REVOKED")
+                    or ownership[1] != run_id
+                    or not _proof(tuple(ownership), tenant_id)
+                    or not isinstance(expiry, datetime)
+                    or expiry.tzinfo is None
+                    or expiry > datetime.now(timezone.utc)):
+                return _response()
+            # Incident is resolved from Core's canonical Run; a caller
+            # cannot invent a parallel Incident/Run relationship.
+            incident = c.execute(
+                "select incident_id from aiops.runs where run_id=%s",
+                (run_id,)).fetchone()
+            if (not incident or incident[0] != payload["incident_id"]):
+                return _response()
+            if status == "DEAD":
+                found = c.execute(_TERMINAL_READ_SQL,
+                                  (event_id, tenant_id, run_id)).fetchone()
+                if not found:
+                    return _response(503)
+                receipt, digest = found
+                if (not isinstance(receipt, dict)
+                        or receipt.get("schema") != TERMINAL_SCHEMA
+                        or receipt.get("event_id") != event_id
+                        or receipt.get("tenant_id") != tenant_id
+                        or receipt.get("run_id") != run_id
+                        or receipt.get("proposal_id") != proposal_id
+                        or receipt.get("proposal_hash") != proposal_hash
+                        or receipt.get("proposal_revision") != revision
+                        or receipt.get("actor_id") != actor["actor_id"]
+                        or receipt.get("lease_owner") != owner
+                        or receipt.get("lease_token_sha256") != _terminal_digest(token)
+                        or receipt.get("attempts") != attempts
+                        or receipt.get("source_status") != source_status
+                        or receipt.get("decision") != "REJECT"
+                        or receipt.get("execution_allowed") is not False
+                        or receipt.get("effect_allowed") is not False
+                        or receipt.get("human_glpi_authorization") != "UNKNOWN"
+                        or not secrets.compare_digest(
+                            str(digest), _terminal_digest(_terminal_json(receipt)))):
+                    return _response(503)
+                return _terminal_reply(receipt, digest, idempotent=True,
+                                       incident_id=incident[0])
+            # Readback is strictly read-only and non-enumerating before DEAD.
+            if not mutate:
+                return _response()
+            # The expired eighth lease is consumed inside Core, using its
+            # stored token. No new lease, retry budget or schema mutation.
+            changed = c.execute(_TERMINAL_UPDATE_SQL,
+                                (event_id, owner, token)).fetchone()
+            if not changed or changed[0] != "DEAD" or changed[1] != 8:
+                return _response()
+            _, committed_attempts, lease_until, dead_at = changed
+            receipt = {
+                "schema": TERMINAL_SCHEMA, "event_id": event_id,
+                "tenant_id": tenant_id, "run_id": run_id,
+                "proposal_id": proposal_id, "proposal_hash": proposal_hash,
+                "proposal_revision": revision, "actor_id": actor["actor_id"],
+                "lease_owner": owner, "lease_token_sha256": _terminal_digest(token),
+                "attempts": committed_attempts, "source_status": source_status,
+                "lease_expired_at": lease_until.isoformat(),
+                "dead_at": dead_at.isoformat(), "decision": "REJECT",
+                "execution_allowed": False, "effect_allowed": False,
+                "human_glpi_authorization": "UNKNOWN"
+            }
+            digest = _terminal_digest(_terminal_json(receipt))
+            c.execute(_TERMINAL_INSERT_SQL,
+                      (event_id, tenant_id, run_id, proposal_id, proposal_hash,
+                       revision, actor["actor_id"], owner, _terminal_digest(token),
+                       committed_attempts, lease_until, dead_at,
+                       _terminal_json(receipt), digest))
+        return _terminal_reply(receipt, digest, idempotent=False,
+                               incident_id=incident[0])
+    except Exception:
+        # Any failure in the audit INSERT rolls back the DEAD update.
+        return _response(503)
+
+
+@router.post("/api/tenants/{tenant_id}/hitl/reject-delivery/{event_id}/terminal-recover")
+def terminal_recover(tenant_id: str, event_id: str, payload: dict,
+                     authorization: str | None = Header(default=None)):
+    """Core-authoritative DEAD after an expired eighth lease, no token export."""
+    return _terminal_recovery(tenant_id, event_id, payload, authorization,
+                              mutate=True)
+
+
+@router.post("/api/tenants/{tenant_id}/hitl/reject-delivery/{event_id}/terminal-receipt")
+def terminal_receipt(tenant_id: str, event_id: str, payload: dict,
+                     authorization: str | None = Header(default=None)):
+    """Token-free authenticated readback; never transitions an outbox row."""
+    return _terminal_recovery(tenant_id, event_id, payload, authorization,
+                              mutate=False)

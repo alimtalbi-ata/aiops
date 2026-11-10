@@ -1,0 +1,108 @@
+name: Core ACME-TEST sandbox PG16 (disposable, no effects)
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/core/acme_sandbox.py
+      - app/core/main.py
+      - db/migrations/016_acme_sandbox_attempts.sql
+      - tests/test_core_acme_sandbox_pg16.py
+      - .github/workflows/core-acme-sandbox-pg16.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-acme-sandbox-pg16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: postgres:16-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-core-acme-disposable-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://aiops:ci-core-acme-disposable-only@127.0.0.1:5432/aiops
+      PGPASSWORD: ci-core-acme-disposable-only
+      PYTHONPATH: app:tests
+      AIOPS_CORE_ACME_RECEIPT_DIR: /tmp/core-acme-sandbox-receipt
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Install disposable test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends python3 python3-venv git socat ca-certificates
+          python3 -m venv /tmp/core-acme-venv
+          /tmp/core-acme-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13" "fastapi==0.116.1" "httpx==0.28.1" "requests==2.32.4"
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exact SHA and real PostgreSQL 16
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          /usr/lib/postgresql/16/bin/pg_dump --version | grep -F '(PostgreSQL) 16.'
+          socat TCP-LISTEN:5432,bind=127.0.0.1,reuseaddr,fork TCP:postgres:5432 >/tmp/core-acme-socat.log 2>&1 </dev/null &
+          for i in $(seq 1 30); do
+            if /usr/lib/postgresql/16/bin/pg_isready -h 127.0.0.1 -p 5432 -U aiops -d aiops >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
+      - name: Eight real PG16 sandbox regressions, no skip
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
+          /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
+          grep -E '^Ran 8 tests in ' /tmp/core-acme-tests.log
+          grep -x 'OK' /tmp/core-acme-tests.log
+          ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
+          echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
+      - name: Independently validate redacted SHA256 receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/core-acme-venv/bin/python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          p=Path(os.environ['AIOPS_CORE_ACME_RECEIPT_DIR'])/'core-acme-sandbox.json'
+          data=json.loads(p.read_text())
+          claimed=data.pop('payload_sha256')
+          actual=hashlib.sha256(json.dumps(data,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert actual==claimed
+          assert data['source_head']==os.environ['AIOPS_EXPECTED_HEAD_SHA']
+          assert data['migration_chain']==['001','004','009','010','011','012','013','014','015','016']
+          assert data['source_event_count']==7 and data['evidence_count']==2
+          assert data['source_hashes_qualified'] is True
+          assert data['incident_status']==data['run_status']==data['ticket_status']=='RESOLVED'
+          assert data['ticket_authority']=='SIMULATED_ONLY'
+          assert data['analysis_kind']=='SYNTHETIC_FIXTURE'
+          assert data['analysis_validated'] is data['critic_validated'] is True
+          assert data['idempotent_replay'] is True
+          assert data['human_glpi_attested'] is data['execution_allowed'] is data['effect_allowed'] is data['host_deployed'] is False
+          assert not any(secret in p.read_text() for secret in ('Bearer ','postgresql://','ci-core-acme-sandbox-internal-only-not-human'))
+          print('CORE_ACME_SANDBOX_PG16_RECEIPT_PASS',actual)
+          PY
+          sha256sum "$AIOPS_CORE_ACME_RECEIPT_DIR/core-acme-sandbox.json" > "$AIOPS_CORE_ACME_RECEIPT_DIR/core-acme-sandbox.sha256"
+          (cd "$AIOPS_CORE_ACME_RECEIPT_DIR" && sha256sum --check core-acme-sandbox.sha256)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-acme-sandbox-pg16-redacted
+          path: |
+            /tmp/core-acme-sandbox-receipt/core-acme-sandbox.json
+            /tmp/core-acme-sandbox-receipt/core-acme-sandbox.sha256
+          retention-days: 7
