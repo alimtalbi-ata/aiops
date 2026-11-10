@@ -47,3 +47,10 @@ The example is a schema illustration, **not real observation evidence**. An empt
 - CI checks and Debian environment qualification, followed by explicit release authorization.
 
 Keep PR #537, #539 and #540 in DRAFT. No merge, deployment, automation change, or Debian modification.
+
+## Source audit: Core endpoints (verified on stacked branch)
+
+- `app/core/main.py` `GET /api/runs`: `list_runs()` executes `select ... from aiops.runs order by created_at desc limit 100` without an actor/tenant filter in the handler and without an authorization dependency in its signature. This is a global run listing in the inspected implementation.
+- `app/core/main.py` `GET /api/dashboard`: `dashboard()` aggregates counts from `aiops.runs`, `aiops.twin_nodes`, and `aiops.incidents` without actor/tenant predicates in the handler. These aggregates cannot be presented as tenant-qualified evidence.
+- These observations describe the inspected handlers; they do not establish whether other infrastructure restricts reachability. Network restrictions or service-level bearer tokens do not, by themselves, establish end-user tenant scoping.
+- **Do not expose these global responses as scoped user projections.** Identify and test an authoritative identity/tenant model and authorized data queries before introducing the proposed endpoint. If such a model is not available, retain UNKNOWN and HOLD.
