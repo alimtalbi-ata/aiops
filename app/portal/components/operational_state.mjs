@@ -57,7 +57,10 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
     // A transport success is not an evidence success. The server must have
     // already enforced actor/tenant scope; this UI only refuses to display
     // an unqualified projection as READY. Never authorize in the browser.
-    const scoped=result && result.scope_verified===true && result.authorization_source==='server';
+    const scoped=result && typeof result==='object' &&
+     Object.hasOwn(result,'scope_verified') && result.scope_verified===true &&
+     Object.hasOwn(result,'authorization_source') && result.authorization_source==='server' &&
+     Object.hasOwn(result,'records') && Object.hasOwn(result,'observed_at');
     const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now(),maxAgeMs}) : 'UNKNOWN';
     active=false;
     publish({state,result:state==='READY'||state==='EMPTY'?result:null});
