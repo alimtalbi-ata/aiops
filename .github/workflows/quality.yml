@@ -36,6 +36,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_glpi_copilot_context_gate.py" -v
       - name: GLPI and Core dual-readback adapter contract (offline only)
         run: python -m unittest discover -s tests -p "test_glpi_copilot_readback.py" -v
+      - name: GLPI and Core real response-shape normalization (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_raw_readback.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
