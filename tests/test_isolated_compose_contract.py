@@ -64,6 +64,29 @@ class IsolatedComposeContractTests(unittest.TestCase):
         self.assertNotIn("docker volume rm", self.installer)
         self.assertNotIn("RETIRE_LEGACY=1", self.installer)
 
+    def test_internal_dns_is_preserved_and_consumers_share_networks(self):
+        # Docker embedded service-name resolution is explicitly allowed.
+        service_blocks = {}
+        for name, body in re.findall(
+            r"(?ms)^  (aiops2-[a-z0-9-]+):\\n(.*?)(?=^  aiops2-[a-z0-9-]+:|^networks:)",
+            self.compose,
+        ):
+            service_blocks[name] = body
+        self.assertEqual(len(service_blocks), 18)
+        for consumer, target, network in (
+            ("aiops2-n8n", "aiops2-postgres", "aiops2-integration"),
+            ("aiops2-simulator", "aiops2-core", "aiops2-control"),
+            ("aiops2-core", "aiops2-postgres", "aiops2-data"),
+            ("aiops2-worker", "aiops2-temporal", "aiops2-control"),
+            ("aiops2-portal", "aiops2-core", "aiops2-control"),
+            ("aiops2-glpi", "aiops2-glpi-db", "aiops2-integration"),
+        ):
+            with self.subTest(consumer=consumer, target=target):
+                self.assertIn(network, service_blocks[consumer].split("    networks:", 1)[1].split("\\n", 1)[0])
+                self.assertIn(network, service_blocks[target].split("    networks:", 1)[1].split("\\n", 1)[0])
+        self.assertIn("DB_POSTGRESDB_HOST: aiops2-postgres", service_blocks["aiops2-n8n"])
+        self.assertIn("CORE_URL: http://aiops2-core:810", service_blocks["aiops2-simulator"])
+
     def test_runtime_qualification_checks_loopback_bindings(self):
         self.assertIn('HostIp', self.qualification)
         self.assertIn('"127.0.0.1"', self.qualification)
