@@ -31,10 +31,10 @@ class FakeOpener:
 
 
 class TransportTests(unittest.TestCase):
-    def create(self, response=None, token="server-only-token"):
+    def create(self, response=None, token="server-only-token", max_bytes=262144):
         opener = FakeOpener(response or Response())
         with patch("shared.glpi_http_json_transport.build_opener", return_value=opener):
-            get = make_json_get(get_token=lambda **kwargs: token)
+            get = make_json_get(get_token=lambda **kwargs: token, max_bytes=max_bytes)
         return get, opener
 
     def test_authenticated_get_only(self):
@@ -64,7 +64,7 @@ class TransportTests(unittest.TestCase):
             with self.assertRaises(ReadTransportBlocked):
                 get(url="https://core.internal", actor="operator",
                     tenant_id="tenant-a")
-        get, _ = self.create(response=Response(b'x' * 2048))
+        get, _ = self.create(response=Response(b'x' * 2048), max_bytes=1024)
         with self.assertRaises(ReadTransportBlocked):
             get(url="https://core.internal", actor="operator",
                 tenant_id="tenant-a")
