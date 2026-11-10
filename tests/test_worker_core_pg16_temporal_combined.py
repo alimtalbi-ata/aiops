@@ -1951,5 +1951,128 @@ class CombinedCoreWorkerPG16(unittest.IsolatedAsyncioTestCase):
             auth_patch.stop()
 
 
+    async def test_11_terminal_unprivileged_gate_never_mutates_exhausted_reject(self):
+        """Negative-only Worker contract for a Core-owned /dead endpoint.
+
+        On this candidate the endpoint is absent (404). If Core later adds it,
+        the existing delivery-only service identity must receive 403. Neither
+        response is evidence that a terminal transition works. A positive
+        Core-owned PG16/014 receipt qualification is separately required.
+        """
+        ids = self._fixture()
+        self._write_synthetic_proofs()
+        with self.psycopg.connect(self.url) as db:
+            db.execute(
+                "update aiops.hitl_decision_outbox "
+                "set status='LEASED',attempts=7,lease_owner=%s,"
+                "lease_token=%s,lease_until=now()-interval '1 second' "
+                "where event_id=%s",
+                (OWNER, secrets.token_urlsafe(32), ids["event"]))
+        code, claimed = self._claim()
+        self.assertEqual((code, claimed["status"]), (200, "LEASED"))
+        self.assertEqual(len(claimed["items"]), 1)
+        lease = claimed["items"][0]
+        self.assertEqual(lease["event_id"], ids["event"])
+        self.assertEqual(lease["decision"], "REJECT")
+        self.assertIs(lease["execution_allowed"], False)
+        self.assertIs(lease["effect_allowed"], False)
+        with self.psycopg.connect(self.url) as db:
+            db.execute(
+                "update aiops.hitl_decision_outbox "
+                "set lease_until=now()-interval '1 second' where event_id=%s",
+                (ids["event"],))
+
+        def readback():
+            with self.psycopg.connect(self.url) as db:
+                return db.execute(
+                    "select status,attempts,lease_owner,lease_token,"
+                    "lease_until<now(),delivered_at,decision,"
+                    "proposal_hash,proposal_revision "
+                    "from aiops.hitl_decision_outbox where event_id=%s",
+                    (ids["event"],)).fetchone()
+
+        before = readback()
+        self.assertEqual(
+            before,
+            ("LEASED", 8, OWNER, lease["lease_token"], True, None,
+             "REJECT", lease["proposal_hash"], lease["proposal_revision"]))
+        dead_path = (
+            f"/api/tenants/{TENANT}/hitl/reject-delivery/{ids['event']}/dead")
+        body = {
+            "owner": OWNER, "run_id": lease["run_id"],
+            "proposal_id": lease["proposal_id"],
+            "proposal_hash": lease["proposal_hash"],
+            "proposal_revision": lease["proposal_revision"],
+            "lease_token": lease["lease_token"],
+            "execution_allowed": False, "effect_allowed": False,
+        }
+        self.assertEqual(len(body), 8)
+        status_codes = []
+        for _ in range(2):
+            response = self.client.post(
+                dead_path, json=body,
+                headers={"Authorization": "Bearer " + self.bearer})
+            status_codes.append(response.status_code)
+            # 404 = route absent on current candidate. 403 = future route
+            # present but separate terminal permission correctly denied.
+            self.assertIn(response.status_code, (403, 404))
+            self.assertEqual(readback(), before)
+        self.assertEqual(len(set(status_codes)), 1)
+
+        worker_routes = []
+        async def post(route, request):
+            worker_routes.append(route)
+            return self._http(route, request)
+        async def no_signal(_run_id, _payload):
+            self.fail("exhausted lease must never notify Temporal")
+        delivered = await deliver_core_reject_once(
+            tenant_id=TENANT, owner=OWNER, post=post, signal=no_signal)
+        self.assertEqual(delivered, [])
+        self.assertEqual(
+            worker_routes,
+            [f"/api/tenants/{TENANT}/hitl/reject-delivery/claim"])
+        self.assertEqual(readback(), before)
+        self._no_effect()
+
+        # Redacted, deterministic receipt from actual Core HTTP and PG16.
+        # Do not serialize event IDs, actor bearer, HMAC, owner or lease token.
+        receipt_dir = Path(os.environ["AIOPS_CI_COMBINED_RECEIPT_DIR"])
+        if not str(receipt_dir).startswith("/tmp/hitl-combined-receipts"):
+            raise RuntimeError("refuse_non_disposable_receipt_destination")
+        receipt_dir.mkdir(parents=True, exist_ok=True)
+        receipt = {
+            "schema": "aiops.worker-core-terminal-unprivileged-gate.v1",
+            "source_head": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+            "environment": "CI_DISPOSABLE_SYNTHETIC_ONLY",
+            "terminal_route_result": (
+                "ABSENT_404" if status_codes[0] == 404
+                else "DELIVERY_ONLY_PERMISSION_DENIED_403"),
+            "http_status_codes": status_codes,
+            "terminal_permission_in_fixture": False,
+            "core_terminal_positive_qualification": "NOT_TESTED",
+            "runtime_state": "LEASED",
+            "attempts": 8,
+            "lease_expired": True,
+            "decision": "REJECT",
+            "worker_terminal_requests": 0,
+            "worker_claim_requests": len(worker_routes),
+            "temporal_signals": 0,
+            "approve_count": 0,
+            "effect_receipts": 0,
+            "execution_allowed": False,
+            "effect_allowed": False,
+            "sql_dead_injected": False,
+            "physical_packet_loss": "NOT_TESTED",
+            "oidc_glpi_identity": "NOT_ATTESTED",
+            "universal_exactly_once": "NOT_CLAIMED",
+        }
+        payload = json.dumps(
+            receipt, sort_keys=True, separators=(",", ":")).encode()
+        receipt["payload_sha256"] = hashlib.sha256(payload).hexdigest()
+        target = receipt_dir / "terminal-unprivileged-gate.json"
+        target.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+        self.assertEqual(json.loads(target.read_text()), receipt)
+
+
 if __name__ == "__main__":
     unittest.main()
