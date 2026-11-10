@@ -14,6 +14,7 @@ assert BASE.startswith("http://127.0.0.1:") or BASE.startswith("http://localhost
 
 INJECT = r"""
 (() => {
+  const rejectStale = __FS1113_REJECT_STALE__;
   const nativeFetch = window.fetch.bind(window);
   let seq = 0;
   window.__fs1113HistoryFetchCount = 0;
@@ -33,7 +34,7 @@ INJECT = r"""
     // Alternate by metric to exercise the generation guard in try AND catch.
     const delay = order === 1 ? 1400 : 30;
     return new Promise((resolve, reject) => setTimeout(() => {
-      if (order === 1 && metric === 'scrape_duration') {
+      if (order === 1 && rejectStale) {
         reject(new Error('FS1113 deliberately stale transport failure'));
         return;
       }
@@ -58,7 +59,8 @@ def main():
                 for window_size in ("1h", "6h", "24h"):
                     page = browser.new_page(viewport={"width": 390 if window_size == "24h" else 1280, "height": 844})
                     try:
-                        page.add_init_script(INJECT)
+                        page.add_init_script(INJECT.replace('__FS1113_REJECT_STALE__',
+                                                        'true' if metric == 'scrape_duration' else 'false'))
                         response = page.goto(BASE + "/explorer/visual", wait_until="domcontentloaded", timeout=25000)
                         assert response and response.status == 200, "candidate visual endpoint unavailable"
                         # Force at least one newer request even for the default 1h/availability case.
