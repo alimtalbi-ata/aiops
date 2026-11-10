@@ -163,3 +163,57 @@ finally:
     with checkpoint_db() as connection:
         connection.execute('delete from aiops.run_checkpoints where run_id=%s', (checkpoint_rid,))
         connection.execute('delete from aiops.runs where run_id=%s', (checkpoint_rid,))
+
+# Two different Run rows must still serialize the global command receipt key.
+import json
+from types import SimpleNamespace
+command_fn = next(n for n in ast.parse(source.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == 'command')
+command_fn.decorator_list = []
+command_key = 'CI-COMMAND-' + uuid.uuid4().hex
+command_runs = [command_key + '-A', command_key + '-B']
+command_barrier = threading.Barrier(2)
+command_entered = threading.Event()
+
+def command_event(connection, run_id, *args, **kwargs):
+    # Hold the winning transaction until the other client attempts the same key.
+    command_entered.set()
+    time.sleep(0.15)
+
+command_scope = dict(namespace, Command=SimpleNamespace, json=json,
+                     new=lambda _: 'CI-RCPT-' + uuid.uuid4().hex,
+                     transition=lambda old, new: None, append_event=command_event)
+exec(compile(ast.Module(body=[command_fn], type_ignores=[]), str(source), 'exec'), command_scope)
+
+def command_race(run_id):
+    command_barrier.wait(timeout=5)
+    request = SimpleNamespace(command='START', expected_version=1, idempotency_key=command_key)
+    try:
+        return 200, command_scope['command'](run_id, request)
+    except HTTPException as error:
+        return error.status_code, None
+
+with checkpoint_db() as connection:
+    for run_id in command_runs:
+        connection.execute("insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
+                           "values(%s,'DEMO','CI-COMMAND','CREATED',%s)", (run_id, run_id))
+try:
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(command_race, run_id) for run_id in command_runs]
+        outcomes = [future.result(timeout=15) for future in futures]
+    assert sorted(status for status, _ in outcomes) == [200, 409], outcomes
+    winner = next(response['run_id'] for status, response in outcomes if status == 200)
+    loser = next(run_id for run_id in command_runs if run_id != winner)
+    with checkpoint_db() as connection:
+        assert connection.execute('select run_id,command from aiops.command_receipts where idempotency_key=%s',
+                                  (command_key,)).fetchall() == [(winner, 'START')]
+        assert connection.execute('select status,version from aiops.runs where run_id=%s',
+                                  (loser,)).fetchone() == ('CREATED', 1)
+    request = SimpleNamespace(command='START', expected_version=1, idempotency_key=command_key)
+    assert command_scope['command'](winner, request)['run_id'] == winner
+    print('CANDIDATE_COMMAND_PG_CONCURRENCY=PASS; clients=2; loser_unchanged=true; temporal=NOT_VERIFIED')
+finally:
+    with checkpoint_db() as connection:
+        connection.execute('delete from aiops.command_receipts where idempotency_key=%s', (command_key,))
+        for run_id in command_runs:
+            connection.execute('delete from aiops.runs where run_id=%s', (run_id,))

@@ -23,7 +23,7 @@ class Cursor:
         return self
 
     def fetchone(self):
-        return ("CREATED", 1, "DEMO") if len(self.queries) == 1 else self.receipt
+        return ("CREATED", 1, "DEMO") if len(self.queries) == 2 else self.receipt
 
 
 class CommandReceiptIntentTests(unittest.TestCase):
@@ -58,29 +58,34 @@ class CommandReceiptIntentTests(unittest.TestCase):
             result = exc
         return result, cursor.queries
 
+    def test_global_key_is_locked_before_run_row(self):
+        _, queries = self.invoke(("RUN-147", "START", {}))
+        self.assertIn("pg_advisory_xact_lock", queries[0][0])
+        self.assertEqual(queries[0][1], ("command:shared-key",))
+
     def test_identical_retry_returns_original_receipt(self):
         receipt = ("RUN-147", "START", {"run_id": "RUN-147", "status": "RUNNING", "version": 2})
         result, queries = self.invoke(receipt)
         self.assertEqual(result, receipt[2])
-        self.assertEqual(len(queries), 2)
-        self.assertIn("select run_id,command,response", queries[1][0].lower())
+        self.assertEqual(len(queries), 3)
+        self.assertIn("select run_id,command,response", queries[2][0].lower())
 
     def test_foreign_run_never_receives_receipt(self):
         result, queries = self.invoke(("RUN-OTHER", "START", {"run_id": "RUN-OTHER"}))
         self.assertEqual(result.status_code, 409)
-        self.assertEqual(len(queries), 2)
+        self.assertEqual(len(queries), 3)
 
     def test_different_command_never_receives_receipt(self):
         result, queries = self.invoke(("RUN-147", "RESOLVE", {"run_id": "RUN-147"}))
         self.assertEqual(result.status_code, 409)
-        self.assertEqual(len(queries), 2)
+        self.assertEqual(len(queries), 3)
 
     def test_unknown_receipt_identity_fails_closed(self):
         for receipt in ((None, "START", {}), ("RUN-147", None, {})):
             with self.subTest(receipt=receipt):
                 result, queries = self.invoke(receipt)
                 self.assertEqual(result.status_code, 409)
-                self.assertEqual(len(queries), 2)
+                self.assertEqual(len(queries), 3)
 
 
 if __name__ == "__main__":

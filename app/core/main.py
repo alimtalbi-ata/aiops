@@ -111,6 +111,10 @@ def create(x:RunIn,authorization:str|None=Header(default=None)):
 def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
+        # Serialize a global command key even when contenders target different Runs.
+        # Always acquire this transaction lock before the Run row lock.
+        c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',
+                  ('command:'+x.idempotency_key,))
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
         rec=c.execute(
