@@ -22,6 +22,37 @@ def _unique_pairs(pairs):
     return result
 
 
+def _check_nested_provenance(value, namespace, run_id, node_id):
+    """Reject hidden cross-partition references in structured observation provenance.
+
+    A fact may have valid top-level ownership while its nested dependency,
+    source or impact object points to a different RUN, node or namespace.
+    Only explicit provenance fields are checked; arbitrary metric values remain
+    untouched. A repeated object is rejected to avoid unbounded recursion.
+    """
+    stack = [value]
+    visited = set()
+    while stack:
+        current = stack.pop()
+        if isinstance(current, (dict, list)):
+            identity = id(current)
+            if identity in visited:
+                raise IsolationError("reused or cyclic observation provenance")
+            visited.add(identity)
+        if isinstance(current, dict):
+            for field in ("namespace", "source_namespace", "target_namespace"):
+                if field in current and current[field] != namespace:
+                    raise IsolationError("nested cross-namespace observation provenance")
+            if "run_id" in current and current["run_id"] != run_id:
+                raise IsolationError("nested cross-RUN observation provenance")
+            for field in ("node_id", "source_id", "target_id", "target_node_id"):
+                if field in current and current[field] != node_id:
+                    raise IsolationError("nested cross-node observation provenance")
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+
+
 def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs_run=None, expected_san_run=None):
     """Fail closed on ambiguous ownership, shared IDs and cross-scope edges."""
     if not fs_namespace or not san_namespace or fs_namespace == san_namespace:
@@ -54,6 +85,12 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
         a, b = edge["source_id"], edge["target_id"]
         if a not in owners or b not in owners or owners[a] != owners[b]:
             raise IsolationError("orphan or cross-namespace dependency")
+        # Endpoint ownership alone is insufficient: a dependency may carry
+        # contradictory SAN/FS provenance even when both IDs are in FS.
+        owner = owners[a]
+        for field in ("namespace", "source_namespace", "target_namespace"):
+            if field in edge and edge[field] != owner:
+                raise IsolationError("cross-namespace dependency provenance")
     run_ids = [fs_facts["run_id"], san_facts["run_id"]]
     if not all(run_ids) or len(set(run_ids)) != 2:
         raise IsolationError("RUN IDs missing or shared")
@@ -86,12 +123,18 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
             payload = json.loads(raw, object_pairs_hook=_unique_pairs) if isinstance(raw, str) else raw
             if not isinstance(payload, dict):
                 raise IsolationError("invalid fact provenance")
+            # A fact may have a correct node_id but a forged embedded SAN/FS
+            # scope. Evidence consumers must not trust that nested provenance.
+            for field in ("namespace", "source_namespace", "target_namespace"):
+                if field in payload and payload[field] != namespace:
+                    raise IsolationError("cross-namespace embedded observation provenance")
             if payload.get("run_id") != response["run_id"]:
                 raise IsolationError("cross-RUN observation")
             if payload.get("synthetic") not in (True, "true") or payload.get("synthetic") == 1:
                 raise IsolationError("unmarked observation")
             if payload.get("target_node_id") != node_id:
                 raise IsolationError("missing or mismatched target provenance")
+            _check_nested_provenance(payload, namespace, response["run_id"], node_id)
     return {"status": "PASS", "fs_run": run_ids[0], "san_run": run_ids[1],
             "nodes": len(nodes), "edges": len(edges), "facts": len(seen)}
 
@@ -104,8 +147,8 @@ def main():
     parser.add_argument("--fs-run-id", required=True, help="independent Core filesystem RUN ID")
     parser.add_argument("--san-run-id", required=True, help="independent Core SAN RUN ID")
     args = parser.parse_args()
-    capture = json.loads(args.capture.read_text(encoding="utf-8"))
     try:
+        capture = json.loads(args.capture.read_text(encoding="utf-8"), object_pairs_hook=_unique_pairs)
         result = qualify(capture["graph"], capture["fs_facts"],
                          capture["san_facts"], args.fs_namespace, args.san_namespace, args.fs_run_id, args.san_run_id)
     except (IsolationError, KeyError, TypeError, ValueError) as exc:
