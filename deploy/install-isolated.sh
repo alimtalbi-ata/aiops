@@ -6,7 +6,7 @@ cd "$ROOT"
 PROJECT="aiops2-isolated"
 ISOLATION_ID="aiops2-isolated"
 ENV_FILE=".env.isolated"
-COMPOSE=(docker compose --env-file "$ENV_FILE" -p "$PROJECT" -f compose.yml -f compose.isolated.yml)
+COMPOSE=(docker compose --env-file "$ENV_FILE" -p "$PROJECT" -f compose.isolated.yml)
 
 fail() { echo "HOLD|$*" >&2; exit 1; }
 [[ "${EUID}" -eq 0 ]] || fail "run_as_authorized_operator_on_target_only"
