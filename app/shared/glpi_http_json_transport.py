@@ -35,7 +35,8 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
                 or trusted.username is not None or trusted.password is not None
                 or trusted.path or trusted.query or trusted.fragment
                 or allowed_origin.endswith("/") or trusted_port == 0
-                or any(c.isspace() or ord(c) < 33 for c in allowed_origin)
+                or any(c.isspace() or ord(c) < 33 or ord(c) == 127
+                       for c in allowed_origin)
                 or "\\" in allowed_origin):
             raise ValueError("trusted_origin_required")
     except (ValueError, TypeError, AttributeError) as exc:
