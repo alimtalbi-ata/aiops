@@ -409,7 +409,8 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     if (not isinstance(stage,str) or not stage.strip()
             or stage != stage.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
         raise HTTPException(422,'gate stage identity unknown')
-    if state not in ('PASS','FAIL','BLOCKED','UNKNOWN','NEEDS_HUMAN','PENDING','RUNNING'):
+    # Match aiops.gates CHECK; Run lifecycle states are a separate contract.
+    if state not in ('PASS','FAIL','BLOCKED','UNKNOWN'):
         raise HTTPException(422,'gate state unknown')
     eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
     if (not isinstance(eids,list) or not isinstance(required,list)

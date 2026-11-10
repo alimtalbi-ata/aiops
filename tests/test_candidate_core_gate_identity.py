@@ -36,8 +36,15 @@ class GateIdentityTests(unittest.TestCase):
                 with self.subTest(field=field, value=value):
                     self.deny(dict(stage='POLICY', state='UNKNOWN', **{field: [value]}))
 
+    def test_run_lifecycle_states_are_not_gate_states(self):
+        # 001_schema.sql gates CHECK admits only PASS/FAIL/BLOCKED/UNKNOWN.
+        # PENDING/RUNNING belong to run_stage_state, not aiops.gates.
+        for state in ('NEEDS_HUMAN', 'PENDING', 'RUNNING'):
+            with self.subTest(state=state):
+                self.deny(dict(stage='POLICY', state=state))
+
     def test_canonical_states_remain_accepted(self):
-        for state in ('FAIL', 'BLOCKED', 'UNKNOWN', 'NEEDS_HUMAN', 'PENDING', 'RUNNING'):
+        for state in ('FAIL', 'BLOCKED', 'UNKNOWN'):
             connection = Connection()
             result = load_gate(connection)('RUN-1', dict(stage='POLICY', state=state), 'token')
             self.assertEqual(result['state'], state)
