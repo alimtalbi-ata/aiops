@@ -1,0 +1,58 @@
+"""Durable PostgreSQL replay barrier for signed GLPI cross-reference events.
+
+Install the SQL migration explicitly before wiring this adapter. The callback
+requires a server-owned transaction-capable connection factory, not a request
+parameter. It commits an atomic unique-key insert before returning success.
+Never store the signing secret or untrusted event body in this table.
+"""
+from collections.abc import Callable
+from datetime import datetime, timezone
+
+MIGRATION_SQL = """
+CREATE TABLE IF NOT EXISTS aiops.glpi_xref_consumed_nonces (
+    tenant_id text NOT NULL,
+    nonce text NOT NULL,
+    expires_at timestamptz NOT NULL,
+    consumed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, nonce)
+);
+"""
+
+
+def make_postgres_nonce_consumer(connect: Callable):
+    """Create an atomic insert-if-absent replay barrier.
+
+    connect() returns a DB-API connection supporting context-manager
+    transactions and cursor(). The unique constraint is mandatory.
+    This adapter never auto-creates the schema or prunes old nonces:
+    deleting expired rows can allow replay if a still-valid signed event
+    is presented; retention must exceed maximum signed lifetime and skew.
+    """
+    if not callable(connect):
+        raise ValueError("postgres_connection_factory_missing")
+
+    def consume_nonce(*, tenant_id, nonce, expires_at):
+        if (not isinstance(tenant_id, str) or not tenant_id
+                or len(tenant_id) > 128 or not isinstance(nonce, str)
+                or not 16 <= len(nonce) <= 128
+                or not nonce.isascii() or not nonce.isalnum()
+                or type(expires_at) is not int or expires_at <= 0):
+            return False
+        try:
+            with connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "INSERT INTO aiops.glpi_xref_consumed_nonces "
+                        "(tenant_id, nonce, expires_at) "
+                        "VALUES (%s, %s, %s) "
+                        "ON CONFLICT (tenant_id, nonce) DO NOTHING "
+                        "RETURNING nonce",
+                        (tenant_id, nonce,
+                         datetime.fromtimestamp(expires_at, tz=timezone.utc)),
+                    )
+                    return cursor.fetchone() is not None
+        except Exception:
+            # Never permit a replay on database outage or uncertain commit.
+            return False
+
+    return consume_nonce
