@@ -54,3 +54,10 @@ Keep PR #537, #539 and #540 in DRAFT. No merge, deployment, automation change, o
 - `app/core/main.py` `GET /api/dashboard`: `dashboard()` aggregates counts from `aiops.runs`, `aiops.twin_nodes`, and `aiops.incidents` without actor/tenant predicates in the handler. These aggregates cannot be presented as tenant-qualified evidence.
 - These observations describe the inspected handlers; they do not establish whether other infrastructure restricts reachability. Network restrictions or service-level bearer tokens do not, by themselves, establish end-user tenant scoping.
 - **Do not expose these global responses as scoped user projections.** Identify and test an authoritative identity/tenant model and authorized data queries before introducing the proposed endpoint. If such a model is not available, retain UNKNOWN and HOLD.
+
+## Identity-source audit (additional blocking finding)
+
+- In the inspected `app/portal/main.py`, no authentication middleware, request-state identity, or per-route user/tenant dependency is defined. This does **not** exclude identity enforcement outside this file; an ingress or identity proxy would need separate proof and trusted-header handling tests.
+- In `app/core/main.py`, the `auth(token)` helper checks a shared internal token. Several write routes call it; this establishes a service credential check, not an independently verified human identity or tenant membership.
+- `record_proposal_approval` reads `actor_id` and `actor_role` from the request payload after the internal-token check. Those values must **not** be reused as authenticated browser identity for the portal projection. This is a finding about the source of the fields, not a claim that the approval workflow is exploitable.
+- **Decision gate:** before implementing a user-scoped read endpoint, produce a verified trust-boundary diagram (browser -> ingress/IdP -> portal -> Core/DB), the source and verification of actor and tenant claims, cross-tenant negative tests, and a documented policy owner. Otherwise keep the projection unavailable.
