@@ -34,7 +34,9 @@ class TransportTests(unittest.TestCase):
     def create(self, response=None, token="server-only-token", max_bytes=262144):
         opener = FakeOpener(response or Response())
         with patch("shared.glpi_http_json_transport.build_opener", return_value=opener):
-            get = make_json_get(get_token=lambda **kwargs: token, max_bytes=max_bytes)
+            get = make_json_get(get_token=lambda **kwargs: token,
+                                allowed_origin="https://core.internal",
+                                max_bytes=max_bytes)
         return get, opener
 
     def test_authenticated_get_only(self):
@@ -68,6 +70,17 @@ class TransportTests(unittest.TestCase):
         with self.assertRaises(ReadTransportBlocked):
             get(url="https://core.internal", actor="operator",
                 tenant_id="tenant-a")
+
+    def test_credentials_never_sent_to_other_origin(self):
+        get, opener = self.create()
+        for url in ("https://evil.internal/api/runs/RUN-1",
+                    "https://core.internal.evil.invalid/api/runs/RUN-1",
+                    "https://core.internal:444/api/runs/RUN-1",
+                    "https://core.internal@evil.internal/api/runs/RUN-1",
+                    "https://core.internal:invalid/api/runs/RUN-1"):
+            with self.subTest(url=url), self.assertRaises(ReadTransportBlocked):
+                get(url=url, actor="operator", tenant_id="tenant-a")
+        self.assertEqual(opener.calls, [])
 
     def test_no_redirect_handler_installed(self):
         from shared.glpi_http_json_transport import _NoRedirect
