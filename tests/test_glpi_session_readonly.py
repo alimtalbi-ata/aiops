@@ -1,6 +1,7 @@
 """Offline GLPI REST session GET-only lifecycle and fail-closed checks."""
 import io
 import json
+from urllib.error import HTTPError
 import sys
 import unittest
 from pathlib import Path
@@ -23,10 +24,12 @@ class Response:
 
 
 class Opener:
-    def __init__(self, calls, fail_ticket=False, fail_cleanup=False):
+    def __init__(self, calls, fail_ticket=False, fail_cleanup=False, ticket_payload=None, redirect_ticket=False):
         self.calls = calls
         self.fail_ticket = fail_ticket
         self.fail_cleanup = fail_cleanup
+        self.ticket_payload = ticket_payload
+        self.redirect_ticket = redirect_ticket
     def open(self, request, timeout):
         path = request.full_url.split("/apirest.php/")[-1]
         self.calls.append((path, request))
@@ -39,7 +42,9 @@ class Opener:
         if path == "Ticket/201":
             if self.fail_ticket:
                 raise OSError("upstream offline")
-            return Response({"id": 201, "entities_id": 7})
+            if self.redirect_ticket:
+                raise HTTPError(request.full_url, 302, "redirect denied", {}, None)
+            return Response(self.ticket_payload if self.ticket_payload is not None else {"id": 201, "entities_id": 7})
         if path == "killSession":
             if self.fail_cleanup:
                 raise OSError("session close unconfirmed")
@@ -48,13 +53,13 @@ class Opener:
 
 
 class SessionTests(unittest.TestCase):
-    def make(self, calls, fail_ticket=False, fail_cleanup=False, **overrides):
+    def make(self, calls, fail_ticket=False, fail_cleanup=False, ticket_payload=None, redirect_ticket=False, **overrides):
         args = dict(glpi_base_url="https://glpi.internal",
                     get_app_token=lambda **kwargs: "app-secret",
                     get_user_token=lambda **kwargs: "user-secret")
         args.update(overrides)
         with patch("shared.glpi_session_readonly.build_opener",
-                   return_value=Opener(calls, fail_ticket, fail_cleanup)):
+                   return_value=Opener(calls, fail_ticket, fail_cleanup, ticket_payload, redirect_ticket)):
             return make_glpi_session_ticket_get(**args)
 
     def read(self, fn):
@@ -113,6 +118,33 @@ class SessionTests(unittest.TestCase):
             fn(url="https://glpi.internal/Ticket/202", actor="operator",
                tenant_id="tenant-a", ticket_id="201", glpi_instance_id="ci")
         self.assertEqual(calls, [])
+
+    def test_redirected_ticket_refused_and_session_closed(self):
+        calls = []
+        with self.assertRaises(GLPISessionReadBlocked):
+            self.read(self.make(calls, redirect_ticket=True))
+        self.assertEqual([name for name, _ in calls],
+                         ["initSession", "Ticket/201", "killSession"])
+
+    def test_oversized_ticket_refused_and_session_closed(self):
+        calls = []
+        with self.assertRaises(GLPISessionReadBlocked):
+            self.read(self.make(calls, ticket_payload={"data": "x" * 2048},
+                                max_bytes=1024))
+        self.assertEqual([name for name, _ in calls],
+                         ["initSession", "Ticket/201", "killSession"])
+
+    def test_invalid_credentials_never_open_session(self):
+        calls = []
+        with self.assertRaises(GLPISessionReadBlocked):
+            self.read(self.make(calls, get_user_token=lambda **kw: "bad\\r\\nheader"))
+        self.assertEqual(calls, [])
+
+    def test_untrusted_origin_rejected_at_construction(self):
+        for origin in ("http://glpi.internal", "https://user@glpi.internal",
+                       "https://glpi.internal/other", "https://glpi.internal?x=1"):
+            with self.subTest(origin=origin), self.assertRaises(ValueError):
+                self.make([], glpi_base_url=origin)
 
     def test_missing_credential_dependency_rejected(self):
         with self.assertRaises(ValueError):
