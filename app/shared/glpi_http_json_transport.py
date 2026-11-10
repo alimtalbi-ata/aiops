@@ -36,7 +36,7 @@ def make_json_get(*, get_token: Callable, timeout: float = 3.0,
         try:
             token = get_token(actor=actor, tenant_id=tenant_id, **scope)
             if (not isinstance(token, str) or not token or len(token) > 4096
-                    or any(ord(c) < 33 or ord(c) > 126 or c == "\\\\" for c in token)):
+                    or any(ord(c) < 33 or ord(c) > 126 or ord(c) == 92 for c in token)):
                 raise ReadTransportBlocked("server_credential_unavailable")
             req = Request(url, headers={"Authorization": "Bearer " + token,
                                         "Accept": "application/json"},
