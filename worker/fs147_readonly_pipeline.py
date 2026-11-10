@@ -88,7 +88,14 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or not math.isfinite(observation["used_percent"])
                 or not 0 <= observation["used_percent"] <= 100
                 or observation.get("filesystem") != "/fs-lab"
-                or not observation.get("read_only") is True):
+                or not observation.get("read_only") is True
+                # Contradictory bridge provenance must fail closed.
+                or ("action_executed" in observation
+                    and observation["action_executed"] is not False)
+                or ("mutation_performed" in observation
+                    and observation["mutation_performed"] is not False)
+                or ("ticket_transition" in observation
+                    and observation["ticket_transition"] is not None)):
             return _blocked("INSUFFICIENT_OBSERVATION", steps)
         # A historical lab measurement is not proof of a fresh bridge observation.
         # Clock injection is only for deterministic tests, never a substitute for
