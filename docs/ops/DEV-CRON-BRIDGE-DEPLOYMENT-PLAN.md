@@ -21,6 +21,14 @@ A full recursive tree of `main` was inspected (247 entries, not truncated). No m
 
 **Actionable next discovery**: inspect historical stable poller and Agent 8 handoff comments for exact bridge script paths, request/response transport and current host receipts. A minute cron is not the same as a ChatGPT automation or a GitHub scheduled workflow. Do not create another cron until the existing one is identified.
 
+## Verified report transport — 2026-11-10
+
+**Read-side recovered.** Branch `ops/debian-runtime-reports` contains `ops/debian-reports/SRV-DEB-05/latest.json`. Observed report `collected_at=2026-11-10T22:31:01.170072+00:00` (freshness must be reevaluated on every read). Portal `aiops2-rebuild-portal` reported running, image `sha256:a1f3adcf1e1189600d3167f6d5f3970a89deefe99338b19a8f089da08502916b`; Core, Worker, Twin, n8n and GLPI also reported running. This is a **host-produced report**, not an interactive host shell or proof of deployment.
+
+[Existing publisher script](https://github.com/alimtalbi-ata/aiops/blob/feat/debian-existing-host-autonomy-20261101/scripts/aiops-publish-report.sh) reads `~/.local/state/aiops-debian-agent/latest.json` and pushes `ops/debian-reports/SRV-DEB-05/latest.json` over noninteractive SSH to the reports branch. This is **outbound Debian→GitHub only**; it does not implement an inbound arbitrary-command queue. [Stable qualification script](https://github.com/alimtalbi-ata/aiops/blob/deploy/aiops2-stable/deploy/debian-poller-qualification.py) identifies the historical deploy poller at `/home/aiops/aiops2-auto-deploy/poll.sh` and a development checkout at `/home/aiops/aiops2-auto-deploy/glpi-ai-ticket-enrichment-e2e`. [Stable Portal deployer](https://github.com/alimtalbi-ata/aiops/blob/deploy/aiops2-stable/deploy/debian-portal-deploy.sh) implements image-preserving Portal-only replacement, but fetches a pinned SHA from a fixed PR ref and is **not** a generic arbitrary-command runner.
+
+**Current operational gap:** verify current Debian `crontab -u aiops -l`, `poll.sh` and publisher entries without publishing credentials; inspect whether a separate inbound command bridge exists. Do not treat report branch as an executable command inbox.
+
 ## First operation when bridge is located
 Use a bounded, **read-only** inventory request; record request ID, expected response path, timestamp, host identity, and receipt:
 ```sh
