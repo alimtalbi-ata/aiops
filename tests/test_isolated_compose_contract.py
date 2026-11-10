@@ -9,51 +9,67 @@ ROOT = Path(__file__).resolve().parents[1]
 class IsolatedComposeContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.overlay = (ROOT / "compose.isolated.yml").read_text()
+        cls.compose = (ROOT / "compose.isolated.yml").read_text()
         cls.installer = (ROOT / "deploy/install-isolated.sh").read_text()
+        cls.qualification = (ROOT / "tests/qualification-isolated.sh").read_text()
 
-    def test_every_service_removes_fixed_container_name(self):
-        base = (ROOT / "compose.yml").read_text()
-        services = re.findall(r"^  (aiops2-[a-z0-9-]+):$", base, re.M)
-        for service in services:
-            with self.subTest(service=service):
-                block = re.search(
-                    rf"^  {re.escape(service)}:\n(?P<body>.*?)(?=^  aiops2-[a-z0-9-]+:|^networks:)",
-                    self.overlay,
-                    re.M | re.S,
-                )
-                self.assertIsNotNone(block, f"missing isolated override for {service}")
-                self.assertRegex(block.group("body"), r"(?m)^    container_name: null$")
+    def test_standalone_manifest_has_no_fixed_container_names(self):
+        self.assertRegex(self.compose, r"(?m)^name: aiops2-isolated$")
+        self.assertNotRegex(self.compose, r"(?m)^\s+container_name:")
+        services = re.findall(r"^  (aiops2-[a-z0-9-]+):$", self.compose, re.M)
+        self.assertEqual(len(services), 18)
 
-    def test_all_published_ports_are_loopback_only(self):
+    def test_every_published_port_is_loopback_only_and_exact(self):
+        port_lines = [line.strip() for line in self.compose.splitlines() if "ports:" in line]
+        self.assertEqual(len(port_lines), 6)
         expected = {
-            "127.0.0.1:17777:777",
-            "127.0.0.1:18080:80",
-            "127.0.0.1:15678:5678",
-            "127.0.0.1:19090:9090",
-            "127.0.0.1:13000:3000",
-            "127.0.0.1:19093:9093",
+            'ports: ["127.0.0.1:17777:777"]',
+            'ports: ["127.0.0.1:19090:9090"]',
+            'ports: ["127.0.0.1:13000:3000"]',
+            'ports: ["127.0.0.1:19093:9093"]',
+            'ports: ["127.0.0.1:18080:80"]',
+            'ports: ["127.0.0.1:15678:5678"]',
         }
-        for binding in expected:
-            with self.subTest(binding=binding):
-                self.assertIn(f'"{binding}"', self.overlay)
-        self.assertNotRegex(self.overlay, r'"(?:0\.0\.0\.0|\[::\]):')
+        self.assertEqual(set(port_lines), expected)
+        self.assertNotRegex(self.compose, r'(?m)^\s+ports:.*(?:0\.0\.0\.0|\[::\]|(?<!127\.0\.0\.1:)\d+:\d+)')
 
-    def test_all_named_volumes_and_networks_are_namespaced(self):
-        self.assertIn("${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_postgres_data", self.overlay)
-        self.assertIn("${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_n8n_data", self.overlay)
-        self.assertIn("${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_public", self.overlay)
-        self.assertIn("${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_observability", self.overlay)
+    def test_named_volumes_and_networks_are_unique(self):
+        for name in (
+            "aiops2-isolated_postgres_data",
+            "aiops2-isolated_temporal_postgres_data",
+            "aiops2-isolated_prometheus_data",
+            "aiops2-isolated_grafana_data",
+            "aiops2-isolated_glpi_db_data",
+            "aiops2-isolated_glpi_data",
+            "aiops2-isolated_n8n_data",
+            "aiops2-isolated_public",
+            "aiops2-isolated_control",
+            "aiops2-isolated_data",
+            "aiops2-isolated_execution",
+            "aiops2-isolated_temporal_data",
+            "aiops2-isolated_integration",
+            "aiops2-isolated_observability",
+        ):
+            with self.subTest(name=name):
+                self.assertIn("name: " + name, self.compose)
 
-    def test_installer_is_offline_and_fail_closed(self):
+    def test_installer_uses_only_standalone_manifest_and_fails_closed(self):
+        self.assertIn('-f compose.isolated.yml', self.installer)
+        self.assertNotIn('-f compose.yml', self.installer)
         self.assertIn("--no-build --pull never", self.installer)
         self.assertIn("image_not_preloaded", self.installer)
         self.assertIn("volume_already_exists", self.installer)
         self.assertIn("network_already_exists", self.installer)
         self.assertIn("project_containers_already_exist", self.installer)
+        self.assertIn("10.79.94.202", self.installer)
         self.assertNotIn("docker compose down", self.installer)
         self.assertNotIn("docker volume rm", self.installer)
         self.assertNotIn("RETIRE_LEGACY=1", self.installer)
+
+    def test_runtime_qualification_checks_loopback_bindings(self):
+        self.assertIn('HostIp', self.qualification)
+        self.assertIn('"127.0.0.1"', self.qualification)
+        self.assertIn("ISOLATED_QUALIFICATION=PASS", self.qualification)
 
 
 if __name__ == "__main__":
