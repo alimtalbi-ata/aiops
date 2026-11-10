@@ -72,3 +72,11 @@ test('transport failures never expose secrets or raw error objects to UI',async(
  assert.equal(JSON.stringify(published).includes(secret),false);
  assert.equal(JSON.stringify(published).includes('api.invalid'),false);
 });
+
+test('transport exception publishes terminal ERROR, never leaves UI stuck LOADING',async()=>{
+ const states=[];
+ const reader=createLatestReader(async()=>{throw new TypeError('network failed')},event=>states.push(event),{now:()=>now});
+ await reader.load('runs');
+ assert.deepEqual(states,[{state:'LOADING'},{state:'ERROR',error_code:'READ_FAILED',result:null}]);
+ assert.equal(JSON.stringify(states).includes('network failed'),false);
+});
