@@ -3,7 +3,8 @@
 
 Run after FS1107 has started the candidate at 127.0.0.1:17898.
 This test deliberately simulates a transport that ignores AbortSignal, proving
-the request-generation guard for both late success and late rejection, rather than\nmerely observing an aborted fetch.
+the request-generation guard for both late success and late rejection, rather than
+merely observing an aborted fetch.
 """
 import json
 import os
