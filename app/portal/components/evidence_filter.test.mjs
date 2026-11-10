@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {filterEvidence,mountEvidenceFilter} from './evidence_filter.mjs';
-const synthetic=[{id:'synthetic-1',label:'Disque lent',status:'READY'},{id:'synthetic-2',label:'Réseau inconnu',status:'UNKNOWN'},{id:'synthetic-1',label:'Doublon',status:'READY'}];
+const synthetic=[{id:'synthetic-1',label:'Disque lent',status:'READY'},{id:'synthetic-2',label:'Réseau inconnu',status:'UNKNOWN'},{id:'synthetic-1',label:'Disque lent',status:'READY'}];
 test('synthetic task filtering, deduplication and empty state',()=>{
  assert.deepEqual(filterEvidence(synthetic,{query:'disque'}).records.map(x=>x.id),['synthetic-1']);
  assert.deepEqual(filterEvidence(synthetic,{status:'UNKNOWN'}).records.map(x=>x.id),['synthetic-2']);
@@ -22,4 +22,16 @@ test('native keyboard controls, live count, and no HTML interpretation',()=>{
  assert.equal(list.children[0].textContent.includes('<img'),true);
  input.value='missing';input.events.input();assert.match(output.textContent,/0 preuve/);
  mounted.setRecords(null);assert.equal(seen.at(-1),'UNKNOWN');assert.equal(list.children.length,0);
+});
+
+test('synthetic conflicting duplicate evidence is UNKNOWN, not silently first-wins',()=>{
+ const a={id:'synthetic-7',label:'Preuve A',status:'READY'};
+ for(const b of [
+  {...a,label:'Preuve B'},
+  {...a,status:'ERROR'}
+ ]){
+  const result=filterEvidence([a,b],{query:'Preuve A',status:'READY'});
+  assert.deepEqual(result,{state:'UNKNOWN',records:[]});
+ }
+ assert.equal(filterEvidence([a,{...a}]).records.length,1);
 });
