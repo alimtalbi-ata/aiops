@@ -41,6 +41,29 @@ class PartitionGateTests(unittest.TestCase):
     def test_valid_isolated_capture(self):
         self.assertEqual(self.check(*fixture())["status"], "PASS")
 
+    def test_anonymous_dependency_and_fact_ids_fail_closed(self):
+        for field, value in (("edge_id", ""), ("edge_id", None),
+                             ("relation_type", ""), ("relation_type", None)):
+            with self.subTest(field=field, value=value):
+                graph, fs, san = fixture()
+                graph["edges"].append({"edge_id": "EDGE-FS", "source_id": "FS-147",
+                                       "target_id": "FS-147", "relation_type": "DEPENDS_ON"})
+                graph["edges"][0][field] = value
+                with self.assertRaisesRegex(module.IsolationError, "dependency identity"):
+                    self.check(graph, fs, san)
+        for value in ("", None):
+            with self.subTest(fact_id=value):
+                graph, fs, san = fixture()
+                fs["facts"][0]["fact_id"] = value
+                with self.assertRaisesRegex(module.IsolationError, "missing fact identity"):
+                    self.check(graph, fs, san)
+
+    def test_named_same_namespace_dependency_is_accepted(self):
+        graph, fs, san = fixture()
+        graph["edges"].append({"edge_id": "EDGE-FS", "source_id": "FS-147",
+                               "target_id": "FS-147", "relation_type": "DEPENDS_ON"})
+        self.assertEqual(self.check(graph, fs, san)["edges"], 1)
+
     def test_cross_namespace_dependency(self):
         graph, fs, san = fixture()
         graph["edges"].append({"edge_id": "EDGE-X", "source_id": "FS-147",
