@@ -9,12 +9,19 @@ import os
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPRedirectHandler
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    """Never forward the Twin bearer credential to a redirect destination."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
 
 from fs147_twin_partition_gate import IsolationError, qualify
 
 
-def fetch_json(base_url, path, token, timeout=8, opener=urlopen):
+def fetch_json(base_url, path, token, timeout=8, opener=None):
     parsed = urlsplit(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password:
         raise IsolationError("invalid Twin API base URL")
@@ -23,6 +30,10 @@ def fetch_json(base_url, path, token, timeout=8, opener=urlopen):
     request = Request(base_url.rstrip("/") + path,
                       headers={"Authorization": "Bearer " + token,
                                "Accept": "application/json"}, method="GET")
+    # Default urllib redirects can leak the bearer token to another origin.
+    # A qualification capture must never follow redirects.
+    if opener is None:
+        opener = build_opener(_RejectRedirects()).open
     try:
         with opener(request, timeout=timeout) as response:
             if response.status != 200:
