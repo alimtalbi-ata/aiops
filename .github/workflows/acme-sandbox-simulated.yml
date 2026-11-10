@@ -25,6 +25,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source HEAD (never synthetic PR merge)
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "ACME_EXACT_HEAD=$EXPECTED_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -33,4 +42,8 @@ jobs:
       - name: Compile owned sandbox modules
         run: python -m py_compile app/simulator/acme_sandbox.py app/twin/acme_sandbox.py app/simulator/main.py app/twin/main.py
       - name: ACME negative and structural simulation checks (no host/GLPI)
-        run: PYTHONPATH=app:. python -m pytest -q tests/test_acme_sandbox_services.py
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app:. python -m pytest -q tests/test_acme_sandbox_services.py | tee /tmp/acme-sandbox-tests.log
+          grep -E '^120 passed in ' /tmp/acme-sandbox-tests.log
+          ! grep -E 'skipped|xfailed|xpassed' /tmp/acme-sandbox-tests.log
