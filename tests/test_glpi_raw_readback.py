@@ -21,6 +21,15 @@ class RawReadbackTests(unittest.TestCase):
             with self.assertRaises(RawReadbackInvalid):
                 normalize_core_run_readback(wrong, expected_run_id="RUN-12345678")
 
+    def test_core_incident_identifier_grammar_matches_signed_xref(self):
+        for incident in ("INC-", "INC-abc", "INC-../bad",
+                         "INC-" + "x" * 129, "INC-" + chr(10) + "abcd"):
+            with self.subTest(incident=incident), self.assertRaises(RawReadbackInvalid):
+                normalize_core_run_readback(
+                    {"run": {"run_id": "RUN-12345678",
+                             "incident_id": incident, "mode": "DEMO"}},
+                    expected_run_id="RUN-12345678")
+
     def test_glpi_numeric_id_and_entity_are_normalized_without_attestation(self):
         result = normalize_glpi_ticket_readback(
             {"id": 201, "entities_id": 7, "name": "RUN-12345678"},
