@@ -69,6 +69,19 @@ class SignedXrefBoundaryTests(unittest.TestCase):
                     self.invoke(**changes)
         self.assertEqual(self.calls, [])
 
+    def test_verified_identity_still_requires_canonical_entity_and_instance(self):
+        for field, value in (("glpi_entity_id", "007"),
+                             ("glpi_entity_id", "0" * 19),
+                             ("glpi_instance_id", "   "),
+                             ("glpi_instance_id", "ci" + chr(10) + "other")):
+            with self.subTest(field=field):
+                original = self.claims[field]
+                self.claims[field] = value
+                with self.assertRaises(CanonicalXrefBlocked):
+                    self.invoke()
+                self.claims[field] = original
+        self.assertEqual(self.calls, ["fetch", "verify"] * 4)
+
     def test_invalid_ticket_rejected_before_fetch(self):
         with self.assertRaises(CanonicalXrefBlocked):
             self.invoke(ticket_id="201/../../")
