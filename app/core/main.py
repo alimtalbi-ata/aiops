@@ -74,8 +74,13 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     with db() as c:
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
-        rec=c.execute('select response from aiops.command_receipts where idempotency_key=%s',(x.idempotency_key,)).fetchone()
-        if rec:return rec[0]
+        rec=c.execute('select run_id,command,response from aiops.command_receipts where idempotency_key=%s for update',(x.idempotency_key,)).fetchone()
+        if rec:
+            # A command receipt is bound to the original Run and command intent.
+            # A global key collision must never return another Run's response.
+            if rec[0] != rid or rec[1] != x.command:
+                raise HTTPException(409,'command idempotency key belongs to a different intent')
+            return rec[2]
         status,version,mode=row
         if version!=x.expected_version:raise HTTPException(409,'stale run version')
         target={'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED','RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'}[x.command]
