@@ -66,5 +66,38 @@ class StrictCaptureTest(unittest.TestCase):
         self.assertIn("duplicate", result.stdout)
 
 
+    def test_nested_san_namespace_in_fs_observation_fails_closed(self):
+        capture = valid_capture()
+        capture["fs_facts"]["facts"][0]["value"]["source"] = {
+            "namespace": "san", "metadata": {"confidence": 0.9}}
+        result = self.invoke(json.dumps(capture))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("nested cross-namespace", result.stdout)
+
+    def test_nested_san_node_dependency_in_fs_observation_fails_closed(self):
+        capture = valid_capture()
+        capture["fs_facts"]["facts"][0]["value"]["dependencies"] = [
+            {"target_node_id": "SAN-1", "relation_type": "depends_on"}]
+        result = self.invoke(json.dumps(capture))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("nested cross-node", result.stdout)
+
+    def test_nested_foreign_run_in_fs_observation_fails_closed(self):
+        capture = valid_capture()
+        capture["fs_facts"]["facts"][0]["value"]["source"] = {"run_id": "RUN-SAN"}
+        result = self.invoke(json.dumps(capture))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("nested cross-RUN", result.stdout)
+
+    def test_nested_local_provenance_passes(self):
+        capture = valid_capture()
+        capture["fs_facts"]["facts"][0]["value"]["dependencies"] = [
+            {"namespace": "lab-fs147", "target_node_id": "FS-1",
+             "run_id": "RUN-FS", "metric": {"value": 92}}]
+        result = self.invoke(json.dumps(capture))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "PASS")
+
+
 if __name__ == "__main__":
     unittest.main()
