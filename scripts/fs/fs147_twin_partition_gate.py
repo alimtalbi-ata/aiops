@@ -21,12 +21,16 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace):
     ids = [n["node_id"] for n in nodes]
     if len(ids) != len(set(ids)):
         raise IsolationError("duplicate topology node IDs")
+    if not nodes:
+        raise IsolationError("empty topology capture")
     owners = {}
     for n in nodes:
         owner = n.get("namespace")
         if owner not in (fs_namespace, san_namespace):
             raise IsolationError("unscoped or unknown topology node")
         owners[n["node_id"]] = owner
+    if fs_namespace not in owners.values() or san_namespace not in owners.values():
+        raise IsolationError("missing topology partition")
     edge_ids = [e["edge_id"] for e in edges]
     if len(edge_ids) != len(set(edge_ids)):
         raise IsolationError("duplicate dependency IDs")
@@ -41,6 +45,8 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace):
     for response, namespace in ((fs_facts, fs_namespace), (san_facts, san_namespace)):
         if response.get("synthetic") is not True:
             raise IsolationError("unmarked scenario response")
+        if not response["facts"]:
+            raise IsolationError("empty RUN evidence is not proof of isolation")
         for fact in response["facts"]:
             if fact["fact_id"] in seen:
                 raise IsolationError("fact ID reused across RUNs")
