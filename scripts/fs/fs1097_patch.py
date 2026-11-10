@@ -60,6 +60,9 @@ async function loadHistory(){
  const requestId=++historyRequestId;
  if(historyAbortController)historyAbortController.abort();
  const controller=new AbortController();historyAbortController=controller;
+ // A hung same-origin request must not leave the chart in perpetual loading.
+ let historyTimedOut=false;
+ const historyTimeout=setTimeout(()=>{historyTimedOut=true;controller.abort()},20000);
  const metric=$("history-metric").value,windowSize=$("history-window").value;
  const status=$("history-status"),chart=$("history-chart"),legend=$("history-legend"),button=$("history-refresh");
  button.disabled=true;status.textContent="Chargement des séries historiques…";legend.replaceChildren();
@@ -104,8 +107,8 @@ async function loadHistory(){
    const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.className="history-swatch history-swatch-"+(index%historyColors.length);label.textContent=name;item.append(swatch,label);legend.append(item);
   });
   status.textContent=series.length+" séries · "+points.length+" points · pas "+data.step_seconds+" s · "+windowSize;
- }catch(error){if(requestId!==historyRequestId||controller.signal.aborted||error?.name==="AbortError")return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));legend.replaceChildren();status.textContent="Historique indisponible · réessayez ou contactez l’exploitation";}
- finally{if(requestId===historyRequestId){button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
+ }catch(error){if(requestId!==historyRequestId||(!historyTimedOut&&(controller.signal.aborted||error?.name==="AbortError")))return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));legend.replaceChildren();status.textContent="Historique indisponible · réessayez ou contactez l’exploitation";}
+ finally{clearTimeout(historyTimeout);if(requestId===historyRequestId){button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
 }
 $("history-refresh").addEventListener("click",loadHistory);
 $("history-metric").addEventListener("change",loadHistory);
