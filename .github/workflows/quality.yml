@@ -30,6 +30,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
       - name: GLPI existing-ticket identity authority negative regressions (offline only)
         run: python -m unittest discover -s tests -p "test_glpi_sync_authority.py" -v
+      - name: GLPI Portal handoff preservation and Copilot non-claim regression (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_copilot_preservation.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
