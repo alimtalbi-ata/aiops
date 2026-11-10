@@ -46,7 +46,12 @@ export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
    try{
     const result=await read(query,{signal});
     if(id!==generation||signal.aborted)return;
-    // A transport success is not an evidence success. The server must have\n    // already enforced actor/tenant scope; this UI only refuses to display\n    // an unqualified projection as READY. Never authorize in the browser.\n    const scoped=result && result.scope_verified===true && result.authorization_source==='server';\n    const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now()}) : 'UNKNOWN';\n    publish({state,result:state==='READY'||state==='EMPTY'?result:null});
+    // A transport success is not an evidence success. The server must have
+    // already enforced actor/tenant scope; this UI only refuses to display
+    // an unqualified projection as READY. Never authorize in the browser.
+    const scoped=result && result.scope_verified===true && result.authorization_source==='server';
+    const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now()}) : 'UNKNOWN';
+    publish({state,result:state==='READY'||state==='EMPTY'?result:null});
    }catch(error){
     if(id!==generation||signal.aborted)return;
     publish({state:'ERROR',error});
