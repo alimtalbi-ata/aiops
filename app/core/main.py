@@ -114,9 +114,33 @@ def checkpoint(rid:str,x:dict,authorization:str|None=Header(default=None)):
     workflow_id = x.get('workflow_id')
     if workflow_id is not None and (not isinstance(workflow_id, str) or workflow_id != rid):
         raise HTTPException(409, 'checkpoint has unverified workflow identity')
+    stage = x.get('stage')
+    version = x.get('version')
+    if not isinstance(stage, str) or not stage.strip():
+        raise HTTPException(422, 'checkpoint stage unknown')
+    if type(version) is not int or version < 0:
+        raise HTTPException(422, 'checkpoint version unknown')
     with db() as c:
-        c.execute("insert into aiops.run_checkpoints(run_id,stage,version,workflow_id) values(%s,%s,%s,%s) on conflict(run_id) do update set stage=excluded.stage,version=excluded.version,workflow_id=coalesce(excluded.workflow_id,aiops.run_checkpoints.workflow_id),updated_at=now()",(rid,x['stage'],x['version'],x.get('workflow_id')))
-    return {'run_id':rid,'stage':x['stage'],'version':x['version']}
+        # Atomic PostgreSQL conflict predicate fences stale and conflicting retries.
+        saved = c.execute(
+            """insert into aiops.run_checkpoints(run_id,stage,version,workflow_id)
+               values(%s,%s,%s,%s)
+               on conflict(run_id) do update set
+                 stage=excluded.stage,
+                 version=excluded.version,
+                 workflow_id=coalesce(excluded.workflow_id,aiops.run_checkpoints.workflow_id),
+                 updated_at=now()
+               where (aiops.run_checkpoints.version < excluded.version
+                      or (aiops.run_checkpoints.version = excluded.version
+                          and aiops.run_checkpoints.stage = excluded.stage))
+                 and (aiops.run_checkpoints.workflow_id is null
+                      or aiops.run_checkpoints.workflow_id = excluded.run_id)
+               returning run_id""",
+            (rid, stage, version, workflow_id),
+        ).fetchone()
+        if not saved:
+            raise HTTPException(409, 'checkpoint version, stage or ownership conflict')
+    return {'run_id':rid,'stage':stage,'version':version}
 
 @app.get('/api/runs/{rid}/checkpoint')
 def get_checkpoint(rid:str):
