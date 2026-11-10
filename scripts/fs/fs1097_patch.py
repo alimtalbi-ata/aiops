@@ -91,7 +91,7 @@ async function loadHistory(){
   }).slice(0,30);
   const points=series.flatMap(s=>s.points).filter(historyValidPoint);
   chart.replaceChildren();
-  if(!points.length){chart.append(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Aucune donnée disponible pour cette période"));status.textContent="Aucune série avec points disponibles.";return}
+  if(!points.length){chart.append(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Aucune donnée disponible pour cette période"));status.textContent="Aucune série avec points disponibles.";chart.setAttribute("aria-label","Historique Prometheus · "+(metric==="availability"?"disponibilité":"durée de scraping")+" · "+windowSize+" · aucune donnée disponible");return}
   const width=900,height=320,left=64,right=18,top=18,bottom=42,plotW=width-left-right,plotH=height-top-bottom;
   // Reduce bounds without spreading every sample into function arguments.
   // Large 24h responses must not trigger engine argument-count limits.
