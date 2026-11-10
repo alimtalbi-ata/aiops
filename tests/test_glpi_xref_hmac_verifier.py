@@ -109,6 +109,17 @@ class HmacXrefTests(unittest.TestCase):
         self.assertEqual(self.acl_calls, [])
         self.assertEqual(self.seen, set())
 
+    def test_malformed_request_scope_never_reaches_acl_or_nonce(self):
+        for field, value in (("actor", "operator" + chr(10) + "admin"),
+                             ("tenant_id", "tenant" + chr(0) + "other"),
+                             ("ticket_id", "0201"),
+                             ("actor", "   ")):
+            with self.subTest(field=field):
+                with self.assertRaises(XrefSignatureRejected):
+                    self.invoke(**{field: value})
+        self.assertEqual(self.acl_calls, [])
+        self.assertEqual(self.seen, set())
+
     def test_malformed_signed_identity_never_consumes_nonce(self):
         for field, value in (("run_id", "RUN-../../bad"),
                              ("incident_id", "INC-?bad"),
