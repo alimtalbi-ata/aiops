@@ -39,9 +39,21 @@ class GLPIPortalHandoffPreservationTests(unittest.TestCase):
                 "/api/portal/itsm",
                 headers={"Authorization": "Bearer test-viewer-token"},
             )
-        self.assertEqual(allowed_bearer.status_code, 503)
-        self.assertEqual(allowed_bearer.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
-        self.assertFalse(allowed_bearer.json()["tenant_acl_qualified"])
+            forged_scope = self.client.get(
+                "/api/portal/itsm",
+                headers={
+                    "Authorization": "Bearer test-viewer-token",
+                    "X-Actor-ID": "admin",
+                    "X-Tenant-ID": "tenant-production",
+                    "X-GLPI-Entity-ID": "0",
+                    "X-Role": "superuser",
+                },
+            )
+        for response in (allowed_bearer, forged_scope):
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["reason"], "TENANT_ACL_NOT_QUALIFIED")
+            self.assertFalse(response.json()["tenant_acl_qualified"])
+        self.assertEqual(forged_scope.json(), allowed_bearer.json())
 
     def test_existing_generic_copilot_ui_endpoint_remains_fail_closed(self):
         with patch.dict(os.environ, {"AIOPS_PORTAL_READ_TOKEN": "test-viewer-token"}), \
