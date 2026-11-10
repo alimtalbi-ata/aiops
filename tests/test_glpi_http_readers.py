@@ -80,17 +80,17 @@ class HTTPReadersTests(unittest.TestCase):
     def test_control_characters_in_scope_rejected_before_acl(self):
         core, glpi = self.readers()
         for actor, tenant, instance in (
-            ("operator\\nadmin", "tenant-a", "ci"),
-            ("operator", "tenant-a\\rother", "ci"),
-            ("operator", "tenant-a", "ci\\x00other"),
-            ("operator\\x7f", "tenant-a", "ci"),
+            ("operator" + chr(10) + "admin", "tenant-a", "ci"),
+            ("operator", "tenant-a" + chr(13) + "other", "ci"),
+            ("operator", "tenant-a", "ci" + chr(0) + "other"),
+            ("operator" + chr(127), "tenant-a", "ci"),
         ):
             with self.subTest(actor=actor, tenant=tenant, instance=instance):
                 with self.assertRaises(GLPIHTTPReadBlocked):
                     glpi(actor=actor, tenant_id=tenant, ticket_id="201",
                          glpi_instance_id=instance)
         with self.assertRaises(GLPIHTTPReadBlocked):
-            core(actor="operator\\x00admin", tenant_id="tenant-a",
+            core(actor="operator" + chr(0) + "admin", tenant_id="tenant-a",
                  run_id="RUN-12345678")
         self.assertEqual(self.calls, [])
 
