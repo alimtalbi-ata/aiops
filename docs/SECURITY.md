@@ -15,5 +15,6 @@ The secure `config/.env.example` intentionally leaves secret values blank; the i
 - Keep `.env` out of source control and restrict it to the deployment account.
 - Use unique random secrets and a secret manager/Docker secrets for production deployments.
 - Never print credentials in diagnostics, commit them outside the documented demo template, or copy them into logs/screenshots.
-- The n8n sample workflow may contain a demo token for local demonstration; production imports must replace it with an n8n credential.
+- The n8n incident template must remain inactive and fail closed: no embedded token (including demo tokens), HTTP action nodes, or LIVE execution path. Importing it does not authorize activation. Any future operational workflow requires trusted identity, tenant authorization, independent security review, and explicit signed approval before deployment or activation.
+- If a credential has appeared in a committed n8n workflow, treat it as exposed even after removing it from the current file. A credential owner must verify revocation/rotation and audit use, copies, and Git history; do not mark the incident resolved based solely on a clean template or passing CI.
 - Secret rotation must account for PostgreSQL, GLPI, Grafana, n8n and internal service consumers; do not rotate a live credential without a coordinated plan.

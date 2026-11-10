@@ -163,6 +163,98 @@ jobs:
               sys.exit(1)
           PY
 
+  n8n-security-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Enforce inert n8n incident template
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import re
+
+          # Scan every n8n JSON export, not only the current disabled template.
+          workflow_files = sorted(Path("integration/n8n").rglob("*.json"))
+          assert workflow_files, "no n8n workflow JSON files found"
+          for workflow_file in workflow_files:
+              raw = workflow_file.read_text(encoding="utf-8")
+              assert not re.search(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}", raw), (
+                  f"embedded bearer credential found in {workflow_file}"
+              )
+              assert not re.search(r'(?i)"authorization"\s*:', raw), (
+                  f"authorization header found in {workflow_file}"
+              )
+              assert not re.search(r'(?i)"mode"\s*:\s*"live"', raw), (
+                  f"LIVE execution mode found in {workflow_file}"
+              )
+
+          path = Path("integration/n8n/incident-to-run.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          assert data.get("active") is False, "n8n template must remain inactive"
+          nodes = data.get("nodes")
+          assert isinstance(nodes, list) and len(nodes) == 2, (
+              "n8n template must have exactly two nodes"
+          )
+          by_name = {node.get("name"): node for node in nodes}
+          assert len(by_name) == 2 and set(by_name) == {
+              "Incident Webhook", "Respond"
+          }, "n8n node names must be unique and fixed"
+          webhook = by_name["Incident Webhook"]
+          response = by_name["Respond"]
+          assert webhook.get("type") == "n8n-nodes-base.webhook"
+          assert webhook.get("parameters") == {
+              "httpMethod": "POST",
+              "path": "acme-incident",
+              "responseMode": "responseNode"
+          }, "webhook must be configured for responseNode"
+          assert response.get("type") == "n8n-nodes-base.respondToWebhook"
+          assert set(data) == {
+              "name", "nodes", "connections", "active", "settings", "versionId"
+          }, "unexpected top-level n8n workflow configuration"
+          assert data["settings"] == {}, "n8n template settings must be empty"
+          expected_node_keys = {
+              "parameters", "id", "name", "type", "typeVersion", "position"
+          }
+          for node in nodes:
+              assert set(node) == expected_node_keys, (
+                  "unexpected n8n node fields (including credentials or hooks)"
+              )
+              assert isinstance(node["position"], list) and len(node["position"]) == 2
+          assert webhook["id"] == "webhook" and webhook["typeVersion"] == 2
+          assert response["id"] == "response" and response["typeVersion"] == 1
+          parameters = response.get("parameters")
+          assert isinstance(parameters, dict)
+          assert set(parameters) == {"respondWith", "responseBody"}
+          assert parameters["respondWith"] == "json"
+          body = parameters["responseBody"]
+          assert isinstance(body, str) and not body.startswith("="), (
+              "HOLD response must be static JSON, not an expression"
+          )
+          payload = json.loads(body)
+          assert isinstance(payload, dict)
+          assert payload.get("status") == "HOLD"
+          assert payload.get("reason") == "N8N_TEMPLATE_DISABLED"
+          assert isinstance(payload.get("message"), str) and payload["message"]
+          expected_connections = {
+              "Incident Webhook": {
+                  "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+              }
+          }
+          assert data.get("connections") == expected_connections, (
+              "n8n graph must route only the webhook to the HOLD response"
+          )
+          assert not any(
+              term in json.dumps(node, sort_keys=True).lower()
+              for node in nodes
+              for term in ('"authorization"', 'bearer ', '"live"', "mode:'live'")
+          ), "n8n node contains a credential or LIVE marker"
+          print("PASS: disabled, action-free n8n template with HOLD response")
+          PY
+
   quality-build-package:
     runs-on: ubuntu-latest
     timeout-minutes: 30
