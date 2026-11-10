@@ -403,6 +403,21 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
 @app.post('/api/runs/{rid}/gates')
 def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Canonical identities prevent alias rows and malformed gate receipts.
+    stage=x.get('stage')
+    state=x.get('state')
+    if (not isinstance(stage,str) or not stage.strip()
+            or stage != stage.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
+        raise HTTPException(422,'gate stage identity unknown')
+    if state not in ('PASS','FAIL','BLOCKED','UNKNOWN','NEEDS_HUMAN','PENDING','RUNNING'):
+        raise HTTPException(422,'gate state unknown')
+    eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
+    if (not isinstance(eids,list) or not isinstance(required,list)
+            or any(not isinstance(value,str) or not value.strip() or value != value.strip()
+                   or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+                   for value in eids+required)
+            or len(eids)!=len(set(eids)) or len(required)!=len(set(required))):
+        raise HTTPException(422,'gate evidence contract malformed or duplicated')
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run: raise HTTPException(404,'run not found')
@@ -410,12 +425,6 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
                 and run[0] in ('DEMO','REPLAY','STORY')
                 and x.get('decision')!='SIMULATE'):
             raise HTTPException(422,'synthetic_policy_pass_requires_simulate')
-        eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
-        if (not isinstance(eids,list) or not isinstance(required,list)
-                or any(not isinstance(value,str) or not value.strip()
-                       for value in eids+required)
-                or len(eids)!=len(set(eids)) or len(required)!=len(set(required))):
-            raise HTTPException(422,'gate evidence contract malformed or duplicated')
         # required_evidence names categories (analyst/critic/twin/observation),
         # not evidence IDs. Do not compare the two namespaces as sets.
         # Nonempty lists and persisted IDs are necessary, not full category proof.
