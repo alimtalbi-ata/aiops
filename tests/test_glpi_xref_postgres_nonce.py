@@ -72,7 +72,8 @@ class NonceBarrierTests(unittest.TestCase):
                         {"tenant_id": "   "},
                         {"tenant_id": "tenant" + chr(10) + "other"},
                         {"tenant_id": "tenant" + chr(127)},
-                        {"expires_at": True}, {"expires_at": -1}):
+                        {"expires_at": True}, {"expires_at": -1},
+                        {"expires_at": 10 ** 100}):
             self.assertFalse(self.consume(**{**self.args, **changes}))
         self.assertEqual(self.db.connections, 0)
 
