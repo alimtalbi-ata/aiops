@@ -29,6 +29,15 @@ class RawReadbackTests(unittest.TestCase):
         self.assertNotIn("run_id", result)
         self.assertNotIn("glpi_ticket_readback_verified", result)
 
+    def test_glpi_entity_canonical_numeric_format(self):
+        for entity in ("007", "00", "01", "0" * 19):
+            with self.subTest(entity=entity), self.assertRaises(RawReadbackInvalid):
+                normalize_glpi_ticket_readback(
+                    {"id": 201, "entities_id": entity}, expected_ticket_id="201")
+        self.assertEqual(normalize_glpi_ticket_readback(
+            {"id": 201, "entities_id": 0}, expected_ticket_id="201")
+            ["glpi_entity_id"], "0")
+
     def test_glpi_missing_entity_or_mismatched_ticket_fails(self):
         for ticket in ({"id": 201}, {"id": 202, "entities_id": 7},
                        {"id": True, "entities_id": 7},
