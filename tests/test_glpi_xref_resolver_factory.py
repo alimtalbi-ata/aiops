@@ -14,7 +14,7 @@ class HmacResolverFactoryTests(unittest.TestCase):
     def setUp(self):
         self.secret = b"s" * 32
         self.calls = []
-        self.claims = dict(aud="aiops-glpi-copilot-xref", actor="operator",
+        self.claims = dict(aud="aiops-glpi-copilot-xref", iss="aiops-core-xref-signer", actor="operator",
                            tenant_id="tenant-a", ticket_id="201",
                            glpi_instance_id="ci", glpi_entity_id="7",
                            incident_id="INC-DEMO-12345678",
