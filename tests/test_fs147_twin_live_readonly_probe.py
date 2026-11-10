@@ -105,5 +105,36 @@ class LiveProbeContract(unittest.TestCase):
         self.assertFalse(calls)
 
 
+    def test_ambiguous_base_urls_rejected_without_http_request(self):
+        # A query or fragment can silently alter the requested API path.
+        # Credentialed captures must use a canonical origin, not a URL suffix.
+        for base in ("http://isolated-candidate?next=/api/twin/graph",
+                     "http://isolated-candidate/#shadow",
+                     "http://isolated-candidate/other",
+                     "http://isolated-candidate@external.example",
+                     "http://isolated-candidate/\\n"):
+            with self.subTest(base=base), patch(
+                    "fs147_twin_live_readonly_probe.build_opener") as builder:
+                with self.assertRaisesRegex(IsolationError, "invalid Twin API base URL"):
+                    fetch_json(base, "/api/twin/graph", "secret")
+                builder.assert_not_called()
+
+    def test_canonical_origin_accepts_get_only(self):
+        from email.message import Message
+        from unittest.mock import MagicMock
+        import json
+        response = MagicMock()
+        response.status = 200
+        response.headers.get_content_type.return_value = "application/json"
+        response.read.return_value = json.dumps({"nodes": [], "edges": []}).encode()
+        response.__enter__.return_value = response
+        with patch("fs147_twin_live_readonly_probe.build_opener") as builder:
+            builder.return_value.open.return_value = response
+            result = fetch_json("http://isolated-candidate/", "/api/twin/graph", "secret")
+            self.assertEqual(result, {"nodes": [], "edges": []})
+            request = builder.return_value.open.call_args.args[0]
+            self.assertEqual(request.get_method(), "GET")
+            self.assertEqual(request.full_url, "http://isolated-candidate/api/twin/graph")
+
 if __name__ == "__main__":
     unittest.main()
