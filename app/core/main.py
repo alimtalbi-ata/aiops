@@ -58,6 +58,10 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
+        # Serialize first-time dispatches for the same key before checking existence.
+        # A row lock cannot protect an absent row. The transaction-scoped advisory
+        # lock is released by psycopg on commit/rollback; no external side effects.
+        c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',('core:run-idempotency:'+x.idempotency_key,))
         row=c.execute('select run_id,mode,scenario_id,status,version,incident_id from aiops.runs where idempotency_key=%s for update',(x.idempotency_key,)).fetchone()
         if row:
             # A reused key must not alias a different incident or execution intent.
