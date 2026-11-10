@@ -9,6 +9,10 @@ ENV_FILE=".env.isolated"
 COMPOSE=(docker compose --env-file "$ENV_FILE" -p "$PROJECT" -f compose.isolated.yml)
 
 fail() { echo "HOLD|$*" >&2; exit 1; }
+# Strict no-DNS release gate: do not create env files, resources or containers until
+# the independently reviewed DNS-free design and runtime qualification exist.
+fail "dns_free_architecture_not_qualified|issue_553"
+
 [[ "${EUID}" -eq 0 ]] || fail "run_as_authorized_operator_on_target_only"
 [[ -f compose.isolated.yml ]] || fail "isolated_compose_file_missing"
 command -v docker >/dev/null 2>&1 || fail "docker_missing"
