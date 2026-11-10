@@ -129,6 +129,17 @@ Sorties fournies par l'opérateur depuis SRV-DEB-05 :
 
 L'opérateur a exécuté `sudo systemctl start containerd docker` ; `systemctl is-active containerd docker` retourne **active / active**. La commande `sudo docker ps --format '{{.Names}} | {{.Status}}' | head -25` n'a listé **aucun conteneur actif**. La reprise du daemon est attestée ; **la reprise d'AIOPS2 ne l'est pas**. Étape suivante : `sudo docker ps -a`, `sudo docker compose ls -a`, diagnostic d'état et de restart policy ; ne pas exécuter de `compose up` global ni de prune. Le reporter GitHub antérieur à cette reprise n'est pas une preuve de santé courante.
 
+### Diagnostic final avant pause opérateur — 2026-11-10 23:36 CET
+
+L'opérateur a confirmé en lecture seule :
+- `/etc/docker/daemon.json` : `data-root=/home/aiops/aiops-platform/docker-data`.
+- `docker info` : Docker Root Dir identique, **Containers=0, Images=0** ; `docker ps -a` et `docker compose ls -a` vides.
+- `du -sh /home/aiops/aiops-platform/docker-data` : **216K**, dossier créé/initialisé le 10 novembre à 23:36 CET ; `/var/lib/docker` : **268K**.
+- `/home` est monté en ext4 depuis `/dev/mapper/SRV--DEB--05--vg-home`, 162G, 24G utilisés, 130G libres ; aucun volume Docker dédié apparent dans `lsblk`. Ne pas inférer que le stockage d'origine a été supprimé : emplacement historique et cause inconnus.
+- `systemctl` : `docker` et `containerd` actifs après démarrage manuel. Journal Docker : démarrage Docker 29.8.1 avec `containerd-snapshotter=true`, `storage-driver=overlayfs`, aucun conteneur restauré. Anciens journaux de shutdown au 28 octobre ; le rapport GitHub du 10 novembre indiquant des conteneurs peut correspondre à une autre configuration ou période.
+- **HOLD** : pas de `docker compose up`, `docker system prune`, déplacement du data-root, restauration, nettoyage du checkout, push de déploiement stable, ni mutation des cinq autres stacks avant inventaire du stockage historique. Conserver le patch local de 8 204 octets.
+- Prochaine recherche non destructive : historiques de configuration Docker (`/etc/docker`, systemd, anciens scripts), emplacement réel des données via volumes/montages et journaux d'opérations, comparer les empreintes de rapports datés ; documenter une procédure de récupération avec rollback et revue avant exécution.
+
 ## 6. Prochaine action concrète pour un nouvel agent
 
 **Ne pas commencer par le déploiement Debian.** Commencer par récupérer l'état actuel des PR et les diffs/commits cumulés **#515, #516, #517** contre leurs bases et contre `main`. Construire une matrice « changement utile / dépendance / risque / test requis », puis créer une branche/PR de consolidation **uniquement si** les dépendances sont comprises et le périmètre testable. Garder les PR sources en Draft et ne rien fusionner automatiquement.
