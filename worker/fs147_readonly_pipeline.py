@@ -94,30 +94,41 @@ def execute(request: FS147Request, *, stop_auto: bool,
     Each callback must be a real, authenticated service call; no mock fallback.
     No callback may perform a mutation of the lab or a GLPI ticket.
     """
+    # Correlate denials without trusting evidence rejected by the bridge gates.
+    accepted_evidence_id = None
+
+    def block(reason, steps=()):
+        receipt = _blocked(reason, steps)
+        receipt.update(tenant_id=request.tenant_id, incident_id=request.incident_id,
+                       run_id=request.run_id, ticket_id=request.ticket_id)
+        if accepted_evidence_id is not None:
+            receipt["evidence_id"] = accepted_evidence_id
+        return receipt
+
     if stop_auto:
-        return _blocked("STOP_AUTO")
+        return block("STOP_AUTO")
     if (request.mode != "DEMO" or type(request.ticket_id) is not int or request.ticket_id != 147
             or any(type(identifier) is not str or not identifier.strip()
                    for identifier in (request.tenant_id, request.actor_id,
                                       request.incident_id, request.run_id))):
-        return _blocked("INVALID_SCOPE")
+        return block("INVALID_SCOPE")
     key = hashlib.sha256(json.dumps(
         [request.tenant_id, request.incident_id, request.run_id,
          request.ticket_id], separators=(",", ":")).encode()).hexdigest()
     try:
         claim_result = claim_once(key)
         if claim_result is False:
-            return _blocked("DUPLICATE_RUN")
+            return block("DUPLICATE_RUN")
         if claim_result is not True:
             # Missing/ambiguous Core acknowledgement is not a proven duplicate.
-            return _blocked("IDEMPOTENCY_UNAVAILABLE")
+            return block("IDEMPOTENCY_UNAVAILABLE")
     except Exception:
-        return _blocked("IDEMPOTENCY_UNAVAILABLE")
+        return block("IDEMPOTENCY_UNAVAILABLE")
     steps = []
     try:
         observation = observe(request)
         if not _matching(observation, request):
-            return _blocked("OBSERVATION_SCOPE", steps)
+            return block("OBSERVATION_SCOPE", steps)
         if (observation.get("source") != "fs-lab-bridge-readonly"
                 or observation.get("commands") != ["df", "du", "ls"]
                 or not isinstance(observation.get("evidence_id"), str)
@@ -129,7 +140,7 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or observation.get("filesystem") != "/fs-lab"
                 or not observation.get("read_only") is True
                 or _claims_side_effect(observation)):
-            return _blocked("INSUFFICIENT_OBSERVATION", steps)
+            return block("INSUFFICIENT_OBSERVATION", steps)
         # A historical lab measurement is not proof of a fresh bridge observation.
         # Clock injection is only for deterministic tests, never a substitute for
         # an authenticated bridge response.
@@ -155,17 +166,18 @@ def execute(request: FS147Request, *, stop_auto: bool,
 
         age = observation_age()
         if age is None:
-            return _blocked("CLOCK_UNVERIFIED", steps)
+            return block("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age <= timedelta(minutes=5):
-            return _blocked("STALE_OBSERVATION", steps)
+            return block("STALE_OBSERVATION", steps)
+        accepted_evidence_id = observation["evidence_id"]
         steps.append("OBSERVE")
         analysis = analyst(request, deepcopy(observation))
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
-            return _blocked("ANALYST_SCOPE", steps)
+            return block("ANALYST_SCOPE", steps)
         if not _provenance_consistent(analysis, observation):
-            return _blocked("ANALYST_PROVENANCE", steps)
+            return block("ANALYST_PROVENANCE", steps)
         if _claims_side_effect(analysis):
-            return _blocked("ANALYST_SIDE_EFFECT", steps)
+            return block("ANALYST_SIDE_EFFECT", steps)
         # Findings alone do not override an explicit UNKNOWN/failed Analyst verdict.
         # Missing optional verdict metadata remains compatible with older adapters.
         if (("state" in analysis and analysis["state"] not in ("PASS", "COMPLETE"))
@@ -173,49 +185,49 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or ("missing_information" in analysis
                     and (not isinstance(analysis["missing_information"], list)
                          or bool(analysis["missing_information"])))):
-            return _blocked("INSUFFICIENT_ANALYSIS", steps)
+            return block("INSUFFICIENT_ANALYSIS", steps)
         if (not isinstance(analysis.get("findings"), list)
                 or not analysis["findings"]
                 or len(analysis["findings"]) > 64
                 or any(not isinstance(item, str) or not item.strip()
                        or len(item) > 2048
                        for item in analysis["findings"])):
-            return _blocked("INSUFFICIENT_ANALYSIS", steps)
+            return block("INSUFFICIENT_ANALYSIS", steps)
         steps.append("ANALYST")
         # An expensive Analyst call may exhaust the observation freshness budget.
         # Do not invoke Critic on expired evidence, even if Policy would later deny.
         age_after_analyst = observation_age()
         if age_after_analyst is None:
-            return _blocked("CLOCK_UNVERIFIED", steps)
+            return block("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_analyst <= timedelta(minutes=5):
-            return _blocked("STALE_OBSERVATION", steps)
+            return block("STALE_OBSERVATION", steps)
         critique = critic(request, deepcopy(observation), deepcopy(analysis))
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
-            return _blocked("CRITIC_SCOPE", steps)
+            return block("CRITIC_SCOPE", steps)
         if not _provenance_consistent(critique, observation):
-            return _blocked("CRITIC_PROVENANCE", steps)
+            return block("CRITIC_PROVENANCE", steps)
         if _claims_side_effect(critique):
-            return _blocked("CRITIC_SIDE_EFFECT", steps)
+            return block("CRITIC_SIDE_EFFECT", steps)
         if (critique.get("state") != "PASS"
                 or ("validated" in critique and critique["validated"] is not True)
                 or ("missing_information" in critique
                     and (not isinstance(critique["missing_information"], list)
                          or bool(critique["missing_information"])))):
             # Explicit Critic rejection or unresolved evidence gaps override PASS.
-            return _blocked("CRITIC_REFUSED", steps)
+            return block("CRITIC_REFUSED", steps)
         steps.append("CRITIC")
         # The observation can expire while Analyst/Critic are running. Never
         # authorize even a simulation from evidence that is stale at Policy time.
         age_at_policy = observation_age()
         if age_at_policy is None:
-            return _blocked("CLOCK_UNVERIFIED", steps)
+            return block("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_at_policy <= timedelta(minutes=5):
-            return _blocked("STALE_OBSERVATION", steps)
+            return block("STALE_OBSERVATION", steps)
         decision = policy(request, deepcopy(observation), deepcopy(analysis), deepcopy(critique))
         if not _matching(decision, request) or decision.get("evidence_id") != observation["evidence_id"]:
-            return _blocked("POLICY_SCOPE", steps)
+            return block("POLICY_SCOPE", steps)
         if not _provenance_consistent(decision, observation):
-            return _blocked("POLICY_PROVENANCE", steps)
+            return block("POLICY_PROVENANCE", steps)
         steps.append("POLICY")
         if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
                 # Optional execution metadata cannot contradict read-only simulation.
@@ -225,20 +237,20 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or ("resolved" in decision and decision["resolved"] is not False)
                 or ("effect" in decision and decision["effect"] != "NO_EFFECT")
                 or _claims_side_effect(decision)):
-            return _blocked("POLICY_REFUSED", steps)
+            return block("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.
         age_after_policy = observation_age()
         if age_after_policy is None:
-            return _blocked("CLOCK_UNVERIFIED", steps)
+            return block("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_policy <= timedelta(minutes=5):
-            return _blocked("STALE_OBSERVATION", steps)
+            return block("STALE_OBSERVATION", steps)
         return {"status": "NO_EFFECT", "effect": "NO_EFFECT", "resolved": False,
                 "steps": steps, "run_id": request.run_id,
                 "ticket_id": request.ticket_id, "evidence_id": observation["evidence_id"]}
     except TimeoutError:
         # A timeout is an indeterminate remote outcome, not proof of failure.
         # The durable Core claim remains consumed: never replay with a new claim.
-        return _blocked("UNKNOWN_TIMEOUT", steps)
+        return block("UNKNOWN_TIMEOUT", steps)
     except Exception:
-        return _blocked("SERVICE_UNAVAILABLE", steps)
+        return block("SERVICE_UNAVAILABLE", steps)
