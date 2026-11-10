@@ -55,6 +55,8 @@ def _nested_hitl_artifact(payload):
     oversized payloads cannot be safely interpreted as read-only evidence.
     """
     forbidden = {"approval_binding", "approval_token", "action_intent"}
+    # Nested outcome/transition claims are as unsafe as nested HITL tokens.
+    # Only explicit NO_EFFECT, False and None preserve read-only semantics.
     flags = {"approval_granted", "approval_consumed", "hitl_approved",
              "action_dispatched", "action_executed", "remediation_executed",
              "mutation_performed", "ticket_updated", "dispatch_allowed"}
@@ -73,7 +75,10 @@ def _nested_hitl_artifact(payload):
             seen.add(identity)
         if isinstance(value, Mapping):
             for key, child in value.items():
-                if key in forbidden or (key in flags and child is not False):
+                if (key in forbidden or (key in flags and child is not False)
+                        or (key == "resolved" and child is not False)
+                        or (key == "ticket_transition" and child is not None)
+                        or (key == "effect" and child != "NO_EFFECT")):
                     return True
                 stack.append((child, depth + 1))
         elif isinstance(value, (list, tuple)):
