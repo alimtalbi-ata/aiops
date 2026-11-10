@@ -94,3 +94,16 @@ Rollback means stopping only the newly created isolated project and restoring it
 - No deployment, migration, cutover or rollback has been executed.
 
 **Final authorization required:** explicit approval of the reviewed release SHA, isolated Compose design, backup/restore evidence, maintenance window and named operator before any target-host action.
+
+
+## 7. Isolated installer implementation candidate
+
+A separate implementation candidate is under review in PR #549:
+- `compose.isolated.yml`: clears all fixed `container_name` values, namespaces all named volumes and networks, and binds all published ports to `127.0.0.1`.
+- `deploy/install-isolated.sh`: requires the target host to own IPv4 address `10.79.94.202`, uses a dedicated `.env.isolated`, refuses pre-existing project resources/port collisions, requires all images to be preloaded locally, and runs `up --no-build --pull never`.
+- `tests/qualification-isolated.sh`: checks 18 containers, health, exact loopback bindings and local HTTP readiness.
+- CI validates the static contract and merged Compose config.
+
+This candidate has **not** been executed on Debian. It must pass CI and independent review first.
+
+**DNS scope clarification:** the installer performs no registry pulls/builds and makes no host/external DNS query. The Compose application still uses Docker's embedded DNS for service-name resolution between containers. If “no DNS” also prohibits Docker-internal DNS, this candidate is not compliant and must not be run until service discovery is redesigned around fixed IPs or another explicitly approved mechanism.
