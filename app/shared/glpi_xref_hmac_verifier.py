@@ -7,6 +7,7 @@ server-owned actor/tenant ACL evaluator. Never accept these from HTTP clients.
 import hashlib
 import hmac
 import json
+import re
 import time
 from collections.abc import Callable
 
@@ -76,6 +77,14 @@ def verify_hmac_xref_event(
     if any(not isinstance(claims.get(field), str) or not claims[field]
            for field in required_identity):
         raise XrefSignatureRejected("signed_identity_missing")
+    # Reject malformed signed identities before ACL or durable nonce consumption.
+    if (not re.fullmatch(r"RUN-[A-Z0-9]{8,64}", claims["run_id"])
+            or not re.fullmatch(r"INC-[A-Za-z0-9_-]{4,128}", claims["incident_id"])
+            or not re.fullmatch(r"[0-9]{1,18}", claims["glpi_entity_id"])
+            or len(claims["glpi_instance_id"]) > 128
+            or any(ord(ch) < 32 or ord(ch) == 127
+                   for ch in claims["glpi_instance_id"])):
+        raise XrefSignatureRejected("signed_identity_invalid")
     if (not isinstance(nonce, str) or not 16 <= len(nonce) <= 128
             or not nonce.isascii() or not nonce.isalnum()):
         raise XrefSignatureRejected("signed_nonce_invalid")
