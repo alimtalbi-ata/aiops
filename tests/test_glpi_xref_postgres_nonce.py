@@ -74,6 +74,23 @@ class NonceBarrierTests(unittest.TestCase):
             raise ConnectionError("offline")
         self.assertFalse(make_postgres_nonce_consumer(broken)(**self.args))
 
+    def test_commit_failure_never_reports_nonce_consumed(self):
+        class CommitFailureConnection(Connection):
+            def __exit__(self, *args):
+                raise RuntimeError("commit failed")
+        self.assertFalse(make_postgres_nonce_consumer(
+            lambda: CommitFailureConnection(self.db))(**self.args))
+
+    def test_cursor_error_never_reports_nonce_consumed(self):
+        class BrokenCursor(Cursor):
+            def execute(self, sql, params):
+                raise RuntimeError("statement failed")
+        class BrokenConnection(Connection):
+            def cursor(self):
+                return BrokenCursor(self.db)
+        self.assertFalse(make_postgres_nonce_consumer(
+            lambda: BrokenConnection(self.db))(**self.args))
+
     def test_missing_connection_factory_rejected(self):
         with self.assertRaises(ValueError):
             make_postgres_nonce_consumer(None)
