@@ -71,9 +71,11 @@ async function loadHistory(){
   const url="/api/fs1089/prometheus/history?"+new URLSearchParams({metric,window:windowSize});
   const response=await fetch(url,{credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal});
   if(requestId!==historyRequestId)return;
+  if(historyTimedOut)throw new Error("History request timed out");
   if(!response.ok)throw new Error("HTTP "+response.status);
   const data=await response.json();
   if(requestId!==historyRequestId)return;
+  if(historyTimedOut)throw new Error("History request timed out");
   if(data.metric!==metric||data.window!==windowSize||!Array.isArray(data.series))throw new Error("Contrat de données invalide");
   // Deduplicate only labelled Prometheus targets; preserve unknown identities.
   const seenTargets=new Set();
