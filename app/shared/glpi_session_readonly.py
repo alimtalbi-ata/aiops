@@ -4,6 +4,7 @@ Dedicated trusted HTTPS GLPI origin and server-owned credentials only. Session
 is always closed after a ticket GET. No Portal route or ticket write methods.
 """
 import json
+import re
 from collections.abc import Callable
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler, ProxyHandler
@@ -108,8 +109,9 @@ def make_glpi_session_ticket_get(
             observed_id = ticket.get("id")
             if (type(observed_id) not in (str, int)
                     or str(observed_id) != ticket_id
-                    or not isinstance(ticket.get("entities_id"), (str, int))
-                    or type(ticket.get("entities_id")) is bool):
+                    or type(ticket.get("entities_id")) not in (str, int)
+                    or not re.fullmatch(r"(?:0|[1-9][0-9]{0,17})",
+                                        str(ticket.get("entities_id")))):
                 raise GLPISessionReadBlocked("glpi_ticket_response_mismatch")
             return ticket
         except (HTTPError, URLError, TimeoutError, OSError, UnicodeError,
