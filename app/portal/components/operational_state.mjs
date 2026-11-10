@@ -47,7 +47,7 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
    let timer;
    try{
     const result=await Promise.race([
-     Promise.resolve().then(()=>read(query,{signal})),
+     Promise.resolve(read(query,{signal})),
      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('OPERATIONAL_TIMEOUT')),timeoutMs);})
     ]);
     if(id!==generation||signal.aborted)return;
