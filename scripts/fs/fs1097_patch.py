@@ -62,18 +62,19 @@ async function loadHistory(){
  const controller=new AbortController();historyAbortController=controller;
  // A hung same-origin request must not leave the chart in perpetual loading.
  let historyTimedOut=false;
- const historyTimeout=setTimeout(()=>{historyTimedOut=true;controller.abort()},20000);
+ let historyTimeout;
+ const historyDeadline=new Promise((_,reject)=>{historyTimeout=setTimeout(()=>{historyTimedOut=true;controller.abort();reject(new Error("History request timed out"))},20000)});
  const metric=$("history-metric").value,windowSize=$("history-window").value;
  const status=$("history-status"),chart=$("history-chart"),legend=$("history-legend"),button=$("history-refresh");
  button.disabled=true;status.textContent="Chargement des séries historiques…";legend.replaceChildren();
  chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Chargement…"));
  try{
   const url="/api/fs1089/prometheus/history?"+new URLSearchParams({metric,window:windowSize});
-  const response=await fetch(url,{credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal});
+  const response=await Promise.race([fetch(url,{credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal}),historyDeadline]);
   if(requestId!==historyRequestId)return;
   if(historyTimedOut)throw new Error("History request timed out");
   if(!response.ok)throw new Error("HTTP "+response.status);
-  const data=await response.json();
+  const data=await Promise.race([response.json(),historyDeadline]);
   if(requestId!==historyRequestId)return;
   if(historyTimedOut)throw new Error("History request timed out");
   if(data.metric!==metric||data.window!==windowSize||!Array.isArray(data.series))throw new Error("Contrat de données invalide");
