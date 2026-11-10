@@ -107,3 +107,14 @@ The downloaded GitHub Actions artifacts were inspected, not just their workflow 
 3. Keep real provider/model qualification separate from deterministic fixtures, and keep live execution disabled absent a separately approved test environment.
 
 The CI workflow #8533 is green, but these artifact caveats remain release blockers where applicable. No production inference, no live effects, no Temporal MariaDB volume qualification, and no idempotent evaluation ledger are claimed.
+
+## Correction: evaluation-ledger idempotency interpretation
+
+A subsequent source review of `app/core/main.py` and `tests/test_model_evaluation_api.py` refines the earlier artifact interpretation:
+
+- The first successful insert intentionally returns `idempotent=false` because it created a new evaluation row. That value alone is **not evidence of an idempotency defect**.
+- The endpoint uses `ON CONFLICT(evaluation_id) DO NOTHING`, reads the prior row, returns `idempotent=true` when all persisted fields match, and returns HTTP 409 when the same ID is reused with different content.
+- Existing unit tests cover first insert, duplicate same-content replay, conflicting-content rejection, and auth rejection. However, the tests use a mocked cursor/connection; they do **not** prove the unique constraint and transaction behavior against a live PostgreSQL instance.
+- Therefore the accurate status is: **idempotency logic implemented; unit-tested with mocks; real-database concurrent/replay qualification not yet evidenced**. The artifact field `idempotent=false` records the initial insert path, not a failed replay test.
+
+Next validation: run a PostgreSQL integration test against the migration-created schema; submit the same evaluation ID and payload twice (including concurrent requests), assert one row, first response `idempotent=false`, subsequent response(s) `idempotent=true`, stable persisted fields, and HTTP 409 for changed payload. Do not label this feature broken absent a failing integration test.
