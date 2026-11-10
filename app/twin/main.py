@@ -36,6 +36,38 @@ def graph():
     with db() as c:
         ns=c.execute('select node_id,type,name,site,state,criticality,health,confidence from aiops.twin_nodes').fetchall(); es=c.execute('select edge_id,source_id,target_id,relation_type,redundancy,confidence from aiops.twin_edges').fetchall()
     nk=['node_id','type','name','site','state','criticality','health','confidence']; ek=['edge_id','source_id','target_id','relation_type','redundancy','confidence']; return {'nodes':[dict(zip(nk,x)) for x in ns],'edges':[dict(zip(ek,x)) for x in es]}
+@app.get('/api/twin/qualification/graph')
+def qualification_graph(authorization:str|None=Header(default=None)):
+    """Read-only explicitly scoped topology for SAN/FS E2E qualification.
+
+    No namespace is inferred from a node name, site or customer identifier.
+    The complete node_id->namespace map is supplied by the isolated candidate
+    configuration; missing/invalid coverage is HOLD, never a partial PASS.
+    """
+    import json
+    if (authorization or '').removeprefix('Bearer ') != SIM_TOKEN:
+        raise HTTPException(401, 'invalid token')
+    try:
+        mapping = json.loads(os.getenv('AIOPS_TWIN_QUALIFICATION_NODE_NAMESPACES', ''))
+    except (ValueError, TypeError):
+        raise HTTPException(503, 'qualification namespace mapping unavailable')
+    if (not isinstance(mapping, dict) or not mapping
+            or any(not isinstance(k, str) or not k or
+                   not isinstance(v, str) or not v.strip() or v != v.strip()
+                   for k, v in mapping.items())):
+        raise HTTPException(503, 'qualification namespace mapping unavailable')
+    canonical = graph()
+    ids = [node['node_id'] for node in canonical['nodes']]
+    if not ids or len(ids) != len(set(ids)) or set(ids) != set(mapping):
+        raise HTTPException(409, 'qualification namespace coverage mismatch')
+    for edge in canonical['edges']:
+        a, b = edge['source_id'], edge['target_id']
+        if a not in mapping or b not in mapping or mapping[a] != mapping[b]:
+            raise HTTPException(409, 'cross-namespace or orphan dependency')
+    return {'nodes': [{**node, 'namespace': mapping[node['node_id']]}
+                      for node in canonical['nodes']], 'edges': canonical['edges'],
+            'scope': 'qualification-only', 'namespace_source': 'explicit-candidate-config'}
+
 @app.get('/api/twin/impact/{node_id}')
 def impact(node_id:str):
     with db() as c:
