@@ -62,6 +62,14 @@ class HTTPReadersTests(unittest.TestCase):
                  ticket_id="201/../1", glpi_instance_id="ci")
         self.assertEqual(self.calls, [])
 
+    def test_run_identifier_grammar_matches_signed_xref_before_acl(self):
+        core, _ = self.readers()
+        for run_id in ("RUN-", "RUN-1", "RUN-abcdefgh",
+                       "RUN-ABC_1234", "RUN-" + "A" * 65):
+            with self.subTest(run_id=run_id), self.assertRaises(GLPIHTTPReadBlocked):
+                core(actor="operator", tenant_id="tenant-a", run_id=run_id)
+        self.assertEqual(self.calls, [])
+
     def test_missing_scope_and_unicode_run_block_before_acl(self):
         core, glpi = self.readers()
         for actor, tenant in (("", "tenant-a"), ("operator", ""),
