@@ -45,7 +45,9 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
 
     def get(*, url, actor, tenant_id, **scope):
         if (not isinstance(url, str) or not url.startswith("https://")
-                or any(c in url for c in ("#", "@", "\\", "\r", "\n"))):
+                or len(url) > 2048
+                or any(ord(c) < 33 or ord(c) == 127 for c in url)
+                or any(c in url for c in ("#", "@", "\\"))):
             raise ReadTransportBlocked("trusted_https_url_required")
         try:
             parsed = urlsplit(url)
