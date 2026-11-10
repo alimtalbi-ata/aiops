@@ -7,7 +7,7 @@ Portal and does not grant tenant/actor ACL.
 import json
 from collections.abc import Callable
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.request import Request, build_opener, HTTPRedirectHandler, ProxyHandler
 from urllib.parse import urlsplit
 
 
@@ -37,7 +37,8 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
             raise ValueError("trusted_origin_required")
     except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError("trusted_origin_required") from exc
-    opener = build_opener(_NoRedirect())
+    # Never inherit HTTP(S)_PROXY from the host for credential-bearing reads.
+    opener = build_opener(ProxyHandler({}), _NoRedirect())
 
     def get(*, url, actor, tenant_id, **scope):
         if (not isinstance(url, str) or not url.startswith("https://")
