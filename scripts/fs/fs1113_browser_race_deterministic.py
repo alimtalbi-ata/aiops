@@ -19,6 +19,10 @@ INJECT = r"""
   const nativeFetch = window.fetch.bind(window);
   let seq = 0;
   window.__fs1113HistoryFetchCount = 0;
+  window.__fs1113UnhandledRejections = [];
+  window.addEventListener('unhandledrejection', event => {
+    window.__fs1113UnhandledRejections.push(String(event.reason));
+  });
   const makeSeries = (marker) => Array.from({length:5}, (_, i) => ({
     job: 'fs1113-' + marker, instance: 'target-' + i,
     points: [[1700000000, i + 1], [1700000060, i + 2]]
@@ -77,6 +81,7 @@ def main():
                                  document.querySelector('#history-metric').value === m;
                         }""", arg=[metric, window_size], timeout=10000)
                         page.wait_for_timeout(1600)  # stale first response resolves after the latest
+                        assert not page.evaluate("window.__fs1113UnhandledRejections || []"), (metric, window_size, "unhandled stale rejection")
                         assert page.locator("#history-legend > span").count() == 5, (metric, window_size)
                         assert page.locator("#history-chart path").count() == 5, (metric, window_size)
                         labels = page.locator("#history-legend > span").all_inner_texts()
@@ -97,6 +102,9 @@ def main():
                         }""", arg=[metric, window_size], timeout=10000)
                         assert page.locator("#history-legend > span").count() == 5, (metric, window_size, "refresh")
                         assert page.locator("#history-chart path").count() == 5, (metric, window_size, "refresh")
+                        if window_size == "24h":
+                            overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")
+                            assert not overflow, (metric, window_size, "mobile horizontal overflow")
                         assert all("fs1113-" + metric + "-" + window_size in item
                                    for item in page.locator("#history-legend > span").all_inner_texts())
                         print(f"FS1113_DETERMINISTIC_STALE_RESPONSE_REFRESH=PASS metric={metric} window={window_size} viewport={page.viewport_size['width']}")
