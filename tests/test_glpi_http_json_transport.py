@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.request import ProxyHandler
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 from shared.glpi_http_json_transport import ReadTransportBlocked, make_json_get
 
@@ -81,6 +82,18 @@ class TransportTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ReadTransportBlocked):
                 get(url=url, actor="operator", tenant_id="tenant-a")
         self.assertEqual(opener.calls, [])
+
+    def test_environment_proxy_is_explicitly_disabled(self):
+        handlers = []
+        def capture(*args):
+            handlers.extend(args)
+            return FakeOpener(Response())
+        with patch("shared.glpi_http_json_transport.build_opener", side_effect=capture):
+            make_json_get(get_token=lambda **kwargs: "server-only-token",
+                          allowed_origin="https://core.internal")
+        proxies = [handler for handler in handlers if isinstance(handler, ProxyHandler)]
+        self.assertEqual(len(proxies), 1)
+        self.assertEqual(proxies[0].proxies, {})
 
     def test_no_redirect_handler_installed(self):
         from shared.glpi_http_json_transport import _NoRedirect
