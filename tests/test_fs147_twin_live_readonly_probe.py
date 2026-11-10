@@ -19,7 +19,7 @@ def fixtures():
         return {"fact_id": identifier, "node_id": node_id,
                 "value": {"run_id": run, "synthetic": True, "target_node_id": node_id}}
     return {
-        "/api/twin/graph": {
+        "/api/twin/qualification/graph": {
             "nodes": [node("FS-NODE", "lab-fs147"), node("SAN-NODE", "san")],
             "edges": [{"edge_id": "FS-EDGE", "source_id": "FS-NODE",
                        "target_id": "FS-NODE", "relation_type": "depends_on"}]},
@@ -38,7 +38,7 @@ class LiveProbeContract(unittest.TestCase):
             return captures[path]
         result = qualify_live("http://isolated-candidate", "read-only-token",
                               "lab-fs147", "san", "RUN-FS", "RUN-SAN", fetch=fetch)
-        self.assertEqual(calls, ["/api/twin/graph",
+        self.assertEqual(calls, ["/api/twin/qualification/graph",
                                  "/api/twin/scenario/RUN-FS/facts",
                                  "/api/twin/scenario/RUN-SAN/facts"])
         return result
@@ -65,7 +65,7 @@ class LiveProbeContract(unittest.TestCase):
 
     def test_current_graph_without_namespace_must_hold(self):
         data = fixtures()
-        for node in data["/api/twin/graph"]["nodes"]:
+        for node in data["/api/twin/qualification/graph"]["nodes"]:
             del node["namespace"]
         with self.assertRaisesRegex(IsolationError, "unscoped"):
             self.run_probe(data)
@@ -90,7 +90,7 @@ class LiveProbeContract(unittest.TestCase):
 
     def test_cross_namespace_dependency_must_hold(self):
         data = fixtures()
-        data["/api/twin/graph"]["edges"][0]["target_id"] = "SAN-NODE"
+        data["/api/twin/qualification/graph"]["edges"][0]["target_id"] = "SAN-NODE"
         with self.assertRaisesRegex(IsolationError, "cross-namespace"):
             self.run_probe(data)
 
