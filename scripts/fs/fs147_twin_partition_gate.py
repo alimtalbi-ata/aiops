@@ -12,7 +12,7 @@ class IsolationError(ValueError):
     pass
 
 
-def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace):
+def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs_run=None, expected_san_run=None):
     """Fail closed on ambiguous ownership, shared IDs and cross-scope edges."""
     if not fs_namespace or not san_namespace or fs_namespace == san_namespace:
         raise IsolationError("distinct nonempty namespaces required")
@@ -41,6 +41,12 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace):
     run_ids = [fs_facts["run_id"], san_facts["run_id"]]
     if not all(run_ids) or len(set(run_ids)) != 2:
         raise IsolationError("RUN IDs missing or shared")
+    # A captured RUN cannot establish its own identity: bind it to the Core
+    # incident/RUN IDs supplied independently by the E2E orchestrator.
+    if expected_fs_run is not None and fs_facts["run_id"] != expected_fs_run:
+        raise IsolationError("filesystem RUN does not match expected Core RUN")
+    if expected_san_run is not None and san_facts["run_id"] != expected_san_run:
+        raise IsolationError("SAN RUN does not match expected Core RUN")
     seen = set()
     for response, namespace in ((fs_facts, fs_namespace), (san_facts, san_namespace)):
         if response.get("synthetic") is not True:
@@ -73,11 +79,13 @@ def main():
     parser.add_argument("--capture", required=True, type=Path)
     parser.add_argument("--fs-namespace", required=True)
     parser.add_argument("--san-namespace", required=True)
+    parser.add_argument("--fs-run-id", required=True, help="independent Core filesystem RUN ID")
+    parser.add_argument("--san-run-id", required=True, help="independent Core SAN RUN ID")
     args = parser.parse_args()
     capture = json.loads(args.capture.read_text(encoding="utf-8"))
     try:
         result = qualify(capture["graph"], capture["fs_facts"],
-                         capture["san_facts"], args.fs_namespace, args.san_namespace)
+                         capture["san_facts"], args.fs_namespace, args.san_namespace, args.fs_run_id, args.san_run_id)
     except (IsolationError, KeyError, TypeError, ValueError) as exc:
         print(json.dumps({"status": "HOLD", "reason": str(exc)}))
         raise SystemExit(1) from exc
