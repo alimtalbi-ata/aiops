@@ -31,7 +31,8 @@ def resolve_signed_glpi_xref(
     the requested actor, tenant and ticket. The verifier must enforce issuer,
     signature, expiration, replay protection and actor/tenant ACL itself.
     """
-    if not all(isinstance(v, str) and v and len(v) <= 128
+    if not all(isinstance(v, str) and v.strip() and len(v) <= 128
+               and not any(ord(ch) < 32 or ord(ch) == 127 for ch in v)
                for v in (actor, tenant_id, ticket_id)):
         raise CanonicalXrefBlocked("invalid_scope")
     if not _TICKET.fullmatch(ticket_id):
