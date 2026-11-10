@@ -52,6 +52,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_glpi_hmac_qualification.py" -v
       - name: GLPI PostgreSQL signed-xref nonce replay barrier (offline DB-API contract)
         run: python -m unittest discover -s tests -p "test_glpi_xref_postgres_nonce.py" -v
+      - name: GLPI and Core GET-only HTTP ACL adapter regressions (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_http_readers.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
