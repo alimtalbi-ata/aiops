@@ -19,7 +19,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{JSON.stringify({status:\"HOLD\",reason:\"N8N_TEMPLATE_DISABLED\",message:\"No incident or run is created; configure trusted identity, tenant authorization and signed approval before enabling any write or LIVE execution.\"})}}"
+        "responseBody": "{\"status\":\"HOLD\",\"reason\":\"N8N_TEMPLATE_DISABLED\",\"message\":\"No incident or run is created. This template is disabled until trusted identity, tenant authorization and signed approval are implemented.\"}"
       },
       "id": "response",
       "name": "Respond",
