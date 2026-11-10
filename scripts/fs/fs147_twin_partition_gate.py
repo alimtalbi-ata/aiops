@@ -12,6 +12,16 @@ class IsolationError(ValueError):
     pass
 
 
+def _unique_pairs(pairs):
+    """Fail closed on ambiguous nested provenance keys in fact.value."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise IsolationError("duplicate fact provenance JSON key")
+        result[key] = value
+    return result
+
+
 def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs_run=None, expected_san_run=None):
     """Fail closed on ambiguous ownership, shared IDs and cross-scope edges."""
     if not fs_namespace or not san_namespace or fs_namespace == san_namespace:
@@ -69,7 +79,7 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
             if owners.get(node_id) != namespace:
                 raise IsolationError("cross-namespace observation")
             raw = fact["value"]
-            payload = json.loads(raw) if isinstance(raw, str) else raw
+            payload = json.loads(raw, object_pairs_hook=_unique_pairs) if isinstance(raw, str) else raw
             if not isinstance(payload, dict):
                 raise IsolationError("invalid fact provenance")
             if payload.get("run_id") != response["run_id"]:
