@@ -74,7 +74,8 @@ class FullChainTests(unittest.TestCase):
                            association_count=1, iat=1000, exp=1100,
                            nonce="nonce123456789012")
 
-    def make(self, core_incident="INC-DEMO-12345678", read_allowed=True):
+    def make(self, core_incident="INC-DEMO-12345678", read_allowed=True,
+             nonce_allowed=True, actor_allowed=True):
         def fetch(**kwargs):
             self.calls.append("fetch")
             return {"claims": dict(self.claims),
@@ -83,10 +84,10 @@ class FullChainTests(unittest.TestCase):
                                           hashlib.sha256).hexdigest()}
         def acl(**kwargs):
             self.calls.append("xref_acl")
-            return True
+            return actor_allowed
         def nonce(**kwargs):
             self.calls.append("nonce")
-            return True
+            return nonce_allowed
         def read_acl(**kwargs):
             self.calls.append("read_acl:" + kwargs["resource"])
             return (read_allowed.get(kwargs["resource"], False)
@@ -135,6 +136,23 @@ class FullChainTests(unittest.TestCase):
         self.assertEqual(self.calls, ["fetch", "xref_acl", "nonce",
                                       "read_acl:core_run", "core_token",
                                       "read_acl:glpi_ticket", "glpi_app_token", "glpi_user_token"])
+
+    def test_replayed_nonce_never_reads_core_or_glpi(self):
+        with self.assertRaises(GLPIHmacQualificationBlocked):
+            self.make(nonce_allowed=False)(
+                actor="operator", tenant_id="tenant-a", ticket_id="201")
+        self.assertEqual(self.requests, [])
+        self.assertNotIn("core_token", self.calls)
+        self.assertNotIn("glpi_app_token", self.calls)
+        self.assertNotIn("read_acl:core_run", self.calls)
+
+    def test_denied_signed_xref_actor_never_reads_upstream(self):
+        with self.assertRaises(GLPIHmacQualificationBlocked):
+            self.make(actor_allowed=False)(
+                actor="operator", tenant_id="tenant-a", ticket_id="201")
+        self.assertEqual(self.requests, [])
+        self.assertNotIn("core_token", self.calls)
+        self.assertNotIn("glpi_user_token", self.calls)
 
     def test_denied_core_acl_never_fetches_upstream(self):
         with self.assertRaises(GLPIHmacQualificationBlocked):
