@@ -60,8 +60,12 @@ def resolve_signed_glpi_xref(
             raise ValueError("identity_missing")
         if (not _RUN.fullmatch(claims["run_id"])
                 or not _INCIDENT.fullmatch(claims["incident_id"])
-                or not claims["glpi_entity_id"].isascii()
-                or not claims["glpi_entity_id"].isdecimal()):
+                or not re.fullmatch(r"(?:0|[1-9][0-9]{0,17})",
+                                    claims["glpi_entity_id"])
+                or not claims["glpi_instance_id"].strip()
+                or len(claims["glpi_instance_id"]) > 128
+                or any(ord(ch) < 32 or ord(ch) == 127
+                       for ch in claims["glpi_instance_id"])):
             raise ValueError("identity_invalid")
         return {key: claims[key] for key in _FIELDS}
     except Exception as exc:
