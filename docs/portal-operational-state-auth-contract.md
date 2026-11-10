@@ -67,3 +67,9 @@ Keep PR #537, #539 and #540 in DRAFT. No merge, deployment, automation change, o
 - `compose.yml` publishes the portal container on `${AIOPS_BIND_IP:-127.0.0.1}:${AIOPS_PORTAL_HOST_PORT:-7777}:777`. The default bind is loopback, but `AIOPS_BIND_IP` can change it. This is a configuration default, **not evidence of actual Debian runtime settings**.
 - The inspected `aiops2-portal` service joins `aiops2-public` and `aiops2-control` and carries `AIOPS_INTERNAL_TOKEN` to make internal calls. The inspected Compose file does not configure an OIDC identity provider, authenticated ingress, or reverse proxy for this service. External host-level controls may still exist and require independent qualification.
 - **Debian qualification must collect, without changing it:** effective Compose config and environment (with secrets redacted), active bind address, firewall/proxy/SSO policy, TLS/session identity flow, trusted headers and actor/tenant claim validation, and cross-tenant access tests. Do not infer public accessibility or safety solely from the Compose default.
+
+## Existing automated boundary coverage (scope limitation)
+
+- `tests/test_internal_auth.py` checks that Evidence read/write and Policy check deny absent or invalid **internal service tokens**. It also checks a missing Evidence secret fails closed. These are useful controls, but they **do not** establish portal user authentication, verified actor/tenant claims, or cross-tenant filtering.
+- `tests/test_portal_demo.py` checks synthetic demo launch behavior and idempotency, not tenant-scoped read authorization.
+- A green existing CI run must not be interpreted as passing the new portal actor/tenant acceptance matrix until new integration and negative authorization tests exist.
