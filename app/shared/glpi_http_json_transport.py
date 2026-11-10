@@ -27,11 +27,14 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
             or not 1024 <= max_bytes <= 1048576):
         raise ValueError("secure_http_transport_configuration_required")
     try:
+        if not isinstance(allowed_origin, str) or len(allowed_origin) > 512:
+            raise ValueError("trusted_origin_required")
         trusted = urlsplit(allowed_origin)
         trusted_port = trusted.port
         if (trusted.scheme != "https" or not trusted.hostname
                 or trusted.username is not None or trusted.password is not None
                 or trusted.path or trusted.query or trusted.fragment
+                or allowed_origin.endswith("/") or trusted_port == 0
                 or any(c.isspace() or ord(c) < 33 for c in allowed_origin)
                 or "\\" in allowed_origin):
             raise ValueError("trusted_origin_required")
@@ -55,7 +58,11 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
             same_origin = False
         if not same_origin:
             raise ReadTransportBlocked("untrusted_upstream_origin")
-        if not isinstance(actor, str) or not actor.strip() or not isinstance(tenant_id, str) or not tenant_id.strip():
+        if (not isinstance(actor, str) or not actor.strip() or len(actor) > 256
+                or not isinstance(tenant_id, str) or not tenant_id.strip()
+                or len(tenant_id) > 128
+                or any(ord(ch) < 32 or ord(ch) == 127
+                       for ch in actor + tenant_id)):
             raise ReadTransportBlocked("actor_tenant_required")
         try:
             token = get_token(actor=actor, tenant_id=tenant_id, **scope)
