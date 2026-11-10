@@ -52,7 +52,11 @@ def make_postgres_nonce_consumer(connect: Callable):
                             (tenant_id, nonce,
                              datetime.fromtimestamp(expires_at, tz=timezone.utc)),
                         )
-                        inserted = cursor.fetchone() is not None
+                        row = cursor.fetchone()
+                        # Only the exact inserted nonce proves successful
+                        # insert; a malformed DB result must fail closed.
+                        inserted = (isinstance(row, (tuple, list))
+                                    and len(row) == 1 and row[0] == nonce)
                 # Transaction context exited: commit must have succeeded.
                 return inserted
             finally:
