@@ -3,7 +3,7 @@
 
 Run after FS1107 has started the candidate at 127.0.0.1:17898.
 This test deliberately simulates a transport that ignores AbortSignal, proving
-the request-generation guard rather than merely observing an aborted fetch.
+the request-generation guard for both late success and late rejection, rather than\nmerely observing an aborted fetch.
 """
 import json
 import os
@@ -29,13 +29,20 @@ INJECT = r"""
     const windowSize = u.searchParams.get('window');
     const order = ++seq;
     window.__fs1113HistoryFetchCount = order;
-    // First response resolves AFTER the second even if its signal was aborted.
+    // Both late success and late rejection must be ignored after a newer request.
+    // Alternate by metric to exercise the generation guard in try AND catch.
     const delay = order === 1 ? 1400 : 30;
-    return new Promise(resolve => setTimeout(() => resolve(new Response(
-      JSON.stringify({metric, window:windowSize, series:makeSeries(metric + '-' + windowSize),
-                      step_seconds:60}),
-      {status:200, headers:{'Content-Type':'application/json'}}
-    )), delay));
+    return new Promise((resolve, reject) => setTimeout(() => {
+      if (order === 1 && metric === 'scrape_duration') {
+        reject(new Error('FS1113 deliberately stale transport failure'));
+        return;
+      }
+      resolve(new Response(
+        JSON.stringify({metric, window:windowSize, series:makeSeries(metric + '-' + windowSize),
+                        step_seconds:60}),
+        {status:200, headers:{'Content-Type':'application/json'}}
+      ));
+    }, delay));
   };
 })();
 """
@@ -46,7 +53,7 @@ def main():
                                     args=["--no-sandbox", "--disable-dev-shm-usage"])
         try:
             # Exercise both Prometheus metrics and all three supported windows.
-            # Each fresh page starts with a deliberately slow 1h request.
+            # Each fresh page starts with a deliberately slow 1h request;\n            # scrape_duration also exercises a late rejected request.
             for metric in ("availability", "scrape_duration"):
                 for window_size in ("1h", "6h", "24h"):
                     page = browser.new_page(viewport={"width": 390 if window_size == "24h" else 1280, "height": 844})
