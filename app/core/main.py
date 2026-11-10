@@ -432,8 +432,12 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
         if x.get('state')=='PASS' and (not eids or not required):
             raise HTTPException(409,'gate PASS requires evidence and required categories')
         if eids:
-            n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(eids,)).fetchone()[0]
-            if n!=len(set(eids)):raise HTTPException(422,'gate references unknown evidence')
+            # Legacy evidence may omit run_id; an explicit owner must match.
+            # JSON null, empty and malformed owners cannot prove this binding.
+            n=c.execute("select count(*) from aiops.evidence where evidence_id=any(%s) "
+                        "and (not (provenance ? 'run_id') or provenance->>'run_id'=%s)",
+                        (eids,rid)).fetchone()[0]
+            if n!=len(set(eids)):raise HTTPException(422,'gate references unknown or foreign-run evidence')
         c.execute('insert into aiops.gates(gate_id,run_id,stage,state,required_evidence,evidence_ids,decision,reason) values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(run_id,stage) do update set state=excluded.state,required_evidence=excluded.required_evidence,evidence_ids=excluded.evidence_ids,decision=excluded.decision,reason=excluded.reason,evaluated_at=now()',(new('GATE'),rid,x.get('stage','UNKNOWN'),x.get('state','UNKNOWN'),json.dumps(required),json.dumps(eids),x.get('decision'),x.get('reason')))
     return {'run_id':rid,'stage':x.get('stage'),'state':x.get('state')}
 @app.get('/api/runs/{rid}/gates')

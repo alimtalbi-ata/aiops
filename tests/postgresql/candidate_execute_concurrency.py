@@ -217,3 +217,41 @@ finally:
         connection.execute('delete from aiops.command_receipts where idempotency_key=%s', (command_key,))
         for run_id in command_runs:
             connection.execute('delete from aiops.runs where run_id=%s', (run_id,))
+
+
+# Gate evidence provenance is checked with the actual PostgreSQL JSON operators.
+gate_fn = next(n for n in ast.parse(source.read_text()).body
+               if isinstance(n, ast.FunctionDef) and n.name == 'gate')
+gate_fn.decorator_list = []
+gate_scope = dict(namespace, json=json, new=lambda _: 'CI-GATE-' + uuid.uuid4().hex)
+exec(compile(ast.Module(body=[gate_fn], type_ignores=[]), str(source), 'exec'), gate_scope)
+gate_rid = 'CI-GATE-' + uuid.uuid4().hex
+gate_eid = gate_rid + '-EVIDENCE'
+with checkpoint_db() as connection:
+    connection.execute("insert into aiops.runs(run_id,mode,scenario_id,status,idempotency_key) "
+                       "values(%s,'DEMO','CI-GATE','CREATED',%s)", (gate_rid, gate_rid))
+try:
+    for provenance, allowed in (({'run_id': 'FOREIGN'}, False), ({'run_id': None}, False),
+                                ({'run_id': ''}, False), ({'run_id': 42}, False),
+                                ({'run_id': gate_rid}, True), ({}, True)):
+        with checkpoint_db() as connection:
+            connection.execute('delete from aiops.gates where run_id=%s', (gate_rid,))
+            gate_eid = gate_rid + '-EVIDENCE-' + uuid.uuid4().hex
+            # Append-only evidence stays intact in the disposable CI database.
+            connection.execute("insert into aiops.evidence(evidence_id,source,claim,confidence,payload_hash,provenance) "
+                               "values(%s,'ci-gate','fixture',0.9,%s,%s)",
+                               (gate_eid, gate_eid, json.dumps(provenance)))
+        try:
+            gate_scope['gate'](gate_rid, dict(stage='OBSERVE', state='PASS',
+                evidence_ids=[gate_eid], required_evidence=['observation']), 'Bearer offline-test')
+            assert allowed, 'foreign evidence admitted'
+        except HTTPException as error:
+            assert not allowed and error.status_code == 422
+        with checkpoint_db() as connection:
+            assert connection.execute('select count(*) from aiops.gates where run_id=%s',
+                                      (gate_rid,)).fetchone()[0] == int(allowed)
+    print('CANDIDATE_GATE_PG_RUN_BINDING=PASS; legacy_owner_absent=compatible; category_proof=NOT_VERIFIED')
+finally:
+    with checkpoint_db() as connection:
+        connection.execute('delete from aiops.gates where run_id=%s', (gate_rid,))
+        connection.execute('delete from aiops.runs where run_id=%s', (gate_rid,))

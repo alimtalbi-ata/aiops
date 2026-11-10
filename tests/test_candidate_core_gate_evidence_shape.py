@@ -95,5 +95,24 @@ class GateEvidenceShapeTests(unittest.TestCase):
         self.assertEqual(len(connection.writes), 1)
 
 
+class GateEvidenceRunBindingTests(unittest.TestCase):
+    def test_explicit_foreign_or_unknown_run_is_refused(self):
+        for owner in ('RUN-OTHER', None, '', 42):
+            connection = Connection()
+            original = connection.execute
+            def execute(query, params):
+                result = original(query, params)
+                if 'count(*)' in query and len(params) > 1:
+                    connection.row = (int(owner == params[1]),)
+                return result
+            connection.execute = execute
+            with self.subTest(owner=owner):
+                with self.assertRaises(HTTPException) as caught:
+                    load_gate(connection)('RUN-1', dict(stage='OBSERVE', state='PASS',
+                        evidence_ids=['EV-1'], required_evidence=['observation']), 'token')
+                self.assertEqual(caught.exception.status_code, 422)
+                self.assertFalse(connection.writes)
+
+
 if __name__ == '__main__':
     unittest.main()
