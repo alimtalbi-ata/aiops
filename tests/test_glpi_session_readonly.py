@@ -119,6 +119,17 @@ class SessionTests(unittest.TestCase):
                tenant_id="tenant-a", ticket_id="201", glpi_instance_id="ci")
         self.assertEqual(calls, [])
 
+    def test_mismatched_ticket_response_refused_and_session_closed(self):
+        for observed in (202, "202", None, True):
+            with self.subTest(observed=observed):
+                calls = []
+                with self.assertRaisesRegex(GLPISessionReadBlocked,
+                                            "glpi_ticket_response_mismatch"):
+                    self.read(self.make(calls, ticket_payload={"id": observed,
+                                                              "entities_id": 7}))
+                self.assertEqual([name for name, _ in calls],
+                                 ["initSession", "Ticket/201", "killSession"])
+
     def test_redirected_ticket_refused_and_session_closed(self):
         calls = []
         with self.assertRaises(GLPISessionReadBlocked):
