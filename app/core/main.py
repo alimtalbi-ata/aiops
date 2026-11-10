@@ -256,6 +256,14 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
 @app.post('/api/runs/{rid}/gates')
 def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Reject malformed gate identities before touching persistence. A missing
+    # stage must never be stored under a shared UNKNOWN key across retries.
+    stage=x.get('stage')
+    state=x.get('state')
+    if not isinstance(stage,str) or not stage.strip():
+        raise HTTPException(422,'gate stage identity unknown')
+    if state not in ('PASS','FAIL','BLOCKED','UNKNOWN','NEEDS_HUMAN','PENDING','RUNNING'):
+        raise HTTPException(422,'gate state unknown')
     with db() as c:
         if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
         eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
