@@ -23,9 +23,10 @@ class Response:
 
 
 class Opener:
-    def __init__(self, calls, fail_ticket=False):
+    def __init__(self, calls, fail_ticket=False, fail_cleanup=False):
         self.calls = calls
         self.fail_ticket = fail_ticket
+        self.fail_cleanup = fail_cleanup
     def open(self, request, timeout):
         path = request.full_url.split("/apirest.php/")[-1]
         self.calls.append((path, request))
@@ -40,18 +41,20 @@ class Opener:
                 raise OSError("upstream offline")
             return Response({"id": 201, "entities_id": 7})
         if path == "killSession":
+            if self.fail_cleanup:
+                raise OSError("session close unconfirmed")
             return Response({})
         raise AssertionError(path)
 
 
 class SessionTests(unittest.TestCase):
-    def make(self, calls, fail_ticket=False, **overrides):
+    def make(self, calls, fail_ticket=False, fail_cleanup=False, **overrides):
         args = dict(glpi_base_url="https://glpi.internal",
                     get_app_token=lambda **kwargs: "app-secret",
                     get_user_token=lambda **kwargs: "user-secret")
         args.update(overrides)
         with patch("shared.glpi_session_readonly.build_opener",
-                   return_value=Opener(calls, fail_ticket)):
+                   return_value=Opener(calls, fail_ticket, fail_cleanup)):
             return make_glpi_session_ticket_get(**args)
 
     def read(self, fn):
@@ -86,6 +89,20 @@ class SessionTests(unittest.TestCase):
         calls = []
         with self.assertRaises(GLPISessionReadBlocked):
             self.read(self.make(calls, fail_ticket=True))
+        self.assertEqual([name for name, _ in calls],
+                         ["initSession", "Ticket/201", "killSession"])
+
+    def test_cleanup_failure_blocks_successful_ticket_read(self):
+        calls = []
+        with self.assertRaisesRegex(GLPISessionReadBlocked, "glpi_session_cleanup_unconfirmed"):
+            self.read(self.make(calls, fail_cleanup=True))
+        self.assertEqual([name for name, _ in calls],
+                         ["initSession", "Ticket/201", "killSession"])
+
+    def test_cleanup_failure_also_blocks_failed_ticket_read(self):
+        calls = []
+        with self.assertRaises(GLPISessionReadBlocked):
+            self.read(self.make(calls, fail_ticket=True, fail_cleanup=True))
         self.assertEqual([name for name, _ in calls],
                          ["initSession", "Ticket/201", "killSession"])
 
