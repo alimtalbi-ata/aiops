@@ -62,3 +62,27 @@ test('qualified empty result remains EMPTY, transport error remains ERROR',async
  await reader.load('empty');fail=true;await reader.load('error');
  assert.deepEqual(published.map(x=>x.state),['LOADING','EMPTY','LOADING','ERROR']);
 });
+
+test('hung read times out to UNKNOWN and ignores late success',async()=>{
+ const published=[];let finish,signal;
+ const reader=createLatestReader((_,ctx)=>{signal=ctx.signal;return new Promise(resolve=>{finish=resolve})},x=>published.push(x),{now:()=>now,timeoutMs:10});
+ await reader.load('hung');
+ assert.deepEqual(published.map(x=>x.state),['LOADING','UNKNOWN']);
+ assert.equal(published[1].reason,'TIMEOUT');
+ assert.equal(published[1].result,null);
+ assert.equal(signal.aborted,true);
+ finish({records:[1],observed_at:fresh,scope_verified:true,authorization_source:'server'});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(published.length,2);
+});
+test('newer request fences a previous timeout and invalid budgets fail closed',async()=>{
+ assert.throws(()=>createLatestReader(()=>{},()=>{},{timeoutMs:0}),RangeError);
+ assert.throws(()=>createLatestReader(()=>{},()=>{},{timeoutMs:Infinity}),RangeError);
+ const published=[];let release;
+ const reader=createLatestReader(q=>q==='slow'?new Promise(resolve=>{release=resolve}):Promise.resolve({records:[],observed_at:fresh,scope_verified:true,authorization_source:'server'}),x=>published.push(x),{now:()=>now,timeoutMs:20});
+ const slow=reader.load('slow');await reader.load('fast');
+ await new Promise(resolve=>setTimeout(resolve,30));
+ release({records:[1],observed_at:fresh,scope_verified:true,authorization_source:'server'});
+ await slow;
+ assert.deepEqual(published.map(x=>x.state),['LOADING','LOADING','EMPTY']);
+});
