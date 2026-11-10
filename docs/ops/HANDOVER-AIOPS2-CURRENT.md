@@ -1,6 +1,6 @@
 # AIOPS2 — HANDOVER / CONTINUITÉ OPÉRATIONNELLE
 
-> **Point de reprise prioritaire.** Dernière actualisation : 2026-11-10.  
+> **Point de reprise prioritaire.** Dernière actualisation : 2026-11-10 (coordination des tâches UI horaires).  
 > Dépôt : https://github.com/alimtalbi-ata/aiops  
 > Rapport central : PR #545 — https://github.com/alimtalbi-ata/aiops/pull/545  
 > **Ce fichier est versionné sur la branche de la PR #545, pas encore sur `main`.** Vérifier l'état GitHub actuel avant toute action.
@@ -56,6 +56,29 @@ Le travail autorisé à ce stade est **sur GitHub** (audit, code, tests, PR, doc
 3. **Portal** : réconcilier #541/#544/#547 et leurs ancêtres ; éviter les régressions de sécurité, de timeout et d'accessibilité.
 4. **DR** : qualifier #529 et ses dépendances ; exiger une restauration de test documentée.
 5. **Déploiement isolé** : qualifier #549/#552, contrôle DNS sortant, images locales, loopback, connectivité, sauvegarde/rollback. Déploiement seulement après décision explicite.
+
+## 5 bis. Coordination des 5 tâches planifiées UI / portail (mise à jour 2026-11-10)
+
+**Contexte fourni par l'utilisateur** : cinq tâches ChatGPT actives, chacune programmée toutes les heures, travaillant en parallèle sur audit des régressions, design UX/UI, données/automatisations, frontend/recette et coordination. Leur état/schedule interne n'a **pas été revérifié via l'API des automatisations pendant cette intervention**. Les contributions suivantes ont été vérifiées **directement sur GitHub** :
+
+| Flux | PR / commit de tête | Constat GitHub | Décision |
+| --- | --- | --- | --- |
+| Audit régressions | #538 `4615c05a3b1215e457ac92495387692f7c39c411` | Draft, base `main`; tests HTTP 404/405 et navigation superseded ; **1 workflow réussi** | Tests utiles, candidat indépendant à consolider |
+| UX/UI | #541 `a4a8a5f918a1eb6ba32c15601ef97057a485d17c` | Draft ; base `agent/portal/461-operational-timeout-20261110` ; filtre de preuves | Conserver la protection, vérifier la chaîne des bases |
+| Données/automatisations | #550 `9c3227195cda9957e1f6dfce59bb0215702e53d4` | Draft ; base exactement le head de #547 `52b15a6cc8bced70aa81a5559f2e69e98ea52357` ; `compare`: **ahead 2 / behind 0** ; **4 workflows réussis** ; une revue COMMENTED par le propriétaire, **pas une approbation indépendante** | Regrouper avec #547. Le timeout passe d'une comparaison de chaîne d'erreur à un `Symbol` non falsifiable ; le transport ne peut plus forger TIMEOUT |
+| Frontend/recette | #551 `31f735ae70d2b14831893254bdd11aa28ecf8c26` | Draft ; base exactement le head de #544 `865fea95469078adffa87a5738ffcfe03d2af1a6` ; `compare`: **ahead 2 / behind 0** ; **3 workflows réussis** | Regrouper avec #544. Corrige `aria-label` de l'historique Prometheus vide |
+| Coordination générale | Synthèse sur #550 (information fournie) | Aucun merge ni déploiement autorisé | Utiliser PR #545 + ce handover comme relais inter-agents |
+
+**Chevauchements confirmés :**
+- #547 et #550 touchent tous deux `app/portal/components/operational_state.mjs` et ses tests ; chaîne ordonnée #547 → #550.
+- #544 et #551 touchent tous deux `scripts/fs/fs1097_patch.py` ; chaîne ordonnée #544 → #551.
+- #538 ajoute trois **fichiers de tests** et cible directement `main`; vérifier leur compatibilité avec la version effective du portail au moment du regroupement.
+- #541 est sur une base d'une autre branche Portal ; analyser les interactions avec les autres changements UI au niveau des versions communes.
+- Les informations du précédent chat évoquent un portail existant sur port `7777`, une recette candidate sur `17778` et cinq stacks Docker ; **ces faits sont seulement rapportés**, sans inspection du serveur dans cette session. Ne pas les présenter comme vérifiés en direct.
+
+**Règles pour cinq tâches concurrentes :** attribuer un propriétaire par fichier/zone ; privilégier des branches et PR distinctes ; éviter les modifications simultanées sur la branche de coordination #545 ; fournir à chaque livraison le numéro PR, la base et le head SHA, les fichiers modifiés, les tests du head, la dépendance amont et les risques. Le coordinateur doit recomparer les heads GitHub avant consolidation : une tâche horaire peut actualiser une branche entre deux vérifications.
+
+**Nouvelle priorité parallèle :** consolider le paquet Portal (#541, #547→#550, #544→#551, #538) avec des tests UX/sécurité communs pendant que l'audit Core/Worker/Twin progresse ; aucune fusion automatique.
 
 ## 6. Prochaine action concrète pour un nouvel agent
 
