@@ -73,3 +73,20 @@ Keep PR #537, #539 and #540 in DRAFT. No merge, deployment, automation change, o
 - `tests/test_internal_auth.py` checks that Evidence read/write and Policy check deny absent or invalid **internal service tokens**. It also checks a missing Evidence secret fails closed. These are useful controls, but they **do not** establish portal user authentication, verified actor/tenant claims, or cross-tenant filtering.
 - `tests/test_portal_demo.py` checks synthetic demo launch behavior and idempotency, not tenant-scoped read authorization.
 - A green existing CI run must not be interpreted as passing the new portal actor/tenant acceptance matrix until new integration and negative authorization tests exist.
+
+## Implementation checkpoint: disconnected projection policy (PR #543)
+
+- `app/portal/operational_projection.py` is a **pure, disconnected policy helper**. It is not a route, authentication middleware, identity verifier, or authorization provider. No browser-visible endpoint calls it.
+- It denies absent/unverified actor assertions, missing tenant membership, tenant/source mismatch, missing source scope verification, invalid or out-of-window observation times, and invalid freshness budgets. Its positive-path envelope is only valid when **every input is constructed by a trusted server component**.
+- `tests/test_portal_operational_projection.py` covers these policy cases with **synthetic identities and sources**. The test data are not proof that real actor identity, tenant membership, or a tenant-scoped DB query exist.
+- The CI workflow also executes `tests/test_portal_auth_contract_guard.py` and `node --test app/portal/components/operational_state.test.mjs`. The latest verified four-workflow green run was commit `5c4c56b`, including quality gates #8520. This is **unit/CI qualification only**, not integrated Chromium acceptance or Debian evidence.
+
+### Unresolved ownership and evidence required for HTTP integration
+
+1. Identify the trusted authentication mechanism (IdP/ingress/session) and prove that the portal verifies actor identity independently of browser-supplied fields. A forwarded header alone is insufficient without an enforced trusted ingress boundary.
+2. Identify the authoritative tenant membership service or schema and its owner; verify revocation and denial of cross-tenant requests.
+3. Provide a tenant-scoped query that never reads the global Core `/api/runs` or `/api/dashboard` responses as a source of tenant-qualified data. Verify row-level filtering before serialization.
+4. Decide how server-side scope evidence and source observation timestamps are established, including empty data and upstream failure semantics.
+5. Only then connect a route, add anonymous/forged-header/cross-tenant/expired-session tests, and execute Chromium on the **actual integrated portal**. Debian qualification remains separate.
+
+**Until those five items have owners and executable evidence, the policy helper must remain disconnected and the release decision remains HOLD / NO_GO.**
