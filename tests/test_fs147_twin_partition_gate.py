@@ -27,6 +27,17 @@ class PartitionGateTests(unittest.TestCase):
     def check(self, graph, fs, san):
         return module.qualify(graph, fs, san, "lab/fs147", "lab/san")
 
+    def test_core_run_binding_rejects_swapped_capture(self):
+        graph, fs, san = fixture()
+        self.assertEqual(module.qualify(graph, fs, san, "lab/fs147", "lab/san",
+                                        "RUN-FS", "RUN-SAN")["status"], "PASS")
+        with self.assertRaisesRegex(module.IsolationError, "filesystem RUN"):
+            module.qualify(graph, fs, san, "lab/fs147", "lab/san",
+                           "RUN-OTHER", "RUN-SAN")
+        with self.assertRaisesRegex(module.IsolationError, "SAN RUN"):
+            module.qualify(graph, fs, san, "lab/fs147", "lab/san",
+                           "RUN-FS", "RUN-OTHER")
+
     def test_valid_isolated_capture(self):
         self.assertEqual(self.check(*fixture())["status"], "PASS")
 
