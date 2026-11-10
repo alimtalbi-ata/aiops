@@ -3,16 +3,30 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-10T13:00:01.206739+00:00",
+  "collected_at": "2026-11-10T13:01:01.558757+00:00",
   "docker": {
     "available": true,
     "containers": [
       {
         "health": "no-healthcheck",
-        "image": "sha256:ed00b30c5faafeaa2273e5bcff25e300954a93bfb5839163755630e6ecc11862",
+        "image": "sha256:a1f3adcf1e1189600d3167f6d5f3970a89deefe99338b19a8f089da08502916b",
         "inspect_ok": true,
         "name": "aiops2-rebuild-portal",
         "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "sha256:34e0a155cf4f7c6268738bc9d542876f4857be0df8d725369c5913be2394af9a",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-core",
+        "state": "running"
+      },
+      {
+        "health": "no-healthcheck",
+        "image": "sha256:ed00b30c5faafeaa2273e5bcff25e300954a93bfb5839163755630e6ecc11862",
+        "inspect_ok": true,
+        "name": "aiops2-rebuild-portal-rollback-20261110T130053212659Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -22,11 +36,11 @@
         "state": "exited"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "sha256:4e719b8133c10a30477dfb92436e3a50060e47aa48f2c2e8357a11ede7741222",
         "inspect_ok": true,
-        "name": "aiops2-rebuild-core",
-        "state": "running"
+        "name": "aiops2-rebuild-core-rollback-20261110T130053212659Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -552,20 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-e2e-v1-aiops2-temporal-namespace-1",
         "state": "exited"
-      },
-      {
-        "health": "healthy",
-        "image": "temporalio/server:1.31.0",
-        "inspect_ok": true,
-        "name": "aiops2-e2e-v1-aiops2-temporal-1",
-        "state": "running"
-      },
-      {
-        "health": "no-healthcheck",
-        "image": "temporalio/admin-tools:1.31.0",
-        "inspect_ok": true,
-        "name": "aiops2-e2e-v1-aiops2-temporal-schema-1",
-        "state": "exited"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 4 weeks, 6 days, 3 hours, 11 minutes"
+    "uptime": "up 4 weeks, 6 days, 3 hours, 12 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 139444899840,
+      "free_bytes": 139439415296,
       "total_bytes": 172898033664,
-      "used_bytes": 24595812352
+      "used_bytes": 24601296896
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.09521484375,
-      1.2255859375,
-      1.3017578125
+      2.0224609375,
+      1.55615234375,
+      1.41650390625
     ],
     "memory_bytes": {
-      "MemAvailable": 18443931648,
+      "MemAvailable": 18524594176,
       "MemTotal": 25205911552,
       "SwapFree": 10029432832,
       "SwapTotal": 10838077440
