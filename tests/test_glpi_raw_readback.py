@@ -55,6 +55,12 @@ class RawReadbackTests(unittest.TestCase):
             {"id": 201, "entities_id": 0}, expected_ticket_id="201")
             ["glpi_entity_id"], "0")
 
+    def test_matching_noncanonical_glpi_ticket_is_rejected(self):
+        for ticket in ("0201", "0", "2" * 19, "201" + chr(10)):
+            with self.subTest(ticket=ticket), self.assertRaises(RawReadbackInvalid):
+                normalize_glpi_ticket_readback(
+                    {"id": ticket, "entities_id": 7}, expected_ticket_id=ticket)
+
     def test_glpi_missing_entity_or_mismatched_ticket_fails(self):
         for ticket in ({"id": 201}, {"id": 202, "entities_id": 7},
                        {"id": True, "entities_id": 7},
