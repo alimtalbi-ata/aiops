@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
 import sys
@@ -46,6 +47,21 @@ class LiveProbeContract(unittest.TestCase):
         result = self.run_probe(fixtures())
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["qualification"], "API_CAPTURE_ONLY_NOT_DEBIAN_E2E")
+
+
+    def test_redirect_is_rejected_before_bearer_token_can_be_forwarded(self):
+        from fs147_twin_live_readonly_probe import _RejectRedirects
+        handler = _RejectRedirects()
+        self.assertIsNone(handler.redirect_request(None, None, 302, "redirect", {},
+                                                   "https://untrusted.example/collect"))
+        with patch("fs147_twin_live_readonly_probe.build_opener") as builder:
+            builder.return_value.open.side_effect = HTTPError(
+                "http://isolated-candidate/api/twin/graph", 302,
+                "redirect refused", {}, None)
+            with self.assertRaisesRegex(IsolationError, "HTTPError"):
+                fetch_json("http://isolated-candidate", "/api/twin/graph", "secret")
+            self.assertIsInstance(builder.call_args.args[0], _RejectRedirects)
+            self.assertEqual(builder.return_value.open.call_count, 1)
 
     def test_current_graph_without_namespace_must_hold(self):
         data = fixtures()
