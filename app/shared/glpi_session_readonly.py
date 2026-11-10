@@ -62,7 +62,7 @@ def make_glpi_session_ticket_get(
         with opener.open(request, timeout=timeout) as response:
             if response.status != 200:
                 raise GLPISessionReadBlocked("glpi_non_200")
-            if "application/json" not in response.headers.get("Content-Type", "").lower():
+            if response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
                 raise GLPISessionReadBlocked("glpi_non_json")
             raw = response.read(max_bytes + 1)
             if len(raw) > max_bytes:
