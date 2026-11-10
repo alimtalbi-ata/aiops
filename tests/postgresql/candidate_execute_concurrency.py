@@ -136,6 +136,9 @@ try:
     refused(1, 'POLICY')
     refused(2, workflow='FOREIGN')
     refused(True, status=422)
+    for stage in (' POLICY', 'POLICY ', 'POLICY\n', 'POLICY\t', 'POLICY\x00', 'POLICY\x7f'):
+        refused(2, stage=stage, status=422)
+    print('CANDIDATE_CHECKPOINT_PG_STAGE_IDENTITY=PASS; ambiguous_cases=6')
     barrier = threading.Barrier(2)
     def race(version):
         barrier.wait(timeout=5)

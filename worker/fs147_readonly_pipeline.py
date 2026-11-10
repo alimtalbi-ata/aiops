@@ -77,7 +77,9 @@ def _nested_hitl_artifact(payload):
                 if (key in forbidden or (key in flags and child is not False)
                         or (key == "resolved" and child is not False)
                         or (key == "ticket_transition" and child is not None)
-                        or (key == "effect" and child != "NO_EFFECT")):
+                        or (key == "effect" and child != "NO_EFFECT")
+                        or (key == "dry_run" and child is not True)
+                        or (key == "execution_mode" and child != "SIMULATE")):
                     return True
                 stack.append((child, depth + 1))
         elif isinstance(value, (list, tuple)):
