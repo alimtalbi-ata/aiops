@@ -7,10 +7,17 @@ export function filterEvidence(records, {query='', status='ALL'}={}) {
   const needle=query.trim().toLocaleLowerCase();
   const valid=records.every(r=>r && typeof r==='object' && typeof r.id==='string' && typeof r.label==='string' && allowed.has(r.status) && r.status!=='ALL');
   if (!valid) return {state:'UNKNOWN',records:[]};
-  const seen=new Set();
+  // A repeated evidence ID with divergent content is ambiguous, never silently first-wins.
+  const seen=new Map();
+  for(const r of records){
+    const prior=seen.get(r.id);
+    if(prior && (prior.label!==r.label || prior.status!==r.status)) return {state:'UNKNOWN',records:[]};
+    seen.set(r.id,r);
+  }
+  const emitted=new Set();
   const filtered=records.filter(r=>{
-    if(seen.has(r.id))return false;
-    seen.add(r.id);
+    if(emitted.has(r.id))return false;
+    emitted.add(r.id);
     return (status==='ALL'||r.status===status) && (!needle||r.label.toLocaleLowerCase().includes(needle)||r.id.toLocaleLowerCase().includes(needle));
   });
   return {state:filtered.length?'READY':'EMPTY',records:filtered};
