@@ -179,6 +179,10 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("POLICY_SCOPE", steps)
         steps.append("POLICY")
         if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
+                # Explicit execution metadata must agree with a read-only simulation.
+                # Absence remains backward compatible; contradictions fail closed.
+                or ("dry_run" in decision and decision["dry_run"] is not True)
+                or ("execution_mode" in decision and decision["execution_mode"] != "SIMULATE")
                 or ("dispatch_allowed" in decision and decision["dispatch_allowed"] is not False)
                 or ("resolved" in decision and decision["resolved"] is not False)
                 or ("effect" in decision and decision["effect"] != "NO_EFFECT")
