@@ -67,6 +67,20 @@ class RealPostgresNonceTests(unittest.TestCase):
                 ("ci-tenant-a", self.nonce)).fetchone()
         self.assertEqual(row, (1,))
 
+    def test_expired_nonce_remains_replay_blocked_without_unsafe_pruning(self):
+        # Expiration does not silently delete replay evidence or permit reuse.
+        expired = {**self.args, "expires_at": 1}
+        self.assertTrue(self.consumer(**expired))
+        self.assertFalse(self.consumer(**self.args))
+        with self.psycopg.connect(self.url) as connection:
+            row = connection.execute(
+                "SELECT expires_at, count(*) OVER () "
+                "FROM aiops.glpi_xref_consumed_nonces "
+                "WHERE tenant_id=%s AND nonce=%s",
+                (self.args["tenant_id"], self.nonce)).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row[1], 1)
+
     def test_database_statement_failure_is_denied(self):
         # The real failure path is exercised using a closed DB connection.
         def closed_connect():
