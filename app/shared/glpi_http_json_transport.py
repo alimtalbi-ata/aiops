@@ -8,6 +8,7 @@ import json
 from collections.abc import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.parse import urlsplit
 
 
 class ReadTransportBlocked(RuntimeError):
@@ -19,18 +20,40 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def make_json_get(*, get_token: Callable, timeout: float = 3.0,
-                  max_bytes: int = 262144):
+def make_json_get(*, get_token: Callable, allowed_origin: str,
+                  timeout: float = 3.0, max_bytes: int = 262144):
     if (not callable(get_token) or type(timeout) not in (int, float)
             or not 0 < timeout <= 10 or type(max_bytes) is not int
             or not 1024 <= max_bytes <= 1048576):
         raise ValueError("secure_http_transport_configuration_required")
+    try:
+        trusted = urlsplit(allowed_origin)
+        trusted_port = trusted.port
+        if (trusted.scheme != "https" or not trusted.hostname
+                or trusted.username is not None or trusted.password is not None
+                or trusted.path or trusted.query or trusted.fragment
+                or any(c.isspace() or ord(c) < 33 for c in allowed_origin)
+                or "\\" in allowed_origin):
+            raise ValueError("trusted_origin_required")
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValueError("trusted_origin_required") from exc
     opener = build_opener(_NoRedirect())
 
     def get(*, url, actor, tenant_id, **scope):
         if (not isinstance(url, str) or not url.startswith("https://")
                 or any(c in url for c in ("#", "@", "\\", "\r", "\n"))):
             raise ReadTransportBlocked("trusted_https_url_required")
+        try:
+            parsed = urlsplit(url)
+            request_port = parsed.port
+            same_origin = (parsed.scheme == "https" and parsed.hostname
+                           and parsed.hostname.lower() == trusted.hostname.lower()
+                           and (request_port or 443) == (trusted_port or 443)
+                           and parsed.username is None and parsed.password is None)
+        except (ValueError, TypeError):
+            same_origin = False
+        if not same_origin:
+            raise ReadTransportBlocked("untrusted_upstream_origin")
         if not isinstance(actor, str) or not actor.strip() or not isinstance(tenant_id, str) or not tenant_id.strip():
             raise ReadTransportBlocked("actor_tenant_required")
         try:
