@@ -109,6 +109,11 @@ def scenario(sid:str):
 @app.post('/api/runs/{rid}/checkpoint')
 def checkpoint(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Temporal uses the canonical Run ID as its workflow ID. A checkpoint
+    # cannot bind this Run to a foreign workflow even on repeated delivery.
+    workflow_id = x.get('workflow_id')
+    if workflow_id is not None and (not isinstance(workflow_id, str) or workflow_id != rid):
+        raise HTTPException(409, 'checkpoint has unverified workflow identity')
     with db() as c:
         c.execute("insert into aiops.run_checkpoints(run_id,stage,version,workflow_id) values(%s,%s,%s,%s) on conflict(run_id) do update set stage=excluded.stage,version=excluded.version,workflow_id=coalesce(excluded.workflow_id,aiops.run_checkpoints.workflow_id),updated_at=now()",(rid,x['stage'],x['version'],x.get('workflow_id')))
     return {'run_id':rid,'stage':x['stage'],'version':x['version']}
