@@ -29,6 +29,8 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
     nodes = graph["nodes"]
     edges = graph["edges"]
     ids = [n["node_id"] for n in nodes]
+    if any(not isinstance(node_id, str) or not node_id.strip() for node_id in ids):
+        raise IsolationError("topology node identity missing or invalid")
     if len(ids) != len(set(ids)):
         raise IsolationError("duplicate topology node IDs")
     if not nodes:
