@@ -14,7 +14,7 @@ from shared.glpi_xref_hmac_verifier import (
 class HmacXrefTests(unittest.TestCase):
     def setUp(self):
         self.secret = b"x" * 32
-        self.claims = dict(aud="aiops-glpi-copilot-xref", actor="operator",
+        self.claims = dict(aud="aiops-glpi-copilot-xref", iss="aiops-core-xref-signer", actor="operator",
                            tenant_id="tenant-a", ticket_id="201",
                            glpi_instance_id="ci", glpi_entity_id="7",
                            incident_id="INC-DEMO-12345678",
@@ -61,14 +61,14 @@ class HmacXrefTests(unittest.TestCase):
         self.assertEqual(self.acl_calls, [])
 
     def test_signed_scope_and_audience_rejected(self):
-        for field, value in (("aud", "other"), ("tenant_id", "other"),
+        for field, value in (("aud", "other"), ("iss", "other"), ("tenant_id", "other"),
                              ("actor", "other"), ("ticket_id", "202")):
             with self.subTest(field=field):
                 self.claims[field] = value
                 with self.assertRaises(XrefSignatureRejected):
                     self.invoke()
                 self.claims[field] = dict(
-                    aud="aiops-glpi-copilot-xref", tenant_id="tenant-a",
+                    aud="aiops-glpi-copilot-xref", iss="aiops-core-xref-signer", tenant_id="tenant-a",
                     actor="operator", ticket_id="201")[field]
 
     def test_expired_future_and_long_lived_rejected(self):
