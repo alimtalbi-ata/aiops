@@ -36,12 +36,15 @@ class Connection:
         return False
     def cursor(self):
         return Cursor(self.db)
+    def close(self):
+        self.db.closed += 1
 
 
 class DB:
     def __init__(self):
         self.seen = set()
         self.connections = 0
+        self.closed = 0
     def connect(self):
         self.connections += 1
         return Connection(self)
@@ -58,6 +61,7 @@ class NonceBarrierTests(unittest.TestCase):
         self.assertTrue(self.consume(**self.args))
         self.assertFalse(self.consume(**self.args))
         self.assertEqual(self.db.connections, 2)
+        self.assertEqual(self.db.closed, 2)
 
     def test_different_tenant_is_distinct_namespace(self):
         self.assertTrue(self.consume(**self.args))
@@ -80,6 +84,7 @@ class NonceBarrierTests(unittest.TestCase):
                 raise RuntimeError("commit failed")
         self.assertFalse(make_postgres_nonce_consumer(
             lambda: CommitFailureConnection(self.db))(**self.args))
+        self.assertEqual(self.db.closed, 1)
 
     def test_cursor_error_never_reports_nonce_consumed(self):
         class BrokenCursor(Cursor):
@@ -90,6 +95,7 @@ class NonceBarrierTests(unittest.TestCase):
                 return BrokenCursor(self.db)
         self.assertFalse(make_postgres_nonce_consumer(
             lambda: BrokenConnection(self.db))(**self.args))
+        self.assertEqual(self.db.closed, 1)
 
     def test_missing_connection_factory_rejected(self):
         with self.assertRaises(ValueError):
