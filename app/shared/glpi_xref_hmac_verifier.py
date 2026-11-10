@@ -28,6 +28,7 @@ def verify_hmac_xref_event(
     authorize_actor: Callable | None = None,
     now: int | None = None,
     expected_audience="aiops-glpi-copilot-xref",
+    expected_issuer="aiops-core-xref-signer",
 ):
     """Verify signature, scope, audience, time, replay and server ACL.
 
@@ -52,7 +53,9 @@ def verify_hmac_xref_event(
     expected = hmac.new(secret, signed, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature):
         raise XrefSignatureRejected("signature_invalid")
-    if (claims.get("aud") != expected_audience or claims.get("actor") != actor
+    if (claims.get("aud") != expected_audience
+            or claims.get("iss") != expected_issuer
+            or claims.get("actor") != actor
             or claims.get("tenant_id") != tenant_id
             or claims.get("ticket_id") != ticket_id):
         raise XrefSignatureRejected("signed_scope_invalid")
