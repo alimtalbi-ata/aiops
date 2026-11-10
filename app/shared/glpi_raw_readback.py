@@ -41,8 +41,10 @@ def normalize_glpi_ticket_readback(payload, *, expected_ticket_id):
     if type(ticket) not in (str, int) or type(entity) not in (str, int):
         raise RawReadbackInvalid("glpi_ticket_or_entity_missing")
     ticket, entity = str(ticket), str(entity)
-    if (not ticket.isascii() or not ticket.isdecimal()
-            or ticket.startswith("0") or ticket != expected_ticket_id
+    if (not isinstance(expected_ticket_id, str)
+            or not re.fullmatch(r"[1-9][0-9]{0,17}", expected_ticket_id)
+            or not re.fullmatch(r"[1-9][0-9]{0,17}", ticket)
+            or ticket != expected_ticket_id
             or not entity.isascii() or not entity.isdecimal()
             or len(entity) > 18 or (entity.startswith("0") and entity != "0")):
         raise RawReadbackInvalid("glpi_ticket_or_entity_mismatch")
