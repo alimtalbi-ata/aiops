@@ -24,12 +24,13 @@ class Response:
 
 
 class Opener:
-    def __init__(self, calls, fail_ticket=False, fail_cleanup=False, ticket_payload=None, redirect_ticket=False):
+    def __init__(self, calls, fail_ticket=False, fail_cleanup=False, ticket_payload=None, redirect_ticket=False, ticket_content_type=None):
         self.calls = calls
         self.fail_ticket = fail_ticket
         self.fail_cleanup = fail_cleanup
         self.ticket_payload = ticket_payload
         self.redirect_ticket = redirect_ticket
+        self.ticket_content_type = ticket_content_type
     def open(self, request, timeout):
         path = request.full_url.split("/apirest.php/")[-1]
         self.calls.append((path, request))
@@ -44,7 +45,10 @@ class Opener:
                 raise OSError("upstream offline")
             if self.redirect_ticket:
                 raise HTTPError(request.full_url, 302, "redirect denied", {}, None)
-            return Response(self.ticket_payload if self.ticket_payload is not None else {"id": 201, "entities_id": 7})
+            response = Response(self.ticket_payload if self.ticket_payload is not None else {"id": 201, "entities_id": 7})
+            if self.ticket_content_type is not None:
+                response.headers = {"Content-Type": self.ticket_content_type}
+            return response
         if path == "killSession":
             if self.fail_cleanup:
                 raise OSError("session close unconfirmed")
@@ -53,13 +57,13 @@ class Opener:
 
 
 class SessionTests(unittest.TestCase):
-    def make(self, calls, fail_ticket=False, fail_cleanup=False, ticket_payload=None, redirect_ticket=False, **overrides):
+    def make(self, calls, fail_ticket=False, fail_cleanup=False, ticket_payload=None, redirect_ticket=False, ticket_content_type=None, **overrides):
         args = dict(glpi_base_url="https://glpi.internal",
                     get_app_token=lambda **kwargs: "app-secret",
                     get_user_token=lambda **kwargs: "user-secret")
         args.update(overrides)
         with patch("shared.glpi_session_readonly.build_opener",
-                   return_value=Opener(calls, fail_ticket, fail_cleanup, ticket_payload, redirect_ticket)):
+                   return_value=Opener(calls, fail_ticket, fail_cleanup, ticket_payload, redirect_ticket, ticket_content_type)):
             return make_glpi_session_ticket_get(**args)
 
     def read(self, fn):
@@ -160,6 +164,14 @@ class SessionTests(unittest.TestCase):
                              ["initSession", "Ticket/201", "killSession"])
         finally:
             Response.headers = original
+
+    def test_non_json_ticket_response_still_closes_session(self):
+        for content_type in ("application/jsonp", "text/application/json"):
+            calls = []
+            with self.subTest(content_type=content_type), self.assertRaises(GLPISessionReadBlocked):
+                self.read(self.make(calls, ticket_content_type=content_type))
+            self.assertEqual([name for name, _ in calls],
+                             ["initSession", "Ticket/201", "killSession"])
 
     def test_invalid_scope_rejected_before_credential_callbacks(self):
         calls = []
