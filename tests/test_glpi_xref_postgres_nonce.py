@@ -69,6 +69,9 @@ class NonceBarrierTests(unittest.TestCase):
 
     def test_invalid_inputs_never_connect(self):
         for changes in ({"nonce": "bad"}, {"tenant_id": ""},
+                        {"tenant_id": "   "},
+                        {"tenant_id": "tenant" + chr(10) + "other"},
+                        {"tenant_id": "tenant" + chr(127)},
                         {"expires_at": True}, {"expires_at": -1}):
             self.assertFalse(self.consume(**{**self.args, **changes}))
         self.assertEqual(self.db.connections, 0)
