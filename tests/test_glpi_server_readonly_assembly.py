@@ -16,14 +16,14 @@ class AssemblyTests(unittest.TestCase):
         return dict(secret=b"s" * 32, fetch_signed_event=missing,
                     consume_nonce=missing, authorize_actor=denied,
                     authorize_read=denied, core_token=missing,
-                    glpi_token=missing, core_base_url="https://core.internal",
+                    glpi_app_token=missing, glpi_user_token=missing, core_base_url="https://core.internal",
                     glpi_base_url="https://glpi.internal")
 
     def test_missing_trust_refused_at_construction(self):
         for key, value in (("secret", b"short"), ("fetch_signed_event", None),
                            ("consume_nonce", None), ("authorize_actor", None),
                            ("authorize_read", None), ("core_token", None),
-                           ("glpi_token", None)):
+                           ("glpi_app_token", None), ("glpi_user_token", None)):
             with self.subTest(key=key):
                 config = self.config()
                 config[key] = value
