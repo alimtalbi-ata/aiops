@@ -90,3 +90,20 @@ Keep PR #537, #539 and #540 in DRAFT. No merge, deployment, automation change, o
 5. Only then connect a route, add anonymous/forged-header/cross-tenant/expired-session tests, and execute Chromium on the **actual integrated portal**. Debian qualification remains separate.
 
 **Until those five items have owners and executable evidence, the policy helper must remain disconnected and the release decision remains HOLD / NO_GO.**
+
+## Artifact-level qualification review: workflow #8533 / head 25b5586
+
+The downloaded GitHub Actions artifacts were inspected, not just their workflow status:
+
+- `aiops2-runtime-e2e-report`: synthetic Temporal run `RUN-6EFA56C514488C89`, `RESOLVED`, 13 evidence records, 0 effect receipts, `mode=DEMO`, `live_execution=disabled`; provider and twin evidence are synthetic. This validates orchestration contracts only, not real model or production execution.
+- `ai-core-evaluation.json`: 5/5 deterministic fixture cases, `provider=openai-compatible`, `model=ci-deterministic`, `execution_allowed=false`; all listed contract metrics score 1.0. The report explicitly says fixture data only and does not qualify real-model accuracy. `ledger_persistence.status=PASS` but `ledger_persistence.idempotent=false` — persistence success must not be conflated with idempotency.
+- `aiops2-postgres-dr-report`: disposable PostgreSQL logical restore PASS; 31 tables, row hashes MATCH, corruption negative control PASS, target ephemeral CI DB, live system untouched. The artifact explicitly reports `temporal_mariadb_volumes=NOT_QUALIFIED`.
+- `aiops2-mariadb-dr-report`: disposable MariaDB logical restore PASS; 2/2 rows, row integrity MATCH, corruption negative control PASS, no network, live system untouched.
+
+### Follow-up acceptance work
+
+1. Make evaluation-ledger writes idempotent on a stable evaluation identity (unique constraint/upsert or transaction-safe deduplication); add a replay test that submits the same evaluation twice and proves exactly one logical ledger record, unchanged payload/hash, and deterministic response. Do not change the reported gate to PASS until this replay test runs against the real persistence backend.
+2. Add a separate Temporal MariaDB volume backup/restore rehearsal with disposable named volumes, explicit snapshot/restore evidence, integrity hashes and corruption negative control. Until then, retain `NOT_QUALIFIED`.
+3. Keep real provider/model qualification separate from deterministic fixtures, and keep live execution disabled absent a separately approved test environment.
+
+The CI workflow #8533 is green, but these artifact caveats remain release blockers where applicable. No production inference, no live effects, no Temporal MariaDB volume qualification, and no idempotent evaluation ledger are claimed.
