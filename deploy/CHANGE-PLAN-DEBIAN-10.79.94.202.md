@@ -106,8 +106,12 @@ A separate implementation candidate is under review in PR #549:
 
 This candidate has **not** been executed on Debian. It must pass CI and independent review first.
 
-**DNS scope clarification:** the installer performs no registry pulls/builds and makes no host/external DNS query. The Compose application still uses Docker's embedded DNS for service-name resolution between containers. The user's no-DNS requirement is therefore not yet fully satisfied if it includes Docker-internal DNS. If “no DNS” also prohibits Docker-internal DNS, this candidate is not compliant and must not be run until service discovery is redesigned around fixed IPs or another explicitly approved mechanism.
+**DNS scope clarified by the operator:** only DNS resolution external to Debian host 10.79.94.202 is prohibited. Docker's embedded internal DNS for Compose service discovery is explicitly allowed and preserved. The installer must not perform external DNS queries, image pulls or builds. Any runtime external DNS behavior still needs separate validation before target deployment.
 
 
 ### Latest review note — Compose port merge hazard
 A prior overlay-based candidate could retain the base Compose wildcard port bindings when lists were merged. PR #549 has been changed to use a standalone `compose.isolated.yml` manifest, with no base file merge. The updated CI contract asserts exactly six published port entries and all are `127.0.0.1` bindings. The corrected CI run is pending; this does not authorize target execution.
+
+
+### DNS clarification — operator decision
+The operator explicitly permits Docker/Compose internal DNS and prohibits only DNS external to the Debian host. PR #549 reverted the static-IP conversion and retained original internal service-name URLs and original Prometheus/Grafana provisioning. No external DNS resolution during install, no image pulls/builds. External DNS attempts by running containers are not yet proven absent and remain a qualification item.
