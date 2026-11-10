@@ -9,6 +9,9 @@ never from ticket text or caller-supplied flags.
 """
 
 
+import re
+
+
 class RawReadbackInvalid(ValueError):
     pass
 
@@ -19,7 +22,8 @@ def normalize_core_run_readback(payload, *, expected_run_id):
     run = payload["run"]
     if not isinstance(expected_run_id, str) or run.get("run_id") != expected_run_id:
         raise RawReadbackInvalid("core_run_mismatch")
-    if not isinstance(run.get("incident_id"), str) or not run["incident_id"]:
+    if (not isinstance(run.get("incident_id"), str)
+            or not re.fullmatch(r"INC-[A-Za-z0-9_-]{4,128}", run["incident_id"])):
         raise RawReadbackInvalid("core_incident_missing")
     if run.get("mode") != "DEMO":
         raise RawReadbackInvalid("core_mode_not_qualified")
