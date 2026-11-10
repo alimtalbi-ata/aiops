@@ -48,7 +48,7 @@ class ProjectionPolicyTests(unittest.TestCase):
                 project(source={**SOURCE, "observed_at": timestamp})
 
     def test_bad_freshness_policy_fails_closed(self):
-        for budget in (0, -1, 3601, None):
+        for budget in (0, -1, 3601, None, True, float('nan'), float('inf'), float('-inf')):
             with self.subTest(budget=budget), self.assertRaises(projection.ProjectionUnavailable):
                 project(max_age_seconds=budget)
 
