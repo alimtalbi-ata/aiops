@@ -66,6 +66,12 @@ class HmacQualificationTests(unittest.TestCase):
         self.assertFalse(result["copilot_query_performed"])
         self.assertFalse(result["hitl_proposal_created"])
         self.assertFalse(result["execution_allowed"])
+        self.assertTrue(result["raw_readbacks_match"])
+        for flag in ("canonical_association_attested", "tenant_acl_verified",
+                     "actor_acl_verified", "copilot_context_authorized",
+                     "hitl_proposal_authorized"):
+            with self.subTest(flag=flag):
+                self.assertIs(result[flag], False)
 
     def test_core_mismatch_fails(self):
         self.core["run"]["incident_id"] = "INC-OTHER-12345678"
