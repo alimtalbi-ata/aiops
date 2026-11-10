@@ -67,6 +67,8 @@ def make_json_get(*, get_token: Callable, allowed_origin: str,
                 or any(ord(ch) < 32 or ord(ch) == 127
                        for ch in actor + tenant_id)):
             raise ReadTransportBlocked("actor_tenant_required")
+        if not parsed.path.startswith("/") or parsed.path.startswith("//"):
+            raise ReadTransportBlocked("trusted_https_path_required")
         try:
             token = get_token(actor=actor, tenant_id=tenant_id, **scope)
             if (not isinstance(token, str) or not token or len(token) > 4096
