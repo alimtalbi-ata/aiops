@@ -13,7 +13,7 @@ class IsolationError(ValueError):
 
 
 def _unique_pairs(pairs):
-    """Fail closed on ambiguous nested provenance keys in fact.value."""
+    """Fail closed on ambiguous JSON keys at every capture/provenance level."""
     result = {}
     for key, value in pairs:
         if key in result:
@@ -115,8 +115,9 @@ def main():
     parser.add_argument("--fs-run-id", required=True, help="independent Core filesystem RUN ID")
     parser.add_argument("--san-run-id", required=True, help="independent Core SAN RUN ID")
     args = parser.parse_args()
-    capture = json.loads(args.capture.read_text(encoding="utf-8"))
     try:
+        capture = json.loads(args.capture.read_text(encoding="utf-8"),
+                             object_pairs_hook=_unique_pairs)
         result = qualify(capture["graph"], capture["fs_facts"],
                          capture["san_facts"], args.fs_namespace, args.san_namespace, args.fs_run_id, args.san_run_id)
     except (IsolationError, KeyError, TypeError, ValueError) as exc:
