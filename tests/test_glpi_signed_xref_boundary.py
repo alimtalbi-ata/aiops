@@ -59,6 +59,16 @@ class SignedXrefBoundaryTests(unittest.TestCase):
                     ticket_id="201", association_count=1,
                     association_state="ACTIVE")[field]
 
+    def test_invalid_actor_and_tenant_rejected_before_signed_event_fetch(self):
+        for changes in ({"actor": "operator" + chr(10) + "admin"},
+                        {"tenant_id": "tenant" + chr(0) + "other"},
+                        {"actor": "   "},
+                        {"tenant_id": "tenant" + chr(127)}):
+            with self.subTest(changes=changes):
+                with self.assertRaises(CanonicalXrefBlocked):
+                    self.invoke(**changes)
+        self.assertEqual(self.calls, [])
+
     def test_invalid_ticket_rejected_before_fetch(self):
         with self.assertRaises(CanonicalXrefBlocked):
             self.invoke(ticket_id="201/../../")
