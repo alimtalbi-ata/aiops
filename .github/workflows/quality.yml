@@ -155,6 +155,10 @@ jobs:
               for name in ("001_schema.sql", "004_operational_model.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
+      - name: GLPI nonce replay barrier against real disposable PostgreSQL
+        env:
+          AIOPS_GLPI_NONCE_REAL_PG_CI: "1"
+        run: python -m unittest discover -s tests -p "test_glpi_xref_postgres_real_integration.py" -v
       - name: Start actual Core HTTP service and verify readiness
         run: |
           PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &
