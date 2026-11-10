@@ -54,6 +54,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_glpi_xref_postgres_nonce.py" -v
       - name: GLPI and Core GET-only HTTP ACL adapter regressions (offline only)
         run: python -m unittest discover -s tests -p "test_glpi_http_readers.py" -v
+      - name: GLPI complete HMAC ACL Core GLPI authenticated read-only chain (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_full_readonly_chain.py" -v
       - name: GLPI server-side HMAC ACL authenticated read-only assembly (offline only)
         run: python -m unittest discover -s tests -p "test_glpi_server_readonly_assembly.py" -v
       - name: GLPI Core authenticated GET-only JSON transport security (offline only)
