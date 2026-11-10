@@ -12,7 +12,9 @@ fail() { echo "HOLD|$*" >&2; exit 1; }
 [[ "${EUID}" -eq 0 ]] || fail "run_as_authorized_operator_on_target_only"
 [[ -f compose.yml && -f compose.isolated.yml ]] || fail "compose_files_missing"
 command -v docker >/dev/null 2>&1 || fail "docker_missing"
+command -v ip >/dev/null 2>&1 || fail "ip_missing"
 command -v ss >/dev/null 2>&1 || fail "ss_missing"
+if ! ip -o -4 addr show | grep -Fq '10.79.94.202/'; then fail "unexpected_target_host_ip|expected_10.79.94.202"; fi
 command -v curl >/dev/null 2>&1 || fail "curl_missing"
 docker compose version >/dev/null 2>&1 || fail "docker_compose_missing"
 
