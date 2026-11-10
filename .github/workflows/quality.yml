@@ -163,6 +163,41 @@ jobs:
               sys.exit(1)
           PY
 
+  n8n-security-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Enforce inert n8n incident template
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("integration/n8n/incident-to-run.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          assert data.get("active") is False, "n8n template must remain inactive"
+          nodes = data.get("nodes")
+          assert isinstance(nodes, list) and nodes, "n8n nodes must exist"
+          assert {n.get("type") for n in nodes} == {
+              "n8n-nodes-base.webhook", "n8n-nodes-base.respondToWebhook"
+          }, "n8n template may not contain HTTP/action nodes"
+          response = next(n for n in nodes if n["type"].endswith(".respondToWebhook"))
+          assert "HOLD" in response.get("parameters", {}).get("responseBody", ""), (
+              "n8n template must explicitly return HOLD"
+          )
+          assert set(data.get("connections", {})) == {"Incident Webhook"}, (
+              "n8n template must only route webhook to HOLD response"
+          )
+          assert not any(
+              term in path.read_text(encoding="utf-8").lower()
+              for term in ('authorization', 'bearer ', '"live"', "mode:'live'")
+          ), "n8n template contains a credential or LIVE marker"
+          print("PASS: disabled, action-free n8n template with HOLD response")
+          PY
+
   quality-build-package:
     runs-on: ubuntu-latest
     timeout-minutes: 30
