@@ -42,6 +42,17 @@ class ProjectionPolicyTests(unittest.TestCase):
             with self.subTest(source=source), self.assertRaises(projection.ProjectionUnavailable):
                 project(source=source)
 
+    def test_mixed_tenant_records_denied_even_with_source_attestation(self):
+        for records in ([{"tenant_id": "tenant-B", "id": "foreign"}], [{"tenant_id": "tenant-A"}, {"tenant_id": "tenant-B"}], ["not-a-record"]):
+            with self.subTest(records=records), self.assertRaises(projection.ProjectionUnavailable):
+                project(source={**SOURCE, "records": records})
+
+    def test_projection_is_snapshot_not_source_alias(self):
+        source = {**SOURCE, "records": [{"id": "run-1", "details": {"state": "READY"}}]}
+        result = project(source=source)
+        source["records"][0]["details"]["state"] = "MUTATED"
+        self.assertEqual(result["records"][0]["details"]["state"], "READY")
+
     def test_timestamp_fails_closed(self):
         for timestamp in (None, "", "not-a-date", "2026-11-10T16:24:00", "2026-11-10T16:20:00Z", "2026-11-10T16:26:00Z"):
             with self.subTest(timestamp=timestamp), self.assertRaises(projection.ProjectionUnavailable):
