@@ -98,6 +98,21 @@ class TransportTests(unittest.TestCase):
             get(url="https://core.internal", actor="operator",
                 tenant_id="tenant-a")
 
+    def test_malformed_url_rejected_before_credentials(self):
+        opener = FakeOpener(Response())
+        credentials = []
+        with patch("shared.glpi_http_json_transport.build_opener", return_value=opener):
+            get = make_json_get(get_token=lambda **kw: credentials.append(kw) or "token",
+                                allowed_origin="https://core.internal")
+        for url in ("https://core.internal/api/" + chr(9) + "runs",
+                    "https://core.internal/api/" + chr(0) + "runs",
+                    "https://core.internal/api/" + chr(127) + "runs",
+                    "https://core.internal/" + "x" * 2048):
+            with self.subTest(url_length=len(url)), self.assertRaises(ReadTransportBlocked):
+                get(url=url, actor="operator", tenant_id="tenant-a")
+        self.assertEqual(credentials, [])
+        self.assertEqual(opener.calls, [])
+
     def test_credentials_never_sent_to_other_origin(self):
         get, opener = self.create()
         for url in ("https://evil.internal/api/runs/RUN-1",
