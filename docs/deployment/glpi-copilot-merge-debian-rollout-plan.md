@@ -95,3 +95,35 @@ Planning baseline: branch head f99aa8f354818d0b073b00744628432df34331ba; main ba
 NO-GO for merge, Debian deployment, schema migration, GLPI writes, Copilot route activation, or HITL.
 
 GO only for planning, code review, scope audit, isolated CI/E2E preparation, and gathering the missing deployment facts. This document is a runbook proposal, not deployment authorization.
+## 6. Commit-range and target-host audit — 2026-11-10
+
+### Commit range reviewed
+
+- GitHub compare now reports `main...feat/glpi-copilot-xref-guard-20261110`: 166 commits ahead, 0 behind, 39 changed paths. Merge base/main SHA: `0e232c9fdf4a519de36ba8035b506621854e0277`.
+- The commit list is a focused, same-day GLPI read-only/security hardening sequence, not an obvious unrelated 166-commit product feature dump. Message-prefix classification of the 166 commits: 27 feature/security, 37 fix, 79 test, 18 CI, 5 docs. Most commits are narrow test/fix pairs that progressively harden canonical identity validation, HMAC xref verification, nonce replay, Core/GLPI GET-only transport, GLPI 11 session cleanup, and fail-closed Portal route policy.
+- The 39-file PR diff consists of the quality workflow, 15 shared GLPI/Core adapter modules, 4 documentation/SQL paths, and 19 test modules. The SQL file is an optional, unapplied schema proposal.
+- This substantially reduces the concern that the branch is mixing unrelated application features. It does not remove the need for commit-level review: 166 commits are unusually granular, all commits are unsigned per GitHub commit metadata, and the code still lacks a real actor/tenant ACL provider and positive authenticated GLPI E2E. Consider a single reviewed merge or a clean focused follow-up PR only after the full diff and commit history are independently reviewed; do not rewrite history or discard tests merely to reduce commit count.
+- Latest exact-HEAD CI is now available: run #8556 on `bb76fcd454647130243b1582b3e326417eed613a`, all three jobs SUCCESS (policy-and-static, Core/PostgreSQL/NOC real integration, Grafana real integration). This qualifies the configured CI scope, not live Debian or GLPI positive E2E.
+
+### Target Debian host — documentation baseline found
+
+- The project continuity record identifies `SRV-DEB-05`, Debian 13, working root `/home/aiops`. This resolves the previously open target-host question at the documentation level; it is not a live host confirmation.
+- The latest supplied host inventory is dated 2026-11-08, not a fresh 2026-11-10 preflight. It records 78 containers (59 running, 18 exited, 1 created), 5 Compose projects, 18 networks and 59 volumes. Many containers have no healthcheck; some exited rollback/before-metrics containers were reported unhealthy. One metrics-cutover Compose source referenced a missing temporary /tmp file. Some container names do not match Compose project labels. Do not infer current state from this snapshot.
+- Observed projects: `aiops2-demo-observability`, `aiops2-e2e-v1`, `aiops2-metrics-cutover`, `aiops2-rebuild`, `aiops2-v27-qual`. Keep their distinct databases, volumes, qualification stacks and rollback artifacts intact until exact ownership and preservation are verified.
+- The inventory recorded GLPI `glpi/glpi:11.0.9` and MariaDB `11.4` images in the rebuild project, plus Core PostgreSQL 16. This is image-tag evidence from the dated snapshot, not proof of current live versions, successful connectivity or functional qualification.
+- The documented existing `aiops` user crontab has three per-minute flock-guarded jobs (deployment poller, reporter, publisher) and a 10-minute FS watcher. The preferred inventory/reporting path is the existing reporter → publisher. Do not create another cron, duplicate inventory agent, or invoke/modify the deployment poller. Its ability to execute approved deployment scripts makes it a separate deployment control plane.
+- The reporter does not collect image digests, Compose labels, source commits, mounts, or feature/test evidence. The deployment plan therefore requires a new read-only capture to enrich evidence, but it must be designed as a reviewed extension of the existing reporter and must preserve lock behavior, redaction and least privilege.
+- The supplied inventory explicitly says the root crontab was not inspected, report generation/publication success was not proven, and no application APIs/databases were queried. Exact 48-hour runtime chronology remains UNKNOWN.
+
+### Operational access limitation
+
+No SSH, shell, Docker, or Debian host connector is available in this session. No live command has been run on SRV-DEB-05; no current git status, container digest, Compose hash, DB backup, restore test, cron receipt or health endpoint has been observed. The next on-host step must be a read-only preflight executed by an authorized operator or an approved host connector, with output sanitized before sharing.
+
+### Updated decision
+
+- Commit-scope audit: substantially completed at message-category and diff-path level; independent security review remains required.
+- Exact-head CI: PASS (#8556, 3/3).
+- Target host: documented as SRV-DEB-05 / Debian 13 / /home/aiops; current live state unverified.
+- Merge: still HOLD pending independent review and isolated authenticated positive E2E.
+- Debian: HOLD pending fresh preservation inventory, verified backups/restores, current health and rollback readiness.
+- No migration, restart, deployment, GLPI write, Copilot activation or HITL execution is authorized by this plan.
