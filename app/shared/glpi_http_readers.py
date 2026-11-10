@@ -4,6 +4,7 @@ No default endpoints, tokens, network calls or tenant authority. Deployment
 must provide trusted service endpoints, per-request server ACL and credentials.
 These readers return raw JSON only; the signed-xref comparison remains required.
 """
+import re
 from collections.abc import Callable
 from urllib.parse import quote, urlsplit
 
@@ -56,9 +57,8 @@ def make_core_glpi_readers(
 
     def read_core_raw(*, actor, tenant_id, run_id):
         require_scope(actor, tenant_id)
-        if (not isinstance(run_id, str) or not run_id.startswith("RUN-")
-                or not run_id.isascii() or not run_id[4:].isalnum()
-                or len(run_id) > 68):
+        if (not isinstance(run_id, str)
+                or not re.fullmatch(r"RUN-[A-Z0-9]{8,64}", run_id)):
             raise GLPIHTTPReadBlocked("invalid_run_id")
         if authorize_read(actor=actor, tenant_id=tenant_id,
                           resource="core_run", resource_id=run_id) is not True:
