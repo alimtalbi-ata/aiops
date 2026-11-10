@@ -33,7 +33,7 @@ export function renderOperationalState(root,state,{details='',retry=null}={}) {
  root.replaceChildren(section);return section;
 }
 /** Latest-only reader: also fences sources that ignore AbortSignal. */
-export function createLatestReader(read,publish){
+export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
  if(typeof read!=='function'||typeof publish!=='function')throw new TypeError('read/publish required');
  let generation=0,controller=null;
  return {
@@ -46,7 +46,7 @@ export function createLatestReader(read,publish){
    try{
     const result=await read(query,{signal});
     if(id!==generation||signal.aborted)return;
-    publish({state:'READY',result});
+    // A transport success is not an evidence success. The server must have\n    // already enforced actor/tenant scope; this UI only refuses to display\n    // an unqualified projection as READY. Never authorize in the browser.\n    const scoped=result && result.scope_verified===true && result.authorization_source==='server';\n    const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now()}) : 'UNKNOWN';\n    publish({state,result:state==='READY'||state==='EMPTY'?result:null});
    }catch(error){
     if(id!==generation||signal.aborted)return;
     publish({state:'ERROR',error});
