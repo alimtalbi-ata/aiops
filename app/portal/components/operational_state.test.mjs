@@ -132,3 +132,35 @@ test('transport error with timeout-like message never reveals sensitive details'
  assert.deepEqual(events.at(-1),{state:'ERROR',error_code:'READ_FAILED',result:null});
  assert.equal(JSON.stringify(events).includes('secret-tenant-token'),false);
 });
+
+
+test('latest reader enforces bounded source-specific freshness without promoting stale data',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>({records:[{id:'run-1'}],observed_at:fresh,scope_verified:true,authorization_source:'server'}),event=>events.push(event),{now:()=>now,maxAgeMs:30000});
+ await reader.load('runs');
+ assert.deepEqual(events,[{state:'LOADING'},{state:'UNKNOWN',result:null}]);
+});
+
+test('latest reader accepts qualified evidence within a configured freshness budget',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>({records:[{id:'run-1'}],observed_at:fresh,scope_verified:true,authorization_source:'server'}),event=>events.push(event),{now:()=>now,maxAgeMs:60000});
+ await reader.load('runs');
+ assert.deepEqual(events.map(e=>e.state),['LOADING','READY']);
+ assert.equal(events[1].result.records[0].id,'run-1');
+});
+
+test('invalid freshness budgets fail before any network read or UI publication',()=>{
+ let reads=0,publishes=0;
+ for(const maxAgeMs of [0,-1,1.5,NaN,Infinity,86400001,'60000',null]){
+  assert.throws(()=>createLatestReader(()=>{reads++},()=>{publishes++},{maxAgeMs}),RangeError);
+ }
+ assert.equal(reads,0);
+ assert.equal(publishes,0);
+});
+
+test('tight freshness budget cannot override missing server authorization',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>({records:[{id:'cross-tenant'}],observed_at:fresh,scope_verified:true,authorization_source:'browser'}),e=>events.push(e),{now:()=>now,maxAgeMs:60000});
+ await reader.load('evidence');
+ assert.deepEqual(events.at(-1),{state:'UNKNOWN',result:null});
+});
