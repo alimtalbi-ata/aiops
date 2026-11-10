@@ -478,3 +478,8 @@ def policy_story():
         '<a href="/policy-control">Policy Control Center (état réel si disponible)</a></p>')
     return shell("/demo-studio","ACME — Freeze Button Story",
         "Démonstration guidée des interactions humaines et de l'autonomie contrôlée.",body)
+
+# ACME-TEST SIMULATED_ONLY readback, isolated from native GLPI and human ALLOW.
+# Self-contained router: stable does not contain portal.noc_runtime.
+from portal.acme_sim_glpi import router as acme_sim_glpi_router
+app.include_router(acme_sim_glpi_router)
