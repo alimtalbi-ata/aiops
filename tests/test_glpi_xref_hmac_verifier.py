@@ -98,6 +98,17 @@ class HmacXrefTests(unittest.TestCase):
         self.assertEqual(self.acl_calls, [])
         self.assertEqual(self.seen, set())
 
+    def test_missing_signed_identity_rejected_before_acl_and_nonce(self):
+        for field in ("glpi_instance_id", "glpi_entity_id",
+                      "incident_id", "run_id"):
+            with self.subTest(field=field):
+                original = self.claims.pop(field)
+                with self.assertRaises(XrefSignatureRejected):
+                    self.invoke()
+                self.claims[field] = original
+        self.assertEqual(self.acl_calls, [])
+        self.assertEqual(self.seen, set())
+
     def test_unsigned_or_short_secret_rejected(self):
         with self.assertRaises(XrefSignatureRejected):
             self.invoke(secret=b"short")
