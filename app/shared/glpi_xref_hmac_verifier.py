@@ -89,7 +89,7 @@ def verify_hmac_xref_event(
     # Reject malformed signed identities before ACL or durable nonce consumption.
     if (not re.fullmatch(r"RUN-[A-Z0-9]{8,64}", claims["run_id"])
             or not re.fullmatch(r"INC-[A-Za-z0-9_-]{4,128}", claims["incident_id"])
-            or not re.fullmatch(r"[0-9]{1,18}", claims["glpi_entity_id"])
+            or not re.fullmatch(r"(?:0|[1-9][0-9]{0,17})", claims["glpi_entity_id"])
             or not claims["glpi_instance_id"].strip()
             or len(claims["glpi_instance_id"]) > 128
             or any(ord(ch) < 32 or ord(ch) == 127
