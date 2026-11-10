@@ -82,6 +82,7 @@ class TransportTests(unittest.TestCase):
 
     def test_invalid_trusted_origins_rejected_at_construction(self):
         for origin in ("https://core.internal/", "https://core.internal:0",
+                   "https://core.internal" + chr(127),
                        "https://" + "a" * 510 + ".internal"):
             with self.subTest(origin=origin), self.assertRaises(ValueError):
                 make_json_get(get_token=lambda **kw: "token",
