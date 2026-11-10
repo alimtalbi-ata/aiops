@@ -43,6 +43,9 @@ def authorize_existing_ticket_update(core, glpi):
         raise ValueError("invalid_core_identity")
     if not _TICKET.fullmatch(core["ticket_id"]):
         raise ValueError("invalid_ticket_id")
-    if core.get("association_count") != 1 or glpi.get("matching_ticket_count") != 1:
+    if (type(core.get("association_count")) is not int
+            or type(glpi.get("matching_ticket_count")) is not int
+            or core["association_count"] != 1
+            or glpi["matching_ticket_count"] != 1):
         raise ValueError("ambiguous_association")
     return {field: core[field] for field in fields}
