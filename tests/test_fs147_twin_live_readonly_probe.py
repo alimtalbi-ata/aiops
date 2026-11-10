@@ -76,6 +76,18 @@ class LiveProbeContract(unittest.TestCase):
         with self.assertRaisesRegex(IsolationError, "cross-namespace"):
             self.run_probe(data)
 
+    def test_conflicting_scenario_namespace_must_hold(self):
+        data = fixtures()
+        data["/api/twin/scenario/RUN-FS/facts"]["namespace"] = "san"
+        with self.assertRaisesRegex(IsolationError, "cross-namespace scenario provenance"):
+            self.run_probe(data)
+
+    def test_conflicting_fact_namespace_must_hold(self):
+        data = fixtures()
+        data["/api/twin/scenario/RUN-SAN/facts"]["facts"][0]["namespace"] = "lab-fs147"
+        with self.assertRaisesRegex(IsolationError, "cross-namespace fact provenance"):
+            self.run_probe(data)
+
     def test_cross_namespace_dependency_must_hold(self):
         data = fixtures()
         data["/api/twin/graph"]["edges"][0]["target_id"] = "SAN-NODE"
