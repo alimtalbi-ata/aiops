@@ -184,7 +184,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or ("effect" in decision and decision["effect"] != "NO_EFFECT")
                 or ("action_executed" in decision and decision["action_executed"] is not False)
                 or ("remediation_executed" in decision and decision["remediation_executed"] is not False)
-                or ("ticket_transition" in decision and decision["ticket_transition"] is not None)):
+                or ("ticket_transition" in decision and decision["ticket_transition"] is not None)
+                or _claims_side_effect(decision)):
             return _blocked("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.
