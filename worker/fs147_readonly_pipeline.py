@@ -161,6 +161,14 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("ANALYST_PROVENANCE", steps)
         if _claims_side_effect(analysis):
             return _blocked("ANALYST_SIDE_EFFECT", steps)
+        # Findings alone do not override an explicit UNKNOWN/failed Analyst verdict.
+        # Missing optional verdict metadata remains compatible with older adapters.
+        if (("state" in analysis and analysis["state"] not in ("PASS", "COMPLETE"))
+                or ("validated" in analysis and analysis["validated"] is not True)
+                or ("missing_information" in analysis
+                    and (not isinstance(analysis["missing_information"], list)
+                         or bool(analysis["missing_information"])))):
+            return _blocked("INSUFFICIENT_ANALYSIS", steps)
         if (not isinstance(analysis.get("findings"), list)
                 or not analysis["findings"]
                 or len(analysis["findings"]) > 64
