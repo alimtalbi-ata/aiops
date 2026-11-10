@@ -145,6 +145,22 @@ class SessionTests(unittest.TestCase):
         self.assertEqual([name for name, _ in calls],
                          ["initSession", "Ticket/201", "killSession"])
 
+    def test_json_content_type_must_match_exact_media_type_and_close_session(self):
+        calls = []
+        original = Response.headers
+        try:
+            Response.headers = {"Content-Type": "application/jsonp"}
+            with self.assertRaises(GLPISessionReadBlocked):
+                self.read(self.make(calls))
+            self.assertEqual([name for name, _ in calls], ["initSession"])
+            Response.headers = {"Content-Type": "application/json; charset=utf-8"}
+            calls.clear()
+            self.assertEqual(self.read(self.make(calls))["id"], 201)
+            self.assertEqual([name for name, _ in calls],
+                             ["initSession", "Ticket/201", "killSession"])
+        finally:
+            Response.headers = original
+
     def test_invalid_scope_rejected_before_credential_callbacks(self):
         calls = []
         credentials = []
