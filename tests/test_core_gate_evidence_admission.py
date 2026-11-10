@@ -154,3 +154,23 @@ def test_gate_canonical_stage_still_accepts_unknown(fixture_gate):
     assert result["stage"] == "POLICY"
     assert result["state"] == "UNKNOWN"
     assert len(cursor.writes) == 1
+
+
+@pytest.mark.parametrize("field,bad_id", [
+    ("evidence_ids", " EV-1"),
+    ("evidence_ids", "EV-1 "),
+    ("evidence_ids", "EV-1\\n"),
+    ("evidence_ids", "EV-1\\x00"),
+    ("required_evidence", " EV-1"),
+    ("required_evidence", "EV-1\\t"),
+    ("required_evidence", "EV-1\\x7f"),
+])
+def test_gate_rejects_noncanonical_evidence_identity_before_write(fixture_gate, field, bad_id):
+    gate, cursor = fixture_gate
+    payload = {"stage": "POLICY", "state": "UNKNOWN",
+               "required_evidence": [], "evidence_ids": []}
+    payload[field] = [bad_id]
+    with pytest.raises(HTTPException) as exc:
+        gate("RUN-1", payload, authorization="token")
+    assert exc.value.status_code == 422
+    assert cursor.writes == []
