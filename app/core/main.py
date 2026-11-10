@@ -51,9 +51,9 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     iid='INC-'+x.external_id
     with db() as c:
-        saved=c.execute('insert into aiops.incidents(incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic,payload) values(%s,%s,%s,%s,\'OPEN\',%s,now(),%s,%s,%s) on conflict(external_id) do update set title=excluded.title,severity=excluded.severity,service_id=excluded.service_id,payload=excluded.payload where aiops.incidents.source is not distinct from excluded.source and aiops.incidents.synthetic is not distinct from excluded.synthetic returning incident_id',(iid,x.external_id,x.title,x.severity,x.service_id,x.source,x.synthetic,json.dumps(x.payload))).fetchone()
+        saved=c.execute('insert into aiops.incidents(incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic,payload) values(%s,%s,%s,%s,\'OPEN\',%s,now(),%s,%s,%s) on conflict(external_id) do update set title=excluded.title,severity=excluded.severity,service_id=excluded.service_id,payload=excluded.payload where aiops.incidents.source is not distinct from excluded.source and aiops.incidents.synthetic is not distinct from excluded.synthetic returning incident_id,severity,state,synthetic',(iid,x.external_id,x.title,x.severity,x.service_id,x.source,x.synthetic,json.dumps(x.payload))).fetchone()
         if not saved: raise HTTPException(409,'incident external_id belongs to a different source or synthetic identity')
-    return {'incident_id':saved[0],'severity':x.severity,'state':'OPEN','synthetic':x.synthetic}
+    return {'incident_id':saved[0],'severity':saved[1],'state':saved[2],'synthetic':saved[3]}
 @app.post('/api/runs')
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
