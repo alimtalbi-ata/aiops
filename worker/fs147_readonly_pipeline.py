@@ -6,6 +6,7 @@ grant access: each adapter MUST enforce tenant/actor ACL and use its own credent
 from dataclasses import dataclass
 from typing import Callable, Mapping
 import hashlib
+from copy import deepcopy
 import json
 import math
 from datetime import datetime, timezone, timedelta
@@ -154,7 +155,7 @@ def execute(request: FS147Request, *, stop_auto: bool,
         if not timedelta(seconds=-30) <= age <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
         steps.append("OBSERVE")
-        analysis = analyst(request, observation)
+        analysis = analyst(request, deepcopy(observation))
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
             return _blocked("ANALYST_SCOPE", steps)
         if not _provenance_consistent(analysis, observation):
@@ -184,7 +185,7 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_analyst <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
-        critique = critic(request, observation, analysis)
+        critique = critic(request, deepcopy(observation), deepcopy(analysis))
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
             return _blocked("CRITIC_SCOPE", steps)
         if not _provenance_consistent(critique, observation):
@@ -206,7 +207,7 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_at_policy <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
-        decision = policy(request, observation, analysis, critique)
+        decision = policy(request, deepcopy(observation), deepcopy(analysis), deepcopy(critique))
         if not _matching(decision, request) or decision.get("evidence_id") != observation["evidence_id"]:
             return _blocked("POLICY_SCOPE", steps)
         if not _provenance_consistent(decision, observation):
