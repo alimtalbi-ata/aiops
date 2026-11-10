@@ -59,6 +59,26 @@ def _claims_side_effect(payload):
             or ("resolved" in payload and payload["resolved"] is not False)
             or ("effect" in payload and payload["effect"] != "NO_EFFECT"))
 
+def _provenance_consistent(stage, observation):
+    """Optional provenance echoed by remote stages must match bridge evidence.
+
+    Stage-specific output remains free to omit these keys for compatibility.
+    A stage must never replace the source, measurement time or target identity
+    while retaining the original evidence_id.
+    """
+    for field in ("source", "collected_at", "filesystem", "commands", "read_only",
+                  "used_percent"):
+        if field in stage:
+            value = stage[field]
+            original = observation[field]
+            if field == "used_percent":
+                if type(value) not in (int, float) or not math.isfinite(value):
+                    return False
+            if type(value) is not type(original) or value != original:
+                return False
+    return True
+
+
 def execute(request: FS147Request, *, stop_auto: bool,
             observe: Callable, analyst: Callable, critic: Callable,
             policy: Callable, claim_once: Callable, now: Callable = lambda: datetime.now(timezone.utc)):
@@ -137,6 +157,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
         analysis = analyst(request, observation)
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
             return _blocked("ANALYST_SCOPE", steps)
+        if not _provenance_consistent(analysis, observation):
+            return _blocked("ANALYST_PROVENANCE", steps)
         if _claims_side_effect(analysis):
             return _blocked("ANALYST_SIDE_EFFECT", steps)
         if (not isinstance(analysis.get("findings"), list)
@@ -157,6 +179,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
         critique = critic(request, observation, analysis)
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
             return _blocked("CRITIC_SCOPE", steps)
+        if not _provenance_consistent(critique, observation):
+            return _blocked("CRITIC_PROVENANCE", steps)
         if _claims_side_effect(critique):
             return _blocked("CRITIC_SIDE_EFFECT", steps)
         if (critique.get("state") != "PASS"
@@ -177,6 +201,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
         decision = policy(request, observation, analysis, critique)
         if not _matching(decision, request) or decision.get("evidence_id") != observation["evidence_id"]:
             return _blocked("POLICY_SCOPE", steps)
+        if not _provenance_consistent(decision, observation):
+            return _blocked("POLICY_PROVENANCE", steps)
         steps.append("POLICY")
         if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
                 # Explicit execution metadata must agree with a read-only simulation.
