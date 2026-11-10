@@ -67,6 +67,31 @@ class StageEffectsTests(unittest.TestCase):
                                  ("BLOCKED", "CRITIC_SIDE_EFFECT", "NO_EFFECT"))
                 self.assertEqual(self.calls, ["observe", "analyst", "critic"])
 
+    def test_policy_mutation_claim_blocks_and_consumes_durable_claim(self):
+        for value in (True, 1, "yes", None):
+            with self.subTest(value=value):
+                self.calls = []
+                claims = []
+                def policy(*args):
+                    return dict(self.policy(*args), mutation_performed=value)
+                result = execute(self.req, stop_auto=False, observe=self.observe,
+                                 analyst=self.analyst, critic=self.critic,
+                                 policy=policy, claim_once=lambda key: claims.append(key) or True,
+                                 now=self.clock)
+                self.assertEqual((result["status"], result["reason"], result["effect"]),
+                                 ("BLOCKED", "POLICY_REFUSED", "NO_EFFECT"))
+                self.assertEqual(self.calls, ["observe", "analyst", "critic", "policy"])
+                self.assertEqual(len(claims), 1)
+
+    def test_policy_explicit_no_mutation_remains_readonly(self):
+        def policy(*args):
+            return dict(self.policy(*args), mutation_performed=False)
+        result = execute(self.req, stop_auto=False, observe=self.observe,
+                         analyst=self.analyst, critic=self.critic,
+                         policy=policy, claim_once=lambda _: True, now=self.clock)
+        self.assertEqual(result["status"], "NO_EFFECT")
+        self.assertEqual(result["effect"], "NO_EFFECT")
+
     def test_clean_readonly_path_and_duplicate_claim(self):
         result = self.run_case()
         self.assertEqual(result["status"], "NO_EFFECT")
