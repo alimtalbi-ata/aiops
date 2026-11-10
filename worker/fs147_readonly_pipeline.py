@@ -52,7 +52,9 @@ def _claims_side_effect(payload):
     """Reject explicit mutation/execution claims from any read-only stage."""
     return (any(field in payload and payload[field] is not False
                 for field in ("action_executed", "remediation_executed",
-                              "mutation_performed"))
+                              "mutation_performed", "approval_granted",
+                              "approval_consumed", "hitl_approved",
+                              "action_dispatched", "ticket_updated"))
             or ("ticket_transition" in payload
                 and payload["ticket_transition"] is not None)
             or ("dispatch_allowed" in payload
