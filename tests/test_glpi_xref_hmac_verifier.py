@@ -109,6 +109,21 @@ class HmacXrefTests(unittest.TestCase):
         self.assertEqual(self.acl_calls, [])
         self.assertEqual(self.seen, set())
 
+    def test_malformed_signed_identity_never_consumes_nonce(self):
+        for field, value in (("run_id", "RUN-../../bad"),
+                             ("incident_id", "INC-?bad"),
+                             ("glpi_entity_id", "-1"),
+                             ("glpi_instance_id", "ci" + chr(10) + "other")):
+            with self.subTest(field=field):
+                original = self.claims[field]
+                self.claims[field] = value
+                with self.assertRaisesRegex(XrefSignatureRejected,
+                                            "signed_identity_invalid"):
+                    self.invoke()
+                self.claims[field] = original
+        self.assertEqual(self.acl_calls, [])
+        self.assertEqual(self.seen, set())
+
     def test_unsigned_or_short_secret_rejected(self):
         with self.assertRaises(XrefSignatureRejected):
             self.invoke(secret=b"short")
