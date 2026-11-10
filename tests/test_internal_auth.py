@@ -80,15 +80,35 @@ class BoundaryAuthTests(unittest.TestCase):
             self.assertEqual(exc.exception.status_code, 422)
             self.assertEqual(cursor.execute.call_count, 1)
 
-    def test_core_demo_policy_gate_pass_simulate_keeps_existing_contract(self):
+    def test_core_demo_policy_gate_pass_simulate_requires_evidence(self):
         with patch.object(CORE, 'db') as db:
             cursor=db.return_value.__enter__.return_value
             cursor.execute.return_value.fetchone.return_value=('DEMO',)
+            with self.assertRaises(HTTPException) as exc:
+                CORE.gate('RUN-DEMO', {'stage':'POLICY','state':'PASS',
+                                      'decision':'SIMULATE','evidence_ids':[]},
+                          authorization='Bearer test-only-internal-token')
+            self.assertEqual(exc.exception.status_code, 409)
+            self.assertEqual(cursor.execute.call_count, 1)
+
+    def test_core_demo_policy_gate_pass_simulate_with_persisted_evidence(self):
+        with patch.object(CORE, 'db') as db:
+            cursor=db.return_value.__enter__.return_value
+            cursor.execute.return_value.fetchone.side_effect=[('DEMO',), (1,)]
             result=CORE.gate('RUN-DEMO', {'stage':'POLICY','state':'PASS',
-                                          'decision':'SIMULATE','evidence_ids':[]},
+                                          'decision':'SIMULATE',
+                                          'required_evidence':['observation'],
+                                          'evidence_ids':['EV-DEMO']},
                              authorization='Bearer test-only-internal-token')
             self.assertEqual(result['state'], 'PASS')
-            self.assertEqual(cursor.execute.call_count, 2)
+            self.assertEqual(cursor.execute.call_count, 3)
+            evidence_query=cursor.execute.call_args_list[1]
+            self.assertIn('select count(*) from aiops.evidence', evidence_query.args[0])
+            self.assertEqual(evidence_query.args[1], (['EV-DEMO'],))
+            gate_query=cursor.execute.call_args_list[2]
+            self.assertIn('insert into aiops.gates', gate_query.args[0])
+            self.assertEqual(gate_query.args[1][4:7],
+                             ('["observation"]', '["EV-DEMO"]', 'SIMULATE'))
 
     def test_twin_all_topology_reads_deny_anonymous_before_db(self):
         routes = [
