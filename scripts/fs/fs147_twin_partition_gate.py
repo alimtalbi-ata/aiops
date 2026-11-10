@@ -65,6 +65,8 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
         raise IsolationError("SAN RUN does not match expected Core RUN")
     seen = set()
     for response, namespace in ((fs_facts, fs_namespace), (san_facts, san_namespace)):
+        if "namespace" in response and response["namespace"] != namespace:
+            raise IsolationError("cross-namespace scenario provenance")
         if response.get("synthetic") is not True:
             raise IsolationError("unmarked scenario response")
         if not response["facts"]:
@@ -72,6 +74,8 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
         for fact in response["facts"]:
             if not isinstance(fact.get("fact_id"), str) or not fact["fact_id"].strip():
                 raise IsolationError("missing fact identity")
+            if "namespace" in fact and fact["namespace"] != namespace:
+                raise IsolationError("cross-namespace fact provenance")
             if fact["fact_id"] in seen:
                 raise IsolationError("fact ID reused across RUNs")
             seen.add(fact["fact_id"])
