@@ -1,33 +1,24 @@
-# DNS-free isolated deployment: architecture gate (issue #553)
+# Isolated Debian deployment: DNS policy (corrected)
 
-Status: **DESIGN ONLY / RELEASE HOLD**. Do not run the installer on Debian 10.79.94.202.
+**Authoritative scope clarification:** Docker embedded DNS and service-name resolution **between applications on this server are allowed**. Only DNS resolution to resolvers **outside the server** is prohibited.
 
-## Known dependencies in `compose.isolated.yml`
+## Allowed
+- Compose service names such as `aiops2-postgres`, `aiops2-core`, `aiops2-temporal` and the Docker embedded resolver (typically `127.0.0.11`) for local inter-container discovery.
+- Internal service-to-service traffic on dedicated Docker networks.
 
-| Client | Destination | Current service-name reference |
-| --- | --- | --- |
-| core, twin, evidence | PostgreSQL | `aiops2-postgres:5432` |
-| core | policy, worker | `aiops2-policy:813`, `aiops2-worker:815` |
-| copilot | core, twin, evidence | `aiops2-core:810`, `aiops2-twin:811`, `aiops2-evidence:812` |
-| worker | core, evidence, policy, twin, Temporal | service names in HTTP URLs and `TEMPORAL_ADDRESS` |
-| simulator | core | `aiops2-core:810` |
-| portal | core, copilot, twin | service names in HTTP URLs |
-| Temporal | Temporal PostgreSQL | `POSTGRES_SEEDS=aiops2-temporal-postgres` |
-| Temporal UI | Temporal | `TEMPORAL_ADDRESS=aiops2-temporal:7233` |
-| GLPI | MariaDB | `GLPI_DB_HOST=aiops2-glpi-db` |
-| n8n | PostgreSQL | `DB_POSTGRESDB_HOST=aiops2-postgres` |
+## Prohibited
+- DNS queries forwarded to resolvers beyond the server, whether from containers or the host during the isolated workflow.
+- Internet-dependent image pulls, remote package downloads or other network dependencies during installation and qualification.
 
-Additional service discovery in mounted Prometheus, Grafana, Alertmanager, application code and image entrypoints is **not yet audited**. No DNS-free claim can be made from Compose alone.
+## Acceptance criteria
+1. Verify the full 18-service network graph, especially n8n → PostgreSQL and simulator → core, without requiring static IPv4 addresses.
+2. Verify all six published ports bind only to host loopback; preserve internal network segmentation.
+3. Audit host Docker daemon DNS configuration and upstream resolver behavior. **An internal Docker DNS query can be forwarded upstream on cache misses**: do not assume `127.0.0.11` alone guarantees no external DNS.
+4. Use a controlled isolated test environment to observe outbound DNS traffic on UDP/TCP 53 (and review encrypted DNS / proxy routes where applicable). Confirm that only locally resolvable service names are needed.
+5. Validate no external egress, image pulls or builds during deployment, and all image identities preloaded. Keep security P0 #535, independent review, backup/restore rehearsal and explicit authorization as release gates.
+6. Do not access Debian `10.79.94.202` until release gates pass.
 
-## Required implementation (not yet approved)
+## Historical note
+Earlier documents incorrectly interpreted the requirement as forbidding Docker internal DNS and mandating static IPs. That interpretation was withdrawn on user clarification. The standalone static network-plan validator, if retained, is **optional and not a deployment prerequisite**.
 
-1. Choose non-overlapping, dedicated IPv4 subnets for each of the seven networks **only after** comparing them with the target host's routes, Docker address pools, and all existing Docker networks. Never assume a subnet is free. Fail closed on overlap or missing inspection data.
-2. Assign a deterministic, unique `ipv4_address` for every service/network attachment. Use the destination address on a network shared with each caller. Verify all 18 containers and every declared dependency.
-3. Replace every service-name reference in runtime environment and mounted configuration with an IP literal (or independently reviewed non-DNS mechanism). Validate TLS certificate identity and application-specific hostname assumptions; do not weaken certificate verification.
-4. Confirm whether any application or third-party image performs DNS lookups outside the manifest. DNS-free means **no resolver queries**, including Docker's embedded resolver, not merely no external DNS.
-5. Test rendered Compose config, static graph reachability, route/subnet collisions, runtime traffic and DNS-query absence. Ensure offline image loading and image identity are validated before any deployment.
-6. Retain the unconditional installer HOLD until all acceptance criteria, P0 #535, independent review, backup/restore rehearsal and explicit change approval pass.
-
-## Current safeguard
-
-`deploy/install-isolated.sh` intentionally exits with `HOLD|dns_free_architecture_not_qualified|issue_553` before creating or modifying anything. This is a fail-closed release guard, not a finished installation path.
+**Status: RELEASE HOLD for outstanding qualification and security gates, not for use of Docker internal DNS.**
