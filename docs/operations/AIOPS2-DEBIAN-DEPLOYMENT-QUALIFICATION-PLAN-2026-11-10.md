@@ -38,6 +38,36 @@ The latest committed SRV-DEB-05 inventory is dated 2026-11-08. It records 5 Comp
 6. Compose has fixed `container_name: aiops2-...` names. A second candidate Compose project on the same Docker daemon can collide even with a different Compose project name. Use a separate Debian VM/host for staging, or first engineer and qualify a complete namespacing change. Do not attempt parallel staging on the existing host as-is.
 7. `deploy/init-env.sh` intentionally leaves an existing `.env` unchanged. It does not rotate secrets. Secret changes require a separate coordinated consumer/database plan and rollback.
 
+## 1A. Network addressing constraint — IP only, no DNS
+
+**Target Debian IPv4:** `10.79.94.202`.
+
+This is a mandatory constraint for DEV/TEST/QUAL connectivity checks and any separately approved Debian deployment:
+- Use the literal IPv4 address `10.79.94.202` in URLs, SSH destinations and test configuration.
+- Do not require, configure, query or modify DNS records; do not introduce hostnames, FQDNs, reverse-DNS dependencies, or `/etc/hosts` entries.
+- Do not use a hostname in HTTP Host headers or TLS SNI as a hidden dependency. If HTTPS is required, the certificate must contain the IP address as an IP Subject Alternative Name and chain to a trusted CA; never disable certificate validation to work around a mismatch.
+- Use explicit IP-based health checks and report the target IP and port in test receipts.
+- Before any connection, confirm routing and firewall reachability from the approved operator/staging network. No network probe or SSH session to the host has been performed as part of this planning change.
+
+Expected Compose host-port endpoints, subject to fresh read-only confirmation on the server:
+| Service | Direct-IP URL |
+|---|---|
+| Portal | `http://10.79.94.202:17777` |
+| GLPI | `http://10.79.94.202:8080` |
+| n8n | `http://10.79.94.202:5678` |
+| Prometheus | `http://10.79.94.202:9090` |
+| Grafana | `http://10.79.94.202:3000` |
+| Alertmanager | `http://10.79.94.202:9093` |
+
+These are Compose-published port expectations, not evidence that the services are currently listening or reachable. Do not expose these ports to wider networks; preserve existing firewall boundaries and verify each binding before use.
+
+Example operator syntax (not executed):
+```bash
+ssh <approved-user>@10.79.94.202
+curl --connect-timeout 3 --max-time 10 http://10.79.94.202:17777/health
+```
+Use the actual documented health path for each service; do not assume every service exposes `/health`. Do not add DNS fallbacks.
+
 ## 2. Promotion model and stop/go gates
 
 Promotion order: **DEV source → CI → isolated integration/qualification → Debian staging → controlled production change window → post-deploy verification**. LIVE execution is a separate approval, not part of installation.
