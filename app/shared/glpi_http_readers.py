@@ -41,9 +41,17 @@ def make_core_glpi_readers(
     if not all(callable(fn) for fn in (core_get, glpi_get, authorize_read)):
         raise ValueError("authenticated_read_dependencies_missing")
 
+    def require_scope(actor, tenant_id):
+        if (not isinstance(actor, str) or not actor.strip()
+                or len(actor) > 256 or not isinstance(tenant_id, str)
+                or not tenant_id.strip() or len(tenant_id) > 128):
+            raise GLPIHTTPReadBlocked("missing_actor_tenant_scope")
+
     def read_core_raw(*, actor, tenant_id, run_id):
+        require_scope(actor, tenant_id)
         if (not isinstance(run_id, str) or not run_id.startswith("RUN-")
-                or not run_id[4:].isalnum() or len(run_id) > 68):
+                or not run_id.isascii() or not run_id[4:].isalnum()
+                or len(run_id) > 68):
             raise GLPIHTTPReadBlocked("invalid_run_id")
         if authorize_read(actor=actor, tenant_id=tenant_id,
                           resource="core_run", resource_id=run_id) is not True:
@@ -52,11 +60,12 @@ def make_core_glpi_readers(
                         actor=actor, tenant_id=tenant_id)
 
     def read_glpi_raw(*, actor, tenant_id, ticket_id, glpi_instance_id):
+        require_scope(actor, tenant_id)
         if (not isinstance(ticket_id, str) or not ticket_id.isascii()
                 or not ticket_id.isdecimal() or not 1 <= len(ticket_id) <= 18
                 or ticket_id.startswith("0")
                 or not isinstance(glpi_instance_id, str)
-                or not glpi_instance_id or len(glpi_instance_id) > 128):
+                or not glpi_instance_id.strip() or len(glpi_instance_id) > 128):
             raise GLPIHTTPReadBlocked("invalid_glpi_identity")
         if authorize_read(actor=actor, tenant_id=tenant_id,
                           resource="glpi_ticket", resource_id=ticket_id,
