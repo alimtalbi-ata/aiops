@@ -71,9 +71,12 @@ class FullChainTests(unittest.TestCase):
         def read_acl(**kwargs):
             self.calls.append("read_acl:" + kwargs["resource"])
             return read_allowed
-        def token(**kwargs):
-            self.calls.append("token")
-            return "server-credential"
+        def core_token(**kwargs):
+            self.calls.append("core_token")
+            return "core-only-credential"
+        def glpi_token(**kwargs):
+            self.calls.append("glpi_token")
+            return "glpi-only-credential"
         openers = [Opener(self.requests, core_incident),
                    Opener(self.requests, core_incident)]
         with patch("shared.glpi_http_json_transport.build_opener",
@@ -81,7 +84,7 @@ class FullChainTests(unittest.TestCase):
             return make_server_glpi_readonly_qualifier(
                 secret=self.secret, fetch_signed_event=fetch,
                 consume_nonce=nonce, authorize_actor=acl,
-                authorize_read=read_acl, core_token=token, glpi_token=token,
+                authorize_read=read_acl, core_token=core_token, glpi_token=glpi_token,
                 core_base_url="https://core.internal",
                 glpi_base_url="https://glpi.internal", clock=lambda: 1050)
 
@@ -95,16 +98,21 @@ class FullChainTests(unittest.TestCase):
         self.assertFalse(result["execution_allowed"])
         self.assertEqual(len(self.requests), 2)
         self.assertTrue(all(r.get_method() == "GET" for r in self.requests))
+        self.assertEqual(self.requests[0].get_header("Authorization"),
+                         "Bearer core-only-credential")
+        self.assertEqual(self.requests[1].get_header("Authorization"),
+                         "Bearer glpi-only-credential")
         self.assertEqual(self.calls, ["fetch", "xref_acl", "nonce",
-                                      "read_acl:core_run", "token",
-                                      "read_acl:glpi_ticket", "token"])
+                                      "read_acl:core_run", "core_token",
+                                      "read_acl:glpi_ticket", "glpi_token"])
 
     def test_denied_core_acl_never_fetches_upstream(self):
         with self.assertRaises(GLPIHmacQualificationBlocked):
             self.make(read_allowed=False)(
                 actor="operator", tenant_id="tenant-a", ticket_id="201")
         self.assertEqual(self.requests, [])
-        self.assertNotIn("token", self.calls)
+        self.assertNotIn("core_token", self.calls)
+        self.assertNotIn("glpi_token", self.calls)
 
     def test_mismatched_core_identity_fails_closed(self):
         with self.assertRaises(GLPIHmacQualificationBlocked):
