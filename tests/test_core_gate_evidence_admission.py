@@ -49,11 +49,11 @@ def fixture_gate():
 
 
 @pytest.mark.parametrize("payload,status", [
-    ({"state": "PASS"}, 409),
-    ({"state": "PASS", "required_evidence": ["EV-1"]}, 409),
-    ({"state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1", "EV-1"]}, 422),
-    ({"state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-2"]}, 409),
-    ({"state": "PASS", "required_evidence": "EV-1", "evidence_ids": ["EV-1"]}, 422),
+    ({"stage": "POLICY", "state": "PASS"}, 409),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"]}, 409),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1", "EV-1"]}, 422),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-2"]}, 409),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": "EV-1", "evidence_ids": ["EV-1"]}, 422),
 ])
 def test_gate_rejects_unverified_pass_without_write(fixture_gate, payload, status):
     gate, cursor = fixture_gate
@@ -84,7 +84,7 @@ def test_gate_missing_persisted_evidence_fails_closed(fixture_gate):
         return result
     cursor.execute = execute
     with pytest.raises(HTTPException) as error:
-        gate("RUN-1", {"state": "PASS", "required_evidence": ["EV-1"],
+        gate("RUN-1", {"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"],
                         "evidence_ids": ["EV-1"]}, authorization="token")
     assert error.value.status_code == 422
     assert not cursor.writes
@@ -107,3 +107,70 @@ def test_gate_upsert_reconciles_required_evidence_on_repeated_stage(fixture_gate
     assert first_params[4] == '["EV-1"]'
     assert second_params[4] == "[]"
     assert second_params[3] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("payload", [
+    {"state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+    {"stage": "", "state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+    {"stage": None, "state": "UNKNOWN"},
+    {"stage": "POLICY", "state": None},
+    {"stage": "POLICY", "state": "SUCCESS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1"]},
+])
+def test_gate_unknown_stage_or_state_cannot_write(fixture_gate, payload):
+    gate, cursor = fixture_gate
+    with pytest.raises(HTTPException) as exc:
+        gate("RUN-1", payload, authorization="token")
+    assert exc.value.status_code == 422
+    assert cursor.writes == []
+
+
+def test_gate_explicit_unknown_state_is_not_pass(fixture_gate):
+    gate, cursor = fixture_gate
+    result = gate("RUN-1", {"stage": "POLICY", "state": "UNKNOWN",
+                             "required_evidence": [], "evidence_ids": []},
+                  authorization="token")
+    assert result["state"] == "UNKNOWN"
+    assert cursor.writes[0][1][3] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("stage", [
+    " POLICY", "POLICY ", "POLICY\\n", "POLICY\\t", "POLICY\\x00", "POLICY\\x7f",
+])
+def test_gate_rejects_ambiguous_stage_alias_without_write(fixture_gate, stage):
+    gate, cursor = fixture_gate
+    with pytest.raises(HTTPException) as exc:
+        gate("RUN-1", {"stage": stage, "state": "UNKNOWN",
+                       "required_evidence": [], "evidence_ids": []},
+             authorization="token")
+    assert exc.value.status_code == 422
+    assert cursor.writes == []
+
+
+def test_gate_canonical_stage_still_accepts_unknown(fixture_gate):
+    gate, cursor = fixture_gate
+    result = gate("RUN-1", {"stage": "POLICY", "state": "UNKNOWN",
+                            "required_evidence": [], "evidence_ids": []},
+                  authorization="token")
+    assert result["stage"] == "POLICY"
+    assert result["state"] == "UNKNOWN"
+    assert len(cursor.writes) == 1
+
+
+@pytest.mark.parametrize("field,bad_id", [
+    ("evidence_ids", " EV-1"),
+    ("evidence_ids", "EV-1 "),
+    ("evidence_ids", "EV-1\\n"),
+    ("evidence_ids", "EV-1\\x00"),
+    ("required_evidence", " EV-1"),
+    ("required_evidence", "EV-1\\t"),
+    ("required_evidence", "EV-1\\x7f"),
+])
+def test_gate_rejects_noncanonical_evidence_identity_before_write(fixture_gate, field, bad_id):
+    gate, cursor = fixture_gate
+    payload = {"stage": "POLICY", "state": "UNKNOWN",
+               "required_evidence": [], "evidence_ids": []}
+    payload[field] = [bad_id]
+    with pytest.raises(HTTPException) as exc:
+        gate("RUN-1", payload, authorization="token")
+    assert exc.value.status_code == 422
+    assert cursor.writes == []

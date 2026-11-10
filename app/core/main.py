@@ -57,6 +57,16 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
 @app.post('/api/runs')
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Identity validation must precede the idempotency lock and every DB write.
+    # Whitespace aliases or control characters must not silently create runs.
+    for name, value in (('scenario_id', x.scenario_id), ('idempotency_key', x.idempotency_key)):
+        if (not isinstance(value, str) or not value.strip() or value != value.strip()
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)):
+            raise HTTPException(422, f'run {name} identity unknown')
+    if x.incident_id is not None and (not isinstance(x.incident_id, str)
+            or not x.incident_id.strip() or x.incident_id != x.incident_id.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in x.incident_id)):
+        raise HTTPException(422, 'run incident_id identity unknown')
     with db() as c:
         # Serialize first-time dispatches for the same key before checking existence.
         # A row lock cannot protect an absent row. The transaction-scoped advisory
@@ -147,8 +157,9 @@ def checkpoint(rid:str,x:dict,authorization:str|None=Header(default=None)):
         raise HTTPException(409, 'checkpoint has unverified workflow identity')
     stage = x.get('stage')
     version = x.get('version')
-    if not isinstance(stage, str) or not stage.strip():
-        raise HTTPException(422, 'checkpoint stage unknown')
+    if (not isinstance(stage, str) or not stage.strip() or stage != stage.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
+        raise HTTPException(422, 'checkpoint stage identity unknown')
     if type(version) is not int or version < 0:
         raise HTTPException(422, 'checkpoint version unknown')
     with db() as c:
@@ -209,6 +220,14 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         # Never forward unknown/NULL/corrupt modes to the Worker as synthetic.
         if row[1] not in ('DEMO', 'REPLAY', 'STORY'):
             raise HTTPException(422,'run execution mode unknown or unsupported')
+        # Legacy or externally corrupted persisted intent must not reach Worker,
+        # including through a previously stored execution receipt. RunIn only
+        # validates new requests; dispatch must validate the durable row too.
+        scenario_id = row[2]
+        if (not isinstance(scenario_id, str) or not scenario_id.strip()
+                or scenario_id != scenario_id.strip()
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in scenario_id)):
+            raise HTTPException(422, 'persisted run scenario identity unknown')
         # A completed dispatch may already have advanced the Run. Return its
         # durable receipt instead of issuing a second Worker start on retry.
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
@@ -256,13 +275,24 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
 @app.post('/api/runs/{rid}/gates')
 def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Reject malformed gate identities before touching persistence. A missing
+    # stage must never be stored under a shared UNKNOWN key across retries.
+    stage=x.get('stage')
+    state=x.get('state')
+    if (not isinstance(stage,str) or not stage.strip()
+            or stage != stage.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
+        raise HTTPException(422,'gate stage identity unknown')
+    if state not in ('PASS','FAIL','BLOCKED','UNKNOWN','NEEDS_HUMAN','PENDING','RUNNING'):
+        raise HTTPException(422,'gate state unknown')
     with db() as c:
         if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
         eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
         # A gate cannot claim PASS when its evidence contract is absent,
         # incomplete, duplicated or not independently persisted.
         if (not isinstance(eids,list) or not isinstance(required,list)
-                or any(not isinstance(v,str) or not v.strip() for v in eids+required)
+                or any(not isinstance(v,str) or not v.strip() or v != v.strip()
+                       or any(ord(ch) < 32 or ord(ch) == 127 for ch in v)
+                       for v in eids+required)
                 or len(eids)!=len(set(eids)) or len(required)!=len(set(required))):
             raise HTTPException(422,'gate evidence identity unknown or duplicated')
         if x.get('state')=='PASS' and (not required or not set(required).issubset(set(eids))):
