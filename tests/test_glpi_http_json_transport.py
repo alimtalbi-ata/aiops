@@ -92,11 +92,11 @@ class TransportTests(unittest.TestCase):
         for response in (Response(b'[]'), Response(b'{bad')):
             get, _ = self.create(response=response)
             with self.assertRaises(ReadTransportBlocked):
-                get(url="https://core.internal", actor="operator",
+                get(url="https://core.internal/api/runs/RUN-1", actor="operator",
                     tenant_id="tenant-a")
         get, _ = self.create(response=Response(b'x' * 2048), max_bytes=1024)
         with self.assertRaises(ReadTransportBlocked):
-            get(url="https://core.internal", actor="operator",
+            get(url="https://core.internal/api/runs/RUN-1", actor="operator",
                 tenant_id="tenant-a")
 
     def test_json_content_type_must_match_exact_media_type(self):
