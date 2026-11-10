@@ -49,11 +49,11 @@ def fixture_gate():
 
 
 @pytest.mark.parametrize("payload,status", [
-    ({"state": "PASS"}, 409),
-    ({"state": "PASS", "required_evidence": ["EV-1"]}, 409),
-    ({"state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1", "EV-1"]}, 422),
-    ({"state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-2"]}, 409),
-    ({"state": "PASS", "required_evidence": "EV-1", "evidence_ids": ["EV-1"]}, 422),
+    ({"stage": "POLICY", "state": "PASS"}, 409),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"]}, 409),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-1", "EV-1"]}, 422),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"], "evidence_ids": ["EV-2"]}, 409),
+    ({"stage": "POLICY", "state": "PASS", "required_evidence": "EV-1", "evidence_ids": ["EV-1"]}, 422),
 ])
 def test_gate_rejects_unverified_pass_without_write(fixture_gate, payload, status):
     gate, cursor = fixture_gate
@@ -84,7 +84,7 @@ def test_gate_missing_persisted_evidence_fails_closed(fixture_gate):
         return result
     cursor.execute = execute
     with pytest.raises(HTTPException) as error:
-        gate("RUN-1", {"state": "PASS", "required_evidence": ["EV-1"],
+        gate("RUN-1", {"stage": "POLICY", "state": "PASS", "required_evidence": ["EV-1"],
                         "evidence_ids": ["EV-1"]}, authorization="token")
     assert error.value.status_code == 422
     assert not cursor.writes
