@@ -52,7 +52,7 @@ jobs:
 
           files = subprocess.check_output(
               ["git", "ls-files", "-z", "*.json", "**/*.json"]
-          ).decode().split("\\0")
+          ).decode().split("\0")
           files = sorted({name for name in files if name and Path(name).is_file()})
           failures = []
           for name in files:
@@ -63,7 +63,7 @@ jobs:
                   failures.append(f"{name}: {exc}")
           print(f"JSON files checked: {len(files)}")
           if failures:
-              print("\\n".join(failures), file=sys.stderr)
+              print("\n".join(failures), file=sys.stderr)
               sys.exit(1)
           PY
 
@@ -91,7 +91,7 @@ jobs:
           raw = subprocess.check_output(
               ["git", "ls-files", "-z", "*.yaml", "*.yml", "**/*.yaml", "**/*.yml"]
           )
-          files = sorted({name for name in raw.decode().split("\\0")
+          files = sorted({name for name in raw.decode().split("\0")
                           if name and Path(name).is_file()})
           failures = []
           for name in files:
@@ -102,7 +102,7 @@ jobs:
                   failures.append(f"{name}: {exc}")
           print(f"YAML files checked: {len(files)}")
           if failures:
-              print("\\n".join(failures), file=sys.stderr)
+              print("\n".join(failures), file=sys.stderr)
               sys.exit(1)
           PY
 
