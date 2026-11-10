@@ -54,6 +54,12 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
         a, b = edge["source_id"], edge["target_id"]
         if a not in owners or b not in owners or owners[a] != owners[b]:
             raise IsolationError("orphan or cross-namespace dependency")
+        # Endpoint ownership alone is insufficient: a dependency may carry
+        # contradictory SAN/FS provenance even when both IDs are in FS.
+        owner = owners[a]
+        for field in ("namespace", "source_namespace", "target_namespace"):
+            if field in edge and edge[field] != owner:
+                raise IsolationError("cross-namespace dependency provenance")
     run_ids = [fs_facts["run_id"], san_facts["run_id"]]
     if not all(run_ids) or len(set(run_ids)) != 2:
         raise IsolationError("RUN IDs missing or shared")
