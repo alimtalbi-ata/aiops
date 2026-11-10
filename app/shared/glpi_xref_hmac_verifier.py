@@ -68,6 +68,15 @@ def verify_hmac_xref_event(
             or expiry <= current or expiry - issued > 300
             or issued > expiry):
         raise XrefSignatureRejected("signed_time_invalid")
+    # Reject malformed request scope before invoking server ACL or replay store.
+    if (not isinstance(actor, str) or not actor.strip() or len(actor) > 128
+            or not isinstance(tenant_id, str) or not tenant_id.strip()
+            or len(tenant_id) > 128
+            or not isinstance(ticket_id, str)
+            or not re.fullmatch(r"[1-9][0-9]{0,17}", ticket_id)
+            or any(ord(ch) < 32 or ord(ch) == 127
+                   for ch in actor + tenant_id)):
+        raise XrefSignatureRejected("signed_request_scope_invalid")
     if (claims.get("association_state") != "ACTIVE"
             or type(claims.get("association_count")) is not int
             or claims["association_count"] != 1):
