@@ -36,6 +36,7 @@ export function renderOperationalState(root,state,{details='',retry=null}={}) {
 export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15000}={}){
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)throw new RangeError('timeoutMs must be 1..120000');
  if(typeof read!=='function'||typeof publish!=='function')throw new TypeError('read/publish required');
+ const timeoutMarker=Symbol('operational-timeout');
  let generation=0,controller=null,active=false;
  return {
   async load(query){
@@ -49,7 +50,7 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
    try{
     const result=await Promise.race([
      Promise.resolve(read(query,{signal})),
-     new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('OPERATIONAL_TIMEOUT')),timeoutMs);})
+     new Promise((_,reject)=>{timer=setTimeout(()=>reject(timeoutMarker),timeoutMs);})
     ]);
     if(id!==generation||signal.aborted)return;
     // A transport success is not an evidence success. The server must have
@@ -63,7 +64,7 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
     if(id!==generation||signal.aborted)return;
     // Never publish raw transport errors: messages, URLs and headers may carry secrets.
     active=false;
-    if(error?.message==='OPERATIONAL_TIMEOUT'){
+    if(error===timeoutMarker){
      controller.abort();
      publish({state:'UNKNOWN',reason:'TIMEOUT',result:null});
     }else publish({state:'ERROR',error_code:'READ_FAILED',result:null});
