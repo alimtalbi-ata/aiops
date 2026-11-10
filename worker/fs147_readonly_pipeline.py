@@ -6,6 +6,7 @@ grant access: each adapter MUST enforce tenant/actor ACL and use its own credent
 from dataclasses import dataclass
 from typing import Callable, Mapping
 import hashlib
+from copy import deepcopy
 import json
 import math
 from datetime import datetime, timezone, timedelta
@@ -44,6 +45,44 @@ def _valid_observation_time(value):
         return parsed.tzinfo is not None and parsed.utcoffset() is not None
     except (ValueError, TypeError, OverflowError):
         return False
+
+
+def _claims_side_effect(payload):
+    """Reject explicit mutation/execution claims from any read-only stage."""
+    # Action-bound approval artifacts cannot authorize this read-only flow.
+    return (any(field in payload for field in ("approval_binding",
+                                               "approval_token", "action_intent"))
+            or any(field in payload and payload[field] is not False
+                for field in ("action_executed", "remediation_executed",
+                              "mutation_performed", "approval_granted",
+                              "approval_consumed", "hitl_approved",
+                              "action_dispatched", "ticket_updated"))
+            or ("ticket_transition" in payload
+                and payload["ticket_transition"] is not None)
+            or ("dispatch_allowed" in payload
+                and payload["dispatch_allowed"] is not False)
+            or ("resolved" in payload and payload["resolved"] is not False)
+            or ("effect" in payload and payload["effect"] != "NO_EFFECT"))
+
+
+def _provenance_consistent(stage, observation):
+    """Optional provenance echoed by remote stages must match bridge evidence.
+
+    Stage-specific output remains free to omit these keys for compatibility.
+    A stage must never replace the source, measurement time or target identity
+    while retaining the original evidence_id.
+    """
+    for field in ("source", "collected_at", "filesystem", "commands", "read_only",
+                  "used_percent"):
+        if field in stage:
+            value = stage[field]
+            original = observation[field]
+            if field == "used_percent":
+                if type(value) not in (int, float) or not math.isfinite(value):
+                    return False
+            if type(value) is not type(original) or value != original:
+                return False
+    return True
 
 
 def execute(request: FS147Request, *, stop_auto: bool,
@@ -88,7 +127,8 @@ def execute(request: FS147Request, *, stop_auto: bool,
                 or not math.isfinite(observation["used_percent"])
                 or not 0 <= observation["used_percent"] <= 100
                 or observation.get("filesystem") != "/fs-lab"
-                or not observation.get("read_only") is True):
+                or not observation.get("read_only") is True
+                or _claims_side_effect(observation)):
             return _blocked("INSUFFICIENT_OBSERVATION", steps)
         # A historical lab measurement is not proof of a fresh bridge observation.
         # Clock injection is only for deterministic tests, never a substitute for
@@ -119,9 +159,21 @@ def execute(request: FS147Request, *, stop_auto: bool,
         if not timedelta(seconds=-30) <= age <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
         steps.append("OBSERVE")
-        analysis = analyst(request, observation)
+        analysis = analyst(request, deepcopy(observation))
         if not _matching(analysis, request) or analysis.get("evidence_id") != observation["evidence_id"]:
             return _blocked("ANALYST_SCOPE", steps)
+        if not _provenance_consistent(analysis, observation):
+            return _blocked("ANALYST_PROVENANCE", steps)
+        if _claims_side_effect(analysis):
+            return _blocked("ANALYST_SIDE_EFFECT", steps)
+        # Findings alone do not override an explicit UNKNOWN/failed Analyst verdict.
+        # Missing optional verdict metadata remains compatible with older adapters.
+        if (("state" in analysis and analysis["state"] not in ("PASS", "COMPLETE"))
+                or ("validated" in analysis and analysis["validated"] is not True)
+                or ("missing_information" in analysis
+                    and (not isinstance(analysis["missing_information"], list)
+                         or bool(analysis["missing_information"])))):
+            return _blocked("INSUFFICIENT_ANALYSIS", steps)
         if (not isinstance(analysis.get("findings"), list)
                 or not analysis["findings"]
                 or len(analysis["findings"]) > 64
@@ -137,9 +189,13 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_analyst <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
-        critique = critic(request, observation, analysis)
+        critique = critic(request, deepcopy(observation), deepcopy(analysis))
         if not _matching(critique, request) or critique.get("evidence_id") != observation["evidence_id"]:
             return _blocked("CRITIC_SCOPE", steps)
+        if not _provenance_consistent(critique, observation):
+            return _blocked("CRITIC_PROVENANCE", steps)
+        if _claims_side_effect(critique):
+            return _blocked("CRITIC_SIDE_EFFECT", steps)
         if (critique.get("state") != "PASS"
                 or ("validated" in critique and critique["validated"] is not True)
                 or ("missing_information" in critique
@@ -155,11 +211,20 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return _blocked("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_at_policy <= timedelta(minutes=5):
             return _blocked("STALE_OBSERVATION", steps)
-        decision = policy(request, observation, analysis, critique)
+        decision = policy(request, deepcopy(observation), deepcopy(analysis), deepcopy(critique))
         if not _matching(decision, request) or decision.get("evidence_id") != observation["evidence_id"]:
             return _blocked("POLICY_SCOPE", steps)
+        if not _provenance_consistent(decision, observation):
+            return _blocked("POLICY_PROVENANCE", steps)
         steps.append("POLICY")
-        if decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE":
+        if (decision.get("state") != "PASS" or decision.get("decision") != "SIMULATE"
+                # Optional execution metadata cannot contradict read-only simulation.
+                or ("dry_run" in decision and decision["dry_run"] is not True)
+                or ("execution_mode" in decision and decision["execution_mode"] != "SIMULATE")
+                or ("dispatch_allowed" in decision and decision["dispatch_allowed"] is not False)
+                or ("resolved" in decision and decision["resolved"] is not False)
+                or ("effect" in decision and decision["effect"] != "NO_EFFECT")
+                or _claims_side_effect(decision)):
             return _blocked("POLICY_REFUSED", steps)
         # Policy is a remote call: its latency can expire the observation.
         # A pre-call freshness check alone can incorrectly report success.

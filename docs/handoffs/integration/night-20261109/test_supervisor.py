@@ -49,6 +49,7 @@ class Safety(unittest.TestCase):
         def spawn(command, **kwargs):
             self.assertEqual(command[:2], ['timeout', '--signal=KILL'])
             self.assertIn('workspace-write', command)
+            self.assertIn(str(m.ROOT), command)
             self.assertIn('sandbox_workspace_write.network_access=true', command)
             starts.append(time.monotonic())
             child = real_popen(['/bin/sleep', '30'], **kwargs)

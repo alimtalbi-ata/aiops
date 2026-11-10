@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[4]
 RUN = ROOT.parent / 'runtime'
-DEADLINE = dt.datetime(2026, 11, 10, 11, tzinfo=ZoneInfo('Europe/Paris')).timestamp()
+DEADLINE = dt.datetime(2026, 11, 12, 11, tzinfo=ZoneInfo('Europe/Paris')).timestamp()
 INTERVAL = 600
 CYCLE_LIMIT = 540
 LOCK = Path('/tmp/aiops2-night-20261109.lock')
@@ -85,7 +85,7 @@ def run():
                 prefix = RUN / f'cycle-{cycle:04d}'
                 command = ['timeout', '--signal=KILL', str(min(CYCLE_LIMIT, max(0.1, DEADLINE - time.time() - 1))), 'codex', '-a', 'never', 'exec', '--sandbox', 'workspace-write',
                            '-c', 'sandbox_workspace_write.network_access=true',
-                           '-C', str(ROOT), '--add-dir', str(RUN), '--json',
+                           '-C', str(ROOT), '--add-dir', str(ROOT), '--add-dir', str(RUN), '--json',
                            '-o', str(prefix) + '-result.md', '-']
                 with (Path(str(prefix) + '.jsonl')).open('a') as output, \
                      (Path(__file__).with_name('mission.md')).open() as prompt:
