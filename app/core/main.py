@@ -89,7 +89,24 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
             # A global key collision must never return another Run's response.
             if rec[0] != rid or rec[1] != x.command:
                 raise HTTPException(409,'command idempotency key belongs to a different intent')
-            return rec[2]
+            # A receipt also binds the original optimistic version. A reused
+            # key with a new expected_version is a different command intent.
+            # Do not trust malformed or foreign persisted responses as success.
+            try:
+                receipt = json.loads(rec[2]) if isinstance(rec[2], str) else rec[2]
+                valid = (isinstance(receipt, dict)
+                         and receipt.get('run_id') == rid
+                         and type(receipt.get('version')) is int
+                         and receipt['version'] == x.expected_version + 1
+                         and receipt.get('status') == {
+                             'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED',
+                             'RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'
+                         }[x.command])
+            except (ValueError, TypeError, KeyError):
+                valid = False
+            if not valid:
+                raise HTTPException(409,'command receipt version or response identity conflict')
+            return receipt
         status,version,mode=row
         if version!=x.expected_version:raise HTTPException(409,'stale run version')
         target={'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED','RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'}[x.command]
