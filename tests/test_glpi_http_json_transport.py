@@ -136,7 +136,8 @@ class TransportTests(unittest.TestCase):
             get = make_json_get(get_token=lambda **kw: credentials.append(kw) or "token",
                                 allowed_origin="https://core.internal")
         for url in ("https://core.internal", "https://core.internal//evil",
-                    "https://core.internal?x=1"):
+                    "https://core.internal?x=1",
+                    "https://core.internal/api/runs/RUN-1?token=leak"):
             with self.subTest(url=url), self.assertRaises(ReadTransportBlocked):
                 get(url=url, actor="operator", tenant_id="tenant-a")
         self.assertEqual(credentials, [])
