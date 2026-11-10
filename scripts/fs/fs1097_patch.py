@@ -102,7 +102,7 @@ async function loadHistory(){
    const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.className="history-swatch history-swatch-"+(index%historyColors.length);label.textContent=name;item.append(swatch,label);legend.append(item);
   });
   status.textContent=series.length+" séries · "+points.length+" points · pas "+data.step_seconds+" s · "+windowSize;
- }catch(error){if(requestId!==historyRequestId||error.name==="AbortError")return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));status.textContent="Erreur de chargement : "+error.message}
+ }catch(error){if(requestId!==historyRequestId||controller.signal.aborted||error?.name==="AbortError")return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));legend.replaceChildren();status.textContent="Historique indisponible · réessayez ou contactez l’exploitation";}
  finally{if(requestId===historyRequestId){button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
 }
 $("history-refresh").addEventListener("click",loadHistory);
