@@ -20,7 +20,9 @@ def normalize_core_run_readback(payload, *, expected_run_id):
     if not isinstance(payload, dict) or not isinstance(payload.get("run"), dict):
         raise RawReadbackInvalid("core_run_missing")
     run = payload["run"]
-    if not isinstance(expected_run_id, str) or run.get("run_id") != expected_run_id:
+    if (not isinstance(expected_run_id, str)
+            or not re.fullmatch(r"RUN-[A-Z0-9]{8,64}", expected_run_id)
+            or run.get("run_id") != expected_run_id):
         raise RawReadbackInvalid("core_run_mismatch")
     if (not isinstance(run.get("incident_id"), str)
             or not re.fullmatch(r"INC-[A-Za-z0-9_-]{4,128}", run["incident_id"])):
