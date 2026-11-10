@@ -124,7 +124,8 @@ class HmacXrefTests(unittest.TestCase):
         for field, value in (("run_id", "RUN-../../bad"),
                              ("incident_id", "INC-?bad"),
                              ("glpi_entity_id", "-1"),
-                             ("glpi_instance_id", "ci" + chr(10) + "other")):
+                             ("glpi_instance_id", "ci" + chr(10) + "other"),
+                             ("glpi_instance_id", "   ")):
             with self.subTest(field=field):
                 original = self.claims[field]
                 self.claims[field] = value
