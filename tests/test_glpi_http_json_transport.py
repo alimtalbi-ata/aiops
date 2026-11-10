@@ -99,6 +99,21 @@ class TransportTests(unittest.TestCase):
             get(url="https://core.internal", actor="operator",
                 tenant_id="tenant-a")
 
+    def test_json_content_type_must_match_exact_media_type(self):
+        for content_type in ("application/jsonp", "text/application/json",
+                             "application/json-extra"):
+            response = Response()
+            response.headers = {"Content-Type": content_type}
+            get, _ = self.create(response=response)
+            with self.subTest(content_type=content_type), self.assertRaises(ReadTransportBlocked):
+                get(url="https://core.internal/api/runs/RUN-1",
+                    actor="operator", tenant_id="tenant-a")
+        response = Response()
+        response.headers = {"Content-Type": "application/json; charset=utf-8"}
+        get, _ = self.create(response=response)
+        self.assertEqual(get(url="https://core.internal/api/runs/RUN-1",
+                             actor="operator", tenant_id="tenant-a"), {"id": 201})
+
     def test_malformed_url_rejected_before_credentials(self):
         opener = FakeOpener(Response())
         credentials = []
