@@ -40,6 +40,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_demo.py" -v
       - name: Portal scope-attestation regression guard
         run: python -m unittest discover -s tests -p "test_portal_auth_contract_guard.py" -v
+      - name: Portal disconnected projection policy tests
+        run: python -m unittest discover -s tests -p "test_portal_operational_projection.py" -v
       - name: Portal operational-state JavaScript unit tests
         run: node --test app/portal/components/operational_state.test.mjs
       - name: AI evaluation harness tests
