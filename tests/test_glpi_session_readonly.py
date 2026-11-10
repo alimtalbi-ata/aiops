@@ -134,6 +134,16 @@ class SessionTests(unittest.TestCase):
                 self.assertEqual([name for name, _ in calls],
                                  ["initSession", "Ticket/201", "killSession"])
 
+    def test_invalid_ticket_entity_refused_and_session_closed(self):
+        for entity in (None, True, -1, "07", "７", "1" * 19):
+            calls = []
+            with self.subTest(entity=entity), self.assertRaisesRegex(
+                    GLPISessionReadBlocked, "glpi_ticket_response_mismatch"):
+                self.read(self.make(calls, ticket_payload={
+                    "id": 201, "entities_id": entity}))
+            self.assertEqual([name for name, _ in calls],
+                             ["initSession", "Ticket/201", "killSession"])
+
     def test_redirected_ticket_refused_and_session_closed(self):
         calls = []
         with self.assertRaises(GLPISessionReadBlocked):
