@@ -84,6 +84,20 @@ class HmacXrefTests(unittest.TestCase):
         with self.assertRaises(XrefSignatureRejected):
             self.invoke(consume_nonce=None)
 
+    def test_inactive_or_ambiguous_association_rejected_before_acl_and_nonce(self):
+        for field, value in (("association_state", "REVOKED"),
+                             ("association_count", 0),
+                             ("association_count", 2),
+                             ("association_count", True)):
+            with self.subTest(field=field, value=value):
+                original = self.claims[field]
+                self.claims[field] = value
+                with self.assertRaises(XrefSignatureRejected):
+                    self.invoke()
+                self.claims[field] = original
+        self.assertEqual(self.acl_calls, [])
+        self.assertEqual(self.seen, set())
+
     def test_unsigned_or_short_secret_rejected(self):
         with self.assertRaises(XrefSignatureRejected):
             self.invoke(secret=b"short")
