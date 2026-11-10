@@ -176,7 +176,8 @@ class SessionTests(unittest.TestCase):
 
     def test_untrusted_origin_rejected_at_construction(self):
         for origin in ("http://glpi.internal", "https://user@glpi.internal",
-                       "https://glpi.internal/other", "https://glpi.internal?x=1"):
+                       "https://glpi.internal/other", "https://glpi.internal?x=1",
+                       "https://glpi.internal/", "https://" + "a" * 510 + ".internal"):
             with self.subTest(origin=origin), self.assertRaises(ValueError):
                 self.make([], glpi_base_url=origin)
 
