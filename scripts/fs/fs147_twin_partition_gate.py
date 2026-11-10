@@ -22,6 +22,37 @@ def _unique_pairs(pairs):
     return result
 
 
+def _check_nested_provenance(value, namespace, run_id, node_id):
+    """Reject hidden cross-partition references in structured observation provenance.
+
+    A fact may have valid top-level ownership while its nested dependency,
+    source or impact object points to a different RUN, node or namespace.
+    Only explicit provenance fields are checked; arbitrary metric values remain
+    untouched. A repeated object is rejected to avoid unbounded recursion.
+    """
+    stack = [value]
+    visited = set()
+    while stack:
+        current = stack.pop()
+        if isinstance(current, (dict, list)):
+            identity = id(current)
+            if identity in visited:
+                raise IsolationError("reused or cyclic observation provenance")
+            visited.add(identity)
+        if isinstance(current, dict):
+            for field in ("namespace", "source_namespace", "target_namespace"):
+                if field in current and current[field] != namespace:
+                    raise IsolationError("nested cross-namespace observation provenance")
+            if "run_id" in current and current["run_id"] != run_id:
+                raise IsolationError("nested cross-RUN observation provenance")
+            for field in ("node_id", "source_id", "target_id", "target_node_id"):
+                if field in current and current[field] != node_id:
+                    raise IsolationError("nested cross-node observation provenance")
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+
+
 def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs_run=None, expected_san_run=None):
     """Fail closed on ambiguous ownership, shared IDs and cross-scope edges."""
     if not fs_namespace or not san_namespace or fs_namespace == san_namespace:
@@ -103,6 +134,7 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
                 raise IsolationError("unmarked observation")
             if payload.get("target_node_id") != node_id:
                 raise IsolationError("missing or mismatched target provenance")
+            _check_nested_provenance(payload, namespace, response["run_id"], node_id)
     return {"status": "PASS", "fs_run": run_ids[0], "san_run": run_ids[1],
             "nodes": len(nodes), "edges": len(edges), "facts": len(seen)}
 
