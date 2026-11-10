@@ -17,6 +17,10 @@ class FakeDB:
     def __exit__(self,*args): return False
     def execute(self,sql,params):
         self.queries.append(sql)
+        if sql == 'select pg_advisory_xact_lock(hashtextextended(%s,0))':
+            if params != ('command:SAME-KEY',):
+                raise AssertionError('unexpected_lock_key')
+            return FakeResult(None)
         if 'from aiops.runs' in sql:
             return FakeResult(('RUNNING',3,'DEMO'))
         if 'from aiops.command_receipts' in sql:
