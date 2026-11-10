@@ -95,8 +95,14 @@ def make_glpi_session_ticket_get(
             initial = get_json("initSession", {"App-Token": app,
                                                 "Authorization": "user_token " + user})
             session = token(initial.get("session_token"))
-            return get_json("Ticket/" + ticket_id, {"App-Token": app,
-                                                     "Session-Token": session})
+            ticket = get_json("Ticket/" + ticket_id, {"App-Token": app,
+                                                       "Session-Token": session})
+            # Authentication does not establish the requested ticket identity.
+            observed_id = ticket.get("id")
+            if (type(observed_id) not in (str, int)
+                    or str(observed_id) != ticket_id):
+                raise GLPISessionReadBlocked("glpi_ticket_response_mismatch")
+            return ticket
         except (HTTPError, URLError, TimeoutError, OSError, UnicodeError,
                 ValueError, json.JSONDecodeError) as exc:
             raise GLPISessionReadBlocked("glpi_authenticated_read_failed") from exc
