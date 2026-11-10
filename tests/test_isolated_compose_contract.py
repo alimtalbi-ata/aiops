@@ -68,7 +68,7 @@ class IsolatedComposeContractTests(unittest.TestCase):
         # Docker embedded service-name resolution is explicitly allowed.
         service_blocks = {}
         for name, body in re.findall(
-            r"(?ms)^  (aiops2-[a-z0-9-]+):\\n(.*?)(?=^  aiops2-[a-z0-9-]+:|^networks:)",
+            r"(?ms)^  (aiops2-[a-z0-9-]+):\n(.*?)(?=^  aiops2-[a-z0-9-]+:|^networks:)",
             self.compose,
         ):
             service_blocks[name] = body
@@ -82,8 +82,8 @@ class IsolatedComposeContractTests(unittest.TestCase):
             ("aiops2-glpi", "aiops2-glpi-db", "aiops2-integration"),
         ):
             with self.subTest(consumer=consumer, target=target):
-                self.assertIn(network, service_blocks[consumer].split("    networks:", 1)[1].split("\\n", 1)[0])
-                self.assertIn(network, service_blocks[target].split("    networks:", 1)[1].split("\\n", 1)[0])
+                self.assertIn(network, service_blocks[consumer].split("    networks:", 1)[1].split("\n", 1)[0])
+                self.assertIn(network, service_blocks[target].split("    networks:", 1)[1].split("\n", 1)[0])
         self.assertIn("DB_POSTGRESDB_HOST: aiops2-postgres", service_blocks["aiops2-n8n"])
         self.assertIn("CORE_URL: http://aiops2-core:810", service_blocks["aiops2-simulator"])
 
