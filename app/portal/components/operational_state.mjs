@@ -33,7 +33,8 @@ export function renderOperationalState(root,state,{details='',retry=null}={}) {
  root.replaceChildren(section);return section;
 }
 /** Latest-only reader: also fences sources that ignore AbortSignal. */
-export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
+export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15000}={}){
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)throw new RangeError('timeoutMs must be 1..120000');
  if(typeof read!=='function'||typeof publish!=='function')throw new TypeError('read/publish required');
  let generation=0,controller=null;
  return {
@@ -43,8 +44,12 @@ export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
    controller=new AbortController();
    const signal=controller.signal;
    publish({state:'LOADING'});
+   let timer;
    try{
-    const result=await read(query,{signal});
+    const result=await Promise.race([
+     Promise.resolve().then(()=>read(query,{signal})),
+     new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('OPERATIONAL_TIMEOUT')),timeoutMs);})
+    ]);
     if(id!==generation||signal.aborted)return;
     // A transport success is not an evidence success. The server must have
     // already enforced actor/tenant scope; this UI only refuses to display
@@ -55,7 +60,12 @@ export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
    }catch(error){
     if(id!==generation||signal.aborted)return;
     // Never publish raw transport errors: messages, URLs and headers may carry secrets.
-    publish({state:'ERROR',error_code:'READ_FAILED',result:null});
+    if(error?.message==='OPERATIONAL_TIMEOUT'){
+     controller.abort();
+     publish({state:'UNKNOWN',reason:'TIMEOUT',result:null});
+    }else publish({state:'ERROR',error_code:'READ_FAILED',result:null});
+   }finally{
+    clearTimeout(timer);
    }
   },
   cancel(){generation++;if(controller)controller.abort();controller=null;}
