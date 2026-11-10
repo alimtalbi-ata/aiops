@@ -3,7 +3,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 PROJECT="aiops2-isolated"
-COMPOSE=(docker compose --env-file .env.isolated -p "$PROJECT" -f compose.yml -f compose.isolated.yml)
+COMPOSE=(docker compose --env-file .env.isolated -p "$PROJECT" -f compose.isolated.yml)
 fail() { echo "FAIL|$*" >&2; exit 1; }
 
 for service in \
