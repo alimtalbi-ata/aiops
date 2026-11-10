@@ -50,7 +50,10 @@ def make_postgres_nonce_consumer(connect: Callable):
                         (tenant_id, nonce,
                          datetime.fromtimestamp(expires_at, tz=timezone.utc)),
                     )
-                    return cursor.fetchone() is not None
+                    inserted = cursor.fetchone() is not None
+            # Connection context has exited: transaction commit must have
+            # succeeded before a nonce is reported as consumed.
+            return inserted
         except Exception:
             # Never permit a replay on database outage or uncertain commit.
             return False
