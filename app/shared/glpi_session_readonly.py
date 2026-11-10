@@ -104,8 +104,8 @@ def make_glpi_session_ticket_get(
             if session is not None:
                 try:
                     get_json("killSession", {"App-Token": app, "Session-Token": session})
-                except Exception:
-                    # Cleanup failure must not expose session or mask the read.
-                    pass
+                except Exception as exc:
+                    # An unclosed remote session cannot count as a successful read.
+                    raise GLPISessionReadBlocked("glpi_session_cleanup_unconfirmed") from exc
 
     return get
