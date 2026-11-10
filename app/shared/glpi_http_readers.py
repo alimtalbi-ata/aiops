@@ -5,7 +5,7 @@ must provide trusted service endpoints, per-request server ACL and credentials.
 These readers return raw JSON only; the signed-xref comparison remains required.
 """
 from collections.abc import Callable
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 
 class GLPIHTTPReadBlocked(RuntimeError):
@@ -24,9 +24,19 @@ def make_core_glpi_readers(
     authorize_read must check actor+tenant+resource ACL and return exactly True.
     """
     for base in (core_base_url, glpi_base_url):
-        if (not isinstance(base, str) or not base.startswith("https://")
-                or base.endswith("/") or "?" in base or "#" in base
-                or "@" in base or len(base) > 512):
+        if not isinstance(base, str) or len(base) > 512:
+            raise ValueError("trusted_https_endpoint_required")
+        try:
+            parsed = urlsplit(base)
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("trusted_https_endpoint_required") from exc
+        if (parsed.scheme != "https" or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.path or parsed.query or parsed.fragment
+                or base.endswith("/") or port == 0
+                or any(ch.isspace() or ord(ch) < 33 for ch in base)
+                or "\\" in base):
             raise ValueError("trusted_https_endpoint_required")
     if not all(callable(fn) for fn in (core_get, glpi_get, authorize_read)):
         raise ValueError("authenticated_read_dependencies_missing")
