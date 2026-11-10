@@ -39,21 +39,25 @@ def make_postgres_nonce_consumer(connect: Callable):
                 or type(expires_at) is not int or expires_at <= 0):
             return False
         try:
-            with connect() as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        "INSERT INTO aiops.glpi_xref_consumed_nonces "
-                        "(tenant_id, nonce, expires_at) "
-                        "VALUES (%s, %s, %s) "
-                        "ON CONFLICT (tenant_id, nonce) DO NOTHING "
-                        "RETURNING nonce",
-                        (tenant_id, nonce,
-                         datetime.fromtimestamp(expires_at, tz=timezone.utc)),
-                    )
-                    inserted = cursor.fetchone() is not None
-            # Connection context has exited: transaction commit must have
-            # succeeded before a nonce is reported as consumed.
-            return inserted
+            connection = connect()
+            try:
+                with connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "INSERT INTO aiops.glpi_xref_consumed_nonces "
+                            "(tenant_id, nonce, expires_at) "
+                            "VALUES (%s, %s, %s) "
+                            "ON CONFLICT (tenant_id, nonce) DO NOTHING "
+                            "RETURNING nonce",
+                            (tenant_id, nonce,
+                             datetime.fromtimestamp(expires_at, tz=timezone.utc)),
+                        )
+                        inserted = cursor.fetchone() is not None
+                # Transaction context exited: commit must have succeeded.
+                return inserted
+            finally:
+                # psycopg2 connection contexts commit/rollback but do not close.
+                connection.close()
         except Exception:
             # Never permit a replay on database outage or uncertain commit.
             return False
