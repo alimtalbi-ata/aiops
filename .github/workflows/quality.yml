@@ -175,6 +175,22 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          import re
+
+          # Scan every n8n JSON export, not only the current disabled template.
+          workflow_files = sorted(Path("integration/n8n").rglob("*.json"))
+          assert workflow_files, "no n8n workflow JSON files found"
+          for workflow_file in workflow_files:
+              raw = workflow_file.read_text(encoding="utf-8")
+              assert not re.search(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}", raw), (
+                  f"embedded bearer credential found in {workflow_file}"
+              )
+              assert not re.search(r'(?i)"authorization"\s*:', raw), (
+                  f"authorization header found in {workflow_file}"
+              )
+              assert not re.search(r'(?i)"mode"\s*:\s*"live"', raw), (
+                  f"LIVE execution mode found in {workflow_file}"
+              )
 
           path = Path("integration/n8n/incident-to-run.json")
           data = json.loads(path.read_text(encoding="utf-8"))
