@@ -117,10 +117,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update && sudo apt-get install -y postgresql-client-16
-          pg_dump --version | grep -E '^pg_dump \(PostgreSQL\) 16\.'
-          pg_restore --version | grep -E '^pg_restore \(PostgreSQL\) 16\.'
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
@@ -159,7 +156,15 @@ jobs:
       - name: Qualified disposable PostgreSQL disaster recovery drill
         env:
           PGPASSWORD: ci-only-password
-        run: bash tests/postgres-dr-rehearsal.sh
+        run: |
+          docker run --rm --network host \\
+            -e PGPASSWORD="$PGPASSWORD" \\
+            -e DR_POSTGRES_HOST=127.0.0.1 \\
+            -e DR_POSTGRES_PORT=5432 \\
+            -e DR_POSTGRES_USER=aiops \\
+            -v "$GITHUB_WORKSPACE:/workspace" \\
+            -w /workspace postgres:16-alpine \\
+            sh -ec 'apk add --no-cache bash python3 >/dev/null && bash tests/postgres-dr-rehearsal.sh'
       - name: Upload recovery qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
