@@ -4,6 +4,8 @@ No Debian host, GLPI server, production credential or production migration.
 Requires DATABASE_URL pointing to disposable CI PostgreSQL and psycopg 3.
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 import sys
 import unittest
 from pathlib import Path
@@ -47,6 +49,23 @@ class RealPostgresNonceTests(unittest.TestCase):
         self.assertTrue(self.consumer(**self.args))
         self.assertTrue(self.consumer(**{**self.args, "tenant_id": "ci-tenant-b"}))
         self.assertFalse(self.consumer(**self.args))
+
+    def test_concurrent_insert_only_one_winner(self):
+        workers = 8
+        barrier = Barrier(workers)
+        def attempt(_):
+            barrier.wait(timeout=10)
+            return self.consumer(**self.args)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            outcomes = list(pool.map(attempt, range(workers)))
+        self.assertEqual(outcomes.count(True), 1)
+        self.assertEqual(outcomes.count(False), workers - 1)
+        with self.psycopg.connect(self.url) as connection:
+            row = connection.execute(
+                "SELECT count(*) FROM aiops.glpi_xref_consumed_nonces "
+                "WHERE tenant_id=%s AND nonce=%s",
+                ("ci-tenant-a", self.nonce)).fetchone()
+        self.assertEqual(row, (1,))
 
     def test_database_statement_failure_is_denied(self):
         # The real failure path is exercised using a closed DB connection.
