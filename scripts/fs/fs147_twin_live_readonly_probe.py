@@ -21,6 +21,16 @@ class _RejectRedirects(HTTPRedirectHandler):
 from fs147_twin_partition_gate import IsolationError, qualify
 
 
+def _unique_json_object(pairs):
+    """Reject duplicate JSON keys, including nested provenance and ownership fields."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 def fetch_json(base_url, path, token, timeout=8, opener=None):
     parsed = urlsplit(base_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password:
@@ -46,9 +56,9 @@ def fetch_json(base_url, path, token, timeout=8, opener=None):
     if len(raw) > 2_000_000:
         raise IsolationError("Twin API response exceeds size limit")
     try:
-        return json.loads(raw)
+        return json.loads(raw, object_pairs_hook=_unique_json_object)
     except (ValueError, UnicodeDecodeError) as exc:
-        raise IsolationError("Twin API returned invalid JSON") from exc
+        raise IsolationError("Twin API returned invalid or ambiguous JSON") from exc
 
 
 def qualify_live(base_url, token, fs_namespace, san_namespace, fs_run, san_run, fetch=fetch_json):
