@@ -89,7 +89,8 @@ class FullChainTests(unittest.TestCase):
             return True
         def read_acl(**kwargs):
             self.calls.append("read_acl:" + kwargs["resource"])
-            return read_allowed
+            return (read_allowed.get(kwargs["resource"], False)
+                    if isinstance(read_allowed, dict) else read_allowed)
         def core_token(**kwargs):
             self.calls.append("core_token")
             return "core-only-credential"
@@ -141,6 +142,17 @@ class FullChainTests(unittest.TestCase):
                 actor="operator", tenant_id="tenant-a", ticket_id="201")
         self.assertEqual(self.requests, [])
         self.assertNotIn("core_token", self.calls)
+        self.assertNotIn("glpi_app_token", self.calls)
+        self.assertNotIn("glpi_user_token", self.calls)
+
+    def test_denied_glpi_acl_never_opens_glpi_session(self):
+        with self.assertRaises(GLPIHmacQualificationBlocked):
+            self.make(read_allowed={"core_run": True, "glpi_ticket": False})(
+                actor="operator", tenant_id="tenant-a", ticket_id="201")
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(self.requests[0].full_url,
+                         "https://core.internal/api/runs/RUN-12345678")
+        self.assertIn("read_acl:glpi_ticket", self.calls)
         self.assertNotIn("glpi_app_token", self.calls)
         self.assertNotIn("glpi_user_token", self.calls)
 
