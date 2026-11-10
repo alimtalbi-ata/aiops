@@ -106,6 +106,14 @@ Objectif de la journée : un candidat de consolidation **pour la plateforme exis
 4. Vérifier P0 #535 (révocation/rotation, audit historique, approbation indépendante), CI du candidat et recette négative sécurité.
 5. **Autorisation explicite de l'opérateur avant toute connexion/intervention Debian** ; sinon résultat `NO_GO` et conserver l'existant intact.
 
+## 5 quinquies. Instruction DEV révisée — 2026-11-10
+
+L'utilisateur confirme que le serveur est un environnement **DEV isolé non critique**, accepte le risque de régression et souhaite exploiter les **deux cron minute** (déploiement et remontée d'informations) pour inventorier, tester et remplacer progressivement les composants. **Avant remplacement, préserver la version fonctionnelle** et sa procédure de retour arrière. Il ne demande pas une qualification production pour chaque itération. Le périmètre reste les composants ciblés ; ne pas écraser les cinq stacks ni exposer de secrets.
+
+**IMPORTANT :** le canal bidirectionnel cron n'est pas encore identifié ni testé. Inspection GitHub de `main` : `00-Deployment/status.sh` est un script local Docker, `deploy/preflight.sh` peut modifier `.env` via `init-env.sh`, `scripts/automation_heartbeat_gate.py` ne pilote aucun cron. Aucun accès Debian ni déploiement réalisé. Plan exécutable et contrat à découvrir : `docs/ops/DEV-CRON-BRIDGE-DEPLOYMENT-PLAN.md` (PR #545). **Ne pas inventer de canal ni prétendre avoir exécuté les cron.** Une fois le protocole vérifié, commencer par un ping et inventaire lecture seule, puis sauvegarde et remplacement ciblé.
+
+Les exigences de niveau production ne doivent pas bloquer les itérations DEV à faible impact, mais les opérations sur le serveur nécessitent un canal réel et une vérification du retour arrière. Les instructions antérieures de RELEASE HOLD s'appliquent toujours à toute opération destructive/non bornée et à la production ; la présente instruction autorise la préparation d'itérations DEV avec sauvegarde et tests.
+
 ## 6. Prochaine action concrète pour un nouvel agent
 
 **Ne pas commencer par le déploiement Debian.** Commencer par récupérer l'état actuel des PR et les diffs/commits cumulés **#515, #516, #517** contre leurs bases et contre `main`. Construire une matrice « changement utile / dépendance / risque / test requis », puis créer une branche/PR de consolidation **uniquement si** les dépendances sont comprises et le périmètre testable. Garder les PR sources en Draft et ne rien fusionner automatiquement.
