@@ -10,7 +10,7 @@ services:
     volumes:
       - aiops2-postgres-data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
-    networks: [aiops2-data]
+    networks: [aiops2-data, aiops2-integration]
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -104,7 +104,7 @@ services:
       CORE_URL: http://aiops2-core:810
       AIOPS_INTERNAL_TOKEN: ${AIOPS_INTERNAL_TOKEN:?AIOPS_INTERNAL_TOKEN_required}
     expose: ["816"]
-    networks: [aiops2-execution]
+    networks: [aiops2-execution, aiops2-control]
     healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:816/health')"], interval: 5s, timeout: 3s, retries: 20}
 
   aiops2-portal:
