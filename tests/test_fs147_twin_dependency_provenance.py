@@ -63,6 +63,31 @@ class DependencyProvenanceTest(unittest.TestCase):
                         with self.assertRaisesRegex(IsolationError, "unmarked observation"):
                             check(graph, fs, san)
 
+    def test_embedded_observation_namespace_must_match_node_owner(self):
+        import json
+        for encoded in (False, True):
+            for partition in (1, 2):
+                for field in ("namespace", "source_namespace", "target_namespace"):
+                    with self.subTest(encoded=encoded, partition=partition, field=field):
+                        graph, fs, san = capture()
+                        response = (None, fs, san)[partition]
+                        payload = response["facts"][0]["value"]
+                        payload[field] = "san" if partition == 1 else "lab-fs147"
+                        if encoded:
+                            response["facts"][0]["value"] = json.dumps(payload)
+                        with self.assertRaisesRegex(IsolationError, "embedded observation provenance"):
+                            check(graph, fs, san)
+
+    def test_matching_embedded_observation_provenance_is_accepted(self):
+        graph, fs, san = capture()
+        fs["facts"][0]["value"].update(
+            namespace="lab-fs147",
+            source_namespace="lab-fs147",
+            target_namespace="lab-fs147",
+        )
+        san["facts"][0]["value"]["namespace"] = "san"
+        self.assertEqual(check(graph, fs, san)["status"], "PASS")
+
     def test_cross_namespace_dependency_endpoints_still_rejected(self):
         graph, fs, san = capture()
         graph["edges"][0]["target_id"] = "SAN-1"
