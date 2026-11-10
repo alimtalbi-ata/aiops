@@ -93,14 +93,21 @@ def incident(x:IncidentIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     iid='INC-'+x.external_id
     with db() as c:
-        c.execute('insert into aiops.incidents(incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic,payload) values(%s,%s,%s,%s,\'OPEN\',%s,now(),%s,%s,%s) on conflict(external_id) do update set title=excluded.title,severity=excluded.severity,service_id=excluded.service_id,payload=excluded.payload',(iid,x.external_id,x.title,x.severity,x.service_id,x.source,x.synthetic,json.dumps(x.payload)))
-    return {'incident_id':iid,'severity':x.severity,'state':'OPEN','synthetic':x.synthetic}
+        saved=c.execute('insert into aiops.incidents(incident_id,external_id,title,severity,state,service_id,opened_at,source,synthetic,payload) values(%s,%s,%s,%s,\'OPEN\',%s,now(),%s,%s,%s) on conflict(external_id) do update set title=excluded.title,severity=excluded.severity,service_id=excluded.service_id,payload=excluded.payload where aiops.incidents.source is not distinct from excluded.source and aiops.incidents.synthetic is not distinct from excluded.synthetic returning incident_id,severity,state,synthetic',(iid,x.external_id,x.title,x.severity,x.service_id,x.source,x.synthetic,json.dumps(x.payload))).fetchone()
+        if not saved: raise HTTPException(409,'incident external_id belongs to a different source or synthetic identity')
+    return {'incident_id':saved[0],'severity':saved[1],'state':saved[2],'synthetic':saved[3]}
 @app.post('/api/runs')
 def create(x:RunIn,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
-        row=c.execute('select run_id,mode,scenario_id,status,version from aiops.runs where idempotency_key=%s',(x.idempotency_key,)).fetchone()
-        if row:return dict(zip(['run_id','mode','scenario_id','status','version'],row))
+        # A row lock cannot serialize first requests while the row is absent.
+        c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',
+                  ('core:run-idempotency:'+x.idempotency_key,))
+        row=c.execute('select run_id,mode,scenario_id,status,version,incident_id from aiops.runs where idempotency_key=%s for update',(x.idempotency_key,)).fetchone()
+        if row:
+            if (row[1], row[2], row[5]) != (x.mode, x.scenario_id, x.incident_id):
+                raise HTTPException(409,'idempotency key belongs to a different run intent')
+            return dict(zip(['run_id','mode','scenario_id','status','version'],row[:5]))
         rid=new('RUN'); c.execute('insert into aiops.runs(run_id,incident_id,mode,scenario_id,status,idempotency_key) values(%s,%s,%s,%s,%s,%s)',(rid,x.incident_id,x.mode,x.scenario_id,'CREATED',x.idempotency_key))
         for stage in STAGES:
             initial=initial_stage_state(stage)
@@ -111,8 +118,15 @@ def create(x:RunIn,authorization:str|None=Header(default=None)):
 def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
     with db() as c:
+        # Serialize a global command key even when contenders target different Runs.
+        # Always acquire this transaction lock before the Run row lock.
+        c.execute('select pg_advisory_xact_lock(hashtextextended(%s,0))',
+                  ('command:'+x.idempotency_key,))
         row=c.execute('select status,version,mode from aiops.runs where run_id=%s for update',(rid,)).fetchone()
         if not row:raise HTTPException(404,'run not found')
+        # A historical receipt is not action-bound Policy/HITL admission.
+        if row[2] == 'LIVE' and x.command in ('START', 'RESOLVE'):
+            raise HTTPException(403,'LIVE command requires verified action-bound Policy/HITL admission')
         rec=c.execute(
             'select run_id,command,response from aiops.command_receipts '
             'where idempotency_key=%s',
@@ -121,7 +135,24 @@ def command(rid:str,x:Command,authorization:str|None=Header(default=None)):
         if rec:
             if rec[0]!=rid or rec[1]!=x.command:
                 raise HTTPException(409,'command_idempotency_conflict')
-            return rec[2]
+            # A receipt also binds the original optimistic version. A reused
+            # key with a new expected_version is a different command intent.
+            # Do not trust malformed or foreign persisted responses as success.
+            try:
+                receipt = json.loads(rec[2]) if isinstance(rec[2], str) else rec[2]
+                valid = (isinstance(receipt, dict)
+                         and receipt.get('run_id') == rid
+                         and type(receipt.get('version')) is int
+                         and receipt['version'] == x.expected_version + 1
+                         and receipt.get('status') == {
+                             'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED',
+                             'RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'
+                         }[x.command])
+            except (ValueError, TypeError, KeyError):
+                valid = False
+            if not valid:
+                raise HTTPException(409,'command receipt version or response identity conflict')
+            return receipt
         status,version,mode=row
         if version!=x.expected_version:raise HTTPException(409,'stale run version')
         target={'START':'RUNNING','WAIT':'WAITING','BLOCK':'BLOCKED','RESOLVE':'RESOLVED','FAIL':'FAILED','CANCEL':'CANCELLED'}[x.command]
@@ -225,9 +256,39 @@ def scenario(sid:str):
 @app.post('/api/runs/{rid}/checkpoint')
 def checkpoint(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Temporal uses the canonical Run ID as its workflow ID. A checkpoint
+    # cannot bind this Run to a foreign workflow even on repeated delivery.
+    workflow_id = x.get('workflow_id')
+    if workflow_id is not None and (not isinstance(workflow_id, str) or workflow_id != rid):
+        raise HTTPException(409, 'checkpoint has unverified workflow identity')
+    stage = x.get('stage')
+    version = x.get('version')
+    if (not isinstance(stage, str) or not stage.strip() or stage != stage.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
+        raise HTTPException(422, 'checkpoint stage identity unknown')
+    if type(version) is not int or version < 0:
+        raise HTTPException(422, 'checkpoint version unknown')
     with db() as c:
-        c.execute("insert into aiops.run_checkpoints(run_id,stage,version,workflow_id) values(%s,%s,%s,%s) on conflict(run_id) do update set stage=excluded.stage,version=excluded.version,workflow_id=coalesce(excluded.workflow_id,aiops.run_checkpoints.workflow_id),updated_at=now()",(rid,x['stage'],x['version'],x.get('workflow_id')))
-    return {'run_id':rid,'stage':x['stage'],'version':x['version']}
+        # Atomic PostgreSQL conflict predicate fences stale and conflicting retries.
+        saved = c.execute(
+            """insert into aiops.run_checkpoints(run_id,stage,version,workflow_id)
+               values(%s,%s,%s,%s)
+               on conflict(run_id) do update set
+                 stage=excluded.stage,
+                 version=excluded.version,
+                 workflow_id=coalesce(excluded.workflow_id,aiops.run_checkpoints.workflow_id),
+                 updated_at=now()
+               where (aiops.run_checkpoints.version < excluded.version
+                      or (aiops.run_checkpoints.version = excluded.version
+                          and aiops.run_checkpoints.stage = excluded.stage))
+                 and (aiops.run_checkpoints.workflow_id is null
+                      or aiops.run_checkpoints.workflow_id = excluded.run_id)
+               returning run_id""",
+            (rid, stage, version, workflow_id),
+        ).fetchone()
+        if not saved:
+            raise HTTPException(409, 'checkpoint version, stage or ownership conflict')
+    return {'run_id':rid,'stage':stage,'version':version}
 
 @app.get('/api/runs/{rid}/checkpoint')
 def get_checkpoint(rid:str):
@@ -269,24 +330,30 @@ def execute(rid:str,authorization:str|None=Header(default=None)):
         # durable receipt instead of issuing a second Worker start on retry.
         existing=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
         if existing:
-            if not existing[0]: raise HTTPException(409,'execution receipt missing workflow identity')
+            if not isinstance(existing[0], str) or existing[0] != rid:
+                raise HTTPException(409,'execution receipt has unverified workflow identity')
             return {'run_id':rid,'workflow_id':existing[0],'idempotent':True}
         if row[4] not in ('CREATED','WAITING'):
             raise HTTPException(409,f'run not executable from {row[4]}')
         payload={'run_id':row[0],'mode':row[1],'scenario_id':row[2],'version':row[3]}
-    try:
-        r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
-        # Worker uses the canonical run ID as the Temporal workflow ID.
-        # Never persist or acknowledge a receipt for another Run/workflow.
-        if (not isinstance(data,dict) or data.get('run_id') != rid
-                or data.get('workflow_id') != rid):
-            raise HTTPException(502,'execution service returned unverified workflow identity')
-        with db() as c:
+        # Serialize first starts until the bounded Worker call and receipt readback finish.
+        try:
+            r=requests.post(WORKER+'/api/execution/start',json=payload,headers={'Authorization':f'Bearer {ADMIN}'},timeout=10); r.raise_for_status(); data=r.json()
+            # Worker uses the canonical run ID as the Temporal workflow ID.
+            # Never persist or acknowledge a receipt for another Run/workflow.
+            if (not isinstance(data,dict) or data.get('run_id') != rid
+                    or data.get('workflow_id') != rid):
+                raise HTTPException(502,'execution service returned unverified workflow identity')
             c.execute('insert into aiops.execution_receipts(run_id,workflow_id) values(%s,%s) on conflict(run_id) do nothing',(rid,data['workflow_id']))
-            winner=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()[0]
-        data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
-        return data
-    except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
+            winner_row=c.execute('select workflow_id from aiops.execution_receipts where run_id=%s',(rid,)).fetchone()
+            # A concurrent writer may win ON CONFLICT. Never acknowledge a
+            # foreign or missing durable workflow identity as successful.
+            if not winner_row or winner_row[0] != rid:
+                raise HTTPException(409,'execution receipt winner has unverified workflow identity')
+            winner=winner_row[0]
+            data['idempotent']=bool(data.get('idempotent',False)); data['workflow_id']=winner
+            return data
+        except requests.RequestException as e: raise HTTPException(503,f'execution service unavailable: {e}')
 @app.post('/api/runs/{rid}/events')
 def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
@@ -337,6 +404,22 @@ def add_event(rid:str,x:Event,authorization:str|None=Header(default=None)):
 @app.post('/api/runs/{rid}/gates')
 def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     auth(bearer(authorization))
+    # Canonical identities prevent alias rows and malformed gate receipts.
+    stage=x.get('stage')
+    state=x.get('state')
+    if (not isinstance(stage,str) or not stage.strip()
+            or stage != stage.strip() or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
+        raise HTTPException(422,'gate stage identity unknown')
+    # Match aiops.gates CHECK; Run lifecycle states are a separate contract.
+    if state not in ('PASS','FAIL','BLOCKED','UNKNOWN'):
+        raise HTTPException(422,'gate state unknown')
+    eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
+    if (not isinstance(eids,list) or not isinstance(required,list)
+            or any(not isinstance(value,str) or not value.strip() or value != value.strip()
+                   or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+                   for value in eids+required)
+            or len(eids)!=len(set(eids)) or len(required)!=len(set(required))):
+        raise HTTPException(422,'gate evidence contract malformed or duplicated')
     with db() as c:
         run=c.execute('select mode from aiops.runs where run_id=%s',(rid,)).fetchone()
         if not run: raise HTTPException(404,'run not found')
@@ -344,11 +427,20 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
                 and run[0] in ('DEMO','REPLAY','STORY')
                 and x.get('decision')!='SIMULATE'):
             raise HTTPException(422,'synthetic_policy_pass_requires_simulate')
-        eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
+        # required_evidence names categories (analyst/critic/twin/observation),
+        # not evidence IDs. Do not compare the two namespaces as sets.
+        # Nonempty lists and persisted IDs are necessary, not full category proof.
+        if x.get('state')=='PASS' and (not eids or not required):
+            raise HTTPException(409,'gate PASS requires evidence and required categories')
         if eids:
-            n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(eids,)).fetchone()[0]
-            if n!=len(set(eids)):raise HTTPException(422,'gate references unknown evidence')
-        c.execute('insert into aiops.gates(gate_id,run_id,stage,state,required_evidence,evidence_ids,decision,reason) values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(run_id,stage) do update set state=excluded.state,evidence_ids=excluded.evidence_ids,decision=excluded.decision,reason=excluded.reason,evaluated_at=now()',(new('GATE'),rid,x.get('stage','UNKNOWN'),x.get('state','UNKNOWN'),json.dumps(required),json.dumps(eids),x.get('decision'),x.get('reason')))
+            # Legacy evidence may omit run_id; an explicit owner must match.
+            # JSON null, empty and malformed owners cannot prove this binding.
+            n=c.execute("select count(*) from aiops.evidence where evidence_id=any(%s) "
+                        "and jsonb_typeof(provenance)='object' "
+                        "and (not (provenance ? 'run_id') or provenance->>'run_id'=%s)",
+                        (eids,rid)).fetchone()[0]
+            if n!=len(set(eids)):raise HTTPException(422,'gate references unknown or foreign-run evidence')
+        c.execute('insert into aiops.gates(gate_id,run_id,stage,state,required_evidence,evidence_ids,decision,reason) values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(run_id,stage) do update set state=excluded.state,required_evidence=excluded.required_evidence,evidence_ids=excluded.evidence_ids,decision=excluded.decision,reason=excluded.reason,evaluated_at=now()',(new('GATE'),rid,x.get('stage','UNKNOWN'),x.get('state','UNKNOWN'),json.dumps(required),json.dumps(eids),x.get('decision'),x.get('reason')))
     return {'run_id':rid,'stage':x.get('stage'),'state':x.get('state')}
 @app.get('/api/runs/{rid}/gates')
 def gates(rid:str):

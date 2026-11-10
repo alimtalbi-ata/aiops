@@ -1,0 +1,10 @@
+--- a/tests/test_core_live_execute_guard.py
++++ b/tests/test_core_live_execute_guard.py
+@@ -37,6 +37,7 @@
+ 
+ 
+ def load_execute(db_factory, requests):
++    requests.RequestException = type("RequestException", (Exception,), {})
+     source = pathlib.Path(__file__).resolve().parents[1] / "app/core/main.py"
+     tree = ast.parse(source.read_text(encoding="utf-8"))
+     function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "execute")

@@ -1,0 +1,33 @@
+# Night cycle #462 — reproducible delivery defects, ownership arbitration
+
+UTC: 2026-11-09T22:03:02.151125+00:00. Branch: agent/integration/462-night-20261109. Local HEAD and remote head before publication: 0489932e8682b3ed8dda5dbcaa874b60d63f00c4. Approved PR #478 remains DRAFT targeting agent/integration/462-isolated-candidate @ 3218228ab4b0d24faa117b49d08272c8e025750a. Exact delivery SHA is recorded in the publication comment (avoids self-reference).
+
+## Read and examined
+
+Read README, continuity, architecture/boundaries, decision log, catalog, stack inventory, qualification protocol. AGENTS.md absent in this candidate; read orchestration branch AGENTS.md plus its orchestration contract and cross-branch reuse inventory through GitHub. Read #458/#459/#462 comments, QA #68 (no comments), current open PR list, #476/#477 latest PR comments and full diffs, remote branch heads and local history. Current dependency DAG remains Core #470 -> #472 -> #474 -> #475 -> #476; Worker #469 -> #471 -> #473 -> #477. No merge/cherry-pick/rebase/import.
+
+Checkout initially clean. `git fetch origin` failed: .git/FETCH_HEAD read-only. Reading missing promisor objects also failed to write .git; stopped Git metadata attempts after two relevant failures. `git ls-remote origin` succeeded, confirming remote night SHA and candidate SHA above. No other checkout touched. Normal GitHub API publication of handoff only is used because local Git metadata cannot be written; local worktree handoff intentionally remains modified and must be preserved next cycle.
+
+## Defects reproduced and proposed resolutions
+
+Core #476 exact head a3a4a210d54594c347ee9c7c6a3f5fe22b0febd8: downloaded exact source app/core/main.py and tests/test_core_live_execute_guard.py + test_core_receipt_winner_conflict.py into runtime/review-fixtures (plain source fixtures, no Git checkout). `python3 -m unittest discover -s /tmp/aiops-night-20261109/runtime/review-fixtures/core/tests -p 'test_core*.py' -v`: 10 tests, FAILED with 11 subtest errors. Mock requests.RequestException is not an exception class; expected HTTP 409/502 becomes TypeError. Second diagnostic attempt bound a real Exception subclass in load_execute's requests double at runtime: 10/10 PASS. Application source unchanged. core-476-harness-proposed.patch provides the equivalent minimal helper correction, not applied to owner paths. This is harness evidence, not a fresh exact-head PASS.
+
+Worker #477 exact head d9666f7b62c1560569d8c860747b339126141ce2: downloaded worker/fs147_readonly_pipeline.py and tests/test_fs147_critic_validation_metadata.py. `PYTHONPATH=/tmp/aiops-night-20261109/runtime/review-fixtures/worker python3 -m unittest discover -s /tmp/aiops-night-20261109/runtime/review-fixtures/worker/tests -p 'test_fs147_critic_validation_metadata.py' -v`: FAILED importing module, SyntaxError unmatched ')' line 147. Second attempt removed one extra closing parenthesis in runtime fixture only: 2/2 PASS (including six negative metadata subcases). worker-477-proposed.patch records the minimal repair. No test or safety assertion removed.
+
+Arbitration requested: Core #458 owner applies helper exception binding on its active stack; Worker #459 owner applies syntax repair on its active stack; then rerun targeted tests and exact-head existing Actions. Integration does not overwrite active Core/Worker ownership. Proposed patches are review artifacts, not candidate application fixes; both candidates remain HOLD. Real concurrent PostgreSQL/Temporal start and reconciliation remain unverified.
+
+## CI and PostgreSQL
+
+Base CI https://github.com/alimtalbi-ata/aiops/actions/runs/42703074786 verified success at exact SHA 3218228ab4b0d24faa117b49d08272c8e025750a. Logs freshly read: pg_dump/pg_restore/psql all 16.15 under /usr/lib/postgresql/16/bin; server 16.15 / 160015, disposable DR PASS / 32 tables. Existing fixes 8011ddd6ff0130e52500a0832db187759a0e1025 + e7c76514b8e98cb35a9594226e7106fde98a42aa retained. `bash -n tests/postgres-dr-rehearsal.sh` PASS. Read script: loopback/identity/major-version fences, existing-target refusal, corrupt-archive negative control, single transaction/exit-on-error, counts/row hashes, scoped cleanup all retained. No PG commands executed locally.
+
+Core exact-head checks success https://github.com/alimtalbi-ata/aiops/actions/runs/42700054700 ; Worker exact-head checks success https://github.com/alimtalbi-ata/aiops/actions/runs/42701600099 . These three-check suites did not establish coverage for the reproduced failures; green checks must not promote these candidates. Night delivery CI UNK2026-11-09T22:03:02.151125+00:00N until exact new SHA observed. No heavy tests run locally.
+
+## Runtime evidence and gates
+
+GitHub-only receipt ops/debian-runtime-reports:ops/debian-reports/SRV-DEB-05/latest.json collected_at 2026-11-09T22:00:01.937171+00:00. Freshness must be recomputed; expires at 22:03:01Z with the existing three-minute rule. Core healthy image sha256:87427734395dd212f550f03498fb77954c572675b41d8e5ba5dd4f295ecbef4d; Portal running/no-healthcheck image sha256:e0559a90b34adcfe59ad3545e44195a10274398c17a308b6d8df316d4552eed1, previous f8df32... in exited rollback container dated 21:59:25Z. Worker healthy tag fs-demo-candidate-20261105. This is an observation, not attribution, deployment qualification or source parity. Preserve all generations. latest-usecase.json HTTP 404: ABSENT/UNVERIFIED, not functional FAIL.
+
+CODE: two published defects reproduced; minimal proposals validated only on temporary fixtures; application candidate unchanged. CI: base and reviewed external exact heads green as above, feature coverage insufficient; new night SHA UNK2026-11-09T22:03:02.151125+00:00N. DEBIAN: source/image parity UNK2026-11-09T22:03:02.151125+00:00N; dated read-only receipt only. E2E: NOT_VERIFIED; FS1250 HOLD; G1/G2/G3 HOLD. No production access or write, deployment/restart, new supervisor/Codex, secrets/permissions/cron/Compose change, or Policy/Critic/HITL bypass.
+
+Changed paths: latest-cycle.md, cycle-2200.md, core-476-harness-proposed.patch, worker-477-proposed.patch under this handoff directory only. No supervisor or mission changes.
+
+Risk/rollback: proposals still require owners and exact-head CI; fixtures are not full runtime proofs. Abandon branch/close DRAFT PR, retain evidence; no deployment rollback needed. Next cycle: preserve local handoff modifications, read owner responses and new SHA, verify fixes and feature-selection in existing CI; otherwise independent provenance/E2E receipt review. Hard stop 2026-11-10 06:00 UTC; current cycle ends before 540 seconds.

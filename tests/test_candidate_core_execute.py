@@ -91,12 +91,27 @@ class LiveExecutionGateTests(unittest.TestCase):
         for mode in ("DEMO", "REPLAY", "STORY"):
             for status in ("RUNNING", "RESOLVED", "FAILED"):
                 with self.subTest(mode=mode, status=status):
-                    connection = FakeDB(mode, status, receipt="wf-existing")
+                    connection = FakeDB(mode, status, receipt="RUN-1")
                     requests = Mock()
                     result = load_execute(lambda: connection, requests)("RUN-1", "Bearer offline-test")
-                    self.assertEqual(result, {"run_id": "RUN-1", "workflow_id": "wf-existing", "idempotent": True})
+                    self.assertEqual(result, {"run_id": "RUN-1", "workflow_id": "RUN-1", "idempotent": True})
                     self.assertEqual(len(connection.queries), 2)
                     requests.post.assert_not_called()
+
+    def test_retry_rejects_foreign_workflow_receipt_without_worker_dispatch(self):
+        for mode in ("DEMO", "REPLAY", "STORY"):
+            for state in ("CREATED", "WAITING", "RUNNING", "RESOLVED", "FAILED"):
+                for receipt in ("RUN-OTHER", True, 1):
+                    with self.subTest(mode=mode, state=state, receipt=receipt):
+                        connection = FakeDB(mode, state, receipt=receipt)
+                        requests = Mock()
+                        with self.assertRaises(HTTPException) as caught:
+                            load_execute(lambda: connection, requests)("RUN-1", "Bearer offline-test")
+                        self.assertEqual(caught.exception.status_code, 409)
+                        self.assertIn("workflow identity", caught.exception.detail)
+                        self.assertEqual(len(connection.queries), 2)
+                        self.assertTrue(all(q.lstrip().lower().startswith("select") for q in connection.queries))
+                        requests.post.assert_not_called()
 
     def test_non_live_progressed_without_receipt_fails_closed(self):
         connection = FakeDB("DEMO", "RUNNING")
