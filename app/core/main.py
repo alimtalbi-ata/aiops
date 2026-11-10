@@ -147,8 +147,9 @@ def checkpoint(rid:str,x:dict,authorization:str|None=Header(default=None)):
         raise HTTPException(409, 'checkpoint has unverified workflow identity')
     stage = x.get('stage')
     version = x.get('version')
-    if not isinstance(stage, str) or not stage.strip():
-        raise HTTPException(422, 'checkpoint stage unknown')
+    if (not isinstance(stage, str) or not stage.strip() or stage != stage.strip()
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in stage)):
+        raise HTTPException(422, 'checkpoint stage identity unknown')
     if type(version) is not int or version < 0:
         raise HTTPException(422, 'checkpoint version unknown')
     with db() as c:
