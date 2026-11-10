@@ -47,10 +47,49 @@ def _valid_observation_time(value):
         return False
 
 
+def _nested_hitl_artifact(payload):
+    """Fail closed on action/approval claims hidden inside adapter metadata.
+
+    Inspect bounded JSON-like structures only. Cycles, excessive nesting and
+    oversized payloads cannot be safely interpreted as read-only evidence.
+    """
+    forbidden = {"approval_binding", "approval_token", "action_intent"}
+    # Nested outcome/transition claims are as unsafe as nested HITL tokens.
+    # Only explicit NO_EFFECT, False and None preserve read-only semantics.
+    flags = {"approval_granted", "approval_consumed", "hitl_approved",
+             "action_dispatched", "action_executed", "remediation_executed",
+             "mutation_performed", "ticket_updated", "dispatch_allowed"}
+    stack = [(payload, 0)]
+    seen = set()
+    budget = 4096
+    while stack:
+        value, depth = stack.pop()
+        budget -= 1
+        if budget < 0 or depth > 16:
+            return True
+        if isinstance(value, (Mapping, list, tuple)):
+            identity = id(value)
+            if identity in seen:
+                return True
+            seen.add(identity)
+        if isinstance(value, Mapping):
+            for key, child in value.items():
+                if (key in forbidden or (key in flags and child is not False)
+                        or (key == "resolved" and child is not False)
+                        or (key == "ticket_transition" and child is not None)
+                        or (key == "effect" and child != "NO_EFFECT")):
+                    return True
+                stack.append((child, depth + 1))
+        elif isinstance(value, (list, tuple)):
+            stack.extend((child, depth + 1) for child in value)
+    return False
+
+
 def _claims_side_effect(payload):
     """Reject explicit mutation/execution claims from any read-only stage."""
     # Action-bound approval artifacts cannot authorize this read-only flow.
-    return (any(field in payload for field in ("approval_binding",
+    return (_nested_hitl_artifact(payload)
+            or any(field in payload for field in ("approval_binding",
                                                "approval_token", "action_intent"))
             or any(field in payload and payload[field] is not False
                 for field in ("action_executed", "remediation_executed",
@@ -245,8 +284,11 @@ def execute(request: FS147Request, *, stop_auto: bool,
             return block("CLOCK_UNVERIFIED", steps)
         if not timedelta(seconds=-30) <= age_after_policy <= timedelta(minutes=5):
             return block("STALE_OBSERVATION", steps)
+        # Successful diagnostic receipts require the same tenant/incident lineage
+        # as blocked receipts; consumers must not infer tenant from run_id.
         return {"status": "NO_EFFECT", "effect": "NO_EFFECT", "resolved": False,
-                "steps": steps, "run_id": request.run_id,
+                "steps": steps, "tenant_id": request.tenant_id,
+                "incident_id": request.incident_id, "run_id": request.run_id,
                 "ticket_id": request.ticket_id, "evidence_id": observation["evidence_id"]}
     except TimeoutError:
         # A timeout is an indeterminate remote outcome, not proof of failure.

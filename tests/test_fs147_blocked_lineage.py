@@ -79,8 +79,13 @@ class BlockedLineageTests(unittest.TestCase):
         self.assertNotIn("evidence_id", first)
         self.assertEqual(calls, ["observe"])
 
-    def test_readonly_success_preserves_evidence(self):
-        first, _, calls = self.run_case()
+    def test_success_receipt_preserves_scope_and_replay_has_no_second_effect(self):
+        first, replay, calls = self.run_case(replay=True)
+        self.assert_scope(first)
+        self.assert_scope(replay)
+        self.assertEqual(replay["reason"], "DUPLICATE_RUN")
+        self.assertNotIn("evidence_id", replay)
+        self.assertEqual(first["steps"], ["OBSERVE", "ANALYST", "CRITIC", "POLICY"])
         self.assertEqual(first["status"], "NO_EFFECT")
         self.assertEqual(first["evidence_id"], "evidence-a")
         self.assertEqual(calls, ["observe", "analyst", "critic", "policy"])
