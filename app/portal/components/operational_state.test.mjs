@@ -117,3 +117,18 @@ test('cancelled pending read terminates as UNKNOWN and ignores late sensitive re
  reader.cancel();
  assert.equal(events.length,2,'idle cancel must not duplicate events');
 });
+
+test('transport cannot impersonate timeout using a reserved error message',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>{throw new Error('OPERATIONAL_TIMEOUT')},x=>events.push(x),{now:()=>now,timeoutMs:500});
+ await reader.load('incidents');
+ assert.deepEqual(events,[{state:'LOADING'},{state:'ERROR',error_code:'READ_FAILED',result:null}]);
+});
+
+test('transport error with timeout-like message never reveals sensitive details',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>{throw {message:'OPERATIONAL_TIMEOUT',token:'secret-tenant-token'}},x=>events.push(x),{now:()=>now});
+ await reader.load('evidence');
+ assert.deepEqual(events.at(-1),{state:'ERROR',error_code:'READ_FAILED',result:null});
+ assert.equal(JSON.stringify(events).includes('secret-tenant-token'),false);
+});
