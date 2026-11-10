@@ -35,6 +35,12 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
     if len(edge_ids) != len(set(edge_ids)):
         raise IsolationError("duplicate dependency IDs")
     for edge in edges:
+        # An anonymous dependency cannot be audited or correlated with Evidence.
+        # A blank relation type is not proof of a valid impact relation.
+        if (not isinstance(edge.get("edge_id"), str) or not edge["edge_id"].strip()
+                or not isinstance(edge.get("relation_type"), str)
+                or not edge["relation_type"].strip()):
+            raise IsolationError("dependency identity or relation type missing")
         a, b = edge["source_id"], edge["target_id"]
         if a not in owners or b not in owners or owners[a] != owners[b]:
             raise IsolationError("orphan or cross-namespace dependency")
@@ -54,6 +60,8 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
         if not response["facts"]:
             raise IsolationError("empty RUN evidence is not proof of isolation")
         for fact in response["facts"]:
+            if not isinstance(fact.get("fact_id"), str) or not fact["fact_id"].strip():
+                raise IsolationError("missing fact identity")
             if fact["fact_id"] in seen:
                 raise IsolationError("fact ID reused across RUNs")
             seen.add(fact["fact_id"])
