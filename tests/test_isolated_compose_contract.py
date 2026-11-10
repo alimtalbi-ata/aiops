@@ -83,6 +83,12 @@ class IsolatedComposeContractTests(unittest.TestCase):
             with self.subTest(service=name):
                 self.assertRegex(services["aiops2-" + name], r"(?m)^    image: \S+")
 
+    def test_installer_blocks_before_any_mutation_until_dns_free_qualification(self):
+        marker = 'fail "dns_free_architecture_not_qualified|issue_553"'
+        self.assertIn(marker, self.installer)
+        self.assertLess(self.installer.index(marker), self.installer.index('bash deploy/init-env.sh'))
+        self.assertLess(self.installer.index(marker), self.installer.index('"\u0024{COMPOSE[@]}" up -d'))
+
     def test_runtime_qualification_checks_loopback_bindings(self):
         self.assertIn('HostIp', self.qualification)
         self.assertIn('"127.0.0.1"', self.qualification)
