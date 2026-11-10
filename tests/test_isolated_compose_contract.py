@@ -81,7 +81,7 @@ class IsolatedComposeContractTests(unittest.TestCase):
         services = {sections[i]: sections[i + 1] for i in range(1, len(sections), 2)}
         for name in ("core", "twin", "evidence", "policy", "copilot", "worker", "simulator", "portal"):
             with self.subTest(service=name):
-                self.assertRegex(services["aiops2-" + name], r"(?m)^    image: \\S+")
+                self.assertRegex(services["aiops2-" + name], r"(?m)^    image: \S+")
 
     def test_runtime_qualification_checks_loopback_bindings(self):
         self.assertIn('HostIp', self.qualification)
