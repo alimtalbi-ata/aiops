@@ -271,7 +271,7 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
         # A gate cannot claim PASS when its evidence contract is absent,
         # incomplete, duplicated or not independently persisted.
         if (not isinstance(eids,list) or not isinstance(required,list)
-                or any(not isinstance(v,str) or not v.strip() for v in eids+required)
+                or any(not isinstance(v,str) or not v.strip() or v != v.strip()\n                       or any(ord(ch) < 32 or ord(ch) == 127 for ch in v)\n                       for v in eids+required)
                 or len(eids)!=len(set(eids)) or len(required)!=len(set(required))):
             raise HTTPException(422,'gate evidence identity unknown or duplicated')
         if x.get('state')=='PASS' and (not required or not set(required).issubset(set(eids))):
