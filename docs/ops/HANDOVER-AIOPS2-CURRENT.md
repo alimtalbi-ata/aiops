@@ -99,6 +99,8 @@ Après chaque incrément : mettre à jour ce handover (faits, SHA, décisions, r
 
 ## 7. Liens de reprise
 
+- Coordination dédiée des 5 tâches UI : https://github.com/alimtalbi-ata/aiops/issues/555
+
 - Rapport central : https://github.com/alimtalbi-ata/aiops/pull/545
 - Matrice : https://github.com/alimtalbi-ata/aiops/blob/docs/debian-deployment-qualification-plan-20261110/docs/ops/AIOPS2-CONSOLIDATION-PR-20261110.md
 - Plan Debian : https://github.com/alimtalbi-ata/aiops/pull/548
