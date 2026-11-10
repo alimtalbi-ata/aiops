@@ -157,13 +157,13 @@ jobs:
         env:
           PGPASSWORD: ci-only-password
         run: |
-          docker run --rm --network host \\
-            -e PGPASSWORD="$PGPASSWORD" \\
-            -e DR_POSTGRES_HOST=127.0.0.1 \\
-            -e DR_POSTGRES_PORT=5432 \\
-            -e DR_POSTGRES_USER=aiops \\
-            -v "$GITHUB_WORKSPACE:/workspace" \\
-            -w /workspace postgres:16-alpine \\
+          docker run --rm --network host \
+            -e PGPASSWORD="$PGPASSWORD" \
+            -e DR_POSTGRES_HOST=127.0.0.1 \
+            -e DR_POSTGRES_PORT=5432 \
+            -e DR_POSTGRES_USER=aiops \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace postgres:16-alpine \
             sh -ec 'apk add --no-cache bash python3 >/dev/null && bash tests/postgres-dr-rehearsal.sh'
       - name: Upload recovery qualification evidence
         if: always()
