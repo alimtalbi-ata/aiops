@@ -17,7 +17,7 @@ test('native keyboard controls, live count, and no HTML interpretation',()=>{
  class Element{constructor(tag,doc){this.tag=tag;this.ownerDocument=doc;this.children=[];this.attrs={};this.value=tag==='select'?'ALL':'';this.textContent='';this.events={};}setAttribute(k,v){this.attrs[k]=v;}append(...xs){this.children.push(...xs);}replaceChildren(...xs){this.children=xs;}addEventListener(k,fn){this.events[k]=fn;}}
  const doc={createElement(tag){return new Element(tag,doc)}};const root=new Element('div',doc);const seen=[];
  const mounted=mountEvidenceFilter(root,{records:[{id:'synthetic-x',label:'<img src=x onerror=alert(1)>',status:'READY'}],onChange:r=>seen.push(r.state)});
- const form=root.children[0],input=form.children[0].children[0],output=form.children[2],list=form.children[3];
+ const form=root.children[0],input=form.children[0].children[0],output=form.children[2],list=form.children[4];
  assert.equal(form.attrs.role,'search');assert.equal(input.type,'search');assert.equal(output.attrs['aria-live'],'polite');
  assert.equal(list.children[0].textContent.includes('<img'),true);
  input.value='missing';input.events.input();assert.match(output.textContent,/0 preuve/);
@@ -58,4 +58,22 @@ test('synthetic empty source and unmatched filters have distinct accessible anno
  view.setRecords([{id:'synthetic-1',label:'Disque',status:'READY'}]);
  input.value='';input.events.input();
  assert.match(count.textContent,/1 preuve/);
+});
+
+test('synthetic no-match reset is keyboard operable and hidden for UNKNOWN',()=>{
+ class Element {
+  constructor(tag,doc){this.tag=tag;this.ownerDocument=doc;this.children=[];this.attrs={};this.value=tag==='select'?'ALL':'';this.textContent='';this.events={};this.hidden=false;this.focused=false;}
+  setAttribute(k,v){this.attrs[k]=v;}append(...xs){this.children.push(...xs);}
+  replaceChildren(...xs){this.children=xs;}addEventListener(k,fn){this.events[k]=fn;}
+  focus(){this.focused=true;}
+ }
+ const doc={createElement(tag){return new Element(tag,doc)}},root=new Element('div',doc);
+ const view=mountEvidenceFilter(root,{records:[{id:'synthetic-1',label:'Disk',status:'READY'}]});
+ const form=root.children[0],input=form.children[0].children[0],select=form.children[1],reset=form.children[3];
+ assert.equal(reset.tag,'button');assert.equal(reset.type,'button');assert.equal(reset.hidden,true);
+ input.value='no match';input.events.input();assert.equal(reset.hidden,false);
+ reset.events.click();assert.equal(input.value,'');assert.equal(select.value,'ALL');
+ assert.equal(input.focused,true);assert.equal(reset.hidden,true);
+ select.value='ERROR';select.events.change();assert.equal(reset.hidden,false);
+ view.setRecords(null);assert.equal(reset.hidden,true);
 });
