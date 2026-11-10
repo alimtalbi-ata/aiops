@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
-from portal.glpi_operator_view import PAGE, glpi_readonly_status, router
+from portal.glpi_operator_view import PAGE, router
 from portal.portal_integrations import build_navigation, render_navigation_html
 
 
@@ -24,8 +24,8 @@ class GLPICopilotPreservationTests(unittest.TestCase):
         self.assertIn(("/api/portal/itsm", ("GET",)), paths)
 
     def test_glpi_handoff_remains_fail_closed(self):
-        self.assertIn("TENANT_ACL_NOT_QUALIFIED", glpi_readonly_status.__doc__ or ""
-                      if False else (ROOT / "app/portal/glpi_operator_view.py").read_text())
+        self.assertIn("TENANT_ACL_NOT_QUALIFIED",
+                      (ROOT / "app/portal/glpi_operator_view.py").read_text())
         self.assertIn("GLPI reste le système de référence", PAGE)
         self.assertIn("UNKNOWN", PAGE)
         self.assertNotIn("/api/copilot/ticket/", PAGE)
