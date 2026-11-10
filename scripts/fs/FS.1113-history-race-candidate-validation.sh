@@ -72,8 +72,23 @@ PROD_TAG_ID_BEFORE="$(docker image inspect "$EXPECTED_PROD" --format '{{.Id}}')"
   exit 2
 }
 
+# Bind the candidate build to an immutable, clean checkout. A moving or dirty
+# worktree cannot provide reproducible source-to-image provenance.
+SOURCE_SHA_BEFORE="$(git -C "$ROOT" rev-parse HEAD)" || exit 4
+if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]]; then
+  echo "FS1113_ERROR=DIRTY_SOURCE_CHECKOUT"
+  exit 2
+fi
+echo "FS1113_SOURCE_SHA=$SOURCE_SHA_BEFORE"
+
 # Always rebuild from current checkout; never trust a cached candidate tag.
 bash "$ROOT/scripts/fs/FS.1097-build-history-chart-candidate.sh"
+
+SOURCE_SHA_AFTER="$(git -C "$ROOT" rev-parse HEAD)" || exit 4
+if [[ "$SOURCE_SHA_AFTER" != "$SOURCE_SHA_BEFORE" || -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]]; then
+  echo "FS1113_ERROR=SOURCE_CHANGED_DURING_BUILD"
+  exit 3
+fi
 
 # Fail closed after candidate build, before starting browser/network qualification.
 # A candidate that resolves to the protected production image is not isolated.
