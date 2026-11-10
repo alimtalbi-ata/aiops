@@ -1,0 +1,81 @@
+services:
+  aiops2-postgres:
+    container_name: null
+  aiops2-core:
+    container_name: null
+  aiops2-twin:
+    container_name: null
+  aiops2-evidence:
+    container_name: null
+  aiops2-policy:
+    container_name: null
+  aiops2-copilot:
+    container_name: null
+  aiops2-worker:
+    container_name: null
+  aiops2-simulator:
+    container_name: null
+  aiops2-portal:
+    container_name: null
+    ports:
+      - "127.0.0.1:17777:777"
+  aiops2-temporal-postgres:
+    container_name: null
+  aiops2-temporal:
+    container_name: null
+  aiops2-temporal-ui:
+    container_name: null
+  aiops2-prometheus:
+    container_name: null
+    ports:
+      - "127.0.0.1:19090:9090"
+  aiops2-grafana:
+    container_name: null
+    ports:
+      - "127.0.0.1:13000:3000"
+  aiops2-alertmanager:
+    container_name: null
+    ports:
+      - "127.0.0.1:19093:9093"
+  aiops2-glpi-db:
+    container_name: null
+  aiops2-glpi:
+    container_name: null
+    ports:
+      - "127.0.0.1:18080:80"
+  aiops2-n8n:
+    container_name: null
+    ports:
+      - "127.0.0.1:15678:5678"
+
+networks:
+  aiops2-public:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_public
+  aiops2-control:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_control
+  aiops2-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_data
+  aiops2-execution:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_execution
+  aiops2-temporal-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_temporal_data
+  aiops2-integration:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_integration
+  aiops2-observability:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_observability
+
+volumes:
+  aiops2-postgres-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_postgres_data
+  aiops2-temporal-postgres-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_temporal_postgres_data
+  aiops2-prometheus-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_prometheus_data
+  aiops2-grafana-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_grafana_data
+  aiops2-glpi-db-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_glpi_db_data
+  aiops2-glpi-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_glpi_data
+  aiops2-n8n-data:
+    name: ${AIOPS_ISOLATION_ID:?AIOPS_ISOLATION_ID_required}_n8n_data
