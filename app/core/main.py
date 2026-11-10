@@ -259,9 +259,17 @@ def gate(rid:str,x:dict,authorization:str|None=Header(default=None)):
     with db() as c:
         if not c.execute('select 1 from aiops.runs where run_id=%s',(rid,)).fetchone(): raise HTTPException(404,'run not found')
         eids=x.get('evidence_ids',[]); required=x.get('required_evidence',[])
+        # A gate cannot claim PASS when its evidence contract is absent,
+        # incomplete, duplicated or not independently persisted.
+        if (not isinstance(eids,list) or not isinstance(required,list)
+                or any(not isinstance(v,str) or not v.strip() for v in eids+required)
+                or len(eids)!=len(set(eids)) or len(required)!=len(set(required))):
+            raise HTTPException(422,'gate evidence identity unknown or duplicated')
+        if x.get('state')=='PASS' and (not required or not set(required).issubset(set(eids))):
+            raise HTTPException(409,'gate PASS requires verified required evidence')
         if eids:
             n=c.execute('select count(*) from aiops.evidence where evidence_id=any(%s)',(eids,)).fetchone()[0]
-            if n!=len(set(eids)):raise HTTPException(422,'gate references unknown evidence')
+            if n!=len(eids):raise HTTPException(422,'gate references unknown evidence')
         c.execute('insert into aiops.gates(gate_id,run_id,stage,state,required_evidence,evidence_ids,decision,reason) values(%s,%s,%s,%s,%s,%s,%s,%s) on conflict(run_id,stage) do update set state=excluded.state,evidence_ids=excluded.evidence_ids,decision=excluded.decision,reason=excluded.reason,evaluated_at=now()',(new('GATE'),rid,x.get('stage','UNKNOWN'),x.get('state','UNKNOWN'),json.dumps(required),json.dumps(eids),x.get('decision'),x.get('reason')))
     return {'run_id':rid,'stage':x.get('stage'),'state':x.get('state')}
 @app.get('/api/runs/{rid}/gates')
