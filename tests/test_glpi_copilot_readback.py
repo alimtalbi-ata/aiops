@@ -90,6 +90,17 @@ class DualReadbackTests(unittest.TestCase):
             self.invoke(ticket_id="17/../../admin")
         self.assertEqual(self.calls, [])
 
+    def test_oversized_ticket_rejected_without_adapter_call(self):
+        with self.assertRaises(GLPICopilotReadbackBlocked):
+            self.invoke(ticket_id="9" * 10000)
+        self.assertEqual(self.calls, [])
+
+    def test_boolean_cardinality_never_authorizes_context(self):
+        self.core["association_count"] = True
+        self.glpi["matching_ticket_count"] = True
+        with self.assertRaises(GLPICopilotReadbackBlocked):
+            self.invoke()
+
 
 if __name__ == "__main__":
     unittest.main()
