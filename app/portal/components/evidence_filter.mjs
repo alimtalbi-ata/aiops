@@ -34,16 +34,20 @@ export function mountEvidenceFilter(root,{records=[],onChange=()=>{}}={}){
     const option=doc.createElement('option');option.value=value;option.textContent=value==='ALL'?'Tous les états':value;status.append(option);
   }
   const count=doc.createElement('output');count.setAttribute('role','status');count.setAttribute('aria-live','polite');
+  // When filters hide every authorized record, offer an explicit keyboard action to recover.
+  const reset=doc.createElement('button');reset.type='button';reset.textContent='Effacer les filtres';
+  reset.addEventListener('click',()=>{input.value='';status.value='ALL';update();input.focus();});
   const list=doc.createElement('ul');list.setAttribute('aria-label','Preuves filtrées');
   function update(){
     const result=filterEvidence(records,{query:input.value,status:status.value||'ALL'});
     list.replaceChildren();
     for(const record of result.records){const li=doc.createElement('li');li.textContent=record.label+' — '+record.status;list.append(li);}
+    reset.hidden=!(result.state==='EMPTY' && Array.isArray(records) && records.length>0);
     count.textContent=result.state==='UNKNOWN'?'Preuves non vérifiables':result.state==='EMPTY'?(Array.isArray(records)&&records.length===0?'Aucune preuve disponible':'Aucune preuve ne correspond aux filtres'):`${result.records.length} preuve(s) — ${result.state}`;
     onChange(result);
   }
   input.addEventListener('input',update);status.addEventListener('change',update);
   form.addEventListener('submit',event=>event.preventDefault());
-  label.append(input);form.append(label,status,count,list);root.replaceChildren(form);update();
+  label.append(input);form.append(label,status,count,reset,list);root.replaceChildren(form);update();
   return {setRecords(next){records=next;update();},refresh:update};
 }
