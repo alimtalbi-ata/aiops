@@ -54,6 +54,12 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
         a, b = edge["source_id"], edge["target_id"]
         if a not in owners or b not in owners or owners[a] != owners[b]:
             raise IsolationError("orphan or cross-namespace dependency")
+        # Endpoint ownership alone is insufficient: a dependency may carry
+        # contradictory SAN/FS provenance even when both IDs are in FS.
+        owner = owners[a]
+        for field in ("namespace", "source_namespace", "target_namespace"):
+            if field in edge and edge[field] != owner:
+                raise IsolationError("cross-namespace dependency provenance")
     run_ids = [fs_facts["run_id"], san_facts["run_id"]]
     if not all(run_ids) or len(set(run_ids)) != 2:
         raise IsolationError("RUN IDs missing or shared")
@@ -86,6 +92,11 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
             payload = json.loads(raw, object_pairs_hook=_unique_pairs) if isinstance(raw, str) else raw
             if not isinstance(payload, dict):
                 raise IsolationError("invalid fact provenance")
+            # A fact may have a correct node_id but a forged embedded SAN/FS
+            # scope. Evidence consumers must not trust that nested provenance.
+            for field in ("namespace", "source_namespace", "target_namespace"):
+                if field in payload and payload[field] != namespace:
+                    raise IsolationError("cross-namespace embedded observation provenance")
             if payload.get("run_id") != response["run_id"]:
                 raise IsolationError("cross-RUN observation")
             if payload.get("synthetic") not in (True, "true") or payload.get("synthetic") == 1:
