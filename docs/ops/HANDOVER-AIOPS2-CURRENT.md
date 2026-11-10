@@ -91,6 +91,21 @@ Comparaisons GitHub `main...head` effectuées **sur les branches complètes**, a
 
 **Prochaine tâche concrète affinée** : analyse des trois patches PR-vers-base et des tests associés, cartographie des imports/interfaces, puis composition d'un lot minimal Core/Worker/Twin ; parallèlement, intégrer le paquet Portal en respectant les chaînes #547→#550, #544→#551 et les tests #538. Actualiser les SHA des tâches horaires juste avant tout lot.
 
+## 5 quater. Préparation de la journée du 11 novembre — cinq tâches
+
+Les cinq automatisations AIOPS2 existantes ont été retrouvées et **leurs prompts mis à jour** (audit, UX, données/UI, frontend/recette, coordination). La cadence **horaire** et l'état actif ont été préservés. L'appel de démarrage immédiat a retourné `Ready to run in this conversation` pour les cinq : **cela ne démontre pas cinq exécutions autonomes achevées**, ni la production de nouvelles PR. La programmation horaire future reste active.
+
+Objectif de la journée : un candidat de consolidation **pour la plateforme existante** et un protocole de tests/rollback utilisable par l'opérateur, sans opération sur Debian avant autorisation. Coordination et critères : https://github.com/alimtalbi-ata/aiops/issues/555#issuecomment-6780735619
+
+**Ordre de travail :** audit #538 ; design #541 ; données #547→#550 ; frontend #544→#551 ; coordination du candidat commun. Chaque rôle publie PR, head SHA, tests/CI du head, limites, dépendances et recette. Les branches sont susceptibles de changer à chaque heure ; vérifier à nouveau avant intégration.
+
+**Préflight pour demain (à exécuter seulement après levée du HOLD et autorisation ciblée) :**
+1. Identifier et sauvegarder l'état des cinq stacks et de leurs volumes ; inventorier ports, routes, Docker networks, images et secrets sans les afficher.
+2. Vérifier le périmètre réseau : DNS Docker entre conteneurs permis ; DNS externe bloqué, images préchargées, aucun pull/build.
+3. Valider l'absence de collision des ports et ressources du candidat isolé ; vérifier le plan de retour arrière et une restauration réellement testée.
+4. Vérifier P0 #535 (révocation/rotation, audit historique, approbation indépendante), CI du candidat et recette négative sécurité.
+5. **Autorisation explicite de l'opérateur avant toute connexion/intervention Debian** ; sinon résultat `NO_GO` et conserver l'existant intact.
+
 ## 6. Prochaine action concrète pour un nouvel agent
 
 **Ne pas commencer par le déploiement Debian.** Commencer par récupérer l'état actuel des PR et les diffs/commits cumulés **#515, #516, #517** contre leurs bases et contre `main`. Construire une matrice « changement utile / dépendance / risque / test requis », puis créer une branche/PR de consolidation **uniquement si** les dépendances sont comprises et le périmètre testable. Garder les PR sources en Draft et ne rien fusionner automatiquement.
