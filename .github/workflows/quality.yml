@@ -196,6 +196,20 @@ jobs:
               "responseMode": "responseNode"
           }, "webhook must be configured for responseNode"
           assert response.get("type") == "n8n-nodes-base.respondToWebhook"
+          assert set(data) == {
+              "name", "nodes", "connections", "active", "settings", "versionId"
+          }, "unexpected top-level n8n workflow configuration"
+          assert data["settings"] == {}, "n8n template settings must be empty"
+          expected_node_keys = {
+              "parameters", "id", "name", "type", "typeVersion", "position"
+          }
+          for node in nodes:
+              assert set(node) == expected_node_keys, (
+                  "unexpected n8n node fields (including credentials or hooks)"
+              )
+              assert isinstance(node["position"], list) and len(node["position"]) == 2
+          assert webhook["id"] == "webhook" and webhook["typeVersion"] == 2
+          assert response["id"] == "response" and response["typeVersion"] == 1
           parameters = response.get("parameters")
           assert isinstance(parameters, dict)
           assert set(parameters) == {"respondWith", "responseBody"}
