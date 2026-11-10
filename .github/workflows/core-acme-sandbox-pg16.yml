@@ -64,13 +64,13 @@ jobs:
             sleep 1
           done
           /usr/lib/postgresql/16/bin/psql -h 127.0.0.1 -U aiops -d aiops -Atqc 'show server_version_num' | grep -E '^16[0-9]{4}$'
-      - name: Twenty-one PG16 regressions including terminal security and Temporal, no skip
+      - name: Twenty-four PG16 regressions including real lock contention and Temporal, no skip
         shell: bash
         run: |
           set -euo pipefail
           /tmp/core-acme-venv/bin/python -m compileall -q app/core/acme_sandbox.py tests/test_core_acme_sandbox_pg16.py
           /tmp/core-acme-venv/bin/python -m unittest discover -s tests -p 'test_core_acme_sandbox_pg16.py' -v 2>&1 | tee /tmp/core-acme-tests.log
-          grep -E '^Ran 21 tests in ' /tmp/core-acme-tests.log
+          grep -E '^Ran 24 tests in ' /tmp/core-acme-tests.log
           grep -x 'OK' /tmp/core-acme-tests.log
           ! grep -E 'skipped=|NOT_QUALIFIED' /tmp/core-acme-tests.log
           echo 'SYNTHETIC_ONLY=true HUMAN_GLPI_AUTH=UNKNOWN HOST_DEPLOY=false EFFECT_ALLOWED=false'
