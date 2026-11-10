@@ -54,7 +54,7 @@ export function createLatestReader(read,publish,{now=()=>Date.now()}={}){
     publish({state,result:state==='READY'||state==='EMPTY'?result:null});
    }catch(error){
     if(id!==generation||signal.aborted)return;
-    publish({state:'ERROR',error});
+    // Never publish raw transport errors: messages, URLs and headers may carry secrets.\n    publish({state:'ERROR',error_code:'READ_FAILED',result:null});
    }
   },
   cancel(){generation++;if(controller)controller.abort();controller=null;}

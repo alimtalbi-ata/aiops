@@ -62,3 +62,13 @@ test('qualified empty result remains EMPTY, transport error remains ERROR',async
  await reader.load('empty');fail=true;await reader.load('error');
  assert.deepEqual(published.map(x=>x.state),['LOADING','EMPTY','LOADING','ERROR']);
 });
+
+test('transport failures never expose secrets or raw error objects to UI',async()=>{
+ const published=[];
+ const secret='Bearer super-secret-token';
+ const reader=createLatestReader(async()=>{throw new Error('GET https://api.invalid/?token='+secret)},x=>published.push(x),{now:()=>now});
+ await reader.load('incidents');
+ assert.deepEqual(published,[{state:'LOADING'},{state:'ERROR',error_code:'READ_FAILED',result:null}]);
+ assert.equal(JSON.stringify(published).includes(secret),false);
+ assert.equal(JSON.stringify(published).includes('api.invalid'),false);
+});
