@@ -71,6 +71,11 @@ def verify_hmac_xref_event(
             or type(claims.get("association_count")) is not int
             or claims["association_count"] != 1):
         raise XrefSignatureRejected("signed_association_not_unique_active")
+    required_identity = ("glpi_instance_id", "glpi_entity_id",
+                         "incident_id", "run_id")
+    if any(not isinstance(claims.get(field), str) or not claims[field]
+           for field in required_identity):
+        raise XrefSignatureRejected("signed_identity_missing")
     if (not isinstance(nonce, str) or not 16 <= len(nonce) <= 128
             or not nonce.isascii() or not nonce.isalnum()):
         raise XrefSignatureRejected("signed_nonce_invalid")
