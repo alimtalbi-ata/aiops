@@ -107,7 +107,9 @@ def make_glpi_session_ticket_get(
             # Authentication does not establish the requested ticket identity.
             observed_id = ticket.get("id")
             if (type(observed_id) not in (str, int)
-                    or str(observed_id) != ticket_id):
+                    or str(observed_id) != ticket_id
+                    or not isinstance(ticket.get("entities_id"), (str, int))
+                    or type(ticket.get("entities_id")) is bool):
                 raise GLPISessionReadBlocked("glpi_ticket_response_mismatch")
             return ticket
         except (HTTPError, URLError, TimeoutError, OSError, UnicodeError,
