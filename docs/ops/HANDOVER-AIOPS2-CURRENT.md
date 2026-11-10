@@ -140,6 +140,10 @@ L'opérateur a confirmé en lecture seule :
 - **HOLD** : pas de `docker compose up`, `docker system prune`, déplacement du data-root, restauration, nettoyage du checkout, push de déploiement stable, ni mutation des cinq autres stacks avant inventaire du stockage historique. Conserver le patch local de 8 204 octets.
 - Prochaine recherche non destructive : historiques de configuration Docker (`/etc/docker`, systemd, anciens scripts), emplacement réel des données via volumes/montages et journaux d'opérations, comparer les empreintes de rapports datés ; documenter une procédure de récupération avec rollback et revue avant exécution.
 
+### Directive produit prioritaire — 2026-11-10 (correction opérateur)
+
+**AIOPS2 est une ÉVOLUTION / UPGRADE / UPDATE FONCTIONNELLE de la plateforme existante, et non une reconstruction.** Produire cette nuit des incréments GitHub testés : régressions, UX, read models, portail, intégration progressive, compatibilité avec fonctions historiques, procédures de mise à jour et rollback. Ne pas remplacer les stacks ni perdre des fonctions. Le diagnostic Docker #557 est un **incident infrastructure indépendant**, à traiter en lecture seule et sans reconstruction ; il n'empêche pas de développer/tester les correctifs GitHub. Les tâches horaires coordination et audit ont été réorientées en ce sens, trois autres tâches UX/données/frontend restent actives. Tout déploiement sur Debian reste HOLD jusqu'à préflight, identification du stockage, sauvegardes et autorisation ciblée.
+
 ## 6. Prochaine action concrète pour un nouvel agent
 
 **Ne pas commencer par le déploiement Debian.** Commencer par récupérer l'état actuel des PR et les diffs/commits cumulés **#515, #516, #517** contre leurs bases et contre `main`. Construire une matrice « changement utile / dépendance / risque / test requis », puis créer une branche/PR de consolidation **uniquement si** les dépendances sont comprises et le périmètre testable. Garder les PR sources en Draft et ne rien fusionner automatiquement.
