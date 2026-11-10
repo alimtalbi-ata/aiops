@@ -127,3 +127,12 @@ No SSH, shell, Docker, or Debian host connector is available in this session. No
 - Merge: still HOLD pending independent review and isolated authenticated positive E2E.
 - Debian: HOLD pending fresh preservation inventory, verified backups/restores, current health and rollback readiness.
 - No migration, restart, deployment, GLPI write, Copilot activation or HITL execution is authorized by this plan.
+
+## 7. Direct-IP operation — operator instruction (2026-11-10)
+
+- **Authoritative target supplied by operator:** Debian host `10.79.94.202`.
+- **DNS policy for this rollout:** do not use DNS names, hostnames, FQDNs, DNS discovery, reverse lookups, or hostname-based service URLs. Use the literal IPv4 address `10.79.94.202` for the target host and literal IP-based URLs for host-published services. Do not infer or invent service ports; confirm them from a fresh read-only host inventory.
+- SSH, if performed by an authorized operator from an approved workstation, must target the literal IP and retain normal host-key verification. Do not disable StrictHostKeyChecking or use password/credential values in chat, command history or logs. SSH username, port, authentication method and host-key fingerprint are not yet supplied/verified.
+- Do not add an `/etc/hosts` alias or configure DNS as a workaround. If an application or certificate requires a DNS hostname, treat that as a deployment blocker and obtain an explicit IP-compatible design/approval rather than silently falling back to DNS.
+- All preflight, backup, restore-validation and deployment requests must remain scoped to `10.79.94.202`; no other host is authorized by this instruction.
+- This is a target/transport constraint only. It does not establish network reachability, SSH access, service availability, host identity, or permission to make changes.
