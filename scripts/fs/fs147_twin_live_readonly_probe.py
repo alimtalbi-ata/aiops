@@ -33,7 +33,9 @@ def _unique_json_object(pairs):
 
 def fetch_json(base_url, path, token, timeout=8, opener=None):
     parsed = urlsplit(base_url)
-    if (parsed.scheme not in ("http", "https") or not parsed.hostname\n            or parsed.username or parsed.password or parsed.query or parsed.fragment\n            or parsed.path not in ("", "/") or any(ch.isspace() for ch in base_url)):
+    if (parsed.scheme not in ("http", "https") or not parsed.hostname
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.path not in ("", "/") or any(ch.isspace() for ch in base_url)):
         raise IsolationError("invalid Twin API base URL")
     if not token:
         raise IsolationError("Twin read token missing")
