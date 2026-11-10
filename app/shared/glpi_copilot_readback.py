@@ -27,7 +27,8 @@ def resolve_glpi_copilot_context(
     """
     if not all((isinstance(v, str) and v.strip()) for v in (ticket_id, actor, tenant_id)):
         raise GLPICopilotReadbackBlocked("actor_tenant_ticket_required")
-    if not (ticket_id.isascii() and ticket_id.isdecimal() and int(ticket_id) > 0):
+    if not (ticket_id.isascii() and ticket_id.isdecimal()
+            and len(ticket_id) <= 18 and ticket_id[0] in "123456789"):
         raise GLPICopilotReadbackBlocked("invalid_ticket_id")
     if not all(callable(fn) for fn in
                (resolve_canonical_xref, read_core_run, read_glpi_ticket)):
