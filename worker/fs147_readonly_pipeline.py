@@ -75,6 +75,11 @@ def _nested_hitl_artifact(payload):
             seen.add(identity)
         if isinstance(value, Mapping):
             for key, child in value.items():
+                # Adapter payloads cross a JSON service boundary. Non-string keys
+                # can be silently rewritten or dropped during serialization,
+                # including keys that become privileged claims downstream.
+                if type(key) is not str:
+                    return True
                 if (key in forbidden or (key in flags and child is not False)
                         or (key == "resolved" and child is not False)
                         or (key == "ticket_transition" and child is not None)
@@ -85,6 +90,14 @@ def _nested_hitl_artifact(payload):
                 stack.append((child, depth + 1))
         elif isinstance(value, (list, tuple)):
             stack.extend((child, depth + 1) for child in value)
+        elif value is None or type(value) in (str, bool, int):
+            continue
+        elif type(value) is float and math.isfinite(value):
+            continue
+        else:
+            # No opaque objects, sets, bytes, NaN or infinity can cross the
+            # read-only evidence boundary as an uninspected metadata value.
+            return True
     return False
 
 
