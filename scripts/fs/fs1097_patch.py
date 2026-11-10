@@ -73,6 +73,7 @@ async function loadHistory(){
   const response=await Promise.race([fetch(url,{credentials:"same-origin",headers:{Accept:"application/json"},signal:controller.signal}),historyDeadline]);
   if(requestId!==historyRequestId)return;
   if(historyTimedOut)throw new Error("History request timed out");
+  if(response.status===401||response.status===403)throw Object.assign(new Error("History access denied"),{historyAuthDenied:true});
   if(!response.ok)throw new Error("HTTP "+response.status);
   const data=await Promise.race([response.json(),historyDeadline]);
   if(requestId!==historyRequestId)return;
@@ -110,7 +111,7 @@ async function loadHistory(){
    const item=document.createElement("span"),swatch=document.createElement("i"),label=document.createElement("span");swatch.className="history-swatch history-swatch-"+(index%historyColors.length);label.textContent=name;item.append(swatch,label);legend.append(item);
   });
   status.textContent=series.length+" séries · "+points.length+" points · pas "+data.step_seconds+" s · "+windowSize;
- }catch(error){if(requestId!==historyRequestId||(!historyTimedOut&&(controller.signal.aborted||error?.name==="AbortError")))return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));legend.replaceChildren();status.textContent="Historique indisponible · réessayez ou contactez l’exploitation";}
+ }catch(error){if(requestId!==historyRequestId||(!historyTimedOut&&(controller.signal.aborted||error?.name==="AbortError")))return;chart.replaceChildren(historyElement("text",{x:450,y:160,"text-anchor":"middle",class:"history-axis"},"Historique indisponible"));legend.replaceChildren();status.textContent=error?.historyAuthDenied?"Accès refusé à l’historique · authentification ou autorisation requise":"Historique indisponible · réessayez ou contactez l’exploitation";}
  finally{clearTimeout(historyTimeout);if(requestId===historyRequestId){button.disabled=false;if(historyAbortController===controller)historyAbortController=null}}
 }
 $("history-refresh").addEventListener("click",loadHistory);
