@@ -107,3 +107,7 @@ A separate implementation candidate is under review in PR #549:
 This candidate has **not** been executed on Debian. It must pass CI and independent review first.
 
 **DNS scope clarification:** the installer performs no registry pulls/builds and makes no host/external DNS query. The Compose application still uses Docker's embedded DNS for service-name resolution between containers. The user's no-DNS requirement is therefore not yet fully satisfied if it includes Docker-internal DNS. If “no DNS” also prohibits Docker-internal DNS, this candidate is not compliant and must not be run until service discovery is redesigned around fixed IPs or another explicitly approved mechanism.
+
+
+### Latest review note — Compose port merge hazard
+A prior overlay-based candidate could retain the base Compose wildcard port bindings when lists were merged. PR #549 has been changed to use a standalone `compose.isolated.yml` manifest, with no base file merge. The updated CI contract asserts exactly six published port entries and all are `127.0.0.1` bindings. The corrected CI run is pending; this does not authorize target execution.
