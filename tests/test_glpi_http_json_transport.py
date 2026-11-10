@@ -61,6 +61,32 @@ class TransportTests(unittest.TestCase):
             get(url="http://core.internal", actor="operator", tenant_id="tenant-a")
         self.assertEqual(opener.calls, [])
 
+    def test_invalid_scope_does_not_fetch_credentials_or_open_network(self):
+        opener = FakeOpener(Response())
+        credentials = []
+        with patch("shared.glpi_http_json_transport.build_opener", return_value=opener):
+            get = make_json_get(get_token=lambda **kw: credentials.append(kw) or "token",
+                                allowed_origin="https://core.internal")
+        for field, value in (("actor", "a" + chr(10) + "b"),
+                             ("tenant_id", "t" + chr(0) + "b"),
+                             ("actor", "a" * 257),
+                             ("tenant_id", "t" * 129)):
+            with self.subTest(field=field):
+                args = dict(url="https://core.internal/api/runs/RUN-1",
+                            actor="operator", tenant_id="tenant-a")
+                args[field] = value
+                with self.assertRaises(ReadTransportBlocked):
+                    get(**args)
+        self.assertEqual(credentials, [])
+        self.assertEqual(opener.calls, [])
+
+    def test_invalid_trusted_origins_rejected_at_construction(self):
+        for origin in ("https://core.internal/", "https://core.internal:0",
+                       "https://" + "a" * 510 + ".internal"):
+            with self.subTest(origin=origin), self.assertRaises(ValueError):
+                make_json_get(get_token=lambda **kw: "token",
+                              allowed_origin=origin)
+
     def test_non_json_and_oversized_fail_closed(self):
         for response in (Response(b'[]'), Response(b'{bad')):
             get, _ = self.create(response=response)
