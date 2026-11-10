@@ -36,10 +36,11 @@ export function renderOperationalState(root,state,{details='',retry=null}={}) {
 export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15000}={}){
  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120000)throw new RangeError('timeoutMs must be 1..120000');
  if(typeof read!=='function'||typeof publish!=='function')throw new TypeError('read/publish required');
- let generation=0,controller=null;
+ let generation=0,controller=null,active=false;
  return {
   async load(query){
    const id=++generation;
+   active=true;
    if(controller)controller.abort();
    controller=new AbortController();
    const signal=controller.signal;
@@ -56,10 +57,12 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
     // an unqualified projection as READY. Never authorize in the browser.
     const scoped=result && result.scope_verified===true && result.authorization_source==='server';
     const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now()}) : 'UNKNOWN';
+    active=false;
     publish({state,result:state==='READY'||state==='EMPTY'?result:null});
    }catch(error){
     if(id!==generation||signal.aborted)return;
     // Never publish raw transport errors: messages, URLs and headers may carry secrets.
+    active=false;
     if(error?.message==='OPERATIONAL_TIMEOUT'){
      controller.abort();
      publish({state:'UNKNOWN',reason:'TIMEOUT',result:null});
@@ -68,6 +71,10 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
     clearTimeout(timer);
    }
   },
-  cancel(){generation++;if(controller)controller.abort();controller=null;}
+  cancel(){
+   generation++;if(controller)controller.abort();controller=null;
+   // A cancelled in-flight read must terminate without stale data.
+   if(active){active=false;publish({state:'UNKNOWN',result:null});}
+  }
  };
 }
