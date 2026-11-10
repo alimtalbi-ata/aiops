@@ -68,8 +68,8 @@ class DualReadbackTests(unittest.TestCase):
                              ("incident_id", "INC-OTHER-12345678"),
                              ("run_id", "RUN-87654321")):
             with self.subTest(field=field):
-                self.glpi = dict(self.identity, glpi_ticket_readback_verified=True,
-                                 matching_ticket_count=1, **{field: value})
+                self.glpi = {**self.identity, "glpi_ticket_readback_verified": True,
+                             "matching_ticket_count": 1, field: value}
                 with self.assertRaises(GLPICopilotReadbackBlocked):
                     self.invoke()
                 self.glpi = dict(self.identity, glpi_ticket_readback_verified=True,
