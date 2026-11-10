@@ -92,6 +92,11 @@ def qualify(graph, fs_facts, san_facts, fs_namespace, san_namespace, expected_fs
             payload = json.loads(raw, object_pairs_hook=_unique_pairs) if isinstance(raw, str) else raw
             if not isinstance(payload, dict):
                 raise IsolationError("invalid fact provenance")
+            # A fact may have a correct node_id but a forged embedded SAN/FS
+            # scope. Evidence consumers must not trust that nested provenance.
+            for field in ("namespace", "source_namespace", "target_namespace"):
+                if field in payload and payload[field] != namespace:
+                    raise IsolationError("cross-namespace embedded observation provenance")
             if payload.get("run_id") != response["run_id"]:
                 raise IsolationError("cross-RUN observation")
             if payload.get("synthetic") not in (True, "true") or payload.get("synthetic") == 1:
