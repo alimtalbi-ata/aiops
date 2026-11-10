@@ -68,6 +68,9 @@ def main():
                                                         'true' if metric == 'scrape_duration' else 'false'))
                         response = page.goto(BASE + "/explorer/visual", wait_until="domcontentloaded", timeout=25000)
                         assert response and response.status == 200, "candidate visual endpoint unavailable"
+                        # The stale request must actually be in flight before changing controls.
+                        # Otherwise the test can pass without exercising the generation guard.
+                        page.wait_for_function("window.__fs1113HistoryFetchCount === 1", timeout=10000)
                         # Force at least one newer request even for the default 1h/availability case.
                         if metric != "availability":
                             page.locator("#history-metric").select_option(metric)
@@ -80,6 +83,7 @@ def main():
                                  !document.querySelector('#history-refresh').disabled &&
                                  document.querySelector('#history-metric').value === m;
                         }""", arg=[metric, window_size], timeout=10000)
+                        assert page.evaluate("window.__fs1113HistoryFetchCount") >= 2, (metric, window_size, "race not exercised")
                         page.wait_for_timeout(1600)  # stale first response resolves after the latest
                         assert not page.evaluate("window.__fs1113UnhandledRejections || []"), (metric, window_size, "unhandled stale rejection")
                         assert page.locator("#history-legend > span").count() == 5, (metric, window_size)
