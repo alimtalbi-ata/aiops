@@ -64,6 +64,25 @@ class IsolatedComposeContractTests(unittest.TestCase):
         self.assertNotIn("docker volume rm", self.installer)
         self.assertNotIn("RETIRE_LEGACY=1", self.installer)
 
+    def test_critical_service_network_paths(self):
+        # Parse only the service sections to avoid matching unrelated network declarations.
+        sections = re.split(r"(?m)^  (aiops2-[a-z0-9-]+):\n", self.compose.split("\nnetworks:")[0])
+        services = {sections[i]: sections[i + 1] for i in range(1, len(sections), 2)}
+        def networks(name):
+            match = re.search(r"(?m)^    networks: \[([^\]]+)\]", services[name])
+            self.assertIsNotNone(match, name)
+            return set(re.findall(r"aiops2-[a-z-]+", match.group(1)))
+        for a, b in (("aiops2-n8n", "aiops2-postgres"), ("aiops2-simulator", "aiops2-core")):
+            with self.subTest(source=a, destination=b):
+                self.assertTrue(networks(a) & networks(b), f"{a} cannot reach {b}")
+
+    def test_application_images_are_explicit(self):
+        sections = re.split(r"(?m)^  (aiops2-[a-z0-9-]+):\n", self.compose.split("\nnetworks:")[0])
+        services = {sections[i]: sections[i + 1] for i in range(1, len(sections), 2)}
+        for name in ("core", "twin", "evidence", "policy", "copilot", "worker", "simulator", "portal"):
+            with self.subTest(service=name):
+                self.assertRegex(services["aiops2-" + name], r"(?m)^    image: \\S+")
+
     def test_runtime_qualification_checks_loopback_bindings(self):
         self.assertIn('HostIp', self.qualification)
         self.assertIn('"127.0.0.1"', self.qualification)
