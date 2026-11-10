@@ -73,8 +73,8 @@ class IncidentIdentityTests(unittest.TestCase):
                 self.assertEqual(params[5:7], (source, synthetic))
 
     def test_same_identity_is_replayable(self):
-        result, calls = self.invoke(("INC-FS147",))
-        self.assertEqual(result["incident_id"], "INC-FS147")
+        result, calls = self.invoke(("INC-CANONICAL-EXISTING",))
+        self.assertEqual(result["incident_id"], "INC-CANONICAL-EXISTING")
         self.assertEqual(result["synthetic"], True)
         self.assertEqual(len(calls), 1)
 
