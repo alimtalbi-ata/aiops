@@ -45,3 +45,30 @@ def verify_run_evidence(run_id, completed_events, core_listing, fetch_evidence):
     return {"run_id":run_id,"verified_persisted_evidence":len(verified),
             "canonical_sha256_readback":"PASS","cryptographic_signature":"NOT_VERIFIED",
             "database_direct_sql":"NOT_VERIFIED","file_artifacts":"NOT_VERIFIED"}
+
+def verify_evidence_sql(run_id, evidence_ids, connection):
+    """Direct read-only PG check: all IDs persisted, linked to Run events and hashed."""
+    if not isinstance(run_id,str) or not re.fullmatch(r"RUN-[A-Za-z0-9-]{6,80}",run_id):
+        raise ValueError("INVALID_RUN_ID")
+    if not isinstance(evidence_ids,set) or not evidence_ids or any(
+        not isinstance(i,str) or not i for i in evidence_ids
+    ):
+        raise ValueError("INVALID_EVIDENCE_IDS")
+    with connection.cursor() as cursor:
+        cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute(
+            """SELECT e.evidence_id,e.payload_hash,e.provenance->>'run_id',
+                      EXISTS(SELECT 1 FROM aiops.run_events re
+                             WHERE re.run_id=%s
+                               AND re.evidence_ids @> jsonb_build_array(e.evidence_id))
+               FROM aiops.evidence e WHERE e.evidence_id = ANY(%s)""",
+            (run_id,sorted(evidence_ids)))
+        rows=cursor.fetchall()
+    if len(rows)!=len(evidence_ids) or {r[0] for r in rows}!=evidence_ids:
+        raise ValueError("SQL_EVIDENCE_ROWS_MISSING")
+    if any(r[2]!=run_id or r[3] is not True for r in rows):
+        raise ValueError("SQL_RUN_EVENT_LINK_MISMATCH")
+    if any(not isinstance(r[1],str) or not re.fullmatch(r"[0-9a-f]{64}",r[1]) for r in rows):
+        raise ValueError("SQL_EVIDENCE_DIGEST_INVALID")
+    return {"sql_persisted_rows":len(rows),"database_direct_sql":"PASS",
+            "sql_run_event_links":"PASS"}
