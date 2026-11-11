@@ -90,6 +90,8 @@ test('synthetic evidence statuses are localized without promoting UNKNOWN to REA
  const rows=[{id:'synthetic-ready',label:'Disque',status:'READY'},{id:'synthetic-unknown',label:'Réseau',status:'UNKNOWN'},{id:'synthetic-error',label:'Agent',status:'ERROR'},{id:'synthetic-empty',label:'Sans preuve',status:'EMPTY'}];
  const view=mountEvidenceFilter(root,{records:rows});
  const form=root.children[0],status=form.children[1],count=form.children[2],list=form.children[4];
+ assert.deepEqual(status.children.map(option=>[option.value,option.textContent]),[['ALL','Tous les états'],['READY','Disponible'],['UNKNOWN','Non vérifiable'],['ERROR','Erreur'],['EMPTY','Vide']]);
+
  assert.deepEqual(list.children.map(x=>x.textContent),['Disque — Disponible','Réseau — Non vérifiable','Agent — Erreur','Sans preuve — Vide']);
  assert.match(count.textContent,/4 résultat/);
  status.value='UNKNOWN';status.events.change();
