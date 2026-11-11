@@ -25,3 +25,25 @@ test('projection is immutable and does not return browser-provided actor or secr
  assert.equal(JSON.stringify(value).includes('secret'),false);
  assert.equal(JSON.stringify(value).includes('other-tenant'),false);
 });
+
+test('accessors never execute, even for cancellation and status',()=>{
+ for (const key of ['status','aborted','timedOut']) {
+  let calls=0;
+  const input={status:403};
+  Object.defineProperty(input,key,{enumerable:true,get(){calls++;throw new Error('secret');}});
+  assert.deepEqual(project(input),{state:'ERROR',error_code:'READ_FAILED',result:null});
+  assert.equal(calls,0);
+ }
+});
+test('inherited authorization-like status and flags are ignored',()=>{
+ const input=Object.create({status:403,aborted:true,timedOut:true});
+ assert.deepEqual(project(input),{state:'ERROR',error_code:'READ_FAILED',result:null});
+});
+test('hostile Proxy descriptors fail closed without exposing exceptions',()=>{
+ const input=new Proxy({status:403},{getOwnPropertyDescriptor(){throw new Error('Bearer secret');}});
+ assert.deepEqual(project(input),{state:'ERROR',error_code:'READ_FAILED',result:null});
+});
+test('own data descriptors preserve cancellation precedence and 403',()=>{
+ assert.deepEqual(project({status:403}),{state:'UNKNOWN',reason:'TENANT_ACL_NOT_QUALIFIED',result:null});
+ assert.deepEqual(project({status:403,aborted:true,timedOut:true}),{state:'UNKNOWN',reason:'CANCELLED',result:null});
+});
