@@ -70,7 +70,7 @@
     if (rows && states.runs === "READABLE_UNVERIFIED" && data.runs &&
         Array.isArray(data.runs.items)) {
       rows.replaceChildren();
-      for (const run of data.runs.items.slice(0, 15)) {
+      for (const run of data.runs.items) {
         if (!run || typeof run.run_id !== "string") continue;
         const tr = document.createElement("tr");
         for (const field of ["run_id", "mode", "status", "overall_confidence", "scenario_id"]) {
@@ -78,17 +78,6 @@
           td.textContent = String(run[field] ?? "UNKNOWN").slice(0, 256);
           tr.appendChild(td);
         }
-        rows.appendChild(tr);
-      }
-      if (data.runs.items.length > 15) {
-        // The client deliberately renders a bounded preview, not a complete Runs list.
-        // Never imply hidden entries are absent or that this read is LIVE-qualified.
-        const tr = document.createElement("tr");
-        const td = document.createElement("td");
-        td.colSpan = 5;
-        td.textContent = "Aperçu limité : 15 sur " + data.runs.items.length +
-          " Runs reçus (lecture non attestée). D'autres Runs ne sont pas affichés.";
-        tr.appendChild(td);
         rows.appendChild(tr);
       }
       if (!rows.children.length) {
