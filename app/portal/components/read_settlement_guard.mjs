@@ -15,12 +15,13 @@ export function projectReadSettlement(input) {
     if (input===null || typeof input!=='object' || Array.isArray(input)) return failure();
     const generation=own(input,'generation');
     const activeGeneration=own(input,'activeGeneration');
+    if (!Number.isSafeInteger(generation) || generation<0 ||
+        !Number.isSafeInteger(activeGeneration) || activeGeneration<0) return failure();
+    // Superseded generations must not inspect terminal fields (possibly hostile).
+    if (generation!==activeGeneration) return diagnostic('STALE_RESPONSE');
     const cancelled=own(input,'cancelled');
     const timedOut=own(input,'timedOut');
-    if (!Number.isSafeInteger(generation) || generation<0 ||
-        !Number.isSafeInteger(activeGeneration) || activeGeneration<0 ||
-        typeof cancelled!=='boolean' || typeof timedOut!=='boolean') return failure();
-    if (generation!==activeGeneration) return diagnostic('STALE_RESPONSE');
+    if (typeof cancelled!=='boolean' || typeof timedOut!=='boolean') return failure();
     if (cancelled) return diagnostic('CANCELLED');
     if (timedOut) return diagnostic('TIMEOUT');
     return diagnostic('NOT_QUALIFIED');
