@@ -52,7 +52,7 @@ async def main():
             with urllib.request.urlopen(worker_req,timeout=5) as worker_response:
                 if json.load(worker_response).get('status')!='ok':
                     raise RuntimeError('WORKER_NOT_READY')
-            intel_req=urllib.request.Request('http://127.0.0.1:817/health')
+            intel_req=urllib.request.Request('http://127.0.0.1:817/ready')
             with urllib.request.urlopen(intel_req,timeout=5) as intel_response:
                 intel_health=json.load(intel_response)
             if not intel_health.get('provider_configured'):
