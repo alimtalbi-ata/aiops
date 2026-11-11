@@ -11,6 +11,7 @@ on:
       - "app/portal/runs_display.py"
       - "app/portal/main.py"
       - "tests/test_portal_runs_display.py"
+      - "tests/test_portal_acme_run_navigation.py"
       - ".github/workflows/portal-ui-consolidation-contracts.yml"
   workflow_dispatch:
 
@@ -40,3 +41,5 @@ jobs:
         run: python -m unittest discover -s tests -p "test_portal_runs_display.py" -v
       - name: Compile Portal controller and projection
         run: python -m py_compile app/portal/main.py app/portal/runs_display.py
+      - name: Verify ACME run navigation and launch guard
+        run: python -m unittest discover -s tests -p "test_portal_acme_run_navigation.py" -v
