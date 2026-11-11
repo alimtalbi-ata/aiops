@@ -49,3 +49,29 @@ test('synthetic view refresh preserves expanded disclosure but not unrelated nod
   root.replaceChildren(new Element('section',doc));
   assert.equal(mountEvidenceStateLegend(root).open,false);
 });
+
+test('synthetic keyboard focus remains on summary after refresh, never stolen from another control',()=>{
+  class Element {
+    constructor(tag,doc){this.tagName=tag.toUpperCase();this.ownerDocument=doc;this.children=[];this.open=false;this.textContent='';}
+    get firstElementChild(){return this.children[0]??null;}
+    append(...items){this.children.push(...items);}
+    replaceChildren(...items){this.children=items;}
+    focus(){this.ownerDocument.activeElement=this;}
+  }
+  const doc={activeElement:null,createElement(tag){return new Element(tag,doc);}};
+  const root=new Element('div',doc);
+  const initial=mountEvidenceStateLegend(root);
+  initial.open=true;
+  initial.firstElementChild.focus();
+  const next=mountEvidenceStateLegend(root);
+  assert.equal(next.open,true);
+  assert.equal(doc.activeElement,next.firstElementChild);
+  const external=new Element('button',doc);
+  external.focus();
+  mountEvidenceStateLegend(root);
+  assert.equal(doc.activeElement,external);
+  root.replaceChildren(new Element('section',doc));
+  external.focus();
+  mountEvidenceStateLegend(root);
+  assert.equal(doc.activeElement,external);
+});
