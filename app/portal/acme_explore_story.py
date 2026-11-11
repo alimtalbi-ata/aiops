@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Header, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 
 from portal.acme_impact_read_model import _load_or_503
+from portal.acme_scenario_contract import build_acme_scenario_contract
 from portal.noc_runtime import _require_portal_read_auth, _noc_json_response
 
 router = APIRouter()
@@ -82,6 +83,28 @@ def explore_story_script():
                         media_type="application/javascript", headers=HEADERS)
 
 
+def _read_scenario_or_503() -> dict[str, Any]:
+    """Only validated synthetic fixture data may reach either consumer."""
+    try:
+        return build_acme_scenario_contract(_load_or_503())
+    except (HTTPException, ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=503, detail="synthetic_fixture_unavailable") from exc
+
+
+@router.get("/api/demo/acme-scenario")
+def acme_scenario_read(authorization: str | None = Header(default=None)):
+    """Viewer-authenticated canonical synthetic events, no runtime evidence."""
+    try:
+        _require_portal_read_auth(authorization)
+    except HTTPException as exc:
+        return _noc_json_response({"detail": exc.detail}, status_code=exc.status_code)
+    try:
+        return _noc_json_response(_read_scenario_or_503())
+    except HTTPException:
+        return _noc_json_response({"state": "UNKNOWN", "detail": "synthetic_fixture_unavailable"},
+                                  status_code=503)
+
+
 @router.post("/api/demo/explore-story/control")
 def explore_story_control(payload: Any = Body(...), authorization: str | None = Header(default=None)):
     """Pure step selection. Authenticate before opening/validating local fixture."""
@@ -97,12 +120,12 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
         return _noc_json_response({"detail": "invalid_story_control"}, status_code=422)
 
     try:
-        model = _load_or_503()
+        contract = _read_scenario_or_503()
     except HTTPException:
         return _noc_json_response({"state": "UNKNOWN", "detail": "synthetic_fixture_unavailable"},
                                   status_code=503)
 
-    steps = model["checkpoint_evidence"]
+    steps = contract["events"]
     if not steps or payload["cursor"] >= len(steps):
         return _noc_json_response({"detail": "invalid_story_cursor"}, status_code=422)
 
@@ -118,12 +141,12 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
     return _noc_json_response({
         "schema": "aiops.acme-explore-story.v1",
         "mode": mode, "action": action, "cursor": cursor, "playing": playing,
-        "provenance": "SIMULATED_TARGET", "source_sha256": model["source_sha256"],
+        "provenance": "SIMULATED_TARGET", "source_sha256": contract["source_sha256"],
         "scenario": {
-            "run_id": model["run_id"],
-            "incident_id": model["incident_id"],
-            "impact_incident_id": model["impact_incident_id"],
-            "impact_path": model["impact_path"],
+            "run_id": contract["scenario"]["run_id"],
+            "incident_id": contract["scenario"]["incident_id"],
+            "impact_incident_id": contract["scenario"]["impact_incident_id"],
+            "impact_path": contract["scenario"]["impact_path"],
             "ticket_id": None, "event_timestamp_utc": None,
         },
         "timeline": timeline, "step": timeline[cursor],
