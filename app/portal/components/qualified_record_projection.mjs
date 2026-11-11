@@ -4,10 +4,17 @@
  */
 export function projectQualifiedRecords(envelope, allowedFields) {
  const unknown={state:'UNKNOWN',result:null};
- if(!Array.isArray(allowedFields)||allowedFields.length===0||
-    allowedFields.some(k=>typeof k!=='string'||!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(k))||
-    new Set(allowedFields).size!==allowedFields.length)return unknown;
  try {
+  if(!Array.isArray(allowedFields)||allowedFields.length===0)return unknown;
+  const fields=[];
+  for(let i=0;i<allowedFields.length;i++){
+   const descriptor=Object.getOwnPropertyDescriptor(allowedFields,String(i));
+   if(!descriptor||!Object.hasOwn(descriptor,'value'))return unknown;
+   const key=descriptor.value;
+   if(typeof key!=='string'||!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(key))return unknown;
+   fields.push(key);
+  }
+  if(new Set(fields).size!==fields.length)return unknown;
   if(envelope===null||typeof envelope!=='object')return unknown;
   const own=(obj,key)=>{
    const d=Object.getOwnPropertyDescriptor(obj,key);
@@ -17,10 +24,13 @@ export function projectQualifiedRecords(envelope, allowedFields) {
   const records=own(envelope,'records'),observedAt=own(envelope,'observed_at');
   if(!Array.isArray(records)||typeof observedAt!=='string')return unknown;
   const projected=[];
-  for(const record of records){
+  for(let i=0;i<records.length;i++){
+   const entry=Object.getOwnPropertyDescriptor(records,String(i));
+   if(!entry||!Object.hasOwn(entry,'value'))return unknown;
+   const record=entry.value;
    if(record===null||typeof record!=='object'||Array.isArray(record))return unknown;
    const safe=Object.create(null);
-   for(const key of allowedFields){
+   for(const key of fields){
     const descriptor=Object.getOwnPropertyDescriptor(record,key);
     if(!descriptor||!Object.hasOwn(descriptor,'value'))return unknown;
     const value=descriptor.value;
