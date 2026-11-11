@@ -119,3 +119,39 @@ def test_real_viewer_auth_accepts_token_but_never_qualifies_tenant(monkeypatch):
             assert response.json()["reason"] == "TENANT_ACL_NOT_QUALIFIED"
         else:
             assert response.json()["detail"] == "invalid_portal_read_token"
+
+
+def test_spoofed_actor_tenant_and_proxy_headers_cannot_upgrade_viewer(monkeypatch):
+    """Untrusted browser headers must never qualify a shared viewer token."""
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "app"))
+    portal = importlib.import_module("portal.main")
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "synthetic-test-secret")
+
+    def forbidden_upstream(*_args, **_kwargs):
+        raise AssertionError("spoofed identity reached an upstream service")
+
+    monkeypatch.setattr(portal, "get_json", forbidden_upstream)
+    monkeypatch.setattr(portal, "post_json", forbidden_upstream)
+    monkeypatch.setattr(portal, "read_portal_snapshot", forbidden_upstream)
+    client = TestClient(portal.app, raise_server_exceptions=False)
+    headers = {
+        "Authorization": "Bearer synthetic-test-secret",
+        "X-Actor-Id": "admin",
+        "X-Tenant-Id": "tenant-b",
+        "X-Authenticated-User": "admin",
+        "X-Forwarded-User": "admin",
+        "X-Remote-User": "admin",
+        "X-Forwarded-Email": "admin@example.invalid",
+    }
+    for method, endpoint in (
+        ("get", "/api/portal/bootstrap"),
+        ("get", "/api/portal/components"),
+        ("post", "/api/copilot"),
+    ):
+        response = getattr(client, method)(endpoint, headers=headers)
+        assert response.status_code == 503, endpoint
+        assert response.json()["reason"] == "TENANT_ACL_NOT_QUALIFIED"
+        assert "items" not in response.json()
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
