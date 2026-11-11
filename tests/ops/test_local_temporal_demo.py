@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -15,6 +16,7 @@ spec.loader.exec_module(m)
 class LocalDemoTests(unittest.TestCase):
     def test_low_disk_starts_nothing_and_reports_blocked(self):
         with patch('sys.argv',['demo','--image','test']), \
+             patch.dict(os.environ,{'LLM_BASE_URL':'https://model.invalid/v1','LLM_MODEL':'test-model','LLM_API_KEY':'test-only'},clear=False), \
              patch.object(m.shutil,'disk_usage',return_value=SimpleNamespace(free=0)), \
              patch.object(m.subprocess,'run') as run, patch('sys.stderr',new_callable=io.StringIO) as err:
             self.assertEqual(m.main(),2)
@@ -30,6 +32,7 @@ class LocalDemoTests(unittest.TestCase):
             return subprocess.CompletedProcess(command,0,stdout='')
         with tempfile.TemporaryDirectory() as td, \
              patch('sys.argv',['demo','--image','test','--keep']), \
+             patch.dict(os.environ,{'LLM_BASE_URL':'https://model.invalid/v1','LLM_MODEL':'test-model','LLM_API_KEY':'test-only'},clear=False), \
              patch.object(m.shutil,'disk_usage',return_value=SimpleNamespace(free=3*1024**3)), \
              patch.object(m.tempfile,'mkdtemp',return_value=td), \
              patch.object(m.subprocess,'check_output',return_value='a'*40), \
