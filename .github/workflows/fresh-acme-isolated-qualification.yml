@@ -1,0 +1,54 @@
+name: Fresh ACME Core Temporal isolated qualification
+
+on:
+  pull_request:
+    branches:
+      - deploy/aiops2-stable
+    paths:
+      - 'scripts/ops/run_local_temporal_demo.py'
+      - 'app/qualification_fixture/**'
+      - 'app/shared/fresh_run_evidence.py'
+      - 'app/shared/evidence_identity.py'
+      - 'tests/test_fresh_run_evidence.py'
+      - '.github/workflows/fresh-acme-isolated-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-isolated-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Preflight isolated Docker and free disk
+        run: |
+          docker info >/dev/null
+          docker compose version
+          python -m unittest discover -s tests/ops -p 'test_local_temporal_demo.py' -v
+          python -m unittest discover -s tests -p 'test_fresh_run_evidence.py' -v
+      - name: Generate new DEMO Run with explicitly synthetic fixture; verify Temporal Evidence and PostgreSQL
+        env:
+          LLM_BASE_URL: ${{ secrets.AIOPS_QUALIFICATION_LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.AIOPS_QUALIFICATION_LLM_MODEL }}
+          LLM_API_KEY: ${{ secrets.AIOPS_QUALIFICATION_LLM_API_KEY }}
+        run: |
+          set -euo pipefail
+          python scripts/ops/run_local_temporal_demo.py --synthetic-fixture | tee fresh-run-output.log
+          grep -Fq '"database_direct_sql": "PASS"' fresh-run-output.log
+          grep -Fq '"canonical_sha256_readback": "PASS"' fresh-run-output.log
+          grep -Fq '"replay": "PASS"' fresh-run-output.log
+      - name: Publish redacted qualification output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-isolated-run-console
+          path: fresh-run-output.log
+          if-no-files-found: ignore
+          retention-days: 7

@@ -74,9 +74,16 @@ def home():
         f'<div class="tile" style="--c:{color}"><strong>{esc("INCONNU" if v is None else v)}</strong><span>{esc(k)}</span></div>'
         for k,v,color in cards
     )
-    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("scenario_id","UNKNOWN")) for r in _runs()[:15]]
+    from portal.runs_display import cockpit_runs_projection
+    try:
+        rows, omitted = cockpit_runs_projection(_runs())
+        runs_notice = (f"<p class='muted'>Affichage limité à 100 Runs ; {omitted} autres non affichés. "
+                       "Consultez le registre complet.</p>" if omitted else "")
+    except ValueError:
+        rows = [("UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN")]
+        runs_notice = "<p class='muted'>UNKNOWN — registre Runs invalide.</p>"
     content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
-    content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
+    content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows)+runs_notice)
     content+=panel("Digital Twin — état courant",pretty(t))
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
@@ -134,6 +141,9 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         raise HTTPException(404,"run_not_in_registry")
     key=quote(selected,safe="")
     detail=_get("/api/runs/"+key)
+    from portal.demo_run_identity import matches_demo_run
+    if not matches_demo_run(detail,selected,match.get("mode")):
+        raise HTTPException(503,"run_identity_unverified")
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     evidence_response=_get("/api/runs/"+key+"/evidence")
     evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
@@ -262,6 +272,9 @@ def demo_run_detail(rid:str):
     from urllib.parse import quote
     key=quote(rid,safe="")
     detail=_get("/api/runs/"+key)
+    from portal.demo_run_identity import matches_demo_run
+    if not matches_demo_run(detail,rid,matched.get("mode")):
+        raise HTTPException(503,"demo_run_identity_unverified")
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     gate=_get("/api/runs/"+key+"/gates")
     body=panel("Suivi de l'exécution",
@@ -271,15 +284,22 @@ def demo_run_detail(rid:str):
       '<script>(function(){const rid='+json.dumps(rid)+
       ';const state=document.getElementById("run-watch-state");'
       'const status=document.getElementById("run-watch-status");'
-      'let active=true;let pending=false;'
+      'let active=true;let pending=false;let generation=0;let controller=null;'
+      'function invalidate(){generation++;active=false;if(controller)controller.abort();}'
+      'window.addEventListener("pagehide",invalidate,{once:true});'
       'async function refresh(){if(!active||pending)return;pending=true;'
-      'try{const response=await fetch("/api/demo-status/"+encodeURIComponent(rid),{cache:"no-store"});'
+      'const current=++generation;controller=new AbortController();'
+      'try{const response=await fetch("/api/demo-status/"+encodeURIComponent(rid),{cache:"no-store",signal:controller.signal});'
+      'if(!active||current!==generation)return;'
       'if(!response.ok){status.textContent="Statut indisponible : HTTP "+response.status;return;}'
-      'const result=await response.json();state.textContent=JSON.stringify({run_id:result.run_id,status:result.status,mode:result.mode},null,2);'
+      'const result=await response.json();if(!active||current!==generation)return;'
+      'if(!result||result.run_id!==rid){status.textContent="UNKNOWN — identité du Run incohérente";return;}'
+      'state.textContent=JSON.stringify({run_id:result.run_id,status:result.status,mode:result.mode},null,2);'
       'const trace=document.getElementById("run-watch-trace");'
       'if(trace)trace.textContent=JSON.stringify({events:result.events,ledger:result.ledger,gates:result.gates},null,2);'
       'if(["RESOLVED","BLOCKED","FAILED","CANCELLED"].includes(result.status)){active=false;status.textContent="État terminal. Recharger la page pour voir les derniers registres Analyst/Critic/Policy.";}}'
-      'catch(e){status.textContent="Suivi temporairement indisponible";}finally{pending=false;}}'
+      'catch(e){if(active&&current===generation&&e.name!=="AbortError")status.textContent="Suivi temporairement indisponible";}'
+      'finally{pending=false;if(current===generation)controller=null;}}'
       'document.getElementById("run-watch-refresh").addEventListener("click",()=>{active=true;refresh();});'
       'refresh();setInterval(refresh,5000);})();</script>')
     body+=panel("Timeline et registres en direct",
@@ -294,6 +314,13 @@ def demo_run_detail(rid:str):
       table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
     from portal.demo_explain import render_critic_explanation
+    body+=panel("Parcours ACME — preuves reliées au Run",
+      '<p>Ces liens conservent le même identifiant de Run. La timeline et les registres '
+      'restent des lectures Core ; le graphe d’impact SAN est une lecture Twin '
+      'et ne constitue pas une preuve causale de ce Run.</p>'
+      '<p><a href="/timeline?run_id='+quote(rid,safe="")+'">Timeline de ce Run</a> · '
+      '<a href="/runs">Registre des Runs</a> · '
+      '<a href="/demo-studio">Impact SAN → Payments (Twin, non corrélé)</a></p>')
     body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
@@ -314,6 +341,9 @@ def demo_status(rid:str):
     detail=_get("/api/runs/"+rid)
     if detail.get("status")=="UNKNOWN":
         return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
+    from portal.demo_run_identity import matches_demo_run
+    if not matches_demo_run(detail,rid,allowed.get("mode")):
+        raise HTTPException(503,"demo_run_identity_unverified")
     run=detail.get("run",{}) if isinstance(detail.get("run"),dict) else detail
     ledger=_get("/api/runs/"+rid+"/ai-ledger")
     gates=_get("/api/runs/"+rid+"/gates")
