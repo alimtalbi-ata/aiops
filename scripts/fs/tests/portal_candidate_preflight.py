@@ -31,7 +31,19 @@ def main():
     results = []
     if not GATES:
         results.append(dict(gate="manifest", status="FAIL", reason="no gates configured"))
-    for name, command in GATES:
+    seen = set()
+    for entry in GATES:
+        if (not isinstance(entry, (tuple, list)) or len(entry) != 2
+                or not isinstance(entry[0], str) or not entry[0]
+                or not isinstance(entry[1], (tuple, list)) or not entry[1]
+                or not all(isinstance(arg, str) and arg for arg in entry[1])):
+            results.append(dict(gate="manifest", status="FAIL", reason="invalid gate definition"))
+            continue
+        name, command = entry
+        if name in seen:
+            results.append(dict(gate=name, status="FAIL", reason="duplicate gate name"))
+            continue
+        seen.add(name)
         missing = [path for path in command[1:] if path.endswith((".py", ".mjs")) and not (ROOT / path).is_file()]
         executable = shutil.which(command[0])
         if missing or not executable:
