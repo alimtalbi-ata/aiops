@@ -21,7 +21,10 @@ export function mountEvidenceStateLegend(root){
   const doc=root.ownerDocument;
   // Preserve a user's expanded explanation when a read-only view is refreshed.
   const previous=root.firstElementChild;
-  const wasOpen=previous?.tagName?.toLowerCase()==='details' && previous.open===true;
+  const isPriorLegend=previous?.tagName?.toLowerCase()==='details';
+  const wasOpen=isPriorLegend && previous.open===true;
+  // Remounting an active summary otherwise drops keyboard focus into the document.
+  const restoreSummaryFocus=isPriorLegend && doc.activeElement===previous.firstElementChild;
   const details=doc.createElement('details');
   details.open=wasOpen;
   const summary=doc.createElement('summary');
@@ -34,5 +37,6 @@ export function mountEvidenceStateLegend(root){
   }
   details.append(summary,list);
   root.replaceChildren(details);
+  if(restoreSummaryFocus && typeof summary.focus==='function') summary.focus();
   return details;
 }
