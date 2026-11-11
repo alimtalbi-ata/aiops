@@ -10,6 +10,8 @@ from collections.abc import Mapping
 def matches_demo_run(detail, requested_id, registry_mode):
     if not isinstance(detail, Mapping):
         return False
+    if not any(key in detail for key in ("run", "run_id", "status", "events")):
+        return False
     run = detail.get("run", detail)
     if not isinstance(run, Mapping):
         return False
