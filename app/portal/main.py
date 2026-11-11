@@ -301,6 +301,13 @@ def demo_run_detail(rid:str):
       table(["Séquence","Date","Étape","Événement","État","Décision"],rows)
       if rows else '<p class="muted">Aucun événement disponible depuis Core.</p>')
     from portal.demo_explain import render_critic_explanation
+    body+=panel("Parcours ACME — preuves reliées au Run",
+      '<p>Ces liens conservent le même identifiant de Run. La timeline et les registres '
+      'restent des lectures Core ; le graphe d’impact SAN est une lecture Twin '
+      'et ne constitue pas une preuve causale de ce Run.</p>'
+      '<p><a href="/timeline?run_id='+quote(rid,safe="")+'">Timeline de ce Run</a> · '
+      '<a href="/runs">Registre des Runs</a> · '
+      '<a href="/demo-studio">Impact SAN → Payments (Twin, non corrélé)</a></p>')
     body+=panel("Pourquoi le Critic valide ou bloque",render_critic_explanation(ledger))
     body+=panel("Analyst · Critic · Policy (registre)",pretty(ledger))
     body+=panel("Gates et décisions",pretty(gate))
