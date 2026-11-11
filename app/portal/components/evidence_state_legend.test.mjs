@@ -28,3 +28,24 @@ test('native details/summary and text-only descriptions work without inline scri
 test('invalid mount target is rejected',()=>{
   assert.throws(()=>mountEvidenceStateLegend(null),TypeError);
 });
+
+test('synthetic view refresh preserves expanded disclosure but not unrelated nodes',()=>{
+  class Element {
+    constructor(tag,doc){this.tagName=tag.toUpperCase();this.ownerDocument=doc;this.children=[];this.open=false;this.textContent='';}
+    get firstElementChild(){return this.children[0]??null;}
+    append(...items){this.children.push(...items);}
+    replaceChildren(...items){this.children=items;}
+  }
+  const doc={createElement(tag){return new Element(tag,doc);}};
+  const root=new Element('div',doc);
+  const first=mountEvidenceStateLegend(root);
+  assert.equal(first.open,false);
+  first.open=true;
+  const second=mountEvidenceStateLegend(root);
+  assert.notEqual(second,first);
+  assert.equal(second.open,true);
+  second.open=false;
+  assert.equal(mountEvidenceStateLegend(root).open,false);
+  root.replaceChildren(new Element('section',doc));
+  assert.equal(mountEvidenceStateLegend(root).open,false);
+});
