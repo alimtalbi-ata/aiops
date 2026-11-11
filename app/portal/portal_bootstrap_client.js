@@ -131,7 +131,7 @@
         return;
       }
       if ($("portal-read-result")) $("portal-read-result").textContent =
-        Object.values(data.states).includes("READABLE_UNVERIFIED") ?
+        ["dashboard", "runs", "twin"].some((key) => data.states[key] === "READABLE_UNVERIFIED") ?
           "READABLE_UNVERIFIED — aucune attestation LIVE" :
           "UNKNOWN — aucune source lisible";
     } catch (_) {
