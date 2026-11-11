@@ -6,6 +6,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import unicodedata
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 GATES = [
@@ -46,10 +47,16 @@ def main():
             results.append(dict(gate="manifest", status="FAIL", reason="invalid gate definition"))
             continue
         name, command = entry
-        if name in seen:
+        # Names are receipt identifiers, not trusted display strings.
+        # Reject invisible formatting/control characters and canonical duplicates.
+        if any(unicodedata.category(char).startswith("C") for char in name):
+            results.append(dict(gate="manifest", status="FAIL", reason="unsafe gate name"))
+            continue
+        canonical_name = name.strip()
+        if canonical_name in seen:
             results.append(dict(gate=name, status="FAIL", reason="duplicate gate name"))
             continue
-        seen.add(name)
+        seen.add(canonical_name)
         missing = [path for path in command[1:] if path.endswith((".py", ".mjs")) and not (ROOT / path).is_file()]
         executable = shutil.which(command[0])
         if missing or not executable:
