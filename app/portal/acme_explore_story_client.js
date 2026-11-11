@@ -3,6 +3,10 @@
   "use strict";
   const byId = id => document.getElementById(id);
   const actions = ["start", "pause", "advance", "reset", "replay"];
+  const hitlStates = Object.freeze({detect:"NOT_REACHED", correlate:"NOT_REACHED",
+    enrich:"NOT_REACHED", analyze:"NOT_REACHED", ticket:"NOT_REACHED",
+    approve:"HUMAN_APPROVAL_REQUIRED", simulate:"DRY_RUN_NOT_EXECUTED",
+    verify:"POSTCHECK_NOT_EXECUTED", close:"RECOVERY_NOT_VERIFIED"});
   let mode = "explore";
   let cursor = 0;
   let credential = "";
@@ -66,6 +70,20 @@
     }
     const expected = data.timeline[data.cursor];
     if (!data.step || !["cue", "service", "view", "status"].every(k => data.step[k] === expected[k])) return false;
+    const h = data.hitl_story;
+    if (!h || typeof h !== "object" || h.schema !== "aiops.acme-hitl-story.v1" ||
+        h.provenance !== "SIMULATED_TARGET" || h.mode !== "DEMO" ||
+        h.run_id !== data.scenario.run_id || h.incident_id !== data.scenario.incident_id ||
+        h.impact_incident_id !== data.scenario.impact_incident_id ||
+        h.cue !== data.step.cue || h.story_state !== hitlStates[h.cue] ||
+        h.policy_command !== "OBSERVE" || h.policy_live_effect !== "DENY_LIVE_ACTION" ||
+        h.policy_source !== "DETERMINISTIC_PREVIEW_NOT_POLICY_HTTP" ||
+        h.policy_runtime_checked !== false || h.binding_status !== "MISSING" ||
+        h.recipe_id !== null || h.target_id !== null || h.params_hash !== null ||
+        h.approval_id !== null || h.human_decision !== "NOT_AUTHENTICATED" ||
+        h.temporal_workflow !== "NOT_EXECUTED" || h.dry_run_receipt !== null ||
+        h.postchecks !== "NOT_EXECUTED" || h.rollback !== "DOCUMENTED_ONLY_NOT_EXECUTED" ||
+        h.recovery !== "NOT_VERIFIED" || h.live_effect_authorized !== false) return false;
     const identity = JSON.stringify([data.source_sha256, data.scenario, data.timeline]);
     return sessionIdentity === null || identity === sessionIdentity;
   }
@@ -86,7 +104,10 @@
     byId("step-title").textContent = data.step.cue.toUpperCase() +
       " · " + data.step.service.toUpperCase();
     byId("step-detail").textContent = data.step.view + " · preuve MISSING" +
-      " · runtime UNKNOWN";
+      " · runtime UNKNOWN" + "\nHITL/Temporal : " + data.hitl_story.story_state +
+      " · décision humaine NON AUTHENTIFIÉE · workflow NON EXÉCUTÉ" +
+      "\nPolicy LIVE : DENY_LIVE_ACTION (aperçu déterministe, HTTP NOT_TESTED)" +
+      " · rollback DOCUMENTÉ SEULEMENT";
     const list = byId("timeline");
     list.replaceChildren();
     data.timeline.forEach((step, i) => {

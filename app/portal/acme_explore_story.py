@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Header, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 
 from portal.acme_impact_read_model import _load_or_503
+from portal.acme_hitl_story import project_hitl_story
 from portal.noc_runtime import _require_portal_read_auth, _noc_json_response
 
 router = APIRouter()
@@ -63,7 +64,7 @@ Aucune preuve LIVE, capture, écriture GLPI, commande Core ou remédiation.</p>
 <div class="panel"><h2>Scénario</h2><p id="scenario">UNKNOWN — aucune lecture authentifiée</p>
 <p id="source" class="muted">Provenance : UNKNOWN</p></div>
 <div class="panel"><h2>Checkpoint courant</h2><p id="step-title">UNKNOWN</p>
-<p id="step-detail" class="muted">Aucune preuve runtime attestée</p></div>
+<p id="step-detail" class="muted">Aucune preuve runtime attestée</p><p class="muted">HITL, Policy et Temporal : scénario documentaire, sans approbation ni exécution.</p></div>
 </section>
 <section class="panel"><h2>Timeline · checkpoints de scénario, pas événements runtime</h2>
 <ol id="timeline"><li>UNKNOWN — authentification requise</li></ol></section>
@@ -115,6 +116,11 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
     # Strict projection: no raw fixture, secret, backend URLs or unqualified evidence.
     timeline = [{"cue": s["cue"], "service": s["service"], "view": s["view"],
                  "status": "MISSING"} for s in steps]
+    try:
+        hitl_story = project_hitl_story(model, steps[cursor]["cue"])
+    except (ValueError, TypeError, KeyError):
+        return _noc_json_response({"state": "UNKNOWN", "detail": "synthetic_hitl_unavailable"},
+                                  status_code=503)
     return _noc_json_response({
         "schema": "aiops.acme-explore-story.v1",
         "mode": mode, "action": action, "cursor": cursor, "playing": playing,
@@ -127,6 +133,7 @@ def explore_story_control(payload: Any = Body(...), authorization: str | None = 
             "ticket_id": None, "event_timestamp_utc": None,
         },
         "timeline": timeline, "step": timeline[cursor],
+        "hitl_story": hitl_story,
         "runtime_attested": False, "production_qualified": False,
         "live_remediation_authorized": False,
     })
