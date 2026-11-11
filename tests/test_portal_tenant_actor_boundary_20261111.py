@@ -11,11 +11,14 @@ PORTAL = ROOT / "app/portal/main.py"
 CORE = ROOT / "app/core/main.py"
 
 
+def _endpoint_node(path: Path, name: str):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name)
+
+
 def _endpoint_source(path: Path, name: str) -> str:
     source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    node = next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name)
-    return ast.get_source_segment(source, node) or ""
+    return ast.get_source_segment(source, _endpoint_node(path, name)) or ""
 
 
 def test_portal_bootstrap_remains_denied_without_tenant_actor_contract():
@@ -35,7 +38,13 @@ def test_legacy_core_read_endpoints_are_not_misrepresented_as_tenant_scoped():
     assert "limit 100" in runs.lower()
     # These legacy functions do not accept actor/tenant identity and must not
     # be used as authorization evidence for the browser read-model.
-    for endpoint in (dashboard, runs):
-        signature = endpoint.split(":", 1)[0]
-        assert "tenant" not in signature.lower()
-        assert "actor" not in signature.lower()
+    for name in ("dashboard", "list_runs"):
+        node = _endpoint_node(CORE, name)
+        args = node.args
+        parameter_names = [arg.arg.lower() for arg in (
+            args.posonlyargs + args.args + args.kwonlyargs
+        )]
+        assert not args.vararg and not args.kwarg
+        assert not any("tenant" in name or "actor" in name for name in parameter_names)
+        # These legacy routes currently take no authenticated principal at all.
+        assert parameter_names == []
