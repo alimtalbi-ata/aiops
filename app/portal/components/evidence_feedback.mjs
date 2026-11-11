@@ -28,6 +28,9 @@ export function mountEvidenceFeedback(root,state){
      previous.node.getAttribute('role')===(feedback.state==='ERROR'?'alert':'status') &&
      previous.node.getAttribute('aria-live')===(feedback.state==='ERROR'?'assertive':'polite') &&
      previous.node.getAttribute('aria-atomic')==='true' &&
+     // An externally hidden live-region message must never be cached.
+     previous.node.getAttribute('aria-hidden')===null &&
+     previous.node.getAttribute('hidden')===null &&
      previous.node.getAttribute('aria-busy')===(feedback.state==='LOADING'?'true':null)){
     if(root.getAttribute('aria-busy')!==busy) root.setAttribute('aria-busy',busy);
     return previous.node;
