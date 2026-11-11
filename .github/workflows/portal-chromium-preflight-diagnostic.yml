@@ -1,0 +1,46 @@
+name: Portal Chromium isolated CI diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/portal-chromium-preflight-diagnostic.yml"
+      - ".github/workflows/quality.yml"
+      - "app/portal/**"
+      - "tests/test_portal_bootstrap_client.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record isolated runner and Python context
+        run: |
+          python --version
+          node --version
+          df -h .
+      - name: Install same pinned browser test dependencies as quality gate
+        timeout-minutes: 3
+        run: python -m pip install --disable-pip-version-check "uvicorn==0.35.0" "playwright==1.55.0"
+      - name: Install Chromium and OS dependencies with bounded diagnostic
+        timeout-minutes: 7
+        run: python -m playwright install --with-deps chromium
+      - name: Verify isolated Chromium launch
+        timeout-minutes: 1
+        run: |
+          python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              page = browser.new_page()
+              page.set_content("<main>synthetic isolated chromium preflight</main>")
+              assert page.locator("main").inner_text() == "synthetic isolated chromium preflight"
+              browser.close()
+          PY
