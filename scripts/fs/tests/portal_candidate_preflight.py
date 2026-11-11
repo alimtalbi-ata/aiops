@@ -29,10 +29,16 @@ def main():
     parser.add_argument("--json", action="store_true", help="emit machine-readable summary")
     args = parser.parse_args()
     results = []
-    if not GATES:
+    if not isinstance(GATES, (list, tuple)):
+        results.append(dict(gate="manifest", status="FAIL", reason="invalid manifest type"))
+        entries = ()
+    elif not GATES:
         results.append(dict(gate="manifest", status="FAIL", reason="no gates configured"))
+        entries = ()
+    else:
+        entries = GATES
     seen = set()
-    for entry in GATES:
+    for entry in entries:
         if (not isinstance(entry, (tuple, list)) or len(entry) != 2
                 or not isinstance(entry[0], str) or not entry[0]
                 or not isinstance(entry[1], (tuple, list)) or not entry[1]
