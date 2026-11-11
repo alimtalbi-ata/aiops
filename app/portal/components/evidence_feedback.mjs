@@ -9,11 +9,16 @@ export function evidenceFeedback(state){
   return Object.hasOwn(messages,state) ? {state,message:messages[state]} :
     {state:'UNKNOWN',message:messages.UNKNOWN};
 }
+/** Avoid duplicate live-region announcements when polling repeats the same state. */
+const mountedFeedback=new WeakMap();
 /** Mount a single accessible feedback message, replacing stale announcements. */
 export function mountEvidenceFeedback(root,state){
   if(!root?.ownerDocument || typeof root.replaceChildren!=='function')
     throw new TypeError('DOM root required');
   const feedback=evidenceFeedback(state);
+  const previous=mountedFeedback.get(root);
+  if(previous?.state===feedback.state && root.firstChild===previous.node)
+    return previous.node;
   const node=root.ownerDocument.createElement('p');
   node.textContent=feedback.message;
   node.setAttribute('role',feedback.state==='ERROR'?'alert':'status');
@@ -24,5 +29,6 @@ export function mountEvidenceFeedback(root,state){
   // Explicit false avoids a stale loading flag after ERROR/EMPTY/UNKNOWN.
   root.setAttribute('aria-busy',feedback.state==='LOADING'?'true':'false');
   root.replaceChildren(node);
+  mountedFeedback.set(root,{state:feedback.state,node});
   return node;
 }
