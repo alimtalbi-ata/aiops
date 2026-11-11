@@ -20,8 +20,20 @@ PY
 test -f "$DEV/compose.yml" && test -f "$ENV" || { echo 'PORTAL_DEPLOY=NO_GO_MISSING_COMPOSE_OR_ENV'; exit 78; }
 test "$(docker inspect aiops2-rebuild-portal --format '{{index .Config.Labels "com.docker.compose.project"}}')" = aiops2-rebuild
 test "$(docker inspect aiops2-rebuild-portal --format '{{index .Config.Labels "com.docker.compose.service"}}')" = aiops2-portal
-test "$(docker inspect aiops2-rebuild-portal --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}')" = healthy
-test "$(docker inspect aiops2-rebuild-portal --format '{{len .Mounts}}')" = 0 || { echo 'PORTAL_DEPLOY=NO_GO_MOUNTS_REQUIRE_BACKUP'; exit 78; }
+# This legacy deploy path is only qualified for a zero-mount, healthchecked
+# Portal. The current Debian Portal has persistent mounts and no Docker
+# healthcheck: fail explicitly before building or recreating anything.
+HEALTH_STATUS="$(docker inspect aiops2-rebuild-portal --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}')"
+if [ "$HEALTH_STATUS" != healthy ]; then
+  echo 'PORTAL_DEPLOY=NO_GO_DOCKER_HEALTHCHECK_UNAVAILABLE_OR_UNHEALTHY'
+  echo 'PORTAL_DEPLOY=NEXT_ACTION_READONLY_PREFLIGHT_AND_HTTP_READINESS'
+  exit 78
+fi
+MOUNT_COUNT="$(docker inspect aiops2-rebuild-portal --format '{{len .Mounts}}')"
+if [ "$MOUNT_COUNT" != 0 ]; then
+  echo 'PORTAL_DEPLOY=NO_GO_PERSISTENT_MOUNTS_REQUIRE_BACKUP_AND_RESTORE'
+  exit 78
+fi
 docker inspect aiops2-rebuild-portal --format '{{json .NetworkSettings.Ports}}' |
 python3 -c 'import json,sys; p=json.load(sys.stdin).get("777/tcp") or []; assert len(p)==1 and p[0].get("HostPort")=="7777"'
 OLD="$(docker inspect aiops2-rebuild-portal --format '{{.Image}}')"
