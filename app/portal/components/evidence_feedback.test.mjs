@@ -11,6 +11,7 @@ test('synthetic transitions replace stale feedback and use native ARIA',()=>{
   class Element{
     constructor(tag){this.tag=tag;this.attrs={};this.children=[];this.textContent='';}
     setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
     replaceChildren(...children){this.children=children;}
   }
   const doc={createElement:tag=>new Element(tag)};
@@ -36,6 +37,7 @@ test('synthetic LOADING to EMPTY and UNKNOWN always clears stable region busy st
   class Element{
     constructor(){this.attrs={};this.ownerDocument={createElement:()=>new Element()};}
     setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
     replaceChildren(...children){this.children=children;}
   }
   for(const next of ['EMPTY','UNKNOWN','UNRECOGNIZED']){
@@ -55,8 +57,10 @@ test('synthetic polling does not repeat identical live-region announcements',()=
   class Element{
     constructor(){this.attrs={};this.children=[];this.replacements=0;this.ownerDocument={createElement:()=>new Element()};}
     setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
     replaceChildren(...nodes){this.children=nodes;this.replacements++;}
     get firstChild(){return this.children[0]??null;}
+    get childNodes(){return this.children;}
   }
   const root=new Element();
   const first=mountEvidenceFeedback(root,'LOADING');
@@ -74,4 +78,27 @@ test('synthetic polling does not repeat identical live-region announcements',()=
   assert.notEqual(repaired,error);
   assert.equal(root.replacements,4);
   assert.equal(repaired.attrs.role,'alert');
+});
+
+test('synthetic external DOM drift repairs busy flag without repeated announcement',()=>{
+  class Element{
+    constructor(){this.attrs={};this.children=[];this.replacements=0;this.ownerDocument={createElement:()=>new Element()};}
+    setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
+    replaceChildren(...nodes){this.children=nodes;this.replacements++;}
+    get firstChild(){return this.children[0]??null;}
+    get childNodes(){return this.children;}
+  }
+  const root=new Element();
+  const node=mountEvidenceFeedback(root,'LOADING');
+  root.setAttribute('aria-busy','false');
+  assert.equal(mountEvidenceFeedback(root,'LOADING'),node);
+  assert.equal(root.attrs['aria-busy'],'true');
+  assert.equal(root.replacements,1);
+  root.children.push(new Element());
+  const repaired=mountEvidenceFeedback(root,'LOADING');
+  assert.notEqual(repaired,node);
+  assert.equal(root.childNodes.length,1);
+  assert.equal(root.replacements,2);
+  assert.equal(root.attrs['aria-busy'],'true');
 });
