@@ -24,7 +24,7 @@ export function mountEvidenceFeedback(root,state){
      root.firstChild===previous.node &&
      previous.node.textContent===feedback.message &&
      // Nested markup can change the accessible tree without changing textContent.
-     previous.node.childNodes?.length===0 &&
+     (!previous.node.childNodes || previous.node.childNodes.length===0) &&
      previous.node.getAttribute('role')===(feedback.state==='ERROR'?'alert':'status') &&
      previous.node.getAttribute('aria-live')===(feedback.state==='ERROR'?'assertive':'polite') &&
      previous.node.getAttribute('aria-atomic')==='true' &&
