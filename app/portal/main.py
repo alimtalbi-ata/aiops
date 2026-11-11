@@ -141,6 +141,9 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
         raise HTTPException(404,"run_not_in_registry")
     key=quote(selected,safe="")
     detail=_get("/api/runs/"+key)
+    from portal.demo_run_identity import matches_demo_run
+    if not matches_demo_run(detail,rid,matched.get("mode")):
+        raise HTTPException(503,"demo_run_identity_unverified")
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     evidence_response=_get("/api/runs/"+key+"/evidence")
     evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
@@ -335,6 +338,9 @@ def demo_status(rid:str):
     detail=_get("/api/runs/"+rid)
     if detail.get("status")=="UNKNOWN":
         return {"run_id":rid,"status":"UNKNOWN","source":"Core unavailable"}
+    from portal.demo_run_identity import matches_demo_run
+    if not matches_demo_run(detail,rid,allowed.get("mode")):
+        raise HTTPException(503,"demo_run_identity_unverified")
     run=detail.get("run",{}) if isinstance(detail.get("run"),dict) else detail
     ledger=_get("/api/runs/"+rid+"/ai-ledger")
     gates=_get("/api/runs/"+rid+"/gates")
