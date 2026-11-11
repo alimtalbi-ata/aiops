@@ -1,0 +1,21 @@
+schema_version: 1
+profile:
+  name: aiops2-recovery-staging
+  mode: recovery
+  apply_by_default: false
+paths:
+  historical_v69_source: /home/aiops/exports/AIOPS-R33-LOGICAL-20261007-112249/03-SOURCES/V69/stack
+  temporal_stage_source: /home/aiops/.temporal-stage-20261017-171712
+  missing_v2_deployment_root: /home/aiops/aiops2-v8-r4/00-Deployment
+  staging_root: /home/aiops/aiops2-reconstruction/staging
+safety:
+  modify_existing_sources: false
+  restart_containers: false
+  start_workflows: false
+  require_compose_validation: true
+  require_explicit_apply_flag: true
+temporal:
+  address_env: TEMPORAL_ADDRESS
+  namespace_env: TEMPORAL_NAMESPACE
+  task_queue_env: TEMPORAL_TASK_QUEUE
+  secrets_in_repository: false
