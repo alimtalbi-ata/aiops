@@ -59,6 +59,9 @@ async def main():
                 raise RuntimeError('INTELLIGENCE_MODEL_NOT_CONFIGURED')
             client=await Client.connect('temporal:7233')
             break
+        except RuntimeError as exc:
+            if str(exc)=='INTELLIGENCE_MODEL_NOT_CONFIGURED':raise
+            await asyncio.sleep(1)
         except Exception:await asyncio.sleep(1)
     if client is None:
         raise RuntimeError('LOCAL_SERVICES_OR_INTELLIGENCE_NOT_READY')
@@ -247,6 +250,8 @@ ENV PYTHONPATH=/app
                    'SQL_EVIDENCE_ROWS_MISSING', 'SQL_RUN_EVENT_LINK_MISMATCH',
                    'SQL_EVIDENCE_DIGEST_INVALID', 'TEMPORAL_NOT_COMPLETED')
         marker = next((code for code in allowed if code in child_output), 'UNCLASSIFIED_CHILD_FAILURE')
+        if 'INTELLIGENCE_MODEL_NOT_CONFIGURED' in child_output:
+            marker = 'INTELLIGENCE_MODEL_NOT_CONFIGURED'
         demo_failure = re.search(r'DEMO_NOT_RESOLVED_STATE_(?:BLOCKED|FAILED|CANCELLED|WAITING|RUNNING|CREATED|UNKNOWN)_STAGE_(?:NORMALIZE|CORRELATE|CMDB|OBSERVE|RAG|DGX_ANALYST|DGX_CRITIC|POLICY|HITL|REMEDIATE|VERIFY|RECONCILE|LEARN|UNKNOWN)', child_output)
         if demo_failure: marker = demo_failure.group(0)
         api_failure = re.search(r'API_(?:HEALTH|INCIDENT_CREATE|RUN_CREATE|RUN_EXECUTE|RUN_DETAIL|EVIDENCE_LIST)_HTTP_(?:400|401|403|404|409|422|429|500|502|503|504)', child_output)
