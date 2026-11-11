@@ -28,6 +28,9 @@ export function mountEvidenceFeedback(root,state){
      previous.node.getAttribute('role')===(feedback.state==='ERROR'?'alert':'status') &&
      previous.node.getAttribute('aria-live')===(feedback.state==='ERROR'?'assertive':'polite') &&
      previous.node.getAttribute('aria-atomic')==='true' &&
+     // An external accessible name overrides the visible status text.
+     previous.node.getAttribute('aria-label')===null &&
+     previous.node.getAttribute('aria-labelledby')===null &&
      // An externally hidden live-region message must never be cached.
      previous.node.getAttribute('aria-hidden')===null &&
      previous.node.getAttribute('hidden')===null &&
