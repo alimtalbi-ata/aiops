@@ -23,6 +23,7 @@ from pathlib import Path
 from temporalio.client import Client
 from temporalio.worker import Replayer
 from worker.workflow import IncidentWorkflow
+from shared.fresh_run_evidence import verify_run_evidence
 
 def api(path, body=None):
     req=urllib.request.Request('http://127.0.0.1:810'+path,
@@ -76,12 +77,18 @@ async def main():
            for e in completed):
         raise RuntimeError('STAGE_EVIDENCE_LINK_MISSING')
     evidence={i for e in completed for i in e['evidence_ids']}
+    listing=api('/api/runs/'+rid+'/evidence')
+    def fetch_evidence(eid):
+        req=urllib.request.Request('http://127.0.0.1:812/api/evidence/'+eid,
+            headers={'Authorization':'Bearer '+os.environ['AIOPS_INTERNAL_TOKEN']})
+        with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)
+    evidence_readback=verify_run_evidence(rid,completed,listing,fetch_evidence)
     if len(evidence)<len(required):
         raise RuntimeError('EVIDENCE_COVERAGE_INCOMPLETE')
     print(json.dumps({'scope':'LOCAL_ISOLATED_SYNTHETIC_TEMPORAL','run_id':rid,
         'temporal_run_id':description.run_id,'application_manifest_sha256':manifest,'core_status':'RESOLVED',
         'temporal_status':'COMPLETED','completed_stages':len(required),
-        'linked_synthetic_evidence':len(evidence),'policy':'PASS/SIMULATE',
+        'linked_synthetic_evidence':len(evidence),'evidence_readback':evidence_readback,'policy':'PASS/SIMULATE',
         'history_events':len(history.events),'replay':'PASS',
         'debian_verified':False,'glpi_verified':False,'portal_verified':False,
         'real_model_verified':False}))
