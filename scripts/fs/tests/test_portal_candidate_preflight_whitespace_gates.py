@@ -17,15 +17,15 @@ class WhitespaceGateTests(unittest.TestCase):
             [("   ", ["python3", "-V"])],
             [("history", ["   "])],
             [("history", ["python3", "  "])],
-            [("history", ["python3", "\\t"])],
+            [("history", ["python3", "\t"])],
         ]
         for gates in cases:
             with self.subTest(gates=gates):
                 output = io.StringIO()
-                with mock.patch.object(preflight, "GATES", gates), \\
-                     mock.patch.object(sys, "argv", ["preflight", "--json"]), \\
-                     mock.patch.object(preflight.shutil, "which", return_value="/synthetic/python3"), \\
-                     mock.patch.object(preflight.subprocess, "run") as runner, \\
+                with mock.patch.object(preflight, "GATES", gates), \
+                     mock.patch.object(sys, "argv", ["preflight", "--json"]), \
+                     mock.patch.object(preflight.shutil, "which", return_value="/synthetic/python3"), \
+                     mock.patch.object(preflight.subprocess, "run") as runner, \
                      contextlib.redirect_stdout(output):
                     exit_code = preflight.main()
                 receipt = json.loads(output.getvalue())
