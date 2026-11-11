@@ -101,6 +101,13 @@ class LiveQualificationTests(unittest.TestCase):
         with patch.object(m.subprocess,"run") as run:
             run.return_value.returncode=1
             self.assertEqual(m.portal_probe()["status"],"UNVERIFIED")
+    def test_missing_explicit_run_id_stops_before_any_probe(self):
+        with patch("sys.argv", ["live_usecase_qualification.py"]), patch.object(m, "invoke") as invoke:
+            with self.assertRaises(SystemExit) as failure:
+                m.main()
+            self.assertEqual(failure.exception.code, 2)
+            invoke.assert_not_called()
+
     def test_runner_does_not_mutate_runtime(self):
         src=p.read_text()
         for forbidden in ("docker restart","docker compose up","method='POST'","DELETE FROM","UPDATE aiops."):
