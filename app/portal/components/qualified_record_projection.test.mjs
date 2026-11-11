@@ -104,3 +104,21 @@ test('projection budget boundary accepts exactly 100000 scalar cells',()=>{
  assert.equal(result.result.records.length,1000);
  assert.equal(result.result.records[0].f0,'ok');
 });
+
+test('oversized scalar and timestamp fail closed without publishing contents',()=>{
+ const secret='s'.repeat(4097);
+ assert.deepEqual(projectQualifiedRecords(qualified([{id:secret}]),['id']),{state:'UNKNOWN',result:null});
+ const envelope=qualified([{id:'safe'}]);envelope.observed_at='x'.repeat(65);
+ assert.deepEqual(projectQualifiedRecords(envelope,['id']),{state:'UNKNOWN',result:null});
+});
+test('aggregate string budget rejects many bounded strings',()=>{
+ const records=Array.from({length:250},()=>({id:'x'.repeat(4096)}));
+ assert.deepEqual(projectQualifiedRecords(qualified(records),['id']),{state:'UNKNOWN',result:null});
+});
+test('scalar and aggregate string boundaries remain unverified until freshness validation',()=>{
+ const records=Array.from({length:244},()=>({id:'x'.repeat(4096)}));
+ const outcome=projectQualifiedRecords(qualified(records),['id']);
+ assert.equal(outcome.state,'UNVERIFIED_FRESHNESS');
+ assert.equal(outcome.result.records.length,244);
+ assert.equal(outcome.result.records[0].id.length,4096);
+});
