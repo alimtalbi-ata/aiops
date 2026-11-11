@@ -1,6 +1,8 @@
-import copy
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'app'))
 import unittest
-from app.shared.evidence_identity import canonical_evidence,evidence_digest
+from shared.evidence_identity import canonical_evidence,evidence_digest
 from app.shared.fresh_run_evidence import verify_run_evidence
 
 RID="RUN-QUALIFICATION-123456"
