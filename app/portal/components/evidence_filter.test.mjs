@@ -20,7 +20,9 @@ test('native keyboard controls, live count, and no HTML interpretation',()=>{
  const form=root.children[0],input=form.children[0].children[0],output=form.children[2],list=form.children[4];
  assert.equal(form.attrs.role,'search');assert.equal(input.type,'search');assert.equal(output.attrs['aria-live'],'polite');
  assert.equal(list.children[0].textContent.includes('<img'),true);
- input.value='missing';input.events.input();assert.match(output.textContent,/0 preuve/);
+ assert.match(list.children[0].textContent,/Disponible/);
+ assert.doesNotMatch(list.children[0].textContent,/READY/);
+ input.value='missing';input.events.input();assert.match(output.textContent,/Aucune preuve ne correspond aux filtres/);
  mounted.setRecords(null);assert.equal(seen.at(-1),'UNKNOWN');assert.equal(list.children.length,0);
 });
 
@@ -57,7 +59,7 @@ test('synthetic empty source and unmatched filters have distinct accessible anno
  assert.equal(count.textContent,'Preuves non vérifiables');
  view.setRecords([{id:'synthetic-1',label:'Disque',status:'READY'}]);
  input.value='';input.events.input();
- assert.match(count.textContent,/1 preuve/);
+ assert.match(count.textContent,/1 résultat/);
 });
 
 test('synthetic no-match reset is keyboard operable and hidden for UNKNOWN',()=>{
@@ -76,4 +78,23 @@ test('synthetic no-match reset is keyboard operable and hidden for UNKNOWN',()=>
  assert.equal(input.focused,true);assert.equal(reset.hidden,true);
  select.value='ERROR';select.events.change();assert.equal(reset.hidden,false);
  view.setRecords(null);assert.equal(reset.hidden,true);
+});
+
+test('synthetic evidence statuses are localized without promoting UNKNOWN to READY',()=>{
+ class Element {
+  constructor(tag,doc){this.tag=tag;this.ownerDocument=doc;this.children=[];this.attrs={};this.value=tag==='select'?'ALL':'';this.textContent='';this.events={};}
+  setAttribute(k,v){this.attrs[k]=v;}append(...xs){this.children.push(...xs);}
+  replaceChildren(...xs){this.children=xs;}addEventListener(k,fn){this.events[k]=fn;}
+ }
+ const doc={createElement(tag){return new Element(tag,doc)},root=new Element('div',doc);
+ const rows=[{id:'synthetic-ready',label:'Disque',status:'READY'},{id:'synthetic-unknown',label:'Réseau',status:'UNKNOWN'},{id:'synthetic-error',label:'Agent',status:'ERROR'},{id:'synthetic-empty',label:'Sans preuve',status:'EMPTY'}];
+ const view=mountEvidenceFilter(root,{records:rows});
+ const form=root.children[0],status=form.children[1],count=form.children[2],list=form.children[4];
+ assert.deepEqual(list.children.map(x=>x.textContent),['Disque — Disponible','Réseau — Non vérifiable','Agent — Erreur','Sans preuve — Vide']);
+ assert.match(count.textContent,/4 résultat/);
+ status.value='UNKNOWN';status.events.change();
+ assert.deepEqual(list.children.map(x=>x.textContent),['Réseau — Non vérifiable']);
+ assert.match(count.textContent,/1 résultat/);
+ view.setRecords(null);assert.equal(count.textContent,'Preuves non vérifiables');
+ assert.equal(list.children.length,0);
 });
