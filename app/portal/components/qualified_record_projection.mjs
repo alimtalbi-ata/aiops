@@ -32,6 +32,8 @@ export function projectQualifiedRecords(envelope, allowedFields) {
   const records=own(envelope,'records'),observedAt=own(envelope,'observed_at');
   const recordCount=safeLength(records);
   if(recordCount===null||typeof observedAt!=='string')return unknown;
+  // Bound total projection work, not only each input dimension. Fail closed before reading records.
+  if(recordCount>Math.floor(100000/fieldCount))return unknown;
   const projected=[];
   for(let i=0;i<recordCount;i++){
    const entry=Object.getOwnPropertyDescriptor(records,String(i));
