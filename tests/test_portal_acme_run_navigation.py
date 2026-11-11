@@ -9,7 +9,7 @@ class AcmeRunNavigationContract(unittest.TestCase):
     def test_run_link_uses_validated_id_and_url_encoding(self):
         source = PORTAL.read_text(encoding="utf-8")
         self.assertIn('if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}",rid):', source)
-        self.assertIn('"/timeline?run_id="+quote(rid,safe="")', source)
+        self.assertIn('href="/timeline?run_id=\'+quote(rid,safe="")', source)
         self.assertIn("Impact SAN → Payments (Twin, non corrélé)", source)
 
     def test_launch_still_requires_server_side_opt_in_and_token(self):
