@@ -69,7 +69,9 @@ def main():
             results.append(dict(gate=name, status="PASS" if run.returncode == 0 else "FAIL", exit_code=run.returncode))
         except subprocess.TimeoutExpired:
             results.append(dict(gate=name, status="FAIL", reason="timeout 120s"))
-        except OSError:
+        except (OSError, UnicodeError, subprocess.SubprocessError):
+            # Decode errors and subprocess infrastructure failures must also
+            # return a redacted FAIL receipt rather than an unhandled traceback.
             # Runner failures must remain fail-closed and never expose exception text
             # (which can contain environment paths or subprocess diagnostics).
             results.append(dict(gate=name, status="FAIL", reason="runner unavailable"))
