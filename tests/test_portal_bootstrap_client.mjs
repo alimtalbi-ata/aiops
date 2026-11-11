@@ -208,3 +208,35 @@ test("15 received Runs display without a false truncation notice", async () => {
   await h.window.loadPortalReadModel();
   assert.equal(h.ids.get("portal-runs").children.length, 15);
 });
+
+test("100 qualified Runs are visible, while 101 fail closed without leaking IDs", async () => {
+  for (const count of [100, 101]) {
+    const h = harness(async () => ({ok: true, json: async () => ({
+      schema: "aiops.portal.readmodels.v1",
+      provenance: "UNATTESTED_UPSTREAM_API_READ",
+      tenant_acl_qualified: true, actor_identity_server_derived: true,
+      runtime_authenticated: false, live_remediation_authorized: false,
+      states: {dashboard: "UNKNOWN", runs: "READABLE_UNVERIFIED", twin: "UNKNOWN"},
+      dashboard: null, twin: null,
+      runs: {items: Array.from({length: count}, (_, i) => ({
+        run_id: "RUN-" + String(i + 1).padStart(3, "0"),
+        mode: "DEMO", status: i === count - 1 ? "FAILED" : "UNKNOWN"
+      }))}
+    })}));
+    h.ids.get("portal-read-token").value = "synthetic-only";
+    await h.window.loadPortalReadModel();
+    const rows = h.ids.get("portal-runs").children;
+    if (count === 100) {
+      assert.equal(rows.length, 100);
+      assert.equal(rows[99].children[0].textContent, "RUN-100");
+      assert.equal(rows[99].children[2].textContent, "FAILED");
+      assert.match(h.ids.get("portal-read-result").textContent, /READABLE_UNVERIFIED/);
+    } else {
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].children[0].textContent, "UNKNOWN — lecture non attestée");
+      assert.match(h.ids.get("portal-read-result").textContent, /contrat de lecture invalide/);
+      assert.equal(h.metrics.get("open_p1").textContent, "UNKNOWN");
+    }
+    assert.equal(h.ids.get("portal-read-token").value, "");
+  }
+});
