@@ -87,3 +87,20 @@ test('hostile length descriptors and excessive arrays fail closed',()=>{
  assert.deepEqual(projectQualifiedRecords(qualified(new Array(10001)),['id']),{state:'UNKNOWN',result:null});
  assert.deepEqual(projectQualifiedRecords(qualified([{id:'safe'}]),new Array(10001)),{state:'UNKNOWN',result:null});
 });
+
+test('total projection budget fails closed before reading hostile record fields',()=>{
+ const fields=Array.from({length:100},(_,i)=>'f'+i);
+ let reads=0;
+ const record=new Proxy({}, {getOwnPropertyDescriptor(){reads++;throw Error('must not read');}});
+ const over=Array(1001).fill(record);
+ assert.deepEqual(projectQualifiedRecords(qualified(over),fields),{state:'UNKNOWN',result:null});
+ assert.equal(reads,0);
+});
+test('projection budget boundary accepts exactly 100000 scalar cells',()=>{
+ const fields=Array.from({length:100},(_,i)=>'f'+i);
+ const record=Object.fromEntries(fields.map(k=>[k,'ok']));
+ const result=projectQualifiedRecords(qualified(Array(1000).fill(record)),fields);
+ assert.equal(result.state,'UNVERIFIED_FRESHNESS');
+ assert.equal(result.result.records.length,1000);
+ assert.equal(result.result.records[0].f0,'ok');
+});
