@@ -40,6 +40,14 @@ class LocalDemoTests(unittest.TestCase):
             self.assertIn(str(Path(td)/'compose.json'),commands[-1])
             self.assertFalse((Path(td)/'receipt.json').exists())
 
+    def test_fresh_run_requires_stage_evidence_and_temporal_replay(self):
+        client=m.CLIENT
+        for marker in ("STAGE_EVIDENCE_LINK_MISSING", "EVIDENCE_COVERAGE_INCOMPLETE",
+                       "TEMPORAL_NOT_COMPLETED", "replay_workflow(history)",
+                       "IMAGE_SOURCE_MISMATCH", "SIMULATE_GATE_MISSING"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker,client)
+
     def test_manifest_detects_source_change_but_ignores_python_cache(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td)
