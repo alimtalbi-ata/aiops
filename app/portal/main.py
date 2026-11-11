@@ -142,8 +142,8 @@ def timeline_page(run_id:str|None=None, q:str="", status:str="ALL"):
     key=quote(selected,safe="")
     detail=_get("/api/runs/"+key)
     from portal.demo_run_identity import matches_demo_run
-    if not matches_demo_run(detail,rid,matched.get("mode")):
-        raise HTTPException(503,"demo_run_identity_unverified")
+    if not matches_demo_run(detail,selected,match.get("mode")):
+        raise HTTPException(503,"run_identity_unverified")
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     evidence_response=_get("/api/runs/"+key+"/evidence")
     evidence_items=evidence_response.get("items",[]) if isinstance(evidence_response.get("items"),list) else []
@@ -272,6 +272,9 @@ def demo_run_detail(rid:str):
     from urllib.parse import quote
     key=quote(rid,safe="")
     detail=_get("/api/runs/"+key)
+    from portal.demo_run_identity import matches_demo_run
+    if not matches_demo_run(detail,rid,matched.get("mode")):
+        raise HTTPException(503,"demo_run_identity_unverified")
     ledger=_get("/api/runs/"+key+"/ai-ledger")
     gate=_get("/api/runs/"+key+"/gates")
     body=panel("Suivi de l'exécution",
