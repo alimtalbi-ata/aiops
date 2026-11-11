@@ -80,6 +80,17 @@
         }
         rows.appendChild(tr);
       }
+      if (data.runs.items.length > 15) {
+        // The client deliberately renders a bounded preview, not a complete Runs list.
+        // Never imply hidden entries are absent or that this read is LIVE-qualified.
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.textContent = "Aperçu limité : 15 sur " + data.runs.items.length +
+          " Runs reçus (lecture non attestée). D'autres Runs ne sont pas affichés.";
+        tr.appendChild(td);
+        rows.appendChild(tr);
+      }
       if (!rows.children.length) {
         const tr = document.createElement("tr");
         const td = document.createElement("td");
