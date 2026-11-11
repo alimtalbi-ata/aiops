@@ -28,7 +28,7 @@ class DemoRunIdentityTests(unittest.TestCase):
 
     def test_reject_cross_run_cross_mode_and_unverified(self):
         for data in (
-            None,
+            None, {},
             {"run_id": "RUN-2", "mode": "DEMO"},
             {"run_id": "RUN-1", "mode": "LIVE"},
             {"run_id": "RUN-2", "run": {"run_id": "RUN-1", "mode": "DEMO"}},
