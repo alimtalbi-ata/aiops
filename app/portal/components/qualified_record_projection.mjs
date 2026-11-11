@@ -31,6 +31,9 @@ export function projectQualifiedRecords(envelope, allowedFields) {
   if(own(envelope,'scope_verified')!==true||own(envelope,'authorization_source')!=='server')return unknown;
   const records=own(envelope,'records'),observedAt=own(envelope,'observed_at');
   const recordCount=safeLength(records);
+  // Bound string payload size as well as cell count; no oversized UI projection.
+  if(typeof observedAt==='string'&&observedAt.length>64)return unknown;
+  let stringUnits=0;
   if(recordCount===null||typeof observedAt!=='string')return unknown;
   // Bound total projection work, not only each input dimension. Fail closed before reading records.
   if(recordCount>Math.floor(100000/fieldCount))return unknown;
@@ -47,6 +50,11 @@ export function projectQualifiedRecords(envelope, allowedFields) {
     const value=descriptor.value;
     if(value!==null&&typeof value!=='string'&&typeof value!=='boolean'&&
        !(typeof value==='number'&&Number.isFinite(value)))return unknown;
+    if(typeof value==='string'){
+     if(value.length>4096)return unknown;
+     stringUnits+=value.length;
+     if(stringUnits>1000000)return unknown;
+    }
     safe[key]=value;
    }
    projected.push(safe);
