@@ -63,7 +63,13 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
      Object.hasOwn(result,'records') && Object.hasOwn(result,'observed_at');
     const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now(),maxAgeMs}) : 'UNKNOWN';
     active=false;
-    publish({state,result:state==='READY'||state==='EMPTY'?result:null});
+    // Do not forward the raw transport envelope: it may include tokens, headers or diagnostics.
+    // Only server-qualified, fresh read data and its minimal provenance reach the UI.
+    const safeResult=(state==='READY'||state==='EMPTY') ? {
+     records:result.records,observed_at:result.observed_at,
+     scope_verified:true,authorization_source:'server'
+    } : null;
+    publish({state,result:safeResult});
    }catch(error){
     if(id!==generation||signal.aborted)return;
     // Never publish raw transport errors: messages, URLs and headers may carry secrets.

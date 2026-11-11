@@ -194,3 +194,32 @@ test('own server qualification fields still permit fresh empty read-only results
  await reader.load('runs');
  assert.deepEqual(events.map(e=>e.state),['LOADING','EMPTY']);
 });
+
+test('qualified read strips transport-only metadata and secrets from published envelope',async()=>{
+ const events=[];
+ const secret='Bearer should-not-reach-portal';
+ const response={
+  records:[{id:'run-1'}],observed_at:fresh,scope_verified:true,authorization_source:'server',
+  authorization:'Bearer '+secret,headers:{cookie:'session-secret'},debug_url:'https://internal.invalid/?token='+secret,
+  actor_id:'unverified-actor',tenant_id:'unverified-tenant'
+ };
+ const reader=createLatestReader(async()=>response,event=>events.push(event),{now:()=>now});
+ await reader.load('runs');
+ assert.equal(events.at(-1).state,'READY');
+ assert.deepEqual(Object.keys(events.at(-1).result).sort(),['authorization_source','observed_at','records','scope_verified']);
+ assert.equal(events.at(-1).result.records[0].id,'run-1');
+ assert.equal(JSON.stringify(events).includes(secret),false);
+ assert.equal(JSON.stringify(events).includes('session-secret'),false);
+ assert.equal(JSON.stringify(events).includes('unverified-tenant'),false);
+});
+
+test('unqualified envelope with sensitive metadata publishes only UNKNOWN and null',async()=>{
+ const events=[];
+ const reader=createLatestReader(async()=>({
+  records:[{id:'other-tenant'}],observed_at:fresh,scope_verified:false,
+  authorization_source:'server',headers:{authorization:'Bearer private'}
+ }),event=>events.push(event),{now:()=>now});
+ await reader.load('evidence');
+ assert.deepEqual(events.at(-1),{state:'UNKNOWN',result:null});
+ assert.equal(JSON.stringify(events).includes('private'),false);
+});
