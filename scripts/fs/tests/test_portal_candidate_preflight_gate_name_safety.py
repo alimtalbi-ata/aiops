@@ -34,13 +34,13 @@ class GateNameSafetyTests(unittest.TestCase):
         self.assertEqual(receipt["kind"], "SYNTHETIC_OFFLINE_ONLY")
 
     def test_bidi_override_rejected_without_execution(self):
-        self.check([("history\\u202ePASS", ["python3", "-V"])], "unsafe gate name", 0)
+        self.check([("history\u202ePASS", ["python3", "-V"])], "unsafe gate name", 0)
 
     def test_zero_width_joiner_rejected_without_execution(self):
-        self.check([("history\\u200dPASS", ["python3", "-V"])], "unsafe gate name", 0)
+        self.check([("history\u200dPASS", ["python3", "-V"])], "unsafe gate name", 0)
 
     def test_control_character_rejected_without_execution(self):
-        self.check([("history\\nPASS", ["python3", "-V"])], "unsafe gate name", 0)
+        self.check([("history\nPASS", ["python3", "-V"])], "unsafe gate name", 0)
 
     def test_whitespace_alias_duplicate(self):
         self.check([("history", ["python3", "-V"]), (" history ", ["python3", "-V"])],
