@@ -23,3 +23,19 @@ def test_framework_method_not_allowed_is_not_cacheable_or_frameable(monkeypatch)
     assert response.headers["x-frame-options"] == "DENY"
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     assert response.headers["referrer-policy"] == "no-referrer"
+
+
+def test_framework_put_method_not_allowed_keeps_security_headers(monkeypatch):
+    """Second rejected method must not weaken the middleware security contract."""
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "app"))
+    portal = importlib.import_module("portal.main")
+    client = TestClient(portal.app, raise_server_exceptions=False)
+    response = client.put("/health")
+    assert response.status_code == 405
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert response.headers["referrer-policy"] == "no-referrer"
