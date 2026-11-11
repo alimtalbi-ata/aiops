@@ -1,6 +1,15 @@
 name: Fresh ACME Core Temporal isolated qualification
 
 on:
+  pull_request:
+    branches:
+      - deploy/aiops2-stable
+    paths:
+      - 'scripts/ops/run_local_temporal_demo.py'
+      - 'app/shared/fresh_run_evidence.py'
+      - 'app/shared/evidence_identity.py'
+      - 'tests/test_fresh_run_evidence.py'
+      - '.github/workflows/fresh-acme-isolated-qualification.yml'
   workflow_dispatch:
 
 permissions:
