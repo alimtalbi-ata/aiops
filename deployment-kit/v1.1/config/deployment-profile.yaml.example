@@ -1,0 +1,40 @@
+apiVersion: aiops.openai.example/v1
+kind: DeploymentProfile
+metadata:
+  name: aiops2-v2-reference
+  owner: Abdelhalim Talbi
+spec:
+  mode: plan-only
+  runtime:
+    composeProject: aiops2
+    coreContainer: aiops2_core
+    workerContainer: aiops2_worker
+    temporalContainer: aiops2_temporal
+    postgresContainer: aiops2_postgres
+  temporal:
+    address: aiops2_temporal:7233
+    namespace: default
+    taskQueue: aiops2
+    requireNetwork: aiops2_temporal
+    historicalBackendsAreSeparate: true
+  acmeDigitalTwin:
+    enabledForSimulation: true
+    deterministicSeedRequired: true
+    realInfrastructureMutation: false
+  policy:
+    simulationOnly: true
+    autoRemediationEnabled: false
+    humanApprovalRequiredForSensitiveActions: true
+    p1AutoRemediation: false
+    unknownEvidenceFailsClosed: true
+    preservePC11KFencingOwnership: true
+  deployment:
+    buildImages: false
+    restartTemporal: false
+    restartDatabases: false
+    requireComposePathVerification: true
+    requireHumanApprovalForApply: true
+  qualification:
+    lastPreflight: failed
+    failureReason: compose_file_missing_at_runtime_label_path
+    productionQualified: false

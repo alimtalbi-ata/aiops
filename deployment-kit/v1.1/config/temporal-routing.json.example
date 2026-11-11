@@ -1,0 +1,31 @@
+{
+  "profile": "aiops2-v2-example",
+  "apply_automatically": false,
+  "temporal": {
+    "address": "aiops2_temporal:7233",
+    "namespace": "default",
+    "task_queue": "aiops2",
+    "expected_docker_network": "aiops2_temporal"
+  },
+  "historical_profiles": {
+    "fastpath_v28": {
+      "namespace": "aiops",
+      "task_queue": "aiops-v28"
+    },
+    "integration_v2835": {
+      "namespace": "aiops",
+      "task_queue": "aiops-incidents"
+    }
+  },
+  "safety": {
+    "simulation_only": true,
+    "auto_remediation_enabled": false,
+    "hitl_required": true,
+    "preserve_pc11k_fencing_ownership": true
+  },
+  "qualification": {
+    "runtime_audit_observed_2026_10_19": true,
+    "deployment_preflight_passed": false,
+    "production_qualified": false
+  }
+}
