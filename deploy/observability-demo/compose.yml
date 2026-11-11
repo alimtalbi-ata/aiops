@@ -1,0 +1,44 @@
+# Isolated optional stack. Run ONLY after review on Debian.
+# No published host ports. Does not alter existing Compose project.
+services:
+  demo-loki:
+    image: grafana/loki:3.5.0
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki/config.yaml:ro
+      - demo_loki_data:/loki
+    networks: [observability]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+
+  demo-tempo:
+    image: grafana/tempo:2.7.2
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo/config.yaml:ro
+      - demo_tempo_data:/var/tempo
+    networks: [observability]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+
+  demo-otel:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel.yaml:/etc/otelcol/config.yaml:ro
+    networks: [observability]
+    depends_on: [demo-loki, demo-tempo]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 384m
+
+networks:
+  observability:
+    external: true
+    name: aiops2-rebuild-observability
+
+volumes:
+  demo_loki_data:
+  demo_tempo_data:
