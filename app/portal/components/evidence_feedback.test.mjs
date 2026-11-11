@@ -160,3 +160,29 @@ test('synthetic nested markup injection is repaired even when text is unchanged'
   assert.equal(root.replacements,2);
   assert.equal(mountEvidenceFeedback(root,'UNKNOWN'),repaired);
 });
+
+test('synthetic external hiding of an announcement is repaired without hiding the replacement',()=>{
+  class Element{
+    constructor(){this.attrs={};this.children=[];this.textContent='';this.replacements=0;this.ownerDocument={createElement:()=>new Element()};}
+    setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
+    replaceChildren(...nodes){this.children=nodes;this.replacements++;}
+    get childNodes(){return this.children;}
+    get firstChild(){return this.children[0]??null;}
+  }
+  for(const state of ['LOADING','EMPTY','ERROR','UNKNOWN']){
+    for(const attr of ['aria-hidden','hidden']){
+      const root=new Element();
+      const first=mountEvidenceFeedback(root,state);
+      assert.equal(mountEvidenceFeedback(root,state),first);
+      first.setAttribute(attr,attr==='hidden'?'':'true');
+      const repaired=mountEvidenceFeedback(root,state);
+      assert.notEqual(repaired,first);
+      assert.equal(repaired.getAttribute(attr),null);
+      assert.equal(repaired.textContent,evidenceFeedback(state).message);
+      assert.equal(root.getAttribute('aria-busy'),state==='LOADING'?'true':'false');
+      assert.equal(root.replacements,2);
+      assert.equal(mountEvidenceFeedback(root,state),repaired);
+    }
+  }
+});
