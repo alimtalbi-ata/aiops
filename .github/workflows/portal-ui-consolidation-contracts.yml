@@ -1,0 +1,35 @@
+name: Portal UI consolidation contracts
+
+on:
+  pull_request:
+    branches:
+      - deploy/aiops2-stable
+    paths:
+      - "app/portal/components/**"
+      - "app/portal/portal_bootstrap_client.js"
+      - "tests/test_portal_bootstrap_client.mjs"
+      - ".github/workflows/portal-ui-consolidation-contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-ui-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify isolated UI contracts without network or secrets
+        run: |
+          node --test \
+            app/portal/components/read_settlement_guard.test.mjs \
+            app/portal/components/evidence_request_settlement.test.mjs \
+            tests/test_portal_bootstrap_client.mjs
