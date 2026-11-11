@@ -22,7 +22,7 @@ test('native keyboard controls, live count, and no HTML interpretation',()=>{
  assert.equal(list.children[0].textContent.includes('<img'),true);
  assert.match(list.children[0].textContent,/Disponible/);
  assert.doesNotMatch(list.children[0].textContent,/READY/);
- input.value='missing';input.events.input();assert.match(output.textContent,/0 preuve/);
+ input.value='missing';input.events.input();assert.match(output.textContent,/Aucune preuve ne correspond aux filtres/);
  mounted.setRecords(null);assert.equal(seen.at(-1),'UNKNOWN');assert.equal(list.children.length,0);
 });
 
