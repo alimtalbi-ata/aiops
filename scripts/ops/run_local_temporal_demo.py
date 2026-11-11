@@ -63,7 +63,16 @@ async def main():
         detail=api('/api/runs/'+rid)
         if detail['run']['status'] in ('RESOLVED','BLOCKED','FAILED','CANCELLED'):break
         await asyncio.sleep(1)
-    if detail['run']['status']!='RESOLVED':raise RuntimeError('DEMO_NOT_RESOLVED')
+    if detail['run']['status']!='RESOLVED':
+        state=detail['run']['status']
+        if state not in ('BLOCKED','FAILED','CANCELLED','WAITING','RUNNING','CREATED'):
+            state='UNKNOWN'
+        failed_stage=next((s.get('stage') for s in detail.get('stages',[])
+                           if s.get('state') in ('BLOCKED','FAIL','FAILED')),None)
+        if failed_stage not in ('NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG',
+                               'DGX_ANALYST','DGX_CRITIC','POLICY','HITL','REMEDIATE',
+                               'VERIFY','RECONCILE','LEARN'):failed_stage='UNKNOWN'
+        raise RuntimeError('DEMO_NOT_RESOLVED_STATE_'+state+'_STAGE_'+failed_stage)
     if detail['run']['mode']!='DEMO':raise RuntimeError('NOT_SYNTHETIC_DEMO')
     required={'NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC',
               'POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN'}
@@ -228,6 +237,8 @@ ENV PYTHONPATH=/app
                    'SQL_EVIDENCE_ROWS_MISSING', 'SQL_RUN_EVENT_LINK_MISMATCH',
                    'SQL_EVIDENCE_DIGEST_INVALID', 'TEMPORAL_NOT_COMPLETED')
         marker = next((code for code in allowed if code in child_output), 'UNCLASSIFIED_CHILD_FAILURE')
+        demo_failure = re.search(r'DEMO_NOT_RESOLVED_STATE_(?:BLOCKED|FAILED|CANCELLED|WAITING|RUNNING|CREATED|UNKNOWN)_STAGE_(?:NORMALIZE|CORRELATE|CMDB|OBSERVE|RAG|DGX_ANALYST|DGX_CRITIC|POLICY|HITL|REMEDIATE|VERIFY|RECONCILE|LEARN|UNKNOWN)', child_output)
+        if demo_failure: marker = demo_failure.group(0)
         api_failure = re.search(r'API_(?:HEALTH|INCIDENT_CREATE|RUN_CREATE|RUN_EXECUTE|RUN_DETAIL|EVIDENCE_LIST)_HTTP_(?:400|401|403|404|409|422|429|500|502|503|504)', child_output)
         if api_failure: marker = api_failure.group(0)
         categories = ('ModuleNotFoundError', 'ImportError', 'OperationalError', 'ConnectionRefusedError',
