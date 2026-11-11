@@ -18,9 +18,11 @@ export function projectReadTransportFailure(input={}) {
     if (input===null || typeof input!=='object' || Array.isArray(input)) return failed();
     const aborted=ownData(input,'aborted',false);
     const timedOut=ownData(input,'timedOut',false);
-    const status=ownData(input,'status',null);
+    // Terminal cancellation/timeout signals are sufficient: do not inspect a
+    // potentially hostile or unavailable HTTP status after either is known.
     if (aborted===true) return unknown('CANCELLED');
     if (timedOut===true) return unknown('TIMEOUT');
+    const status=ownData(input,'status',null);
     if (!Number.isInteger(status) || status<100 || status>599) return failed();
     if (status===401) return unknown('AUTH_REQUIRED');
     if (status===403) return unknown('TENANT_ACL_NOT_QUALIFIED');
