@@ -89,7 +89,7 @@ async def main():
     if detail['run']['mode']!='DEMO':raise RuntimeError('NOT_SYNTHETIC_DEMO')
     required={'NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC',
               'POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN'}
-    completed=[e for e in detail['events'] if e['event_type']=='STAGE_COMPLETED' and e['status']=='PASS']
+    completed=[e for e in detail['events'] if e['event_type'] in ('STAGE_COMPLETED','ANALYST_COMPLETED','CRITIC_COMPLETED') and e['status']=='PASS']
     if not required <= {e['stage'] for e in completed}:raise RuntimeError('STAGES_INCOMPLETE')
     if not all(e.get('payload',{}).get('synthetic') is True for e in completed):raise RuntimeError('PROVENANCE_MISSING')
     if not any(g['stage']=='POLICY' and g['state']=='PASS' and g['decision']=='SIMULATE'
@@ -122,7 +122,7 @@ async def main():
         'linked_synthetic_evidence':len(evidence),'evidence_readback':evidence_readback,'policy':'PASS/SIMULATE',
         'history_events':len(history.events),'replay':'PASS',
         'debian_verified':False,'glpi_verified':False,'portal_verified':False,
-        'real_model_verified':False}))
+        'real_model_verified':False,'intelligence_provider':'SYNTHETIC_CI_FIXTURE' if os.environ.get('LLM_MODEL')=='synthetic-ci-fixture-v1' else 'REAL_MODEL_CONFIGURED_NOT_ATTESTED'}))
 asyncio.run(main())
 '''
 
