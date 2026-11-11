@@ -137,3 +137,26 @@ test('synthetic external mutation of cached live-region node is repaired',()=>{
     }
   }
 });
+
+test('synthetic nested markup injection is repaired even when text is unchanged',()=>{
+  class Element{
+    constructor(){this.attrs={};this.children=[];this.textContent='';this.replacements=0;this.ownerDocument={createElement:()=>new Element()};}
+    setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
+    replaceChildren(...nodes){this.children=nodes;this.replacements++;}
+    get childNodes(){return this.children;}
+    get firstChild(){return this.children[0]??null;}
+  }
+  const root=new Element();
+  const first=mountEvidenceFeedback(root,'UNKNOWN');
+  assert.equal(mountEvidenceFeedback(root,'UNKNOWN'),first);
+  // An external renderer adds an empty focusable element without changing the message.
+  first.children.push(new Element());
+  assert.equal(first.textContent,evidenceFeedback('UNKNOWN').message);
+  const repaired=mountEvidenceFeedback(root,'UNKNOWN');
+  assert.notEqual(repaired,first);
+  assert.equal(repaired.childNodes.length,0);
+  assert.equal(repaired.getAttribute('role'),'status');
+  assert.equal(root.replacements,2);
+  assert.equal(mountEvidenceFeedback(root,'UNKNOWN'),repaired);
+});
