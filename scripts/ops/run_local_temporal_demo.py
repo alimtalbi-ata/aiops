@@ -17,7 +17,7 @@ import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[2]
-SERVICES = [('core', 810), ('worker', 815), ('twin', 811), ('policy', 813), ('evidence', 812)]
+SERVICES = [('core', 810), ('worker', 815), ('twin', 811), ('policy', 813), ('evidence', 812), ('intelligence', 817)]
 CLIENT = r'''
 import asyncio,hashlib,json,os,sys,time,uuid,urllib.request,urllib.error
 from pathlib import Path
@@ -52,10 +52,16 @@ async def main():
             with urllib.request.urlopen(worker_req,timeout=5) as worker_response:
                 if json.load(worker_response).get('status')!='ok':
                     raise RuntimeError('WORKER_NOT_READY')
+            intel_req=urllib.request.Request('http://127.0.0.1:817/health')
+            with urllib.request.urlopen(intel_req,timeout=5) as intel_response:
+                intel_health=json.load(intel_response)
+            if not intel_health.get('provider_configured'):
+                raise RuntimeError('INTELLIGENCE_MODEL_NOT_CONFIGURED')
             client=await Client.connect('temporal:7233')
             break
         except Exception:await asyncio.sleep(1)
-    if client is None:raise RuntimeError('LOCAL_SERVICES_NOT_READY')
+    if client is None:
+        raise RuntimeError('LOCAL_SERVICES_OR_INTELLIGENCE_NOT_READY')
     key='LOCAL-DEMO-'+uuid.uuid4().hex[:12].upper()
     incident=api('/api/incidents',{'external_id':key,'title':'Isolated synthetic demo',
         'severity':'P1','source':'local-qualification','synthetic':True})
