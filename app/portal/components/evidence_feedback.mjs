@@ -19,8 +19,14 @@ export function mountEvidenceFeedback(root,state){
   const previous=mountedFeedback.get(root);
   const busy=feedback.state==='LOADING'?'true':'false';
   // External renderers can alter the region while preserving its first child.
-  // Repair only the drift; avoid re-announcing an unchanged state.
-  if(previous?.state===feedback.state && root.childNodes?.length===1 && root.firstChild===previous.node){
+  // Reuse only intact announcements; an external mutation must not mislead assistive technology.
+  if(previous?.state===feedback.state && root.childNodes?.length===1 &&
+     root.firstChild===previous.node &&
+     previous.node.textContent===feedback.message &&
+     previous.node.getAttribute('role')===(feedback.state==='ERROR'?'alert':'status') &&
+     previous.node.getAttribute('aria-live')===(feedback.state==='ERROR'?'assertive':'polite') &&
+     previous.node.getAttribute('aria-atomic')==='true' &&
+     previous.node.getAttribute('aria-busy')===(feedback.state==='LOADING'?'true':null)){
     if(root.getAttribute('aria-busy')!==busy) root.setAttribute('aria-busy',busy);
     return previous.node;
   }

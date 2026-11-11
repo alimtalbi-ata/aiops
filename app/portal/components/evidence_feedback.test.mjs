@@ -102,3 +102,38 @@ test('synthetic external DOM drift repairs busy flag without repeated announceme
   assert.equal(root.replacements,2);
   assert.equal(root.attrs['aria-busy'],'true');
 });
+
+test('synthetic external mutation of cached live-region node is repaired',()=>{
+  class Element{
+    constructor(){this.attrs={};this.children=[];this.replacements=0;this.textContent='';this.ownerDocument={createElement:()=>new Element()};}
+    setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
+    replaceChildren(...nodes){this.children=nodes;this.replacements++;}
+    get firstChild(){return this.children[0]??null;}
+    get childNodes(){return this.children;}
+  }
+  for(const state of ['LOADING','ERROR','UNKNOWN']){
+    for(const corrupt of [
+      node=>{node.textContent='Donnée synthétique erronée';},
+      node=>node.setAttribute('role','presentation'),
+      node=>node.setAttribute('aria-live','off'),
+      node=>node.setAttribute('aria-atomic','false'),
+      node=>node.setAttribute('aria-busy','false')
+    ]){
+      const root=new Element();
+      const original=mountEvidenceFeedback(root,state);
+      corrupt(original);
+      const repaired=mountEvidenceFeedback(root,state);
+      assert.notEqual(repaired,original);
+      assert.equal(root.children.length,1);
+      assert.equal(repaired.textContent,evidenceFeedback(state).message);
+      assert.equal(repaired.getAttribute('role'),state==='ERROR'?'alert':'status');
+      assert.equal(repaired.getAttribute('aria-live'),state==='ERROR'?'assertive':'polite');
+      assert.equal(repaired.getAttribute('aria-atomic'),'true');
+      assert.equal(repaired.getAttribute('aria-busy'),state==='LOADING'?'true':null);
+      assert.equal(root.getAttribute('aria-busy'),state==='LOADING'?'true':'false');
+      assert.equal(mountEvidenceFeedback(root,state),repaired);
+      assert.equal(root.replacements,2);
+    }
+  }
+});
