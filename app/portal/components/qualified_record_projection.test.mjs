@@ -39,3 +39,24 @@ test('no client-side tenant assertion can qualify records',()=>{
  const e=qualified([{id:'a'}]);e.authorization_source='browser';e.tenant_id='tenant-a';
  assert.deepEqual(projectQualifiedRecords(e,['id']),{state:'UNKNOWN',result:null});
 });
+
+test('record array accessor is never invoked and fails closed',()=>{
+ let calls=0;
+ const records=[{id:'safe'}];
+ Object.defineProperty(records,'0',{configurable:true,get(){calls++;return {id:'leak'};}});
+ assert.deepEqual(projectQualifiedRecords(qualified(records),['id']),{state:'UNKNOWN',result:null});
+ assert.equal(calls,0);
+});
+test('allowlist array accessor is never invoked and fails closed',()=>{
+ let calls=0;
+ const fields=['id'];
+ Object.defineProperty(fields,'0',{configurable:true,get(){calls++;return 'id';}});
+ assert.deepEqual(projectQualifiedRecords(qualified([{id:'safe'}]),fields),{state:'UNKNOWN',result:null});
+ assert.equal(calls,0);
+});
+test('sparse record and allowlist arrays fail closed',()=>{
+ const sparseRecords=new Array(1);
+ const sparseFields=new Array(1);
+ assert.deepEqual(projectQualifiedRecords(qualified(sparseRecords),['id']),{state:'UNKNOWN',result:null});
+ assert.deepEqual(projectQualifiedRecords(qualified([{id:'safe'}]),sparseFields),{state:'UNKNOWN',result:null});
+});
