@@ -31,6 +31,8 @@ export function mountEvidenceFeedback(root,state){
      // An externally hidden live-region message must never be cached.
      previous.node.getAttribute('aria-hidden')===null &&
      previous.node.getAttribute('hidden')===null &&
+     // `inert` removes descendants from focus and accessibility navigation.
+     previous.node.getAttribute('inert')===null &&
      previous.node.getAttribute('aria-busy')===(feedback.state==='LOADING'?'true':null)){
     if(root.getAttribute('aria-busy')!==busy) root.setAttribute('aria-busy',busy);
     return previous.node;
