@@ -1,0 +1,11 @@
+{
+  "incident_id": "INC-DEMO-P1-001",
+  "source": "manual-demo",
+  "title": "Storage multipath degraded",
+  "description": "One of two SAN paths is unavailable; impact must be confirmed.",
+  "severity": "P1",
+  "ci_id": "srv-demo-01",
+  "idempotency_key": "demo-multipath-001",
+  "evidence": [{"type":"simulated","name":"path_count","value":1,"note":"Example payload; not a live observation"}],
+  "labels": {"environment":"demo","data_class":"synthetic"}
+}

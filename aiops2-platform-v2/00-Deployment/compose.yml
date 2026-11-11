@@ -1,0 +1,52 @@
+name: aiops2-v2
+services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - aiops2_pgdata:/var/lib/postgresql/data
+      - ../02-Database/init/001-schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    networks: [aiops2-internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+  api:
+    build:
+      context: ..
+      dockerfile: 01-Application/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AIOPS2_API_KEY: ${AIOPS2_API_KEY:?set AIOPS2_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:${AIOPS2_API_PORT:-18080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [aiops2-internal]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+networks:
+  aiops2-internal:
+    name: aiops2-v2-internal
+    driver: bridge
+    internal: true
+volumes:
+  aiops2_pgdata:
+    name: aiops2-v2-pgdata

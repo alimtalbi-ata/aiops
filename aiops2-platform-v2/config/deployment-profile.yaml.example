@@ -1,0 +1,13 @@
+schema_version: 1
+profile:
+  name: aiops2-development
+  mode: isolated-dev
+  apply_by_default: false
+paths:
+  root: /home/aiops/aiops2
+  staging: /home/aiops/aiops2-reconstruction/staging
+safety:
+  modify_legacy_sources: false
+  restart_legacy_containers: false
+  automatic_remediation: false
+  require_human_approval_for_high_risk: true
