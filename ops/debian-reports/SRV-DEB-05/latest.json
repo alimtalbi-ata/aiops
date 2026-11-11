@@ -3,7 +3,7 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-11T16:21:01.744086+00:00",
+  "collected_at": "2026-11-11T16:22:01.198992+00:00",
   "docker": {
     "available": true,
     "containers": [
@@ -523,21 +523,21 @@
         "image": "aiops2-e2e-v1-aiops2-core",
         "inspect_ok": true,
         "name": "aiops2-demo-web-v1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-e2e-v1-aiops2-core",
         "inspect_ok": true,
         "name": "aiops2-demo-readonly",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-candidate-worker:b870f48",
         "inspect_ok": true,
         "name": "aiops2-e2e-v1-aiops2-worker-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -551,7 +551,7 @@
         "image": "aiops2-e2e-v1-aiops2-test-llm",
         "inspect_ok": true,
         "name": "aiops2-e2e-v1-aiops2-test-llm-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 5 weeks, 6 hours, 32 minutes"
+    "uptime": "up 5 weeks, 6 hours, 33 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 138782806016,
+      "free_bytes": 138782777344,
       "total_bytes": 172898033664,
-      "used_bytes": 25257906176
+      "used_bytes": 25257934848
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,14 +592,14 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.67529296875,
-      1.48779296875,
-      1.43994140625
+      2.49267578125,
+      1.73828125,
+      1.529296875
     ],
     "memory_bytes": {
-      "MemAvailable": 19455635456,
+      "MemAvailable": 19549646848,
       "MemTotal": 25205911552,
-      "SwapFree": 10352910336,
+      "SwapFree": 10391425024,
       "SwapTotal": 10838077440
     }
   },
