@@ -5,9 +5,17 @@
 export function projectQualifiedRecords(envelope, allowedFields) {
  const unknown={state:'UNKNOWN',result:null};
  try {
-  if(!Array.isArray(allowedFields)||allowedFields.length===0)return unknown;
+  // Read array lengths as own data descriptors: Proxy get traps must never run.
+  const safeLength=array=>{
+   if(!Array.isArray(array))return null;
+   const descriptor=Object.getOwnPropertyDescriptor(array,'length');
+   const length=descriptor&&Object.hasOwn(descriptor,'value')?descriptor.value:null;
+   return Number.isSafeInteger(length)&&length>=0&&length<=10000?length:null;
+  };
+  const fieldCount=safeLength(allowedFields);
+  if(fieldCount===null||fieldCount===0)return unknown;
   const fields=[];
-  for(let i=0;i<allowedFields.length;i++){
+  for(let i=0;i<fieldCount;i++){
    const descriptor=Object.getOwnPropertyDescriptor(allowedFields,String(i));
    if(!descriptor||!Object.hasOwn(descriptor,'value'))return unknown;
    const key=descriptor.value;
@@ -22,9 +30,10 @@ export function projectQualifiedRecords(envelope, allowedFields) {
   };
   if(own(envelope,'scope_verified')!==true||own(envelope,'authorization_source')!=='server')return unknown;
   const records=own(envelope,'records'),observedAt=own(envelope,'observed_at');
-  if(!Array.isArray(records)||typeof observedAt!=='string')return unknown;
+  const recordCount=safeLength(records);
+  if(recordCount===null||typeof observedAt!=='string')return unknown;
   const projected=[];
-  for(let i=0;i<records.length;i++){
+  for(let i=0;i<recordCount;i++){
    const entry=Object.getOwnPropertyDescriptor(records,String(i));
    if(!entry||!Object.hasOwn(entry,'value'))return unknown;
    const record=entry.value;
