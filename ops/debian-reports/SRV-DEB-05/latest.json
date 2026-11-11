@@ -3,7 +3,7 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-11T16:19:01.228320+00:00",
+  "collected_at": "2026-11-11T16:20:02.091873+00:00",
   "docker": {
     "available": true,
     "containers": [
@@ -432,49 +432,49 @@
         "image": "aiops2-worker:v27-9885fc5",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-worker-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-core:v27-9885fc5",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-core-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-candidate-intelligence:cf09ec3",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-intelligence-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-v27-qual-aiops2-policy",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-policy-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-v27-qual-aiops2-twin",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-twin-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-v27-qual-aiops2-evidence",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-evidence-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
         "image": "aiops2-v27-qual-aiops2-test-llm",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-test-llm-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -484,11 +484,11 @@
         "state": "exited"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "temporalio/server:1.31.0",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-temporal-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -498,18 +498,18 @@
         "state": "exited"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "postgres:16-alpine",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-temporal-postgres-1",
-        "state": "running"
+        "state": "exited"
       },
       {
-        "health": "healthy",
+        "health": "unhealthy",
         "image": "postgres:16-alpine",
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-postgres-1",
-        "state": "running"
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 5 weeks, 6 hours, 30 minutes"
+    "uptime": "up 5 weeks, 6 hours, 31 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 138784985088,
+      "free_bytes": 138783916032,
       "total_bytes": 172898033664,
-      "used_bytes": 25255727104
+      "used_bytes": 25256796160
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,14 +592,14 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      1.1279296875,
-      1.4111328125,
-      1.4140625
+      1.21728515625,
+      1.40576171875,
+      1.4130859375
     ],
     "memory_bytes": {
-      "MemAvailable": 18490859520,
+      "MemAvailable": 18956742656,
       "MemTotal": 25205911552,
-      "SwapFree": 10030219264,
+      "SwapFree": 10195636224,
       "SwapTotal": 10838077440
     }
   },
