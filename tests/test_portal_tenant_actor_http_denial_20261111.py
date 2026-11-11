@@ -39,3 +39,29 @@ def test_authenticated_shared_viewer_cannot_read_tenant_bootstrap(monkeypatch):
     assert "items" not in body
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_rejected_viewer_cannot_reach_upstream_or_disclose_rows(monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "app"))
+    portal = importlib.import_module("portal.main")
+    from fastapi import HTTPException
+
+    def denied_viewer(_authorization):
+        raise HTTPException(status_code=403, detail="unauthorized")
+
+    def forbidden_upstream(*_args, **_kwargs):
+        raise AssertionError("unauthorized request reached Core/Twin")
+
+    monkeypatch.setattr(portal, "_require_portal_read_auth", denied_viewer)
+    monkeypatch.setattr(portal, "get_json", forbidden_upstream)
+    monkeypatch.setattr(portal, "read_portal_snapshot", forbidden_upstream)
+    client = TestClient(portal.app, raise_server_exceptions=False)
+    response = client.get(
+        "/api/portal/bootstrap",
+        headers={"Authorization": "Bearer synthetic-rejected"},
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "unauthorized"}
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
