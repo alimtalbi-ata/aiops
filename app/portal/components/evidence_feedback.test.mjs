@@ -211,3 +211,31 @@ test('synthetic inert announcement is reconstructed for all feedback states',()=
     assert.equal(mountEvidenceFeedback(root,state),repaired);
   }
 });
+
+test('synthetic external accessible-name override is repaired for all feedback states',()=>{
+  class Element{
+    constructor(){this.attrs={};this.children=[];this.textContent='';this.replacements=0;this.ownerDocument={createElement:()=>new Element()};}
+    setAttribute(k,v){this.attrs[k]=v;}
+    getAttribute(k){return this.attrs[k]??null;}
+    replaceChildren(...nodes){this.children=nodes;this.replacements++;}
+    get childNodes(){return this.children;}
+    get firstChild(){return this.children[0]??null;}
+  }
+  for(const state of syntheticStates){
+    for(const attr of ['aria-label','aria-labelledby']){
+      const root=new Element();
+      const original=mountEvidenceFeedback(root,state);
+      assert.equal(mountEvidenceFeedback(root,state),original);
+      original.setAttribute(attr,'synthetic-overriding-label');
+      const repaired=mountEvidenceFeedback(root,state);
+      assert.notEqual(repaired,original);
+      assert.equal(repaired.getAttribute(attr),null);
+      assert.equal(repaired.textContent,evidenceFeedback(state).message);
+      assert.equal(repaired.getAttribute('role'),state==='ERROR'?'alert':'status');
+      assert.equal(root.getAttribute('aria-busy'),state==='LOADING'?'true':'false');
+      assert.equal(root.replacements,2);
+      assert.equal(mountEvidenceFeedback(root,state),repaired);
+      assert.equal(root.replacements,2);
+    }
+  }
+});
