@@ -1,0 +1,25 @@
+name: Portal tenant actor boundary exact-head tests
+
+on:
+  pull_request:
+    paths:
+      - "tests/test_portal_tenant_actor_boundary_20261111.py"
+      - "app/portal/main.py"
+      - "app/core/main.py"
+      - ".github/workflows/portal-tenant-actor-boundary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal-tenant-actor-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run isolated fail-closed tenant and actor source contracts
+        run: python -m unittest discover -s tests -p 'test_portal_tenant_actor_boundary_20261111.py'
