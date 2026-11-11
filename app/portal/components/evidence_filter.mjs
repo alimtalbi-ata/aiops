@@ -22,6 +22,8 @@ export function filterEvidence(records, {query='', status='ALL'}={}) {
   });
   return {state:filtered.length?'READY':'EMPTY',records:filtered};
 }
+/** Localized presentation only: never reinterpret the evidence status contract. */
+const evidenceStatusLabels=Object.freeze({READY:'Disponible',UNKNOWN:'Non vérifiable',ERROR:'Erreur',EMPTY:'Vide'});
 /** Native controls; no inline handlers or HTML injection (strict CSP compatible). */
 export function mountEvidenceFilter(root,{records=[],onChange=()=>{}}={}){
   if(!root?.ownerDocument || typeof root.replaceChildren!=='function')throw new TypeError('DOM root required');
@@ -41,9 +43,9 @@ export function mountEvidenceFilter(root,{records=[],onChange=()=>{}}={}){
   function update(){
     const result=filterEvidence(records,{query:input.value,status:status.value||'ALL'});
     list.replaceChildren();
-    for(const record of result.records){const li=doc.createElement('li');li.textContent=record.label+' — '+record.status;list.append(li);}
+    for(const record of result.records){const li=doc.createElement('li');li.textContent=record.label+' — '+evidenceStatusLabels[record.status];list.append(li);}
     reset.hidden=!(result.state==='EMPTY' && Array.isArray(records) && records.length>0);
-    count.textContent=result.state==='UNKNOWN'?'Preuves non vérifiables':result.state==='EMPTY'?(Array.isArray(records)&&records.length===0?'Aucune preuve disponible':'Aucune preuve ne correspond aux filtres'):`${result.records.length} preuve(s) — ${result.state}`;
+    count.textContent=result.state==='UNKNOWN'?'Preuves non vérifiables':result.state==='EMPTY'?(Array.isArray(records)&&records.length===0?'Aucune preuve disponible':'Aucune preuve ne correspond aux filtres'):`${result.records.length} preuve(s) disponible(s)`;
     onChange(result);
   }
   input.addEventListener('input',update);status.addEventListener('change',update);
