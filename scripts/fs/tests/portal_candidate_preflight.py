@@ -40,9 +40,9 @@ def main():
     seen = set()
     for entry in entries:
         if (not isinstance(entry, (tuple, list)) or len(entry) != 2
-                or not isinstance(entry[0], str) or not entry[0]
+                or not isinstance(entry[0], str) or not entry[0].strip()
                 or not isinstance(entry[1], (tuple, list)) or not entry[1]
-                or not all(isinstance(arg, str) and arg for arg in entry[1])):
+                or not all(isinstance(arg, str) and arg.strip() for arg in entry[1])):
             results.append(dict(gate="manifest", status="FAIL", reason="invalid gate definition"))
             continue
         name, command = entry
