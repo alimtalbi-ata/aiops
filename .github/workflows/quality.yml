@@ -162,7 +162,7 @@ jobs:
           docker run --rm --network host \
             -e PGPASSWORD -v "$GITHUB_WORKSPACE:/workspace" -w /workspace \
             postgres:16 bash -ec \
-            "apt-get update -qq && apt-get install -y -qq python3 >/dev/null && bash tests/postgres-dr-rehearsal.sh"
+            "apt-get update -qq && apt-get install -y -qq python3 >/dev/null && bash tests/postgres-dr-rehearsal.sh && chown --reference=/workspace /workspace/reports/postgres-dr-rehearsal.json"
       - name: Upload recovery qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
