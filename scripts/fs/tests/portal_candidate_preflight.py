@@ -42,6 +42,10 @@ def main():
             results.append(dict(gate=name, status="PASS" if run.returncode == 0 else "FAIL", exit_code=run.returncode))
         except subprocess.TimeoutExpired:
             results.append(dict(gate=name, status="FAIL", reason="timeout 120s"))
+        except OSError:
+            # Runner failures must remain fail-closed and never expose exception text
+            # (which can contain environment paths or subprocess diagnostics).
+            results.append(dict(gate=name, status="FAIL", reason="runner unavailable"))
     summary = dict(kind="SYNTHETIC_OFFLINE_ONLY", host="NOT_VERIFIED", debian="NOT_VERIFIED",
                    chromium="NOT_VERIFIED", live="UNKNOWN", gates=results)
     if args.json:
