@@ -23,7 +23,8 @@ from pathlib import Path
 from temporalio.client import Client
 from temporalio.worker import Replayer
 from worker.workflow import IncidentWorkflow
-from shared.fresh_run_evidence import verify_run_evidence
+from shared.fresh_run_evidence import verify_run_evidence, verify_evidence_sql
+import psycopg
 
 def api(path, body=None):
     req=urllib.request.Request('http://127.0.0.1:810'+path,
@@ -83,6 +84,9 @@ async def main():
             headers={'Authorization':'Bearer '+os.environ['AIOPS_INTERNAL_TOKEN']})
         with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)
     evidence_readback=verify_run_evidence(rid,completed,listing,fetch_evidence)
+    with psycopg.connect(os.environ['DATABASE_URL']) as connection:
+        sql_readback=verify_evidence_sql(rid,evidence,connection)
+    evidence_readback.update(sql_readback)
     if len(evidence)<len(required):
         raise RuntimeError('EVIDENCE_COVERAGE_INCOMPLETE')
     print(json.dumps({'scope':'LOCAL_ISOLATED_SYNTHETIC_TEMPORAL','run_id':rid,
