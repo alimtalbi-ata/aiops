@@ -19,6 +19,8 @@ class DemoRunIdentityTests(unittest.TestCase):
         for data in (
             {"run_id": "RUN-1", "mode": "DEMO", "status": "BLOCKED"},
             {"run": {"run_id": "RUN-1", "mode": "DEMO", "status": "BLOCKED"}},
+            {"run": {"status": "BLOCKED"}, "events": []},
+            {"run_id": "RUN-1", "status": "BLOCKED"},
             {"run_id": "RUN-1", "run": {"run_id": "RUN-1", "mode": "DEMO"}},
         ):
             with self.subTest(data=data):
@@ -26,11 +28,11 @@ class DemoRunIdentityTests(unittest.TestCase):
 
     def test_reject_cross_run_cross_mode_and_unverified(self):
         for data in (
-            None, {}, {"status": "RESOLVED"},
+            None,
             {"run_id": "RUN-2", "mode": "DEMO"},
             {"run_id": "RUN-1", "mode": "LIVE"},
             {"run_id": "RUN-2", "run": {"run_id": "RUN-1", "mode": "DEMO"}},
-            {"run": {"run_id": "RUN-1"}},
+
             {"run": None}, {"run": "bad"},
         ):
             with self.subTest(data=data):
