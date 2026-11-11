@@ -1,21 +1,29 @@
-import os,asyncio,datetime
-from fastapi import FastAPI,HTTPException,Header
+import os,asyncio,datetime,re
+from fastapi import FastAPI,HTTPException,Header,Request
 from temporalio import activity,workflow
 from temporalio.client import Client
 from temporalio.worker import Worker
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.common import RetryPolicy
-from shared.http import post_json
-from shared.simulation_policy_contract import policy_command_for_mode
+from shared.http import post_json, get_json
+from shared.simulation_policy_contract import policy_command_for_mode, validate_synthetic_policy_response, validate_synthetic_gate_receipt, validate_canonical_run_binding, valid_internal_bearer
 app=FastAPI(title='ACME AioOps Temporal Worker',version='2.1.0')
 CORE=os.getenv('CORE_URL','http://aiops2-core:810');EVID=os.getenv('EVIDENCE_URL','http://aiops2-evidence:812');POLICY=os.getenv('POLICY_URL','http://aiops2-policy:813');TWIN=os.getenv('TWIN_URL','http://aiops2-twin:811');ADMIN=os.getenv('AIOPS_INTERNAL_TOKEN') or os.getenv('AIOPS_ADMIN_TOKEN')
 if not ADMIN: raise RuntimeError('AIOPS_INTERNAL_TOKEN or AIOPS_ADMIN_TOKEN must be configured')
 TEMP=os.getenv('TEMPORAL_ADDRESS','aiops2-temporal:7233')
 STAGES=['NORMALIZE','CORRELATE','CMDB','OBSERVE','RAG','DGX_ANALYST','DGX_CRITIC','POLICY','HITL','REMEDIATE','VERIFY','RECONCILE','LEARN']
-RETRY=RetryPolicy(initial_interval=datetime.timedelta(seconds=1),backoff_coefficient=2.0,max_interval=datetime.timedelta(seconds=10),maximum_attempts=3)
+RETRY=RetryPolicy(initial_interval=datetime.timedelta(seconds=1),backoff_coefficient=2.0,maximum_interval=datetime.timedelta(seconds=10),maximum_attempts=3)
 def call(method,url,payload): return post_json(url.split('/api/')[0],'/api/'+url.split('/api/',1)[1],payload,timeout=15,token=ADMIN)
 @activity.defn
-async def start_run(a): return call('POST',f'{CORE}/api/runs/{a["run_id"]}/command',{'expected_version':a['version'],'idempotency_key':'START-'+a['run_id'],'command':'START'})
+async def start_run(a):
+    # Re-read Core inside the activity: the HTTP preflight alone is not a binding.
+    validate_canonical_run_binding(
+        get_json(CORE, f'/api/runs/{a["run_id"]}', token=ADMIN), a,
+        allow_started=True,
+    )
+    return call('POST', f'{CORE}/api/runs/{a["run_id"]}/command',
+                {'expected_version': a['version'],
+                 'idempotency_key': 'START-'+a['run_id'], 'command': 'START'})
 @activity.defn
 async def execute_stage(a):
     rid,version,stage,mode,scenario=a['run_id'],a['version'],a['stage'],a['mode'],a['scenario_id']
@@ -54,10 +62,22 @@ async def execute_stage(a):
         ev=post_json(EVID,'/api/evidence',{'source':f'run:{rid}:{stage.lower()}','claim':f'{stage} completed for scenario {scenario}','confidence':0.94 if stage not in ('DGX_ANALYST','DGX_CRITIC') else 0.91,'provenance':{'synthetic':synthetic,'run_id':rid,'stage':stage,'scenario_id':scenario},'payload':{'stage':stage,'scenario_id':scenario,'mode':mode,'attempt':activity.info().attempt}},token=ADMIN)
         eids=[ev['evidence_id']]
         if stage=='POLICY':
-            pol=post_json(POLICY,'/api/policy/check',{'mode':mode,'command':policy_command,'severity':'P1','confidence':.94,'evidence_count':len(eids),'critic_validated':True,'redundancy_ok':True},token=ADMIN)
-            post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':eids,'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
+            pol=validate_synthetic_policy_response(post_json(POLICY,'/api/policy/check',{'mode':mode,'command':policy_command,'severity':'P1','confidence':.94,'evidence_count':len(eids),'critic_validated':True,'redundancy_ok':True},token=ADMIN))
+            gate_receipt=post_json(CORE,f'/api/runs/{rid}/gates',{'stage':'POLICY','state':pol['state'],'decision':pol['decision'],'reason':pol['reason'],'evidence_ids':eids,'required_evidence':['analyst','critic','twin','observation']},token=ADMIN)
+            # A successful HTTP response is not sufficient if it acknowledges
+            # a different Run, stage, or state. Never advance on ambiguity.
+            validate_synthetic_gate_receipt(gate_receipt,rid,pol)
             if pol['state']!='PASS':
-                return call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'GATE_BLOCKED','event_key':f'{stage}:BLOCKED','status':'BLOCKED','evidence_ids':eids,'decision':pol['decision'],'confidence':.94,'payload':pol})
+                # Core's stage event alone does not change the canonical Run status.
+                # Persist the terminal BLOCK first: if the subsequent event fails,
+                # the Run must not remain misleadingly RUNNING.
+                blocked_run=call('POST',f'{CORE}/api/runs/{rid}/command',{'expected_version':v,'idempotency_key':f'POLICY-DENIED-{rid}','command':'BLOCK'})
+                if (not isinstance(blocked_run,dict) or blocked_run.get('run_id')!=rid
+                        or blocked_run.get('status')!='BLOCKED'
+                        or type(blocked_run.get('version')) is not int):
+                    raise ValueError('Core policy denial terminal status unverified')
+                blocked_event=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':blocked_run['version'],'stage':stage,'event_type':'GATE_BLOCKED','event_key':f'{stage}:BLOCKED','status':'BLOCKED','evidence_ids':eids,'decision':pol['decision'],'confidence':.94,'payload':pol})
+                return {'run_id':rid,'stage':stage,'status':'BLOCKED','version':blocked_event['version'],'sequence':blocked_event['sequence']}
         completed=call('POST',f'{CORE}/api/runs/{rid}/events',{'expected_version':v,'stage':stage,'event_type':'STAGE_COMPLETED','event_key':f'{stage}:COMPLETE','status':'PASS','evidence_ids':eids,'confidence':.94,'payload':{'executor':'temporal','synthetic':synthetic,'attempt':activity.info().attempt}})
         post_json(CORE,f'/api/runs/{rid}/checkpoint',{'stage':stage,'version':completed['version']},token=ADMIN)
         if synthetic:
@@ -82,10 +102,28 @@ def health():return {'status':'ok','component':'worker','executor':'temporal','t
 @app.get('/metrics')
 def metrics(): return 'aiops_worker_up 1\n'
 @app.post('/api/execution/start')
-async def start(args:dict,authorization:str|None=Header(default=None)):
- if (authorization or '').removeprefix('Bearer ')!=ADMIN:raise HTTPException(401,'invalid internal token')
+async def start(args:dict,request:Request,authorization:str|None=Header(default=None)):
+ # Reject duplicate Authorization fields: a framework may otherwise select
+ # one valid Bearer value while an intermediary interprets another.
+ if len(request.headers.getlist('authorization')) != 1 or not valid_internal_bearer(authorization, ADMIN):raise HTTPException(401,'invalid internal token')
  try: policy_command_for_mode(args.get('mode') if isinstance(args,dict) else None)
  except ValueError: raise HTTPException(422,'invalid execution mode')
+ # Do not start Temporal for a caller-supplied DEMO identity that points to
+ # a different canonical Core Run (notably a LIVE Run).
+ if (not isinstance(args, dict)
+     or type(args.get('run_id')) is not str
+     or re.fullmatch(r'RUN-[A-Za-z0-9_-]{1,120}', args['run_id']) is None
+     or type(args.get('version')) is not int or args['version'] < 1
+     or type(args.get('scenario_id')) is not str or not args['scenario_id']):
+  raise HTTPException(422, 'invalid execution binding')
+ try:
+  canonical = get_json(CORE, f'/api/runs/{args["run_id"]}', token=ADMIN)
+ except Exception:
+  raise HTTPException(503, 'canonical Core Run unavailable')
+ try:
+  validate_canonical_run_binding(canonical, args)
+ except ValueError:
+  raise HTTPException(409, 'canonical Core Run binding mismatch')
  c=await Client.connect(TEMP)
  try:
   h=await c.start_workflow(IncidentWorkflow.run,args,id=args['run_id'],task_queue='aiops-runner');return {'workflow_id':h.id,'run_id':args['run_id'],'executor':'temporal'}

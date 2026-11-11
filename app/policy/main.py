@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt
 
 app = FastAPI(title="ACME Policy Engine", version="2.1.0")
 
@@ -14,15 +14,16 @@ class Decision(BaseModel):
     mode: Literal["LIVE", "DEMO", "REPLAY", "STORY"]
     command: Literal["OBSERVE", "ENRICH", "EXECUTE", "RESOLVE", "REMEDIATE", "CANCEL"]
     severity: Literal["P1", "P2", "P3", "P4", "UNKNOWN"]
-    confidence: float = Field(ge=0, le=1)
-    evidence_count: int = Field(ge=0)
+    # A string/boolean must never be coerced into a trusted safety assertion.
+    confidence: StrictFloat = Field(ge=0, le=1)
+    evidence_count: StrictInt = Field(ge=0)
     # Deliberately required: callers must not inherit a trusted default.
-    critic_validated: bool
-    redundancy_ok: bool
-    evidence_fresh: bool = False
-    preconditions_verified: bool = False
-    fencing_verified: bool = False
-    human_approved: bool = False
+    critic_validated: StrictBool
+    redundancy_ok: StrictBool
+    evidence_fresh: StrictBool = False
+    preconditions_verified: StrictBool = False
+    fencing_verified: StrictBool = False
+    human_approved: StrictBool = False
 
 
 def evaluate(x: Decision) -> dict:
@@ -43,6 +44,27 @@ def evaluate(x: Decision) -> dict:
         }
 
     if x.mode in ("DEMO", "REPLAY", "STORY"):
+        # Synthetic mode bypasses effect-only fences, not evidence/critic safety.
+        # These are caller assertions, NOT authenticated critic or Evidence proof.
+        # Never label an invalid synthetic assessment PASS/SIMULATE.
+        if not x.critic_validated:
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "synthetic critic validation is missing or failed",
+            }
+        if not x.redundancy_ok:
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "synthetic redundancy/safety checks failed",
+            }
+        if x.confidence < 0.90:
+            return {
+                "state": "BLOCKED",
+                "decision": "HUMAN_APPROVAL",
+                "reason": "synthetic confidence threshold not met",
+            }
         return {
             "state": "PASS",
             "decision": "SIMULATE",
