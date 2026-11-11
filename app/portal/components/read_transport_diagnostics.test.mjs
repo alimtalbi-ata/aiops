@@ -47,3 +47,23 @@ test('own data descriptors preserve cancellation precedence and 403',()=>{
  assert.deepEqual(project({status:403}),{state:'UNKNOWN',reason:'TENANT_ACL_NOT_QUALIFIED',result:null});
  assert.deepEqual(project({status:403,aborted:true,timedOut:true}),{state:'UNKNOWN',reason:'CANCELLED',result:null});
 });
+
+test('nonboolean terminal flags fail closed even with otherwise valid HTTP status',()=>{
+ for (const invalid of [null,0,1,'false','true',[],{},Symbol('flag')]) {
+  for (const key of ['aborted','timedOut']) {
+   const input={status:403,[key]:invalid};
+   assert.deepEqual(project(input),{state:'ERROR',error_code:'READ_FAILED',result:null});
+  }
+ }
+});
+test('malformed cancellation cannot be overridden by valid timeout or status',()=>{
+ assert.deepEqual(project({aborted:'false',timedOut:true,status:403}),{state:'ERROR',error_code:'READ_FAILED',result:null});
+ assert.deepEqual(project({aborted:true,timedOut:'false',status:403}),{state:'ERROR',error_code:'READ_FAILED',result:null});
+});
+test('valid boolean signals preserve cancellation priority and avoid hostile status accessors',()=>{
+ let statusCalls=0;
+ const input={aborted:true,timedOut:true};
+ Object.defineProperty(input,'status',{get(){statusCalls++;throw Error('secret');}});
+ assert.deepEqual(project(input),{state:'UNKNOWN',reason:'CANCELLED',result:null});
+ assert.equal(statusCalls,0);
+});

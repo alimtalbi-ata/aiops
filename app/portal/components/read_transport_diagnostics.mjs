@@ -18,6 +18,8 @@ export function projectReadTransportFailure(input={}) {
     if (input===null || typeof input!=='object' || Array.isArray(input)) return failed();
     const aborted=ownData(input,'aborted',false);
     const timedOut=ownData(input,'timedOut',false);
+    // Reject malformed terminal signals rather than silently treating them as false.
+    if (typeof aborted!=='boolean' || typeof timedOut!=='boolean') return failed();
     // Terminal cancellation/timeout signals are sufficient: do not inspect a
     // potentially hostile or unavailable HTTP status after either is known.
     if (aborted===true) return unknown('CANCELLED');
