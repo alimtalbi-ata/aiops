@@ -19,7 +19,11 @@ export function evidenceStateDescription(state){
 export function mountEvidenceStateLegend(root){
   if(!root?.ownerDocument || typeof root.replaceChildren!=='function') throw new TypeError('DOM root required');
   const doc=root.ownerDocument;
+  // Preserve a user's expanded explanation when a read-only view is refreshed.
+  const previous=root.firstElementChild;
+  const wasOpen=previous?.tagName?.toLowerCase()==='details' && previous.open===true;
   const details=doc.createElement('details');
+  details.open=wasOpen;
   const summary=doc.createElement('summary');
   summary.textContent='Comprendre les états des preuves';
   const list=doc.createElement('dl');
