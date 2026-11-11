@@ -6,8 +6,10 @@ p=Path(__file__).resolve().parents[2]/"scripts/ops/live_usecase_qualification.py
 s=importlib.util.spec_from_file_location("live",p)
 m=importlib.util.module_from_spec(s)
 s.loader.exec_module(m)
+TEST_RUN_ID="RUN-TEST-QUALIFICATION-001"
+
 def linkage():
-    return {"run_id":m.RUN_ID,"database":{"run":{"status":"BLOCKED"}},"checks":{
+    return {"run_id":TEST_RUN_ID,"database":{"run":{"status":"BLOCKED"}},"checks":{
         "core_run":"PASS","core_api":"PASS","evidence_api":"PASS",
         "critic_policy_outbox":"PASS","temporal_worker_execution":"UNVERIFIED",
         "hitl_action_binding":"UNVERIFIED","glpi_core_link":"MISSING","itsm_readback":"UNVERIFIED"}}
@@ -55,9 +57,9 @@ class LiveQualificationTests(unittest.TestCase):
                 l["database"]["run"]["run_id"]=rid
                 l["core"]={"run":{"run_id":rid,"status":"BLOCKED"}}
                 if source=="report":
-                    l["run_id"]=m.RUN_ID
+                    l["run_id"]=TEST_RUN_ID
                 elif source in ("database","core"):
-                    l[source]["run"]["run_id"]=m.RUN_ID
+                    l[source]["run"]["run_id"]=TEST_RUN_ID
                 result=m.summarize(l,platform(),{"platform":{"exit":0},"linkage":{"exit":2}},
                                    "2026-11-09T12:00Z",portal(),requested_run_id=rid)
                 self.assertEqual(result["run_id"],rid)
