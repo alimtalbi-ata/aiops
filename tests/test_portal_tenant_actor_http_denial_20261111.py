@@ -65,3 +65,28 @@ def test_rejected_viewer_cannot_reach_upstream_or_disclose_rows(monkeypatch):
     assert response.json() == {"detail": "unauthorized"}
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_missing_bearer_is_denied_before_any_upstream_access(monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "app"))
+    portal = importlib.import_module("portal.main")
+    from fastapi import HTTPException
+
+    def require_bearer(authorization):
+        assert authorization is None
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+    def forbidden_upstream(*_args, **_kwargs):
+        raise AssertionError("missing bearer reached Core/Twin")
+
+    monkeypatch.setattr(portal, "_require_portal_read_auth", require_bearer)
+    monkeypatch.setattr(portal, "get_json", forbidden_upstream)
+    monkeypatch.setattr(portal, "read_portal_snapshot", forbidden_upstream)
+    response = TestClient(portal.app, raise_server_exceptions=False).get(
+        "/api/portal/bootstrap"
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
