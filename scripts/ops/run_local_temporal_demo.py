@@ -70,7 +70,14 @@ async def main():
     if description.status.name!='COMPLETED':raise RuntimeError('TEMPORAL_NOT_COMPLETED')
     history=await handle.fetch_history()
     await Replayer(workflows=[IncidentWorkflow]).replay_workflow(history)
+    # A completed stage without a linked Evidence ID is not qualified.
+    if any(not isinstance(e.get('evidence_ids'),list) or not e['evidence_ids']
+           or any(not isinstance(i,str) or not i.strip() for i in e['evidence_ids'])
+           for e in completed):
+        raise RuntimeError('STAGE_EVIDENCE_LINK_MISSING')
     evidence={i for e in completed for i in e['evidence_ids']}
+    if len(evidence)<len(required):
+        raise RuntimeError('EVIDENCE_COVERAGE_INCOMPLETE')
     print(json.dumps({'scope':'LOCAL_ISOLATED_SYNTHETIC_TEMPORAL','run_id':rid,
         'temporal_run_id':description.run_id,'application_manifest_sha256':manifest,'core_status':'RESOLVED',
         'temporal_status':'COMPLETED','completed_stages':len(required),
