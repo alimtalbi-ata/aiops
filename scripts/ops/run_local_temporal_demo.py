@@ -48,6 +48,10 @@ async def main():
     for _ in range(60):
         try:
             api('/health')
+            worker_req=urllib.request.Request('http://127.0.0.1:815/health')
+            with urllib.request.urlopen(worker_req,timeout=5) as worker_response:
+                if json.load(worker_response).get('status')!='ok':
+                    raise RuntimeError('WORKER_NOT_READY')
             client=await Client.connect('temporal:7233')
             break
         except Exception:await asyncio.sleep(1)
