@@ -8,6 +8,9 @@ on:
       - "app/portal/components/**"
       - "app/portal/portal_bootstrap_client.js"
       - "tests/test_portal_bootstrap_client.mjs"
+      - "app/portal/runs_display.py"
+      - "app/portal/main.py"
+      - "tests/test_portal_runs_display.py"
       - ".github/workflows/portal-ui-consolidation-contracts.yml"
   workflow_dispatch:
 
@@ -33,3 +36,7 @@ jobs:
             app/portal/components/read_settlement_guard.test.mjs \
             app/portal/components/evidence_request_settlement.test.mjs \
             tests/test_portal_bootstrap_client.mjs
+      - name: Verify bounded legacy cockpit Runs projection
+        run: python -m unittest discover -s tests -p "test_portal_runs_display.py" -v
+      - name: Compile Portal controller and projection
+        run: python -m py_compile app/portal/main.py app/portal/runs_display.py
