@@ -14,6 +14,27 @@ m=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
 class LocalDemoTests(unittest.TestCase):
+    def test_missing_model_blocks_before_docker(self):
+        with patch('sys.argv',['demo','--image','test']), \
+             patch.dict(os.environ,{'LLM_BASE_URL':'','LLM_MODEL':'','LLM_API_KEY':''}), \
+             patch.object(m.shutil,'disk_usage') as disk, \
+             patch.object(m.subprocess,'run') as run, \
+             patch('sys.stderr',new_callable=io.StringIO) as err:
+            self.assertEqual(m.main(),2)
+            self.assertIn('INTELLIGENCE_MODEL_NOT_CONFIGURED',err.getvalue())
+            self.assertIn('no containers started',err.getvalue())
+            disk.assert_not_called()
+            run.assert_not_called()
+
+    def test_insecure_model_endpoint_blocks_before_docker(self):
+        with patch('sys.argv',['demo','--image','test']), \
+             patch.dict(os.environ,{'LLM_BASE_URL':'http://model.invalid/v1','LLM_MODEL':'model','LLM_API_KEY':'test-only'}), \
+             patch.object(m.subprocess,'run') as run, \
+             patch('sys.stderr',new_callable=io.StringIO) as err:
+            self.assertEqual(m.main(),2)
+            self.assertIn('LLM_BASE_URL_REQUIRES_HTTPS',err.getvalue())
+            run.assert_not_called()
+
     def test_low_disk_starts_nothing_and_reports_blocked(self):
         with patch('sys.argv',['demo','--image','test']), \
              patch.dict(os.environ,{'LLM_BASE_URL':'https://model.invalid/v1','LLM_MODEL':'test-model','LLM_API_KEY':'test-only'},clear=False), \
