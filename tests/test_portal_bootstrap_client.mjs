@@ -169,7 +169,7 @@ test("all unavailable sources remain UNKNOWN even after HTTP 200", async () => {
 });
 
 
-test("17 received Runs visibly disclose truncation while retaining first 15 only", async () => {
+test("17 received Runs show critical item at position 16", async () => {
   const items = Array.from({length: 17}, (_, i) => ({
     run_id: "RUN-" + String(i + 1).padStart(3, "0"), mode: "DEMO",
     status: i === 15 ? "FAILED" : "UNKNOWN"
@@ -185,13 +185,12 @@ test("17 received Runs visibly disclose truncation while retaining first 15 only
   h.ids.get("portal-read-token").value = "synthetic-only";
   await h.window.loadPortalReadModel();
   const rows = h.ids.get("portal-runs").children;
-  assert.equal(rows.length, 16);
+  assert.equal(rows.length, 17);
   assert.equal(rows[0].children[0].textContent, "RUN-001");
   assert.equal(rows[14].children[0].textContent, "RUN-015");
-  assert.match(rows[15].children[0].textContent, /15 sur 17 Runs reçus/);
-  assert.match(rows[15].children[0].textContent, /D'autres Runs ne sont pas affichés/);
-  assert.equal(rows[15].children[0].colSpan, 5);
-  assert.ok(!rows.some(row => row.children.some(cell => cell.textContent === "RUN-016")));
+  assert.equal(rows[15].children[0].textContent, "RUN-016");
+  assert.equal(rows[15].children[2].textContent, "FAILED");
+  assert.equal(rows[16].children[0].textContent, "RUN-017");
   assert.match(h.ids.get("portal-read-result").textContent, /READABLE_UNVERIFIED/);
 });
 
