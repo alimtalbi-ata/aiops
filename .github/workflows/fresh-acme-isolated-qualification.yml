@@ -33,6 +33,10 @@ jobs:
           python -m unittest discover -s tests/ops -p 'test_local_temporal_demo.py' -v
           python -m unittest discover -s tests -p 'test_fresh_run_evidence.py' -v
       - name: Generate a new isolated DEMO Run and verify Temporal, Evidence and PostgreSQL
+        env:
+          LLM_BASE_URL: ${{ secrets.AIOPS_QUALIFICATION_LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.AIOPS_QUALIFICATION_LLM_MODEL }}
+          LLM_API_KEY: ${{ secrets.AIOPS_QUALIFICATION_LLM_API_KEY }}
         run: |
           set -euo pipefail
           python scripts/ops/run_local_temporal_demo.py | tee fresh-run-output.log
