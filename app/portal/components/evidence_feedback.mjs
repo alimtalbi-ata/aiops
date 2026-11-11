@@ -20,6 +20,9 @@ export function mountEvidenceFeedback(root,state){
   node.setAttribute('aria-live',feedback.state==='ERROR'?'assertive':'polite');
   node.setAttribute('aria-atomic','true');
   if(feedback.state==='LOADING') node.setAttribute('aria-busy','true');
+  // Keep the stable region's busy state in sync across node replacement.
+  // Explicit false avoids a stale loading flag after ERROR/EMPTY/UNKNOWN.
+  root.setAttribute('aria-busy',feedback.state==='LOADING'?'true':'false');
   root.replaceChildren(node);
   return node;
 }
