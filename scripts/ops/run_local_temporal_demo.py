@@ -153,6 +153,17 @@ def main():
         parser.error('only a local Docker Unix socket is accepted')
     if args.ui_port == args.core_port:
         parser.error('Core and UI require different ports')
+    model_inputs = tuple(bool(os.environ.get(key, '').strip())
+                         for key in ('LLM_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY'))
+    if not all(model_inputs):
+        print('LOCAL_DEMO=BLOCKED: INTELLIGENCE_MODEL_NOT_CONFIGURED; '
+              'set LLM_BASE_URL, LLM_MODEL and LLM_API_KEY; no containers started.',
+              file=sys.stderr)
+        return 2
+    if not os.environ['LLM_BASE_URL'].strip().startswith('https://'):
+        print('LOCAL_DEMO=BLOCKED: LLM_BASE_URL_REQUIRES_HTTPS; '
+              'no containers started.', file=sys.stderr)
+        return 2
     required_gib = 1 if args.image else 2
     if shutil.disk_usage(tempfile.gettempdir()).free < required_gib * 1024**3:
         print(f'LOCAL_DEMO=BLOCKED: at least {required_gib} GiB free disk required; nothing started.', file=sys.stderr)
