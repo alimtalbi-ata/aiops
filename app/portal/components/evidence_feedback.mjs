@@ -17,8 +17,13 @@ export function mountEvidenceFeedback(root,state){
     throw new TypeError('DOM root required');
   const feedback=evidenceFeedback(state);
   const previous=mountedFeedback.get(root);
-  if(previous?.state===feedback.state && root.firstChild===previous.node)
+  const busy=feedback.state==='LOADING'?'true':'false';
+  // External renderers can alter the region while preserving its first child.
+  // Repair only the drift; avoid re-announcing an unchanged state.
+  if(previous?.state===feedback.state && root.childNodes?.length===1 && root.firstChild===previous.node){
+    if(root.getAttribute('aria-busy')!==busy) root.setAttribute('aria-busy',busy);
     return previous.node;
+  }
   const node=root.ownerDocument.createElement('p');
   node.textContent=feedback.message;
   node.setAttribute('role',feedback.state==='ERROR'?'alert':'status');
@@ -27,7 +32,7 @@ export function mountEvidenceFeedback(root,state){
   if(feedback.state==='LOADING') node.setAttribute('aria-busy','true');
   // Keep the stable region's busy state in sync across node replacement.
   // Explicit false avoids a stale loading flag after ERROR/EMPTY/UNKNOWN.
-  root.setAttribute('aria-busy',feedback.state==='LOADING'?'true':'false');
+  root.setAttribute('aria-busy',busy);
   root.replaceChildren(node);
   mountedFeedback.set(root,{state:feedback.state,node});
   return node;
