@@ -1,0 +1,25 @@
+/** Read-only, CSP-safe feedback for an authorized evidence request. No operational data. */
+const messages=Object.freeze({
+  LOADING:'Chargement des preuves…',
+  EMPTY:'Aucune preuve disponible.',
+  ERROR:'Impossible de consulter les preuves.',
+  UNKNOWN:'État des preuves non vérifiable.'
+});
+export function evidenceFeedback(state){
+  return Object.hasOwn(messages,state) ? {state,message:messages[state]} :
+    {state:'UNKNOWN',message:messages.UNKNOWN};
+}
+/** Mount a single accessible feedback message, replacing stale announcements. */
+export function mountEvidenceFeedback(root,state){
+  if(!root?.ownerDocument || typeof root.replaceChildren!=='function')
+    throw new TypeError('DOM root required');
+  const feedback=evidenceFeedback(state);
+  const node=root.ownerDocument.createElement('p');
+  node.textContent=feedback.message;
+  node.setAttribute('role',feedback.state==='ERROR'?'alert':'status');
+  node.setAttribute('aria-live',feedback.state==='ERROR'?'assertive':'polite');
+  node.setAttribute('aria-atomic','true');
+  if(feedback.state==='LOADING') node.setAttribute('aria-busy','true');
+  root.replaceChildren(node);
+  return node;
+}
