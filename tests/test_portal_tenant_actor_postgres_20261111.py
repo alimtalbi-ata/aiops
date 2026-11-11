@@ -5,6 +5,7 @@ Never use a production DSN: this test creates schema and synthetic fixtures.
 """
 import importlib.util
 import os
+from urllib.parse import urlsplit
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,12 @@ def test_real_postgres_actor_tenant_isolation():
     dsn = os.getenv("AIOPS_TENANT_TEST_DSN")
     if not dsn:
         pytest.skip("requires dedicated ephemeral PostgreSQL")
+    parsed = urlsplit(dsn)
+    # Never run synthetic fixtures against a remote or production database.
+    assert parsed.scheme in {"postgresql", "postgres"}
+    assert parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    assert parsed.path == "/tenant_isolation"
+    assert parsed.username == "tenant_ci"
     import psycopg
 
     with psycopg.connect(dsn, autocommit=True) as conn:
