@@ -1,0 +1,64 @@
+name: Portal tenant actor boundary exact-head tests
+
+on:
+  pull_request:
+    paths:
+      - "tests/test_portal_tenant_actor_boundary_20261111.py"
+      - "tests/test_portal_tenant_actor_http_denial_20261111.py"
+      - "tests/test_portal_tenant_actor_schema_20261111.py"
+      - "tests/test_portal_tenant_actor_core_reader_20261111.py"
+      - "tests/test_portal_tenant_actor_postgres_20261111.py"
+      - "app/core/portal_tenant_runs.py"
+      - "db/migrations/009_portal_tenant_actor_read_groundwork.sql"
+      - "app/portal/main.py"
+      - "app/core/main.py"
+      - ".github/workflows/portal-tenant-actor-boundary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal-tenant-actor-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run isolated fail-closed tenant and actor source contracts
+        env:
+          AIOPS_INTERNAL_TOKEN: ci-synthetic-internal-token-not-for-runtime
+        run: |
+          python -m pip install --disable-pip-version-check -r app/requirements.txt pytest==8.4.2 httpx
+          python -m pytest -q tests/test_portal_tenant_actor_boundary_20261111.py tests/test_portal_tenant_actor_http_denial_20261111.py tests/test_portal_tenant_actor_schema_20261111.py tests/test_portal_tenant_actor_core_reader_20261111.py
+
+  tenant-postgres-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tenant_ci
+          POSTGRES_PASSWORD: tenant_ci_ephemeral_only
+          POSTGRES_DB: tenant_isolation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tenant_ci -d tenant_isolation"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      AIOPS_TENANT_TEST_DSN: postgresql://tenant_ci:tenant_ci_ephemeral_only@localhost:5432/tenant_isolation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Real PostgreSQL cross-tenant isolation and revocation
+        run: |
+          python -m pip install --disable-pip-version-check pytest==8.4.2 "psycopg[binary]==3.2.9"
+          python -m pytest -q tests/test_portal_tenant_actor_postgres_20261111.py
