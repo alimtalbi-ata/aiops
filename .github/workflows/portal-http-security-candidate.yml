@@ -1,0 +1,50 @@
+name: Portal HTTP security candidate exact-head tests
+
+on:
+  pull_request:
+    paths:
+      - "tests/test_portal_error_response_security_20261110.py"
+      - "tests/test_portal_method_error_security_20261110.py"
+      - "tests/test_portal_navigation_supersession.mjs"
+      - ".github/workflows/portal-http-security-candidate.yml"
+      - "tests/test_portal_bootstrap_stale_response_contract_20261111.py"
+      - "tests/test_portal_runs_visibility_notice_20261111.py"
+      - "app/portal/portal_bootstrap_client.js"
+      - "tests/test_portal_bootstrap_client.mjs"
+      - "tests/test_portal_chromium_ci_contract_20261111.py"
+      - ".github/workflows/quality.yml"
+      - ".github/workflows/portal-chromium-preflight-diagnostic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal-http-security-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install isolated test dependencies
+        run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4" "pytest==8.4.2"
+      - name: Check isolated Python tests compile
+        run: python -m py_compile tests/test_portal_error_response_security_20261110.py tests/test_portal_method_error_security_20261110.py
+      - name: Execute 404 and 405 security contract tests
+        env:
+          AIOPS_INTERNAL_TOKEN: ci-ephemeral-synthetic-portal-http-security-only
+        run: python -m pytest -q tests/test_portal_error_response_security_20261110.py tests/test_portal_method_error_security_20261110.py
+      - name: Execute bootstrap fail-closed source contract
+        run: python -m pytest -q tests/test_portal_bootstrap_stale_response_contract_20261111.py
+      - name: Execute Runs preview disclosure contract
+        run: python -m pytest -q tests/test_portal_runs_visibility_notice_20261111.py
+      - name: Assert real Chromium E2E remains mandatory without apt mirror downloads
+        run: python -m pytest -q tests/test_portal_chromium_ci_contract_20261111.py
+      - name: Check bootstrap client JavaScript syntax
+        run: node --check app/portal/portal_bootstrap_client.js
+      - name: Execute bootstrap DOM Runs visibility and ACL regressions
+        run: node --test tests/test_portal_bootstrap_client.mjs
+      - name: Execute navigation supersession regression
+        run: node --test tests/test_portal_navigation_supersession.mjs
