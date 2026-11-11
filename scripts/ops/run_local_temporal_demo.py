@@ -145,6 +145,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--docker-host', default='unix:///var/run/docker.sock', help='local Docker Unix socket (rootless: unix:///run/user/UID/docker.sock)')
     parser.add_argument('--image', help='reuse an already built application image; otherwise build source')
+    parser.add_argument('--synthetic-fixture', action='store_true', help='isolated DEMO-only deterministic model fixture; never a real model')
     parser.add_argument('--keep', action='store_true', help='leave this isolated demo and Temporal UI running')
     parser.add_argument('--ui-port', type=port, default=18233)
     parser.add_argument('--core-port', type=port, default=18100)
@@ -155,12 +156,12 @@ def main():
         parser.error('Core and UI require different ports')
     model_inputs = tuple(bool(os.environ.get(key, '').strip())
                          for key in ('LLM_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY'))
-    if not all(model_inputs):
+    if not args.synthetic_fixture and not all(model_inputs):
         print('LOCAL_DEMO=BLOCKED: INTELLIGENCE_MODEL_NOT_CONFIGURED; '
               'set LLM_BASE_URL, LLM_MODEL and LLM_API_KEY; no containers started.',
               file=sys.stderr)
         return 2
-    if not os.environ['LLM_BASE_URL'].strip().startswith('https://'):
+    if not args.synthetic_fixture and not os.environ['LLM_BASE_URL'].strip().startswith('https://'):
         print('LOCAL_DEMO=BLOCKED: LLM_BASE_URL_REQUIRES_HTTPS; '
               'no containers started.', file=sys.stderr)
         return 2
@@ -211,7 +212,11 @@ ENV PYTHONPATH=/app
         model_base = environment.get('LLM_BASE_URL', '').strip()
         model_name = environment.get('LLM_MODEL', '').strip()
         model_key = environment.get('LLM_API_KEY', '').strip()
-        if model_base and model_name and model_key:
+        if args.synthetic_fixture:
+            env.update({'LLM_BASE_URL':'http://127.0.0.1:818',
+                        'LLM_MODEL':'synthetic-ci-fixture-v1',
+                        'LLM_API_KEY':'synthetic-ci-only-no-credential'})
+        elif model_base and model_name and model_key:
             if not model_base.startswith('https://'):
                 raise RuntimeError('LLM_BASE_URL_REQUIRES_HTTPS')
             env.update({'LLM_BASE_URL': model_base, 'LLM_MODEL': model_name,
@@ -220,8 +225,9 @@ ENV PYTHONPATH=/app
             if name != 'worker':
                 env[name.upper() + '_URL'] = f'http://127.0.0.1:{service_port}'
         env['WORKER_URL'] = 'http://127.0.0.1:815'
+        service_processes = SERVICES + ([('qualification_fixture', 818)] if args.synthetic_fixture else [])
         supervisor = ('import subprocess,time; processes=[subprocess.Popen(["uvicorn",name+".main:app",'
-                      '"--host","0.0.0.0","--port",str(port)]) for name,port in ' + repr(SERVICES) + '];\n'
+                      '"--host","0.0.0.0","--port",str(port)]) for name,port in ' + repr(service_processes) + '];\n'
                       'while all(p.poll() is None for p in processes): time.sleep(1)\nraise SystemExit(1)')
         data = {'name': project, 'networks': {'default': {}}, 'services': {
             'pg': {'image': 'postgres:16-alpine', 'tmpfs': ['/var/lib/postgresql/data'],
