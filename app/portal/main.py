@@ -74,9 +74,16 @@ def home():
         f'<div class="tile" style="--c:{color}"><strong>{esc("INCONNU" if v is None else v)}</strong><span>{esc(k)}</span></div>'
         for k,v,color in cards
     )
-    rows=[(_run_id(r),r.get("mode","UNKNOWN"),r.get("status","UNKNOWN"),r.get("scenario_id","UNKNOWN")) for r in _runs()[:15]]
+    from portal.runs_display import cockpit_runs_projection
+    try:
+        rows, omitted = cockpit_runs_projection(_runs())
+        runs_notice = (f"<p class='muted'>Affichage limité à 100 Runs ; {omitted} autres non affichés. "
+                       "Consultez le registre complet.</p>" if omitted else "")
+    except ValueError:
+        rows = [("UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN")]
+        runs_notice = "<p class='muted'>UNKNOWN — registre Runs invalide.</p>"
     content='<section aria-label="Indicateurs" class="kpi">'+tiles+'</section>'
-    content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows))
+    content+=panel("Runs récents",table(["Run","Mode","État","Scénario"],rows)+runs_notice)
     content+=panel("Digital Twin — état courant",pretty(t))
     content+=panel("Démo ACME — simulation uniquement",
         '<p class="muted">La démo crée un incident synthétique. Elle est désactivée sur cette interface tant que la stack complète et sa remise à zéro ne sont pas qualifiées.</p><button disabled title="Qualification nécessaire">Lancer DEMO (non qualifié)</button>')
