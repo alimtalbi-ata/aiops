@@ -21,7 +21,34 @@ def verify(row=None,listing=None,events=None):
     events=[{"evidence_ids":["EVD-1"]}] if events is None else events
     return verify_run_evidence(RID,events,listing,lambda _:row)
 
+class FakeCursor:
+    def __init__(self,rows):self.rows=rows;self.queries=[]
+    def __enter__(self):return self
+    def __exit__(self,*args):return False
+    def execute(self,query,params=None):self.queries.append((query,params))
+    def fetchall(self):return self.rows
+class FakeConnection:
+    def __init__(self,rows):self.fake=FakeCursor(rows)
+    def cursor(self):return self.fake
+
 class EvidenceReadbackTests(unittest.TestCase):
+    def test_direct_sql_readonly_links(self):
+        rows=[("EVD-1","a"*64,RID,True)]
+        conn=FakeConnection(rows)
+        result=verify_evidence_sql(RID,{"EVD-1"},conn)
+        self.assertEqual(result["database_direct_sql"],"PASS")
+        self.assertEqual(conn.fake.queries[0][0],"SET TRANSACTION READ ONLY")
+        self.assertEqual(conn.fake.queries[1][1],(RID,["EVD-1"]))
+    def test_direct_sql_missing_row_fails(self):
+        with self.assertRaisesRegex(ValueError,"SQL_EVIDENCE_ROWS_MISSING"):
+            verify_evidence_sql(RID,{"EVD-1"},FakeConnection([]))
+    def test_direct_sql_wrong_run_link_fails(self):
+        with self.assertRaisesRegex(ValueError,"SQL_RUN_EVENT_LINK_MISMATCH"):
+            verify_evidence_sql(RID,{"EVD-1"},FakeConnection([("EVD-1","a"*64,RID,False)]))
+    def test_direct_sql_invalid_digest_fails(self):
+        with self.assertRaisesRegex(ValueError,"SQL_EVIDENCE_DIGEST_INVALID"):
+            verify_evidence_sql(RID,{"EVD-1"},FakeConnection([("EVD-1","bad",RID,True)]))
+
     def test_verified_digest_but_not_signature_or_direct_sql(self):
         result=verify()
         self.assertEqual(result["canonical_sha256_readback"],"PASS")
