@@ -7,6 +7,7 @@ The compact application container is a storage-saving test fixture only.
 import argparse
 import hashlib
 import json
+import re
 import os
 from pathlib import Path
 import secrets
@@ -214,7 +215,16 @@ ENV PYTHONPATH=/app
         return 0
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         # Never publish command arguments, subprocess output, tokens or raw API bodies.
-        print('LOCAL_DEMO=FAILED: ' + type(error).__name__ + '; no success receipt produced.', file=sys.stderr)
+        # Only emit explicitly allowlisted machine error markers from the child.
+        child_output = (error.stderr or '') if isinstance(error, subprocess.CalledProcessError) else ''
+        allowed = ('IMAGE_SOURCE_MISMATCH', 'LOCAL_SERVICES_NOT_READY', 'DEMO_NOT_RESOLVED',
+                   'STAGES_INCOMPLETE', 'PROVENANCE_MISSING', 'SIMULATE_GATE_MISSING',
+                   'STAGE_EVIDENCE_LINK_MISSING', 'EVIDENCE_COVERAGE_INCOMPLETE',
+                   'CORE_EVIDENCE_READBACK_INCOMPLETE', 'EVIDENCE_DIGEST_MISMATCH',
+                   'SQL_EVIDENCE_ROWS_MISSING', 'SQL_RUN_EVENT_LINK_MISMATCH',
+                   'SQL_EVIDENCE_DIGEST_INVALID', 'TEMPORAL_NOT_COMPLETED')
+        marker = next((code for code in allowed if code in child_output), 'UNCLASSIFIED_CHILD_FAILURE')
+        print('LOCAL_DEMO=FAILED: ' + type(error).__name__ + ' marker=' + marker + '; no success receipt produced.', file=sys.stderr)
         return 1
     finally:
         if started and (not args.keep or not success):
