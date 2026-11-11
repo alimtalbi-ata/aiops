@@ -223,3 +223,32 @@ test('unqualified envelope with sensitive metadata publishes only UNKNOWN and nu
  assert.deepEqual(events.at(-1),{state:'UNKNOWN',result:null});
  assert.equal(JSON.stringify(events).includes('private'),false);
 });
+
+test('accessor-backed server qualification is rejected without invoking getters',async()=>{
+ const events=[];let invoked=0;
+ const fields=['scope_verified','authorization_source','records','observed_at'];
+ const values=[true,'server',[{id:'foreign-tenant'}],fresh];
+ const envelopes=fields.map((field,index)=>{
+  const envelope={scope_verified:true,authorization_source:'server',records:[{id:'safe'}],observed_at:fresh};
+  Object.defineProperty(envelope,field,{enumerable:true,get(){invoked++;return values[index]}});
+  return envelope;
+ });
+ const reader=createLatestReader(async()=>envelopes.shift(),event=>events.push(event),{now:()=>now});
+ for(let i=0;i<fields.length;i++)await reader.load('runs');
+ assert.equal(invoked,0);
+ assert.deepEqual(events.filter(e=>e.state!=='LOADING'),fields.map(()=>({state:'UNKNOWN',result:null})));
+ assert.equal(JSON.stringify(events).includes('foreign-tenant'),false);
+});
+
+test('qualified own data descriptors remain readable after snapshot',async()=>{
+ const events=[];
+ const envelope=Object.create(null);
+ for(const [key,value] of Object.entries({
+  scope_verified:true,authorization_source:'server',
+  records:[{id:'run-safe'}],observed_at:fresh
+ }))Object.defineProperty(envelope,key,{value,enumerable:true});
+ const reader=createLatestReader(async()=>envelope,event=>events.push(event),{now:()=>now});
+ await reader.load('runs');
+ assert.equal(events.at(-1).state,'READY');
+ assert.deepEqual(events.at(-1).result.records,[{id:'run-safe'}]);
+});
