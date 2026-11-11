@@ -37,8 +37,9 @@ def main():
             continue
         try:
             run = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=120)
-            output = (run.stdout + "\n" + run.stderr)[-3000:]
-            results.append(dict(gate=name, status="PASS" if run.returncode == 0 else "FAIL", exit_code=run.returncode, output=output))
+            # Do not persist subprocess output: test logs may contain tokens, URLs or headers.
+            # Gate name, status and exit code are sufficient for this offline receipt.
+            results.append(dict(gate=name, status="PASS" if run.returncode == 0 else "FAIL", exit_code=run.returncode))
         except subprocess.TimeoutExpired:
             results.append(dict(gate=name, status="FAIL", reason="timeout 120s"))
     summary = dict(kind="SYNTHETIC_OFFLINE_ONLY", host="NOT_VERIFIED", debian="NOT_VERIFIED",
