@@ -224,7 +224,12 @@ ENV PYTHONPATH=/app
                    'SQL_EVIDENCE_ROWS_MISSING', 'SQL_RUN_EVENT_LINK_MISMATCH',
                    'SQL_EVIDENCE_DIGEST_INVALID', 'TEMPORAL_NOT_COMPLETED')
         marker = next((code for code in allowed if code in child_output), 'UNCLASSIFIED_CHILD_FAILURE')
-        print('LOCAL_DEMO=FAILED: ' + type(error).__name__ + ' marker=' + marker + '; no success receipt produced.', file=sys.stderr)
+        categories = ('ModuleNotFoundError', 'ImportError', 'OperationalError', 'ConnectionRefusedError',
+                      'HTTPError', 'RuntimeError', 'KeyError', 'TypeError', 'ValueError',
+                      'WorkflowFailureError', 'TimeoutError', 'IntegrityError')
+        category = next((name for name in categories if name + ':' in child_output), 'UNCLASSIFIED')
+        print('LOCAL_DEMO=FAILED: ' + type(error).__name__ + ' marker=' + marker +
+              ' category=' + category + '; no success receipt produced.', file=sys.stderr)
         return 1
     finally:
         if started and (not args.keep or not success):
