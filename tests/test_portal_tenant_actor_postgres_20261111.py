@@ -26,6 +26,7 @@ def test_real_postgres_actor_tenant_isolation():
     assert parsed.hostname in {"localhost", "127.0.0.1", "::1"}
     assert parsed.path == "/tenant_isolation"
     assert parsed.username == "tenant_ci"
+    assert parsed.port == 5432
     import psycopg
 
     with psycopg.connect(dsn, autocommit=True) as conn:
@@ -55,6 +56,16 @@ def test_real_postgres_actor_tenant_isolation():
             assert all(x["run_id"].startswith("A-") for x in alice["items"])
             assert reader.read_runs_for_verified_actor(cur, actor_id="bob")["items"][0]["run_id"] == "B-001"
             assert reader.read_runs_for_verified_actor(cur, actor_id="unknown") == {"items": []}
+            cur.execute(
+                "insert into aiops.portal_actor_tenant_grants(actor_id,tenant_id) "
+                "values ('charlie','tenant-b')"
+            )
+            assert [item["run_id"] for item in reader.read_runs_for_verified_actor(cur, actor_id="charlie")["items"]] == ["B-001"]
+            cur.execute(
+                "update aiops.portal_actor_tenant_grants set revoked_at=now() "
+                "where actor_id='charlie' and tenant_id='tenant-b'"
+            )
+            assert reader.read_runs_for_verified_actor(cur, actor_id="charlie") == {"items": []}
             assert reader.read_runs_for_verified_actor(cur, actor_id="alice", limit=17)["items"]
             assert len(reader.read_runs_for_verified_actor(cur, actor_id="alice", limit=17)["items"]) == 17
             cur.execute(
