@@ -50,3 +50,28 @@ test('synthetic LOADING to EMPTY and UNKNOWN always clears stable region busy st
 test('invalid mount root is rejected',()=>{
   assert.throws(()=>mountEvidenceFeedback(null,'LOADING'),TypeError);
 });
+
+test('synthetic polling does not repeat identical live-region announcements',()=>{
+  class Element{
+    constructor(){this.attrs={};this.children=[];this.replacements=0;this.ownerDocument={createElement:()=>new Element()};}
+    setAttribute(k,v){this.attrs[k]=v;}
+    replaceChildren(...nodes){this.children=nodes;this.replacements++;}
+    get firstChild(){return this.children[0]??null;}
+  }
+  const root=new Element();
+  const first=mountEvidenceFeedback(root,'LOADING');
+  assert.equal(mountEvidenceFeedback(root,'LOADING'),first);
+  assert.equal(root.replacements,1);
+  const error=mountEvidenceFeedback(root,'ERROR');
+  assert.notEqual(error,first);
+  assert.equal(root.replacements,2);
+  assert.equal(root.attrs['aria-busy'],'false');
+  assert.equal(mountEvidenceFeedback(root,'ERROR'),error);
+  assert.equal(root.replacements,2);
+  // A separately updated DOM must be repaired, not treated as a cached announcement.
+  root.replaceChildren();
+  const repaired=mountEvidenceFeedback(root,'ERROR');
+  assert.notEqual(repaired,error);
+  assert.equal(root.replacements,4);
+  assert.equal(repaired.attrs.role,'alert');
+});
