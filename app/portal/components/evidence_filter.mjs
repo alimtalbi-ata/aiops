@@ -33,7 +33,7 @@ export function mountEvidenceFilter(root,{records=[],onChange=()=>{}}={}){
   const input=doc.createElement('input');input.type='search';input.setAttribute('aria-label','Rechercher une preuve');input.setAttribute('maxlength','256');
   const status=doc.createElement('select');status.setAttribute('aria-label','Filtrer par état');
   for(const value of ['ALL','READY','UNKNOWN','ERROR','EMPTY']){
-    const option=doc.createElement('option');option.value=value;option.textContent=value==='ALL'?'Tous les états':value;status.append(option);
+    const option=doc.createElement('option');option.value=value;option.textContent=value==='ALL'?'Tous les états':evidenceStatusLabels[value];status.append(option);
   }
   const count=doc.createElement('output');count.setAttribute('role','status');count.setAttribute('aria-live','polite');
   // When filters hide every authorized record, offer an explicit keyboard action to recover.
