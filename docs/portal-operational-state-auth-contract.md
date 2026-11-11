@@ -118,3 +118,22 @@ A subsequent source review of `app/core/main.py` and `tests/test_model_evaluatio
 - Therefore the accurate status is: **idempotency logic implemented; unit-tested with mocks; real-database concurrent/replay qualification not yet evidenced**. The artifact field `idempotent=false` records the initial insert path, not a failed replay test.
 
 Next validation: run a PostgreSQL integration test against the migration-created schema; submit the same evaluation ID and payload twice (including concurrent requests), assert one row, first response `idempotent=false`, subsequent response(s) `idempotent=true`, stable persisted fields, and HTTP 409 for changed payload. Do not label this feature broken absent a failing integration test.
+
+## Exact-SHA isolated PR qualification and route risk matrix (2026-11-11)
+
+This section supersedes the historical PR #543 / workflow #8533 qualification statements **for isolated PR #627 only**. Head `4fbe9f68237f8bbd17db0f5e2f780e592dd1678e`: [quality run 43039219267](https://github.com/alimtalbi-ata/aiops/actions/runs/43039219267) completed **6/6 successful jobs**; the projection policy and authorization attestation guard steps both passed. V2.8 Core qualification (43039219280), Offline Integrity (43039219269), and Historical Trace (43039218887) also succeeded. This is CI qualification, **not** actor/tenant authorization qualification.
+
+Source audit of `app/portal/main.py` and `app/shared/http.py` on the isolated branch:
+
+| Portal route | Upstream data/action | Current human actor / tenant authorization evidence in handler | Gate before tenant-qualified access |
+| --- | --- | --- | --- |
+| `GET /api/portal/bootstrap` | Core dashboard/runs; Twin summary | No actor/tenant dependency; internal service bearer used upstream | P0.1 identity + P0.2 tenant-filtered Core/Twin queries; 401/403 and no-leak tests |
+| `GET /`, `GET /runs`, `GET /policy` | Core dashboard/runs, Twin summary for home | No actor/tenant dependency; server-rendered pages | Authenticate page requests and authorize rows/counts before rendering |
+| `GET /timeline` | Core runs/incidents, selected run detail, ledger and evidence | `run_id` validated for format and presence in a global run list, **not** tenant membership | Enforce resource ACL before detail/ledger/evidence fetch; cross-tenant 404/no-leak test |
+| `GET /twin` | Twin summary, graph, fixed-node impact | No actor/tenant dependency in handler | Tenant-scope graph, nodes, edges, and impact before serialization |
+| `POST /api/copilot` | Forwards browser JSON to Copilot | No human actor/tenant dependency in handler | Authorize actor, bound tenant and query scope; reject forged tenant hints |
+| `POST /api/demo`, `POST /api/demo-enriched` | Synthetic incident/run creation | Feature flag and shared internal/admin bearer, not verified human identity | Keep disabled; any future role-based launch requires server-verified actor and audit |
+
+**Trust boundary:** `shared.http._headers()` attaches `AIOPS_INTERNAL_TOKEN` (or admin fallback) to upstream requests. That token authenticates a service, **not** the browser actor. An upstream HTTP 200, membership in the global Core run registry, or a client-supplied tenant header cannot substitute for server-owned authorization. The route inventory is a source-code observation, not proof of runtime reachability or absence of an external ingress control.
+
+**Acceptance sequence:** (1) document and test trusted IdP/session/ingress claim verification and revocation; (2) enforce actor→tenant/resource ACL before querying Core/Twin/Copilot; (3) prove anonymous 401, forged-header denial, wrong-tenant 403/404 with no data leak, and service-token-only denial; (4) qualify authorized fresh/empty/error cases at the actual HTTP route and browser; (5) collect separate Debian ingress evidence. Until then **HOLD / NO_GO** for integrated tenant reads and LIVE.
