@@ -19,7 +19,7 @@ import tempfile
 REPO = Path(__file__).resolve().parents[2]
 SERVICES = [('core', 810), ('worker', 815), ('twin', 811), ('policy', 813), ('evidence', 812)]
 CLIENT = r'''
-import asyncio,hashlib,json,os,sys,time,uuid,urllib.request
+import asyncio,hashlib,json,os,sys,time,uuid,urllib.request,urllib.error
 from pathlib import Path
 from temporalio.client import Client
 from temporalio.worker import Replayer
@@ -32,7 +32,11 @@ def api(path, body=None):
         data=json.dumps(body).encode() if body is not None else None,
         headers={'Authorization':'Bearer '+os.environ['AIOPS_INTERNAL_TOKEN'],
                  'Content-Type':'application/json'})
-    with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)
+    try:
+        with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)
+    except urllib.error.HTTPError as exc:
+        route='HEALTH' if path=='/health' else ('INCIDENT_CREATE' if path=='/api/incidents' else ('RUN_CREATE' if path=='/api/runs' else ('RUN_EXECUTE' if path.endswith('/execute') else ('EVIDENCE_LIST' if path.endswith('/evidence') else 'RUN_DETAIL'))))
+        raise RuntimeError('API_'+route+'_HTTP_'+str(exc.code)) from None
 
 async def main():
     sources={str(p.relative_to('/app')):hashlib.sha256(p.read_bytes()).hexdigest()
@@ -224,6 +228,8 @@ ENV PYTHONPATH=/app
                    'SQL_EVIDENCE_ROWS_MISSING', 'SQL_RUN_EVENT_LINK_MISMATCH',
                    'SQL_EVIDENCE_DIGEST_INVALID', 'TEMPORAL_NOT_COMPLETED')
         marker = next((code for code in allowed if code in child_output), 'UNCLASSIFIED_CHILD_FAILURE')
+        api_failure = re.search(r'API_(?:HEALTH|INCIDENT_CREATE|RUN_CREATE|RUN_EXECUTE|RUN_DETAIL|EVIDENCE_LIST)_HTTP_(?:400|401|403|404|409|422|429|500|502|503|504)', child_output)
+        if api_failure: marker = api_failure.group(0)
         categories = ('ModuleNotFoundError', 'ImportError', 'OperationalError', 'ConnectionRefusedError',
                       'HTTPError', 'RuntimeError', 'KeyError', 'TypeError', 'ValueError',
                       'WorkflowFailureError', 'TimeoutError', 'IntegrityError')
