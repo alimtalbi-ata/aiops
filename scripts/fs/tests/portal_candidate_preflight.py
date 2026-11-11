@@ -29,6 +29,8 @@ def main():
     parser.add_argument("--json", action="store_true", help="emit machine-readable summary")
     args = parser.parse_args()
     results = []
+    if not GATES:
+        results.append(dict(gate="manifest", status="FAIL", reason="no gates configured"))
     for name, command in GATES:
         missing = [path for path in command[1:] if path.endswith((".py", ".mjs")) and not (ROOT / path).is_file()]
         executable = shutil.which(command[0])
