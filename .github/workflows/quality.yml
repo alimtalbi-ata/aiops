@@ -116,8 +116,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Provide PostgreSQL 16 client without runner APT
+        run: |
+          # Ubuntu package mirrors may be unreachable on hosted runners.
+          # Use the same PostgreSQL major as the disposable CI service.
+          mkdir -p "$RUNNER_TEMP/pg-client-bin"
+          cat > "$RUNNER_TEMP/pg-client-bin/psql" <<'SH'
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          exec docker run --rm --network host \
+            -e PGPASSWORD -v "$GITHUB_WORKSPACE:/workspace:ro" -w /workspace \
+            postgres:16 psql "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/pg-client-bin/psql"
+          echo "$RUNNER_TEMP/pg-client-bin" >> "$GITHUB_PATH"
+          docker run --rm postgres:16 psql --version
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
@@ -162,7 +175,12 @@ jobs:
           docker run --rm --network host \
             -e PGPASSWORD -v "$GITHUB_WORKSPACE:/workspace" -w /workspace \
             postgres:16 bash -ec \
-            "apt-get update -qq && apt-get install -y -qq python3 >/dev/null && bash tests/postgres-dr-rehearsal.sh"
+            "apt-get update -qq && apt-get install -y -qq python3 >/dev/null && bash tests/postgres-dr-rehearsal.sh && chown --reference=/workspace /workspace/reports/postgres-dr-rehearsal.json"
+      - name: Assert PostgreSQL DR report is runner-owned and readable
+        run: |
+          test -s reports/postgres-dr-rehearsal.json
+          test -O reports/postgres-dr-rehearsal.json
+          python3 -m json.tool reports/postgres-dr-rehearsal.json >/dev/null
       - name: Upload recovery qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
