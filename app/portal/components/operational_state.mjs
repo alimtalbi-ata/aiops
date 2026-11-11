@@ -57,16 +57,21 @@ export function createLatestReader(read,publish,{now=()=>Date.now(),timeoutMs=15
     // A transport success is not an evidence success. The server must have
     // already enforced actor/tenant scope; this UI only refuses to display
     // an unqualified projection as READY. Never authorize in the browser.
-    const scoped=result && typeof result==='object' &&
-     Object.hasOwn(result,'scope_verified') && result.scope_verified===true &&
-     Object.hasOwn(result,'authorization_source') && result.authorization_source==='server' &&
-     Object.hasOwn(result,'records') && Object.hasOwn(result,'observed_at');
-    const state=scoped ? deriveOperationalState({records:result.records,observedAt:result.observed_at,now:now(),maxAgeMs}) : 'UNKNOWN';
+    // Own accessors can execute arbitrary code or change values between checks.
+    // Snapshot only own DATA descriptors; never invoke getters on untrusted envelopes.
+    const fields=result && typeof result==='object' ?
+     ['scope_verified','authorization_source','records','observed_at'].map(
+      key=>Object.getOwnPropertyDescriptor(result,key)) : [];
+    const scoped=fields.length===4 && fields.every(d=>d && Object.hasOwn(d,'value')) &&
+     fields[0].value===true && fields[1].value==='server';
+    const records=scoped ? fields[2].value : null;
+    const observedAt=scoped ? fields[3].value : null;
+    const state=scoped ? deriveOperationalState({records,observedAt,now:now(),maxAgeMs}) : 'UNKNOWN';
     active=false;
     // Do not forward the raw transport envelope: it may include tokens, headers or diagnostics.
     // Only server-qualified, fresh read data and its minimal provenance reach the UI.
     const safeResult=(state==='READY'||state==='EMPTY') ? {
-     records:result.records,observed_at:result.observed_at,
+     records,observed_at:observedAt,
      scope_verified:true,authorization_source:'server'
     } : null;
     publish({state,result:safeResult});
