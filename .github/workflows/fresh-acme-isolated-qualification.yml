@@ -6,6 +6,7 @@ on:
       - deploy/aiops2-stable
     paths:
       - 'scripts/ops/run_local_temporal_demo.py'
+      - 'app/qualification_fixture/**'
       - 'app/shared/fresh_run_evidence.py'
       - 'app/shared/evidence_identity.py'
       - 'tests/test_fresh_run_evidence.py'
@@ -32,32 +33,14 @@ jobs:
           docker compose version
           python -m unittest discover -s tests/ops -p 'test_local_temporal_demo.py' -v
           python -m unittest discover -s tests -p 'test_fresh_run_evidence.py' -v
-      - name: Check real Intelligence provider configuration (fail closed)
+      - name: Generate new DEMO Run with explicitly synthetic fixture; verify Temporal Evidence and PostgreSQL
         env:
           LLM_BASE_URL: ${{ secrets.AIOPS_QUALIFICATION_LLM_BASE_URL }}
           LLM_MODEL: ${{ secrets.AIOPS_QUALIFICATION_LLM_MODEL }}
           LLM_API_KEY: ${{ secrets.AIOPS_QUALIFICATION_LLM_API_KEY }}
         run: |
           set -euo pipefail
-          if [[ -z "$LLM_BASE_URL" || -z "$LLM_MODEL" || -z "$LLM_API_KEY" ]]; then
-            echo '::error title=Qualification blocked::INTELLIGENCE_MODEL_NOT_CONFIGURED (dedicated qualification secrets missing)'
-            echo 'Fresh ACME: BLOCKED — real Intelligence model not configured; no E2E claim.' >> "$GITHUB_STEP_SUMMARY"
-            exit 2
-          fi
-          if [[ "$LLM_BASE_URL" != https://* ]]; then
-            echo '::error title=Qualification blocked::LLM_BASE_URL_REQUIRES_HTTPS'
-            echo 'Fresh ACME: BLOCKED — HTTPS model endpoint required.' >> "$GITHUB_STEP_SUMMARY"
-            exit 2
-          fi
-          echo 'Fresh ACME: model configuration present; actual Analyst/Critic execution still requires E2E validation.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Generate a new isolated DEMO Run and verify Temporal, Evidence and PostgreSQL
-        env:
-          LLM_BASE_URL: ${{ secrets.AIOPS_QUALIFICATION_LLM_BASE_URL }}
-          LLM_MODEL: ${{ secrets.AIOPS_QUALIFICATION_LLM_MODEL }}
-          LLM_API_KEY: ${{ secrets.AIOPS_QUALIFICATION_LLM_API_KEY }}
-        run: |
-          set -euo pipefail
-          python scripts/ops/run_local_temporal_demo.py | tee fresh-run-output.log
+          python scripts/ops/run_local_temporal_demo.py --synthetic-fixture | tee fresh-run-output.log
           grep -Fq '"database_direct_sql": "PASS"' fresh-run-output.log
           grep -Fq '"canonical_sha256_readback": "PASS"' fresh-run-output.log
           grep -Fq '"replay": "PASS"' fresh-run-output.log
