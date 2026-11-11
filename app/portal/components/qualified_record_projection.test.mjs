@@ -60,3 +60,30 @@ test('sparse record and allowlist arrays fail closed',()=>{
  assert.deepEqual(projectQualifiedRecords(qualified(sparseRecords),['id']),{state:'UNKNOWN',result:null});
  assert.deepEqual(projectQualifiedRecords(qualified([{id:'safe'}]),sparseFields),{state:'UNKNOWN',result:null});
 });
+
+test('array proxy length get traps are never invoked',()=>{
+ for(const kind of ['records','fields']){
+  let calls=0;
+  const array=new Proxy(kind==='records'?[{id:'safe'}]:['id'],{
+   get(target,key,receiver){
+    if(key==='length'){calls++;throw Error('secret-canary');}
+    return Reflect.get(target,key,receiver);
+   }
+  });
+  const outcome=kind==='records'
+   ?projectQualifiedRecords(qualified(array),['id'])
+   :projectQualifiedRecords(qualified([{id:'safe'}]),array);
+  assert.equal(calls,0);
+  assert.equal(outcome.state,'UNVERIFIED_FRESHNESS');
+  assert.equal(JSON.stringify(outcome).includes('secret-canary'),false);
+ }
+});
+test('hostile length descriptors and excessive arrays fail closed',()=>{
+ const hostile=new Proxy(['id'],{getOwnPropertyDescriptor(target,key){
+  if(key==='length')throw Error('secret-canary');
+  return Reflect.getOwnPropertyDescriptor(target,key);
+ }});
+ assert.deepEqual(projectQualifiedRecords(qualified([{id:'safe'}]),hostile),{state:'UNKNOWN',result:null});
+ assert.deepEqual(projectQualifiedRecords(qualified(new Array(10001)),['id']),{state:'UNKNOWN',result:null});
+ assert.deepEqual(projectQualifiedRecords(qualified([{id:'safe'}]),new Array(10001)),{state:'UNKNOWN',result:null});
+});
