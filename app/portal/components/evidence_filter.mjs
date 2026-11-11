@@ -45,7 +45,7 @@ export function mountEvidenceFilter(root,{records=[],onChange=()=>{}}={}){
     list.replaceChildren();
     for(const record of result.records){const li=doc.createElement('li');li.textContent=record.label+' — '+evidenceStatusLabels[record.status];list.append(li);}
     reset.hidden=!(result.state==='EMPTY' && Array.isArray(records) && records.length>0);
-    count.textContent=result.state==='UNKNOWN'?'Preuves non vérifiables':result.state==='EMPTY'?(Array.isArray(records)&&records.length===0?'Aucune preuve disponible':'Aucune preuve ne correspond aux filtres'):`${result.records.length} preuve(s) disponible(s)`;
+    count.textContent=result.state==='UNKNOWN'?'Preuves non vérifiables':result.state==='EMPTY'?(Array.isArray(records)&&records.length===0?'Aucune preuve disponible':'Aucune preuve ne correspond aux filtres'):`${result.records.length} résultat(s) affiché(s)`;
     onChange(result);
   }
   input.addEventListener('input',update);status.addEventListener('change',update);
