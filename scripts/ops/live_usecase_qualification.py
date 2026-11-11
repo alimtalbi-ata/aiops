@@ -13,7 +13,6 @@ from pathlib import Path
 import subprocess
 import sys
 
-RUN_ID="RUN-8CA56A39E58944F1"
 PORTAL="aiops2-rebuild-portal"
 
 def portal_probe():
@@ -113,7 +112,7 @@ def summarize(linkage, platform, execution, stamp, portal=None, requested_run_id
                 item["next_action"]="Qualify this chain on a separate approved action run"
     failed=[x["name"] for x in items if x["status"]=="HOLD"]
     return {"schema":"aiops2-live-usecase-qualification-v1","utc":stamp,
-            "run_id":requested_run_id or linkage.get("run_id",RUN_ID),
+            "run_id":requested_run_id or linkage.get("run_id"),
             "requested_run_id":requested_run_id,"read_only":True,
             "verdict":"PASS" if not failed else "HOLD","checks":items,
             "blocking":failed,"probe_execution":execution,
@@ -123,7 +122,7 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--tools",type=Path,default=Path.home()/"aiops2-audit-tools")
     p.add_argument("--output-dir",type=Path,default=Path.home()/"aiops2-release-receipts")
-    p.add_argument("--run-id",default=RUN_ID)
+    p.add_argument("--run-id",required=True,help="explicit newly executed Run ID; never silently reuse a historical Run")
     p.add_argument("--observed-glpi-ticket",type=int)
     args=p.parse_args()
     if not re.fullmatch(r"RUN-[A-Z0-9-]{6,80}",args.run_id):
