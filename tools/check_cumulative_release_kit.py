@@ -177,11 +177,27 @@ def audit_kit(kit, expected_sha, source_dir=None, required_paths=REQUIRED_PATHS,
                         errors.append("SOURCE_TREE_DIRTY")
                 except (OSError, subprocess.CalledProcessError):
                     errors.append("SOURCE_HEAD_OR_STATUS_UNAVAILABLE")
-                for path in required_paths:
-                    if path not in files or path == "RELEASE-MANIFEST.txt":
+                # Every packaged source member, not just the required subset,
+                # must be backed by the exact tracked checkout. A checksummed
+                # untracked payload can otherwise masquerade as the source SHA.
+                # These two generated metadata files have independent checks.
+                generated = {"RELEASE-MANIFEST.txt", "FILES-SHA256SUMS"}
+                try:
+                    tracked_output = subprocess.check_output(
+                        ["git", "-C", str(root), "ls-files", "-z", "--cached"],
+                        stderr=subprocess.DEVNULL)
+                    tracked = set(tracked_output.decode("utf-8", "surrogateescape").rstrip("\0").split("\0"))
+                except (OSError, subprocess.CalledProcessError):
+                    errors.append("SOURCE_TRACKED_FILES_UNAVAILABLE")
+                    tracked = set()
+                for path in sorted(files - generated):
+                    if path not in tracked:
+                        errors.append("SOURCE_MEMBER_UNTRACKED:" + path)
                         continue
                     candidate = root / path
-                    if not candidate.is_file() or candidate.is_symlink():
+                    if candidate.is_symlink():
+                        errors.append("SOURCE_FILE_SYMLINK:" + path)
+                    elif not candidate.is_file():
                         errors.append("SOURCE_FILE_MISSING:" + path)
                     elif hashlib.sha256(candidate.read_bytes()).hexdigest() != hashlib.sha256(archive.read(path)).hexdigest():
                         errors.append("SOURCE_BLOB_MISMATCH:" + path)
