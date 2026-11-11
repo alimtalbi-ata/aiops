@@ -195,6 +195,16 @@ ENV PYTHONPATH=/app
         env = {'AIOPS_INTERNAL_TOKEN': token, 'AIOPS_ADMIN_TOKEN': token, 'ADMIN_TOKEN': token,
                'DATABASE_URL': f'postgresql://aiops:{password}@pg:5432/aiops',
                'TEMPORAL_ADDRESS': 'temporal:7233', 'NO_PROXY': no_proxy, 'no_proxy': no_proxy}
+        # Opt-in real model credentials; never substitute synthetic Analyst/Critic output.
+        # The disposable Compose file is mode 0600 and removed on teardown.
+        model_base = environment.get('LLM_BASE_URL', '').strip()
+        model_name = environment.get('LLM_MODEL', '').strip()
+        model_key = environment.get('LLM_API_KEY', '').strip()
+        if model_base and model_name and model_key:
+            if not model_base.startswith('https://'):
+                raise RuntimeError('LLM_BASE_URL_REQUIRES_HTTPS')
+            env.update({'LLM_BASE_URL': model_base, 'LLM_MODEL': model_name,
+                        'LLM_API_KEY': model_key})
         for name, service_port in SERVICES:
             if name != 'worker':
                 env[name.upper() + '_URL'] = f'http://127.0.0.1:{service_port}'
