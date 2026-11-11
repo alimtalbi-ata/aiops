@@ -90,3 +90,32 @@ def test_missing_bearer_is_denied_before_any_upstream_access(monkeypatch):
     assert response.json() == {"detail": "unauthorized"}
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_real_viewer_auth_accepts_token_but_never_qualifies_tenant(monkeypatch):
+    """Exercise the real constant-time bearer gate, not an auth stub."""
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(root / "app"))
+    portal = importlib.import_module("portal.main")
+    monkeypatch.setenv("AIOPS_PORTAL_READ_TOKEN", "synthetic-test-secret")
+
+    def forbidden_upstream(*_args, **_kwargs):
+        raise AssertionError("shared bearer must not enable Core/Twin reads")
+
+    monkeypatch.setattr(portal, "get_json", forbidden_upstream)
+    monkeypatch.setattr(portal, "read_portal_snapshot", forbidden_upstream)
+    client = TestClient(portal.app, raise_server_exceptions=False)
+    for bearer, expected_status in (
+        ("Bearer synthetic-test-secret", 503),
+        ("Bearer incorrect", 401),
+        ("Basic synthetic-test-secret", 401),
+    ):
+        response = client.get(
+            "/api/portal/bootstrap", headers={"Authorization": bearer}
+        )
+        assert response.status_code == expected_status
+        assert response.headers["cache-control"] == "no-store"
+        if expected_status == 503:
+            assert response.json()["reason"] == "TENANT_ACL_NOT_QUALIFIED"
+        else:
+            assert response.json()["detail"] == "invalid_portal_read_token"
