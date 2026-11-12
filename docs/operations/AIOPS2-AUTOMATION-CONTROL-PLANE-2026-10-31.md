@@ -77,3 +77,101 @@ The repository is DEV-only. GitHub reports `main.protected=false`, so the archit
 ## 7. Schedule DTSTART correction — 2026-10-31 22:15 Europe/Paris
 
 The five hourly ChatGPT schedules now use future local DTSTART values 23:00, 23:10, 23:20, 23:30 and 23:45 Europe/Paris. All are enabled. The scheduler still returns `next_run_time=null`, so the future firing remains unverified.
+
+## 2026-10-31 23:48 Europe/Paris — scheduler evidence and missed-run truth
+
+A Debian SRV-DEB-05: requested `*/1`, but command/user/PATH/working directory/flock/timeout/logs/last success/heartbeat/next execution remain UNATTESTED; no host shell or duplicate cron. B GitHub: `23 2 * * *` UTC daily Quality configured on main; post-merge #230 Quality #41242870529 was a push-triggered run, **not** a schedule heartbeat. C ChatGPT: five enabled HOURLY configurations; all five `next_run_time=null`, so future cadence is UNKNOWN. Latest handoffs ACME/Portal/Core completed; Policy was in progress; architect active. D lab: ACME seed 20261018, Chromium, PG16 and Temporal are synthetic/disposable, not Debian/NGX/GLPI runtime. `scripts/automation_heartbeat_gate.py` is offline only; missed runs cannot be certified without timestamped receipts. Alerting/recovery remain proposed, not deployed.
+
+
+## 2026-11-01 00:41 Europe/Paris — automation truth / architect handoff
+
+| Plane | Owner/cadence/environment | Last evidence | Next/alert/recovery |
+|---|---|---|---|
+| A Debian SRV-DEB-05 | Host cron `*/1` requested, operator-owned | UNATTESTED: no shell, command/user/PATH/flock/timeout/logs/exit/heartbeat observed | UNKNOWN; inventory before any scheduler installation, local missed-run receipt required |
+| B GitHub Actions | Quality daily `23 2 * * *` UTC plus PR/push/dispatch, hosted disposable CI | Candidate [#41253703233](https://github.com/alimtalbi-ata/aiops/actions/runs/41253703233) PR-triggered IN_PROGRESS; NOT a schedule heartbeat | Next actual schedule run NOT_OBSERVED; inspect event, conclusion, artifacts and retention; no host/GLPI/LIVE |
+| C ChatGPT 1–5 | Five enabled HOURLY owner/architect automations | Latest owner last_run timestamps 2026-10-31 23:06–23:35 UTC; prompts updated with current contracts | **5/5 next_run_time=null**; NEXT_UNKNOWN, cannot certify recurrence/missed runs without run receipts |
+| D Internal lab | ACME seed 20261018, Portal RSA/Chromium, Core PG16, Policy HTTP synthetic/jetable | Source exact-head CIs isolated; combined candidate D0 pending | On-demand only; record seed/version/SHA/artifact, never classify as Debian/NGX/GLPI runtime |
+
+The offline `scripts/automation_heartbeat_gate.py` is not installed on Debian and cannot prove host cron cadence. Do not create duplicate scheduler or confuse GitHub daily schedule with ChatGPT hourly cadence. No host access, no GLPI write or LIVE.
+
+
+## 2026-11-01 01:48 CET — automation A/B/C/D checkpoint
+
+| Plane / owner | Cadence / command / environment | Last verified success / next | Logs, missed-run alert, recovery |
+|---|---|---|---|
+| A SRV-DEB-05 / operator | Debian `*/1` requested; cron/systemd inventory NOT_OBSERVED | Last/next UNKNOWN, host heartbeat absent | Inspect user, PATH, working dir, `flock`, timeout, retries, exit/logs/secrets before installing anything; missed-run UNKNOWN; no SSH/sudo |
+| B GitHub / architect | Quality PR/push/dispatch + configured `23 2 * * *` UTC; new dedicated HITL PR workflow, hosted disposable PG16 | Source #243 [HITL 41257528325](https://github.com/alimtalbi-ata/aiops/actions/runs/41257528325) 1/1; new candidate exact-head pending; no actual `schedule` heartbeat attested | Actions run IDs/artifacts 7-day retention; detect missed daily schedule only from event+timestamp receipts, not PR CI; rerun scoped CI if needed |
+| C ChatGPT owners 1–5 / architect | Five HOURLY enabled; independent of Debian cron | 1–4 latest completed 00:00, 00:12, 00:27, 00:39 UTC on 2026-11-01; 5 in progress; **5/5 `next_run_time=null`** | NEXT_UNKNOWN, not cadence guarantee; handoffs in #186 and source PRs, inspect run details, avoid duplicate schedules |
+| D Internal lab / owner | On-demand ACME seed 20261018, OIDC/Chromium, PG16 SQL-model, Policy | Source exact-head CI as above, candidate D0 pending; no Debian/NGX/real GLPI runtime | Record scenario, seed, SHA, test N/N and artifact; synthetic != runtime; no LIVE |
+
+The offline `scripts/automation_heartbeat_gate.py` remains not deployed. No Debian cron changes, runner host access, external mutation, real GLPI write or executor. `RELEASE_STABLE=NO_GO`.
+
+
+### B GitHub Actions — exact-head correction (2026-11-01)
+
+Review of candidate Quality showed three default PR merge-ref checkouts. Architect pinned all three to `github.event.pull_request.head.sha || github.sha` and added explicit `git rev-parse HEAD` assertions plus contract test on #234 commit `f2bf03f085495348fd80e0acb2a898f9b0b72eb8`. Previous PR-triggered green jobs are **not** evidence of exact source-head D0; new SHA must be requalified. Daily `schedule` trigger still has no observed heartbeat; PR runs are not cron. No Debian host or external effects.
+
+
+### Architect cycle — 2026-11-01 02:44 CET — selective integration, NO_GO
+
+SOURCE_REVIEWED: DEV main `ae7c3e5102b99a66bd7806d602146f1309a9749d`; sole Draft #234 from that base, candidate product checkpoint `7fe177ea165e063a64a80acd22bf4e1a8338b355` (final documentation commit and exact-head CI pending). No whole historical #201/#194/#204 merge. Owner source Drafts all based on prior candidate `d5227f5c3981a53dd2a42d5384dce798cfaf0d33`:
+
+| Owner / source | Exact source HEAD; source CI | Architect selective port / paths | Gate and dependency |
+|---|---|---|---|
+| Core P0 #246 | `a69e68523b6d690dcb8edbaf8bac57b2e8b8cca0`; [Quality 41260773041](https://github.com/alimtalbi-ata/aiops/actions/runs/41260773041) 3/3; Core 30/30, PG16 installed 3/3 | `5d5f776272f2297f0a2e87cadb1f81c78851422f`; actor_resource_authz, itsm_xref router, Core tests/ADR (5 paths) | IdP introspection mocked; GLPI native human rights, nonce replay ledger and positive ALLOW **not qualified** |
+| Portal P0 #245 | `78d0471328268f842e70f5ee5d898cc013b35206`; [Quality 41260115750](https://github.com/alimtalbi-ata/aiops/actions/runs/41260115750) 3/3; Portal 12/12 | `4bcf409c3f2aad27ccaad20ea3cf68dee15b557f`; ACL consumer, tests, OIDC/Core contract (3 paths) | ALLOW-shaped JSON is **not authority**; positive_core_contract_matches remains false, Run 503/UNKNOWN, no upstream |
+| Policy/HITL P0 #247 | `dc005302819912f90f32dfc0584ff478fcf756f5`; [Quality 41261752806](https://github.com/alimtalbi-ata/aiops/actions/runs/41261752806) 3/3; [Temporal+PG16 41261752843](https://github.com/alimtalbi-ata/aiops/actions/runs/41261752843) 2/2, Worker 10/10, SQL 5/5 | `b7ab2ab1a5280e98b15805b2d6c7fa9bcac1598e`; Worker pure REJECT adapter, tests, doc, dedicated workflow (4 paths), workflow PR base retargeted to main | No Core claim/ACK HTTP, runtime poller, APPROVE, executor or LIVE; only disposable Temporal Worker restart, no Temporal server restart |
+| ACME/Twin P1 #244 | `1c9b6f50c92d43fa893f08bcf0da8964873db4ae`; [Quality 41259232141](https://github.com/alimtalbi-ata/aiops/actions/runs/41259232141) 3/3; catalog 48/48, ACME targeted 85/85 | `7fe177ea165e063a64a80acd22bf4e1a8338b355`; synthetic catalog adversarial tests and provenance doc (2 paths) | Seed 20261018, 18 CI/17 edges, candidate blast radius only; owner/SLA/OLA/Change/real maintenance/observed impact UNKNOWN |
+
+**Decision:** four disjoint, source-reviewed ports to one main-based candidate; all source CI are exact source HEAD, but **do not transfer green by proxy** to the new candidate. New D0 Quality + HITL dedicated runs must check final source HEAD; D1 combined disposable ITIL Event→Incident→Twin→Analyst/Critic→Evidence→HITL→SIMULATE→verification→resolution/reopen NOT_QUALIFIED; D2 browser/API same SHA NOT_QUALIFIED; D3 cumulative kit install/upgrade/rollback NO_GO; D4 client sign-off NOT_ATTESTED. `#196=FAIL`, provider-reported tokens only, cost UNKNOWN without versioned pricing. No real GLPI/IdP runtime, host or LIVE effects.
+
+**Next owner contracts (WIP P0=3):** Core owns source-authenticated GLPI native actor permission and durable nonce/revocation, plus Core-fenced claim/ACK interface; Portal owns an authenticated transport and no-ALLOW-until-qualified exact Run binding, without overlapping Core files; Policy owns a disposable integration test for Core claim/ACK and Worker/Temporal REJECT with zero effects, without wiring poller; ACME owns independently sourced Twin governance facts and a synthetic end-to-end fixture, never invented SLA/OLA. Architect owns shared CI, migrations and candidate promotion. **Rollback:** revert these four focused commits in reverse order ACME→HITL→Portal→Core, remove disposable databases/artifacts; no persistent-data downgrade claimed and no main reset. `RELEASE_STABLE=NO_GO`.
+
+Automation planes: A Debian SRV-DEB-05 cron */1 requested but UNATTESTED (no SSH/sudo/host observation, user/PATH/flock/logs/heartbeat unknown); B GitHub Quality daily 02:23 UTC configured on main, but no schedule-triggered success attested; PR runs are not cron, Worker dedicated PR CI is disposable; C five ChatGPT hourly tasks enabled, 5/5 next_run_time=null at 02:44 CET, last runs observed, future cadence NEXT_UNKNOWN; D lab synthetic ACME/Chromium/PG16/Temporal, not Debian/NGX/real GLPI runtime. Offline heartbeat gate not deployed; missed runs remain UNKNOWN, no second scheduler.
+
+
+## 2026-11-01 03:48 CET A/B/C/D control-plane observation
+
+A Debian SRV-DEB-05 cron */1 requested, UNATTESTED; host user, working dir, PATH, flock, timeout, exit, retries, logs, heartbeat, last success and next execution UNKNOWN; no host access. B GitHub Quality on main has `23 2 * * *` UTC plus PR/push/dispatch; PR exact-head runs are not schedule runs, no schedule-triggered success attested. C five ChatGPT owner/architect schedules enabled HOURLY, all five `next_run_time=null`; future cadence NEXT_UNKNOWN; latest owner handoffs on #248/#249/#250/#251 reviewed. D ACME/Chromium/PostgreSQL 16/Temporal disposable lab, no Debian/NGX/real GLPI runtime evidence. Offline heartbeat gate is not installed on Debian and cannot assert missed host runs. New integration #234 source ports and gates documented in `docs/release/AIOPS2-INTEGRATION-CYCLE-2026-11-01-0348.md`. No second cron, host/runner mutation, GLPI write, LIVE or executor. RELEASE_STABLE=NO_GO.
+
+### Automation control checkpoint — 2026-11-01 04:50 CET
+| Plane | Owner / cadence / command | Environment | Last success | Next | Evidence / alert / recovery |
+|---|---|---|---|---|---|
+| A Debian SRV-DEB-05 | Host operator, requested */1; actual cron/systemd/user/cwd/PATH/flock/timeout/retry UNKNOWN | Debian host | UNATTESTED | UNKNOWN | No host heartbeat. Inventory logs/secrets/idempotence before any second scheduler; missed-run NO_SUCCESS_EVIDENCE. |
+| B GitHub | CI architect, main Quality 23 2 * * * UTC, PR/push/dispatch; new #255 dedicated path-scoped PR workflow | Hosted disposable | Prior #234 6/6 on 98659d95; new candidate CI PENDING | Schedule next not independently observed | Verify event=schedule, exact checkout, artifact retention and conclusion; PR green is not schedule heartbeat. |
+| C ChatGPT 1/5–5/5 | Four owners + architect, hourly configured | ChatGPT | Five enabled, last_run present | Five next_run_time=null | NEXT_UNKNOWN; check completed handoffs, missed run after 1h+grace, duplicates. |
+| D Lab | ACME seed 20261018, Chromium, PG16, Temporal test Worker, on demand | Synthetic/disposable | Source #252–#255 isolated CI SUCCESS | N/A | Record seed/version/source SHA/artifact; no Debian/NGX/GLPI runtime inference. |
+No Debian heartbeat agent installed. Offline scripts/automation_heartbeat_gate.py remains the versioned missed-run gate.
+
+### 04:54 CET exact-head CI closeout for 04:50 integration checkpoint
+
+At source/document HEAD f9b1dd88406b8b7cc47d072d7b69f4a3946867fd all four PR workflows completed SUCCESS, **7/7 jobs**: Quality 41270854470 3/3; HITL PG16/DR 41270854374 1/1; Worker Temporal 41270854443 2/2; combined Core ASGI HTTP/PG16/Temporal 41270854369 1/1. Logs explicitly checked out f9b1dd...; populated Core PG16 tests 5/5, combined 3/3, SQL DR 5/5, pg_dump/pg_restore 16.15. Artifacts: replay 13069685107, Chromium 13069490868, PG16/DR 13068714535, Worker 13069251340, combined 13068654765; ZIP digests GitHub-reported, not independently recalculated. New documentation HEAD after this closeout must be separately requalified (no green-by-proxy). D0 CI_PASS only for f9b1dd...; D1 business path and D2 browser/API lifecycle NOT_QUALIFIED, D3 NO_GO, D4 NOT_ATTESTED. Combined test uses in-process ASGI HTTP, synthetic HMAC ownership, REJECT, injected lost ACK response after DB commit and test Worker restart; real network loss, Temporal server restart, native GLPI rights and LIVE effects not observed. Effect receipts 0.
+
+
+## 2026-11-01 05:48 Europe/Paris — unified scheduler heartbeat / missed-run checkpoint
+
+| Scheduler | Owner | Cadence | Command/workflow | Environment | Last success | Next run | Logs/artifact | Alert/recovery |
+|---|---|---|---|---|---|---|---|---|
+| A SRV-DEB-05 cron/systemd | Host operator | `*/1` requested, UNATTESTED | command/user/PATH/flock/timeout/retry UNKNOWN; inventory before change | Debian host (not accessible) | UNKNOWN | UNKNOWN | local cron journal, heartbeat UNKNOWN | missed >2 expected ticks only after actual scheduler+heartbeat inventory; no duplicate cron; operator shell read-only |
+| B GitHub Actions | Architect/CI | Quality schedule `23 2 * * *` UTC configured; PR/push/dispatch distinct | `.github/workflows/quality.yml`, HITL disposable workflows | hosted synthetic/ephemeral PG16 | source #256–#259 PR runs green; integrated #234 new HEAD pending | UTC cron configured, next actual firing NOT_ATTESTED | Actions jobs/artifacts and retention from workflow | detect no schedule event/failed run; inspect workflow enabled status, permissions, concurrency and artifacts; no private NGX/GLPI/LIVE |
+| C ChatGPT 1–5 | ACME/Portal/Core/Policy/Architect | HOURLY configured | five owner prompts, no Debian cron equivalence | ChatGPT cloud | owner last runs 2026-11-01 04:06/04:10/04:24/04:46 UTC, architect prior 03:56 UTC | **5/5 null** | run handoffs in #186; source SHA in owner PR | NEXT_UNKNOWN; check run status, duplicate prompts, refresh handoff; never claim minute guarantee |
+| D internal lab | Owners | on-demand | ACME seed 20261018, Portal RSA, PG16 009–013, Temporal Worker REJECT | synthetic/disposable | source PR exact-head CI as above | none | scenario/seed/version/log SHA, source artifact #13070581531 | no runtime claim; rerun exact integrated HEAD; preserve failure evidence |
+
+Heartbeat acceptance record must contain scheduler_id, environment, planned_at, started_at, finished_at, status, exit_code, source_sha, log/artifact URI and observed_at; missed-run detection compares consecutive expected intervals and distinguishes UNKNOWN from FAIL. The offline `scripts/automation_heartbeat_gate.py` does not prove host cron. No Debian SSH/sudo/cron/runner change. All four owner prompts were updated with new focused contracts; 5/5 automations enabled and all next_run_time null at observation.
+
+
+### Verified schedule event correction — 2026-11-01 05:50 Europe/Paris
+
+GitHub Actions REST `event=schedule` now returns one **real scheduled** Quality run [#41267926085](https://github.com/alimtalbi-ata/aiops/actions/runs/41267926085), created **2026-11-01 03:08:05 UTC** on exact main `ae7c3e5102b99a66bd7806d602146f1309a9749d`: **3/3 SUCCESS** (`core-postgres-noc-real-integration`, `grafana-real-integration`, `policy-and-static`). Artifact `acme-explore-story-ci-simulated` #13067643872, GitHub-provided ZIP digest `sha256:23c7a84184c52b46f6c45c8281e9448c7e41a53d3d53befe4f49f0a1dba1f6a4` (not independently recomputed). This supersedes earlier `0 schedule runs observed` and `schedule success not verified` claims. Actual firing at 03:08 UTC differs from configured cron 02:23 UTC; one success proves a run, **not punctuality, repeated cadence, heartbeat SLA, or Debian cron**. Next scheduled completion remains UNKNOWN. Missed-run detection must compare scheduled UTC date, observed creation and conclusion with tolerances, never equate `workflow_dispatch` or PR CI to schedule.
+
+
+### Control-plane checkpoint — 2026-11-01 06:45 Europe/Paris
+
+| Scheduler | Owner | Cadence | Command/workflow | Environment | Last observed success | Next | Logs/artifact | Alerting / recovery |
+|---|---|---|---|---|---|---|---|---|
+| A SRV-DEB-05 cron/systemd | Host operator (not ChatGPT) | `*/1` requested, UNATTESTED | command/user/PATH/flock/timeouts/retries UNKNOWN | Debian host | UNKNOWN | UNKNOWN | host logs/heartbeat NOT_AVAILABLE | inventory cron/systemd first, verify last exit/duration/secret/idempotence; no install without SSH capability |
+| B GitHub Actions | Architect / repo | Quality `23 2 * * *` UTC on main; PR events separate | `.github/workflows/quality.yml` and dedicated HITL workflows | GitHub hosted disposable | actual `schedule` [#41267926085](https://github.com/alimtalbi-ata/aiops/actions/runs/41267926085), 2026-11-01 03:08 UTC, 3/3 | future schedule not guaranteed | GitHub run/log/artifact #13067643872 | alert if no `event=schedule` run within daily grace; rerun exact SHA, never infer cron from PR |
+| C ChatGPT 1–5 | ACME/Portal/Core/Policy/Architect | HOURLY configured | five owner task prompts | ChatGPT | four owner runs completed, #260–#263 handoffs in #186 | 5/5 `next_run_time=null` | run handoff SHA and #186 | NEXT_UNKNOWN, inspect scheduler status; never call this minute cron |
+| D Internal lab | Owners | on demand | ACME seed 20261018, Chromium TLS, PG16 009–013, Temporal REJECT | synthetic/CI disposable | owner source CI #260–#263 green | none | source SHA, seed, scenario, tests and artifact | fail if artifact/seed missing; lab is not Debian/NGX/GLPI runtime |
+
+Heartbeat schema: `scheduler_id, owner, environment, expected_at, started_at, finished_at, source_sha, status, exit_code, duration, log_uri, artifact_uri, observed_at`. Missed-run detection must classify `UNKNOWN` when next_run_time is null and `MISSED` only after expected window and grace with authoritative schedule; never treat a lab PASS as host success. No Debian scheduler mutation, no duplicate cron installation.

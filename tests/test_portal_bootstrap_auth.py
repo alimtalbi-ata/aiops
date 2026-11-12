@@ -90,9 +90,11 @@ class PortalBootstrapAuthTests(unittest.TestCase):
         with patch.object(main, "get_json", side_effect=AssertionError("no anonymous Core read")) as get:
             response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("portal-read-token", response.text)
-        self.assertIn("UNKNOWN", response.text)
-        self.assertIn('/assets/portal-bootstrap.js', response.text)
+        self.assertIn("operator-workspace.js", response.text)
+        self.assertIn("SAN → Payments", response.text)
+        self.assertNotIn('id="portal-read-token"', response.text)
+        self.assertNotIn('id="noc-token"', response.text)
+        self.assertNotIn('id="demo-token"', response.text)
         self.assertNotIn(TOKEN, response.text)
         get.assert_not_called()
 
@@ -104,6 +106,29 @@ class PortalBootstrapAuthTests(unittest.TestCase):
         self.assertIn("textContent", response.text)
         self.assertNotIn("localStorage", response.text)
         self.assertNotIn("innerHTML", response.text)
+
+
+    def test_health_contract_canonical_host_7777_is_numeric_and_fail_closed(self):
+        # Source-level HTTP regression only: no claim of actual host binding.
+        with patch.dict(os.environ, {"AIOPS_PORTAL_HOST_PORT": "7777"}):
+            response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+        self.assertEqual(response.json()["external_port"], 7777)
+        self.assertIs(type(response.json()["external_port"]), int)
+        for bad in ("17777", "17778", "not-a-port", "0"):
+            with self.subTest(bad=bad), patch.dict(
+                os.environ, {"AIOPS_PORTAL_HOST_PORT": bad}
+            ):
+                response = self.client.get("/health")
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(response.json()["status"], "misconfigured")
+            self.assertIsNone(response.json()["external_port"])
+            self.assertEqual(response.headers["cache-control"], "no-store")
+        with patch.dict(os.environ, {}, clear=True):
+            response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["external_port"], 7777)
 
 
 if __name__ == "__main__":

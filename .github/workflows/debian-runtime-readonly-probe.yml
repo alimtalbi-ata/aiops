@@ -1,0 +1,30 @@
+name: Debian read-only runtime probe contract (CI disposable, no Docker)
+on:
+  pull_request:
+    branches:
+      - integration/enterprise-slice-main-20261031-2230
+      - main
+    paths:
+      - deploy/debian-runtime-readonly-probe.py
+      - tests/test_debian_runtime_readonly_probe.py
+      - .github/workflows/debian-runtime-readonly-probe.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly-probe-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exact HEAD and redacted no-Docker probe tests
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          python3 -m py_compile deploy/debian-runtime-readonly-probe.py
+          python3 -m unittest discover -s tests -p 'test_debian_runtime_readonly_probe.py' -v

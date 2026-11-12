@@ -1,0 +1,132 @@
+name: HITL Worker REJECT fencing + disposable Temporal and PG16 DR
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/worker/hitl_reject_notification.py
+      - app/worker/hitl_reject_core_wire.py
+      - tests/test_worker_hitl_reject_notification.py
+      - tests/test_worker_core_reject_wire.py
+      - .github/workflows/hitl-worker-reject-disposable.yml
+      - docs/qualification/HITL-WORKER-TEMPORAL-REJECT-FENCING-2026-11-01.md
+
+permissions:
+  contents: read
+
+jobs:
+  worker-temporal-reject-disposable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      AIOPS_CI_WORKER_DISPOSABLE: "YES"
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Assert exact PR source HEAD
+        run: test "$(git rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned Temporal SDK for isolated dev server
+        run: python -m pip install --disable-pip-version-check "temporalio==1.16.0"
+      - name: Real disposable Temporal Worker restart + no-effect REJECT contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=app python -m unittest discover -s tests -p 'test_worker_hitl_reject_notification.py' -v 2>&1 | tee /tmp/hitl-worker-reject.log
+          PYTHONPATH=app python -m unittest discover -s tests -p 'test_worker_core_reject_wire.py' -v 2>&1 | tee /tmp/hitl-worker-core-wire.log
+          python - <<'PY'
+          import json, os
+          report = {
+            "head_sha": os.environ["AIOPS_EXPECTED_HEAD_SHA"],
+            "runtime": "DISPOSABLE_TEMPORAL_DEV_SERVER",
+            "worker_restart": "OBSERVED_IF_TEST_PASS",
+            "temporal_server_restart": "NOT_TESTED",
+            "core_claim_ack_http": "NOT_TESTED_MOCK_WIRE_ONLY",
+            "network_ack_loss": "NOT_TESTED",
+            "lost_ack_response_injected": True,
+            "core_wire_fixture": "SYNTHETIC_NOT_CORE_HTTP",
+            "human_identity": "NOT_ATTESTED",
+            "decision": "REJECT",
+            "execution_allowed": False,
+            "effect_allowed": False,
+            "effect_receipts": 0,
+          }
+          with open("/tmp/hitl-worker-reject-report.json", "w") as f:
+            json.dump(report, f, sort_keys=True, indent=2)
+          print(json.dumps(report, sort_keys=True))
+          PY
+      - name: Upload synthetic Temporal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-worker-reject-temporal-disposable
+          path: |
+            /tmp/hitl-worker-reject.log
+            /tmp/hitl-worker-core-wire.log
+            /tmp/hitl-worker-reject-report.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  pg16-sql-model-dr-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: ubuntu:24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aiops
+          POSTGRES_USER: aiops
+          POSTGRES_PASSWORD: ci-hitl-ephemeral-only
+        options: >-
+          --health-cmd "pg_isready -U aiops -d aiops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      DATABASE_URL: postgresql://aiops:ci-hitl-ephemeral-only@postgres:5432/aiops
+      AIOPS_CI_OUTBOX_DISPOSABLE: "YES"
+      HITL_DR_ARTIFACT: /tmp/hitl-worker-pg16-dr.dump
+      AIOPS_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Install versioned PG16 client inside disposable CI container
+        run: |
+          set -eu
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv postgresql-client-16
+          pg_dump --version | grep -E ' 16[.]'
+          pg_restore --version | grep -E ' 16[.]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify source HEAD and install pinned psycopg
+        run: |
+          set -eu
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$AIOPS_EXPECTED_HEAD_SHA"
+          python3 -m venv /tmp/hitl-venv
+          /tmp/hitl-venv/bin/python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.13"
+      - name: Reuse installed 009-012 SQL-model and DR tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/hitl-venv/bin/python -m unittest discover -s tests -p 'test_hitl_pg16_candidate_outbox.py' -v 2>&1 | tee /tmp/hitl-worker-pg16.log
+          sha256sum /tmp/hitl-worker-pg16-dr.dump | tee /tmp/hitl-worker-pg16-dr.sha256
+      - name: Upload PG16 DR evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hitl-worker-pg16-dr-disposable
+          path: |
+            /tmp/hitl-worker-pg16.log
+            /tmp/hitl-worker-pg16-dr.dump
+            /tmp/hitl-worker-pg16-dr.sha256
+          retention-days: 7
+          if-no-files-found: warn

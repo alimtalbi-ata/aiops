@@ -1,0 +1,111 @@
+{
+  "acme_full_event_equivalence": "NOT_VERIFIED",
+  "actor_issuer_distinct_from_source": true,
+  "actor_subject_sha256": "763972ef36457d6c0f2fdcf0b1d7945875ae84dac174aa1b46f4169bb368e6fd",
+  "archive_retained": false,
+  "archive_sha256": "37ec347daf67ad0e2e1aa307eaedd564c2878b5f109fe81c5c559fe8793267b2",
+  "audit_after": {
+    "nonce_013": 1,
+    "revocation_013": 1,
+    "terminal_014": 1
+  },
+  "audit_before": {
+    "nonce_013": 1,
+    "revocation_013": 1,
+    "terminal_014": 1
+  },
+  "decision": "UNKNOWN",
+  "events": [
+    {
+      "acme_fixture_full_sha256": "4ea368ab2b08770a3f5e5a62365139cc27b555da334681b9f8a8382f2daf2a30",
+      "acme_fixture_payload_sha256": "9f50e7f90d484a026ac03a1a2657bab3f7e0da51fa3dafa9122f1480e37c2e94",
+      "core_pg16_full_event_sha256": "892a0098d4b52f2de96cc076c564522ee3c0c73e2851b89fee601667a39773dd",
+      "core_pg16_payload_sha256": "b9962fb35c61ca0351992aa0ea6148a6dc10473bbcbde96659f967d04d77ab17",
+      "source_event_id": "SYN-EVT-D339C4CF0B5DD5FBE166"
+    },
+    {
+      "acme_fixture_full_sha256": "9f2f8ad0ce7c7d521eaef3d06ce26e4a57ac063e95cc27b8ae29c6ff3f8adcde",
+      "acme_fixture_payload_sha256": "d894527dc386f9f954fdd315218a677e736717328bb8f0a9783559a5cfab4c41",
+      "core_pg16_full_event_sha256": "ad4fbd86bec2809b2762f4f1824aaf2efd2311897fa444d130f722923f8c4279",
+      "core_pg16_payload_sha256": "68a01b41cbb23f9c3e1fad4983c486c70b3d224792a28cb791ba922c919a875e",
+      "source_event_id": "SYN-EVT-5085CE4F452216CA6368"
+    },
+    {
+      "acme_fixture_full_sha256": "42d12373a4afe93bb64b9eea6684d1e1840ca11e059f23a8076c955073bde7e4",
+      "acme_fixture_payload_sha256": "04b0362d8edd63c74e764f5a89f158b730227a96b35b59d62a777437f0c4b6c7",
+      "core_pg16_full_event_sha256": "e19cb0820203130771683b0bda7fd6dfe07f9b0cc93a8f878cc1423469940207",
+      "core_pg16_payload_sha256": "9f9b74257cadc4583b99ee19e61d87741eea99643f227f840cdc6240f594493c",
+      "source_event_id": "SYN-EVT-07FBFC9BA5CF807877E9"
+    },
+    {
+      "acme_fixture_full_sha256": "1af7f9bbe0fea665bf4286e626b46452f00358c7c93968494fe7e4f9a0d02dee",
+      "acme_fixture_payload_sha256": "903a6ba7529af8933d992957e6087b7c6d703aee3a7a167045122bfb88af4a6a",
+      "core_pg16_full_event_sha256": "fab5bc1210829b03b61d4219e8416b3d594a0e1a2b181b8e7cb4e85115eebe35",
+      "core_pg16_payload_sha256": "8eee4bff4415b81435a88491fbfa357d1d64cb32dcb9a5027947b337d9c273b5",
+      "source_event_id": "SYN-EVT-C09C5E66551CFA5D66E5"
+    },
+    {
+      "acme_fixture_full_sha256": "5c349f1a76893dbc6d1b831b4c6ef6f88ec568a1955f2ef28e479e493cb0dc88",
+      "acme_fixture_payload_sha256": "5f1dfcc5ebebbfbbfb9244ca701fa91a839de37235e397857d42ccab760677c0",
+      "core_pg16_full_event_sha256": "e523b4d73aac22fa615b8203ba00fccdb91de1de0cba42c6b1ba6217f368f6e5",
+      "core_pg16_payload_sha256": "f7e56be70358ef57da6384dbfc66e91a17261e781ac04d85924a250f6c90de88",
+      "source_event_id": "SYN-EVT-CA2638D022EF7BBAFFF2"
+    },
+    {
+      "acme_fixture_full_sha256": "1f840bf9c4d0ac73b852930625fb81bd0d0aa08e5af29caa5bf3e250b29b0558",
+      "acme_fixture_payload_sha256": "cfc1119cc38010bf5a54ae433ec10239c3886829ca1de22521367faa4dcc1b01",
+      "core_pg16_full_event_sha256": "f62821241c8af5e56ee3990d8fc8288fbb10b90e614591ba413b150d5ff2ca5a",
+      "core_pg16_payload_sha256": "3d99ab5e6ff686b9d91ccb703a6416a6e7b715461378e7ef762ade0d6372d3a3",
+      "source_event_id": "SYN-EVT-DD341274D02FFBC6763E"
+    },
+    {
+      "acme_fixture_full_sha256": "aabfea3c0a88f042d11d3e7bc4af9df2a580e2b66e43f6eed2408c8ea7f67b23",
+      "acme_fixture_payload_sha256": "a158af34136e8bf43718cdad465f9b3ec85337252688a3f09d4d0484affaeb66",
+      "core_pg16_full_event_sha256": "1c705b2ab9007c51a6644110af24597d33e6d9334127f58cecf81422e642c84a",
+      "core_pg16_payload_sha256": "af577beb6419ed5a2bd6eac16935eab99472847fcf4515366bfd81fcd5a8bebc",
+      "source_event_id": "SYN-EVT-E3DBA69E2B38BD179315"
+    }
+  ],
+  "graph_version": "67f0124a2c3b450e5249165e719a5d943fdd7237",
+  "hash_domains": {
+    "full_event": "aiops.core-full-run-event.v1",
+    "payload": "aiops.core-source-event-payload.v1"
+  },
+  "hash_mismatch": "UNKNOWN",
+  "human_glpi_attested": false,
+  "incident_id": "INC-GRAPH005",
+  "installed": [
+    "001",
+    "004",
+    "009",
+    "010",
+    "011",
+    "012",
+    "013",
+    "014",
+    "015"
+  ],
+  "link_status": "UNKNOWN",
+  "native_pg16_restore": true,
+  "negative_cases": {
+    "expired": "UNKNOWN",
+    "foreign_actor": "UNKNOWN",
+    "foreign_incident": "UNKNOWN",
+    "foreign_run": "UNKNOWN",
+    "foreign_tenant": "UNKNOWN",
+    "foreign_ticket": "UNKNOWN",
+    "revoked": "UNKNOWN"
+  },
+  "portable_signature": "NONE",
+  "producer": "core.canonical_seven_pg_source.read_graph005_core_written_seven",
+  "receipt_sha256": "ceceff9e71ca414f2e5b0d9272408c10a3df7c2e405609d174036d419f989de2",
+  "release_stable": "NO_GO",
+  "run_id": "RUN-GRAPH005",
+  "schema": "aiops.core-graph005-seven-015-source-receipt.v1",
+  "source_fixture_only": true,
+  "source_head": "3d4880256d5ffce0a403565ea12dffef2b0bf8e7",
+  "stale": "UNKNOWN",
+  "tenant_id": "TEN-GRAPH005",
+  "transport": "DISPOSABLE_TLS_BASIC_BOUND",
+  "writer": "core.main.app /api/runs/{rid}/events"
+}

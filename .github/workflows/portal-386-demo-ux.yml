@@ -1,0 +1,77 @@
+name: Portal #386 DemoCenter recorder exact-head browser gate
+on:
+  pull_request:
+    branches:
+      - fix/portal-385-noc-operator-20261103
+      - integration/enterprise-slice-main-20261031-2230
+    paths:
+      - app/portal/main.py
+      - app/portal/operator_workspace.py
+      - app/portal/operator_workspace.css
+      - app/portal/operator_workspace.js
+      - tests/test_portal_operator_workspace.py
+      - app/portal/demo_center.py
+      - app/portal/demo_center_recorder.js
+      - tests/test_portal_demo_center_386.py
+      - tests/test_portal_demo_center_playwright_386.py
+      - .github/workflows/portal-386-demo-ux.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  democenter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Assert exact HEAD
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Install disposable portal/browser dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r app/requirements.txt 'cryptography==46.0.4' 'playwright==1.55.0' 'httpx==0.28.1'
+          python -m playwright install --with-deps chromium
+      - name: Compile source and browser script
+        run: |
+          python -m py_compile app/portal/main.py app/portal/operator_workspace.py tests/test_portal_operator_workspace.py app/portal/demo_center.py tests/test_portal_demo_center_386.py tests/test_portal_demo_center_playwright_386.py app/portal/demo_v2.py app/portal/ui_theme.py tests/test_demo_v2.py tests/test_portal_demo_studio_v2_386.py
+          node --check app/portal/demo_center_recorder.js
+          node --check app/portal/operator_workspace.js
+      - name: DemoCenter source and no-effect gates
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: python -m unittest discover -s tests -p test_portal_demo_center_386.py -v
+      - name: Modern operator workspace no-token and source authority regression
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: |
+          python -m unittest discover -s tests -p test_portal_operator_workspace.py -v
+          python -m unittest discover -s tests -p test_portal_bootstrap_auth.py -v
+      - name: Historical Demo Studio V2 restored renderer and no-effect route
+        env:
+          PYTHONPATH: app
+          AIOPS_INTERNAL_TOKEN: disposable-ci-not-live
+        run: |
+          python -m unittest discover -s tests -p test_demo_v2.py -v
+          python -m unittest discover -s tests -p test_portal_demo_studio_v2_386.py -v
+      - name: Real Chromium loopback navigation and mocked recorder UI
+        env:
+          PYTHONPATH: app
+          AIOPS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/democenter-ci
+        run: python -m unittest discover -s tests -p test_portal_demo_center_playwright_386.py -v
+      - name: Upload CI-only synthetic screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: democenter-386-loopback-ci-synthetic
+          path: ${{ runner.temp }}/democenter-ci/
+          if-no-files-found: warn
+          retention-days: 7

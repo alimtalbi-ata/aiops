@@ -1,0 +1,60 @@
+{
+  "actor_subject": null,
+  "core_receipt_schema": "aiops.core-canonical-seven-source-receipt.v1",
+  "events": [
+    {
+      "full_event_sha256": "546e241258dd9fef9bf1ffcc07cab82d9df0cf6a93013f628f37101532a9d442",
+      "payload_sha256": "8848645cc4fc2e5839e5d30bce8479d69942d2e61ec32a982c5754528f844853",
+      "sequence": 1,
+      "source_event_id": "SYN-EVT-D339C4CF0B5DD5FBE166"
+    },
+    {
+      "full_event_sha256": "a0abd6e653d1e6baa864d20c864a50eeb4e4b373ebb801214f682875c5a29b5e",
+      "payload_sha256": "37e9d0f710b180a769d0841d0fa1378af4659f735b26ded8cece3cff9043f629",
+      "sequence": 2,
+      "source_event_id": "SYN-EVT-5085CE4F452216CA6368"
+    },
+    {
+      "full_event_sha256": "83107df6aa29a369df0f081d673a2be38b498ae22f08b0188e0b1d6b81ec8860",
+      "payload_sha256": "e4005cc3d7c6aadaef23efc2d11d27406e38aa72213b89a6ad19f8520f671288",
+      "sequence": 3,
+      "source_event_id": "SYN-EVT-07FBFC9BA5CF807877E9"
+    },
+    {
+      "full_event_sha256": "b665fd6bb533e77cc406e4aba86cf0dd112f3dbcf47dcda4d7b8f9a96a73ecd4",
+      "payload_sha256": "9eed67290d3a134c1a043d18a9580ac6b7428994cd6f3268b1fc9ac9e2f0f10d",
+      "sequence": 4,
+      "source_event_id": "SYN-EVT-C09C5E66551CFA5D66E5"
+    },
+    {
+      "full_event_sha256": "c989343034af85ab341d108b8bef439990a631f1046f165a4b08f1720d8d246e",
+      "payload_sha256": "643d365c6586050e41bc2fce7d465f4e15a2e42c2048fbda874c9a46cbfed42b",
+      "sequence": 5,
+      "source_event_id": "SYN-EVT-CA2638D022EF7BBAFFF2"
+    },
+    {
+      "full_event_sha256": "f399d6d3d4e289630bbac866745eaf29320ec3637a03964c90c50da5d4cfb165",
+      "payload_sha256": "1b303b2cd3764b0e88886d2256896bd3ff6fca2c3f0b7a041dbf3d688a9063bd",
+      "sequence": 6,
+      "source_event_id": "SYN-EVT-DD341274D02FFBC6763E"
+    },
+    {
+      "full_event_sha256": "65aeab324f237952e4b44556b43d462e14a14a65d3397ad1b28e3bc7615c3a7f",
+      "payload_sha256": "deb5a292f8105d733aabd8533339c4ef2bc3ec842af340860f22bb67dac3e374",
+      "sequence": 7,
+      "source_event_id": "SYN-EVT-E3DBA69E2B38BD179315"
+    }
+  ],
+  "evidence_ids": [],
+  "glpi_ticket_id": null,
+  "hash_domains": {
+    "full_event": "aiops.core-full-run-event.v1",
+    "payload": "aiops.core-source-event-payload.v1"
+  },
+  "hitl_approval": null,
+  "incident_id": null,
+  "provenance": "TEST_ONLY_UNTRUSTED_NOT_PG16",
+  "run_id": null,
+  "schema": "aiops.acme.independent-test-core-hash-vector.v1",
+  "tenant_id": null
+}
