@@ -79,6 +79,8 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     const item = document.createElement('li');
     item.setAttribute('data-step', step.id);
     item.setAttribute('data-state', step.state);
+    // Native busy semantics are scoped to the pending step, never the whole journey.
+    if (step.state === 'LOADING') item.setAttribute('aria-busy', 'true');
     const label = document.createElement('strong');
     label.textContent = step.label;
     const status = document.createElement('span');
