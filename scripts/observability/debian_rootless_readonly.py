@@ -101,8 +101,10 @@ def main():
             cmd(["docker", "image", "ls", "-q", "--no-trunc"]),
             inventory_count(["docker", "image", "ls", "-q", "--no-trunc"]))
         s["docker_version"] = cmd(["docker", "version", "--format", "{{.Client.Version}}"])
-        s["user_units"] = safe_lines(cmd(["systemctl", "--user", "list-units",
-             "--type=service", "--all", "--no-legend", "--plain", "--no-pager"]), 100)
+        # Unit names and descriptions are free text; store only an aggregate count.
+        # Failed systemctl remains UNKNOWN, not a fabricated zero.
+        s["user_units"] = inventory_count(["systemctl", "--user", "list-units",
+             "--type=service", "--all", "--no-legend", "--plain", "--no-pager"])
         # Only cron schedule presence, not command contents (may contain secrets).
         cron = cmd(["crontab", "-l"])
         s["cron"] = {"state": cron["state"], "entries": sum(
