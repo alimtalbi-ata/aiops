@@ -28,6 +28,40 @@ jobs:
         run: python -m pip install --disable-pip-version-check "fastapi==0.116.1" "pydantic==2.11.7" "httpx==0.28.1" "requests==2.32.4"
       - name: Daily quality schedule contract
         run: python -m unittest discover -s tests -p "test_quality_schedule_contract.py" -v
+      - name: GLPI existing-ticket identity authority negative regressions (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_sync_authority.py" -v
+      - name: GLPI Portal handoff preservation and Copilot non-claim regression (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_copilot_preservation.py" -v
+      - name: GLPI to Copilot canonical context refusal contract (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_copilot_context_gate.py" -v
+      - name: GLPI and Core dual-readback adapter contract (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_copilot_readback.py" -v
+      - name: GLPI and Core real response-shape normalization (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_raw_readback.py" -v
+      - name: GLPI/Core raw readback association comparison (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_readback_comparison.py" -v
+      - name: GLPI signed xref verifier boundary (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_signed_xref_boundary.py" -v
+      - name: GLPI signed xref and raw Core GLPI qualification pipeline (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_raw_qualification.py" -v
+      - name: GLPI HMAC xref signature ACL expiry and replay regressions (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_xref_hmac_verifier.py" -v
+      - name: GLPI HMAC-backed canonical xref resolver composition (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_xref_resolver_factory.py" -v
+      - name: GLPI HMAC verified xref and Core GLPI readback integration (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_hmac_qualification.py" -v
+      - name: GLPI PostgreSQL signed-xref nonce replay barrier (offline DB-API contract)
+        run: python -m unittest discover -s tests -p "test_glpi_xref_postgres_nonce.py" -v
+      - name: GLPI and Core GET-only HTTP ACL adapter regressions (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_http_readers.py" -v
+      - name: GLPI REST session authenticated ticket GET and cleanup (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_session_readonly.py" -v
+      - name: GLPI complete HMAC ACL Core GLPI authenticated read-only chain (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_full_readonly_chain.py" -v
+      - name: GLPI server-side HMAC ACL authenticated read-only assembly (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_server_readonly_assembly.py" -v
+      - name: GLPI Core authenticated GET-only JSON transport security (offline only)
+        run: python -m unittest discover -s tests -p "test_glpi_http_json_transport.py" -v
       - name: Compile Python source
         run: python -m compileall -q app tests
       - name: Policy safety unit tests
@@ -131,6 +165,10 @@ jobs:
               for name in ("001_schema.sql", "004_operational_model.sql"):
                   c.execute((Path("db/migrations") / name).read_text())
           PY
+      - name: GLPI nonce replay barrier against real disposable PostgreSQL
+        env:
+          AIOPS_GLPI_NONCE_REAL_PG_CI: "1"
+        run: python -m unittest discover -s tests -p "test_glpi_xref_postgres_real_integration.py" -v
       - name: Start actual Core HTTP service and verify readiness
         run: |
           PYTHONPATH=app python -m uvicorn core.main:app --host 127.0.0.1 --port 1810 > /tmp/aiops-core-ci.log 2>&1 &
