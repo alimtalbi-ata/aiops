@@ -16,7 +16,7 @@ ALLOWED_MODES = {"LIVE", "DEMO", "REPLAY"}
 
 def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
                       observed_at, now, source, mode, window_seconds,
-                      generation, expected_generation):
+                      generation, expected_generation, cancelled=False, timed_out=False):
     """Return safe envelope. Authorization is mandatory before sample inspection.
 
     Caller MUST derive actor/tenant/authorized_tenants from verified server session,
@@ -28,6 +28,12 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
     if (not isinstance(authorized_tenants, (set, frozenset, tuple, list))
             or tenant not in authorized_tenants):
         return {"http_status": 403, "state": "BLOCKED", "data": None, "reason": "TENANT_DENIED"}
+    if cancelled is True:
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "CANCELLED"}
+    if timed_out is True:
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "UPSTREAM_TIMEOUT"}
+    if type(cancelled) is not bool or type(timed_out) is not bool:
+        return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_REQUEST_STATE"}
     if (not isinstance(mode, str) or not isinstance(metric, str)
             or mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS):
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_SCOPE"}
