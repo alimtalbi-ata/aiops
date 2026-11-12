@@ -79,7 +79,7 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     const label = document.createElement('strong');
     label.textContent = step.label;
     const status = document.createElement('span');
-    status.textContent = 'État : ' + step.state;
+    status.textContent = 'État : ' + step.state + (step.state === 'AVAILABLE' ? ' (données consultables, non validées)' : '');
     const detail = document.createElement('p');
     detail.textContent = step.detail;
     const guidance = document.createElement('p');
