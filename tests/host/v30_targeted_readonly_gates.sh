@@ -86,9 +86,17 @@ done
 # Receipt candidates: counts only, never names, contents, commands or credentials.
 report_dir=/home/aiops/aiops-debian-audit/reports/SRV-DEB-05/2026-11-12
 if [[ -d "$report_dir" ]]; then
-  receipt_count=$(find "$report_dir" -maxdepth 4 -type f \\( -iname '*receipt*' -o -iname '*publish*' \\) -printf '.' 2>/dev/null | wc -c)
-  echo "REPORT_RECEIPT_CANDIDATE_COUNT=$receipt_count"
-  if (( receipt_count == 0 )); then receipt_review=1; fi
+  # Use separate find predicates: shell-safe, no filenames or receipt contents exposed.
+  # A candidate count never attests job execution or a published-report SHA.
+  if ! receipt_count=$(find "$report_dir" -maxdepth 4 -type f \
+      \( -iname '*receipt*' -o -iname '*publish*' \) \
+      -printf '.' 2>/dev/null | wc -c); then
+    echo 'REPORT_RECEIPTS=UNKNOWN reason=scan_failed'
+    receipt_review=1
+  else
+    echo "REPORT_RECEIPT_CANDIDATE_COUNT=$receipt_count"
+    if (( receipt_count == 0 )); then receipt_review=1; fi
+  fi
   echo 'REPORT_RECEIPT_CORRELATION=UNKNOWN requires_job_timestamp_and_published_sha'
 else
   echo 'REPORT_RECEIPTS=UNKNOWN location_not_attested'; receipt_review=1
