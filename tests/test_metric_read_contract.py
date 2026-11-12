@@ -70,6 +70,23 @@ class MetricReadContractTests(unittest.TestCase):
     def test_boolean_generation_fails_closed(self):
         self.check("UNKNOWN", generation=True, expected_generation=1)
 
+    def test_cpu_utilization_outside_ratio_bounds_unknown(self):
+        for value in (-0.01, 1.01):
+            with self.subTest(value=value):
+                result = self.check("UNKNOWN", metric="node_cpu_utilization", value=value)
+                self.assertEqual(result["reason"], "OUT_OF_RANGE_SAMPLE")
+
+    def test_negative_resource_and_request_samples_unknown(self):
+        for metric in ("node_memory_used", "node_filesystem_available", "http_requests_rate"):
+            with self.subTest(metric=metric):
+                result = self.check("UNKNOWN", metric=metric, value=-1)
+                self.assertEqual(result["reason"], "OUT_OF_RANGE_SAMPLE")
+
+    def test_boundary_samples_remain_ready(self):
+        self.check("READY", metric="node_cpu_utilization", value=0)
+        self.check("READY", metric="node_cpu_utilization", value=1)
+        self.check("READY", metric="node_filesystem_available", value=0)
+
     def test_bad_mode(self):
         self.check("BLOCKED", mode="LIVE_WRITE")
 
