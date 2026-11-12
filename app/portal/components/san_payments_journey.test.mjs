@@ -167,3 +167,25 @@ test('synthetic: AVAILABLE is visibly consultable but never validated or READY',
   assert.ok(describeSanPaymentsJourney({ incident: { state: 'AVAILABLE' } })
     .every(step => step.isOperationalClaim === false));
 });
+
+test('synthetic: demo coverage summary counts only displayed stages, never platform health', () => {
+  const document = { createElement(tag) {
+    return { tag, attributes: {}, children: [], textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const root = { append() {} };
+  const nav = renderSanPaymentsJourney(document, root, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC' },
+    impact: { state: 'BLOCKED' },
+    noc: { state: 'ERROR' },
+    run: { state: 'LOADING' }
+  });
+  assert.equal(nav.children[2].children.length, 8);
+  const summary = nav.children[3];
+  assert.equal(summary.tag, 'p');
+  assert.match(summary.textContent, /5 étape\(s\) sans information exploitable/);
+  assert.match(summary.textContent, /1 étape\(s\) bloquée\(s\)/);
+  assert.match(summary.textContent, /pas un indicateur de santé/);
+  assert.doesNotMatch(summary.textContent, /READY|production saine/);
+});
