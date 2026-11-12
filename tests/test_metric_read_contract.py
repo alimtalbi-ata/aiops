@@ -50,6 +50,14 @@ class MetricReadContractTests(unittest.TestCase):
     def test_unapproved_metric(self):
         self.check("BLOCKED", metric="up{job='anything'}")
 
+    def test_unhashable_scope_is_blocked_not_exception(self):
+        for field in ("metric", "mode"):
+            for malformed in ([], {}, set()):
+                with self.subTest(field=field, malformed=type(malformed).__name__):
+                    result = self.check("BLOCKED", **{field: malformed})
+                    self.assertEqual(result["http_status"], 400)
+                    self.assertEqual(result["reason"], "INVALID_SCOPE")
+
     def test_stale_generation(self):
         self.check("UNKNOWN", generation=3)
 
