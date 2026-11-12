@@ -97,7 +97,8 @@ jobs:
         run: docker compose --env-file .env --profile qualification build aiops2-model-evaluator
 
   database-migrations:
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04 provides PostgreSQL 16 clients; latest (26.04) does not.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
