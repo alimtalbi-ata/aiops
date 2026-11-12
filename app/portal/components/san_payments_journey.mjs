@@ -27,8 +27,10 @@ const text = value => typeof value === 'string' && value.trim() ? value.trim() :
 
 /** Explicitly never interprets a missing record as completed or approved. */
 export function describeSanPaymentsJourney(records = {}) {
+  // A null/primitive response must never crash the demo or imply an available step.
+  const safeRecords = records !== null && typeof records === 'object' ? records : {};
   return SAN_PAYMENTS_STEPS.map(step => {
-    const record = Object.hasOwn(records, step.id) ? records[step.id] : null;
+    const record = Object.hasOwn(safeRecords, step.id) ? safeRecords[step.id] : null;
     const state = ALLOWED.has(record?.state) ? record.state : 'UNKNOWN';
     return Object.freeze({
       id: step.id, label: step.label, state, guidance: GUIDANCE[state],
