@@ -48,7 +48,8 @@ def inventory(result, count, limit=150):
                 "count": count}
     rows = result["value"].splitlines()
     if len(rows) > limit or count["count"] != len(rows):
-        return {"state": "UNKNOWN", "reason": "INVENTORY_TRUNCATED",
+        reason = "INVENTORY_COUNT_MISMATCH" if count["count"] < len(rows) else "INVENTORY_TRUNCATED"
+        return {"state": "UNKNOWN", "reason": reason,
                 "items": rows[:limit], "count": count["count"], "complete": False}
     return {"state": "OBSERVED", "items": rows, "count": count["count"], "complete": True}
 
