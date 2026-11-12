@@ -228,3 +228,21 @@ test('synthetic: coverage breakdown distinguishes UNKNOWN, ERROR and EMPTY witho
   assert.match(summary, /1 étape\(s\) en chargement/);
   assert.match(summary, /pas un indicateur de santé/);
 });
+
+
+test('synthetic: explicit synthetic provenance warning never implies production data', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: 'not verified' },
+    impact: { state: 'AVAILABLE', source: 'authorized source' }
+  });
+  const items = nav.children[2].children;
+  assert.match(items[0].children[4].textContent, /DONNÉES SYNTHÉTIQUES — démonstration uniquement/);
+  assert.match(items[0].children[4].textContent, /Source déclarée : SYNTHETIC/);
+  assert.doesNotMatch(items[1].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+  assert.equal(items[0].children[1].textContent, 'État : AVAILABLE (données consultables, non validées)');
+});
