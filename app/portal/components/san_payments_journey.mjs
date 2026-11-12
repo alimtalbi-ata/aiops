@@ -76,6 +76,9 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
   } catch { /* Invalid adapter metadata fails closed to UNKNOWN. */ }
   const nav = document.createElement('nav');
   nav.setAttribute('aria-label', 'Parcours de démonstration SAN vers Payments');
+  // Expose the same fail-closed mode to CSS and assistive technology without implying LIVE.
+  nav.setAttribute('data-mode', declaredMode);
+  nav.setAttribute('aria-label', 'Parcours SAN vers Payments — mode ' + declaredMode);
   const heading = document.createElement('h2');
   heading.textContent = 'SAN → Payments';
   const note = document.createElement('p');
