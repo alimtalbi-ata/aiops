@@ -3,16 +3,23 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-12T11:47:01.818859+00:00",
+  "collected_at": "2026-11-12T11:48:01.707862+00:00",
   "docker": {
     "available": true,
     "containers": [
       {
         "health": "no-healthcheck",
-        "image": "aiops2-portal:glpi-sync-v3",
+        "image": "aiops2-portal:v30-qualification",
         "inspect_ok": true,
         "name": "aiops2-portal-v3-qual-exposed",
         "state": "running"
+      },
+      {
+        "health": "no-healthcheck",
+        "image": "aiops2-portal:glpi-sync-v3",
+        "inspect_ok": true,
+        "name": "aiops2-portal-v3-qual-exposed-rollback-20261112T114745Z",
+        "state": "exited"
       },
       {
         "health": "no-healthcheck",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-twin-1",
         "state": "exited"
-      },
-      {
-        "health": "no-healthcheck",
-        "image": "aiops2-v27-qual-aiops2-evidence",
-        "inspect_ok": true,
-        "name": "aiops2-v27-qual-aiops2-evidence-1",
-        "state": "exited"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 5 weeks, 1 day, 1 hour, 58 minutes"
+    "uptime": "up 5 weeks, 1 day, 1 hour, 59 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 137830060032,
+      "free_bytes": 137828458496,
       "total_bytes": 172898033664,
-      "used_bytes": 26210652160
+      "used_bytes": 26212253696
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.83349609375,
-      0.919921875,
-      0.98388671875
+      0.8427734375,
+      0.92822265625,
+      0.98486328125
     ],
     "memory_bytes": {
-      "MemAvailable": 19184574464,
+      "MemAvailable": 19101818880,
       "MemTotal": 25205911552,
       "SwapFree": 10424250368,
       "SwapTotal": 10838077440
