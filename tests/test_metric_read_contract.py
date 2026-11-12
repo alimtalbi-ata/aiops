@@ -113,6 +113,27 @@ class MetricReadContractTests(unittest.TestCase):
         self.check("READY", metric="node_cpu_utilization", value=1)
         self.check("READY", metric="node_filesystem_available", value=0)
 
+    def test_cancelled_read_never_returns_sample(self):
+        result = self.check("UNKNOWN", cancelled=True)
+        self.assertEqual(result["reason"], "CANCELLED")
+
+    def test_timed_out_read_never_returns_sample(self):
+        result = self.check("UNKNOWN", timed_out=True)
+        self.assertEqual(result["reason"], "UPSTREAM_TIMEOUT")
+
+    def test_acl_precedes_cancellation_and_timeout(self):
+        for flag in ("cancelled", "timed_out"):
+            with self.subTest(flag=flag):
+                result = self.check("BLOCKED", tenant="other", **{flag: True})
+                self.assertEqual(result["http_status"], 403)
+
+    def test_malformed_request_state_is_blocked(self):
+        for flag in ("cancelled", "timed_out"):
+            for invalid in (None, 1, "false", []):
+                with self.subTest(flag=flag, invalid=invalid):
+                    result = self.check("BLOCKED", **{flag: invalid})
+                    self.assertEqual(result["reason"], "INVALID_REQUEST_STATE")
+
     def test_bad_mode(self):
         self.check("BLOCKED", mode="LIVE_WRITE")
 
