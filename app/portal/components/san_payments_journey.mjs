@@ -86,7 +86,9 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     const guidance = document.createElement('p');
     guidance.textContent = step.guidance;
     const provenance = document.createElement('small');
-    provenance.textContent = (step.source.toUpperCase() === 'SYNTHETIC' ? 'DONNÉES SYNTHÉTIQUES — démonstration uniquement · ' : '') +
+    provenance.textContent = (step.source === 'Source non renseignée' ? 'PROVENANCE INCOMPLÈTE — source non vérifiable · ' : '') +
+      (step.observedAt === 'Fraîcheur inconnue' ? 'FRAÎCHEUR INCONNUE — aucune date vérifiée · ' : '') +
+      (step.source.toUpperCase() === 'SYNTHETIC' ? 'DONNÉES SYNTHÉTIQUES — démonstration uniquement · ' : '') +
       'Source déclarée : ' + step.source + ' · Horodatage déclaré : ' + step.observedAt;
     item.append(label, status, detail, guidance, provenance);
     list.append(item);
