@@ -63,7 +63,7 @@ test('synthetic: provenance and guidance are text, not inferred evidence', () =>
     decision: { state: 'BLOCKED', source: 'SYNTHETIC', observedAt: 'not verified' }
   });
   const decision = nav.children[2].children[6];
-  assert.match(decision.children[2].textContent, /Policy\/HITL/);
+  assert.match(decision.children[3].textContent, /Policy\/HITL/);
   assert.match(decision.children[4].textContent, /Source déclarée : SYNTHETIC/);
   assert.match(decision.children[4].textContent, /Horodatage déclaré : not verified/);
 });
