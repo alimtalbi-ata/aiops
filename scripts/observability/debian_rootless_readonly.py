@@ -46,8 +46,13 @@ def inventory(result, count, limit=150):
     if result["state"] != "OBSERVED" or count["state"] != "OBSERVED":
         return {"state": "UNKNOWN", "reason": "INVENTORY_UNVERIFIED", "items": [],
                 "count": count}
+    # Fail closed on malformed/untrusted count envelopes, not TypeError/false completeness.
+    n = count.get("count")
+    if type(n) is not int or n < 0 or type(limit) is not int or limit < 1 or not isinstance(result.get("value"), str):
+        return {"state": "UNKNOWN", "reason": "INVENTORY_COUNT_INVALID",
+                "items": [], "complete": False}
     rows = result["value"].splitlines()
-    if len(rows) > limit or count["count"] != len(rows):
+    if len(rows) > limit or n != len(rows):
         reason = "INVENTORY_COUNT_MISMATCH" if count["count"] < len(rows) else "INVENTORY_TRUNCATED"
         return {"state": "UNKNOWN", "reason": reason,
                 "items": rows[:limit], "count": count["count"], "complete": False}
