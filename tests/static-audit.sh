@@ -7,6 +7,8 @@ for p in pathlib.Path('app').rglob('*.py'): ast.parse(p.read_text(),filename=str
 PY
 for f in app/*/Dockerfile; do test -f "$f" || { echo "FAIL|dockerfile|$f"; exit 1; }; done
 grep -Fq 'AIOPS_PORTAL_HOST_PORT:-17777}:777' compose.yml
+grep -Fq 'AIOPS_PORTAL_HOST_PORT:-17777}:777' deploy/preflight.sh
+grep -Fq 'Portal: `http://<VM>:17777`' docs/README-DEPLOY.md
 grep -q '8080:80' compose.yml
 grep -q '5678:5678' compose.yml
 grep -q '9090:9090' compose.yml
