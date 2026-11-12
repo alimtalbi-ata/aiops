@@ -116,8 +116,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 16 client matching disposable server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          # Ubuntu may expose newer client binaries first; pin the tools used by the DR drill.
+          echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
+          /usr/lib/postgresql/16/bin/pg_dump --version | grep -E '^pg_dump \(PostgreSQL\) 16\.'
+          /usr/lib/postgresql/16/bin/pg_restore --version | grep -E '^pg_restore \(PostgreSQL\) 16\.'
       - name: Apply complete migration chain to disposable PostgreSQL
         env:
           PGPASSWORD: ci-only-password
