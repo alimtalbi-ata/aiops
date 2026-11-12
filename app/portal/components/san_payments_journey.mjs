@@ -75,16 +75,18 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
         ['DEMO', 'REPLAY'].includes(options.mode)) declaredMode = options.mode;
   } catch { /* Invalid adapter metadata fails closed to UNKNOWN. */ }
   const nav = document.createElement('nav');
-  nav.setAttribute('aria-label', 'Parcours de démonstration SAN vers Payments');
   // Expose the same fail-closed mode to CSS and assistive technology without implying LIVE.
   nav.setAttribute('data-mode', declaredMode);
   nav.setAttribute('aria-label', 'Parcours SAN vers Payments — mode ' + declaredMode);
   const heading = document.createElement('h2');
   heading.textContent = 'SAN → Payments';
   const note = document.createElement('p');
-  note.textContent = 'Mode : ' + declaredMode +
-    (declaredMode === 'UNKNOWN' ? ' — mode non attesté, LIVE non revendiqué.' :
-      ' — données de démonstration/rejeu, jamais une opération LIVE.') +
+  const modeExplanation = {
+    UNKNOWN: 'mode non attesté, LIVE non revendiqué.',
+    DEMO: 'démonstration uniquement, aucune opération LIVE.',
+    REPLAY: 'rejeu déclaré, données historiques non attestées ; aucune opération LIVE.'
+  }[declaredMode];
+  note.textContent = 'Mode : ' + declaredMode + ' — ' + modeExplanation +
     ' Étapes de démonstration : aucune validation opérationnelle implicite.';
   const steps = describeSanPaymentsJourney(records);
   const list = document.createElement('ol');
