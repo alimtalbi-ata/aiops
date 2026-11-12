@@ -98,6 +98,8 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
     item.setAttribute('data-provenance', isSyntheticSource(step.source) ? 'SYNTHETIC' :
       (step.source === 'Source non renseignée' || step.observedAt === 'Fraîcheur inconnue') ?
         'INCOMPLETE' : 'DECLARED_UNVERIFIED');
+    // Freshness is orthogonal to source provenance: synthetic records can also lack a timestamp.
+    item.setAttribute('data-freshness', step.observedAt === 'Fraîcheur inconnue' ? 'UNKNOWN' : 'DECLARED_UNVERIFIED');
     // Native busy semantics are scoped to the pending step, never the whole journey.
     if (step.state === 'LOADING') item.setAttribute('aria-busy', 'true');
     const label = document.createElement('strong');
