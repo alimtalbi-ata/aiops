@@ -77,14 +77,16 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     item.setAttribute('data-step', step.id);
     item.setAttribute('data-state', step.state);
     const label = document.createElement('strong');
-    label.textContent = step.label + ' — ' + step.state;
+    label.textContent = step.label;
+    const status = document.createElement('span');
+    status.textContent = 'État : ' + step.state;
     const detail = document.createElement('p');
     detail.textContent = step.detail;
     const guidance = document.createElement('p');
     guidance.textContent = step.guidance;
     const provenance = document.createElement('small');
     provenance.textContent = 'Source déclarée : ' + step.source + ' · Horodatage déclaré : ' + step.observedAt;
-    item.append(label, detail, guidance, provenance);
+    item.append(label, status, detail, guidance, provenance);
     list.append(item);
   }
   nav.append(heading, note, list);
