@@ -325,6 +325,6 @@ test('synthetic: declared synthetic source variants are never presented without 
     assert.match(items[i].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
   }
   assert.doesNotMatch(items[3].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
-  assert.match(nav.children[3].textContent, /3 source\\(s\\) SYNTHETIC/);
+  assert.match(nav.children[3].textContent, /3 source\(s\) SYNTHETIC/);
   assert.match(items[0].children[1].textContent, /non validées/);
 });
