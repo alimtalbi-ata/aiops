@@ -367,3 +367,20 @@ test('synthetic: mode declaration defaults UNKNOWN and never labels a LIVE sessi
     .children[1].textContent, /Mode : UNKNOWN/);
   assert.equal(unknown.children[2].children[0].attributes['data-state'], 'AVAILABLE');
 });
+
+
+test('synthetic: accessible navigation and CSS mode always fail closed for LIVE or invalid mode', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const render = options => renderSanPaymentsJourney(document, { append() {} }, {}, options);
+  for (const [options, expected] of [[undefined, 'UNKNOWN'], [{ mode: 'LIVE' }, 'UNKNOWN'],
+    [{ mode: 'DEMO' }, 'DEMO'], [{ mode: 'REPLAY' }, 'REPLAY'], [{ mode: 'READY' }, 'UNKNOWN']]) {
+    const nav = render(options);
+    assert.equal(nav.attributes['data-mode'], expected);
+    assert.match(nav.attributes['aria-label'], new RegExp('mode ' + expected + '$'));
+    assert.equal(nav.children[2].children.length, 8);
+  }
+});
