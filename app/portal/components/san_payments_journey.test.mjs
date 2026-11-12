@@ -67,3 +67,27 @@ test('synthetic: provenance and guidance are text, not inferred evidence', () =>
   assert.match(decision.children[3].textContent, /Source déclarée : SYNTHETIC/);
   assert.match(decision.children[3].textContent, /Horodatage déclaré : not verified/);
 });
+
+test('synthetic: null, undefined and primitive payloads fail closed to UNKNOWN', () => {
+  for (const payload of [null, undefined, false, 0, 'SYNTHETIC malformed response']) {
+    const steps = describeSanPaymentsJourney(payload);
+    assert.equal(steps.length, 8);
+    assert.ok(steps.every(step => step.state === 'UNKNOWN' && !step.isOperationalClaim));
+  }
+});
+
+test('synthetic: rendering with null response retains eight accessible UNKNOWN steps', () => {
+  const document = { createElement(tag) {
+    return { tag, attributes: {}, children: [], textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const root = { children: [], append(node) { this.children.push(node); } };
+  const nav = renderSanPaymentsJourney(document, root, null);
+  assert.equal(nav.tag, 'nav');
+  assert.ok(nav.attributes['aria-label']);
+  const list = nav.children[2];
+  assert.equal(list.tag, 'ol');
+  assert.equal(list.children.length, 8);
+  assert.ok(list.children.every(item => item.attributes['data-state'] === 'UNKNOWN'));
+});
