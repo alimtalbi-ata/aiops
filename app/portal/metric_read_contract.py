@@ -16,7 +16,8 @@ ALLOWED_MODES = {"LIVE", "DEMO", "REPLAY"}
 
 def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
                       observed_at, now, source, mode, window_seconds,
-                      generation, expected_generation, cancelled=False, timed_out=False):
+                      generation, expected_generation, cancelled=False, timed_out=False,
+                      source_attested=False):
     """Return safe envelope. Authorization is mandatory before sample inspection.
 
     Caller MUST derive actor/tenant/authorized_tenants from verified server session,
@@ -43,6 +44,10 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
     unit, max_age = ALLOWED_METRICS[metric]
     if not isinstance(window_seconds, int) or isinstance(window_seconds, bool) or not 0 < window_seconds <= 3600:
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_WINDOW"}
+    # A source label is not evidence that the server fetched or verified a sample.
+    # The trusted adapter must set this only after verifying the upstream response.
+    if source_attested is not True:
+        return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "SOURCE_UNATTESTED"}
     if not isinstance(source, str) or source not in {"prometheus:v30", "prometheus:replay"}:
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "SOURCE_UNATTESTED"}
     if ((mode == "LIVE" and source != "prometheus:v30")
