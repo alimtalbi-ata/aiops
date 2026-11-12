@@ -1,3 +1,17 @@
+# F-031 2026-11-12 10:09 Europe/Paris — CI coverage audit
+
+CODE: Draft protocol `docs/audits/AIOPS2-PORTAL-V3-CI-COVERAGE-F031-20261112.md`; stacked on #689 `f931e4201e441a36f533488b9f32da7dcfc0f9f9`. Negative F-031 recipe: short Docker IDs, duplicate IDs, explicit CI invocation and collector full-ID provenance. NOT_EXECUTED.
+
+CI: #689 workflow [43181259702](https://github.com/alimtalbi-ata/aiops/actions/runs/43181259702) SUCCESS (three jobs), but F-030 test invocation NOT_ATTESTED in enumerated steps. New F-031 SHA/CI to be checked separately. No claim that green CI implies F-030 execution.
+
+DEBIAN: NOT_INSPECTED; no authenticated SRV-DEB-05 access. Docker rootless UID 1001 historical observation only. Candidate collector path on #689 returned 404; location UNKNOWN. No host mutation.
+
+E2E: NOT_VERIFIED; NO_GO until exact-SHA CI test coverage, fresh rootless report, v28/V145/stable/V3 capability parity, portal-only backup/rollback and tenant ACL/HITL smoke.
+
+Rollback: close F-031 Draft or revert documentation commits; no runtime changes.
+
+---
+
 # AIOPS2 / Portal V3 — F-030 2026-11-12 09:13 Europe/Paris
 
 ## CODE
