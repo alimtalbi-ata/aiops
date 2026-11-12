@@ -307,3 +307,24 @@ test('synthetic: provenance coverage counts missing metadata and declared demo s
   assert.match(summary, /pas un indicateur de santé/);
   assert.equal(nav.children[2].children.length, 8);
 });
+
+test('synthetic: declared synthetic source variants are never presented without demo warning', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'synthetic: acme fixture' },
+    impact: { state: 'AVAILABLE', source: 'SYNTHETIC/replay' },
+    noc: { state: 'BLOCKED', source: 'synthetic_fixture' },
+    run: { state: 'UNKNOWN', source: 'synthetically named production adapter' }
+  });
+  const items = nav.children[2].children;
+  for (const i of [0, 1, 2]) {
+    assert.match(items[i].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+  }
+  assert.doesNotMatch(items[3].children[4].textContent, /DONNÉES SYNTHÉTIQUES/);
+  assert.match(nav.children[3].textContent, /3 source\\(s\\) SYNTHETIC/);
+  assert.match(items[0].children[1].textContent, /non validées/);
+});
