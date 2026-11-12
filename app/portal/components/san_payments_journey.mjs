@@ -130,7 +130,7 @@ export function renderSanPaymentsJourney(document, parent, records = {}, options
     ' étape(s) consultable(s), non validée(s). Provenance déclarée : ' + incompleteSource +
     ' source(s) non renseignée(s), ' + unknownFreshness +
     ' horodatage(s) inconnu(s), ' + synthetic +
-    ' source(s) SYNTHETIC (démonstration uniquement). Comptage des étapes affichées uniquement, pas un indicateur de santé.';
+    ' source(s) SYNTHETIC (démonstration uniquement). Les horodatages renseignés sont déclaratifs et ne prouvent pas la fraîcheur. Comptage des étapes affichées uniquement, pas un indicateur de santé.';
   nav.append(heading, note, list, summary);
   parent.append(nav);
   return nav;
