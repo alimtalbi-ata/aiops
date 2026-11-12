@@ -16,13 +16,18 @@ echo 'scope=READ_ONLY V1=7777 V30=7788 LIVE=BLOCKED DEMO_REPLAY=NOT_EXECUTED'
 docker --host "$DOCKER_HOST" info --format 'rootless_security={{json .SecurityOptions}}' 2>/dev/null |
   grep -q 'rootless' || { echo 'ROOTLESS=UNKNOWN reason=daemon_not_attested'; exit 2; }
 echo 'ROOTLESS=ATTESTED'
+gate_fail=0
+bootstrap_review=0
 for port in 7777 7788; do
   for route in / /api/portal/bootstrap /api/portal/session /api/portal/scenarios /api/portal/runs /api/fs-demo/health; do
     code=$(curl --noproxy '*' --silent --output /dev/null --max-time 5 --connect-timeout 2 --write-out '%{http_code}' "http://127.0.0.1:${port}${route}" || true)
     [[ "$code" =~ ^[0-9]{3}$ ]] || code=UNKNOWN
     printf 'HTTP port=%s route=%s code=%s\n' "$port" "$route" "$code"
-    if [[ "$route" == /api/portal/session && "$code" != 401 ]]; then echo "GATE=FAIL session_$port"; fi
-    if [[ "$route" == /api/portal/bootstrap && "$code" != 503 ]]; then echo "GATE=REVIEW bootstrap_$port"; fi
+    if [[ "$route" == /api/portal/session && "$code" != 401 ]]; then echo "GATE=FAIL session_$port"; gate_fail=1; fi
+    if [[ "$route" == /api/portal/bootstrap ]]; then
+      echo "GATE=REVIEW bootstrap_${port}_http_${code}"
+      bootstrap_review=1
+    fi
   done
 done
 # Inventory only named Portal candidates and Grafana/GLPI metadata; no env, mount source paths or volume contents.
@@ -56,3 +61,6 @@ else
   echo 'REPORT_RECEIPTS=UNKNOWN location_not_attested'
 fi
 echo 'ROLLBACK=NO_MUTATION_PERFORMED DB_RESTORE=NOT_EXECUTED'
+if (( gate_fail )); then echo 'QUALIFICATION=FAIL reason=session_regression'; exit 1; fi
+if (( bootstrap_review )); then echo 'QUALIFICATION=UNKNOWN reason=bootstrap_requires_authenticated_review'; exit 2; fi
+echo 'QUALIFICATION=UNKNOWN reason=host_parity_and_rollback_not_attested'; exit 2
