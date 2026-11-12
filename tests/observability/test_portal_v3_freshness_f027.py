@@ -1,13 +1,18 @@
 """F-027: standalone negative release gate, synthetic data only. No network/host access."""
 import datetime as dt
 import unittest
+import re
 
 EXPECTED_SOCKET = "/run/user/1001/docker.sock"
 MAX_AGE = dt.timedelta(hours=2)
 
-def gate(report, ci_sha, candidate_sha, now):
-    if not ci_sha or ci_sha != candidate_sha:
+def gate(report, ci_sha, candidate_sha, now, ci_conclusion=None):
+    if not isinstance(ci_sha, str) or not re.fullmatch(r'[0-9a-f]{40}', ci_sha) or ci_sha != candidate_sha:
         return "NO_GO:SHA_MISMATCH"
+    if ci_conclusion != "success":
+        return "NO_GO:CI_UNVERIFIED"
+    if not isinstance(now, dt.datetime) or now.tzinfo is None or now.utcoffset() is None:
+        return "NO_GO:TIME_UNKNOWN"
     if not isinstance(report, dict):
         return "NO_GO:HOST_UNKNOWN"
     if report.get("uid") != 1001 or report.get("socket") != EXPECTED_SOCKET or report.get("context") != "rootless":
@@ -21,6 +26,8 @@ def gate(report, ci_sha, candidate_sha, now):
             return "NO_GO:HOST_STALE"
     except (ValueError, TypeError, KeyError):
         return "NO_GO:TIME_UNKNOWN"
+    if report.get("complete") is not True:
+        return "NO_GO:INVENTORY_UNVERIFIED"
     for kind in ("images", "containers"):
         listing = report.get(kind)
         count = report.get(kind + "_count")
@@ -38,9 +45,9 @@ class NegativeReleaseGate(unittest.TestCase):
         self.r = dict(uid=1001, socket=EXPECTED_SOCKET, context="rootless",
                       collected_at="2026-11-12T05:30:00+00:00",
                       images=["a", "b"], images_count=2,
-                      containers=["c"], containers_count=1)
+                      containers=["c"], containers_count=1, complete=True)
     def check(self, expected, **changes):
-        self.assertEqual(gate({**self.r, **changes}, "a"*40, "a"*40, self.now), expected)
+        self.assertEqual(gate({**self.r, **changes}, "a"*40, "a"*40, self.now, "success"), expected)
     def test_fresh_inventory_is_not_deployment_approval(self):
         self.check("HOST_EVIDENCE_ELIGIBLE_NOT_DEPLOY_APPROVAL")
     def test_stale(self):
@@ -57,8 +64,18 @@ class NegativeReleaseGate(unittest.TestCase):
         self.check("NO_GO:COUNT_UNKNOWN", images_count=True)
     def test_timeout(self):
         self.check("NO_GO:HOST_UNKNOWN", timed_out=True)
+    def test_ci_missing_or_failed(self):
+        self.assertEqual(gate(self.r, "a"*40, "a"*40, self.now), "NO_GO:CI_UNVERIFIED")
+        self.assertEqual(gate(self.r, "a"*40, "a"*40, self.now, "failure"), "NO_GO:CI_UNVERIFIED")
+    def test_complete_missing_or_false(self):
+        self.check("NO_GO:INVENTORY_UNVERIFIED", complete=False)
+        self.check("NO_GO:INVENTORY_UNVERIFIED", complete=None)
+    def test_naive_now(self):
+        self.assertEqual(gate(self.r, "a"*40, "a"*40, self.now.replace(tzinfo=None), "success"), "NO_GO:TIME_UNKNOWN")
+    def test_non_sha_identifier(self):
+        self.assertEqual(gate(self.r, "candidate", "candidate", self.now, "success"), "NO_GO:SHA_MISMATCH")
     def test_sha_mismatch(self):
-        self.assertEqual(gate(self.r, "a"*40, "b"*40, self.now), "NO_GO:SHA_MISMATCH")
+        self.assertEqual(gate(self.r, "a"*40, "b"*40, self.now, "success"), "NO_GO:SHA_MISMATCH")
 
 if __name__ == "__main__":
     unittest.main()
