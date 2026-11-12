@@ -22,9 +22,11 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
     Caller MUST derive actor/tenant/authorized_tenants from verified server session,
     not from browser parameters. This function is not an authentication adapter.
     """
-    if not actor or not tenant:
+    if (not isinstance(actor, str) or not actor.strip()
+            or not isinstance(tenant, str) or not tenant.strip()):
         return {"http_status": 401, "state": "BLOCKED", "data": None, "reason": "UNAUTHENTICATED"}
-    if not isinstance(authorized_tenants, (set, frozenset, tuple, list)) or tenant not in authorized_tenants:
+    if (not isinstance(authorized_tenants, (set, frozenset, tuple, list))
+            or tenant not in authorized_tenants):
         return {"http_status": 403, "state": "BLOCKED", "data": None, "reason": "TENANT_DENIED"}
     if mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS:
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_SCOPE"}
@@ -50,7 +52,7 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
         return {"http_status": 200, "state": "UNKNOWN", "data": None, "reason": "OUT_OF_RANGE_SAMPLE"}
     try:
         observed = datetime.fromisoformat(observed_at.replace("Z", "+00:00"))
-        if observed.tzinfo is None or now.tzinfo is None:
+        if not isinstance(now, datetime) or observed.tzinfo is None or now.tzinfo is None:
             raise ValueError("timezone required")
         age = (now.astimezone(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()
     except (AttributeError, TypeError, ValueError, OverflowError):
