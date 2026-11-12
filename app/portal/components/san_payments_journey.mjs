@@ -101,13 +101,19 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
   const blocked = steps.filter(step => step.state === 'BLOCKED').length;
   const loading = steps.filter(step => step.state === 'LOADING').length;
   const consultable = steps.filter(step => step.state === 'AVAILABLE').length;
+  const incompleteSource = steps.filter(step => step.source === 'Source non renseignée').length;
+  const unknownFreshness = steps.filter(step => step.observedAt === 'Fraîcheur inconnue').length;
+  const synthetic = steps.filter(step => step.source.toUpperCase() === 'SYNTHETIC').length;
   const summary = document.createElement('p');
   summary.textContent = 'Couverture de la démonstration : ' + unresolved +
     ' étape(s) sans information exploitable (UNKNOWN : ' + unknown +
     ', ERROR : ' + errors + ', EMPTY : ' + empty + ') ; ' + blocked +
     ' étape(s) bloquée(s) ; ' + loading +
     ' étape(s) en chargement ; ' + consultable +
-    ' étape(s) consultable(s), non validée(s). Comptage des étapes affichées uniquement, pas un indicateur de santé.';
+    ' étape(s) consultable(s), non validée(s). Provenance déclarée : ' + incompleteSource +
+    ' source(s) non renseignée(s), ' + unknownFreshness +
+    ' horodatage(s) inconnu(s), ' + synthetic +
+    ' source(s) SYNTHETIC (démonstration uniquement). Comptage des étapes affichées uniquement, pas un indicateur de santé.';
   nav.append(heading, note, list, summary);
   parent.append(nav);
   return nav;
