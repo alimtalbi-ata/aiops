@@ -47,7 +47,7 @@ def inventory(result, count, limit=150):
         return {"state": "UNKNOWN", "reason": "INVENTORY_UNVERIFIED", "items": [],
                 "count": count}
     rows = result["value"].splitlines()
-    if len(rows) > limit or count["count"] > len(rows):
+    if len(rows) > limit or count["count"] != len(rows):
         return {"state": "UNKNOWN", "reason": "INVENTORY_TRUNCATED",
                 "items": rows[:limit], "count": count["count"], "complete": False}
     return {"state": "OBSERVED", "items": rows, "count": count["count"], "complete": True}
