@@ -348,3 +348,22 @@ test('synthetic: only pending stages expose aria-busy; BLOCKED and UNKNOWN are n
   assert.equal(items[1].attributes['data-state'], 'BLOCKED');
   assert.equal(items[4].attributes['data-state'], 'UNKNOWN');
 });
+
+test('synthetic: mode declaration defaults UNKNOWN and never labels a LIVE session', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const render = options => renderSanPaymentsJourney(document, { append() {} },
+    { incident: { state: 'AVAILABLE', source: 'SYNTHETIC' } }, options);
+  const unknown = render();
+  assert.match(unknown.children[1].textContent, /Mode : UNKNOWN.*LIVE non revendiqué/);
+  assert.match(render({ mode: 'LIVE' }).children[1].textContent, /Mode : UNKNOWN/);
+  assert.match(render({ mode: 'DEMO' }).children[1].textContent, /Mode : DEMO.*jamais une opération LIVE/);
+  assert.match(render({ mode: 'REPLAY' }).children[1].textContent, /Mode : REPLAY/);
+  assert.match(render({ mode: 'READY' }).children[1].textContent, /Mode : UNKNOWN/);
+  assert.match(render(new Proxy({}, { get() { throw Error('synthetic failure'); } }))
+    .children[1].textContent, /Mode : UNKNOWN/);
+  assert.equal(unknown.children[2].children[0].attributes['data-state'], 'AVAILABLE');
+});
