@@ -93,10 +93,12 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
   // These counts describe only the eight displayed stages, never platform health.
   const unresolved = steps.filter(step => step.state === 'UNKNOWN' || step.state === 'ERROR' || step.state === 'EMPTY').length;
   const blocked = steps.filter(step => step.state === 'BLOCKED').length;
+  const loading = steps.filter(step => step.state === 'LOADING').length;
   const summary = document.createElement('p');
   summary.textContent = 'Couverture de la démonstration : ' + unresolved +
     ' étape(s) sans information exploitable ; ' + blocked +
-    ' étape(s) bloquée(s). Comptage des étapes affichées uniquement, pas un indicateur de santé.';
+    ' étape(s) bloquée(s) ; ' + loading +
+    ' étape(s) en chargement. Comptage des étapes affichées uniquement, pas un indicateur de santé.';
   nav.append(heading, note, list, summary);
   parent.append(nav);
   return nav;
