@@ -28,7 +28,8 @@ def metric_read_model(*, actor, tenant, authorized_tenants, metric, value,
     if (not isinstance(authorized_tenants, (set, frozenset, tuple, list))
             or tenant not in authorized_tenants):
         return {"http_status": 403, "state": "BLOCKED", "data": None, "reason": "TENANT_DENIED"}
-    if mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS:
+    if (not isinstance(mode, str) or not isinstance(metric, str)
+            or mode not in ALLOWED_MODES or metric not in ALLOWED_METRICS):
         return {"http_status": 400, "state": "BLOCKED", "data": None, "reason": "INVALID_SCOPE"}
     if (type(generation) is not int or type(expected_generation) is not int
             or generation < 0 or generation != expected_generation):
