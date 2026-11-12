@@ -3,10 +3,17 @@
     "name": "aiops-debian-readonly",
     "version": "1.0.0"
   },
-  "collected_at": "2026-11-12T10:58:01.206782+00:00",
+  "collected_at": "2026-11-12T10:59:01.910633+00:00",
   "docker": {
     "available": true,
     "containers": [
+      {
+        "health": "unknown",
+        "image": "unknown",
+        "inspect_ok": false,
+        "name": "aiops2-restore-qual-aiops-postgres-1848046",
+        "state": ""
+      },
       {
         "health": "no-healthcheck",
         "image": "aiops2-portal:glpi-sync-v1",
@@ -559,13 +566,6 @@
         "inspect_ok": true,
         "name": "aiops2-v27-qual-aiops2-temporal-namespace-1",
         "state": "exited"
-      },
-      {
-        "health": "unhealthy",
-        "image": "temporalio/server:1.31.0",
-        "inspect_ok": true,
-        "name": "aiops2-v27-qual-aiops2-temporal-1",
-        "state": "exited"
       }
     ],
     "truncated": true
@@ -578,13 +578,13 @@
       "VERSION_ID": "13"
     },
     "reported_name": "SRV-DEB-05",
-    "uptime": "up 5 weeks, 1 day, 1 hour, 9 minutes"
+    "uptime": "up 5 weeks, 1 day, 1 hour, 10 minutes"
   },
   "resources": {
     "disk_home": {
-      "free_bytes": 138050785280,
+      "free_bytes": 138000867328,
       "total_bytes": 172898033664,
-      "used_bytes": 25989926912
+      "used_bytes": 26039844864
     },
     "disk_root": {
       "free_bytes": 11756621824,
@@ -592,12 +592,12 @@
       "used_bytes": 4246261760
     },
     "load_1_5_15": [
-      0.88623046875,
-      1.25,
-      1.10693359375
+      1.47412109375,
+      1.32666015625,
+      1.140625
     ],
     "memory_bytes": {
-      "MemAvailable": 19228422144,
+      "MemAvailable": 19132948480,
       "MemTotal": 25205911552,
       "SwapFree": 10424250368,
       "SwapTotal": 10838077440
