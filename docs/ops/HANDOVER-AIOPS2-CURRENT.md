@@ -1,3 +1,17 @@
+# F-032 — 2026-11-12 11:07 CET — rootless read-only preflight
+
+CODE: `scripts/observability/portal_v3_rootless_preflight_f032.sh` created on isolated Draft branch; rejects wrong UID, missing socket, mismatched Docker data-root, listing failures and noncanonical full IDs. Image IDs are deduplicated because multiple tags can refer to one image. This is a narrow preflight, **not** the complete Debian collector: services, health, ports, volumes, systemd/cron and redacted logs remain UNKNOWN pending reviewed collector #670/#673/#676/#688. Negative protocol: execute as UID !=1001 or with inaccessible rootless socket and assert exit 2, status UNKNOWN; do not fall back to rootful daemon. No test execution attested.
+
+CI: PR #692 workflow 43189114735 completed SUCCESS at SHA `014ee84511788c94061e460cb122422f867ffcfe`, but F-030/F-031 execution coverage NOT_ATTESTED. F-032 CI UNKNOWN until exact new SHA run.
+
+DEBIAN: NOT_INSPECTED, no authenticated SRV-DEB-05 access. Command under aiops: `AIOPS_EXPECTED_SHA=<approved-full-sha> timeout 90s bash scripts/observability/portal_v3_rootless_preflight_f032.sh`. Verify checkout SHA with `git rev-parse HEAD` first. No sudo docker, cron or deployment.
+
+E2E: NOT_VERIFIED. v28/V145, stable and Portal V3 parity remain UNKNOWN for dashboard, incidents, CMDB/service map, NOC, Core/Twin/Runs, Evidence, Policy/HITL, Prometheus/Grafana, GLPI, Copilot ticket/portal and navigation/auth. Negative gates: tenant ACL 401/403, HITL fail-closed, stale provenance, no LIVE/GLPI writes.
+
+Rollback: close Draft or revert F-032 commits; no host runtime changes. NO_GO deployment.
+
+---
+
 # F-031 2026-11-12 10:09 Europe/Paris — CI coverage audit
 
 CODE: Draft protocol `docs/audits/AIOPS2-PORTAL-V3-CI-COVERAGE-F031-20261112.md`; stacked on #689 `f931e4201e441a36f533488b9f32da7dcfc0f9f9`. Negative F-031 recipe: short Docker IDs, duplicate IDs, explicit CI invocation and collector full-ID provenance. NOT_EXECUTED.
