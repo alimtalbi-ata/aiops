@@ -384,3 +384,20 @@ test('synthetic: accessible navigation and CSS mode always fail closed for LIVE 
     assert.equal(nav.children[2].children.length, 8);
   }
 });
+
+test('synthetic: a supplied timestamp is declarative, never proof of freshness', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], attributes: {}, textContent: '',
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'AVAILABLE', source: 'SYNTHETIC', observedAt: '2026-11-12T12:00:00Z' }
+  }, { mode: 'DEMO' });
+  assert.match(nav.children[2].children[0].children[4].textContent,
+    /Horodatage déclaré : 2026-11-12T12:00:00Z/);
+  assert.match(nav.children[3].textContent,
+    /horodatages renseignés sont déclaratifs et ne prouvent pas la fraîcheur/);
+  assert.match(nav.children[1].textContent, /Mode : DEMO/);
+  assert.doesNotMatch(nav.children[3].textContent, /production saine|READY/);
+});
