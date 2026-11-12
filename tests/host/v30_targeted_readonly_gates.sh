@@ -14,8 +14,14 @@ command -v timeout >/dev/null || { echo 'QUALIFICATION=UNKNOWN reason=timeout_cl
 date -u '+timestamp_utc=%Y-%m-%dT%H:%M:%SZ'
 echo 'scope=READ_ONLY V1=7777 V30=7788 LIVE=BLOCKED DEMO_REPLAY=NOT_EXECUTED'
 # No daemon fallback, and never query rootful socket.
-timeout -k 2s 8s docker --host "$DOCKER_HOST" info --format 'rootless_security={{json .SecurityOptions}}' 2>/dev/null |
-  grep -q 'rootless' || { echo 'ROOTLESS=UNKNOWN reason=daemon_not_attested'; exit 2; }
+# Capture the bounded command first: grep -q in a pipefail pipeline may SIGPIPE
+# the Docker CLI and incorrectly report an authenticated rootless daemon as UNKNOWN.
+security_options=$(timeout -k 2s 8s docker --host "$DOCKER_HOST" info --format '{{json .SecurityOptions}}' 2>/dev/null) ||
+  { echo 'ROOTLESS=UNKNOWN reason=daemon_info_failed'; exit 2; }
+if [[ "$security_options" != *rootless* ]]; then
+  echo 'ROOTLESS=UNKNOWN reason=daemon_not_rootless'; exit 2
+fi
+unset security_options
 echo 'ROOTLESS=ATTESTED'
 gate_fail=0
 http_unknown=0
