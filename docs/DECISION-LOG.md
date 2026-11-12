@@ -190,3 +190,13 @@ Use this file for durable architecture/product decisions. Add new entries; do no
 ### 2026-10-30 — ADR delta: one main-based candidate, fail-closed source transport
 
 **Decision:** retain #201 as the only release integration candidate; port six exact source blobs from #198/#202 without merging stacked/divergent PRs or replacing Portal main/Compose/Core. Canonical Evidence UTC must be bounded and Portal must refuse unqualified authority claims, expose 401/403/503 without navigation, and never persist bearer credentials. **Rationale:** preserve Core authority and operator-visible UNKNOWN, prevent false customer evidence. **Qualification:** [new exact-head Quality 41088096834](https://github.com/alimtalbi-ata/aiops/actions/runs/41088096834) queued; T0 not yet passed, T4/T5 NO-GO. No merge, Debian or LIVE.
+
+
+## ADR-2026-11-12 — Reuse existing actor/tenant authorization candidates; no premature activation
+
+- **Status:** Accepted as an integration plan; no production authorization is qualified.
+- **Decision:** Use PR #631 as bounded Runs-only schema/query groundwork; selectively review PR #246 for server-side OIDC introspection and exact-resource delegation; selectively review PR #520 for signed GLPI xref, durable PostgreSQL nonce replay and read-only Core/GLPI adapters. Do not merge their stacked branches wholesale.
+- **Reason:** These candidates solve different parts of the trust chain. #631 does not authenticate the actor or cover all resource families; #246 deliberately has no positive ALLOW because native GLPI actor permissions and durable nonce are not qualified; #520 explicitly records that no production identity provider exists.
+- **Required before positive reads:** select and configure a trusted IdP/gateway; verify actor and tenant membership server-side; implement auditable RBAC and resource ownership for Incident/Run/Evidence/Twin; enforce tenant filters in every list/detail/aggregate/graph/history/search path; independently verify native GLPI actor rights where applicable; qualify revocation and replay behavior; run two-tenant PostgreSQL/HTTP tests for every resource family.
+- **Consequences:** Portal remains TENANT_ACL_NOT_QUALIFIED; GAMMA canonical reads stay disabled; no default tenant, historical backfill, caller-supplied identity, global fallback, LIVE/HITL relaxation, merge or deployment is implied.
+- **Evidence:** Review record in docs/security/TENANT-ACTOR-AUTHZ-REUSE-PLAN-20261112.md. #631 exact-head source/PG16 CI runs 43049964505 and 43049964742 SUCCESS; #520 Quality run 42893375326 SUCCESS. These are CI evidence only, not IdP/GLPI or deployed-service qualification.
