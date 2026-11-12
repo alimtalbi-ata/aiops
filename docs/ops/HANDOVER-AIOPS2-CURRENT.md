@@ -1,16 +1,29 @@
-# AIOPS2 / Portal V3 — handover 2026-11-12 07:09 Europe/Paris
+# AIOPS2 / Portal V3 — handover 2026-11-12 08:21 Europe/Paris
 
 ## CODE
-F-028 on audit/portal-v3-evidence-envelope-f028-20261112, stacked on #680 SHA 3c5ab56b32fcd0c47a57be0f410d126d2adff4c9. Hardened standalone synthetic release evidence gate: explicit CI conclusion SUCCESS, strict 40-lowercase-hex SHA, aware evaluation clock, explicit complete:true inventory. Four new negative methods (missing/failed CI, absent completeness, naive now, invalid SHA). Test file: tests/observability/test_portal_v3_freshness_f027.py. Run: python3 tests/observability/test_portal_v3_freshness_f027.py -v. This is NOT wired into production release controls. v28/V145 -> stable -> V3: dashboard/incidents, CMDB/service map, NOC, Core/Twin/Runs, Evidence, Policy/HITL, Prometheus/Grafana, GLPI, Copilot ticket/portal, navigation/auth: all parity UNKNOWN, needs baseline fixtures and authenticated smoke.
+F-029 branch `audit/portal-v3-inventory-uniqueness-f029-20261112` stacked on F-028 PR #683 SHA `3f6760caf554d861b2d37555aeec702bd5375e1f`. Adds isolated synthetic negative identity tests at `tests/observability/test_portal_v3_inventory_identity_f029.py`. Duplicate or blank image/container identifiers are rejected even when declared counts equal list lengths; Boolean count, mismatched count and absent completeness rejected. Command: `python3 -m unittest -v tests/observability/test_portal_v3_inventory_identity_f029.py`. NOT integrated into collector/release gate. No runtime writes.
+
+## Capability matrix (v28/V145 -> stable -> Portal V3)
+| Domain | Baseline | Stable host | Candidate | Negative acceptance |
+|---|---|---|---|---|
+| Dashboard / incidents | UNKNOWN | UNKNOWN | UNKNOWN | stale response / tenant isolation |
+| CMDB / service map | UNKNOWN | UNKNOWN | UNKNOWN | cross-tenant links denied |
+| NOC | UNKNOWN | UNKNOWN | UNKNOWN | source provenance independent |
+| Core / Twin / Runs | UNKNOWN | UNKNOWN | UNKNOWN | stale state, pagination, concurrency |
+| Evidence / Policy / HITL | UNKNOWN | UNKNOWN | UNKNOWN | fail closed; no LIVE |
+| Prometheus / Grafana | UNKNOWN | UNKNOWN | UNKNOWN | stale metric not LIVE |
+| GLPI | UNKNOWN | UNKNOWN | UNKNOWN | read-only, deny write |
+| Copilot ticket / portal | UNKNOWN | UNKNOWN | UNKNOWN | tenant ACL and provenance |
+| Navigation / auth | UNKNOWN | UNKNOWN | UNKNOWN | 401/403/404/405, keyboard/CSP |
 
 ## CI
-#680 head 3c5ab56b32fcd0c47a57be0f410d126d2adff4c9: run 43159716613 completed SUCCESS (workflow only; no proof standalone tests executed). F-028 new SHA CI UNKNOWN pending check. No claim of green until exact SHA verified and tests identified.
+#683 exact SHA `3f6760caf554d861b2d37555aeec702bd5375e1f`: workflow run 43166281116 completed SUCCESS (queried 2026-11-12). This does not prove F-028 standalone tests were executed. F-029 SHA pending final commit and CI recheck; test execution NOT_ATTESTED.
 
 ## DEBIAN
-NOT_INSPECTED: no authenticated SRV-DEB-05 access available. Rootless UID 1001, context rootless, socket /run/user/1001/docker.sock; historical 87 containers and 210 images not fresh. Collector drafts #670/#673/#676/#679/#682 require privacy and lock/symlink review; no installation, cron, deployment or host mutations. #557 rootful/rootless false diagnostic, no recovery.
+NOT_INSPECTED. No authenticated SRV-DEB-05 session available. Operator historical rootless UID 1001, socket `/run/user/1001/docker.sock`, 87 containers and 210 images; not a fresh measurement. Existing collector PRs #670/#673/#676/#679/#682 and privacy PR #685 must be reviewed before install. Required read-only execution as aiops (not sudo docker): `env DOCKER_HOST=unix:///run/user/1001/docker.sock timeout 90s python3 scripts/observability/debian_rootless_readonly.py` from an approved checkout, after verifying script path and SHA. Collector output must redact logs, avoid secrets, enforce 0700 directory, 0600 files, flock, timeout and retention after review. No cron installed. #557 is rootful/rootless false diagnostic, no recovery.
 
 ## E2E
-NOT_VERIFIED. NO_GO deployment until exact SHA green CI, rootless fresh inventory, baseline parity, compatibility, backups/rollback tested, tenant ACL/HITL smoke and portal-only bounded window. No LIVE, no GLPI writes.
+NOT_VERIFIED; NO_GO deployment. Green exact candidate CI, fresh rootless provenance, parity fixtures, portal-only compatibility, backup and tested rollback, ACL/HITL smoke required. No other stack changes, no LIVE, no GLPI writes.
 
 ## Rollback
-Close F-028 Draft or revert its test+handover commits. No runtime rollback. No merge main or changes to other stacks.
+Close Draft F-029 or revert its isolated test+handover commits. No Debian changes to roll back. No merge main.
