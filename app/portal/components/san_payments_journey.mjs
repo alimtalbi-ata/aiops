@@ -15,6 +15,14 @@ export const SAN_PAYMENTS_STEPS = Object.freeze([
 ].map(([id, label]) => Object.freeze({ id, label })));
 
 const ALLOWED = new Set(['LOADING', 'EMPTY', 'ERROR', 'UNKNOWN', 'BLOCKED', 'AVAILABLE']);
+const GUIDANCE = Object.freeze({
+  LOADING: 'Attendre la réponse de la source autorisée.',
+  EMPTY: 'Vérifier la période et les filtres.',
+  ERROR: 'Réessayer ou contacter le support avec le contexte de la vue.',
+  UNKNOWN: 'Vérifier la source avant de conclure.',
+  BLOCKED: 'Vérifier les droits et la décision Policy/HITL.',
+  AVAILABLE: 'Consulter la provenance avant toute interprétation.'
+});
 const text = value => typeof value === 'string' && value.trim() ? value.trim() : null;
 
 /** Explicitly never interprets a missing record as completed or approved. */
@@ -23,7 +31,7 @@ export function describeSanPaymentsJourney(records = {}) {
     const record = Object.hasOwn(records, step.id) ? records[step.id] : null;
     const state = ALLOWED.has(record?.state) ? record.state : 'UNKNOWN';
     return Object.freeze({
-      id: step.id, label: step.label, state,
+      id: step.id, label: step.label, state, guidance: GUIDANCE[state],
       detail: text(record?.detail) ?? 'Aucune information vérifiée',
       source: text(record?.source) ?? 'Source non renseignée',
       observedAt: text(record?.observedAt) ?? 'Fraîcheur inconnue',
@@ -52,9 +60,11 @@ export function renderSanPaymentsJourney(document, parent, records = {}) {
     label.textContent = step.label + ' — ' + step.state;
     const detail = document.createElement('p');
     detail.textContent = step.detail;
+    const guidance = document.createElement('p');
+    guidance.textContent = step.guidance;
     const provenance = document.createElement('small');
-    provenance.textContent = step.source + ' · ' + step.observedAt;
-    item.append(label, detail, provenance);
+    provenance.textContent = 'Source déclarée : ' + step.source + ' · Horodatage déclaré : ' + step.observedAt;
+    item.append(label, detail, guidance, provenance);
     list.append(item);
   }
   nav.append(heading, note, list);
