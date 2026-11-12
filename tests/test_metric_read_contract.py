@@ -55,6 +55,21 @@ class MetricReadContractTests(unittest.TestCase):
     def test_bad_window(self):
         self.check("BLOCKED", window_seconds=-1)
 
+    def test_replay_cannot_launder_live_source(self):
+        self.check("UNKNOWN", mode="REPLAY", source="prometheus:v30")
+
+    def test_demo_not_attested_by_live_prometheus(self):
+        self.check("UNKNOWN", mode="DEMO", source="prometheus:v30")
+
+    def test_replay_source_qualified_only_in_replay(self):
+        self.assertEqual(self.check("READY", mode="REPLAY", source="prometheus:replay")["data"]["mode"], "REPLAY")
+
+    def test_missing_acl_collection_fails_closed(self):
+        self.assertEqual(self.check("BLOCKED", authorized_tenants=None)["http_status"], 403)
+
+    def test_boolean_generation_fails_closed(self):
+        self.check("UNKNOWN", generation=True, expected_generation=1)
+
     def test_bad_mode(self):
         self.check("BLOCKED", mode="LIVE_WRITE")
 
