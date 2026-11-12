@@ -328,3 +328,23 @@ test('synthetic: declared synthetic source variants are never presented without 
   assert.match(nav.children[3].textContent, /3 source\(s\) SYNTHETIC/);
   assert.match(items[0].children[1].textContent, /non validées/);
 });
+
+
+test('synthetic: only pending stages expose aria-busy; BLOCKED and UNKNOWN are not busy', () => {
+  const document = { createElement(tag) {
+    return { tag, children: [], textContent: '', attributes: {},
+      setAttribute(k, v) { this.attributes[k] = v; },
+      append(...items) { this.children.push(...items); } };
+  }};
+  const nav = renderSanPaymentsJourney(document, { append() {} }, {
+    incident: { state: 'LOADING' },
+    impact: { state: 'BLOCKED' },
+    noc: { state: 'ERROR' },
+    run: { state: 'AVAILABLE', source: 'SYNTHETIC' }
+  });
+  const items = nav.children[2].children;
+  assert.equal(items[0].attributes['aria-busy'], 'true');
+  assert.ok(items.slice(1).every(item => !Object.hasOwn(item.attributes, 'aria-busy')));
+  assert.equal(items[1].attributes['data-state'], 'BLOCKED');
+  assert.equal(items[4].attributes['data-state'], 'UNKNOWN');
+});
